@@ -512,6 +512,7 @@ impl BamlRuntime {
             &cls_module,
             &partial_cls_module,
             allow_partials,
+            self,
         )
     }
 

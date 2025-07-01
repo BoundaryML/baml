@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep:*)",
+      "Bash(uv run maturin develop:*)",
+      "Bash(BAML_LOG_INTERNAL=debug BAML_INTERNAL_LOG=debug infisical run --env=test -- uv run pytest tests/test_functions.py::test_semantic_streaming -s)",
+      "Bash(python test:*)",
+      "Bash(uv run:*)",
+      "Bash(find:*)",
+      "Bash(rg:*)",
+      "Bash(cargo check:*)"
+    ],
+    "deny": []
+  }
+}

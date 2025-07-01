@@ -291,13 +291,17 @@ test_partial_deserializer_streaming_failure!(
     r#"
         "pay
     "#,
-    TypeIR::union(vec![
-        TypeIR::Literal(LiteralValue::String("pay".into()), TypeMeta::default()),
-        TypeIR::Literal(
-            LiteralValue::String("pay_without_credit_card".into()),
-            TypeMeta::default()
-        ),
-    ])
+    {
+        let mut union = TypeIR::union(vec![
+            TypeIR::Literal(LiteralValue::String("pay".into()), TypeMeta::default()),
+            TypeIR::Literal(
+                LiteralValue::String("pay_without_credit_card".into()),
+                TypeMeta::default(),
+            ),
+        ]);
+        union.meta_mut().streaming_behavior.needed = true;
+        union
+    }
 );
 
 // Test with object that has multiple keys (should fail)

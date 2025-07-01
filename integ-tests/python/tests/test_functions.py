@@ -658,12 +658,12 @@ async def test_streaming():
 
     final = await stream.get_final_response()
 
-    assert (
-        first_msg_time - start_time <= 1.5
-    ), "Expected first message within 1 second but it took longer."
-    assert (
-        last_msg_time - start_time >= 1
-    ), "Expected last message after 1.5 seconds but it was earlier."
+    assert first_msg_time - start_time <= 1.5, (
+        "Expected first message within 1 second but it took longer."
+    )
+    assert last_msg_time - start_time >= 1, (
+        "Expected last message after 1.5 seconds but it was earlier."
+    )
     assert len(final) > 0, "Expected non-empty final but got empty."
     assert len(msgs) > 0, "Expected at least one streamed response but got none."
     for prev_msg, msg in zip(msgs, msgs[1:]):
@@ -703,12 +703,12 @@ def test_streaming_sync():
 
     final = stream.get_final_response()
 
-    assert (
-        first_msg_time - start_time <= 1.5
-    ), "Expected first message within 1 second but it took longer."
-    assert (
-        last_msg_time - start_time >= 1
-    ), "Expected last message after 1.5 seconds but it was earlier."
+    assert first_msg_time - start_time <= 1.5, (
+        "Expected first message within 1 second but it took longer."
+    )
+    assert last_msg_time - start_time >= 1, (
+        "Expected last message after 1.5 seconds but it was earlier."
+    )
     assert len(final) > 0, "Expected non-empty final but got empty."
     assert len(msgs) > 0, "Expected at least one streamed response but got none."
     for prev_msg, msg in zip(msgs, msgs[1:]):
@@ -1179,9 +1179,9 @@ In conclusion, this story is a reflection on the power of dreams and the respons
     print("Duration no caching: ", duration)
     print("Duration with caching: ", duration2)
 
-    assert (
-        duration2 < duration
-    ), f"{duration2} < {duration}. Expected second call to be faster than first by a large margin."
+    assert duration2 < duration, (
+        f"{duration2} < {duration}. Expected second call to be faster than first by a large margin."
+    )
 
 
 @pytest.mark.asyncio
@@ -1249,9 +1249,9 @@ async def test_baml_validation_error_format():
         except errors.BamlValidationError as e:
             print("Error: ", e)
             assert hasattr(e, "prompt"), "Error object should have 'prompt' attribute"
-            assert hasattr(
-                e, "raw_output"
-            ), "Error object should have 'raw_output' attribute"
+            assert hasattr(e, "raw_output"), (
+                "Error object should have 'raw_output' attribute"
+            )
             assert hasattr(e, "message"), "Error object should have 'message' attribute"
             assert 'Say "hello there"' in e.prompt
 
@@ -1482,20 +1482,21 @@ async def test_semantic_streaming():
                 assert reference_string == msg.string_with_twenty_words
 
         # Checks for @stream.with_state.
-        if msg.class_needed is not None:
-            if msg.class_needed.s_20_words.value is not None:
-                if (
-                    len(msg.class_needed.s_20_words.value.split(" ")) < 3
-                    and msg.final_string is None
-                ):
-                    print(msg)
-                    assert msg.class_needed.s_20_words.state == "Incomplete"
+        if msg.class_needed.s_20_words.value is not None:
+            if (
+                len(msg.class_needed.s_20_words.value.split(" ")) < 3
+                and msg.final_string is None
+            ):
+                print(msg)
+                assert msg.class_needed.s_20_words.state == "Incomplete"
         if msg.final_string is not None:
             assert msg.class_needed.s_20_words.state == "Complete"
 
         # Checks for @stream.not_null.
         for sub in msg.three_small_things:
             assert sub.i_16_digits is not None
+
+    print("done streaming")
 
     final = await stream.get_final_response()
     print(final)

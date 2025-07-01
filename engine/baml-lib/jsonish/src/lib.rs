@@ -245,7 +245,14 @@ pub fn from_str(
 
     // Pick the schema that is the most specific.
     log::debug!("Parsed JSONish (step 1 of parsing) {raw_string_is_done}: {value:#?}");
-    let ctx = ParsingContext::new(of);
+    let ctx = ParsingContext::new(
+        of,
+        if raw_string_is_done {
+            baml_types::StreamingMode::NonStreaming
+        } else {
+            baml_types::StreamingMode::Streaming
+        },
+    );
 
     // Determine the best way to get the desired schema from the parsed schema.
 

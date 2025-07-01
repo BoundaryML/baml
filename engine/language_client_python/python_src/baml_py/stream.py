@@ -50,7 +50,7 @@ class BamlStream(Generic[PartialOutputType, FinalOutputType]):
             retval = await self.__ffi_stream.done(self.__ctx_manager)
 
             self.__future.set_result(retval)
-           
+
             return retval
         except Exception as e:
             self.__future.set_exception(e)

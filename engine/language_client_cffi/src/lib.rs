@@ -91,7 +91,7 @@ pub extern "C" fn invoke_runtime_cli(args: *const *const libc::c_char) -> libc::
 
 use std::{ffi::CString, os::raw::c_char};
 
-use baml_types::BamlValue;
+use baml_types::{BamlValue, HasType};
 
 use crate::{
     ctypes::{BamlFunctionArguments, DecodeFromBuffer},
@@ -142,11 +142,13 @@ fn safe_trigger_callback(
     match result {
         Ok(result) => match result.parsed() {
             Some(Ok(content)) => {
+                // Look here
                 let buf = if is_done {
                     let meta = content.0.map_meta(|f| ctypes::EncodeMeta {
                         field_type: f.3.to_non_streaming_type(runtime.inner.ir.as_ref()),
                         checks: &f.1,
                     });
+
                     meta.encode_to_c_buffer(runtime.inner.ir.as_ref())
                 } else {
                     let meta = content.0.map_meta(|f| ctypes::EncodeMeta {

@@ -5,6 +5,7 @@ import baml_py
 from . import stream_types, types, type_builder
 from .parser import LlmResponseParser, LlmStreamParser
 from .runtime import DoNotUseDirectlyCallManager, BamlCallOptions
+from .globals import DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME as __runtime__
 
 
 class BamlAsyncClient:
@@ -75,7 +76,7 @@ class BamlAsyncClient:
             "{{arg.name}}": {{arg.name}},
             {%- endfor %}
         })
-        return typing.cast({{func.return_type.serialize_type(pkg)}}, result.cast_to(types, types, stream_types, False))
+        return typing.cast({{func.return_type.serialize_type(pkg)}}, result.cast_to(types, types, stream_types, False, __runtime__))
     {% endfor %}
 
 
@@ -101,8 +102,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlStream[{{ func.stream_return_type.serialize_type(pkg) }}, {{ func.return_type.serialize_type(pkg) }}](
           result,
-          lambda x: typing.cast({{func.stream_return_type.serialize_type(pkg)}}, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast({{func.return_type.serialize_type(pkg)}}, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast({{func.stream_return_type.serialize_type(pkg)}}, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast({{func.return_type.serialize_type(pkg)}}, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     {% endfor %}

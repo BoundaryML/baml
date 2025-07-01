@@ -17,7 +17,7 @@ import baml_py
 from . import stream_types, types, type_builder
 from .parser import LlmResponseParser, LlmStreamParser
 from .runtime import DoNotUseDirectlyCallManager, BamlCallOptions
-
+from .globals import DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME as __runtime__
 
 class BamlSyncClient:
     __options: DoNotUseDirectlyCallManager
@@ -91,1295 +91,1295 @@ class BamlSyncClient:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="AaaSamOutputFormat", args={
             "recipe": recipe,
         })
-        return typing.cast(types.Recipe, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.Recipe, result.cast_to(types, types, stream_types, False, __runtime__))
     def AliasThatPointsToRecursiveType(self, data: types.LinkedListAliasNode,
         baml_options: BamlCallOptions = {},
     ) -> types.LinkedListAliasNode:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="AliasThatPointsToRecursiveType", args={
             "data": data,
         })
-        return typing.cast(types.LinkedListAliasNode, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.LinkedListAliasNode, result.cast_to(types, types, stream_types, False, __runtime__))
     def AliasWithMultipleAttrs(self, money: int,
         baml_options: BamlCallOptions = {},
     ) -> types.Checked[int, typing_extensions.Literal['gt_ten']]:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="AliasWithMultipleAttrs", args={
             "money": money,
         })
-        return typing.cast(types.Checked[int, typing_extensions.Literal['gt_ten']], result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.Checked[int, typing_extensions.Literal['gt_ten']], result.cast_to(types, types, stream_types, False, __runtime__))
     def AliasedInputClass(self, input: types.InputClass,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="AliasedInputClass", args={
             "input": input,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def AliasedInputClass2(self, input: types.InputClass,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="AliasedInputClass2", args={
             "input": input,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def AliasedInputClassNested(self, input: types.InputClassNested,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="AliasedInputClassNested", args={
             "input": input,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def AliasedInputEnum(self, input: types.AliasedEnum,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="AliasedInputEnum", args={
             "input": input,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def AliasedInputList(self, input: typing.List[types.AliasedEnum],
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="AliasedInputList", args={
             "input": input,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def AllowedOptionals(self, optionals: types.OptionalListAndMap,
         baml_options: BamlCallOptions = {},
     ) -> types.OptionalListAndMap:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="AllowedOptionals", args={
             "optionals": optionals,
         })
-        return typing.cast(types.OptionalListAndMap, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.OptionalListAndMap, result.cast_to(types, types, stream_types, False, __runtime__))
     def AssertFn(self, a: int,
         baml_options: BamlCallOptions = {},
     ) -> int:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="AssertFn", args={
             "a": a,
         })
-        return typing.cast(int, result.cast_to(types, types, stream_types, False))
+        return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
     def AudioInput(self, aud: baml_py.Image,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="AudioInput", args={
             "aud": aud,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def AudioInputOpenai(self, aud: baml_py.Image,prompt: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="AudioInputOpenai", args={
             "aud": aud,"prompt": prompt,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def BuildLinkedList(self, input: typing.List[int],
         baml_options: BamlCallOptions = {},
     ) -> types.LinkedList:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="BuildLinkedList", args={
             "input": input,
         })
-        return typing.cast(types.LinkedList, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.LinkedList, result.cast_to(types, types, stream_types, False, __runtime__))
     def BuildTree(self, input: types.BinaryNode,
         baml_options: BamlCallOptions = {},
     ) -> types.Tree:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="BuildTree", args={
             "input": input,
         })
-        return typing.cast(types.Tree, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.Tree, result.cast_to(types, types, stream_types, False, __runtime__))
     def ClassThatPointsToRecursiveClassThroughAlias(self, cls: types.ClassToRecAlias,
         baml_options: BamlCallOptions = {},
     ) -> types.ClassToRecAlias:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="ClassThatPointsToRecursiveClassThroughAlias", args={
             "cls": cls,
         })
-        return typing.cast(types.ClassToRecAlias, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.ClassToRecAlias, result.cast_to(types, types, stream_types, False, __runtime__))
     def ClassifyDynEnumTwo(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> typing.Union[types.DynEnumTwo, str]:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="ClassifyDynEnumTwo", args={
             "input": input,
         })
-        return typing.cast(typing.Union[types.DynEnumTwo, str], result.cast_to(types, types, stream_types, False))
+        return typing.cast(typing.Union[types.DynEnumTwo, str], result.cast_to(types, types, stream_types, False, __runtime__))
     def ClassifyMessage(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.Category:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="ClassifyMessage", args={
             "input": input,
         })
-        return typing.cast(types.Category, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.Category, result.cast_to(types, types, stream_types, False, __runtime__))
     def ClassifyMessage2(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.Category:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="ClassifyMessage2", args={
             "input": input,
         })
-        return typing.cast(types.Category, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.Category, result.cast_to(types, types, stream_types, False, __runtime__))
     def ClassifyMessage3(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.Category:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="ClassifyMessage3", args={
             "input": input,
         })
-        return typing.cast(types.Category, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.Category, result.cast_to(types, types, stream_types, False, __runtime__))
     def Completion(self, prefix: str,suffix: str,language: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="Completion", args={
             "prefix": prefix,"suffix": suffix,"language": language,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def CustomTask(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> typing.Union["types.BookOrder", "types.FlightConfirmation", "types.GroceryReceipt"]:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="CustomTask", args={
             "input": input,
         })
-        return typing.cast(typing.Union["types.BookOrder", "types.FlightConfirmation", "types.GroceryReceipt"], result.cast_to(types, types, stream_types, False))
+        return typing.cast(typing.Union["types.BookOrder", "types.FlightConfirmation", "types.GroceryReceipt"], result.cast_to(types, types, stream_types, False, __runtime__))
     def DescribeImage(self, img: baml_py.Image,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="DescribeImage", args={
             "img": img,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def DescribeImage2(self, classWithImage: types.ClassWithImage,img2: baml_py.Image,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="DescribeImage2", args={
             "classWithImage": classWithImage,"img2": img2,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def DescribeImage3(self, classWithImage: types.ClassWithImage,img2: baml_py.Image,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="DescribeImage3", args={
             "classWithImage": classWithImage,"img2": img2,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def DescribeImage4(self, classWithImage: types.ClassWithImage,img2: baml_py.Image,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="DescribeImage4", args={
             "classWithImage": classWithImage,"img2": img2,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def DescribeMedia1599(self, img: baml_py.Image,client_sector: str,client_name: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="DescribeMedia1599", args={
             "img": img,"client_sector": client_sector,"client_name": client_name,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def DifferentiateUnions(self, 
         baml_options: BamlCallOptions = {},
     ) -> typing.Union["types.OriginalA", "types.OriginalB"]:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="DifferentiateUnions", args={
             
         })
-        return typing.cast(typing.Union["types.OriginalA", "types.OriginalB"], result.cast_to(types, types, stream_types, False))
+        return typing.cast(typing.Union["types.OriginalA", "types.OriginalB"], result.cast_to(types, types, stream_types, False, __runtime__))
     def DummyOutputFunction(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.DummyOutput:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="DummyOutputFunction", args={
             "input": input,
         })
-        return typing.cast(types.DummyOutput, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.DummyOutput, result.cast_to(types, types, stream_types, False, __runtime__))
     def DynamicFunc(self, input: types.DynamicClassOne,
         baml_options: BamlCallOptions = {},
     ) -> types.DynamicClassTwo:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="DynamicFunc", args={
             "input": input,
         })
-        return typing.cast(types.DynamicClassTwo, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.DynamicClassTwo, result.cast_to(types, types, stream_types, False, __runtime__))
     def DynamicInputOutput(self, input: types.DynInputOutput,
         baml_options: BamlCallOptions = {},
     ) -> types.DynInputOutput:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="DynamicInputOutput", args={
             "input": input,
         })
-        return typing.cast(types.DynInputOutput, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.DynInputOutput, result.cast_to(types, types, stream_types, False, __runtime__))
     def DynamicListInputOutput(self, input: typing.List["types.DynInputOutput"],
         baml_options: BamlCallOptions = {},
     ) -> typing.List["types.DynInputOutput"]:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="DynamicListInputOutput", args={
             "input": input,
         })
-        return typing.cast(typing.List["types.DynInputOutput"], result.cast_to(types, types, stream_types, False))
+        return typing.cast(typing.List["types.DynInputOutput"], result.cast_to(types, types, stream_types, False, __runtime__))
     def ExpectFailure(self, 
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="ExpectFailure", args={
             
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def ExtractContactInfo(self, document: str,
         baml_options: BamlCallOptions = {},
     ) -> types.ContactInfo:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="ExtractContactInfo", args={
             "document": document,
         })
-        return typing.cast(types.ContactInfo, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.ContactInfo, result.cast_to(types, types, stream_types, False, __runtime__))
     def ExtractEntities(self, text: str,
         baml_options: BamlCallOptions = {},
     ) -> types.DynamicSchema:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="ExtractEntities", args={
             "text": text,
         })
-        return typing.cast(types.DynamicSchema, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.DynamicSchema, result.cast_to(types, types, stream_types, False, __runtime__))
     def ExtractHobby(self, text: str,
         baml_options: BamlCallOptions = {},
     ) -> typing.List[typing.Union[types.Hobby, str]]:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="ExtractHobby", args={
             "text": text,
         })
-        return typing.cast(typing.List[typing.Union[types.Hobby, str]], result.cast_to(types, types, stream_types, False))
+        return typing.cast(typing.List[typing.Union[types.Hobby, str]], result.cast_to(types, types, stream_types, False, __runtime__))
     def ExtractNames(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> typing.List[str]:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="ExtractNames", args={
             "input": input,
         })
-        return typing.cast(typing.List[str], result.cast_to(types, types, stream_types, False))
+        return typing.cast(typing.List[str], result.cast_to(types, types, stream_types, False, __runtime__))
     def ExtractPeople(self, text: str,
         baml_options: BamlCallOptions = {},
     ) -> typing.List["types.Person"]:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="ExtractPeople", args={
             "text": text,
         })
-        return typing.cast(typing.List["types.Person"], result.cast_to(types, types, stream_types, False))
+        return typing.cast(typing.List["types.Person"], result.cast_to(types, types, stream_types, False, __runtime__))
     def ExtractReceiptInfo(self, email: str,reason: typing.Union[typing_extensions.Literal['curiosity'], typing_extensions.Literal['personal_finance']],
         baml_options: BamlCallOptions = {},
     ) -> types.ReceiptInfo:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="ExtractReceiptInfo", args={
             "email": email,"reason": reason,
         })
-        return typing.cast(types.ReceiptInfo, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.ReceiptInfo, result.cast_to(types, types, stream_types, False, __runtime__))
     def ExtractResume(self, resume: str,img: typing.Optional[baml_py.Image] = None,
         baml_options: BamlCallOptions = {},
     ) -> types.Resume:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="ExtractResume", args={
             "resume": resume,"img": img,
         })
-        return typing.cast(types.Resume, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.Resume, result.cast_to(types, types, stream_types, False, __runtime__))
     def ExtractResume2(self, resume: str,
         baml_options: BamlCallOptions = {},
     ) -> types.Resume:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="ExtractResume2", args={
             "resume": resume,
         })
-        return typing.cast(types.Resume, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.Resume, result.cast_to(types, types, stream_types, False, __runtime__))
     def FnClassOptionalOutput(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> typing.Optional["types.ClassOptionalOutput"]:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="FnClassOptionalOutput", args={
             "input": input,
         })
-        return typing.cast(typing.Optional["types.ClassOptionalOutput"], result.cast_to(types, types, stream_types, False))
+        return typing.cast(typing.Optional["types.ClassOptionalOutput"], result.cast_to(types, types, stream_types, False, __runtime__))
     def FnClassOptionalOutput2(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> typing.Optional["types.ClassOptionalOutput2"]:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="FnClassOptionalOutput2", args={
             "input": input,
         })
-        return typing.cast(typing.Optional["types.ClassOptionalOutput2"], result.cast_to(types, types, stream_types, False))
+        return typing.cast(typing.Optional["types.ClassOptionalOutput2"], result.cast_to(types, types, stream_types, False, __runtime__))
     def FnEnumListOutput(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> typing.List[types.EnumOutput]:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="FnEnumListOutput", args={
             "input": input,
         })
-        return typing.cast(typing.List[types.EnumOutput], result.cast_to(types, types, stream_types, False))
+        return typing.cast(typing.List[types.EnumOutput], result.cast_to(types, types, stream_types, False, __runtime__))
     def FnEnumOutput(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.EnumOutput:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="FnEnumOutput", args={
             "input": input,
         })
-        return typing.cast(types.EnumOutput, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.EnumOutput, result.cast_to(types, types, stream_types, False, __runtime__))
     def FnLiteralClassInputOutput(self, input: types.LiteralClassHello,
         baml_options: BamlCallOptions = {},
     ) -> types.LiteralClassHello:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="FnLiteralClassInputOutput", args={
             "input": input,
         })
-        return typing.cast(types.LiteralClassHello, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.LiteralClassHello, result.cast_to(types, types, stream_types, False, __runtime__))
     def FnLiteralUnionClassInputOutput(self, input: typing.Union["types.LiteralClassOne", "types.LiteralClassTwo"],
         baml_options: BamlCallOptions = {},
     ) -> typing.Union["types.LiteralClassOne", "types.LiteralClassTwo"]:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="FnLiteralUnionClassInputOutput", args={
             "input": input,
         })
-        return typing.cast(typing.Union["types.LiteralClassOne", "types.LiteralClassTwo"], result.cast_to(types, types, stream_types, False))
+        return typing.cast(typing.Union["types.LiteralClassOne", "types.LiteralClassTwo"], result.cast_to(types, types, stream_types, False, __runtime__))
     def FnNamedArgsSingleStringOptional(self, myString: typing.Optional[str] = None,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="FnNamedArgsSingleStringOptional", args={
             "myString": myString,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def FnOutputBool(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> bool:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="FnOutputBool", args={
             "input": input,
         })
-        return typing.cast(bool, result.cast_to(types, types, stream_types, False))
+        return typing.cast(bool, result.cast_to(types, types, stream_types, False, __runtime__))
     def FnOutputClass(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.TestOutputClass:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="FnOutputClass", args={
             "input": input,
         })
-        return typing.cast(types.TestOutputClass, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.TestOutputClass, result.cast_to(types, types, stream_types, False, __runtime__))
     def FnOutputClassList(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> typing.List["types.TestOutputClass"]:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="FnOutputClassList", args={
             "input": input,
         })
-        return typing.cast(typing.List["types.TestOutputClass"], result.cast_to(types, types, stream_types, False))
+        return typing.cast(typing.List["types.TestOutputClass"], result.cast_to(types, types, stream_types, False, __runtime__))
     def FnOutputClassNested(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.TestClassNested:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="FnOutputClassNested", args={
             "input": input,
         })
-        return typing.cast(types.TestClassNested, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.TestClassNested, result.cast_to(types, types, stream_types, False, __runtime__))
     def FnOutputClassWithEnum(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.TestClassWithEnum:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="FnOutputClassWithEnum", args={
             "input": input,
         })
-        return typing.cast(types.TestClassWithEnum, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.TestClassWithEnum, result.cast_to(types, types, stream_types, False, __runtime__))
     def FnOutputInt(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> int:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="FnOutputInt", args={
             "input": input,
         })
-        return typing.cast(int, result.cast_to(types, types, stream_types, False))
+        return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
     def FnOutputLiteralBool(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> typing_extensions.Literal[False]:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="FnOutputLiteralBool", args={
             "input": input,
         })
-        return typing.cast(typing_extensions.Literal[False], result.cast_to(types, types, stream_types, False))
+        return typing.cast(typing_extensions.Literal[False], result.cast_to(types, types, stream_types, False, __runtime__))
     def FnOutputLiteralInt(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> typing_extensions.Literal[5]:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="FnOutputLiteralInt", args={
             "input": input,
         })
-        return typing.cast(typing_extensions.Literal[5], result.cast_to(types, types, stream_types, False))
+        return typing.cast(typing_extensions.Literal[5], result.cast_to(types, types, stream_types, False, __runtime__))
     def FnOutputLiteralString(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> typing_extensions.Literal['example output']:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="FnOutputLiteralString", args={
             "input": input,
         })
-        return typing.cast(typing_extensions.Literal['example output'], result.cast_to(types, types, stream_types, False))
+        return typing.cast(typing_extensions.Literal['example output'], result.cast_to(types, types, stream_types, False, __runtime__))
     def FnOutputStringList(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> typing.List[str]:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="FnOutputStringList", args={
             "input": input,
         })
-        return typing.cast(typing.List[str], result.cast_to(types, types, stream_types, False))
+        return typing.cast(typing.List[str], result.cast_to(types, types, stream_types, False, __runtime__))
     def FnTestAliasedEnumOutput(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.TestEnum:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="FnTestAliasedEnumOutput", args={
             "input": input,
         })
-        return typing.cast(types.TestEnum, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.TestEnum, result.cast_to(types, types, stream_types, False, __runtime__))
     def FnTestClassAlias(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.TestClassAlias:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="FnTestClassAlias", args={
             "input": input,
         })
-        return typing.cast(types.TestClassAlias, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.TestClassAlias, result.cast_to(types, types, stream_types, False, __runtime__))
     def FnTestNamedArgsSingleEnum(self, myArg: types.NamedArgsSingleEnum,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="FnTestNamedArgsSingleEnum", args={
             "myArg": myArg,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def GetDataType(self, text: str,
         baml_options: BamlCallOptions = {},
     ) -> types.RaysData:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="GetDataType", args={
             "text": text,
         })
-        return typing.cast(types.RaysData, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.RaysData, result.cast_to(types, types, stream_types, False, __runtime__))
     def GetOrderInfo(self, email: types.Email,
         baml_options: BamlCallOptions = {},
     ) -> types.OrderInfo:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="GetOrderInfo", args={
             "email": email,
         })
-        return typing.cast(types.OrderInfo, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.OrderInfo, result.cast_to(types, types, stream_types, False, __runtime__))
     def GetQuery(self, query: str,
         baml_options: BamlCallOptions = {},
     ) -> types.SearchParams:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="GetQuery", args={
             "query": query,
         })
-        return typing.cast(types.SearchParams, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.SearchParams, result.cast_to(types, types, stream_types, False, __runtime__))
     def InOutEnumMapKey(self, i1: typing.Dict[types.MapKey, str],i2: typing.Dict[types.MapKey, str],
         baml_options: BamlCallOptions = {},
     ) -> typing.Dict[types.MapKey, str]:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="InOutEnumMapKey", args={
             "i1": i1,"i2": i2,
         })
-        return typing.cast(typing.Dict[types.MapKey, str], result.cast_to(types, types, stream_types, False))
+        return typing.cast(typing.Dict[types.MapKey, str], result.cast_to(types, types, stream_types, False, __runtime__))
     def InOutLiteralStringUnionMapKey(self, i1: typing.Dict[typing.Union[typing_extensions.Literal['one'], typing_extensions.Literal['two'], typing_extensions.Literal['three'], typing_extensions.Literal['four']], str],i2: typing.Dict[typing.Union[typing_extensions.Literal['one'], typing_extensions.Literal['two'], typing_extensions.Literal['three'], typing_extensions.Literal['four']], str],
         baml_options: BamlCallOptions = {},
     ) -> typing.Dict[typing.Union[typing_extensions.Literal['one'], typing_extensions.Literal['two'], typing_extensions.Literal['three'], typing_extensions.Literal['four']], str]:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="InOutLiteralStringUnionMapKey", args={
             "i1": i1,"i2": i2,
         })
-        return typing.cast(typing.Dict[typing.Union[typing_extensions.Literal['one'], typing_extensions.Literal['two'], typing_extensions.Literal['three'], typing_extensions.Literal['four']], str], result.cast_to(types, types, stream_types, False))
+        return typing.cast(typing.Dict[typing.Union[typing_extensions.Literal['one'], typing_extensions.Literal['two'], typing_extensions.Literal['three'], typing_extensions.Literal['four']], str], result.cast_to(types, types, stream_types, False, __runtime__))
     def InOutSingleLiteralStringMapKey(self, m: typing.Dict[typing_extensions.Literal['key'], str],
         baml_options: BamlCallOptions = {},
     ) -> typing.Dict[typing_extensions.Literal['key'], str]:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="InOutSingleLiteralStringMapKey", args={
             "m": m,
         })
-        return typing.cast(typing.Dict[typing_extensions.Literal['key'], str], result.cast_to(types, types, stream_types, False))
+        return typing.cast(typing.Dict[typing_extensions.Literal['key'], str], result.cast_to(types, types, stream_types, False, __runtime__))
     def JsonTypeAliasCycle(self, input: types.JsonValue,
         baml_options: BamlCallOptions = {},
     ) -> types.JsonValue:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="JsonTypeAliasCycle", args={
             "input": input,
         })
-        return typing.cast(types.JsonValue, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.JsonValue, result.cast_to(types, types, stream_types, False, __runtime__))
     def LLMEcho(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="LLMEcho", args={
             "input": input,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def LiteralUnionsTest(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> typing.Union[typing_extensions.Literal[1], typing_extensions.Literal[True], typing_extensions.Literal['string output']]:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="LiteralUnionsTest", args={
             "input": input,
         })
-        return typing.cast(typing.Union[typing_extensions.Literal[1], typing_extensions.Literal[True], typing_extensions.Literal['string output']], result.cast_to(types, types, stream_types, False))
+        return typing.cast(typing.Union[typing_extensions.Literal[1], typing_extensions.Literal[True], typing_extensions.Literal['string output']], result.cast_to(types, types, stream_types, False, __runtime__))
     def MakeBlockConstraint(self, 
         baml_options: BamlCallOptions = {},
     ) -> types.Checked["types.BlockConstraint", typing_extensions.Literal['cross_field', 'cross_field']]:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="MakeBlockConstraint", args={
             
         })
-        return typing.cast(types.Checked["types.BlockConstraint", typing_extensions.Literal['cross_field', 'cross_field']], result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.Checked["types.BlockConstraint", typing_extensions.Literal['cross_field', 'cross_field']], result.cast_to(types, types, stream_types, False, __runtime__))
     def MakeClassWithBlockDone(self, 
         baml_options: BamlCallOptions = {},
     ) -> types.ClassWithBlockDone:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="MakeClassWithBlockDone", args={
             
         })
-        return typing.cast(types.ClassWithBlockDone, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.ClassWithBlockDone, result.cast_to(types, types, stream_types, False, __runtime__))
     def MakeClassWithExternalDone(self, 
         baml_options: BamlCallOptions = {},
     ) -> types.ClassWithoutDone:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="MakeClassWithExternalDone", args={
             
         })
-        return typing.cast(types.ClassWithoutDone, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.ClassWithoutDone, result.cast_to(types, types, stream_types, False, __runtime__))
     def MakeNestedBlockConstraint(self, 
         baml_options: BamlCallOptions = {},
     ) -> types.NestedBlockConstraint:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="MakeNestedBlockConstraint", args={
             
         })
-        return typing.cast(types.NestedBlockConstraint, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.NestedBlockConstraint, result.cast_to(types, types, stream_types, False, __runtime__))
     def MakeSemanticContainer(self, 
         baml_options: BamlCallOptions = {},
     ) -> types.SemanticContainer:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="MakeSemanticContainer", args={
             
         })
-        return typing.cast(types.SemanticContainer, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.SemanticContainer, result.cast_to(types, types, stream_types, False, __runtime__))
     def MapAlias(self, m: typing.Dict[str, typing.List[str]],
         baml_options: BamlCallOptions = {},
     ) -> typing.Dict[str, typing.List[str]]:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="MapAlias", args={
             "m": m,
         })
-        return typing.cast(typing.Dict[str, typing.List[str]], result.cast_to(types, types, stream_types, False))
+        return typing.cast(typing.Dict[str, typing.List[str]], result.cast_to(types, types, stream_types, False, __runtime__))
     def MergeAliasAttributes(self, money: int,
         baml_options: BamlCallOptions = {},
     ) -> types.MergeAttrs:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="MergeAliasAttributes", args={
             "money": money,
         })
-        return typing.cast(types.MergeAttrs, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.MergeAttrs, result.cast_to(types, types, stream_types, False, __runtime__))
     def MyFunc(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.DynamicOutput:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="MyFunc", args={
             "input": input,
         })
-        return typing.cast(types.DynamicOutput, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.DynamicOutput, result.cast_to(types, types, stream_types, False, __runtime__))
     def NestedAlias(self, c: typing.Union[int, str, bool, float, typing.List[str], typing.Dict[str, typing.List[str]]],
         baml_options: BamlCallOptions = {},
     ) -> typing.Union[int, str, bool, float, typing.List[str], typing.Dict[str, typing.List[str]]]:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="NestedAlias", args={
             "c": c,
         })
-        return typing.cast(typing.Union[int, str, bool, float, typing.List[str], typing.Dict[str, typing.List[str]]], result.cast_to(types, types, stream_types, False))
+        return typing.cast(typing.Union[int, str, bool, float, typing.List[str], typing.Dict[str, typing.List[str]]], result.cast_to(types, types, stream_types, False, __runtime__))
     def NullLiteralClassHello(self, s: str,
         baml_options: BamlCallOptions = {},
     ) -> types.ClassForNullLiteral:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="NullLiteralClassHello", args={
             "s": s,
         })
-        return typing.cast(types.ClassForNullLiteral, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.ClassForNullLiteral, result.cast_to(types, types, stream_types, False, __runtime__))
     def OpenAIWithAnthropicResponseHello(self, s: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="OpenAIWithAnthropicResponseHello", args={
             "s": s,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def OptionalTest_Function(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> typing.List[typing.Optional["types.OptionalTest_ReturnType"]]:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="OptionalTest_Function", args={
             "input": input,
         })
-        return typing.cast(typing.List[typing.Optional["types.OptionalTest_ReturnType"]], result.cast_to(types, types, stream_types, False))
+        return typing.cast(typing.List[typing.Optional["types.OptionalTest_ReturnType"]], result.cast_to(types, types, stream_types, False, __runtime__))
     def PredictAge(self, name: str,
         baml_options: BamlCallOptions = {},
     ) -> types.FooAny:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="PredictAge", args={
             "name": name,
         })
-        return typing.cast(types.FooAny, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.FooAny, result.cast_to(types, types, stream_types, False, __runtime__))
     def PredictAgeBare(self, inp: str,
         baml_options: BamlCallOptions = {},
     ) -> types.Checked[int, typing_extensions.Literal['too_big']]:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="PredictAgeBare", args={
             "inp": inp,
         })
-        return typing.cast(types.Checked[int, typing_extensions.Literal['too_big']], result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.Checked[int, typing_extensions.Literal['too_big']], result.cast_to(types, types, stream_types, False, __runtime__))
     def PrimitiveAlias(self, p: typing.Union[int, str, bool, float],
         baml_options: BamlCallOptions = {},
     ) -> typing.Union[int, str, bool, float]:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="PrimitiveAlias", args={
             "p": p,
         })
-        return typing.cast(typing.Union[int, str, bool, float], result.cast_to(types, types, stream_types, False))
+        return typing.cast(typing.Union[int, str, bool, float], result.cast_to(types, types, stream_types, False, __runtime__))
     def PromptTestClaude(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="PromptTestClaude", args={
             "input": input,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def PromptTestClaudeChat(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="PromptTestClaudeChat", args={
             "input": input,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def PromptTestClaudeChatNoSystem(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="PromptTestClaudeChatNoSystem", args={
             "input": input,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def PromptTestOpenAI(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="PromptTestOpenAI", args={
             "input": input,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def PromptTestOpenAIChat(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="PromptTestOpenAIChat", args={
             "input": input,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def PromptTestOpenAIChatNoSystem(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="PromptTestOpenAIChatNoSystem", args={
             "input": input,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def PromptTestStreaming(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="PromptTestStreaming", args={
             "input": input,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def RecursiveAliasCycle(self, input: types.RecAliasOne,
         baml_options: BamlCallOptions = {},
     ) -> types.RecAliasOne:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="RecursiveAliasCycle", args={
             "input": input,
         })
-        return typing.cast(types.RecAliasOne, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.RecAliasOne, result.cast_to(types, types, stream_types, False, __runtime__))
     def RecursiveClassWithAliasIndirection(self, cls: types.NodeWithAliasIndirection,
         baml_options: BamlCallOptions = {},
     ) -> types.NodeWithAliasIndirection:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="RecursiveClassWithAliasIndirection", args={
             "cls": cls,
         })
-        return typing.cast(types.NodeWithAliasIndirection, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.NodeWithAliasIndirection, result.cast_to(types, types, stream_types, False, __runtime__))
     def RecursiveUnionTest(self, input: types.RecursiveUnion,
         baml_options: BamlCallOptions = {},
     ) -> types.RecursiveUnion:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="RecursiveUnionTest", args={
             "input": input,
         })
-        return typing.cast(types.RecursiveUnion, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.RecursiveUnion, result.cast_to(types, types, stream_types, False, __runtime__))
     def ReturnAliasWithMergedAttributes(self, money: int,
         baml_options: BamlCallOptions = {},
     ) -> types.Checked[int, typing_extensions.Literal['gt_ten']]:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="ReturnAliasWithMergedAttributes", args={
             "money": money,
         })
-        return typing.cast(types.Checked[int, typing_extensions.Literal['gt_ten']], result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.Checked[int, typing_extensions.Literal['gt_ten']], result.cast_to(types, types, stream_types, False, __runtime__))
     def ReturnFailingAssert(self, inp: int,
         baml_options: BamlCallOptions = {},
     ) -> int:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="ReturnFailingAssert", args={
             "inp": inp,
         })
-        return typing.cast(int, result.cast_to(types, types, stream_types, False))
+        return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
     def ReturnJsonEntry(self, s: str,
         baml_options: BamlCallOptions = {},
     ) -> types.JsonTemplate:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="ReturnJsonEntry", args={
             "s": s,
         })
-        return typing.cast(types.JsonTemplate, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.JsonTemplate, result.cast_to(types, types, stream_types, False, __runtime__))
     def ReturnMalformedConstraints(self, a: int,
         baml_options: BamlCallOptions = {},
     ) -> types.MalformedConstraints:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="ReturnMalformedConstraints", args={
             "a": a,
         })
-        return typing.cast(types.MalformedConstraints, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.MalformedConstraints, result.cast_to(types, types, stream_types, False, __runtime__))
     def SchemaDescriptions(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.Schema:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="SchemaDescriptions", args={
             "input": input,
         })
-        return typing.cast(types.Schema, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.Schema, result.cast_to(types, types, stream_types, False, __runtime__))
     def SimpleRecursiveListAlias(self, input: types.RecursiveListAlias,
         baml_options: BamlCallOptions = {},
     ) -> types.RecursiveListAlias:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="SimpleRecursiveListAlias", args={
             "input": input,
         })
-        return typing.cast(types.RecursiveListAlias, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.RecursiveListAlias, result.cast_to(types, types, stream_types, False, __runtime__))
     def SimpleRecursiveMapAlias(self, input: types.RecursiveMapAlias,
         baml_options: BamlCallOptions = {},
     ) -> types.RecursiveMapAlias:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="SimpleRecursiveMapAlias", args={
             "input": input,
         })
-        return typing.cast(types.RecursiveMapAlias, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.RecursiveMapAlias, result.cast_to(types, types, stream_types, False, __runtime__))
     def StreamBigNumbers(self, digits: int,
         baml_options: BamlCallOptions = {},
     ) -> types.BigNumbers:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="StreamBigNumbers", args={
             "digits": digits,
         })
-        return typing.cast(types.BigNumbers, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.BigNumbers, result.cast_to(types, types, stream_types, False, __runtime__))
     def StreamFailingAssertion(self, theme: str,length: int,
         baml_options: BamlCallOptions = {},
     ) -> types.TwoStoriesOneTitle:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="StreamFailingAssertion", args={
             "theme": theme,"length": length,
         })
-        return typing.cast(types.TwoStoriesOneTitle, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.TwoStoriesOneTitle, result.cast_to(types, types, stream_types, False, __runtime__))
     def StreamFailingCheck(self, theme: str,length: int,
         baml_options: BamlCallOptions = {},
     ) -> types.TwoStoriesOneTitleCheck:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="StreamFailingCheck", args={
             "theme": theme,"length": length,
         })
-        return typing.cast(types.TwoStoriesOneTitleCheck, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.TwoStoriesOneTitleCheck, result.cast_to(types, types, stream_types, False, __runtime__))
     def StreamOneBigNumber(self, digits: int,
         baml_options: BamlCallOptions = {},
     ) -> int:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="StreamOneBigNumber", args={
             "digits": digits,
         })
-        return typing.cast(int, result.cast_to(types, types, stream_types, False))
+        return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
     def StreamUnionIntegers(self, digits: int,
         baml_options: BamlCallOptions = {},
     ) -> typing.List[typing.Union[int, str]]:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="StreamUnionIntegers", args={
             "digits": digits,
         })
-        return typing.cast(typing.List[typing.Union[int, str]], result.cast_to(types, types, stream_types, False))
+        return typing.cast(typing.List[typing.Union[int, str]], result.cast_to(types, types, stream_types, False, __runtime__))
     def StreamingCompoundNumbers(self, digits: int,yapping: bool,
         baml_options: BamlCallOptions = {},
     ) -> types.CompoundBigNumbers:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="StreamingCompoundNumbers", args={
             "digits": digits,"yapping": yapping,
         })
-        return typing.cast(types.CompoundBigNumbers, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.CompoundBigNumbers, result.cast_to(types, types, stream_types, False, __runtime__))
     def StructureDocument1559(self, document_txt: str,
         baml_options: BamlCallOptions = {},
     ) -> types.Document1559:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="StructureDocument1559", args={
             "document_txt": document_txt,
         })
-        return typing.cast(types.Document1559, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.Document1559, result.cast_to(types, types, stream_types, False, __runtime__))
     def TakeRecAliasDep(self, input: types.RecursiveAliasDependency,
         baml_options: BamlCallOptions = {},
     ) -> types.RecursiveAliasDependency:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TakeRecAliasDep", args={
             "input": input,
         })
-        return typing.cast(types.RecursiveAliasDependency, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.RecursiveAliasDependency, result.cast_to(types, types, stream_types, False, __runtime__))
     def TellStory(self, story: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TellStory", args={
             "story": story,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestAnthropic(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestAnthropic", args={
             "input": input,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestAnthropicShorthand(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestAnthropicShorthand", args={
             "input": input,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestAws(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestAws", args={
             "input": input,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestAwsClaude37(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestAwsClaude37", args={
             "input": input,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestAwsInferenceProfile(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestAwsInferenceProfile", args={
             "input": input,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestAwsInvalidAccessKey(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestAwsInvalidAccessKey", args={
             "input": input,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestAwsInvalidProfile(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestAwsInvalidProfile", args={
             "input": input,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestAwsInvalidRegion(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestAwsInvalidRegion", args={
             "input": input,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestAwsInvalidSessionToken(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestAwsInvalidSessionToken", args={
             "input": input,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestAzure(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestAzure", args={
             "input": input,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestAzureFailure(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestAzureFailure", args={
             "input": input,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestAzureO1NoMaxTokens(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestAzureO1NoMaxTokens", args={
             "input": input,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestAzureO1WithMaxCompletionTokens(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestAzureO1WithMaxCompletionTokens", args={
             "input": input,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestAzureO1WithMaxTokens(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestAzureO1WithMaxTokens", args={
             "input": input,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestAzureO3NoMaxTokens(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestAzureO3NoMaxTokens", args={
             "input": input,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestAzureO3WithMaxCompletionTokens(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestAzureO3WithMaxCompletionTokens", args={
             "input": input,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestAzureWithMaxTokens(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestAzureWithMaxTokens", args={
             "input": input,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestCaching(self, input: str,not_cached: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestCaching", args={
             "input": input,"not_cached": not_cached,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestFallbackClient(self, 
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestFallbackClient", args={
             
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestFallbackStrategy(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestFallbackStrategy", args={
             "input": input,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestFallbackToShorthand(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestFallbackToShorthand", args={
             "input": input,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestFnNamedArgsSingleBool(self, myBool: bool,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestFnNamedArgsSingleBool", args={
             "myBool": myBool,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestFnNamedArgsSingleClass(self, myArg: types.NamedArgsSingleClass,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestFnNamedArgsSingleClass", args={
             "myArg": myArg,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestFnNamedArgsSingleEnumList(self, myArg: typing.List[types.NamedArgsSingleEnumList],
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestFnNamedArgsSingleEnumList", args={
             "myArg": myArg,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestFnNamedArgsSingleFloat(self, myFloat: float,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestFnNamedArgsSingleFloat", args={
             "myFloat": myFloat,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestFnNamedArgsSingleInt(self, myInt: int,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestFnNamedArgsSingleInt", args={
             "myInt": myInt,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestFnNamedArgsSingleMapStringToClass(self, myMap: typing.Dict[str, "types.StringToClassEntry"],
         baml_options: BamlCallOptions = {},
     ) -> typing.Dict[str, "types.StringToClassEntry"]:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestFnNamedArgsSingleMapStringToClass", args={
             "myMap": myMap,
         })
-        return typing.cast(typing.Dict[str, "types.StringToClassEntry"], result.cast_to(types, types, stream_types, False))
+        return typing.cast(typing.Dict[str, "types.StringToClassEntry"], result.cast_to(types, types, stream_types, False, __runtime__))
     def TestFnNamedArgsSingleMapStringToMap(self, myMap: typing.Dict[str, typing.Dict[str, str]],
         baml_options: BamlCallOptions = {},
     ) -> typing.Dict[str, typing.Dict[str, str]]:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestFnNamedArgsSingleMapStringToMap", args={
             "myMap": myMap,
         })
-        return typing.cast(typing.Dict[str, typing.Dict[str, str]], result.cast_to(types, types, stream_types, False))
+        return typing.cast(typing.Dict[str, typing.Dict[str, str]], result.cast_to(types, types, stream_types, False, __runtime__))
     def TestFnNamedArgsSingleMapStringToString(self, myMap: typing.Dict[str, str],
         baml_options: BamlCallOptions = {},
     ) -> typing.Dict[str, str]:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestFnNamedArgsSingleMapStringToString", args={
             "myMap": myMap,
         })
-        return typing.cast(typing.Dict[str, str], result.cast_to(types, types, stream_types, False))
+        return typing.cast(typing.Dict[str, str], result.cast_to(types, types, stream_types, False, __runtime__))
     def TestFnNamedArgsSingleString(self, myString: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestFnNamedArgsSingleString", args={
             "myString": myString,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestFnNamedArgsSingleStringArray(self, myStringArray: typing.List[str],
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestFnNamedArgsSingleStringArray", args={
             "myStringArray": myStringArray,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestFnNamedArgsSingleStringList(self, myArg: typing.List[str],
         baml_options: BamlCallOptions = {},
     ) -> typing.List[str]:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestFnNamedArgsSingleStringList", args={
             "myArg": myArg,
         })
-        return typing.cast(typing.List[str], result.cast_to(types, types, stream_types, False))
+        return typing.cast(typing.List[str], result.cast_to(types, types, stream_types, False, __runtime__))
     def TestGemini(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestGemini", args={
             "input": input,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestGeminiOpenAiGeneric(self, 
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestGeminiOpenAiGeneric", args={
             
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestGeminiSystem(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestGeminiSystem", args={
             "input": input,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestGeminiSystemAsChat(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestGeminiSystemAsChat", args={
             "input": input,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestGroq(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestGroq", args={
             "input": input,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestImageInput(self, img: baml_py.Image,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestImageInput", args={
             "img": img,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestImageInputAnthropic(self, img: baml_py.Image,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestImageInputAnthropic", args={
             "img": img,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestImageListInput(self, imgs: typing.List[baml_py.Image],
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestImageListInput", args={
             "imgs": imgs,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestMemory(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.TestMemoryOutput:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestMemory", args={
             "input": input,
         })
-        return typing.cast(types.TestMemoryOutput, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.TestMemoryOutput, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestMulticlassNamedArgs(self, myArg: types.NamedArgsSingleClass,myArg2: types.NamedArgsSingleClass,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestMulticlassNamedArgs", args={
             "myArg": myArg,"myArg2": myArg2,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestNamedArgsLiteralBool(self, myBool: typing_extensions.Literal[True],
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestNamedArgsLiteralBool", args={
             "myBool": myBool,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestNamedArgsLiteralInt(self, myInt: typing_extensions.Literal[1],
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestNamedArgsLiteralInt", args={
             "myInt": myInt,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestNamedArgsLiteralString(self, myString: typing_extensions.Literal['My String'],
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestNamedArgsLiteralString", args={
             "myString": myString,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestOllama(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> typing.Optional[str]:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestOllama", args={
             "input": input,
         })
-        return typing.cast(typing.Optional[str], result.cast_to(types, types, stream_types, False))
+        return typing.cast(typing.Optional[str], result.cast_to(types, types, stream_types, False, __runtime__))
     def TestOllamaHaiku(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.Haiku:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestOllamaHaiku", args={
             "input": input,
         })
-        return typing.cast(types.Haiku, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.Haiku, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestOpenAI(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestOpenAI", args={
             "input": input,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestOpenAIDummyClient(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestOpenAIDummyClient", args={
             "input": input,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestOpenAIGPT4oMini(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestOpenAIGPT4oMini", args={
             "input": input,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestOpenAIGPT4oMini2(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestOpenAIGPT4oMini2", args={
             "input": input,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestOpenAIGPT4oMini3(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestOpenAIGPT4oMini3", args={
             "input": input,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestOpenAILegacyProvider(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestOpenAILegacyProvider", args={
             "input": input,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestOpenAIO1NoMaxTokens(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestOpenAIO1NoMaxTokens", args={
             "input": input,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestOpenAIO1WithMaxCompletionTokens(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestOpenAIO1WithMaxCompletionTokens", args={
             "input": input,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestOpenAIO1WithMaxTokens(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestOpenAIO1WithMaxTokens", args={
             "input": input,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestOpenAIShorthand(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestOpenAIShorthand", args={
             "input": input,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestOpenAIWithFinishReasonError(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestOpenAIWithFinishReasonError", args={
             "input": input,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestOpenAIWithMaxTokens(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestOpenAIWithMaxTokens", args={
             "input": input,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestOpenAIWithNullMaxTokens(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestOpenAIWithNullMaxTokens", args={
             "input": input,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestOpenRouterMistralSmall3_1_24b(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestOpenRouterMistralSmall3_1_24b", args={
             "input": input,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestRetryConstant(self, 
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestRetryConstant", args={
             
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestRetryExponential(self, 
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestRetryExponential", args={
             
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestRoundRobinStrategy(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestRoundRobinStrategy", args={
             "input": input,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestSingleFallbackClient(self, 
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestSingleFallbackClient", args={
             
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestThinking(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.CustomStory:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestThinking", args={
             "input": input,
         })
-        return typing.cast(types.CustomStory, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.CustomStory, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestUniverseQuestion(self, question: types.UniverseQuestionInput,
         baml_options: BamlCallOptions = {},
     ) -> types.UniverseQuestion:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestUniverseQuestion", args={
             "question": question,
         })
-        return typing.cast(types.UniverseQuestion, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.UniverseQuestion, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestVertex(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestVertex", args={
             "input": input,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestVertexClaude(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestVertexClaude", args={
             "input": input,
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestVertexWithSystemInstructions(self, 
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestVertexWithSystemInstructions", args={
             
         })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def UnionTest_Function(self, input: typing.Union[str, bool],
         baml_options: BamlCallOptions = {},
     ) -> types.UnionTest_ReturnType:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="UnionTest_Function", args={
             "input": input,
         })
-        return typing.cast(types.UnionTest_ReturnType, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.UnionTest_ReturnType, result.cast_to(types, types, stream_types, False, __runtime__))
     def UseBlockConstraint(self, inp: types.BlockConstraintForParam,
         baml_options: BamlCallOptions = {},
     ) -> int:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="UseBlockConstraint", args={
             "inp": inp,
         })
-        return typing.cast(int, result.cast_to(types, types, stream_types, False))
+        return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
     def UseMaintainFieldOrder(self, input: types.MaintainFieldOrder,
         baml_options: BamlCallOptions = {},
     ) -> types.MaintainFieldOrder:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="UseMaintainFieldOrder", args={
             "input": input,
         })
-        return typing.cast(types.MaintainFieldOrder, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.MaintainFieldOrder, result.cast_to(types, types, stream_types, False, __runtime__))
     def UseMalformedConstraints(self, a: types.MalformedConstraints2,
         baml_options: BamlCallOptions = {},
     ) -> int:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="UseMalformedConstraints", args={
             "a": a,
         })
-        return typing.cast(int, result.cast_to(types, types, stream_types, False))
+        return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
     def UseNestedBlockConstraint(self, inp: types.NestedBlockConstraintForParam,
         baml_options: BamlCallOptions = {},
     ) -> int:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="UseNestedBlockConstraint", args={
             "inp": inp,
         })
-        return typing.cast(int, result.cast_to(types, types, stream_types, False))
+        return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
     
 
 
@@ -1397,8 +1397,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[stream_types.Recipe, types.Recipe](
           result,
-          lambda x: typing.cast(stream_types.Recipe, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.Recipe, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(stream_types.Recipe, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.Recipe, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def AliasThatPointsToRecursiveType(self, data: types.LinkedListAliasNode,
@@ -1409,8 +1409,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[stream_types.LinkedListAliasNode, types.LinkedListAliasNode](
           result,
-          lambda x: typing.cast(stream_types.LinkedListAliasNode, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.LinkedListAliasNode, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(stream_types.LinkedListAliasNode, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.LinkedListAliasNode, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def AliasWithMultipleAttrs(self, money: int,
@@ -1421,8 +1421,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[types.Checked[int, typing_extensions.Literal['gt_ten']], types.Checked[int, typing_extensions.Literal['gt_ten']]](
           result,
-          lambda x: typing.cast(types.Checked[int, typing_extensions.Literal['gt_ten']], x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.Checked[int, typing_extensions.Literal['gt_ten']], x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(types.Checked[int, typing_extensions.Literal['gt_ten']], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.Checked[int, typing_extensions.Literal['gt_ten']], x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def AliasedInputClass(self, input: types.InputClass,
@@ -1433,8 +1433,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def AliasedInputClass2(self, input: types.InputClass,
@@ -1445,8 +1445,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def AliasedInputClassNested(self, input: types.InputClassNested,
@@ -1457,8 +1457,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def AliasedInputEnum(self, input: types.AliasedEnum,
@@ -1469,8 +1469,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def AliasedInputList(self, input: typing.List[types.AliasedEnum],
@@ -1481,8 +1481,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def AllowedOptionals(self, optionals: types.OptionalListAndMap,
@@ -1493,8 +1493,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[stream_types.OptionalListAndMap, types.OptionalListAndMap](
           result,
-          lambda x: typing.cast(stream_types.OptionalListAndMap, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.OptionalListAndMap, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(stream_types.OptionalListAndMap, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.OptionalListAndMap, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def AssertFn(self, a: int,
@@ -1505,8 +1505,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[int, int](
           result,
-          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def AudioInput(self, aud: baml_py.Image,
@@ -1517,8 +1517,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def AudioInputOpenai(self, aud: baml_py.Image,prompt: str,
@@ -1529,8 +1529,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def BuildLinkedList(self, input: typing.List[int],
@@ -1541,8 +1541,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[stream_types.LinkedList, types.LinkedList](
           result,
-          lambda x: typing.cast(stream_types.LinkedList, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.LinkedList, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(stream_types.LinkedList, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.LinkedList, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def BuildTree(self, input: types.BinaryNode,
@@ -1553,8 +1553,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[stream_types.Tree, types.Tree](
           result,
-          lambda x: typing.cast(stream_types.Tree, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.Tree, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(stream_types.Tree, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.Tree, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def ClassThatPointsToRecursiveClassThroughAlias(self, cls: types.ClassToRecAlias,
@@ -1565,8 +1565,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[stream_types.ClassToRecAlias, types.ClassToRecAlias](
           result,
-          lambda x: typing.cast(stream_types.ClassToRecAlias, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.ClassToRecAlias, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(stream_types.ClassToRecAlias, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.ClassToRecAlias, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def ClassifyDynEnumTwo(self, input: str,
@@ -1577,8 +1577,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[typing.Union[types.DynEnumTwo, str], typing.Union[types.DynEnumTwo, str]](
           result,
-          lambda x: typing.cast(typing.Union[types.DynEnumTwo, str], x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(typing.Union[types.DynEnumTwo, str], x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(typing.Union[types.DynEnumTwo, str], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing.Union[types.DynEnumTwo, str], x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def ClassifyMessage(self, input: str,
@@ -1589,8 +1589,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[types.Category, types.Category](
           result,
-          lambda x: typing.cast(types.Category, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.Category, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(types.Category, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.Category, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def ClassifyMessage2(self, input: str,
@@ -1601,8 +1601,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[types.Category, types.Category](
           result,
-          lambda x: typing.cast(types.Category, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.Category, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(types.Category, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.Category, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def ClassifyMessage3(self, input: str,
@@ -1613,8 +1613,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[types.Category, types.Category](
           result,
-          lambda x: typing.cast(types.Category, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.Category, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(types.Category, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.Category, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def Completion(self, prefix: str,suffix: str,language: str,
@@ -1625,8 +1625,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def CustomTask(self, input: str,
@@ -1637,8 +1637,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[typing.Union["stream_types.BookOrder", "stream_types.FlightConfirmation", "stream_types.GroceryReceipt"], typing.Union["types.BookOrder", "types.FlightConfirmation", "types.GroceryReceipt"]](
           result,
-          lambda x: typing.cast(typing.Union["stream_types.BookOrder", "stream_types.FlightConfirmation", "stream_types.GroceryReceipt"], x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(typing.Union["types.BookOrder", "types.FlightConfirmation", "types.GroceryReceipt"], x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(typing.Union["stream_types.BookOrder", "stream_types.FlightConfirmation", "stream_types.GroceryReceipt"], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing.Union["types.BookOrder", "types.FlightConfirmation", "types.GroceryReceipt"], x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def DescribeImage(self, img: baml_py.Image,
@@ -1649,8 +1649,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def DescribeImage2(self, classWithImage: types.ClassWithImage,img2: baml_py.Image,
@@ -1661,8 +1661,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def DescribeImage3(self, classWithImage: types.ClassWithImage,img2: baml_py.Image,
@@ -1673,8 +1673,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def DescribeImage4(self, classWithImage: types.ClassWithImage,img2: baml_py.Image,
@@ -1685,8 +1685,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def DescribeMedia1599(self, img: baml_py.Image,client_sector: str,client_name: str,
@@ -1697,8 +1697,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def DifferentiateUnions(self, 
@@ -1709,8 +1709,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[typing.Union["stream_types.OriginalA", "stream_types.OriginalB"], typing.Union["types.OriginalA", "types.OriginalB"]](
           result,
-          lambda x: typing.cast(typing.Union["stream_types.OriginalA", "stream_types.OriginalB"], x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(typing.Union["types.OriginalA", "types.OriginalB"], x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(typing.Union["stream_types.OriginalA", "stream_types.OriginalB"], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing.Union["types.OriginalA", "types.OriginalB"], x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def DummyOutputFunction(self, input: str,
@@ -1721,8 +1721,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[stream_types.DummyOutput, types.DummyOutput](
           result,
-          lambda x: typing.cast(stream_types.DummyOutput, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.DummyOutput, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(stream_types.DummyOutput, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.DummyOutput, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def DynamicFunc(self, input: types.DynamicClassOne,
@@ -1733,8 +1733,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[stream_types.DynamicClassTwo, types.DynamicClassTwo](
           result,
-          lambda x: typing.cast(stream_types.DynamicClassTwo, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.DynamicClassTwo, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(stream_types.DynamicClassTwo, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.DynamicClassTwo, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def DynamicInputOutput(self, input: types.DynInputOutput,
@@ -1745,8 +1745,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[stream_types.DynInputOutput, types.DynInputOutput](
           result,
-          lambda x: typing.cast(stream_types.DynInputOutput, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.DynInputOutput, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(stream_types.DynInputOutput, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.DynInputOutput, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def DynamicListInputOutput(self, input: typing.List["types.DynInputOutput"],
@@ -1757,8 +1757,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[typing.List["stream_types.DynInputOutput"], typing.List["types.DynInputOutput"]](
           result,
-          lambda x: typing.cast(typing.List["stream_types.DynInputOutput"], x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(typing.List["types.DynInputOutput"], x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(typing.List["stream_types.DynInputOutput"], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing.List["types.DynInputOutput"], x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def ExpectFailure(self, 
@@ -1769,8 +1769,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def ExtractContactInfo(self, document: str,
@@ -1781,8 +1781,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[stream_types.ContactInfo, types.ContactInfo](
           result,
-          lambda x: typing.cast(stream_types.ContactInfo, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.ContactInfo, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(stream_types.ContactInfo, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.ContactInfo, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def ExtractEntities(self, text: str,
@@ -1793,8 +1793,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[stream_types.DynamicSchema, types.DynamicSchema](
           result,
-          lambda x: typing.cast(stream_types.DynamicSchema, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.DynamicSchema, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(stream_types.DynamicSchema, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.DynamicSchema, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def ExtractHobby(self, text: str,
@@ -1805,8 +1805,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[typing.List[typing.Union[types.Hobby, str]], typing.List[typing.Union[types.Hobby, str]]](
           result,
-          lambda x: typing.cast(typing.List[typing.Union[types.Hobby, str]], x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(typing.List[typing.Union[types.Hobby, str]], x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(typing.List[typing.Union[types.Hobby, str]], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing.List[typing.Union[types.Hobby, str]], x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def ExtractNames(self, input: str,
@@ -1817,8 +1817,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[typing.List[str], typing.List[str]](
           result,
-          lambda x: typing.cast(typing.List[str], x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(typing.List[str], x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(typing.List[str], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing.List[str], x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def ExtractPeople(self, text: str,
@@ -1829,8 +1829,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[typing.List["stream_types.Person"], typing.List["types.Person"]](
           result,
-          lambda x: typing.cast(typing.List["stream_types.Person"], x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(typing.List["types.Person"], x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(typing.List["stream_types.Person"], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing.List["types.Person"], x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def ExtractReceiptInfo(self, email: str,reason: typing.Union[typing_extensions.Literal['curiosity'], typing_extensions.Literal['personal_finance']],
@@ -1841,8 +1841,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[stream_types.ReceiptInfo, types.ReceiptInfo](
           result,
-          lambda x: typing.cast(stream_types.ReceiptInfo, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.ReceiptInfo, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(stream_types.ReceiptInfo, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.ReceiptInfo, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def ExtractResume(self, resume: str,img: typing.Optional[baml_py.Image] = None,
@@ -1853,8 +1853,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[stream_types.Resume, types.Resume](
           result,
-          lambda x: typing.cast(stream_types.Resume, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.Resume, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(stream_types.Resume, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.Resume, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def ExtractResume2(self, resume: str,
@@ -1865,8 +1865,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[stream_types.Resume, types.Resume](
           result,
-          lambda x: typing.cast(stream_types.Resume, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.Resume, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(stream_types.Resume, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.Resume, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def FnClassOptionalOutput(self, input: str,
@@ -1877,8 +1877,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[typing.Optional["stream_types.ClassOptionalOutput"], typing.Optional["types.ClassOptionalOutput"]](
           result,
-          lambda x: typing.cast(typing.Optional["stream_types.ClassOptionalOutput"], x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(typing.Optional["types.ClassOptionalOutput"], x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(typing.Optional["stream_types.ClassOptionalOutput"], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing.Optional["types.ClassOptionalOutput"], x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def FnClassOptionalOutput2(self, input: str,
@@ -1889,8 +1889,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[typing.Optional["stream_types.ClassOptionalOutput2"], typing.Optional["types.ClassOptionalOutput2"]](
           result,
-          lambda x: typing.cast(typing.Optional["stream_types.ClassOptionalOutput2"], x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(typing.Optional["types.ClassOptionalOutput2"], x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(typing.Optional["stream_types.ClassOptionalOutput2"], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing.Optional["types.ClassOptionalOutput2"], x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def FnEnumListOutput(self, input: str,
@@ -1901,8 +1901,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[typing.List[types.EnumOutput], typing.List[types.EnumOutput]](
           result,
-          lambda x: typing.cast(typing.List[types.EnumOutput], x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(typing.List[types.EnumOutput], x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(typing.List[types.EnumOutput], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing.List[types.EnumOutput], x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def FnEnumOutput(self, input: str,
@@ -1913,8 +1913,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[types.EnumOutput, types.EnumOutput](
           result,
-          lambda x: typing.cast(types.EnumOutput, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.EnumOutput, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(types.EnumOutput, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.EnumOutput, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def FnLiteralClassInputOutput(self, input: types.LiteralClassHello,
@@ -1925,8 +1925,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[stream_types.LiteralClassHello, types.LiteralClassHello](
           result,
-          lambda x: typing.cast(stream_types.LiteralClassHello, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.LiteralClassHello, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(stream_types.LiteralClassHello, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.LiteralClassHello, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def FnLiteralUnionClassInputOutput(self, input: typing.Union["types.LiteralClassOne", "types.LiteralClassTwo"],
@@ -1937,8 +1937,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[typing.Union["stream_types.LiteralClassOne", "stream_types.LiteralClassTwo"], typing.Union["types.LiteralClassOne", "types.LiteralClassTwo"]](
           result,
-          lambda x: typing.cast(typing.Union["stream_types.LiteralClassOne", "stream_types.LiteralClassTwo"], x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(typing.Union["types.LiteralClassOne", "types.LiteralClassTwo"], x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(typing.Union["stream_types.LiteralClassOne", "stream_types.LiteralClassTwo"], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing.Union["types.LiteralClassOne", "types.LiteralClassTwo"], x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def FnNamedArgsSingleStringOptional(self, myString: typing.Optional[str] = None,
@@ -1949,8 +1949,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def FnOutputBool(self, input: str,
@@ -1961,8 +1961,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[bool, bool](
           result,
-          lambda x: typing.cast(bool, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(bool, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(bool, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(bool, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def FnOutputClass(self, input: str,
@@ -1973,8 +1973,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[stream_types.TestOutputClass, types.TestOutputClass](
           result,
-          lambda x: typing.cast(stream_types.TestOutputClass, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.TestOutputClass, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(stream_types.TestOutputClass, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.TestOutputClass, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def FnOutputClassList(self, input: str,
@@ -1985,8 +1985,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[typing.List["stream_types.TestOutputClass"], typing.List["types.TestOutputClass"]](
           result,
-          lambda x: typing.cast(typing.List["stream_types.TestOutputClass"], x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(typing.List["types.TestOutputClass"], x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(typing.List["stream_types.TestOutputClass"], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing.List["types.TestOutputClass"], x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def FnOutputClassNested(self, input: str,
@@ -1997,8 +1997,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[stream_types.TestClassNested, types.TestClassNested](
           result,
-          lambda x: typing.cast(stream_types.TestClassNested, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.TestClassNested, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(stream_types.TestClassNested, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.TestClassNested, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def FnOutputClassWithEnum(self, input: str,
@@ -2009,8 +2009,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[stream_types.TestClassWithEnum, types.TestClassWithEnum](
           result,
-          lambda x: typing.cast(stream_types.TestClassWithEnum, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.TestClassWithEnum, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(stream_types.TestClassWithEnum, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.TestClassWithEnum, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def FnOutputInt(self, input: str,
@@ -2021,8 +2021,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[int, int](
           result,
-          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def FnOutputLiteralBool(self, input: str,
@@ -2033,8 +2033,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[bool, typing_extensions.Literal[False]](
           result,
-          lambda x: typing.cast(bool, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(typing_extensions.Literal[False], x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(bool, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing_extensions.Literal[False], x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def FnOutputLiteralInt(self, input: str,
@@ -2045,8 +2045,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[int, typing_extensions.Literal[5]](
           result,
-          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(typing_extensions.Literal[5], x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing_extensions.Literal[5], x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def FnOutputLiteralString(self, input: str,
@@ -2057,8 +2057,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, typing_extensions.Literal['example output']](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(typing_extensions.Literal['example output'], x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing_extensions.Literal['example output'], x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def FnOutputStringList(self, input: str,
@@ -2069,8 +2069,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[typing.List[str], typing.List[str]](
           result,
-          lambda x: typing.cast(typing.List[str], x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(typing.List[str], x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(typing.List[str], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing.List[str], x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def FnTestAliasedEnumOutput(self, input: str,
@@ -2081,8 +2081,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[types.TestEnum, types.TestEnum](
           result,
-          lambda x: typing.cast(types.TestEnum, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.TestEnum, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(types.TestEnum, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.TestEnum, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def FnTestClassAlias(self, input: str,
@@ -2093,8 +2093,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[stream_types.TestClassAlias, types.TestClassAlias](
           result,
-          lambda x: typing.cast(stream_types.TestClassAlias, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.TestClassAlias, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(stream_types.TestClassAlias, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.TestClassAlias, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def FnTestNamedArgsSingleEnum(self, myArg: types.NamedArgsSingleEnum,
@@ -2105,8 +2105,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def GetDataType(self, text: str,
@@ -2117,8 +2117,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[stream_types.RaysData, types.RaysData](
           result,
-          lambda x: typing.cast(stream_types.RaysData, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.RaysData, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(stream_types.RaysData, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.RaysData, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def GetOrderInfo(self, email: types.Email,
@@ -2129,8 +2129,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[stream_types.OrderInfo, types.OrderInfo](
           result,
-          lambda x: typing.cast(stream_types.OrderInfo, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.OrderInfo, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(stream_types.OrderInfo, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.OrderInfo, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def GetQuery(self, query: str,
@@ -2141,8 +2141,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[stream_types.SearchParams, types.SearchParams](
           result,
-          lambda x: typing.cast(stream_types.SearchParams, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.SearchParams, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(stream_types.SearchParams, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.SearchParams, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def InOutEnumMapKey(self, i1: typing.Dict[types.MapKey, str],i2: typing.Dict[types.MapKey, str],
@@ -2153,8 +2153,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[typing.Dict[types.MapKey, str], typing.Dict[types.MapKey, str]](
           result,
-          lambda x: typing.cast(typing.Dict[types.MapKey, str], x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(typing.Dict[types.MapKey, str], x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(typing.Dict[types.MapKey, str], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing.Dict[types.MapKey, str], x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def InOutLiteralStringUnionMapKey(self, i1: typing.Dict[typing.Union[typing_extensions.Literal['one'], typing_extensions.Literal['two'], typing_extensions.Literal['three'], typing_extensions.Literal['four']], str],i2: typing.Dict[typing.Union[typing_extensions.Literal['one'], typing_extensions.Literal['two'], typing_extensions.Literal['three'], typing_extensions.Literal['four']], str],
@@ -2165,8 +2165,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[typing.Dict[typing.Union[str, str, str, str], str], typing.Dict[typing.Union[typing_extensions.Literal['one'], typing_extensions.Literal['two'], typing_extensions.Literal['three'], typing_extensions.Literal['four']], str]](
           result,
-          lambda x: typing.cast(typing.Dict[typing.Union[str, str, str, str], str], x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(typing.Dict[typing.Union[typing_extensions.Literal['one'], typing_extensions.Literal['two'], typing_extensions.Literal['three'], typing_extensions.Literal['four']], str], x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(typing.Dict[typing.Union[str, str, str, str], str], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing.Dict[typing.Union[typing_extensions.Literal['one'], typing_extensions.Literal['two'], typing_extensions.Literal['three'], typing_extensions.Literal['four']], str], x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def InOutSingleLiteralStringMapKey(self, m: typing.Dict[typing_extensions.Literal['key'], str],
@@ -2177,8 +2177,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[typing.Dict[str, str], typing.Dict[typing_extensions.Literal['key'], str]](
           result,
-          lambda x: typing.cast(typing.Dict[str, str], x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(typing.Dict[typing_extensions.Literal['key'], str], x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(typing.Dict[str, str], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing.Dict[typing_extensions.Literal['key'], str], x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def JsonTypeAliasCycle(self, input: types.JsonValue,
@@ -2189,8 +2189,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[stream_types.JsonValue, types.JsonValue](
           result,
-          lambda x: typing.cast(stream_types.JsonValue, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.JsonValue, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(stream_types.JsonValue, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.JsonValue, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def LLMEcho(self, input: str,
@@ -2201,8 +2201,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def LiteralUnionsTest(self, input: str,
@@ -2213,8 +2213,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[typing.Union[int, bool, str], typing.Union[typing_extensions.Literal[1], typing_extensions.Literal[True], typing_extensions.Literal['string output']]](
           result,
-          lambda x: typing.cast(typing.Union[int, bool, str], x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(typing.Union[typing_extensions.Literal[1], typing_extensions.Literal[True], typing_extensions.Literal['string output']], x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(typing.Union[int, bool, str], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing.Union[typing_extensions.Literal[1], typing_extensions.Literal[True], typing_extensions.Literal['string output']], x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def MakeBlockConstraint(self, 
@@ -2225,8 +2225,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[types.Checked["stream_types.BlockConstraint", typing_extensions.Literal['cross_field', 'cross_field']], types.Checked["types.BlockConstraint", typing_extensions.Literal['cross_field', 'cross_field']]](
           result,
-          lambda x: typing.cast(types.Checked["stream_types.BlockConstraint", typing_extensions.Literal['cross_field', 'cross_field']], x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.Checked["types.BlockConstraint", typing_extensions.Literal['cross_field', 'cross_field']], x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(types.Checked["stream_types.BlockConstraint", typing_extensions.Literal['cross_field', 'cross_field']], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.Checked["types.BlockConstraint", typing_extensions.Literal['cross_field', 'cross_field']], x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def MakeClassWithBlockDone(self, 
@@ -2237,8 +2237,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[types.ClassWithBlockDone, types.ClassWithBlockDone](
           result,
-          lambda x: typing.cast(types.ClassWithBlockDone, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.ClassWithBlockDone, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(types.ClassWithBlockDone, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.ClassWithBlockDone, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def MakeClassWithExternalDone(self, 
@@ -2249,8 +2249,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[types.ClassWithoutDone, types.ClassWithoutDone](
           result,
-          lambda x: typing.cast(types.ClassWithoutDone, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.ClassWithoutDone, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(types.ClassWithoutDone, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.ClassWithoutDone, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def MakeNestedBlockConstraint(self, 
@@ -2261,8 +2261,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[stream_types.NestedBlockConstraint, types.NestedBlockConstraint](
           result,
-          lambda x: typing.cast(stream_types.NestedBlockConstraint, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.NestedBlockConstraint, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(stream_types.NestedBlockConstraint, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.NestedBlockConstraint, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def MakeSemanticContainer(self, 
@@ -2273,8 +2273,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[stream_types.SemanticContainer, types.SemanticContainer](
           result,
-          lambda x: typing.cast(stream_types.SemanticContainer, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.SemanticContainer, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(stream_types.SemanticContainer, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.SemanticContainer, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def MapAlias(self, m: typing.Dict[str, typing.List[str]],
@@ -2285,8 +2285,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[typing.Dict[str, typing.List[str]], typing.Dict[str, typing.List[str]]](
           result,
-          lambda x: typing.cast(typing.Dict[str, typing.List[str]], x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(typing.Dict[str, typing.List[str]], x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(typing.Dict[str, typing.List[str]], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing.Dict[str, typing.List[str]], x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def MergeAliasAttributes(self, money: int,
@@ -2297,8 +2297,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[stream_types.MergeAttrs, types.MergeAttrs](
           result,
-          lambda x: typing.cast(stream_types.MergeAttrs, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.MergeAttrs, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(stream_types.MergeAttrs, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.MergeAttrs, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def MyFunc(self, input: str,
@@ -2309,8 +2309,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[stream_types.DynamicOutput, types.DynamicOutput](
           result,
-          lambda x: typing.cast(stream_types.DynamicOutput, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.DynamicOutput, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(stream_types.DynamicOutput, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.DynamicOutput, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def NestedAlias(self, c: typing.Union[int, str, bool, float, typing.List[str], typing.Dict[str, typing.List[str]]],
@@ -2321,8 +2321,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[typing.Union[int, str, bool, float, typing.List[str], typing.Dict[str, typing.List[str]]], typing.Union[int, str, bool, float, typing.List[str], typing.Dict[str, typing.List[str]]]](
           result,
-          lambda x: typing.cast(typing.Union[int, str, bool, float, typing.List[str], typing.Dict[str, typing.List[str]]], x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(typing.Union[int, str, bool, float, typing.List[str], typing.Dict[str, typing.List[str]]], x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(typing.Union[int, str, bool, float, typing.List[str], typing.Dict[str, typing.List[str]]], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing.Union[int, str, bool, float, typing.List[str], typing.Dict[str, typing.List[str]]], x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def NullLiteralClassHello(self, s: str,
@@ -2333,8 +2333,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[stream_types.ClassForNullLiteral, types.ClassForNullLiteral](
           result,
-          lambda x: typing.cast(stream_types.ClassForNullLiteral, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.ClassForNullLiteral, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(stream_types.ClassForNullLiteral, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.ClassForNullLiteral, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def OpenAIWithAnthropicResponseHello(self, s: str,
@@ -2345,8 +2345,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def OptionalTest_Function(self, input: str,
@@ -2357,8 +2357,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[typing.List[typing.Optional["stream_types.OptionalTest_ReturnType"]], typing.List[typing.Optional["types.OptionalTest_ReturnType"]]](
           result,
-          lambda x: typing.cast(typing.List[typing.Optional["stream_types.OptionalTest_ReturnType"]], x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(typing.List[typing.Optional["types.OptionalTest_ReturnType"]], x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(typing.List[typing.Optional["stream_types.OptionalTest_ReturnType"]], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing.List[typing.Optional["types.OptionalTest_ReturnType"]], x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def PredictAge(self, name: str,
@@ -2369,8 +2369,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[stream_types.FooAny, types.FooAny](
           result,
-          lambda x: typing.cast(stream_types.FooAny, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.FooAny, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(stream_types.FooAny, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.FooAny, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def PredictAgeBare(self, inp: str,
@@ -2381,8 +2381,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[types.Checked[int, typing_extensions.Literal['too_big']], types.Checked[int, typing_extensions.Literal['too_big']]](
           result,
-          lambda x: typing.cast(types.Checked[int, typing_extensions.Literal['too_big']], x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.Checked[int, typing_extensions.Literal['too_big']], x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(types.Checked[int, typing_extensions.Literal['too_big']], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.Checked[int, typing_extensions.Literal['too_big']], x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def PrimitiveAlias(self, p: typing.Union[int, str, bool, float],
@@ -2393,8 +2393,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[typing.Union[int, str, bool, float], typing.Union[int, str, bool, float]](
           result,
-          lambda x: typing.cast(typing.Union[int, str, bool, float], x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(typing.Union[int, str, bool, float], x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(typing.Union[int, str, bool, float], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing.Union[int, str, bool, float], x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def PromptTestClaude(self, input: str,
@@ -2405,8 +2405,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def PromptTestClaudeChat(self, input: str,
@@ -2417,8 +2417,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def PromptTestClaudeChatNoSystem(self, input: str,
@@ -2429,8 +2429,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def PromptTestOpenAI(self, input: str,
@@ -2441,8 +2441,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def PromptTestOpenAIChat(self, input: str,
@@ -2453,8 +2453,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def PromptTestOpenAIChatNoSystem(self, input: str,
@@ -2465,8 +2465,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def PromptTestStreaming(self, input: str,
@@ -2477,8 +2477,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def RecursiveAliasCycle(self, input: types.RecAliasOne,
@@ -2489,8 +2489,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[stream_types.RecAliasOne, types.RecAliasOne](
           result,
-          lambda x: typing.cast(stream_types.RecAliasOne, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.RecAliasOne, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(stream_types.RecAliasOne, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.RecAliasOne, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def RecursiveClassWithAliasIndirection(self, cls: types.NodeWithAliasIndirection,
@@ -2501,8 +2501,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[stream_types.NodeWithAliasIndirection, types.NodeWithAliasIndirection](
           result,
-          lambda x: typing.cast(stream_types.NodeWithAliasIndirection, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.NodeWithAliasIndirection, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(stream_types.NodeWithAliasIndirection, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.NodeWithAliasIndirection, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def RecursiveUnionTest(self, input: types.RecursiveUnion,
@@ -2513,8 +2513,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[stream_types.RecursiveUnion, types.RecursiveUnion](
           result,
-          lambda x: typing.cast(stream_types.RecursiveUnion, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.RecursiveUnion, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(stream_types.RecursiveUnion, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.RecursiveUnion, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def ReturnAliasWithMergedAttributes(self, money: int,
@@ -2525,8 +2525,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[types.Checked[int, typing_extensions.Literal['gt_ten']], types.Checked[int, typing_extensions.Literal['gt_ten']]](
           result,
-          lambda x: typing.cast(types.Checked[int, typing_extensions.Literal['gt_ten']], x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.Checked[int, typing_extensions.Literal['gt_ten']], x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(types.Checked[int, typing_extensions.Literal['gt_ten']], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.Checked[int, typing_extensions.Literal['gt_ten']], x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def ReturnFailingAssert(self, inp: int,
@@ -2537,8 +2537,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[int, int](
           result,
-          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def ReturnJsonEntry(self, s: str,
@@ -2549,8 +2549,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[stream_types.JsonTemplate, types.JsonTemplate](
           result,
-          lambda x: typing.cast(stream_types.JsonTemplate, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.JsonTemplate, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(stream_types.JsonTemplate, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.JsonTemplate, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def ReturnMalformedConstraints(self, a: int,
@@ -2561,8 +2561,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[stream_types.MalformedConstraints, types.MalformedConstraints](
           result,
-          lambda x: typing.cast(stream_types.MalformedConstraints, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.MalformedConstraints, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(stream_types.MalformedConstraints, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.MalformedConstraints, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def SchemaDescriptions(self, input: str,
@@ -2573,8 +2573,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[stream_types.Schema, types.Schema](
           result,
-          lambda x: typing.cast(stream_types.Schema, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.Schema, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(stream_types.Schema, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.Schema, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def SimpleRecursiveListAlias(self, input: types.RecursiveListAlias,
@@ -2585,8 +2585,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[stream_types.RecursiveListAlias, types.RecursiveListAlias](
           result,
-          lambda x: typing.cast(stream_types.RecursiveListAlias, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.RecursiveListAlias, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(stream_types.RecursiveListAlias, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.RecursiveListAlias, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def SimpleRecursiveMapAlias(self, input: types.RecursiveMapAlias,
@@ -2597,8 +2597,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[stream_types.RecursiveMapAlias, types.RecursiveMapAlias](
           result,
-          lambda x: typing.cast(stream_types.RecursiveMapAlias, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.RecursiveMapAlias, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(stream_types.RecursiveMapAlias, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.RecursiveMapAlias, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def StreamBigNumbers(self, digits: int,
@@ -2609,8 +2609,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[stream_types.BigNumbers, types.BigNumbers](
           result,
-          lambda x: typing.cast(stream_types.BigNumbers, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.BigNumbers, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(stream_types.BigNumbers, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.BigNumbers, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def StreamFailingAssertion(self, theme: str,length: int,
@@ -2621,8 +2621,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[stream_types.TwoStoriesOneTitle, types.TwoStoriesOneTitle](
           result,
-          lambda x: typing.cast(stream_types.TwoStoriesOneTitle, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.TwoStoriesOneTitle, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(stream_types.TwoStoriesOneTitle, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.TwoStoriesOneTitle, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def StreamFailingCheck(self, theme: str,length: int,
@@ -2633,8 +2633,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[stream_types.TwoStoriesOneTitleCheck, types.TwoStoriesOneTitleCheck](
           result,
-          lambda x: typing.cast(stream_types.TwoStoriesOneTitleCheck, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.TwoStoriesOneTitleCheck, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(stream_types.TwoStoriesOneTitleCheck, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.TwoStoriesOneTitleCheck, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def StreamOneBigNumber(self, digits: int,
@@ -2645,8 +2645,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[int, int](
           result,
-          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def StreamUnionIntegers(self, digits: int,
@@ -2657,8 +2657,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[typing.List[typing.Union[int, str]], typing.List[typing.Union[int, str]]](
           result,
-          lambda x: typing.cast(typing.List[typing.Union[int, str]], x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(typing.List[typing.Union[int, str]], x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(typing.List[typing.Union[int, str]], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing.List[typing.Union[int, str]], x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def StreamingCompoundNumbers(self, digits: int,yapping: bool,
@@ -2669,8 +2669,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[stream_types.CompoundBigNumbers, types.CompoundBigNumbers](
           result,
-          lambda x: typing.cast(stream_types.CompoundBigNumbers, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.CompoundBigNumbers, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(stream_types.CompoundBigNumbers, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.CompoundBigNumbers, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def StructureDocument1559(self, document_txt: str,
@@ -2681,8 +2681,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[stream_types.Document1559, types.Document1559](
           result,
-          lambda x: typing.cast(stream_types.Document1559, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.Document1559, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(stream_types.Document1559, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.Document1559, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TakeRecAliasDep(self, input: types.RecursiveAliasDependency,
@@ -2693,8 +2693,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[stream_types.RecursiveAliasDependency, types.RecursiveAliasDependency](
           result,
-          lambda x: typing.cast(stream_types.RecursiveAliasDependency, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.RecursiveAliasDependency, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(stream_types.RecursiveAliasDependency, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.RecursiveAliasDependency, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TellStory(self, story: str,
@@ -2705,8 +2705,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestAnthropic(self, input: str,
@@ -2717,8 +2717,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestAnthropicShorthand(self, input: str,
@@ -2729,8 +2729,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestAws(self, input: str,
@@ -2741,8 +2741,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestAwsClaude37(self, input: str,
@@ -2753,8 +2753,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestAwsInferenceProfile(self, input: str,
@@ -2765,8 +2765,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestAwsInvalidAccessKey(self, input: str,
@@ -2777,8 +2777,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestAwsInvalidProfile(self, input: str,
@@ -2789,8 +2789,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestAwsInvalidRegion(self, input: str,
@@ -2801,8 +2801,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestAwsInvalidSessionToken(self, input: str,
@@ -2813,8 +2813,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestAzure(self, input: str,
@@ -2825,8 +2825,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestAzureFailure(self, input: str,
@@ -2837,8 +2837,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestAzureO1NoMaxTokens(self, input: str,
@@ -2849,8 +2849,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestAzureO1WithMaxCompletionTokens(self, input: str,
@@ -2861,8 +2861,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestAzureO1WithMaxTokens(self, input: str,
@@ -2873,8 +2873,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestAzureO3NoMaxTokens(self, input: str,
@@ -2885,8 +2885,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestAzureO3WithMaxCompletionTokens(self, input: str,
@@ -2897,8 +2897,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestAzureWithMaxTokens(self, input: str,
@@ -2909,8 +2909,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestCaching(self, input: str,not_cached: str,
@@ -2921,8 +2921,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestFallbackClient(self, 
@@ -2933,8 +2933,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestFallbackStrategy(self, input: str,
@@ -2945,8 +2945,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestFallbackToShorthand(self, input: str,
@@ -2957,8 +2957,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestFnNamedArgsSingleBool(self, myBool: bool,
@@ -2969,8 +2969,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestFnNamedArgsSingleClass(self, myArg: types.NamedArgsSingleClass,
@@ -2981,8 +2981,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestFnNamedArgsSingleEnumList(self, myArg: typing.List[types.NamedArgsSingleEnumList],
@@ -2993,8 +2993,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestFnNamedArgsSingleFloat(self, myFloat: float,
@@ -3005,8 +3005,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestFnNamedArgsSingleInt(self, myInt: int,
@@ -3017,8 +3017,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestFnNamedArgsSingleMapStringToClass(self, myMap: typing.Dict[str, "types.StringToClassEntry"],
@@ -3029,8 +3029,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[typing.Dict[str, "stream_types.StringToClassEntry"], typing.Dict[str, "types.StringToClassEntry"]](
           result,
-          lambda x: typing.cast(typing.Dict[str, "stream_types.StringToClassEntry"], x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(typing.Dict[str, "types.StringToClassEntry"], x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(typing.Dict[str, "stream_types.StringToClassEntry"], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing.Dict[str, "types.StringToClassEntry"], x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestFnNamedArgsSingleMapStringToMap(self, myMap: typing.Dict[str, typing.Dict[str, str]],
@@ -3041,8 +3041,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[typing.Dict[str, typing.Dict[str, str]], typing.Dict[str, typing.Dict[str, str]]](
           result,
-          lambda x: typing.cast(typing.Dict[str, typing.Dict[str, str]], x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(typing.Dict[str, typing.Dict[str, str]], x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(typing.Dict[str, typing.Dict[str, str]], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing.Dict[str, typing.Dict[str, str]], x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestFnNamedArgsSingleMapStringToString(self, myMap: typing.Dict[str, str],
@@ -3053,8 +3053,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[typing.Dict[str, str], typing.Dict[str, str]](
           result,
-          lambda x: typing.cast(typing.Dict[str, str], x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(typing.Dict[str, str], x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(typing.Dict[str, str], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing.Dict[str, str], x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestFnNamedArgsSingleString(self, myString: str,
@@ -3065,8 +3065,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestFnNamedArgsSingleStringArray(self, myStringArray: typing.List[str],
@@ -3077,8 +3077,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestFnNamedArgsSingleStringList(self, myArg: typing.List[str],
@@ -3089,8 +3089,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[typing.List[str], typing.List[str]](
           result,
-          lambda x: typing.cast(typing.List[str], x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(typing.List[str], x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(typing.List[str], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing.List[str], x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestGemini(self, input: str,
@@ -3101,8 +3101,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestGeminiOpenAiGeneric(self, 
@@ -3113,8 +3113,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestGeminiSystem(self, input: str,
@@ -3125,8 +3125,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestGeminiSystemAsChat(self, input: str,
@@ -3137,8 +3137,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestGroq(self, input: str,
@@ -3149,8 +3149,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestImageInput(self, img: baml_py.Image,
@@ -3161,8 +3161,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestImageInputAnthropic(self, img: baml_py.Image,
@@ -3173,8 +3173,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestImageListInput(self, imgs: typing.List[baml_py.Image],
@@ -3185,8 +3185,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestMemory(self, input: str,
@@ -3197,8 +3197,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[stream_types.TestMemoryOutput, types.TestMemoryOutput](
           result,
-          lambda x: typing.cast(stream_types.TestMemoryOutput, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.TestMemoryOutput, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(stream_types.TestMemoryOutput, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.TestMemoryOutput, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestMulticlassNamedArgs(self, myArg: types.NamedArgsSingleClass,myArg2: types.NamedArgsSingleClass,
@@ -3209,8 +3209,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestNamedArgsLiteralBool(self, myBool: typing_extensions.Literal[True],
@@ -3221,8 +3221,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestNamedArgsLiteralInt(self, myInt: typing_extensions.Literal[1],
@@ -3233,8 +3233,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestNamedArgsLiteralString(self, myString: typing_extensions.Literal['My String'],
@@ -3245,8 +3245,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestOllama(self, input: str,
@@ -3257,8 +3257,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[typing.Optional[str], typing.Optional[str]](
           result,
-          lambda x: typing.cast(typing.Optional[str], x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(typing.Optional[str], x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(typing.Optional[str], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing.Optional[str], x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestOllamaHaiku(self, input: str,
@@ -3269,8 +3269,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[stream_types.Haiku, types.Haiku](
           result,
-          lambda x: typing.cast(stream_types.Haiku, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.Haiku, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(stream_types.Haiku, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.Haiku, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestOpenAI(self, input: str,
@@ -3281,8 +3281,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestOpenAIDummyClient(self, input: str,
@@ -3293,8 +3293,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestOpenAIGPT4oMini(self, input: str,
@@ -3305,8 +3305,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestOpenAIGPT4oMini2(self, input: str,
@@ -3317,8 +3317,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestOpenAIGPT4oMini3(self, input: str,
@@ -3329,8 +3329,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestOpenAILegacyProvider(self, input: str,
@@ -3341,8 +3341,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestOpenAIO1NoMaxTokens(self, input: str,
@@ -3353,8 +3353,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestOpenAIO1WithMaxCompletionTokens(self, input: str,
@@ -3365,8 +3365,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestOpenAIO1WithMaxTokens(self, input: str,
@@ -3377,8 +3377,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestOpenAIShorthand(self, input: str,
@@ -3389,8 +3389,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestOpenAIWithFinishReasonError(self, input: str,
@@ -3401,8 +3401,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestOpenAIWithMaxTokens(self, input: str,
@@ -3413,8 +3413,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestOpenAIWithNullMaxTokens(self, input: str,
@@ -3425,8 +3425,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestOpenRouterMistralSmall3_1_24b(self, input: str,
@@ -3437,8 +3437,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestRetryConstant(self, 
@@ -3449,8 +3449,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestRetryExponential(self, 
@@ -3461,8 +3461,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestRoundRobinStrategy(self, input: str,
@@ -3473,8 +3473,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestSingleFallbackClient(self, 
@@ -3485,8 +3485,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestThinking(self, input: str,
@@ -3497,8 +3497,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[stream_types.CustomStory, types.CustomStory](
           result,
-          lambda x: typing.cast(stream_types.CustomStory, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.CustomStory, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(stream_types.CustomStory, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.CustomStory, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestUniverseQuestion(self, question: types.UniverseQuestionInput,
@@ -3509,8 +3509,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[stream_types.UniverseQuestion, types.UniverseQuestion](
           result,
-          lambda x: typing.cast(stream_types.UniverseQuestion, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.UniverseQuestion, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(stream_types.UniverseQuestion, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.UniverseQuestion, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestVertex(self, input: str,
@@ -3521,8 +3521,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestVertexClaude(self, input: str,
@@ -3533,8 +3533,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestVertexWithSystemInstructions(self, 
@@ -3545,8 +3545,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def UnionTest_Function(self, input: typing.Union[str, bool],
@@ -3557,8 +3557,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[stream_types.UnionTest_ReturnType, types.UnionTest_ReturnType](
           result,
-          lambda x: typing.cast(stream_types.UnionTest_ReturnType, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.UnionTest_ReturnType, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(stream_types.UnionTest_ReturnType, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.UnionTest_ReturnType, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def UseBlockConstraint(self, inp: types.BlockConstraintForParam,
@@ -3569,8 +3569,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[int, int](
           result,
-          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def UseMaintainFieldOrder(self, input: types.MaintainFieldOrder,
@@ -3581,8 +3581,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[stream_types.MaintainFieldOrder, types.MaintainFieldOrder](
           result,
-          lambda x: typing.cast(stream_types.MaintainFieldOrder, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.MaintainFieldOrder, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(stream_types.MaintainFieldOrder, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.MaintainFieldOrder, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def UseMalformedConstraints(self, a: types.MalformedConstraints2,
@@ -3593,8 +3593,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[int, int](
           result,
-          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def UseNestedBlockConstraint(self, inp: types.NestedBlockConstraintForParam,
@@ -3605,8 +3605,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[int, int](
           result,
-          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     

@@ -33,7 +33,7 @@ def {{ fn.name }}(
 
         return baml_py.BamlSyncStream[{{ fn.stream_return_type.serialize_type(pkg) }}, {{ fn.return_type.serialize_type(pkg) }}](
         raw,
-        lambda x: cast({{fn.stream_return_type.serialize_type(pkg)}}, x.cast_to(types, types, partial_types, True)),
-        lambda x: cast({{fn.return_type.serialize_type(pkg)}}, x.cast_to(types, types, partial_types, False)),
+        lambda x: cast({{fn.stream_return_type.serialize_type(pkg)}}, x.cast_to(types, types, partial_types, True, self.__runtime)),
+        lambda x: cast({{fn.return_type.serialize_type(pkg)}}, x.cast_to(types, types, partial_types, False, self.__runtime)),
         self.__ctx_manager.get(),
         )

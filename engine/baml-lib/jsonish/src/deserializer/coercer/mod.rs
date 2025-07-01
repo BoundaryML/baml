@@ -21,6 +21,8 @@ use crate::jsonish;
 pub struct ParsingContext<'a> {
     pub scope: Vec<String>,
     visited: HashSet<(String, jsonish::Value)>,
+    /// THIS IS A TEMPORARY HACK (ask vaibhav)
+    pub do_not_use_mode: baml_types::StreamingMode,
     pub of: &'a OutputFormatContent,
 }
 
@@ -32,10 +34,14 @@ impl ParsingContext<'_> {
         self.scope.join(".")
     }
 
-    pub(crate) fn new(of: &OutputFormatContent) -> ParsingContext<'_> {
+    pub(crate) fn new(
+        of: &OutputFormatContent,
+        mode: baml_types::StreamingMode,
+    ) -> ParsingContext<'_> {
         ParsingContext {
             scope: Vec::new(),
             visited: HashSet::new(),
+            do_not_use_mode: mode,
             of,
         }
     }
@@ -47,6 +53,7 @@ impl ParsingContext<'_> {
             scope: new_scope,
             visited: self.visited.clone(),
             of: self.of,
+            do_not_use_mode: self.do_not_use_mode.clone(),
         }
     }
 
@@ -63,6 +70,7 @@ impl ParsingContext<'_> {
             scope: self.scope.clone(),
             visited: new_visited,
             of: self.of,
+            do_not_use_mode: self.do_not_use_mode.clone(),
         }
     }
 

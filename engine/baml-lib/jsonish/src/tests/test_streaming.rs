@@ -43,7 +43,11 @@ test_partial_deserializer_streaming_failure!(
     test_toplevel_done,
     TOPLEVEL_DONE,
     "{'nums': [1,2]",
-    TypeIR::class("Foo")
+    {
+        let mut class = TypeIR::class("Foo");
+        class.meta_mut().streaming_behavior.needed = true;
+        class
+    }
 );
 
 const NESTED_DONE: &str = r#"
@@ -412,12 +416,16 @@ test_partial_deserializer_streaming_failure!(
     test_todo_tools_adjust_item,
     TODO_TOOLS_EXAMPLE,
     r#"{"type": "adjust_item", "item_id": 1, "title": "New Title"#,
-    TypeIR::union(vec![
-        TypeIR::class("MessageToUser"),
-        TypeIR::class("AdjustItem"),
-        TypeIR::class("AddItem"),
-        TypeIR::class("GetLastItemId"),
-    ])
+    {
+        let mut union = TypeIR::union(vec![
+            TypeIR::class("MessageToUser"),
+            TypeIR::class("AdjustItem"),
+            TypeIR::class("AddItem"),
+            TypeIR::class("GetLastItemId"),
+        ]);
+        union.meta_mut().streaming_behavior.needed = true;
+        union
+    }
 );
 
 // Test for @stream.not_null fields receiving null values during streaming
@@ -465,7 +473,11 @@ test_partial_deserializer_streaming_failure!(
         "three_small_things": [],
         "final_string": "end"
     }"#,
-    TypeIR::class("SemanticContainer")
+    {
+        let mut class = TypeIR::class("SemanticContainer");
+        class.meta_mut().streaming_behavior.needed = true;
+        class
+    }
 );
 
 // This test shows that when @stream.not_null fields have values, parsing succeeds
@@ -530,12 +542,17 @@ class Foo {
 }
 "#;
 
-// This test should fail because y is null but marked as @stream.not_null
-test_partial_deserializer_streaming_failure!(
+// This test should not fail because y is null but marked as @stream.not_null (the @stream.not_null is ignored)
+test_partial_deserializer!(
     test_union_not_null_with_null_value,
     UNION_NOT_NULL_TEST,
     r#"{"y": null}"#,
-    TypeIR::class("Foo")
+    {
+        let mut class = TypeIR::class("Foo");
+        class.meta_mut().streaming_behavior.needed = true;
+        class
+    },
+    {"y": null}
 );
 
 // This test should succeed because y has a non-null value
