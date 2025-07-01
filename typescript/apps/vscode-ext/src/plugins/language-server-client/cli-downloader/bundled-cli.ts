@@ -56,22 +56,22 @@ function checkNodeModulesBin(
   executableName: string,
 ): string | null {
   const nodeModulesBinPath = context.asAbsolutePath(
-    path.join('node_modules', '@baml', 'cli', 'bin', 'baml-cli'),
+    path.join('node_modules', '@baml', 'cli', 'dist', 'baml-cli'),
   );
-  
+
   console.log('nodeModulesBinPath', nodeModulesBinPath);
-  
+
   if (fs.existsSync(nodeModulesBinPath)) {
-    console.log('Found CLI in node_modules/@baml/cli/bin:', nodeModulesBinPath);
+    console.log('Found CLI in node_modules/@baml/cli/dist:', nodeModulesBinPath);
     if (ensureExecutablePermissions(nodeModulesBinPath)) {
       return nodeModulesBinPath;
     }
     console.error(
-      `CLI found in node_modules/@baml/cli/bin but failed to set permissions: ${nodeModulesBinPath}`,
+      `CLI found in node_modules/@baml/cli/dist but failed to set permissions: ${nodeModulesBinPath}`,
     );
     showPermissionError(nodeModulesBinPath);
   }
-  
+
   return null;
 }
 
@@ -85,9 +85,9 @@ function checkDevOverridePath(
   const devServerPath = context.asAbsolutePath(
     path.join('dist', executableName),
   );
-  
+
   console.log('devServerPath', devServerPath);
-  
+
   if (fs.existsSync(devServerPath)) {
     console.log('Found bundled CLI at development override path:', devServerPath);
     if (ensureExecutablePermissions(devServerPath)) {
@@ -98,7 +98,7 @@ function checkDevOverridePath(
     );
     showPermissionError(devServerPath);
   }
-  
+
   return null;
 }
 
@@ -113,7 +113,7 @@ function checkStandardBundledPath(
   const primaryBundledPath = context.asAbsolutePath(
     path.join('dist', targetTriple, executableName),
   );
-  
+
   console.log(`Checking standard bundled path: ${primaryBundledPath}`);
 
   if (fs.existsSync(primaryBundledPath)) {
@@ -126,7 +126,7 @@ function checkStandardBundledPath(
     );
     showPermissionError(primaryBundledPath);
   }
-  
+
   return null;
 }
 
@@ -143,9 +143,9 @@ function checkLinuxMuslFallback(
     const muslBundledPath = context.asAbsolutePath(
       path.join('dist', muslTargetTriple, executableName),
     );
-    
+
     console.log(`Checking Linux MUSL fallback path: ${muslBundledPath}`);
-    
+
     if (fs.existsSync(muslBundledPath)) {
       console.log('Found bundled CLI at MUSL fallback path:', muslBundledPath);
       if (ensureExecutablePermissions(muslBundledPath)) {
@@ -157,7 +157,7 @@ function checkLinuxMuslFallback(
       showPermissionError(muslBundledPath);
     }
   }
-  
+
   return null;
 }
 

@@ -139,7 +139,7 @@ client<llm> GPT35AzureFailed {
     api_key env.AZURE_OPENAI_API_KEY
   }
 }
-  
+
 client<llm> Gemini {
   provider google-ai
   options {

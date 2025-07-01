@@ -1,15 +1,12 @@
 use std::sync::Arc;
 
+use base64::{engine::general_purpose, Engine as _};
+use futures_util::{SinkExt, StreamExt};
+use mime_guess::from_path;
 use serde_json::Value;
 use warp::ws::{Message, WebSocket};
 
-use crate::session::Session;
-use crate::playground::definitions::PlaygroundState;
-
-use base64::engine::general_purpose;
-use base64::Engine as _;
-use futures_util::{StreamExt, SinkExt};
-use mime_guess::from_path;
+use crate::{playground::definitions::PlaygroundState, session::Session};
 
 /// Handles all playground RPC commands over the WebSocket connection.
 pub async fn handle_rpc_websocket(ws: WebSocket, session: Arc<Session>) {
@@ -34,17 +31,17 @@ pub async fn handle_rpc_websocket(ws: WebSocket, session: Arc<Session>) {
                     "GET_WEBVIEW_URI" => {
                         let path = data["path"].as_str().unwrap_or("");
                         let port = session.baml_settings.playground_port.unwrap_or(3030);
-                        
+
                         // Convert absolute path to relative path for /static/ URI
                         let rel_path = std::env::current_dir()
                             .ok()
                             .and_then(|cwd| std::path::Path::new(path).strip_prefix(&cwd).ok())
                             .map(|p| p.to_string_lossy().replace('\\', "/"))
                             .unwrap_or_else(|| path.to_string());
-                        
-                        let uri = format!("http://localhost:{}/static/{}", port, rel_path);
+
+                        let uri = format!("http://localhost:{port}/static/{rel_path}");
                         let mut response_data = serde_json::json!({ "uri": uri });
-                        
+
                         // For non-image files, include contents as base64
                         let mime = from_path(path).first_or_octet_stream();
                         if !mime.type_().as_str().eq("image") {
@@ -53,7 +50,7 @@ pub async fn handle_rpc_websocket(ws: WebSocket, session: Arc<Session>) {
                                 response_data["contents"] = serde_json::Value::String(base64);
                             }
                         }
-                        
+
                         let response = serde_json::json!({
                             "rpcMethod": "GET_WEBVIEW_URI",
                             "rpcId": rpc_id,
@@ -101,4 +98,4 @@ pub async fn handle_rpc_websocket(ws: WebSocket, session: Arc<Session>) {
             }
         }
     }
-} 
+}

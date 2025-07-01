@@ -15,11 +15,10 @@
   },
   "dependencies": {
     "@baml/playground-common": "workspace:*",
-    "@gloo-ai/baml-schema-wasm-web": "workspace:*",
     "@baml/ui": "workspace:*",
     "allotment": "1.20.4",
-    "next-themes": "0.4.6",
     "jotai": "2.12.5",
+    "next-themes": "0.4.6",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "typescript": "5.8.3"
@@ -31,6 +30,7 @@
     "@vitejs/plugin-react": "4.5.2",
     "rimraf": "6.0.1",
     "vite": "7.0.0",
+    "vite-plugin-static-copy": "^3.1.0",
     "vite-plugin-top-level-await": "1.5.0",
     "vite-plugin-wasm": "3.3.0"
   },

@@ -106,7 +106,7 @@ export default class TelemetryReporter {
       areBothSettingsUndefined
     ) {
       this.userOptIn = true;
-      console.info('Telemetry is enabled for BAML extension');
+      console.info('Telemetry is enabled for BAML extension.');
     } else {
       this.userOptIn = false;
       console.info('Telemetry is disabled for BAML extension');

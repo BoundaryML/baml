@@ -61,7 +61,7 @@ interface MyErrorBoundaryProps {
   message?: string;
 }
 
-const CustomErrorBoundary: React.FC<MyErrorBoundaryProps> = ({
+export const CustomErrorBoundary: React.FC<MyErrorBoundaryProps> = ({
   children,
   message,
 }) => {
@@ -78,4 +78,3 @@ const CustomErrorBoundary: React.FC<MyErrorBoundaryProps> = ({
   );
 };
 
-export default CustomErrorBoundary;

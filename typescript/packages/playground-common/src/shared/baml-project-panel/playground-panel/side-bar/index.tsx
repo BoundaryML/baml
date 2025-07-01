@@ -33,6 +33,8 @@ import {
 import { useRunBamlTests } from '../prompt-preview/test-panel/test-runner';
 import { getStatus } from '../prompt-preview/test-panel/testStateUtils';
 
+import { vscode } from '../../vscode'
+
 interface FunctionData {
   name: string;
   tests: string[];
@@ -59,9 +61,7 @@ const isEmbed =
 
 export const isSidebarOpenAtom = atomWithStorage(
   'isSidebarOpen',
-  // isEmbed ? false : vscode.isVscode() ? true : false,
-  // isEmbed ? false : vscode.isVscode() ? true : false,
-  false,
+  isEmbed ? false : vscode.isVscode() ? true : false,
 );
 
 export default function CustomSidebar({

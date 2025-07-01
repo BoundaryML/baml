@@ -54,7 +54,9 @@ export function CopyButton({
 }: CopyButtonProps) {
   const [copyState, setCopyState] = useState<CopyState>('idle');
 
-  const copyToClipboard = async () => {
+  const copyToClipboard = async (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+
     setCopyState('copying');
     try {
       await navigator.clipboard.writeText(text);

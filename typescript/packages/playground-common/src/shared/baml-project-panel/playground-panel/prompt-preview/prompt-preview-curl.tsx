@@ -1,7 +1,8 @@
 import { useAtomValue } from 'jotai';
 import { atom } from 'jotai';
 import { loadable } from 'jotai/utils';
-import { ctxAtom, envVarsAtom, runtimeAtom } from '../../atoms';
+import { ctxAtom, runtimeAtom } from '../../atoms';
+import { apiKeysAtom } from '../../../../components/api-keys-dialog/atoms';
 import { selectionAtom } from '../atoms';
 import { Loader } from './components';
 import { ErrorMessage } from './components';
@@ -13,7 +14,7 @@ type CurlResult = string | undefined | Error;
 const baseCurlAtom = atom<Promise<CurlResult>>(async (get) => {
   const rt = get(runtimeAtom).rt;
   const ctx = get(ctxAtom);
-  const envVars = get(envVarsAtom);
+  const envVars = get(apiKeysAtom);
   const { selectedFn, selectedTc } = get(selectionAtom);
 
   if (!selectedFn || !rt || !selectedTc || !ctx) {
@@ -59,7 +60,7 @@ export const PromptPreviewCurl = () => {
   }
   return (
     <WithCopyButton text={value}>
-      <pre className="w-full whitespace-pre-wrap break-all rounded-lg border bg-muted p-4 font-mono text-xs">
+      <pre className="w-full whitespace-pre-wrap break-all rounded-lg border bg-accent p-4 font-mono text-xs">
         {value}
       </pre>
     </WithCopyButton>

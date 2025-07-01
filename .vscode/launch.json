@@ -11,10 +11,7 @@
         "--disable-extensions",
         "--extensionDevelopmentPath=${workspaceFolder}/typescript/apps/vscode-ext"
       ],
-      "outFiles": [
-        "${workspaceFolder}/typescript/apps/vscode-ext/dist/**",
-        "${workspaceFolder}/typescript/packages/language-server/dist/**"
-      ],
+      "outFiles": ["${workspaceFolder}/typescript/apps/vscode-ext/dist/**"],
       "env": {
         "VSCODE_DEBUG_MODE": "true"
       }

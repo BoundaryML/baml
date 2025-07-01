@@ -10,8 +10,8 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from '@baml/ui/components/dialog';
-import { cn } from '@baml/ui/lib/utils';
+} from './dialog';
+import { cn } from '../lib/utils';
 
 function Command({
   className,

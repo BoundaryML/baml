@@ -1,7 +1,10 @@
 'use client';
 
-import { CustomErrorBoundary } from '@baml/playground-common';
-import { JotaiProvider } from '@baml/playground-common';
+import { CustomErrorBoundary } from '@baml/playground-common/custom-error-boundary';
+import { JotaiProvider } from '@baml/playground-common/jotai-provider';
+import { CodeMirrorViewer } from '@baml/playground-common/codemirror-viewer';
+import { PromptPreview } from '@baml/playground-common/prompt-preview';
+import { EventListener } from '@baml/playground-common/event-listener';
 import {
   ResizableHandle,
   ResizablePanel,
@@ -19,35 +22,17 @@ import {
   unsavedChangesAtom,
 } from '../_atoms/atoms';
 
-import { filesAtom } from '@baml/playground-common';
+import dynamic from 'next/dynamic';
+import Image from 'next/image';
+import { TopNavbar } from './TopNavbar';
+import FileViewer from './Tree/FileViewer';
 import {
+  filesAtom,
   runtimeStateAtom,
   selectedFunctionAtom,
 } from '@baml/playground-common';
 import { useFeedbackWidget } from '@baml/playground-common/lib/feedback_widget';
 import { ScrollArea } from '@baml/ui/scroll-area';
-import dynamic from 'next/dynamic';
-import Image from 'next/image';
-import { TopNavbar } from './TopNavbar';
-import FileViewer from './Tree/FileViewer';
-const CodeMirrorViewer = dynamic(
-  () => import('@baml/playground-common').then((mod) => mod.CodeMirrorViewer),
-  {
-    ssr: false,
-  },
-);
-const PromptPreview = dynamic(
-  () => import('@baml/playground-common').then((mod) => mod.PromptPreview),
-  {
-    ssr: false,
-  },
-);
-const EventListener = dynamic(
-  () => import('@baml/playground-common').then((mod) => mod.EventListener),
-  {
-    ssr: false,
-  },
-);
 
 const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
   useFeedbackWidget();
@@ -144,7 +129,7 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
                               id: activeFileName,
                             }}
                             shouldScrollDown={false}
-                            onContentChange={(v) => {
+                            onContentChange={(v: string) => {
                               const newFiles: Record<string, string> = {};
                               Object.entries(files).map(([key, value]) => {
                                 const newVal =

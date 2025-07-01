@@ -5,7 +5,10 @@
     "emitDeclarationOnly": false,
     "baseUrl": ".",
     "rootDir": ".",
-    "outDir": "dist"
+    "outDir": "dist",
+    "module": "ESNext",
+    "moduleResolution": "node",
+    "target": "ES2020"
   },
   "include": ["src"],
   "exclude": ["node_modules", "dist"]

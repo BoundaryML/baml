@@ -7,7 +7,7 @@ The `vertex-ai` provider is used to interact with the Google Vertex AI services.
 <Tip>As of BAML 0.85.0, `vertex-ai` now supports Anthropic models!</Tip>
 
 
-Example: 
+Example:
 ```baml BAML
 client<llm> MyClient {
   provider vertex-ai
@@ -112,7 +112,7 @@ You can use this to modify the `headers` and `base_url` for example.
   The base URL for the API.
 
   **Default**: inferred from the `project_id` and `location` using the following format:
-  
+
   ```
   https://{LOCATION}-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/{LOCATION}/publishers/google/models/
   ```
@@ -147,7 +147,7 @@ visible on-screen when the user navigates to #credentials, due to how Fern rende
 >
   Vertex requires you to specify the location you want to serve your models
   from. Some models may only be available in certain locations.
-  
+
   Common locations include:
   - `us-central1`
   - `us-west1`
@@ -248,7 +248,7 @@ visible on-screen when the user navigates to #credentials_content, due to how Fe
     }
     ```
   </Accordion>
-  
+
 </ParamField>
 
 <ParamField
@@ -303,7 +303,7 @@ visible on-screen when the user navigates to #credentials_content, due to how Fe
   required
 >
   The Google model to use for the request.
-  
+
 
 | Model | Input(s) | Optimized for |
 | --- | ---  | --- |
@@ -382,7 +382,7 @@ client<llm> MyClient {
     model gemini-1.5-pro
     project_id my-project-id
     location us-central1
-    
+
     generationConfig {
       maxOutputTokens 100
       temperature 1
@@ -390,7 +390,7 @@ client<llm> MyClient {
   }
 }
 ```
-   
+
 </ParamField>
 
 For all other options, see the [official Vertex AI documentation](https://cloud.google.com/vertex-ai/generative-ai/docs/start/quickstarts/quickstart-multimodal).
@@ -403,7 +403,7 @@ Meta, use your project endpoint as the `base_url` in BAML:
 ```baml
 client<llm> VertexLlama {
   provider vertex-ai
-  options {  
+  options {
     base_url "https://${LOCATION}-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/${LOCATION}/endpoints/"
     location us-central1
   }

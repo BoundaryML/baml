@@ -24,10 +24,10 @@ const HighlightedText: React.FC<{
           <mark
             key={`${i}-${part.highlight}-${part.text.length}`}
             className={cn(
-              'inline whitespace-pre-wrap break-words rounded px-1 py-0.5 font-normal text-xs text-input',
+              'inline whitespace-pre-wrap break-words rounded px-1 py-0.5 font-normal text-xs text-primary-foreground',
               part.text.trim() === ''
-                ? 'bg-[var(--vscode-charts-red)]/30'
-                : 'bg-[var(--vscode-charts-blue)]/40',
+                ? 'bg-chart-5/30'
+                : 'bg-chart-1/40',
             )}
           >
             {part.text}
@@ -103,13 +103,10 @@ export const RenderPromptPart: React.FC<{
 
   return (
     <div className="flex flex-col">
-      <div className="relative px-3 pb-3 pt-2 bg-card group max-h-[600px] overflow-y-auto overflow-x-hidden">
-        <div className="absolute right-2 top-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-          <CopyButton text={text} size="sm" variant="secondary" />
-        </div>
+      <div className="px-3 pb-3 pt-2 bg-accent group max-h-[600px] overflow-y-auto overflow-x-hidden">
         <pre
           className={cn(
-            'whitespace-pre-wrap text-xs leading-relaxed transition-all',
+            'whitespace-pre-wrap text-xs leading-relaxed transition-all text-primary-foreground',
           )}
         >
           {renderContent}

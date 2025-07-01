@@ -1,13 +1,13 @@
 import { Suspense } from 'react';
 import 'allotment/dist/style.css';
-import { EventListener } from '@baml/playground-common';
+import { EventListener } from '@baml/playground-common/event-listener';
 // import FunctionPanel from './shared/FunctionPanel'
 // import { ViewSelector } from './shared/Selectors'
 // import SettingsDialog, { ShowSettingsButton, showSettingsAtom } from './shared/SettingsDialog'
 // import IntroToChecksDialog from './shared/IntroToChecksDialog'
-import { CustomErrorBoundary } from '@baml/playground-common';
+import { CustomErrorBoundary } from '@baml/playground-common/custom-error-boundary';
 // import 'jotai-devtools/styles.css'
-import { PromptPreview } from '@baml/playground-common';
+import { PromptPreview } from '@baml/playground-common/prompt-preview';
 // import { Snippets } from './shared/Snippets'
 // import { AppStateProvider } from './shared/AppStateContext' // Import the AppStateProvider
 import { useFeedbackWidget } from '@baml/playground-common';
@@ -19,7 +19,6 @@ function App() {
     <CustomErrorBoundary message="Error loading playground">
       {/* <DevTools /> */}
       <Suspense fallback={<div>Loading...</div>}>
-        <EventListener />
 
         <div className="relative min-h-screen bg-background text-foreground p-2">
           <ThemeProvider
@@ -29,6 +28,9 @@ function App() {
             disableTransitionOnChange={true}
           >
             <PromptPreview />
+            <div className="absolute bottom-0 right-4 z-50">
+              <EventListener />
+            </div>
           </ThemeProvider>
         </div>
 

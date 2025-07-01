@@ -1,0 +1,47 @@
+name: Setup Java
+description: Setup Java with caching and Gradle support
+
+inputs:
+  java-version:
+    description: Java version to use
+    required: false
+    default: '23'
+  distribution:
+    description: Java distribution to use
+    required: false
+    default: 'temurin'
+  cache:
+    description: Build tool to cache dependencies for ('gradle', 'maven', or 'false' to disable)
+    required: false
+    default: 'gradle'
+  cache-dependency-path:
+    description: Path to dependency files for cache (e.g., gradle.properties, build.gradle)
+    required: false
+    default: |
+      **/gradle/wrapper/gradle-wrapper.properties
+      **/*.gradle*
+      **/gradle.properties
+  setup-gradle:
+    description: Whether to setup Gradle using gradle/actions/setup-gradle
+    required: false
+    default: 'true'
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        java-version: ${{ inputs.java-version }}
+        distribution: ${{ inputs.distribution }}
+        cache: ${{ inputs.cache }}
+        cache-dependency-path: ${{ inputs.cache-dependency-path }}
+
+    - name: Setup Gradle
+      if: inputs.setup-gradle == 'true'
+      uses: gradle/actions/setup-gradle@v4
+      with:
+        # Enable Gradle build scans for better debugging
+        add-job-summary: on-failure
+        # Cache Gradle distributions and dependencies
+        cache-read-only: ${{ github.ref != 'refs/heads/canary' }}

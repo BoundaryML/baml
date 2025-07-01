@@ -2,12 +2,15 @@
 
 First off, thanks for your interest in contributing to BAML! We appreciate all the help we can get in making it the best way to build any AI agents or applications.
 
+> **📚 For comprehensive development setup instructions, see our [Development Setup Guide](./README-DEV.md)**
+
 ## Table of Contents
 
 - [Contributing to BAML](#contributing-to-baml)
   - [Table of Contents](#table-of-contents)
   - [How to Contribute](#how-to-contribute)
     - [Examples of Merged PRs:](#examples-of-merged-prs)
+  - [Quick Start - Development Setup](#quick-start---development-setup)
   - [Setting up the BAML Compiler and Runtime](#setting-up-the-baml-compiler-and-runtime)
     - [Compiler Architecture Overview](#compiler-architecture-overview)
     - [Steps to Build and Test Locally](#steps-to-build-and-test-locally)
@@ -19,7 +22,7 @@ First off, thanks for your interest in contributing to BAML! We appreciate all t
     - [Ruby Integration Tests](#ruby-integration-tests)
     - [Adding New Tests](#adding-new-tests)
     - [Debugging Tests](#debugging-tests)
-    - [OpenAPI Server Testss](#openapi-server-testss)
+    - [OpenAPI Server Tests](#openapi-server-tests)
   - [Grammar Testing](#grammar-testing)
   - [VSCode Extension Testing](#vscode-extension-testing)
   - [Testing promptfiddle.com](#testing-promptfiddlecom)
@@ -61,6 +64,33 @@ First off, thanks for your interest in contributing to BAML! We appreciate all t
 
 - **Implement `map` type**: [PR #797](https://github.com/BoundaryML/baml/pull/797)
 
+## Quick Start - Development Setup
+
+We use [mise](https://mise.jdx.dev/) to manage development tools and ensure everyone has the correct versions.
+
+1. **Run the setup script**:
+   ```bash
+   ./scripts/setup-dev.sh
+   ```
+
+   This will:
+   - Install mise (if not already installed)
+   - Install all required tools with correct versions (Rust 1.85.0, Go 1.23, Python 3.12, Ruby 3.2.2, Node.js LTS)
+   - Install language-specific tools (cargo-watch, wasm-pack, protoc-gen-go, etc.)
+   - Set up Python and Ruby dependencies
+
+2. **Verify installation**:
+   ```bash
+   mise list
+   ```
+
+3. **Update tools** (when `mise.toml` changes):
+   ```bash
+   mise install
+   ```
+
+The setup script automatically handles all dependencies and version management, ensuring a consistent development environment across all contributors.
+
 ## Setting up the BAML Compiler and Runtime
 
 #### Compiler Architecture Overview
@@ -73,9 +103,10 @@ First off, thanks for your interest in contributing to BAML! We appreciate all t
 
 ### Steps to Build and Test Locally
 
-1. Install protobuf generator for Go `brew install protoc-gen-go`
-
-1. Install Rust
+1. Run the setup script if you haven't already:
+   ```bash
+   ./scripts/setup-dev.sh
+   ```
 
 2. Run `cargo build` in `engine/` and make sure everything builds on your machine.
 
@@ -93,14 +124,25 @@ First off, thanks for your interest in contributing to BAML! We appreciate all t
    - This hook will run `cargo fmt` with import organization before each commit
    - If formatting changes are made, you'll need to review and re-commit the changes
 
+
+
+**Prerequisites:**
+- Node.js 20.x or later
+- Rust (stable toolchain)
+- Go 1.23 or later
+- Python 3.12
+- Git
+
+The script automatically handles installing missing tools and dependencies, so you can run it on a fresh machine.
+
 ## Running Integration Tests
 
 The integration tests verify BAML's functionality across multiple programming languages. Each language has its own test suite in the `integ-tests/` directory.
 
 ### Prerequisites for All Tests
 
-- [Rust toolchain](https://rustup.rs/) (for building native clients)
-- [BAML CLI](https://github.com/boundaryml/baml#installation)
+- Rust toolchain (managed by mise)
+- BAML CLI (built from source or installed)
 
 #### Environment Variables
 
@@ -127,8 +169,8 @@ You can set up environment variables in two ways:
 
 1. Install prerequisites:
 
-   - [Node.js](https://nodejs.org/) (Latest LTS recommended)
-   - [pnpm](https://pnpm.io/installation) package manager
+   - Node.js (Latest LTS, managed by mise)
+   - pnpm package manager (managed by mise)
 
 2. Build the TypeScript runtime:
 
@@ -150,8 +192,8 @@ dotenv -e ../.env -- pnpm integ-tests  # or use infisical for internal BAML devs
 
 1. Install prerequisites:
 
-   - [Python](https://www.python.org/downloads/) 3.8 or higher
-   - [uv](https://astral.sh/uv) package manager
+   - Python 3.8 or higher (3.12 recommended, managed by mise)
+   - uv package manager (installed via mise)
 
 2. Set up the environment:
 
@@ -176,35 +218,26 @@ dotenv -e ../.env -- uv run pytest  # or use infisical for internal BAML devs
 
 ### Ruby Integration Tests
 
-1. Install prerequisites:
+1. Prerequisites are handled by the setup script (Ruby 3.2.2 via mise)
 
-   - [mise](https://mise.jdx.dev/getting-started.html) for Ruby version management:
-     ```bash
-     brew install mise  # on macOS
-     # or
-     curl https://mise.run | sh  # other platforms
-     ```
-   - Rust toolchain (installed above)
-
-2. Set up mise and build the Ruby client:
+2. Build the Ruby client:
 
 ```bash
 cd integ-tests/ruby
-mise install  # This will install Ruby version from .mise.toml
-(cd ../../engine/language_client_ruby && mise exec -- rake compile)
+(cd ../../engine/language_client_ruby && rake compile)
 ```
 
 3. Install dependencies and generate client:
 
 ```bash
-mise exec -- bundle install
-mise exec -- baml-cli generate --from ../baml_src
+bundle install
+baml-cli generate --from ../baml_src
 ```
 
 4. Run tests:
 
 ```bash
-dotenv -e ../.env -- mise exec -- rake test  # or use infisical for internal BAML devs
+dotenv -e ../.env -- rake test  # or use infisical for internal BAML devs
 ```
 
 ### Adding New Tests
@@ -258,7 +291,7 @@ Each language has its own debugging setup in VS Code:
    - Use launch configuration from Ruby README
    - Use verbose mode for detailed output
 
-### OpenAPI Server Testss
+### OpenAPI Server Tests
 
 1. Navigate to the test directory:
 
@@ -304,7 +337,7 @@ This requires a macos or linux machine, since we symlink some playground files b
    - `pnpm i`
 
 3. Build and launch the extension:
-   - `npx turbo build --force`
+   - `pnpm build:vscode`
    - Open VSCode and go to the Run and Debug section (play button near the extensions button).
    - Select "Launch VSCode Extension" and press the play button.
      - This will open a new VSCode window in Debug mode.
@@ -320,15 +353,16 @@ This requires a macos or linux machine, since we symlink some playground files b
 
 To rebuild the playground UI:
 
-1. `cd typescript/apps/vscode-ext/src/web-panel`
-2. `pnpm build`
-3. Close and open the playground in your "Debug mode VSCode window"
+1. Navigate to the shared playground components: `cd typescript/packages/playground-common`
+2. Make your changes
+3. Build: `pnpm build`
+4. Close and open the playground in your "Debug mode VSCode window"
 
 ## Testing [promptfiddle.com](http://promptfiddle.com)
 
 This is useful if you want to iterate faster on the Extension UI, since it supports hot-reloading.
 
-1. Navigate to the Fiddle Frontend directory:
+1. Navigate to the Fiddle Web App directory:
 
    - `cd typescript/apps/fiddle-web-app`
 
@@ -336,4 +370,7 @@ This is useful if you want to iterate faster on the Extension UI, since it suppo
 
    - `pnpm dev`
 
-3. Modify the files in `typescript/packages/playground-common`
+3. The app will hot-reload when you modify files in:
+   - `typescript/packages/playground-common` (shared playground components)
+   - `typescript/packages/ui` (shared UI components)
+   - `typescript/apps/fiddle-web-app` (app-specific code)

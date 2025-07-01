@@ -159,3 +159,8 @@ yarn.lock
 artifacts
 .direnv
 .rollup.cache
+typescript/apps/vscode-ext/dist/playground
+
+# mise
+.mise.local.toml
+.mise.*.local.toml

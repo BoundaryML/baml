@@ -6,7 +6,6 @@ import useSWR from 'swr';
 import {
   ctxAtom,
   diagnosticsAtom,
-  envVarsAtom,
   runtimeAtom,
 } from '../../atoms';
 import {
@@ -18,12 +17,13 @@ import { Loader } from './components';
 import { ErrorMessage } from './components';
 import { findMediaFile } from './media-utils';
 import { RenderPrompt } from './render-prompt';
+import { apiKeysAtom } from '../../../../components/api-keys-dialog/atoms';
 
 export const renderedPromptAtom = atom<WasmPrompt | undefined>(undefined);
 
 export const PromptPreviewContent = () => {
   const { rt } = useAtomValue(runtimeAtom);
-  const envVars = useAtomValue(envVarsAtom);
+  const apiKeys = useAtomValue(apiKeysAtom);
   const ctx = useAtomValue(ctxAtom);
   const { selectedFn, selectedTc } = useAtomValue(selectionAtom);
   const diagnostics = useAtomValue(diagnosticsAtom);
@@ -43,7 +43,7 @@ export const PromptPreviewContent = () => {
       selectedTc.name,
       ctx,
       findMediaFile,
-      envVars,
+      apiKeys,
     );
     setLastKnownPreview(newPreview);
     setPromptData(newPreview);

@@ -28,7 +28,13 @@
       "Bash(timeout:*)",
       "Bash(gtimeout:*)",
       "Bash(mkdir:*)",
-      "Bash(npx vitest run:*)"
+      "Bash(npx vitest run:*)",
+      "mcp__ide__getDiagnostics",
+      "Bash(cp:*)",
+      "Bash(mv:*)",
+      "Bash(tree:*)",
+      "Bash(rg:*)",
+      "Bash(cargo build:*)"
     ],
     "deny": []
   }

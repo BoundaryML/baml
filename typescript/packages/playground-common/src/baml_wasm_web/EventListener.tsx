@@ -19,6 +19,8 @@ import { CheckCircle } from 'lucide-react';
 import { useEffect } from 'react';
 import { vscodeLocalStorageStore } from './JotaiProvider';
 import { type BamlConfigAtom, bamlConfig } from './bamlConfig';
+import { ErrorWarningDialog } from '../components/ErrorWarningDialog';
+import { useState } from 'react';
 
 export const hasClosedEnvVarsDialogAtom = atomWithStorage<boolean>(
   'has-closed-env-vars-dialog',
@@ -52,7 +54,7 @@ export const numErrorsAtom = atom((get) => {
   return { errors: errors.length - warningCount, warnings: warningCount };
 });
 
-const ErrorCount: React.FC = () => {
+const ErrorCount: React.FC<{ onClick?: () => void }> = ({ onClick }) => {
   const { errors, warnings } = useAtomValue(numErrorsAtom);
   if (errors === 0 && warnings === 0) {
     return (
@@ -63,134 +65,122 @@ const ErrorCount: React.FC = () => {
   }
   if (errors === 0) {
     return (
-      <div className="flex flex-row gap-1 items-center text-yellow-600">
+      <button
+        type="button"
+        onClick={onClick}
+        className="flex flex-row gap-1 items-center text-yellow-600 hover:underline focus:outline-none"
+        title="Show warnings"
+      >
         {warnings} <AlertTriangle size={12} />
-      </div>
+      </button>
     );
   }
   return (
-    <div className="flex flex-row gap-1 items-center text-red-600">
-      {errors} <XCircle size={12} /> {warnings} <AlertTriangle size={12} />{' '}
-    </div>
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex flex-row gap-1 items-center text-red-600 hover:underline focus:outline-none"
+      title="Show errors and warnings"
+    >
+      {errors} <XCircle size={12} /> {warnings} <AlertTriangle size={12} />
+    </button>
   );
 };
 
 export const isConnectedAtom = atom(true);
 
-const ConnectionStatus: React.FC = () => {
-  const isConnected = useAtomValue(isConnectedAtom);
+// const ConnectionStatus: React.FC = () => {
+//   const isConnected = useAtomValue(isConnectedAtom)
 
-  if (isConnected) return null;
+//   if (isConnected || vscode.isVscode()) return null
 
-  return (
-    <div className="fixed top-0 left-0 right-0 bg-red-600 text-white p-2 flex items-center justify-between z-50">
-      <div className="flex items-center gap-2">
-        <XCircle size={16} />
-        <span>Disconnected from LSP server</span>
-      </div>
-      <button
-        onClick={() => window.location.reload()}
-        type="button"
-        className="px-3 py-1 bg-white text-red-600 rounded hover:bg-red-50 transition-colors"
-      >
-        Reconnect
-      </button>
-    </div>
-  );
-};
+//   return (
+//     <div className='fixed top-0 left-0 right-0 bg-red-600 text-white p-2 flex items-center justify-between z-50'>
+//       <div className='flex items-center gap-2'>
+//         <XCircle size={16} />
+//         <span>Disconnected from LSP server</span>
+//       </div>
+//       <button
+//         onClick={() => window.location.reload()}
+//         type='button'
+//         className='px-3 py-1 bg-white text-red-600 rounded hover:bg-red-50 transition-colors'
+//       >
+//         Reconnect
+//       </button>
+//     </div>
+//   )
+// }
 
 // We don't use ASTContext.provider because we should the default value of the context
 export const EventListener: React.FC = () => {
-  const updateCursor = useSetAtom(updateCursorAtom);
-  const setFiles = useSetAtom(filesAtom);
-  const debouncedSetFiles = useDebounceCallback(setFiles, 50, true);
-  const setFlashRanges = useSetAtom(flashRangesAtom);
-  const setIsConnected = useSetAtom(isConnectedAtom);
+  const updateCursor = useSetAtom(updateCursorAtom)
+  const setFiles = useSetAtom(filesAtom)
+  const debouncedSetFiles = useDebounceCallback(setFiles, 50, true)
+  const setFlashRanges = useSetAtom(flashRangesAtom)
+  const setIsConnected = useSetAtom(isConnectedAtom)
+  const isVSCodeWebview = vscode.isVscode()
 
-  const [selectedFunc, setSelectedFunction] = useAtom(selectedFunctionAtom);
-  const setSelectedTestcase = useSetAtom(selectedTestcaseAtom);
-  const setBamlConfig = useSetAtom(bamlConfig);
-  const [bamlCliVersion, setBamlCliVersion] = useAtom(bamlCliVersionAtom);
-  const runBamlTests = useRunBamlTests();
-  const wasm = useAtomValue(wasmAtom);
+  const [selectedFunc, setSelectedFunction] = useAtom(selectedFunctionAtom)
+  const setSelectedTestcase = useSetAtom(selectedTestcaseAtom)
+  const setBamlConfig = useSetAtom(bamlConfig)
+  const [bamlCliVersion, setBamlCliVersion] = useAtom(bamlCliVersionAtom)
+  const runBamlTests = useRunBamlTests()
+  const wasm = useAtomValue(wasmAtom)
   useEffect(() => {
     if (wasm) {
-      console.log('wasm ready!');
+      console.log('wasm ready!')
       try {
-        vscode.markInitialized();
+        vscode.markInitialized()
       } catch (e) {
-        console.error('Error marking initialized', e);
+        console.error('Error marking initialized', e)
       }
     }
-  }, [wasm]);
+  }, [wasm])
 
-  const setOrchestratorIndex = useSetAtom(orchIndexAtom);
+  const setOrchestratorIndex = useSetAtom(orchIndexAtom)
 
   useEffect(() => {
     if (selectedFunc) {
       // todo: maybe we use a derived atom to reset it. But for now this useeffect works.
-      setOrchestratorIndex(0);
+      setOrchestratorIndex(0)
     }
-  }, [selectedFunc]);
+  }, [selectedFunc])
   // console.log('selectedFunc', selectedFunc)
 
   useEffect(() => {
-    const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    const ws = new WebSocket(`${scheme}://${window.location.host}/ws`);
+    // Only open websocket if not in VSCode webview
+    if (isVSCodeWebview) {
+      setIsConnected(true)
+      return
+    }
+
+    const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws'
+    const ws = new WebSocket(`${scheme}://${window.location.host}/ws`)
 
     ws.onopen = () => {
-      console.log('WebSocket Opened');
-      setIsConnected(true);
-    };
+      console.log('WebSocket Opened')
+      setIsConnected(true)
+    }
     ws.onmessage = (e) => {
-      console.log('Websocket recieved message!');
+      console.log('Websocket recieved message!')
       try {
-        const payload = JSON.parse(e.data);
-        window.postMessage(payload, '*');
+        const payload = JSON.parse(e.data)
+        window.postMessage(payload, '*')
       } catch (err) {
-        console.error('invalid WS payload', err);
+        console.error('invalid WS payload', err)
       }
-    };
+    }
     ws.onclose = () => {
-      console.log('WebSocket Closed');
-      setIsConnected(false);
-    };
+      console.log('WebSocket Closed')
+      setIsConnected(false)
+    }
     ws.onerror = () => {
-      console.error('WebSocket error');
-      setIsConnected(false);
-    };
+      console.error('WebSocket error')
+      setIsConnected(false)
+    }
 
-    return () => ws.close();
-  }, [setIsConnected]);
-
-  useEffect(() => {
-    const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    const ws = new WebSocket(`${scheme}://${window.location.host}/ws`);
-
-    ws.onopen = () => {
-      console.log('WebSocket Opened');
-      setIsConnected(true);
-    };
-    ws.onmessage = (e) => {
-      console.log('Websocket recieved message!');
-      try {
-        const payload = JSON.parse(e.data);
-        window.postMessage(payload, '*');
-      } catch (err) {
-        console.error('invalid WS payload', err);
-      }
-    };
-    ws.onclose = () => {
-      console.log('WebSocket Closed');
-      setIsConnected(false);
-    };
-    ws.onerror = () => {
-      console.error('WebSocket error');
-      setIsConnected(false);
-    };
-
-    return () => ws.close();
-  }, [setIsConnected]);
+    return () => ws.close()
+  }, [setIsConnected, isVSCodeWebview])
 
   console.log('Websocket execution finished');
 
@@ -337,15 +327,17 @@ export const EventListener: React.FC = () => {
   }, [selectedFunc, runBamlTests, updateCursor]);
 
   const version = useAtomValue(versionAtom);
+  const [showDialog, setShowDialog] = useState(false);
 
   return (
     <>
-      <ConnectionStatus />
-      <div className="flex absolute right-2 bottom-2 z-50 flex-row gap-2 text-xs bg-transparent">
+      {/* <ConnectionStatus /> */}
+      <div className="flex flex-row gap-2 text-xs bg-transparent items-center">
         <div className="pr-4 whitespace-nowrap">
           {bamlCliVersion && `baml-cli ${bamlCliVersion}`}
         </div>
-        <ErrorCount />{' '}
+        <ErrorCount onClick={() => setShowDialog(true)} />
+        <ErrorWarningDialog open={showDialog} onOpenChange={setShowDialog} />
         <span className="text-muted-foreground text-[10px]">
           VSCode Runtime Version: {version}
         </span>
