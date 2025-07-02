@@ -73,6 +73,8 @@ jobs:
       #     ci/ubuntu-install-packages
 
       - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.4'
       - name: Install protoc
         run: go install github.com/golang/protobuf/protoc-gen-go@latest
 
