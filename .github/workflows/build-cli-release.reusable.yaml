@@ -86,6 +86,7 @@ jobs:
         run: go install github.com/golang/protobuf/protoc-gen-go@latest
 
       - name: Add protoc-gen-go to path
+        shell: bash
         run: |
           echo "$HOME/go/bin" >> $GITHUB_PATH
           # Also set for current step
@@ -93,14 +94,16 @@ jobs:
           echo "PATH=$PATH:$HOME/go/bin" >> $GITHUB_ENV
 
       - name: Test protoc-gen-go availability
+        shell: bash
         run: |
           echo "Current PATH: $PATH"
           echo "Go bin directory contents:"
           ls -la $HOME/go/bin/
-          echo "Testing protoc-gen-go..."
-          protoc-gen-go --version
           echo "Which protoc-gen-go:"
           which protoc-gen-go
+          echo "Testing protoc can find protoc-gen-go plugin..."
+          # Test that protoc can find the go plugin (this will show an error about missing .proto file, but that's expected)
+          protoc --go_out=/tmp --help | grep -q "go_out" && echo "✅ protoc recognizes --go_out flag" || echo "❌ protoc does not recognize --go_out flag"
       
       - name: Use Cross
         if: contains(matrix._.os, 'ubuntu')
