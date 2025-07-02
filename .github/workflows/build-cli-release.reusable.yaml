@@ -147,7 +147,7 @@ jobs:
 
       - name: Build CFFI Library
         run: >
-          ${{ env.CARGO }} build --release -p baml_cffi ${{ env.TARGET_FLAGS }}
+          PATH=$HOME/go/bin:$PATH ${{ env.CARGO }} build --release -p baml_cffi ${{ env.TARGET_FLAGS }}
         working-directory: engine
         # Skip this step on Windows runners
         if: matrix._.os != 'windows-2022'
