@@ -115,6 +115,16 @@ pub async fn make_stream_request(
                             accumulated,
                             event_body,
                         ),
+                        ResponseType::OpenAIResponses => scan_openai_response_stream(
+                            &client_name,
+                            &params,
+                            &prompt,
+                            &start_time_system,
+                            &start_time_instant,
+                            &model_name,
+                            accumulated,
+                            event_body,
+                        ),
                         ResponseType::Anthropic => scan_anthropic_response_stream(
                             &client_name,
                             &params,

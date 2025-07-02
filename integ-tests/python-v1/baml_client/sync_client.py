@@ -1247,6 +1247,69 @@ class BamlSyncClient:
             "input": input,
         })
         return typing.cast(str, result.cast_to(types, types, stream_types, False))
+    def TestOpenAIResponses(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestOpenAIResponses", args={
+            "input": input,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+    def TestOpenAIResponsesAutoType(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestOpenAIResponsesAutoType", args={
+            "input": input,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+    def TestOpenAIResponsesConversation(self, topic: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestOpenAIResponsesConversation", args={
+            "topic": topic,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+    def TestOpenAIResponsesCustomURL(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestOpenAIResponsesCustomURL", args={
+            "input": input,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+    def TestOpenAIResponsesDifferentModel(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestOpenAIResponsesDifferentModel", args={
+            "input": input,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+    def TestOpenAIResponsesEndpoint(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestOpenAIResponsesEndpoint", args={
+            "input": input,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+    def TestOpenAIResponsesExplicit(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestOpenAIResponsesExplicit", args={
+            "input": input,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+    def TestOpenAIResponsesShorthand(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestOpenAIResponsesShorthand", args={
+            "input": input,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+    def TestOpenAIResponsesWithOpenAIResponseType(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestOpenAIResponsesWithOpenAIResponseType", args={
+            "input": input,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False))
     def TestOpenAIShorthand(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
@@ -1380,6 +1443,20 @@ class BamlSyncClient:
             "inp": inp,
         })
         return typing.cast(int, result.cast_to(types, types, stream_types, False))
+    def ValidateBasicResponses(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).call_function_sync(function_name="ValidateBasicResponses", args={
+            "input": input,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False))
+    def ValidateResponseTypes(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).call_function_sync(function_name="ValidateResponseTypes", args={
+            "input": input,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False))
     
 
 
@@ -3381,6 +3458,114 @@ class BamlStreamClient:
           lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
           ctx,
         )
+    def TestOpenAIResponses(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestOpenAIResponses", args={
+            "input": input,
+        })
+        return baml_py.BamlSyncStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          ctx,
+        )
+    def TestOpenAIResponsesAutoType(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestOpenAIResponsesAutoType", args={
+            "input": input,
+        })
+        return baml_py.BamlSyncStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          ctx,
+        )
+    def TestOpenAIResponsesConversation(self, topic: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestOpenAIResponsesConversation", args={
+            "topic": topic,
+        })
+        return baml_py.BamlSyncStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          ctx,
+        )
+    def TestOpenAIResponsesCustomURL(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestOpenAIResponsesCustomURL", args={
+            "input": input,
+        })
+        return baml_py.BamlSyncStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          ctx,
+        )
+    def TestOpenAIResponsesDifferentModel(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestOpenAIResponsesDifferentModel", args={
+            "input": input,
+        })
+        return baml_py.BamlSyncStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          ctx,
+        )
+    def TestOpenAIResponsesEndpoint(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestOpenAIResponsesEndpoint", args={
+            "input": input,
+        })
+        return baml_py.BamlSyncStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          ctx,
+        )
+    def TestOpenAIResponsesExplicit(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestOpenAIResponsesExplicit", args={
+            "input": input,
+        })
+        return baml_py.BamlSyncStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          ctx,
+        )
+    def TestOpenAIResponsesShorthand(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestOpenAIResponsesShorthand", args={
+            "input": input,
+        })
+        return baml_py.BamlSyncStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          ctx,
+        )
+    def TestOpenAIResponsesWithOpenAIResponseType(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestOpenAIResponsesWithOpenAIResponseType", args={
+            "input": input,
+        })
+        return baml_py.BamlSyncStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          ctx,
+        )
     def TestOpenAIShorthand(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[str, str]:
@@ -3607,6 +3792,30 @@ class BamlStreamClient:
           result,
           lambda x: typing.cast(int, x.cast_to(types, types, stream_types, True)),
           lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False)),
+          ctx,
+        )
+    def ValidateBasicResponses(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="ValidateBasicResponses", args={
+            "input": input,
+        })
+        return baml_py.BamlSyncStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          ctx,
+        )
+    def ValidateResponseTypes(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="ValidateResponseTypes", args={
+            "input": input,
+        })
+        return baml_py.BamlSyncStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
           ctx,
         )
     
@@ -4779,6 +4988,69 @@ class BamlHttpRequestClient:
             "input": input,
         }, mode="request")
         return result
+    def TestOpenAIResponses(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestOpenAIResponses", args={
+            "input": input,
+        }, mode="request")
+        return result
+    def TestOpenAIResponsesAutoType(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestOpenAIResponsesAutoType", args={
+            "input": input,
+        }, mode="request")
+        return result
+    def TestOpenAIResponsesConversation(self, topic: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestOpenAIResponsesConversation", args={
+            "topic": topic,
+        }, mode="request")
+        return result
+    def TestOpenAIResponsesCustomURL(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestOpenAIResponsesCustomURL", args={
+            "input": input,
+        }, mode="request")
+        return result
+    def TestOpenAIResponsesDifferentModel(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestOpenAIResponsesDifferentModel", args={
+            "input": input,
+        }, mode="request")
+        return result
+    def TestOpenAIResponsesEndpoint(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestOpenAIResponsesEndpoint", args={
+            "input": input,
+        }, mode="request")
+        return result
+    def TestOpenAIResponsesExplicit(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestOpenAIResponsesExplicit", args={
+            "input": input,
+        }, mode="request")
+        return result
+    def TestOpenAIResponsesShorthand(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestOpenAIResponsesShorthand", args={
+            "input": input,
+        }, mode="request")
+        return result
+    def TestOpenAIResponsesWithOpenAIResponseType(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestOpenAIResponsesWithOpenAIResponseType", args={
+            "input": input,
+        }, mode="request")
+        return result
     def TestOpenAIShorthand(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -4910,6 +5182,20 @@ class BamlHttpRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="UseNestedBlockConstraint", args={
             "inp": inp,
+        }, mode="request")
+        return result
+    def ValidateBasicResponses(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="ValidateBasicResponses", args={
+            "input": input,
+        }, mode="request")
+        return result
+    def ValidateResponseTypes(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="ValidateResponseTypes", args={
+            "input": input,
         }, mode="request")
         return result
     
@@ -6082,6 +6368,69 @@ class BamlHttpStreamRequestClient:
             "input": input,
         }, mode="stream")
         return result
+    def TestOpenAIResponses(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestOpenAIResponses", args={
+            "input": input,
+        }, mode="stream")
+        return result
+    def TestOpenAIResponsesAutoType(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestOpenAIResponsesAutoType", args={
+            "input": input,
+        }, mode="stream")
+        return result
+    def TestOpenAIResponsesConversation(self, topic: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestOpenAIResponsesConversation", args={
+            "topic": topic,
+        }, mode="stream")
+        return result
+    def TestOpenAIResponsesCustomURL(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestOpenAIResponsesCustomURL", args={
+            "input": input,
+        }, mode="stream")
+        return result
+    def TestOpenAIResponsesDifferentModel(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestOpenAIResponsesDifferentModel", args={
+            "input": input,
+        }, mode="stream")
+        return result
+    def TestOpenAIResponsesEndpoint(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestOpenAIResponsesEndpoint", args={
+            "input": input,
+        }, mode="stream")
+        return result
+    def TestOpenAIResponsesExplicit(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestOpenAIResponsesExplicit", args={
+            "input": input,
+        }, mode="stream")
+        return result
+    def TestOpenAIResponsesShorthand(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestOpenAIResponsesShorthand", args={
+            "input": input,
+        }, mode="stream")
+        return result
+    def TestOpenAIResponsesWithOpenAIResponseType(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestOpenAIResponsesWithOpenAIResponseType", args={
+            "input": input,
+        }, mode="stream")
+        return result
     def TestOpenAIShorthand(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -6213,6 +6562,20 @@ class BamlHttpStreamRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="UseNestedBlockConstraint", args={
             "inp": inp,
+        }, mode="stream")
+        return result
+    def ValidateBasicResponses(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="ValidateBasicResponses", args={
+            "input": input,
+        }, mode="stream")
+        return result
+    def ValidateResponseTypes(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="ValidateResponseTypes", args={
+            "input": input,
         }, mode="stream")
         return result
     

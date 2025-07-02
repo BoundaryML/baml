@@ -6,6 +6,36 @@ use serde::{
 pub type CompletionResponse = ChatCompletionGeneric<CompletionChoice>;
 pub type ChatCompletionResponse = ChatCompletionGeneric<ChatCompletionChoice>;
 
+/// OpenAI Responses API response structure
+#[derive(Debug, Deserialize, Clone, PartialEq)]
+pub struct ResponsesApiResponse {
+    pub id: String,
+    pub object: String,
+    pub created_at: Option<u32>,
+    pub status: String,
+    pub model: String,
+    pub output: Vec<ResponseOutput>,
+    pub usage: Option<CompletionUsage>,
+}
+
+#[derive(Debug, Deserialize, Clone, PartialEq)]
+pub struct ResponseOutput {
+    #[serde(rename = "type")]
+    pub output_type: String,
+    pub id: Option<String>,
+    pub status: Option<String>,
+    pub role: Option<String>,
+    pub content: Vec<ResponseContent>,
+}
+
+#[derive(Debug, Deserialize, Clone, PartialEq)]
+pub struct ResponseContent {
+    #[serde(rename = "type")]
+    pub content_type: String,
+    pub text: Option<String>,
+    pub annotations: Option<Vec<serde_json::Value>>,
+}
+
 pub type ChatCompletionResponseDelta = ChatCompletionGeneric<ChatCompletionChoiceDelta>;
 
 /// Represents a chat completion response returned by model, based on the provided input.

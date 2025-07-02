@@ -6494,6 +6494,357 @@ func TestOpenAIO1WithMaxTokens(ctx context.Context, input string, opts ...CallOp
 	return casted, nil
 }
 
+func TestOpenAIResponses(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := baml.EncodeArgs(args)
+	if err != nil {
+		panic(err)
+	}
+
+	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponses", encoded)
+	if err != nil {
+		return "", err
+	}
+
+	if result.Error != nil {
+		return "", result.Error
+	}
+
+	casted := *(result.Data).(*string)
+
+	return casted, nil
+}
+
+func TestOpenAIResponsesAutoType(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := baml.EncodeArgs(args)
+	if err != nil {
+		panic(err)
+	}
+
+	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponsesAutoType", encoded)
+	if err != nil {
+		return "", err
+	}
+
+	if result.Error != nil {
+		return "", result.Error
+	}
+
+	casted := *(result.Data).(*string)
+
+	return casted, nil
+}
+
+func TestOpenAIResponsesConversation(ctx context.Context, topic string, opts ...CallOptionFunc) (string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"topic": topic},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := baml.EncodeArgs(args)
+	if err != nil {
+		panic(err)
+	}
+
+	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponsesConversation", encoded)
+	if err != nil {
+		return "", err
+	}
+
+	if result.Error != nil {
+		return "", result.Error
+	}
+
+	casted := *(result.Data).(*string)
+
+	return casted, nil
+}
+
+func TestOpenAIResponsesCustomURL(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := baml.EncodeArgs(args)
+	if err != nil {
+		panic(err)
+	}
+
+	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponsesCustomURL", encoded)
+	if err != nil {
+		return "", err
+	}
+
+	if result.Error != nil {
+		return "", result.Error
+	}
+
+	casted := *(result.Data).(*string)
+
+	return casted, nil
+}
+
+func TestOpenAIResponsesDifferentModel(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := baml.EncodeArgs(args)
+	if err != nil {
+		panic(err)
+	}
+
+	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponsesDifferentModel", encoded)
+	if err != nil {
+		return "", err
+	}
+
+	if result.Error != nil {
+		return "", result.Error
+	}
+
+	casted := *(result.Data).(*string)
+
+	return casted, nil
+}
+
+func TestOpenAIResponsesEndpoint(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := baml.EncodeArgs(args)
+	if err != nil {
+		panic(err)
+	}
+
+	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponsesEndpoint", encoded)
+	if err != nil {
+		return "", err
+	}
+
+	if result.Error != nil {
+		return "", result.Error
+	}
+
+	casted := *(result.Data).(*string)
+
+	return casted, nil
+}
+
+func TestOpenAIResponsesExplicit(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := baml.EncodeArgs(args)
+	if err != nil {
+		panic(err)
+	}
+
+	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponsesExplicit", encoded)
+	if err != nil {
+		return "", err
+	}
+
+	if result.Error != nil {
+		return "", result.Error
+	}
+
+	casted := *(result.Data).(*string)
+
+	return casted, nil
+}
+
+func TestOpenAIResponsesShorthand(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := baml.EncodeArgs(args)
+	if err != nil {
+		panic(err)
+	}
+
+	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponsesShorthand", encoded)
+	if err != nil {
+		return "", err
+	}
+
+	if result.Error != nil {
+		return "", result.Error
+	}
+
+	casted := *(result.Data).(*string)
+
+	return casted, nil
+}
+
+func TestOpenAIResponsesWithOpenAIResponseType(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := baml.EncodeArgs(args)
+	if err != nil {
+		panic(err)
+	}
+
+	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponsesWithOpenAIResponseType", encoded)
+	if err != nil {
+		return "", err
+	}
+
+	if result.Error != nil {
+		return "", result.Error
+	}
+
+	casted := *(result.Data).(*string)
+
+	return casted, nil
+}
+
 func TestOpenAIShorthand(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
 	var callOpts callOption
@@ -7231,6 +7582,84 @@ func UseNestedBlockConstraint(ctx context.Context, inp types.NestedBlockConstrai
 	}
 
 	casted := *(result.Data).(*int64)
+
+	return casted, nil
+}
+
+func ValidateBasicResponses(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := baml.EncodeArgs(args)
+	if err != nil {
+		panic(err)
+	}
+
+	result, err := bamlRuntime.CallFunction(ctx, "ValidateBasicResponses", encoded)
+	if err != nil {
+		return "", err
+	}
+
+	if result.Error != nil {
+		return "", result.Error
+	}
+
+	casted := *(result.Data).(*string)
+
+	return casted, nil
+}
+
+func ValidateResponseTypes(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := baml.EncodeArgs(args)
+	if err != nil {
+		panic(err)
+	}
+
+	result, err := bamlRuntime.CallFunction(ctx, "ValidateResponseTypes", encoded)
+	if err != nil {
+		return "", err
+	}
+
+	if result.Error != nil {
+		return "", result.Error
+	}
+
+	casted := *(result.Data).(*string)
 
 	return casted, nil
 }

@@ -1,0 +1,179 @@
+// OpenAI Responses API Provider Tests
+// Tests the new openai-responses provider that uses the OpenAI Responses API
+
+// Basic OpenAI Responses client
+client<llm> OpenAIResponses {
+  provider openai-responses
+  options {
+    api_key env.OPENAI_API_KEY
+    model "gpt-4.1"
+  }
+}
+
+// OpenAI Responses client with explicit response type
+client<llm> OpenAIResponsesExplicit {
+  provider openai-responses
+  options {
+    api_key env.OPENAI_API_KEY
+    model "gpt-4.1"
+    client_response_type "openai-responses"
+  }
+}
+
+// OpenAI Responses client with custom base URL (for testing)
+client<llm> OpenAIResponsesCustomURL {
+  provider openai-responses
+  options {
+    api_key env.OPENAI_API_KEY
+    model "gpt-4.1"
+    base_url "https://api.openai.com/v1"
+  }
+}
+
+// Test basic functionality with responses API
+function TestOpenAIResponses(input: string) -> string {
+  client OpenAIResponses
+  prompt #"
+    {{ _.role("user") }}
+    Write a short haiku about {{ input }}. Make it simple and beautiful.
+  "#
+}
+
+// Test with explicit response type configuration
+function TestOpenAIResponsesExplicit(input: string) -> string {
+  client OpenAIResponsesExplicit
+  prompt #"
+    {{ _.role("user") }}
+    Create a brief poem about {{ input }}. Keep it under 50 words.
+  "#
+}
+
+// Test with custom base URL
+function TestOpenAIResponsesCustomURL(input: string) -> string {
+  client OpenAIResponsesCustomURL
+  prompt #"
+    {{ _.role("user") }}
+    Tell me an interesting fact about {{ input }}.
+  "#
+}
+
+// Test with multi-turn conversation
+function TestOpenAIResponsesConversation(topic: string) -> string {
+  client OpenAIResponses
+  prompt #"
+    {{ _.role("system") }}
+    You are a helpful assistant that provides concise answers.
+    
+    {{ _.role("user") }}
+    What is {{ topic }}?
+    
+    {{ _.role("assistant") }}
+    {{ topic }} is a fascinating subject. Let me explain briefly.
+    
+    {{ _.role("user") }}
+    Can you give me a simple example?
+  "#
+}
+
+// Test with different model parameter
+client<llm> OpenAIResponsesGPT4 {
+  provider openai-responses
+  options {
+    api_key env.OPENAI_API_KEY
+    model "gpt-4"
+  }
+}
+
+function TestOpenAIResponsesDifferentModel(input: string) -> string {
+  client OpenAIResponsesGPT4
+  prompt #"
+    {{ _.role("user") }}
+    Explain {{ input }} in one sentence.
+  "#
+}
+
+// Test error handling with invalid configuration
+client<llm> OpenAIResponsesInvalidResponseType {
+  provider openai-responses
+  options {
+    api_key env.OPENAI_API_KEY
+    model "gpt-4.1"
+    // This should work since openai response type is valid for responses provider
+    client_response_type "openai"
+  }
+}
+
+function TestOpenAIResponsesWithOpenAIResponseType(input: string) -> string {
+  client OpenAIResponsesInvalidResponseType
+  prompt #"
+    {{ _.role("user") }}
+    Write about {{ input }}.
+  "#
+}
+
+// Comprehensive test suite for OpenAI Responses
+test TestOpenAIResponsesProviders {
+  functions [
+    TestOpenAIResponses,
+    TestOpenAIResponsesExplicit,
+    TestOpenAIResponsesCustomURL,
+    TestOpenAIResponsesConversation,
+    TestOpenAIResponsesDifferentModel,
+    TestOpenAIResponsesWithOpenAIResponseType
+  ]
+  args {
+    input "mountains"
+    topic "machine learning"
+  }
+}
+
+// Test shorthand syntax (this should work but use standard openai, not responses)
+function TestOpenAIResponsesShorthand(input: string) -> string {
+  client "openai/gpt-4.1"
+  prompt #"
+    {{ _.role("user") }}
+    What do you think about {{ input }}?
+  "#
+}
+
+// Test to ensure the provider correctly routes to /v1/responses endpoint
+// This is validated by the implementation, not by the test execution
+function TestOpenAIResponsesEndpoint(input: string) -> string {
+  client OpenAIResponses
+  prompt #"
+    {{ _.role("user") }}
+    This request should go to /v1/responses endpoint, not /v1/chat/completions.
+    Respond with a short message about {{ input }}.
+  "#
+}
+
+// Test that demonstrates automatic response type selection
+client<llm> OpenAIResponsesAutoType {
+  provider openai-responses
+  options {
+    api_key env.OPENAI_API_KEY
+    model "gpt-4.1"
+    // No explicit client_response_type - should automatically use openai-responses
+  }
+}
+
+function TestOpenAIResponsesAutoType(input: string) -> string {
+  client OpenAIResponsesAutoType
+  prompt #"
+    {{ _.role("user") }}
+    This client should automatically use openai-responses response type.
+    Write a short description of {{ input }}.
+  "#
+}
+
+// Additional test for validation
+test TestOpenAIResponsesValidation {
+  functions [
+    TestOpenAIResponsesShorthand,
+    TestOpenAIResponsesEndpoint,
+    TestOpenAIResponsesAutoType
+  ]
+  args {
+    input "artificial intelligence"
+  }
+}

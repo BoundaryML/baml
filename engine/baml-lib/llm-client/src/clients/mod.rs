@@ -184,6 +184,9 @@ impl crate::OpenAIClientProviderVariant {
             crate::OpenAIClientProviderVariant::Generic => {
                 openai::UnresolvedOpenAI::create_generic(properties)
             }
+            crate::OpenAIClientProviderVariant::Responses => {
+                openai::UnresolvedOpenAI::create_responses(properties)
+            }
         }
     }
 }
