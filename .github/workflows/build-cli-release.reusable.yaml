@@ -73,10 +73,7 @@ jobs:
       #     ci/ubuntu-install-packages
 
       
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: stable
-          target: ${{ matrix._.target }}
+    
       
       - uses: actions/setup-go@v5
         with:
@@ -104,6 +101,11 @@ jobs:
           echo "Testing protoc can find protoc-gen-go plugin..."
           # Test that protoc can find the go plugin (this will show an error about missing .proto file, but that's expected)
           protoc --go_out=/tmp --help | grep -q "go_out" && echo "✅ protoc recognizes --go_out flag" || echo "❌ protoc does not recognize --go_out flag"
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          target: ${{ matrix._.target }}
       
       - name: Use Cross
         if: contains(matrix._.os, 'ubuntu')
