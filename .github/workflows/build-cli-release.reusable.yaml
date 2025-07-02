@@ -146,8 +146,14 @@ jobs:
       #   working-directory: engine
 
       - name: Build CFFI Library
-        run: >
-          PATH=$HOME/go/bin:$PATH ${{ env.CARGO }} build --release -p baml_cffi ${{ env.TARGET_FLAGS }}
+        shell: bash
+        env:
+          PROTOC_ARGS: --plugin=protoc-gen-go=$HOME/go/bin/protoc-gen-go
+        run: |
+          # The PROTOC_ARGS env var is used by prost-build to pass arguments to protoc.
+          # We use it to explicitly tell the vendored protoc where to find the go plugin,
+          # as the cross-compile environment does not inherit the PATH correctly.
+          ${{ env.CARGO }} build --release -p baml_cffi ${{ env.TARGET_FLAGS }}
         working-directory: engine
         # Skip this step on Windows runners
         if: matrix._.os != 'windows-2022'
