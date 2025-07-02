@@ -84,7 +84,7 @@ jobs:
         with:
           workspaces: engine
           # Key might need adjustment if WASM build differs per matrix run, but likely not
-          key: ubuntu-latest-rust-wasm-${{ hashFiles('**/Cargo.lock') }}
+          key: v6-ubuntu-latest-rust-wasm-${{ hashFiles('**/Cargo.lock') }}
       - uses: jetli/wasm-bindgen-action@v0.2.0
         with:
           version: "0.2.92"
