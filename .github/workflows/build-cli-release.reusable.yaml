@@ -76,7 +76,10 @@ jobs:
         with:
           toolchain: stable
           target: ${{ matrix._.target }}
-      
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: engine
+          prefix-key: "v5-rust-${{ matrix._.target }}"
       - uses: actions/setup-go@v5
         with:
           go-version: '1.21'
@@ -134,11 +137,7 @@ jobs:
           echo "target flag is: ${{ env.TARGET_FLAGS }}"
           echo "target dir is: ${{ env.TARGET_DIR }}"
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: engine
-          prefix-key: "v5-rust-${{ matrix._.target }}"
-
+    
       # # Build the CLI - Always use static-ssl features
       # - name: Build CLI Binary
       #   # This single step now handles all builds
