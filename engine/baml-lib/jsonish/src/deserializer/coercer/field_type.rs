@@ -124,7 +124,18 @@ impl TypeCoercer for TypeIR {
             }
         }
         if let Some(CompletionState::Incomplete) = value.map(|v| v.completion_state()) {
-            result.iter_mut().for_each(|v| v.add_flag(Flag::Incomplete));
+            match result {
+                Ok(mut v) => {
+                    if self.meta().streaming_behavior.done
+                        && ctx.do_not_use_mode == baml_types::StreamingMode::Streaming
+                    {
+                        return Err(ctx.error_internal("Streaming field is not done"));
+                    }
+                    v.add_flag(Flag::Incomplete);
+                    return Ok(v);
+                }
+                Err(e) => return Err(e),
+            }
         }
         result
     }

@@ -527,3 +527,232 @@ Actions:
     }
   ]
 );
+
+const TEST_FILE_STREAMING_NOT_NULL_LIST: &str = r###"
+class SemanticContainer2 {    
+    three_small_things SmallThing[] @description("Should have three items.")
+}
+
+class SemanticContainer {
+    sixteen_digit_number int
+    string_with_twenty_words string @stream.done
+    class_1 ClassWithoutDone
+    class_2 ClassWithBlockDone
+    class_done_needed ClassWithBlockDone @stream.not_null
+    class_needed ClassWithoutDone @stream.not_null
+    three_small_things SmallThing[] @description("Should have three items.")
+    final_string string
+}
+
+class ClassWithoutDone {
+    i_16_digits int
+    s_20_words string @description("A string with 20 words in it") @stream.with_state
+}
+
+class ClassWithBlockDone {
+    i_16_digits int
+    s_20_words string
+    @@stream.done
+}
+
+class SmallThing {
+    i_16_digits int @stream.not_null
+    i_8_digits int
+}
+
+function MakeSemanticContainer() -> SemanticContainer {
+    client "openai/gpt-4o"
+    prompt #"
+        {{ ctx.output_format }}
+    "#
+}
+"###;
+
+test_deserializer!(
+  test_streaming_not_null_list,
+  TEST_FILE_STREAMING_NOT_NULL_LIST,
+  r#"
+      {
+      "sixteen_digit_number": 1234567890123456,
+      "string_with_twenty_words": "This is an example string that contains exactly twenty words for the requested output in JSON format. It is quite informative.",
+      "class_1": {
+        "i_16_digits": 9876543210123456,
+        "s_20_words": "Another example string used for class one with twenty distinct words to complete the requirements of this JSON structure."
+      },
+      "class_2": {
+        "i_16_digits": 4567890123456789,
+        "s_20_words": "Class two also has a longer description that encompasses twenty unique words to fulfill the output specifications."
+      },
+      "class_done_needed": {
+        "i_16_digits": 7890123456789012,
+        "s_20_words": "This class indicates what has been completed and also includes twenty words in its description for clarity."
+      },
+      "class_needed": {
+        "i_16_digits": 3210987654321098,
+        "s_20_words": "Another class that explains what is currently needed for completion includes another twenty-word explanation for better understanding."
+      },
+      "three_small_things": [
+        {
+          "i_16_digits": 1357924680135792,
+          "i_8_digits": 24681357
+        },
+        {
+          "i_16_digits": 2468135790246813,
+          "i_8_digits": 86421357
+        },
+        {
+          "i_16_digits": 3571598642035791,
+          "i_8_digits": 97586421
+        }
+      ],
+      "final_string": "This final string provides a brief conclusion or summary of the entire JSON formatted data provided above."
+  }  
+  "#,
+  TypeIR::class("SemanticContainer"),
+  {
+    "sixteen_digit_number": 1234567890123456i64,
+    "string_with_twenty_words": "This is an example string that contains exactly twenty words for the requested output in JSON format. It is quite informative.",
+    "class_1": {
+      "i_16_digits": 9876543210123456i64,
+      "s_20_words": "Another example string used for class one with twenty distinct words to complete the requirements of this JSON structure."
+    },
+    "class_2": {
+      "i_16_digits": 4567890123456789i64,
+      "s_20_words": "Class two also has a longer description that encompasses twenty unique words to fulfill the output specifications."
+    },
+    "class_done_needed": {
+      "i_16_digits": 7890123456789012i64,
+      "s_20_words": "This class indicates what has been completed and also includes twenty words in its description for clarity."
+    },
+    "class_needed": {
+      "i_16_digits": 3210987654321098i64,
+      "s_20_words": "Another class that explains what is currently needed for completion includes another twenty-word explanation for better understanding."
+    },
+    "three_small_things": [
+      {
+        "i_16_digits": 1357924680135792i64,
+        "i_8_digits": 24681357
+      },
+      {
+        "i_16_digits": 2468135790246813i64,
+        "i_8_digits": 86421357
+      },
+      {
+        "i_16_digits": 3571598642035791i64,
+        "i_8_digits": 97586421
+      }
+    ],
+    "final_string": "This final string provides a brief conclusion or summary of the entire JSON formatted data provided above."
+  }
+);
+
+test_partial_deserializer!(
+  test_streaming_not_null_list_partial,
+  TEST_FILE_STREAMING_NOT_NULL_LIST,
+  r#"
+      {
+      "sixteen_digit_number": 1234567890123456,
+      "string_with_twenty_words": "This is an example string that contains exactly twenty words for the requested output in JSON format. It is quite informative.",
+      "class_1": {
+        "i_16_digits": 9876543210123456,
+        "s_20_words": "Another example string used for class one with twenty distinct words to complete the requirements of this JSON structure."
+      },
+      "class_2": {
+        "i_16_digits": 4567890123456789,
+        "s_20_words": "Class two also has a longer description that encompasses twenty unique words to fulfill the output specifications."
+      },
+      "class_done_needed": {
+        "i_16_digits": 7890123456789012,
+        "s_20_words": "This class indicates what has been completed and also includes twenty words in its description for clarity."
+      },
+      "class_needed": {
+        "i_16_digits": 3210987654321098,
+        "s_20_words": "Another class that explains what is currently needed for completion includes another twenty-word explanation for better understanding."
+      },
+      "three_small_things": [{
+        "i_16_digits": 123
+        
+  "#,
+  TypeIR::class("SemanticContainer"),
+  {
+    "sixteen_digit_number": 1234567890123456i64,
+    "string_with_twenty_words": "This is an example string that contains exactly twenty words for the requested output in JSON format. It is quite informative.",
+    "class_1": {
+      "i_16_digits": 9876543210123456i64,
+      "s_20_words": "Another example string used for class one with twenty distinct words to complete the requirements of this JSON structure."
+    },
+    "class_2": {
+      "i_16_digits": 4567890123456789i64,
+      "s_20_words": "Class two also has a longer description that encompasses twenty unique words to fulfill the output specifications."
+    },
+    "class_done_needed": {
+      "i_16_digits": 7890123456789012i64,
+      "s_20_words": "This class indicates what has been completed and also includes twenty words in its description for clarity."
+    },
+    "class_needed": {
+      "i_16_digits": 3210987654321098i64,
+      "s_20_words": "Another class that explains what is currently needed for completion includes another twenty-word explanation for better understanding."
+    },
+    "three_small_things": [
+    ],
+    "final_string": null
+  }
+);
+
+test_deserializer!(
+  test_streaming_not_null_list_partial_2,
+  TEST_FILE_STREAMING_NOT_NULL_LIST,
+  r#"
+      {
+        "i_16_digits": 123456789012345,
+        "i_8_digits": 12345
+      }
+  "#,
+  TypeIR::class("SmallThing"),
+  {
+    "i_16_digits": 123456789012345i64,
+    "i_8_digits": 12345
+  }
+);
+
+test_partial_deserializer!(
+    test_streaming_not_null_list_partial_3_0,
+    TEST_FILE_STREAMING_NOT_NULL_LIST,
+    r#"
+      {
+        "three_small_things": [
+          {
+            "i_16_digits": 123456789012345
+  "#,
+  TypeIR::class("SemanticContainer2"),
+  // we should return an empty list here, not null
+  // SmallThing.i_16_digits is not_null, so the entry is not valid
+  // until the number is complete
+  {
+    "three_small_things": [
+    ]
+  }
+);
+
+test_partial_deserializer!(
+  test_streaming_not_null_list_partial_3_1,
+  TEST_FILE_STREAMING_NOT_NULL_LIST,
+  r#"
+    {
+      "three_small_things": [
+        {
+          "i_16_digits": 123456789012345,
+"#,
+TypeIR::class("SemanticContainer2"),
+// we should return an empty list here, not null
+// SmallThing.i_16_digits is not_null, so the entry is not valid
+// until the number is complete
+{
+  "three_small_things": [
+    {
+      "i_16_digits": 123456789012345i64,
+      "i_8_digits": null
+    }
+  ]
+}
+);

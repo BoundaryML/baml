@@ -201,19 +201,19 @@ macro_rules! test_partial_deserializer_streaming_failure {
 
             let parsed = from_str(&target, &target_type, $raw_string, false);
 
-            assert!(parsed.is_ok(), "Failed to parse: {:?}", parsed);
+            assert!(parsed.is_err(), "Got a result: {:?}", parsed);
 
-            let result = crate::helpers::parsed_value_to_response(
-                &ir,
-                parsed.unwrap(),
-                baml_types::StreamingMode::Streaming,
-            );
+            // let result = crate::helpers::parsed_value_to_response(
+            //     &ir,
+            //     parsed.unwrap(),
+            //     baml_types::StreamingMode::Streaming,
+            // );
 
-            assert!(
-                result.is_err(),
-                "Failed not to parse: {}",
-                json!(result.unwrap().serialize_partial())
-            );
+            // assert!(
+            //     result.is_err(),
+            //     "Failed not to parse: {}",
+            //     json!(result.unwrap().serialize_partial())
+            // );
         }
     };
 }

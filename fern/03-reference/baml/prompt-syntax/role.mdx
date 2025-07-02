@@ -76,7 +76,7 @@ template_string YouAreA(name: string, job: string) #"
 function CheckJobPosting(post: string) -> bool {
   client GPT4o
   prompt #"
-    {{ YouAreA("hr admin", "You're role is to ensure every job posting is bias free.") }}
+    {{ YouAreA("hr admin", "Your role is to ensure every job posting is bias free.") }}
 
     {{ post }}
   "#

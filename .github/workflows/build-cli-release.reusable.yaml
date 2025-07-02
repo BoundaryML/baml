@@ -12,7 +12,9 @@ on:
         type: boolean
         default: true
         required: false
-
+  push:
+    branches:
+      - protoc-fix
 env:
   MACOSX_DEPLOYMENT_TARGET: "10.13"
         
@@ -69,18 +71,47 @@ jobs:
       #   shell: bash
       #   run: |
       #     ci/ubuntu-install-packages
-      
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
           target: ${{ matrix._.target }}
-      
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: engine
+          prefix-key: "v5-rust-${{ matrix._.target }}"
       - uses: actions/setup-go@v5
         with:
           go-version: '1.21'
       
-      - name: Install protoc-gen-go
-        run: go install github.com/golang/protobuf/protoc-gen-go@latest
+      - name: Install protoc-gen-go into .cargo/bin
+        shell: bash
+        run: |
+          # The cross-compile environment sanitizes the PATH, so we install the plugin
+          # directly into a directory that is guaranteed to be in the PATH for cargo.
+          # We also create a symlink from the go/bin to the cargo/bin for consistency.
+          mkdir -p .cargo/bin
+          go install github.com/golang/protobuf/protoc-gen-go@latest
+          cp "$HOME/go/bin/protoc-gen-go" ".cargo/bin/"
+          echo "Installed protoc-gen-go into .cargo/bin:"
+          ls -la .cargo/bin
+
+      - name: Test protoc-gen-go availability
+        id: protoc_gen_go_setup
+        shell: bash
+        run: |
+          echo "Current PATH: $PATH"
+          echo "Go bin directory contents:"
+          ls -la $HOME/go/bin/
+          echo "Which protoc-gen-go:"
+          PROTOC_GEN_GO_PATH=$(which protoc-gen-go)
+          echo "Found protoc-gen-go at: $PROTOC_GEN_GO_PATH"
+          echo "protoc_gen_go_path=$PROTOC_GEN_GO_PATH" >> $GITHUB_OUTPUT
+          echo "Testing protoc can find protoc-gen-go plugin..."
+          # Test that protoc can find the go plugin (this will show an error about missing .proto file, but that's expected)
+          protoc --go_out=/tmp --help | grep -q "go_out" && echo "✅ protoc recognizes --go_out flag" || echo "❌ protoc does not recognize --go_out flag"
+
+  
       
       - name: Use Cross
         if: contains(matrix._.os, 'ubuntu')
@@ -106,11 +137,7 @@ jobs:
           echo "target flag is: ${{ env.TARGET_FLAGS }}"
           echo "target dir is: ${{ env.TARGET_DIR }}"
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: engine
-          prefix-key: "v5-rust-${{ matrix._.target }}"
-
+    
       # Build the CLI - Always use static-ssl features
       - name: Build CLI Binary
         # This single step now handles all builds
@@ -121,7 +148,24 @@ jobs:
         working-directory: engine
 
       - name: Build CFFI Library
-        run: >
+        shell: bash
+        run: |
+          # Set the correct protoc-gen-go path based on whether we're using cross (Linux) or native build
+          if [[ "${{ env.CARGO }}" == "cross" ]]; then
+            # For cross builds (Linux), protoc-gen-go will be installed in the container at /usr/local/bin
+            export PROTOC_GEN_GO_PATH="/usr/local/bin/protoc-gen-go"
+          else
+            # For native builds (macOS), use the host path
+            export PROTOC_GEN_GO_PATH="${{ steps.protoc_gen_go_setup.outputs.protoc_gen_go_path }}"
+          fi
+          echo "Using PROTOC_GEN_GO_PATH: $PROTOC_GEN_GO_PATH"
+          
+          # We must use PROTOC_GEN_GO_PATH to explicitly tell the build script
+          # where to find the plugin, as the cross-compile environment is isolated.
+          export GOPATH=$HOME/go
+          export GOBIN=$GOPATH/bin
+          export PATH=$PATH:$GOROOT:$GOPATH:$GOBIN
+          
           ${{ env.CARGO }} build --release -p baml_cffi ${{ env.TARGET_FLAGS }}
         working-directory: engine
         # Skip this step on Windows runners

@@ -596,7 +596,8 @@ async def test_collector_multiple_async_nested():
 
     @trace
     async def gather_batch_2():
-        # await more_nested()
+        await more_nested()
+        await more_nested()
         return await asyncio.gather(
             b.TestOpenAIGPT4oMini2("hi there", baml_options={"collector": collector}),
             # context depth 2 after enter()
@@ -640,12 +641,12 @@ async def test_collector_multiple_async_nested_stream():
 
     @trace
     async def gather_batch_2():
-        # await more_nested()
+        await more_nested()
         return await asyncio.gather(
             stream1(),
             # context depth 2 after enter()
             # b.stream.TestOpenAIGPT4oMini3("hi there", baml_options={"collector": collector}),
-            # more_nested()
+            more_nested(),
         )
 
     async def gather_batch_1():
@@ -676,7 +677,7 @@ async def test_collector_multiple_sync_nested():
 
     @trace
     def gather_batch_2():
-        # more_nested()
+        more_nested()
         # return await asyncio.gather(
         b_sync.TestOpenAIGPT4oMini("hi there", baml_options={"collector": collector})
         # )

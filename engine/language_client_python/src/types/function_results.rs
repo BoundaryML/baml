@@ -1,13 +1,13 @@
-use baml_types::{BamlValueWithMeta, ResponseCheck};
+use baml_types::{ir_type::TypeGeneric, BamlValueWithMeta, ResponseCheck};
 use jsonish::{ResponseBamlValue, ResponseValueMeta};
 use pyo3::{
     prelude::{pymethods, PyResult},
-    types::{PyAnyMethods, PyDict, PyModule, PyTuple, PyType},
+    types::{PyAnyMethods, PyDict, PyDictMethods, PyModule, PyTuple, PyType},
     Bound, IntoPyObject, IntoPyObjectExt, Py, PyAny, PyErr, PyObject, Python,
 };
 
 use super::{BamlAudioPy, BamlImagePy};
-use crate::errors::BamlError;
+use crate::{errors::BamlError, runtime::BamlRuntime};
 
 crate::lang_wrapper!(FunctionResult, baml_runtime::FunctionResult);
 
@@ -36,6 +36,7 @@ impl FunctionResult {
         cls_module: Bound<'_, PyModule>,
         partial_cls_module: Bound<'_, PyModule>,
         allow_partials: bool,
+        runtime: &BamlRuntime,
     ) -> PyResult<PyObject> {
         let parsed = self
             .inner
@@ -53,6 +54,7 @@ impl FunctionResult {
             &cls_module,
             &partial_cls_module,
             allow_partials,
+            runtime,
         )
     }
 }
@@ -86,15 +88,30 @@ fn pythonize_checks<'a>(
     Ok(dict)
 }
 
+pub struct Meta<'a, T> {
+    pub _field_type: TypeGeneric<T>,
+    pub _checks: &'a Vec<baml_types::ResponseCheck>,
+}
+
 pub(crate) fn pythonize_strict(
     py: Python<'_>,
     parsed: ResponseBamlValue,
     enum_module: &Bound<'_, PyModule>,
     cls_module: &Bound<'_, PyModule>,
     partial_cls_module: &Bound<'_, PyModule>,
-    allow_partials: bool,
+    allow_partials: bool, //if true, use the stream type
+    runtime: &BamlRuntime,
 ) -> PyResult<PyObject> {
     let allow_partials = allow_partials && !parsed.0.meta().2.required_done;
+
+    let _stream_type_metadata = parsed.0.map_meta(|f| {
+        let meta = f.3.to_streaming_type(runtime.inner.internal().ir.as_ref());
+        Meta {
+            _field_type: meta,
+            _checks: &f.1,
+        }
+    });
+
     let meta = parsed.0.meta().clone();
 
     let is_pydantic_2 = {
@@ -127,6 +144,7 @@ pub(crate) fn pythonize_strict(
                     cls_module,
                     partial_cls_module,
                     allow_partials,
+                    runtime,
                 )?;
                 dict.set_item(key, value)?;
             }
@@ -143,6 +161,7 @@ pub(crate) fn pythonize_strict(
                         cls_module,
                         partial_cls_module,
                         allow_partials,
+                        runtime,
                     )
                 })
                 .collect::<PyResult<Vec<_>>>()?,
@@ -194,6 +213,7 @@ pub(crate) fn pythonize_strict(
                         cls_module,
                         partial_cls_module,
                         subvalue_allow_partials,
+                        runtime,
                     )?;
                     Ok((key.clone(), value))
                 })
@@ -257,14 +277,16 @@ pub(crate) fn pythonize_strict(
                 None,
             ) {
                 Ok(x) => Ok(x),
-                Err(original_error) => match backup_class_type.call_method(
-                    model_validate_method,
-                    (properties_dict.clone(),),
-                    None,
-                ) {
-                    Ok(x) => Ok(x),
-                    Err(_) => Err(original_error),
-                },
+                Err(original_error) => {
+                    match backup_class_type.call_method(
+                        model_validate_method,
+                        (properties_dict.clone(),),
+                        None,
+                    ) {
+                        Ok(x) => Ok(x),
+                        Err(_) => Err(original_error),
+                    }
+                }
             }?;
 
             Ok(instance.into())
