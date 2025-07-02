@@ -77,11 +77,16 @@ futures-util = "0.3"
 include_dir = "0.7"
 mime_guess = "2.0.4"
 base64 = "0.21"
-reqwest = { version = "0.11", features = ["json"] }
 http = "0.2"
 bytes = "1.0"
 
 webbrowser = "0.8"
+
+reqwest = { version = "0.12", features = ["blocking", "json"] }
+tar = "0.4"
+flate2 = { version = "1.0" }
+
+dirs = "5.0"
 
 [dev-dependencies]
 insta = { version = "1.42.1" }
