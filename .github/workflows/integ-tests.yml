@@ -71,7 +71,6 @@ jobs:
         with:
           workspaces: engine
           cache-on-failure: true
-          prefix-key: v6-engine-${{ github.job }}-${{ matrix._.target }}-${{ matrix._.host }}
       - uses: jdx/mise-action@v2
         env:
           GITHUB_TOKEN: ${{ github.token }}

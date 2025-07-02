@@ -96,7 +96,6 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: engine
-          prefix-key: v6-${{ github.job }}
       - name: Install Node
         run: pnpm install --frozen-lockfile
         working-directory: engine/language_client_typescript
@@ -152,7 +151,6 @@ jobs:
         - uses: Swatinem/rust-cache@v2
           with:
             workspaces: engine
-            prefix-key: v6-${{ github.job }}
         - name: Build rust for wasm32
           run: cargo build --target=wasm32-unknown-unknown
           working-directory: engine/baml-schema-wasm
@@ -168,7 +166,6 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: engine
-          prefix-key: v6-${{ github.job }}
       - uses: actions/setup-go@v4
         with:
           go-version: '1.24'
@@ -225,7 +222,6 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: engine
-          prefix-key: v6-${{ github.job }}
       - name: Build web-panel for language server
         run: bash ./scripts/build.sh
         working-directory: engine/language_server
@@ -255,7 +251,6 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: engine
-          prefix-key: v6-${{ github.job }}
       - name: Build CLI
         run: cargo build --release --bin baml-cli --target ${{ matrix.target }}
         working-directory: engine

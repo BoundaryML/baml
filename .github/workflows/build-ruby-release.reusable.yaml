@@ -72,22 +72,6 @@ jobs:
           RUSTFLAGS=--cfg tracing_unstable
           EOF
 
-
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9.12.0
-     
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - name: Install Node
-        run: pnpm install --frozen-lockfile
-        working-directory: engine/language_client_typescript
-      # This step is necessary to guarantee that the language server has a frontend to embed.
-      # Is also included in build and integ-tests steps.
-      - name: Build web-panel for language server
-        run: bash ./scripts/build.sh
-        working-directory: engine/language_server
       - name: Setup rb-sys
         shell: bash
         run: |
