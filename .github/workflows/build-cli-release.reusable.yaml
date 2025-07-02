@@ -118,7 +118,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: pnpm
       - name: Install Node
         run: pnpm install --frozen-lockfile
         working-directory: engine/language_client_typescript
