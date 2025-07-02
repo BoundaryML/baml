@@ -20,9 +20,9 @@ impl PlaygroundServer {
     }
 
     pub async fn run(self, port: u16) -> Result<()> {
-        let routes = create_server_routes(self.state, self.session);
+        // let routes = create_server_routes(self.state, self.session);
 
-        warp::serve(routes).try_bind(([127, 0, 0, 1], port)).await;
+        // warp::serve(routes).try_bind(([127, 0, 0, 1], port)).await;
 
         Ok(())
     }

@@ -90,13 +90,13 @@ jobs:
           cmake --version
 
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9.12.0
+      # - uses: pnpm/action-setup@v4
+      #   with:
+      #     version: 9.12.0
         
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
+      # - uses: actions/setup-node@v4
+      #   with:
+      #     node-version: 20
 
 
       # Setup Python for non-ARM64 Windows targets and other OS
@@ -132,14 +132,14 @@ jobs:
           python-version: "3.13"
           architecture: "arm64"
           allow-prereleases: true
-      - name: Install Node
-        run: pnpm install --frozen-lockfile
-        working-directory: engine/language_client_typescript
-      # This step is necessary to guarantee that the language server has a frontend to embed.
-      # Is also included in build and integ-tests steps.
-      - name: Build web-panel for language server
-        run: bash ./scripts/build.sh
-        working-directory: engine/language_server
+      # - name: Install Node
+      #   run: pnpm install --frozen-lockfile
+      #   working-directory: engine/language_client_typescript
+      # # This step is necessary to guarantee that the language server has a frontend to embed.
+      # # Is also included in build and integ-tests steps.
+      # - name: Build web-panel for language server
+      #   run: bash ./scripts/build.sh
+      #   working-directory: engine/language_server
 
       - name: Build wheels
         uses: PyO3/maturin-action@v1
