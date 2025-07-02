@@ -90,8 +90,8 @@ jobs:
           echo 'export PATH=$PATH:$HOME/go/bin' >> $GITHUB_ENV
           echo 'export PATH=$PATH:$HOME/go/bin' >> $GITHUB_PATH
 
-      - name: Call protoc-gen-go
-        run: protoc-gen-go --version
+      # - name: Call protoc-gen-go
+      #   run: protoc-gen-go --version
       
       - name: Use Cross
         if: contains(matrix._.os, 'ubuntu')
