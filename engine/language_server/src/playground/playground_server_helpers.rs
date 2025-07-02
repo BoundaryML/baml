@@ -15,8 +15,8 @@ use crate::{
 /// Embed at compile time everything in dist/
 // WARNING: this is a relative path, will easily break if file structure changes
 // WARNING: works as a macro so any build script executes after this is evaluated
-static STATIC_DIR: Dir<'_> =
-    include_dir!("$CARGO_MANIFEST_DIR/../../typescript/vscode-ext/packages/web-panel/dist");
+// static STATIC_DIR: Dir<'_> =
+//     include_dir!("$CARGO_MANIFEST_DIR/../../typescript/vscode-ext/packages/web-panel/dist");
 
 /// Helper to send all projects/files to a websocket client
 pub async fn send_all_projects_to_client(
@@ -125,30 +125,30 @@ pub fn create_server_routes(
             })
         });
 
-    // Static file serving needed to serve the frontend files
-    let spa =
-        warp::path::full()
-            .and(warp::get())
-            .and_then(|full: warp::path::FullPath| async move {
-                let path = full.as_str().trim_start_matches('/');
-                let file = if path.is_empty() { "index.html" } else { path };
-                match STATIC_DIR.get_file(file) {
-                    Some(f) => {
-                        let body = f.contents();
-                        let mime = from_path(file).first_or_octet_stream();
-                        Ok::<_, warp::Rejection>(
-                            Response::builder()
-                                .header("content-type", mime.as_ref())
-                                .body(body.to_vec()),
-                        )
-                    }
-                    None => Ok::<_, warp::Rejection>(
-                        Response::builder().status(404).body(b"Not Found".to_vec()),
-                    ),
-                }
-            });
+    // // Static file serving needed to serve the frontend files
+    // let spa =
+    //     warp::path::full()
+    //         .and(warp::get())
+    //         .and_then(|full: warp::path::FullPath| async move {
+    //             let path = full.as_str().trim_start_matches('/');
+    //             let file = if path.is_empty() { "index.html" } else { path };
+    //             match STATIC_DIR.get_file(file) {
+    //                 Some(f) => {
+    //                     let body = f.contents();
+    //                     let mime = from_path(file).first_or_octet_stream();
+    //                     Ok::<_, warp::Rejection>(
+    //                         Response::builder()
+    //                             .header("content-type", mime.as_ref())
+    //                             .body(body.to_vec()),
+    //                     )
+    //                 }
+    //                 None => Ok::<_, warp::Rejection>(
+    //                     Response::builder().status(404).body(b"Not Found".to_vec()),
+    //                 ),
+    //             }
+    //         });
 
-    ws_route.or(spa).with(warp::log("playground-server"))
+    // ws_route.or(spa).with(warp::log("playground-server"))
 }
 
 // Helper function to broadcast project updates with better error handling
