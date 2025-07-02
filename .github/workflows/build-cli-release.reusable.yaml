@@ -94,13 +94,16 @@ jobs:
           ls -la .cargo/bin
 
       - name: Test protoc-gen-go availability
+        id: protoc_gen_go_setup
         shell: bash
         run: |
           echo "Current PATH: $PATH"
           echo "Go bin directory contents:"
           ls -la $HOME/go/bin/
           echo "Which protoc-gen-go:"
-          which protoc-gen-go
+          PROTOC_GEN_GO_PATH=$(which protoc-gen-go)
+          echo "Found protoc-gen-go at: $PROTOC_GEN_GO_PATH"
+          echo "protoc_gen_go_path=$PROTOC_GEN_GO_PATH" >> $GITHUB_OUTPUT
           echo "Testing protoc can find protoc-gen-go plugin..."
           # Test that protoc can find the go plugin (this will show an error about missing .proto file, but that's expected)
           protoc --go_out=/tmp --help | grep -q "go_out" && echo "✅ protoc recognizes --go_out flag" || echo "❌ protoc does not recognize --go_out flag"
@@ -148,11 +151,12 @@ jobs:
       - name: Build CFFI Library
         shell: bash
         env:
-          PROTOC_GEN_GO_PATH: /home/runner/go/bin/protoc-gen-go
+          PROTOC_GEN_GO_PATH: ${{ steps.protoc_gen_go_setup.outputs.protoc_gen_go_path }}
         run: |
+          echo "Using PROTOC_GEN_GO_PATH: $PROTOC_GEN_GO_PATH"
           # We must use PROTOC_GEN_GO_PATH to explicitly tell the build script
           # where to find the plugin, as the cross-compile environment is isolated.
-          ${{ env.CARGO }} build --release -p baml_cffi ${{ env.TARGET_FLAGS }}
+          ${{ env.CARGO }} build --debug -p baml_cffi ${{ env.TARGET_FLAGS }}
         working-directory: engine
         # Skip this step on Windows runners
         if: matrix._.os != 'windows-2022'
