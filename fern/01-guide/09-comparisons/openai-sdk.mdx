@@ -349,13 +349,18 @@ private_extraction = await b.ExtractResume(sensitive_text, {"client": "Llama"})
 ### Testing without burning money
 
 With BAML's VSCode extension:
-1. Write your test cases
-2. See the exact prompt
-3. Test instantly without API calls
-4. Iterate until perfect
-5. Save test cases for CI/CD
 
-No mocking, no token costs, real testing.
+<img src="/assets/vscode/playground-preview.png" alt="BAML VSCode playground with instant testing" />
+
+1. **Write your test cases** - Visual interface for test data
+2. **See the exact prompt** - No hidden abstractions
+3. **Test instantly** without API calls
+4. **Iterate until perfect** - Instant feedback loop
+5. **Save test cases** for CI/CD
+
+<img src="/assets/vscode/open-playground.png" alt="Opening BAML playground from VSCode" />
+
+*No mocking, no token costs, real testing.*
 
 ### Built for production
 
@@ -391,13 +396,25 @@ OpenAI's structured outputs are great if you:
 - Don't need prompt customization
 - Have simple extraction needs
 
-But in production, you need more:
-- **Model flexibility** - Try Claude, Gemini, or Llama
-- **Prompt control** - See and optimize what's sent  
-- **Real testing** - Without burning tokens
-- **Production features** - Retries, fallbacks, routing
+**But production LLM applications need more:**
 
-With BAML, you get all of this while keeping your code simple.
+**BAML's advantages over OpenAI SDK:**
+- **Model flexibility** - Works with GPT, Claude, Gemini, Llama, and any future model
+- **Prompt transparency** - See and optimize exactly what's sent to the LLM
+- **Real testing** - Test in VSCode without burning tokens or API calls
+- **Production features** - Built-in retries, fallbacks, and smart routing
+- **Cost optimization** - Understand token usage and optimize prompts
+- **Schema-Aligned Parsing** - Get structured outputs from any model, not just OpenAI
+- **Streaming + Structure** - Stream structured data with loading bars
+
+**Why this matters:**
+- **Future-proof** - Never get locked into one model provider
+- **Faster development** - Instant testing and iteration in your editor
+- **Better reliability** - Built-in error handling and fallback strategies
+- **Team productivity** - Prompts are versioned, testable code
+- **Cost control** - Optimize token usage across different models
+
+With BAML, you get all the benefits of OpenAI's structured outputs plus the flexibility and control needed for production applications.
 
 ### Limitations of BAML
 

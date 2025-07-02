@@ -148,6 +148,12 @@ mock_llm.with_structured_output.return_value.invoke.return_value = Resume(...)
 # Just that your mocks work
 ```
 
+**With BAML, testing is visual and instant:**
+
+<img src="/assets/vscode/test-case-buttons.png" alt="VSCode test case buttons for instant testing" />
+
+*Test your prompts instantly without API calls or mocking*
+
 ### The token mystery
 
 Your CFO asks: "Why is our OpenAI bill so high?" You investigate:
@@ -269,14 +275,23 @@ resume_simple = await b.ExtractResume(simple_text, {"client": "GPT4Mini"})
 
 Langchain is great for building complex LLM applications with chains, agents, and memory. But for structured extraction, you're fighting against abstractions that hide important details.
 
-With BAML you get:
-- **Full prompt transparency** - See and control exactly what's sent
-- **Native testing** - Test in VSCode without API calls  
-- **Multi-model by design** - Switch providers with one line
-- **Token visibility** - Know exactly what you're paying for
-- **Type safety** - Generated Pydantic models that always match your schema
+**BAML gives you what Langchain can't:**
+- **Full prompt transparency** - See and control exactly what's sent to the LLM
+- **Native testing** - Test in VSCode without API calls or burning tokens
+- **Multi-model by design** - Switch providers with one line, works with any model
+- **Token visibility** - Know exactly what you're paying for and optimize costs
+- **Type safety** - Generated clients with autocomplete that always match your schema
+- **Schema-Aligned Parsing** - Get structured outputs from any model, even without function calling
+- **Streaming + Structure** - Stream structured data with loading bars and type-safe parsing
 
-We built BAML because we were tired of wrestling with framework abstractions when all we wanted was reliable structured extraction.
+**Why this matters for production:**
+- **Faster iteration** - See changes instantly without running Python code
+- **Better debugging** - Know exactly why extraction failed
+- **Cost optimization** - Understand and reduce token usage
+- **Model flexibility** - Never get locked into one provider
+- **Team collaboration** - Prompts are code, not hidden strings
+
+We built BAML because we were tired of wrestling with framework abstractions when all we wanted was reliable structured extraction with full developer control.
 
 ### Limitations of BAML
 

@@ -8,7 +8,9 @@
       "Bash(uv run:*)",
       "Bash(find:*)",
       "Bash(rg:*)",
-      "Bash(cargo check:*)"
+      "Bash(cargo check:*)",
+      "WebFetch(domain:gloochat.notion.site)",
+      "WebFetch(domain:www.boundaryml.com)"
     ],
     "deny": []
   }

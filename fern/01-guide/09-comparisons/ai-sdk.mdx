@@ -329,29 +329,42 @@ console.log(resume.seniority); // TypeScript knows this is SeniorityLevel
 ### Testing that actually tests
 
 With BAML's VSCode extension, you can:
-1. Test prompts without API calls
-2. See exactly what will be sent
-3. Iterate on prompts instantly
-4. Save test cases for regression testing
 
-No mocking required - you're testing the actual prompt and parsing logic.
+<img src="/assets/vscode/dev-tools.png" alt="BAML development tools in VSCode" />
+
+1. **Test prompts without API calls** - Instant feedback
+2. **See exactly what will be sent** - Full transparency
+3. **Iterate on prompts instantly** - No deploy cycles
+4. **Save test cases** for regression testing
+
+<img src="/assets/vscode/code-lens.png" alt="BAML code lens showing test options" />
+
+*No mocking required - you're testing the actual prompt and parsing logic.*
 
 ### The bottom line
 
-AI SDK is fantastic for building streaming AI applications in Next.js. But for structured extraction, you end up fighting the abstractions:
+AI SDK is fantastic for building streaming AI applications in Next.js. But for structured extraction, you end up fighting the abstractions.
 
-- **Hidden prompts** - You can't see or control what's sent
-- **Limited schema expressiveness** - Zod wasn't built for LLMs
-- **Package proliferation** - Different package for each provider
-- **No built-in testing** - Mock everything or burn tokens
+**BAML's advantages over AI SDK:**
+- **Prompt transparency** - See and control exactly what's sent to the LLM
+- **Purpose-built types** - Enums with descriptions, aliases, better schema format
+- **Unified model interface** - All providers work the same way, switch with one line
+- **Real testing** - Test in VSCode without API calls or burning tokens
+- **Schema-Aligned Parsing** - Get structured outputs from any model
+- **Better token efficiency** - Optimized schema format uses fewer tokens
+- **Production features** - Built-in retries, fallbacks, and error handling
 
-With BAML:
-- **Prompts as code** - See and version control everything
-- **Purpose-built types** - Descriptions, aliases, all included
-- **Unified interface** - All providers work the same way
-- **Test in VSCode** - No API calls needed
+**What this means for your TypeScript apps:**
+- **Faster development** - Test prompts instantly without running Next.js
+- **Better debugging** - Know exactly why extraction failed
+- **Cost optimization** - See token usage and optimize prompts
+- **Model flexibility** - Never get locked into one provider
+- **Cleaner code** - No wrapper classes or infrastructure code needed
 
-We built BAML because we were tired of elegant APIs that fall apart in production.
+**AI SDK is great for:** Streaming UI, Next.js integration, rapid prototyping
+**BAML is great for:** Production structured extraction, multi-model apps, cost optimization
+
+We built BAML because we were tired of elegant APIs that fall apart when you need production reliability and control.
 
 ### Limitations of BAML
 
