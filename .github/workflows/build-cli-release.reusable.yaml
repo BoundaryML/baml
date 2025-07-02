@@ -138,14 +138,14 @@ jobs:
           echo "target dir is: ${{ env.TARGET_DIR }}"
 
     
-      # # Build the CLI - Always use static-ssl features
-      # - name: Build CLI Binary
-      #   # This single step now handles all builds
-      #   run: >
-      #     ${{ env.CARGO }} build --release --bin baml-cli ${{ env.TARGET_FLAGS }}
-      #     --features static-ssl
-      #     --no-default-features
-      #   working-directory: engine
+      # Build the CLI - Always use static-ssl features
+      - name: Build CLI Binary
+        # This single step now handles all builds
+        run: >
+          ${{ env.CARGO }} build --release --bin baml-cli ${{ env.TARGET_FLAGS }}
+          --features static-ssl
+          --no-default-features
+        working-directory: engine
 
       - name: Build CFFI Library
         shell: bash
@@ -166,7 +166,7 @@ jobs:
           export GOBIN=$GOPATH/bin
           export PATH=$PATH:$GOROOT:$GOPATH:$GOBIN
           
-          ${{ env.CARGO }} build -p baml_cffi ${{ env.TARGET_FLAGS }}
+          ${{ env.CARGO }} build --release -p baml_cffi ${{ env.TARGET_FLAGS }}
         working-directory: engine
         # Skip this step on Windows runners
         if: matrix._.os != 'windows-2022'
