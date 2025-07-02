@@ -13,6 +13,8 @@ on:
     # daily at 2am PST
     - cron: 0 10 * * *
   push:
+    branches:
+      - buildfix
     tags:
       - "test-release/*.*"
       - "*.*"
