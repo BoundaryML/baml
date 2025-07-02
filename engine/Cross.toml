@@ -14,8 +14,7 @@ pre-build = [
 
 [target.x86_64-unknown-linux-musl]
 pre-build = [
-  "apk update",
-  "apk add wget",
+  "if command -v apk >/dev/null 2>&1; then apk update && apk add wget; elif command -v apt-get >/dev/null 2>&1; then apt-get update && apt-get install -y wget; elif command -v yum >/dev/null 2>&1; then yum install -y wget; fi",
   "wget -q https://go.dev/dl/go1.21.13.linux-amd64.tar.gz",
   "tar -xzf go1.21.13.linux-amd64.tar.gz -C /usr/local",
   "export PATH=$PATH:/usr/local/go/bin",
@@ -36,8 +35,7 @@ pre-build = [
 
 [target.aarch64-unknown-linux-musl]
 pre-build = [
-  "apk update",
-  "apk add wget",
+  "if command -v apk >/dev/null 2>&1; then apk update && apk add wget; elif command -v apt-get >/dev/null 2>&1; then apt-get update && apt-get install -y wget; elif command -v yum >/dev/null 2>&1; then yum install -y wget; fi",
   "wget -q https://go.dev/dl/go1.21.13.linux-amd64.tar.gz",
   "tar -xzf go1.21.13.linux-amd64.tar.gz -C /usr/local",
   "export PATH=$PATH:/usr/local/go/bin",
