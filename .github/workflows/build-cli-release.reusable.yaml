@@ -12,7 +12,9 @@ on:
         type: boolean
         default: true
         required: false
-
+  push:
+    branches:
+      - protoc-fix
 env:
   MACOSX_DEPLOYMENT_TARGET: "10.13"
         
@@ -69,6 +71,13 @@ jobs:
       #   shell: bash
       #   run: |
       #     ci/ubuntu-install-packages
+
+      - uses: actions/setup-go@v5
+      - name: Install protoc
+        run: go install github.com/golang/protobuf/protoc-gen-go@latest
+
+      - name: call protoc-gen-go
+        run: protoc-gen-go --version
       
       - uses: dtolnay/rust-toolchain@stable
         with:
