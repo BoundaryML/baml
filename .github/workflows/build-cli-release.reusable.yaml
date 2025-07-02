@@ -87,11 +87,20 @@ jobs:
 
       - name: Add protoc-gen-go to path
         run: |
-          echo 'export PATH=$PATH:$HOME/go/bin' >> $GITHUB_ENV
-          echo 'export PATH=$PATH:$HOME/go/bin' >> $GITHUB_PATH
+          echo "$HOME/go/bin" >> $GITHUB_PATH
+          # Also set for current step
+          export PATH="$PATH:$HOME/go/bin"
+          echo "PATH=$PATH:$HOME/go/bin" >> $GITHUB_ENV
 
-      # - name: Call protoc-gen-go
-      #   run: protoc-gen-go --version
+      - name: Test protoc-gen-go availability
+        run: |
+          echo "Current PATH: $PATH"
+          echo "Go bin directory contents:"
+          ls -la $HOME/go/bin/
+          echo "Testing protoc-gen-go..."
+          protoc-gen-go --version
+          echo "Which protoc-gen-go:"
+          which protoc-gen-go
       
       - name: Use Cross
         if: contains(matrix._.os, 'ubuntu')
