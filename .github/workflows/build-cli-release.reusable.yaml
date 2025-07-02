@@ -150,15 +150,23 @@ jobs:
 
       - name: Build CFFI Library
         shell: bash
-        env:
-          PROTOC_GEN_GO_PATH: ${{ steps.protoc_gen_go_setup.outputs.protoc_gen_go_path }}
         run: |
+          # Set the correct protoc-gen-go path based on whether we're using cross (Linux) or native build
+          if [[ "${{ env.CARGO }}" == "cross" ]]; then
+            # For cross builds (Linux), protoc-gen-go will be installed in the container at /usr/local/bin
+            export PROTOC_GEN_GO_PATH="/usr/local/bin/protoc-gen-go"
+          else
+            # For native builds (macOS), use the host path
+            export PROTOC_GEN_GO_PATH="${{ steps.protoc_gen_go_setup.outputs.protoc_gen_go_path }}"
+          fi
           echo "Using PROTOC_GEN_GO_PATH: $PROTOC_GEN_GO_PATH"
+          
           # We must use PROTOC_GEN_GO_PATH to explicitly tell the build script
           # where to find the plugin, as the cross-compile environment is isolated.
           export GOPATH=$HOME/go
           export GOBIN=$GOPATH/bin
           export PATH=$PATH:$GOROOT:$GOPATH:$GOBIN
+          
           ${{ env.CARGO }} build -p baml_cffi ${{ env.TARGET_FLAGS }}
         working-directory: engine
         # Skip this step on Windows runners

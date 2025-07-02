@@ -1,0 +1,46 @@
+# Cross.toml - Configuration for cross-compilation
+
+# Install Go and protoc-gen-go for Linux targets
+[target.x86_64-unknown-linux-gnu]
+pre-build = [
+  "apt-get update",
+  "apt-get install -y wget",
+  "wget -q https://go.dev/dl/go1.21.13.linux-amd64.tar.gz",
+  "tar -xzf go1.21.13.linux-amd64.tar.gz -C /usr/local",
+  "export PATH=$PATH:/usr/local/go/bin",
+  "/usr/local/go/bin/go install github.com/golang/protobuf/protoc-gen-go@latest",
+  "cp /root/go/bin/protoc-gen-go /usr/local/bin/",
+]
+
+[target.x86_64-unknown-linux-musl]
+pre-build = [
+  "apk update",
+  "apk add wget",
+  "wget -q https://go.dev/dl/go1.21.13.linux-amd64.tar.gz",
+  "tar -xzf go1.21.13.linux-amd64.tar.gz -C /usr/local",
+  "export PATH=$PATH:/usr/local/go/bin",
+  "/usr/local/go/bin/go install github.com/golang/protobuf/protoc-gen-go@latest",
+  "cp /root/go/bin/protoc-gen-go /usr/local/bin/",
+]
+
+[target.aarch64-unknown-linux-gnu]
+pre-build = [
+  "apt-get update",
+  "apt-get install -y wget",
+  "wget -q https://go.dev/dl/go1.21.13.linux-amd64.tar.gz",
+  "tar -xzf go1.21.13.linux-amd64.tar.gz -C /usr/local",
+  "export PATH=$PATH:/usr/local/go/bin",
+  "/usr/local/go/bin/go install github.com/golang/protobuf/protoc-gen-go@latest",
+  "cp /root/go/bin/protoc-gen-go /usr/local/bin/",
+]
+
+[target.aarch64-unknown-linux-musl]
+pre-build = [
+  "apk update",
+  "apk add wget",
+  "wget -q https://go.dev/dl/go1.21.13.linux-amd64.tar.gz",
+  "tar -xzf go1.21.13.linux-amd64.tar.gz -C /usr/local",
+  "export PATH=$PATH:/usr/local/go/bin",
+  "/usr/local/go/bin/go install github.com/golang/protobuf/protoc-gen-go@latest",
+  "cp /root/go/bin/protoc-gen-go /usr/local/bin/",
+]
