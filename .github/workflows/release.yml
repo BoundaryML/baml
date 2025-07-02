@@ -64,8 +64,8 @@ jobs:
   build-python-release:
     uses: ./.github/workflows/build-python-release.reusable.yaml
 
-  build-ruby-release:
-    uses: ./.github/workflows/build-ruby-release.reusable.yaml
+  # build-ruby-release:
+  #   uses: ./.github/workflows/build-ruby-release.reusable.yaml
 
   build-typescript-release:
     uses: ./.github/workflows/build-typescript-release.reusable.yaml
@@ -102,7 +102,7 @@ jobs:
     needs:
       - determine-version
       - build-python-release
-      - build-ruby-release
+      # - build-ruby-release
       - build-typescript-release
       - build-cli
       - build-vscode-reusable # Depends on the job calling the reusable workflow
@@ -197,34 +197,34 @@ jobs:
         run: npm publish --access public
         working-directory: engine/language_client_typescript
 
-  publish-to-rubygems:
-    environment: release
-    needs: [all-builds]
-    if: ${{ startsWith(github.ref, 'refs/tags/') }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+  # publish-to-rubygems:
+  #   environment: release
+  #   needs: [all-builds]
+  #   if: ${{ startsWith(github.ref, 'refs/tags/') }}
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
 
-      - uses: rubygems/configure-rubygems-credentials@main
-        with:
-          # https://rubygems.org/profile/oidc/api_key_roles/rg_oidc_akr_p6x4xz53qtk948na3bgy
-          role-to-assume: rg_oidc_akr_p6x4xz53qtk948na3bgy
+  #     - uses: rubygems/configure-rubygems-credentials@main
+  #       with:
+  #         # https://rubygems.org/profile/oidc/api_key_roles/rg_oidc_akr_p6x4xz53qtk948na3bgy
+  #         role-to-assume: rg_oidc_akr_p6x4xz53qtk948na3bgy
 
-      - uses: jdx/mise-action@v2
+  #     - uses: jdx/mise-action@v2
 
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: gem-*
-          path: engine/language_client_ruby/pkg/
-          merge-multiple: true
+  #     - uses: actions/download-artifact@v4
+  #       with:
+  #         pattern: gem-*
+  #         path: engine/language_client_ruby/pkg/
+  #         merge-multiple: true
 
-      - working-directory: engine/language_client_ruby
-        run: |
-          set -euxo pipefail
-          find pkg
-          for i in $(ls pkg/*.gem); do
-            gem push $i
-          done
+  #     - working-directory: engine/language_client_ruby
+  #       run: |
+  #         set -euxo pipefail
+  #         find pkg
+  #         for i in $(ls pkg/*.gem); do
+  #           gem push $i
+  #         done
 
   publish-to-open-vsx:
     environment: release
