@@ -150,6 +150,7 @@ pub(crate) fn pythonize_strict(
             }
             Ok(dict.into())
         }
+
         BamlValueWithMeta::List(vec, _) => pyo3::types::PyList::new(
             py,
             vec.into_iter()
