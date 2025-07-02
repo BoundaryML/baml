@@ -72,14 +72,6 @@ jobs:
       #   run: |
       #     ci/ubuntu-install-packages
 
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.24.4'
-      - name: Install protoc
-        run: go install github.com/golang/protobuf/protoc-gen-go@latest
-
-      - name: call protoc-gen-go
-        run: protoc-gen-go --version
       
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -92,6 +84,14 @@ jobs:
       
       - name: Install protoc-gen-go
         run: go install github.com/golang/protobuf/protoc-gen-go@latest
+
+      - name: Add protoc-gen-go to path
+        run: |
+          echo 'export PATH=$PATH:$HOME/go/bin' >> $GITHUB_ENV
+          echo 'export PATH=$PATH:$HOME/go/bin' >> $GITHUB_PATH
+
+      - name: Call protoc-gen-go
+        run: protoc-gen-go --version
       
       - name: Use Cross
         if: contains(matrix._.os, 'ubuntu')
