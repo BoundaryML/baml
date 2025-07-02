@@ -147,12 +147,12 @@ jobs:
 
       - name: Build CFFI Library
         shell: bash
+        env:
+          PROTOC_GEN_GO_PATH: /home/runner/go/bin/protoc-gen-go
         run: |
-          # Install protoc-gen-go
-          go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
-          # We must prepend our local .cargo/bin to the PATH to ensure the vendored
-          # protoc used by the build script can find our locally installed protoc-gen-go.
-          PATH=$(pwd)/.cargo/bin:$PATH ${{ env.CARGO }} build --release -p baml_cffi ${{ env.TARGET_FLAGS }}
+          # We must use PROTOC_GEN_GO_PATH to explicitly tell the build script
+          # where to find the plugin, as the cross-compile environment is isolated.
+          ${{ env.CARGO }} build --release -p baml_cffi ${{ env.TARGET_FLAGS }}
         working-directory: engine
         # Skip this step on Windows runners
         if: matrix._.os != 'windows-2022'

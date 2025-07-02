@@ -323,6 +323,13 @@ mod protoc_lang_out {
 }
 
 fn main() -> std::io::Result<()> {
+    #[cfg(target_os = "windows")]
+    println!("cargo:rustc-link-lib=dylib=ntdll");
+
+    // The last component of the target triple
+    let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap();
+    let is_windows = target_os == "windows";
+
     // Re-run build.rs if these files change.
     println!("cargo:rerun-if-changed=types/cffi.fbs");
     println!("cargo:rerun-if-changed=types/cffi.proto");
@@ -348,10 +355,18 @@ fn main() -> std::io::Result<()> {
         //     ..Default::default()
         // };
 
-        protoc_lang_out::ProtocLangOut::new()
+        let mut protoc = protoc_lang_out::ProtocLangOut::new();
+        protoc
             .lang(lang)
             .input("types/cffi.proto")
-            .out_dir(lang_dir)
+            .out_dir(lang_dir);
+
+        // Allow overriding the protoc-gen-go plugin path
+        if let Ok(path) = std::env::var("PROTOC_GEN_GO_PATH") {
+            protoc.plugin(&path);
+        }
+
+        protoc
             .run()
             .unwrap_or_else(|_| panic!("Failed to generate {lang} bindings"));
     }
