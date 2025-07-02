@@ -1,21 +1,21 @@
-use flate2::read::GzDecoder;
-use reqwest::Client;
-use std::fs;
-use std::io::Cursor;
-use std::path::Path;
-use std::{collections::HashMap, path::PathBuf, sync::Arc};
-use tar::Archive;
+use std::{
+    collections::HashMap,
+    fs,
+    io::Cursor,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
-use anyhow::Context;
-use anyhow::Result;
-use base64::{engine::general_purpose, Engine as _};
+use anyhow::{Context, Result};
 use dirs::home_dir;
+use flate2::read::GzDecoder;
 use futures_util::{SinkExt, StreamExt};
 use include_dir::{include_dir, Dir};
 use mime_guess::from_path;
-use serde_json::Value;
-use tokio::fs as async_fs;
-use tokio::sync::RwLock;
+use reqwest::Client;
+use sha2::{Digest, Sha256};
+use tar::Archive;
+use tokio::{fs as async_fs, sync::RwLock};
 use warp::{http::Response, ws::Message, Filter};
 
 use crate::{
@@ -25,10 +25,6 @@ use crate::{
     },
     session::Session,
 };
-
-// TODO: fix clippy
-// remove uneeded deps like anyhow
-// upload checksum to github release
 
 // Embed at compile time everything in dist/
 // WARNING: this is a relative path, will easily break if file structure changes
@@ -149,10 +145,11 @@ pub async fn start_client_connection(
 
 /// Adds a "/" route which servers the static files of the frontend
 /// and a "/ws" route which handles the websocket connection.
+/// If dist_dir is None, serves an error page indicating playground is unavailable.
 pub fn create_server_routes(
     state: Arc<RwLock<PlaygroundState>>,
     session: Arc<Session>,
-    dist_dir: String,
+    dist_dir: Option<std::path::PathBuf>,
 ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
     // WebSocket handler with error handling
     let ws_state = state.clone();
@@ -167,51 +164,54 @@ pub fn create_server_routes(
             })
         });
 
-    tracing::info!("Setting up RPC websocket...");
-    // RPC WebSocket handler
-    let rpc_session = session.clone();
-    let rpc_route = warp::path("rpc")
-        .and(warp::ws())
-        .map(move |ws: warp::ws::Ws| {
-            let session = rpc_session.clone();
-            ws.on_upgrade(move |socket| async move {
-                handle_rpc_websocket(socket, session).await;
-            })
-        });
-
-    // Static file serving for user files (e.g., images, data)
-    let static_files = warp::path("static").and(warp::fs::dir("."));
-
-    // Static file serving needed to serve the frontend files
+    // Static file serving - either real files or error page
     let spa = warp::path::full()
         .and(warp::get())
         .and_then(move |full: warp::path::FullPath| {
             let dist_dir = dist_dir.clone();
             async move {
-                let path = full.as_str().trim_start_matches('/');
-                let file = if path.is_empty() { "index.html" } else { path };
-                let file_path = std::path::Path::new(&dist_dir).join(file);
-                match tokio::fs::read(&file_path).await {
-                    Ok(body) => {
-                        let mime = from_path(file).first_or_octet_stream();
-                        Ok::<_, warp::Rejection>(
-                            Response::builder()
-                                .header("content-type", mime.as_ref())
-                                .body(body),
-                        )
+                match dist_dir {
+                    Some(dir) => {
+                        // Normal file serving
+                        let path = full.as_str().trim_start_matches('/');
+                        let file = if path.is_empty() { "index.html" } else { path };
+                        let file_path = dir.join(file);
+                        match tokio::fs::read(&file_path).await {
+                            Ok(body) => {
+                                let mime = from_path(file).first_or_octet_stream();
+                                Ok::<_, warp::Rejection>(
+                                    Response::builder()
+                                        .header("content-type", mime.as_ref())
+                                        .body(body)
+                                        .unwrap(),
+                                )
+                            }
+                            Err(_) => {
+                                // File not found, serve error page
+                                Ok::<_, warp::Rejection>(serve_error_page())
+                            }
+                        }
                     }
-                    Err(_) => Ok::<_, warp::Rejection>(
-                        Response::builder().status(404).body(b"Not Found".to_vec()),
-                    ),
+                    None => {
+                        // No dist directory available, serve error page
+                        Ok::<_, warp::Rejection>(serve_error_page())
+                    }
                 }
             }
         });
 
-    ws_route
-        .or(rpc_route)
-        .or(static_files)
-        .or(spa)
-        .with(warp::log("playground-server"))
+    ws_route.or(spa).with(warp::log("playground-server"))
+}
+
+/// Creates a nice HTML error page when playground assets are not available
+fn serve_error_page() -> Response<Vec<u8>> {
+    let error_html = include_str!("error_page.html");
+
+    Response::builder()
+        .header("content-type", "text/html; charset=utf-8")
+        .status(503) // Service Unavailable
+        .body(error_html.as_bytes().to_vec())
+        .unwrap()
 }
 
 // Helper function to broadcast project updates with better error handling
@@ -279,12 +279,56 @@ pub async fn broadcast_test_run(
     Ok(())
 }
 
-/// Downloads and extracts the web-panel dist frontend from the baml GitHub release.
-/// If `release_tag` is Some(tag), fetch that release by tag, otherwise fetch latest.
+/// Verifies the SHA256 checksum of a downloaded file against the expected checksum
+async fn verify_sha256_checksum(
+    file_bytes: &[u8],
+    checksum_url: &str,
+    client: &Client,
+) -> anyhow::Result<()> {
+    tracing::info!("Downloading SHA256 checksum from: {}", checksum_url);
+
+    // Download the checksum file
+    let checksum_resp = client
+        .get(checksum_url)
+        .header("User-Agent", "baml-playground-server")
+        .send()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to download checksum file: {e}"))?;
+
+    let checksum_text = checksum_resp.text().await?;
+
+    // Parse the expected checksum (format: "hash filename" or just "hash")
+    let expected_checksum = checksum_text
+        .split_whitespace()
+        .next()
+        .ok_or_else(|| anyhow::anyhow!("Invalid checksum file format"))?
+        .to_lowercase();
+
+    // Calculate actual checksum
+    let mut hasher = Sha256::new();
+    hasher.update(file_bytes);
+    let actual_checksum = format!("{:x}", hasher.finalize());
+
+    // Verify checksums match
+    if actual_checksum != expected_checksum {
+        return Err(anyhow::anyhow!(
+            "SHA256 checksum verification failed. Expected: {}, Actual: {}",
+            expected_checksum,
+            actual_checksum
+        ));
+    }
+
+    tracing::info!("SHA256 checksum verification passed");
+    Ok(())
+}
+
+/// Downloads and extracts the playground frontend from the baml GitHub release.
+/// Uses the provided version for both asset name construction and release tag lookup.
 /// Returns the path to the directory containing the static files to serve (may be a nested 'dist' directory).
-pub async fn ensure_web_panel_dist(release_tag: Option<&str>) -> anyhow::Result<String> {
-    const GITHUB_REPO: &str = "BoundaryML/baml";
-    const WEB_PANEL_ASSET_NAME: &str = "web-panel-dist.tar.gz";
+pub async fn get_playground_dist(github_repo: &str, version: &str) -> anyhow::Result<String> {
+    // Construct versioned asset names
+    let web_panel_asset_name = format!("playground-dist-{version}.tar.gz");
+    let checksum_asset_name = format!("playground-dist-{version}.tar.gz.sha256");
 
     // Build the GitHub API URL
     let api_url = match release_tag {
@@ -297,6 +341,8 @@ pub async fn ensure_web_panel_dist(release_tag: Option<&str>) -> anyhow::Result<
             GITHUB_REPO
         ),
     };
+    // Build the GitHub API URL using the version as the release tag
+    let api_url = format!("https://api.github.com/repos/{github_repo}/releases/tags/{version}");
     tracing::info!("Fetching web-panel release metadata from: {}", api_url);
 
     // Fetch release metadata
@@ -308,7 +354,6 @@ pub async fn ensure_web_panel_dist(release_tag: Option<&str>) -> anyhow::Result<
         .await
         .map_err(|e| anyhow::anyhow!("Failed to fetch release metadata: {e}"))?;
     let release: serde_json::Value = resp.json().await?;
-    // tracing::info!("GitHub release response: {}", release);
 
     // Find the asset
     let assets = release["assets"]
@@ -322,12 +367,40 @@ pub async fn ensure_web_panel_dist(release_tag: Option<&str>) -> anyhow::Result<
         .as_str()
         .ok_or_else(|| anyhow::anyhow!("No download URL for asset"))?;
     let version = release["tag_name"].as_str().unwrap_or("unknown");
+    // Find the main asset
+    let assets = release["assets"]
+        .as_array()
+        .ok_or_else(|| anyhow::anyhow!("No assets in release metadata"))?;
+    let asset = assets
+        .iter()
+        .find(|a| a["name"].as_str() == Some(&web_panel_asset_name))
+        .ok_or_else(|| anyhow::anyhow!("No asset named '{}' in release", web_panel_asset_name))?;
+    let download_url = asset["browser_download_url"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("No download URL for asset"))?;
 
-    // Compute extraction directory
+    // Find the checksum asset
+    let checksum_asset = assets
+        .iter()
+        .find(|a| a["name"].as_str() == Some(&checksum_asset_name))
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "No checksum asset named '{}' in release",
+                checksum_asset_name
+            )
+        })?;
+    let checksum_url = checksum_asset["browser_download_url"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("No download URL for checksum asset"))?;
+
+    // Compute extraction directory using the provided version
     let home = home_dir().ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?;
     let extract_root: PathBuf = home
         .join(".baml/playground")
         .join(format!("web-panel-dist-{}", version));
+    let extract_root: PathBuf = home
+        .join(".baml/playground")
+        .join(format!("web-panel-dist-{version}"));
     let dist_dir = extract_root.join("dist");
 
     // If already extracted, return the correct directory
@@ -341,7 +414,19 @@ pub async fn ensure_web_panel_dist(release_tag: Option<&str>) -> anyhow::Result<
                 extract_root.display()
             )
         })?;
+        fs::remove_dir_all(&extract_root).with_context(|| {
+            format!(
+                "Failed to remove old extraction directory: {}",
+                extract_root.display()
+            )
+        })?;
     }
+    fs::create_dir_all(&extract_root).with_context(|| {
+        format!(
+            "Failed to create extraction directory: {}",
+            extract_root.display()
+        )
+    })?;
     fs::create_dir_all(&extract_root).with_context(|| {
         format!(
             "Failed to create extraction directory: {}",
@@ -358,8 +443,16 @@ pub async fn ensure_web_panel_dist(release_tag: Option<&str>) -> anyhow::Result<
         .await
         .map_err(|e| anyhow::anyhow!("Failed to download asset: {e}"))?;
     let bytes = resp.bytes().await?;
+
+    // Verify SHA256 checksum
+    verify_sha256_checksum(&bytes, checksum_url, &client).await?;
+
+    // Extract the verified archive
     let tar = GzDecoder::new(Cursor::new(bytes));
     let mut archive = Archive::new(tar);
+    archive
+        .unpack(&extract_root)
+        .with_context(|| format!("Failed to extract archive to: {}", extract_root.display()))?;
     archive
         .unpack(&extract_root)
         .with_context(|| format!("Failed to extract archive to: {}", extract_root.display()))?;
@@ -377,6 +470,10 @@ pub fn web_panel_extract_root(version: &str) -> String {
     let home = home_dir().expect("Could not determine home directory");
     home.join(".baml/playground")
         .join(format!("web-panel-dist-{}", version))
+        .to_string_lossy()
+        .to_string()
+    home.join(".baml/playground")
+        .join(format!("web-panel-dist-{version}"))
         .to_string_lossy()
         .to_string()
 }

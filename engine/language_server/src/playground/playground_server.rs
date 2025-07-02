@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{env, sync::Arc};
 
 use anyhow::Result;
 use tokio::sync::RwLock;
@@ -6,9 +6,13 @@ use tokio::sync::RwLock;
 /// Script that runs the playground server.
 /// On the input port
 use crate::playground::definitions::PlaygroundState;
-use crate::playground::proxy::ProxyServer;
-use crate::{playground::playground_server_helpers::create_server_routes, session::Session};
-use crate::playground::playground_server_helpers::ensure_web_panel_dist;
+use crate::{
+    playground::playground_server_helpers::{create_server_routes, get_playground_dist},
+    session::Session,
+};
+
+// Defines where the playground server will look for to fetch the frontend
+const GITHUB_REPO: &str = "BoundaryML/baml";
 
 #[derive(Debug, Clone)]
 pub struct PlaygroundServer {
@@ -22,9 +26,35 @@ impl PlaygroundServer {
     }
 
     pub async fn run(self, port: u16) -> Result<()> {
-        let dist_dir = ensure_web_panel_dist(Some("test-zed")).await?;
+        // Sets debug mode using the VSCODE_DEBUG_MODE enviroment variable.
+        // Otherwise defaults to retrieving the playground from github releases
+        let dist_dir = if env::var("VSCODE_DEBUG_MODE")
+            .map(|v| v == "true")
+            .unwrap_or(false)
+        {
+            // Use cargo-relative path for local dist
+            let local_dist = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../typescript/vscode-ext/packages/web-panel/dist");
+            tracing::info!(
+                "VSCODE_DEBUG_MODE is set. Using local playground dist at {}",
+                local_dist.display()
+            );
+            Some(local_dist)
+        } else {
+            let version = env!("CARGO_PKG_VERSION");
 
-        tracing::info!("Hosting playground frontend at: {}", dist_dir);
+            match get_playground_dist(GITHUB_REPO, version).await {
+                Ok(dir) => Some(std::path::PathBuf::from(dir)),
+                Err(e) => {
+                    tracing::error!(
+                        "Failed to prepare playground web UI: {e}. Serving error page instead."
+                    );
+                    None
+                }
+            }
+        };
+
+        tracing::info!("Hosted playground at http://localhost:{}...", port);
 
         let routes = create_server_routes(self.state, self.session, dist_dir);
 
