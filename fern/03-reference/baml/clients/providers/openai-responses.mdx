@@ -3,6 +3,8 @@ title: openai-responses
 ---
 
 The `openai-responses` provider supports OpenAI's `/responses` endpoint which uses the newer Responses API instead of the traditional Chat Completions API.
+Read more about the differences between the Chat Completions API and the Responses API in [OpenAI's comparison guide](https://platform.openai.com/docs/guides/responses-vs-chat-completions).
+
 
 <Tip>
   If you're a new user, OpenAI recommends using the `openai-responses` provider instead of the `openai` provider.
@@ -88,13 +90,6 @@ client<llm> StandardOpenAIWithResponses {
 These are parameters specific to the OpenAI Responses API that are passed through to the provider.
 
 <ParamField
-   path="messages"
-   type="DO NOT USE"
->
-  BAML will auto construct this field for you from the prompt
-</ParamField>
-
-<ParamField
   path="reasoning_effort"
   type="string"
 >
@@ -124,7 +119,7 @@ client<llm> HighReasoningClient {
   path="model"
   type="string"
 >
-  The model to use with the Responses API.
+Most models support the Responses API, some of the most popular models are:
 
 | Model           | Description                    |
 | --------------- | ------------------------------ |
@@ -252,12 +247,6 @@ function SolveComplexProblem(problem: string) -> string {
   "#
 }
 ```
-
-
-
-## Key Differences from Standard OpenAI Provider
-
-Read more about the differences in [OpenAI's comparison guide](https://platform.openai.com/docs/guides/responses-vs-chat-completions).
 
 ## Modular API Support
 
