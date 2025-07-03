@@ -34,7 +34,7 @@ impl PlaygroundServer {
         {
             // Use cargo-relative path for local dist
             let local_dist = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../../typescript/vscode-ext/packages/web-panel/dist");
+                .join("../../typescript/apps/playground/dist");
             tracing::info!(
                 "VSCODE_DEBUG_MODE is set. Using local playground dist at {}",
                 local_dist.display()
