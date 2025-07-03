@@ -4,7 +4,7 @@ go 1.24.0
 
 require (
 	github.com/ghetzel/testify v1.4.1
-	google.golang.org/protobuf v1.36.6
+	github.com/golang/protobuf v1.36.6
 )
 
 require (
