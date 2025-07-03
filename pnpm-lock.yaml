@@ -39,8 +39,6 @@ importers:
 
   engine/baml-schema-wasm: {}
 
-  engine/baml-schema-wasm/dist: {}
-
   engine/baml-schema-wasm/nodejs: {}
 
   engine/baml-schema-wasm/web:

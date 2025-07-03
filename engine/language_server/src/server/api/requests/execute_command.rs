@@ -3,6 +3,7 @@ use std::time::Duration;
 use lsp_server::ErrorCode;
 use lsp_types::{request, ExecuteCommandParams, MessageType};
 use tokio::time::sleep;
+#[cfg(feature = "playground-server")]
 use webbrowser;
 
 // use crate::server::api::DocumentKey;
@@ -23,6 +24,7 @@ impl RequestHandler for ExecuteCommand {
 }
 
 impl SyncRequestHandler for ExecuteCommand {
+    #[cfg(feature = "playground-server")]
     fn run(
         session: &mut Session,
         notifier: Notifier,
@@ -74,27 +76,23 @@ impl SyncRequestHandler for ExecuteCommand {
         } else if params.command == "baml.changeFunction" {
             // Logic for getting the function can be improved
             if let Some(state) = &session.playground_state {
-                if let Some(args) = params.arguments.first().and_then(|arg| arg.as_object()) {
-                    if let (Some(function_name), Some(project_id)) = (
-                        args.get("functionName").and_then(|v| v.as_str()),
-                        args.get("projectId").and_then(|v| v.as_str()),
-                    ) {
-                        tracing::info!("Broadcasting test run for function: {}", function_name);
-
-                        // Set the selected function
-                        let state_clone = state.clone();
-                        let func_name = function_name.to_string();
-                        let project_path = project_id.to_string();
-                        if let Some(runtime) = &session.playground_runtime {
-                            runtime.spawn(async move {
-                                let _ = crate::playground::broadcast_function_change(
-                                    &state_clone,
-                                    &project_path,
-                                    func_name,
-                                )
-                                .await;
-                            });
-                        }
+                if let Some(function_name) = params
+                    .arguments
+                    .first()
+                    .and_then(|arg| arg.get("functionName"))
+                    .and_then(|v| v.as_str().map(|s| s.to_string()))
+                {
+                    tracing::info!("Broadcasting function change for: {}", function_name);
+                    let state = state.clone();
+                    if let Some(runtime) = &session.playground_runtime {
+                        runtime.spawn(async move {
+                            let _ = crate::playground::broadcast_function_change(
+                                &state,
+                                &function_name.to_string(),
+                                function_name,
+                            )
+                            .await;
+                        });
                     }
                 }
             }
@@ -134,6 +132,8 @@ impl SyncRequestHandler for ExecuteCommand {
                         let test_name = test_case_name.to_string();
                         if let Some(runtime) = &session.playground_runtime {
                             runtime.spawn(async move {
+                                // TODO: temoporary fix to wait for function change to process
+                                sleep(Duration::from_millis(1200)).await;
                                 let _ =
                                     crate::playground::broadcast_test_run(&state_clone, test_name)
                                         .await;
@@ -144,10 +144,32 @@ impl SyncRequestHandler for ExecuteCommand {
             }
         } else {
             return Err(crate::server::api::Error {
-                code: ErrorCode::MethodNotFound,
+                code: ErrorCode::InternalError,
                 error: anyhow::anyhow!("Unknown command: {}", params.command),
             });
         }
         Ok(None)
+    }
+    #[cfg(not(feature = "playground-server"))]
+    fn run(
+        _session: &mut Session,
+        _notifier: Notifier,
+        _requester: &mut Requester,
+        params: ExecuteCommandParams,
+    ) -> Result<Option<serde_json::Value>> {
+        // If the playground-server feature is not enabled, return an error for playground commands
+        if params.command == "openPlayground"
+            || params.command == "baml.changeFunction"
+            || params.command == "baml.runTest"
+        {
+            return Err(crate::server::api::Error {
+                code: ErrorCode::InternalError,
+                error: anyhow::anyhow!("Playground server is not enabled in this build."),
+            });
+        }
+        Err(crate::server::api::Error {
+            code: ErrorCode::InternalError,
+            error: anyhow::anyhow!("Unknown command: {}", params.command),
+        })
     }
 }

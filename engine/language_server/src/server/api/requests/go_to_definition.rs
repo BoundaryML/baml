@@ -5,6 +5,8 @@ use lsp_types::{
     Url,
 };
 
+#[cfg(feature = "playground-server")]
+use crate::playground::broadcast_function_change;
 use crate::{
     baml_project::{position_utils::get_word_at_position, trim_line, BamlRuntimeExt},
     server::{
@@ -99,6 +101,7 @@ impl SyncRequestHandler for GotoDefinition {
                 });
 
                 // Broadcast function change to playground clients
+                #[cfg(feature = "playground-server")]
                 if let Some(state) = &session.playground_state {
                     // Get the first function from the current file if available
                     if let Some(function) = guard
@@ -113,12 +116,9 @@ impl SyncRequestHandler for GotoDefinition {
                         let function_name = function.name.clone();
                         if let Some(runtime) = &session.playground_runtime {
                             runtime.spawn(async move {
-                                let _ = crate::playground::broadcast_function_change(
-                                    &state,
-                                    &root_path,
-                                    function_name,
-                                )
-                                .await;
+                                let _ =
+                                    broadcast_function_change(&state, &root_path, function_name)
+                                        .await;
                             });
                         }
                     }
