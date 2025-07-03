@@ -171,9 +171,70 @@ test TestOpenAIResponsesValidation {
   functions [
     TestOpenAIResponsesShorthand,
     TestOpenAIResponsesEndpoint,
-    TestOpenAIResponsesAutoType
+    TestOpenAIResponsesAutoType,
+    TestOpenAIResponsesExplicit
   ]
   args {
     input "artificial intelligence"
+  }
+}
+
+// Test image input/output with OpenAI Responses API
+client<llm> OpenAIResponsesImage {
+  provider openai-responses
+  options {
+    api_key env.OPENAI_API_KEY
+    model "gpt-4.1"
+  }
+}
+
+function TestOpenAIResponsesImageInput(image: image|string) -> string {
+  client OpenAIResponsesImage
+  prompt #"
+    {{ _.role("user") }}
+    what is in this image?
+    {{ image }}
+  "#
+}
+
+// Test for image analysis
+test TestOpenAIResponsesImageAnalysis {
+  functions [
+    TestOpenAIResponsesImageInput
+  ]
+  args {
+    image "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/2560px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg"
+  }
+}
+
+// Test web search with OpenAI Responses API
+client<llm> OpenAIResponsesWebSearch {
+  provider openai-responses
+  options {
+    api_key env.OPENAI_API_KEY
+    model "gpt-4.1"
+    tools [
+      {
+        type "web_search_preview"
+      }
+    ]
+  }
+}
+
+function TestOpenAIResponsesWebSearch(query: string) -> string {
+  client OpenAIResponsesWebSearch
+  prompt #"
+    {{ _.role("user") }}
+    {{ query }}
+  "#
+}
+
+// Test for web search functionality
+test TestOpenAIResponsesWebSearchTest {
+  functions [
+    TestOpenAIResponsesWebSearch
+  ]
+  args {
+    query "What was a positive news story from today?"
   }
 }

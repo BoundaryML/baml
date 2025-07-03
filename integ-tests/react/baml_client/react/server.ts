@@ -3171,6 +3171,24 @@ export const TestOpenAIResponsesExplicit = async (
 };
 
 /**
+ * Executes the "TestOpenAIResponsesImageInput" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestOpenAIResponsesImageInput"
+ * with the specified parameters.
+ *
+ * @param { Image | string } image - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestOpenAIResponsesImageInput = async (
+  image: Image | string,
+): Promise<string> => {
+  return b.TestOpenAIResponsesImageInput(
+    image,
+  );
+};
+
+/**
  * Executes the "TestOpenAIResponsesShorthand" BAML action.
  *
  * This server action calls the underlying BAML function "TestOpenAIResponsesShorthand"

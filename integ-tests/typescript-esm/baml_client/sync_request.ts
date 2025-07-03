@@ -4360,6 +4360,31 @@ export class HttpRequest {
     }
   }
   
+  TestOpenAIResponsesImageInput(
+      image: Image | string,
+      __baml_options__?: BamlCallOptions
+  ): HTTPRequest {
+    try {
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.buildRequestSync(
+        "TestOpenAIResponsesImageInput",
+        {
+          "image": image
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
   TestOpenAIResponsesShorthand(
       input: string,
       __baml_options__?: BamlCallOptions
@@ -9254,6 +9279,31 @@ export class HttpStreamRequest {
         "TestOpenAIResponsesExplicit",
         {
           "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestOpenAIResponsesImageInput(
+      image: Image | string,
+      __baml_options__?: BamlCallOptions
+  ): HTTPRequest {
+    try {
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.buildRequestSync(
+        "TestOpenAIResponsesImageInput",
+        {
+          "image": image
         },
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),

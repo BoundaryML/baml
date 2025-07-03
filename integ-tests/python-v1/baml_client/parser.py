@@ -1060,6 +1060,12 @@ class LlmResponseParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenAIResponsesExplicit", llm_response=llm_response, mode="request")
         return typing.cast(str, result)
 
+    def TestOpenAIResponsesImageInput(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenAIResponsesImageInput", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
     def TestOpenAIResponsesShorthand(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> str:
@@ -2242,6 +2248,12 @@ class LlmStreamParser:
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenAIResponsesExplicit", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
+
+    def TestOpenAIResponsesImageInput(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenAIResponsesImageInput", llm_response=llm_response, mode="stream")
         return typing.cast(str, result)
 
     def TestOpenAIResponsesShorthand(

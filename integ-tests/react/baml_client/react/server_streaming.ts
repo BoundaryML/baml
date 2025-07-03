@@ -3344,6 +3344,25 @@ export const TestOpenAIResponsesExplicit = async (
 };
 
 /**
+ * Executes the streaming variant of the "TestOpenAIResponsesImageInput" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { Image | string } image - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const TestOpenAIResponsesImageInput = async (
+  image: Image | string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const stream = b.stream.TestOpenAIResponsesImageInput(
+    image,
+  );
+  return Promise.resolve(stream.toStreamable());
+};
+
+/**
  * Executes the streaming variant of the "TestOpenAIResponsesShorthand" BAML action.
  *
  * This action initiates a streaming response by calling the corresponding

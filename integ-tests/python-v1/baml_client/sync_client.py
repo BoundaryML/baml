@@ -1247,6 +1247,76 @@ class BamlSyncClient:
             "input": input,
         })
         return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    def TestOpenAIResponses(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestOpenAIResponses", args={
+            "input": input,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    def TestOpenAIResponsesAutoType(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestOpenAIResponsesAutoType", args={
+            "input": input,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    def TestOpenAIResponsesConversation(self, topic: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestOpenAIResponsesConversation", args={
+            "topic": topic,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    def TestOpenAIResponsesCustomURL(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestOpenAIResponsesCustomURL", args={
+            "input": input,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    def TestOpenAIResponsesDifferentModel(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestOpenAIResponsesDifferentModel", args={
+            "input": input,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    def TestOpenAIResponsesEndpoint(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestOpenAIResponsesEndpoint", args={
+            "input": input,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    def TestOpenAIResponsesExplicit(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestOpenAIResponsesExplicit", args={
+            "input": input,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    def TestOpenAIResponsesImageInput(self, image: typing.Union[baml_py.Image, str],
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestOpenAIResponsesImageInput", args={
+            "image": image,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    def TestOpenAIResponsesShorthand(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestOpenAIResponsesShorthand", args={
+            "input": input,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    def TestOpenAIResponsesWithOpenAIResponseType(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestOpenAIResponsesWithOpenAIResponseType", args={
+            "input": input,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestOpenAIShorthand(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
@@ -1380,6 +1450,20 @@ class BamlSyncClient:
             "inp": inp,
         })
         return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
+    def ValidateBasicResponses(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).call_function_sync(function_name="ValidateBasicResponses", args={
+            "input": input,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    def ValidateResponseTypes(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).call_function_sync(function_name="ValidateResponseTypes", args={
+            "input": input,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     
 
 
@@ -3393,7 +3477,7 @@ class BamlStreamClient:
           lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
-    def TestOpenAIShorthand(self, input: str,
+    def TestOpenAIResponsesAutoType(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[str, str]:
         ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestOpenAIResponsesAutoType", args={
@@ -3413,8 +3497,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestOpenAIResponsesCustomURL(self, input: str,
@@ -3465,6 +3549,18 @@ class BamlStreamClient:
           lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
+    def TestOpenAIResponsesImageInput(self, image: typing.Union[baml_py.Image, str],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestOpenAIResponsesImageInput", args={
+            "image": image,
+        })
+        return baml_py.BamlSyncStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
     def TestOpenAIResponsesShorthand(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[str, str]:
@@ -3473,8 +3569,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestOpenAIResponsesWithOpenAIResponseType(self, input: str,
@@ -3485,8 +3581,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[str, str](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def TestOpenAIShorthand(self, input: str,
@@ -3715,6 +3811,30 @@ class BamlStreamClient:
           result,
           lambda x: typing.cast(int, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def ValidateBasicResponses(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="ValidateBasicResponses", args={
+            "input": input,
+        })
+        return baml_py.BamlSyncStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def ValidateResponseTypes(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="ValidateResponseTypes", args={
+            "input": input,
+        })
+        return baml_py.BamlSyncStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     
@@ -4934,6 +5054,13 @@ class BamlHttpRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestOpenAIResponsesExplicit", args={
             "input": input,
+        }, mode="request")
+        return result
+    def TestOpenAIResponsesImageInput(self, image: typing.Union[baml_py.Image, str],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestOpenAIResponsesImageInput", args={
+            "image": image,
         }, mode="request")
         return result
     def TestOpenAIResponsesShorthand(self, input: str,
@@ -6314,6 +6441,13 @@ class BamlHttpStreamRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestOpenAIResponsesExplicit", args={
             "input": input,
+        }, mode="stream")
+        return result
+    def TestOpenAIResponsesImageInput(self, image: typing.Union[baml_py.Image, str],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestOpenAIResponsesImageInput", args={
+            "image": image,
         }, mode="stream")
         return result
     def TestOpenAIResponsesShorthand(self, input: str,

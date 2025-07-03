@@ -1,6 +1,5 @@
 // OpenAI Responses Provider Validation Tests
 // These tests validate that the openai-responses provider is properly configured
-// and recognized by the BAML system.
 
 // Test 1: Basic provider recognition
 // This should parse successfully once openai-responses is available

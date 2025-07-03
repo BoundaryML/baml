@@ -16,6 +16,23 @@ pub struct ResponsesApiResponse {
     pub model: String,
     pub output: Vec<ResponseOutput>,
     pub usage: Option<CompletionUsage>,
+    pub error: Option<serde_json::Value>,
+    // Additional fields that may appear in responses
+    pub incomplete_details: Option<serde_json::Value>,
+    pub instructions: Option<serde_json::Value>,
+    pub max_output_tokens: Option<u32>,
+    pub parallel_tool_calls: Option<bool>,
+    pub previous_response_id: Option<String>,
+    pub reasoning: Option<serde_json::Value>,
+    pub store: Option<bool>,
+    pub temperature: Option<f32>,
+    pub text: Option<serde_json::Value>,
+    pub tool_choice: Option<serde_json::Value>,
+    pub tools: Option<Vec<serde_json::Value>>,
+    pub top_p: Option<f32>,
+    pub truncation: Option<String>,
+    pub user: Option<serde_json::Value>,
+    pub metadata: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]
@@ -34,6 +51,127 @@ pub struct ResponseContent {
     pub content_type: String,
     pub text: Option<String>,
     pub annotations: Option<Vec<serde_json::Value>>,
+}
+
+#[derive(Debug, Deserialize, Clone, PartialEq)]
+#[serde(tag = "type")]
+pub enum ResponsesApiStreamEvent {
+    #[serde(rename = "response.created")]
+    ResponseCreated {
+        response: ResponsesApiStreamResponse,
+        sequence_number: u32,
+    },
+    #[serde(rename = "response.in_progress")]
+    ResponseInProgress {
+        response: ResponsesApiStreamResponse,
+        sequence_number: u32,
+    },
+    #[serde(rename = "response.completed")]
+    ResponseCompleted {
+        response: ResponsesApiStreamResponse,
+        sequence_number: u32,
+    },
+    #[serde(rename = "response.failed")]
+    ResponseFailed {
+        response: ResponsesApiStreamResponse,
+        sequence_number: u32,
+    },
+    #[serde(rename = "response.incomplete")]
+    ResponseIncomplete {
+        response: ResponsesApiStreamResponse,
+        sequence_number: u32,
+    },
+    #[serde(rename = "response.output_text.delta")]
+    OutputTextDelta {
+        item_id: String,
+        output_index: u32,
+        content_index: u32,
+        delta: String,
+        sequence_number: u32,
+    },
+    #[serde(rename = "response.output_text.done")]
+    OutputTextDone {
+        item_id: String,
+        output_index: u32,
+        content_index: u32,
+        text: String,
+        sequence_number: u32,
+    },
+    #[serde(rename = "response.content_part.added")]
+    ContentPartAdded {
+        item_id: String,
+        output_index: u32,
+        content_index: u32,
+        part: ContentPart,
+        sequence_number: u32,
+    },
+    #[serde(rename = "response.content_part.done")]
+    ContentPartDone {
+        item_id: String,
+        output_index: u32,
+        content_index: u32,
+        part: ContentPart,
+        sequence_number: u32,
+    },
+}
+
+#[derive(Debug, Deserialize, Clone, PartialEq)]
+pub struct ContentPart {
+    #[serde(rename = "type")]
+    pub part_type: String,
+    pub text: String,
+    pub annotations: Option<Vec<serde_json::Value>>,
+}
+
+#[derive(Debug, Deserialize, Clone, PartialEq)]
+pub struct ResponsesApiStreamResponse {
+    pub id: String,
+    pub object: String,
+    pub created_at: u32,
+    pub status: String,
+    pub model: String,
+    pub output: Vec<ResponseOutput>,
+    pub usage: Option<CompletionUsage>,
+    pub error: Option<serde_json::Value>,
+    // Additional fields that appear in streaming responses
+    pub incomplete_details: Option<serde_json::Value>,
+    pub instructions: Option<serde_json::Value>,
+    pub max_output_tokens: Option<u32>,
+    pub parallel_tool_calls: Option<bool>,
+    pub previous_response_id: Option<String>,
+    pub reasoning: Option<serde_json::Value>,
+    pub store: Option<bool>,
+    pub temperature: Option<f32>,
+    pub text: Option<serde_json::Value>,
+    pub tool_choice: Option<serde_json::Value>,
+    pub tools: Option<Vec<serde_json::Value>>,
+    pub top_p: Option<f32>,
+    pub truncation: Option<String>,
+    pub user: Option<serde_json::Value>,
+    pub metadata: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Deserialize, Clone, PartialEq)]
+pub struct StreamOutputItem {
+    pub id: String,
+    #[serde(rename = "type")]
+    pub item_type: String,
+    pub status: Option<String>,
+    pub role: Option<String>,
+    pub content: Option<Vec<ResponseContent>>,
+}
+
+#[derive(Debug, Deserialize, Clone, PartialEq)]
+pub struct ContentDelta {
+    pub index: u32,
+    pub delta: DeltaContent,
+}
+
+#[derive(Debug, Deserialize, Clone, PartialEq)]
+pub struct DeltaContent {
+    #[serde(rename = "type")]
+    pub delta_type: String,
+    pub text: Option<String>,
 }
 
 pub type ChatCompletionResponseDelta = ChatCompletionGeneric<ChatCompletionChoiceDelta>;
@@ -103,11 +241,16 @@ pub struct ChatCompletionChoice {
 #[derive(Debug, Deserialize, Clone, PartialEq)]
 pub struct CompletionUsage {
     /// Number of tokens in the prompt.
+    #[serde(alias = "input_tokens")]
     pub prompt_tokens: u64,
     /// Number of tokens in the generated completion.
+    #[serde(alias = "output_tokens")]
     pub completion_tokens: u64,
     /// Total number of tokens used in the request (prompt + completion).
     pub total_tokens: u64,
+    /// Additional fields that may be present in responses API
+    pub input_tokens_details: Option<serde_json::Value>,
+    pub output_tokens_details: Option<serde_json::Value>,
 }
 
 /// A chat completion message generated by the model.

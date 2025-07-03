@@ -2443,6 +2443,19 @@ paths:
                 title: TestOpenAIResponsesExplicitResponse
                 type: string
       operationId: TestOpenAIResponsesExplicit
+  /call/TestOpenAIResponsesImageInput:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestOpenAIResponsesImageInput'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestOpenAIResponsesImageInputResponse
+                type: string
+      operationId: TestOpenAIResponsesImageInput
   /call/TestOpenAIResponsesShorthand:
     post:
       requestBody:
@@ -5612,6 +5625,24 @@ components:
                 $ref: '#/components/schemas/BamlOptions'
             required:
             - input
+            additionalProperties: false
+    TestOpenAIResponsesImageInput:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestOpenAIResponsesImageInputRequest
+            type: object
+            properties:
+              image:
+                oneOf:
+                - $ref: '#/components/schemas/BamlImage'
+                - type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - image
             additionalProperties: false
     TestOpenAIResponsesShorthand:
       required: true

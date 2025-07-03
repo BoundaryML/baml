@@ -89,12 +89,19 @@ impl WithChat for OpenAIClient {
             .get("model")
             .and_then(serde_json::Value::as_str)
             .map(str::to_string);
+        // TODO(Rahul): This is called for OpenAI client and hence just matches concerning openai, but not sure
+        // if this is clean.
+        let response_type = match self.provider.as_str() {
+            "openai-responses" => ResponseType::OpenAIResponses,
+            _ => ResponseType::OpenAI,
+        };
+
         make_parsed_request(
             self,
             model_name,
             either::Either::Right(prompt),
             false,
-            self.properties.client_response_type.clone(),
+            response_type,
             ctx,
         )
         .await
@@ -134,6 +141,11 @@ impl ProviderStrategy {
                 // Extract model from properties
                 if let Some(model) = properties.get("model") {
                     simple_body.insert("model".into(), model.clone());
+                }
+
+                // Extract tools from properties for web search support
+                if let Some(tools) = properties.get("tools") {
+                    simple_body.insert("tools".into(), tools.clone());
                 }
 
                 // Convert prompt/messages to single input string
@@ -258,12 +270,19 @@ impl ProviderStrategy {
 
 impl OpenAIClient {
     fn get_provider_strategy(&self) -> ProviderStrategy {
-        if self.provider == "openai-responses" {
+        if self.provider.as_str() == "openai-responses" {
             ProviderStrategy::ResponsesApi
         } else {
             ProviderStrategy::StandardOpenAI {
                 provider: self.provider.clone(),
             }
+        }
+    }
+
+    fn get_response_type(&self) -> ResponseType {
+        match self.get_provider_strategy() {
+            ProviderStrategy::ResponsesApi => ResponseType::OpenAIResponses,
+            ProviderStrategy::StandardOpenAI { .. } => ResponseType::OpenAI,
         }
     }
 }
@@ -335,11 +354,12 @@ impl WithStreamChat for OpenAIClient {
             .get("model")
             .and_then(serde_json::Value::as_str)
             .map(str::to_string);
+        let response_type = self.get_response_type();
         crate::internal::llm_client::primitive::stream_request::make_stream_request(
             self,
             either::Either::Right(prompt),
             model_name,
-            ResponseType::OpenAI,
+            response_type,
             ctx,
         )
         .await

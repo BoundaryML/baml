@@ -200,6 +200,7 @@ export type StreamingServerTypes = {
   TestOpenAIResponsesDifferentModel: string,
   TestOpenAIResponsesEndpoint: string,
   TestOpenAIResponsesExplicit: string,
+  TestOpenAIResponsesImageInput: string,
   TestOpenAIResponsesShorthand: string,
   TestOpenAIResponsesWithOpenAIResponseType: string,
   TestOpenAIShorthand: string,

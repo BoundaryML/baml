@@ -3,7 +3,10 @@ use baml_types::BamlMap;
 use serde::Deserialize;
 use serde_json::Value;
 
-use super::types::{ChatCompletionResponse, ChatCompletionResponseDelta, ResponsesApiResponse};
+use super::types::{
+    ChatCompletionResponse, ChatCompletionResponseDelta, ResponsesApiResponse,
+    ResponsesApiStreamEvent,
+};
 use crate::internal::llm_client::{
     primitive::request::RequestBuilder, traits::WithClient, ErrorCode, LLMCompleteResponse,
     LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse,
@@ -93,7 +96,7 @@ pub fn parse_openai_response<C: WithClient + RequestBuilder>(
     })
 }
 
-pub fn scan_openai_response_stream(
+pub fn scan_openai_chat_completion_stream(
     client_name: &str,
     request_options: &BamlMap<String, serde_json::Value>,
     prompt: &internal_baml_jinja::RenderedPrompt,
@@ -288,6 +291,140 @@ pub fn parse_openai_responses_response<C: WithClient + RequestBuilder>(
             total_tokens: usage.map(|u| u.total_tokens),
         },
     })
+}
+
+pub fn scan_openai_responses_stream(
+    client_name: &str,
+    request_options: &BamlMap<String, serde_json::Value>,
+    prompt: &internal_baml_jinja::RenderedPrompt,
+    system_now: &web_time::SystemTime,
+    instant_now: &web_time::Instant,
+    model_name: &Option<String>,
+    accumulated: &mut Result<LLMCompleteResponse>,
+    event_body: serde_json::Value,
+) -> Result<(), LLMErrorResponse> {
+    let inner = match accumulated {
+        Ok(accumulated) => accumulated,
+        // We'll just keep the first error and return it
+        Err(e) => return Ok(()),
+    };
+
+    let event = ResponsesApiStreamEvent::deserialize(&event_body)
+        .context(format!(
+            "Failed to parse into a responses API stream event: {}",
+            event_body
+        ))
+        .map_err(|e| LLMErrorResponse {
+            client: client_name.to_string(),
+            model: model_name.clone(),
+            prompt: prompt.clone(),
+            start_time: *system_now,
+            request_options: request_options.clone(),
+            latency: instant_now.elapsed(),
+            message: format!("{e:?}"),
+            code: ErrorCode::Other(2),
+        })?;
+
+    use super::types::ResponsesApiStreamEvent::*;
+
+    match event {
+        ResponseCreated { response, .. } | ResponseInProgress { response, .. } => {
+            // Update model information
+            inner.model = response.model;
+        }
+        ResponseCompleted { response, .. } => {
+            // Final response with usage information and content
+            inner.model = response.model;
+            inner.metadata.finish_reason = Some(response.status.clone());
+            inner.metadata.baml_is_complete = true;
+
+            // Extract content from the final response
+            let content = response
+                .output
+                .first()
+                .and_then(|output| output.content.first())
+                .and_then(|content| content.text.as_ref())
+                .map_or_else(String::new, |s| s.to_string());
+
+            // If we got content in the final response, use it (overwrite any accumulated content)
+            if !content.is_empty() {
+                inner.content = content;
+            }
+
+            if let Some(usage) = response.usage.as_ref() {
+                inner.metadata.prompt_tokens = Some(usage.prompt_tokens);
+                inner.metadata.output_tokens = Some(usage.completion_tokens);
+                inner.metadata.total_tokens = Some(usage.total_tokens);
+            }
+        }
+        ResponseFailed { response, .. } => {
+            // Handle failure
+            inner.metadata.finish_reason = Some(response.status.clone());
+            inner.metadata.baml_is_complete = false;
+
+            // If there's an error, we might want to add it to the content or handle it differently
+            if let Some(error) = response.error {
+                return Err(LLMErrorResponse {
+                    client: client_name.to_string(),
+                    model: Some(response.model),
+                    prompt: prompt.clone(),
+                    start_time: *system_now,
+                    request_options: request_options.clone(),
+                    latency: instant_now.elapsed(),
+                    message: format!("Response failed with error: {}", error),
+                    code: ErrorCode::Other(2),
+                });
+            }
+        }
+        ResponseIncomplete { response, .. } => {
+            // Handle incomplete response (e.g., hit token limit)
+            inner.model = response.model;
+            inner.metadata.finish_reason = Some(response.status.clone());
+            inner.metadata.baml_is_complete = false; // Mark as incomplete
+
+            // Extract any partial content that was generated
+            let content = response
+                .output
+                .first()
+                .and_then(|output| output.content.first())
+                .and_then(|content| content.text.as_ref())
+                .map_or_else(String::new, |s| s.to_string());
+
+            // If we got partial content, use it
+            if !content.is_empty() {
+                inner.content = content;
+            }
+
+            // Include usage information if available
+            if let Some(usage) = response.usage.as_ref() {
+                inner.metadata.prompt_tokens = Some(usage.prompt_tokens);
+                inner.metadata.output_tokens = Some(usage.completion_tokens);
+                inner.metadata.total_tokens = Some(usage.total_tokens);
+            }
+        }
+        OutputTextDelta { delta, .. } => {
+            // This is where incremental text content comes through during streaming
+            inner.content += &delta;
+        }
+        OutputTextDone { text, .. } => {
+            // Final complete text - use this if we don't have accumulated content
+            if inner.content.is_empty() {
+                inner.content = text;
+            }
+        }
+        ContentPartAdded { .. } => {
+            // Content part was added - this is informational, actual content comes via deltas
+        }
+        ContentPartDone { part, .. } => {
+            // Content part is done - use this as fallback if we don't have accumulated content
+            if inner.content.is_empty() && part.part_type == "output_text" {
+                inner.content = part.text;
+            }
+        }
+    }
+
+    inner.latency = instant_now.elapsed();
+    Ok(())
 }
 
 #[cfg(test)]
