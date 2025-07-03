@@ -1,10 +1,10 @@
 use anyhow::{Context, Result};
 use baml_types::BamlMap;
 use serde::Deserialize;
-use serde_json::Value;
+use serde_json::{json, Value};
 
 use super::types::{
-    ChatCompletionResponse, ChatCompletionResponseDelta, ResponsesApiResponse,
+    ChatCompletionResponse, ChatCompletionResponseDelta, ResponseOutputType, ResponsesApiResponse,
     ResponsesApiStreamEvent,
 };
 use crate::internal::llm_client::{
@@ -266,16 +266,42 @@ pub fn parse_openai_responses_response<C: WithClient + RequestBuilder>(
     };
 
     // Extract text content from the responses API format
-    // Handle both regular messages and web search results
+    // Handle messages, web search results, and function calls
     let content = response
         .output
         .iter()
         .find_map(|output| {
-            // Look for message outputs that have content
-            if output.output_type == "message" && !output.content.is_empty() {
-                output.content.first()?.text.as_ref().map(|s| s.to_string())
-            } else {
-                None
+            match output.output_type {
+                ResponseOutputType::Message => {
+                    // Regular message with text content
+                    if !output.content.is_empty() {
+                        output.content.first()?.text.as_ref().map(|s| s.to_string())
+                    } else {
+                        None
+                    }
+                }
+                ResponseOutputType::FunctionCall => {
+                    // Function call - return the function call as JSON
+                    if let (Some(name), Some(arguments)) = (&output.name, &output.arguments) {
+                        Some(
+                            json!({
+                                "type": "function_call",
+                                "name": name,
+                                "arguments": arguments,
+                                "call_id": output.call_id
+                            })
+                            .to_string(),
+                        )
+                    } else {
+                        None
+                    }
+                }
+                ResponseOutputType::WebSearchCall
+                | ResponseOutputType::FileSearchCall
+                | ResponseOutputType::Reasoning => {
+                    // Tool calls and reasoning outputs don't have text content, skip them
+                    None
+                }
             }
         })
         .unwrap_or_default();

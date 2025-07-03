@@ -148,6 +148,21 @@ impl ProviderStrategy {
                     simple_body.insert("tools".into(), tools.clone());
                 }
 
+                // Extract tool_choice for function calling
+                if let Some(tool_choice) = properties.get("tool_choice") {
+                    simple_body.insert("tool_choice".into(), tool_choice.clone());
+                }
+
+                // Extract reasoning_effort and convert to nested reasoning.effort structure
+                if let Some(reasoning_effort) = properties.get("reasoning_effort") {
+                    simple_body.insert(
+                        "reasoning".into(),
+                        json!({
+                            "effort": reasoning_effort
+                        }),
+                    );
+                }
+
                 // Convert prompt/messages to single input string
                 let input = match prompt {
                     either::Either::Left(prompt) => prompt.clone(),

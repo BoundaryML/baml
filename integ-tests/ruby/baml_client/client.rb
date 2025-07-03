@@ -4372,6 +4372,31 @@ module BamlClient
       end
       sig {params(
           varargs: T.untyped,
+          query: String,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+      ).returns(String)}
+      def TestOpenAIResponsesFunctionCall(
+          *varargs,
+          query:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("TestOpenAIResponsesFunctionCall may only be called with keyword arguments")
+          end
+
+          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          result = options.call_function_sync(function_name: "TestOpenAIResponsesFunctionCall", args: {
+              query: query,
+          })
+
+          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          # for sorbet we need to cast to the return type since parsed is now the right value
+          # We just need to tell sorbet that the return type is the right type
+          parsed.cast_to(String)
+      end
+      sig {params(
+          varargs: T.untyped,
           image: T.any(Baml::Image, String),
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)}
@@ -4388,6 +4413,31 @@ module BamlClient
 
           result = options.call_function_sync(function_name: "TestOpenAIResponsesImageInput", args: {
               image: image,
+          })
+
+          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          # for sorbet we need to cast to the return type since parsed is now the right value
+          # We just need to tell sorbet that the return type is the right type
+          parsed.cast_to(String)
+      end
+      sig {params(
+          varargs: T.untyped,
+          problem: String,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+      ).returns(String)}
+      def TestOpenAIResponsesReasoning(
+          *varargs,
+          problem:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("TestOpenAIResponsesReasoning may only be called with keyword arguments")
+          end
+
+          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          result = options.call_function_sync(function_name: "TestOpenAIResponsesReasoning", args: {
+              problem: problem,
           })
 
           parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
@@ -9333,6 +9383,31 @@ module BamlClient
       end
       sig {params(
           varargs: T.untyped,
+          query: String,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+      ).returns(Baml::BamlStream[String, String])}
+      def TestOpenAIResponsesFunctionCall(
+          *varargs,
+          query:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("TestOpenAIResponsesFunctionCall may only be called with keyword arguments")
+          end
+
+          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          ctx, result = options.create_sync_stream(function_name: "TestOpenAIResponsesFunctionCall", args: {
+              query: query,
+          })
+
+          Baml::BamlStream[String, String].new(
+              ffi_stream: result,
+              ctx_manager: ctx
+          )
+      end
+      sig {params(
+          varargs: T.untyped,
           image: T.any(Baml::Image, String),
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String, String])}
@@ -9349,6 +9424,31 @@ module BamlClient
 
           ctx, result = options.create_sync_stream(function_name: "TestOpenAIResponsesImageInput", args: {
               image: image,
+          })
+
+          Baml::BamlStream[String, String].new(
+              ffi_stream: result,
+              ctx_manager: ctx
+          )
+      end
+      sig {params(
+          varargs: T.untyped,
+          problem: String,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+      ).returns(Baml::BamlStream[String, String])}
+      def TestOpenAIResponsesReasoning(
+          *varargs,
+          problem:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("TestOpenAIResponsesReasoning may only be called with keyword arguments")
+          end
+
+          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          ctx, result = options.create_sync_stream(function_name: "TestOpenAIResponsesReasoning", args: {
+              problem: problem,
           })
 
           Baml::BamlStream[String, String].new(

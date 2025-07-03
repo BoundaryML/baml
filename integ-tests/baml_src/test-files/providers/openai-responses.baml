@@ -238,3 +238,81 @@ test TestOpenAIResponsesWebSearchTest {
     query "What was a positive news story from today?"
   }
 }
+
+
+// Test function calling with OpenAI Responses API
+client<llm> OpenAIResponsesFunctionCall {
+  provider openai-responses
+  options {
+    api_key env.OPENAI_API_KEY
+    model "gpt-4.1"
+    tools [
+      {
+        type "function"
+        name "get_current_weather"
+        description "Get the current weather in a given location"
+        parameters {
+          type "object"
+          properties {
+            location {
+              type "string"
+              description "The city and state, e.g. San Francisco, CA"
+            }
+            unit {
+              type "string"
+              enum ["celsius", "fahrenheit"]
+            }
+          }
+          required ["location", "unit"]
+        }
+      }
+    ]
+    tool_choice "auto"
+  }
+}
+
+function TestOpenAIResponsesFunctionCall(query: string) -> string {
+  client OpenAIResponsesFunctionCall
+  prompt #"
+    {{ _.role("user") }}
+    {{ query }}
+  "#
+}
+
+// Test for function calling
+test TestOpenAIResponsesFunctionCallTest {
+  functions [
+    TestOpenAIResponsesFunctionCall
+  ]
+  args {
+    query "What is the weather like in Boston today?"
+  }
+}
+
+// Test reasoning with OpenAI Responses API
+client<llm> OpenAIResponsesReasoning {
+  provider openai-responses
+  options {
+    api_key env.OPENAI_API_KEY
+    model "o4-mini"
+    reasoning_effort "high"
+  }
+}
+
+function TestOpenAIResponsesReasoning(problem: string) -> string {
+  client OpenAIResponsesReasoning
+  prompt #"
+    {{ _.role("user") }}
+    {{ problem }}
+  "#
+}
+
+// Test for reasoning capability
+test TestOpenAIResponsesReasoningTest {
+  functions [
+    TestOpenAIResponsesReasoning
+  ]
+  args {
+    problem "Solve this step by step: If a train travels at 60 mph for 2.5 hours, then at 80 mph for 1.5 hours, what is the total distance traveled?"
+  }
+}

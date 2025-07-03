@@ -3344,6 +3344,25 @@ export const TestOpenAIResponsesExplicit = async (
 };
 
 /**
+ * Executes the streaming variant of the "TestOpenAIResponsesFunctionCall" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } query - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const TestOpenAIResponsesFunctionCall = async (
+  query: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const stream = b.stream.TestOpenAIResponsesFunctionCall(
+    query,
+  );
+  return Promise.resolve(stream.toStreamable());
+};
+
+/**
  * Executes the streaming variant of the "TestOpenAIResponsesImageInput" BAML action.
  *
  * This action initiates a streaming response by calling the corresponding
@@ -3358,6 +3377,25 @@ export const TestOpenAIResponsesImageInput = async (
 ): Promise<ReadableStream<Uint8Array>> => {
   const stream = b.stream.TestOpenAIResponsesImageInput(
     image,
+  );
+  return Promise.resolve(stream.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "TestOpenAIResponsesReasoning" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } problem - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const TestOpenAIResponsesReasoning = async (
+  problem: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const stream = b.stream.TestOpenAIResponsesReasoning(
+    problem,
   );
   return Promise.resolve(stream.toStreamable());
 };

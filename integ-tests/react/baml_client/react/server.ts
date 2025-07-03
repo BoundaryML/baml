@@ -3171,6 +3171,24 @@ export const TestOpenAIResponsesExplicit = async (
 };
 
 /**
+ * Executes the "TestOpenAIResponsesFunctionCall" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestOpenAIResponsesFunctionCall"
+ * with the specified parameters.
+ *
+ * @param { string } query - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestOpenAIResponsesFunctionCall = async (
+  query: string,
+): Promise<string> => {
+  return b.TestOpenAIResponsesFunctionCall(
+    query,
+  );
+};
+
+/**
  * Executes the "TestOpenAIResponsesImageInput" BAML action.
  *
  * This server action calls the underlying BAML function "TestOpenAIResponsesImageInput"
@@ -3185,6 +3203,24 @@ export const TestOpenAIResponsesImageInput = async (
 ): Promise<string> => {
   return b.TestOpenAIResponsesImageInput(
     image,
+  );
+};
+
+/**
+ * Executes the "TestOpenAIResponsesReasoning" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestOpenAIResponsesReasoning"
+ * with the specified parameters.
+ *
+ * @param { string } problem - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestOpenAIResponsesReasoning = async (
+  problem: string,
+): Promise<string> => {
+  return b.TestOpenAIResponsesReasoning(
+    problem,
   );
 };
 

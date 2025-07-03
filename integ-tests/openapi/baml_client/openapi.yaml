@@ -2443,6 +2443,19 @@ paths:
                 title: TestOpenAIResponsesExplicitResponse
                 type: string
       operationId: TestOpenAIResponsesExplicit
+  /call/TestOpenAIResponsesFunctionCall:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestOpenAIResponsesFunctionCall'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestOpenAIResponsesFunctionCallResponse
+                type: string
+      operationId: TestOpenAIResponsesFunctionCall
   /call/TestOpenAIResponsesImageInput:
     post:
       requestBody:
@@ -2456,6 +2469,19 @@ paths:
                 title: TestOpenAIResponsesImageInputResponse
                 type: string
       operationId: TestOpenAIResponsesImageInput
+  /call/TestOpenAIResponsesReasoning:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestOpenAIResponsesReasoning'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestOpenAIResponsesReasoningResponse
+                type: string
+      operationId: TestOpenAIResponsesReasoning
   /call/TestOpenAIResponsesShorthand:
     post:
       requestBody:
@@ -5639,6 +5665,22 @@ components:
             required:
             - input
             additionalProperties: false
+    TestOpenAIResponsesFunctionCall:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestOpenAIResponsesFunctionCallRequest
+            type: object
+            properties:
+              query:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - query
+            additionalProperties: false
     TestOpenAIResponsesImageInput:
       required: true
       content:
@@ -5656,6 +5698,22 @@ components:
                 $ref: '#/components/schemas/BamlOptions'
             required:
             - image
+            additionalProperties: false
+    TestOpenAIResponsesReasoning:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestOpenAIResponsesReasoningRequest
+            type: object
+            properties:
+              problem:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - problem
             additionalProperties: false
     TestOpenAIResponsesShorthand:
       required: true

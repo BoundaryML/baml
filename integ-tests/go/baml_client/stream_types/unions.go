@@ -907,11 +907,11 @@ func (u *Union2ImageOrString) Decode(holder *cffi.CFFIValueUnionVariant) {
 	switch variantName {
 	case "image":
 		u.variant = "Image"
-		value := *baml.Decode(valueHolder).(*any)
+		value := baml.Decode(valueHolder).(any)
 		u.variant_Image = &value
 	case "string":
 		u.variant = "String"
-		value := *baml.Decode(valueHolder).(*string)
+		value := baml.Decode(valueHolder).(string)
 		u.variant_String = &value
 
 	default:
@@ -982,7 +982,16 @@ func (u *Union2ImageOrString) UnmarshalJSON(data []byte) error {
 	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
+func Union2ImageOrString__NewImage(v any) Union2ImageOrString {
+
+	return Union2ImageOrString{
+		variant:       "Image",
+		variant_Image: &v,
+	}
+}
+
 func (u *Union2ImageOrString) SetImage(v any) {
+
 	u.variant = "Image"
 	u.variant_Image = &v
 
@@ -994,14 +1003,23 @@ func (u *Union2ImageOrString) IsImage() bool {
 	return u.variant == "Image"
 }
 
-func (u *Union2ImageOrString) Image() any {
+func (u *Union2ImageOrString) Image() *any {
 	if u.variant != "Image" {
-		return any{}
+		return nil
 	}
-	return *u.variant_Image
+	return u.variant_Image
+}
+
+func Union2ImageOrString__NewString(v string) Union2ImageOrString {
+
+	return Union2ImageOrString{
+		variant:        "String",
+		variant_String: &v,
+	}
 }
 
 func (u *Union2ImageOrString) SetString(v string) {
+
 	u.variant = "String"
 	u.variant_String = &v
 
@@ -1013,11 +1031,11 @@ func (u *Union2ImageOrString) IsString() bool {
 	return u.variant == "String"
 }
 
-func (u *Union2ImageOrString) String() string {
+func (u *Union2ImageOrString) String() *string {
 	if u.variant != "String" {
-		return ""
+		return nil
 	}
-	return *u.variant_String
+	return u.variant_String
 }
 
 type Union2IntOrString struct {

@@ -40,9 +40,19 @@ pub struct ResponsesApiResponse {
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum ResponseOutputType {
+    Message,
+    WebSearchCall,
+    FileSearchCall,
+    FunctionCall,
+    Reasoning,
+}
+
+#[derive(Debug, Deserialize, Clone, PartialEq)]
 pub struct ResponseOutput {
     #[serde(rename = "type")]
-    pub output_type: String,
+    pub output_type: ResponseOutputType,
     pub id: Option<String>,
     pub status: Option<String>,
     pub role: Option<String>,
@@ -50,6 +60,15 @@ pub struct ResponseOutput {
     pub content: Vec<ResponseContent>,
     // For web search calls
     pub action: Option<WebSearchAction>,
+    // For file search calls
+    pub queries: Option<Vec<String>>,
+    pub results: Option<serde_json::Value>,
+    // For function calls
+    pub call_id: Option<String>,
+    pub name: Option<String>,
+    pub arguments: Option<String>,
+    // For reasoning outputs
+    pub summary: Option<Vec<serde_json::Value>>,
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]
