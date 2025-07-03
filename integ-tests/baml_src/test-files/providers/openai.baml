@@ -145,7 +145,7 @@ client<llm> OpenAIWithNullMaxTokens {
   provider openai
   options {
     api_key env.OPENAI_API_KEY
-    model "gpt-4"
+    model "gpt-4o"
     max_tokens null
   }
 }

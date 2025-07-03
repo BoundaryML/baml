@@ -293,7 +293,11 @@ impl From<&TypeValue> for TypeGo {
             TypeValue::Bool => TypeGo::Bool(None, meta),
             TypeValue::Null => TypeGo::Any {
                 reason: "Null types are not supported in Go".to_string(),
-                meta,
+                meta: {
+                    let mut meta = meta;
+                    meta.make_optional();
+                    meta
+                },
             },
             TypeValue::Media(baml_media_type) => TypeGo::Media(baml_media_type.into(), meta),
         }

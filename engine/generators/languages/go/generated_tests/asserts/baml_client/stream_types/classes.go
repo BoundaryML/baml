@@ -41,29 +41,25 @@ func (c *Person) Decode(holder *cffi.CFFIValueClass) {
 
 		case "name":
 			c.Name = func(param *cffi.CFFIValueHolder) *string {
-				fmt.Printf("\n=== FIELD DECODE ===\n")
-				fmt.Printf("Expecting type: *string\n")
-				fmt.Printf("===================\n")
 				decoded := baml.Decode(param)
 				return func(result any) *string {
 					if result == nil {
 						return nil
 					}
-					return (result).(*string)
+					casted := (result).(string)
+					return &casted
 				}(decoded)
 			}(valueHolder)
 
 		case "age":
 			c.Age = func(param *cffi.CFFIValueHolder) *int64 {
-				fmt.Printf("\n=== FIELD DECODE ===\n")
-				fmt.Printf("Expecting type: *int64\n")
-				fmt.Printf("===================\n")
 				decoded := baml.Decode(param)
 				return func(result any) *int64 {
 					if result == nil {
 						return nil
 					}
-					return (result).(*int64)
+					casted := (result).(int64)
+					return &casted
 				}(decoded)
 			}(valueHolder)
 

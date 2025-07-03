@@ -498,3 +498,8 @@ func EncodeArgs(args BamlFunctionArguments) ([]byte, error) {
 	}
 	return proto.Marshal(root)
 }
+
+// This is only used for testing, do not use in production
+func BAMLTESTINGONLY_InternalEncode(value any) (*cffi.CFFIValueHolder, error) {
+	return encodeValue(value)
+}

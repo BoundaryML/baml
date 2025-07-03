@@ -1,3 +1,4 @@
+use baml_types::{ir_type::TypeGeneric, TypeIR};
 use dir_writer::{FileCollector, GeneratorArgs, IntermediateRepr, LanguageFeatures};
 use functions::{
     render_functions, render_functions_stream, render_runtime_code, render_source_files,
@@ -85,6 +86,31 @@ impl LanguageFeatures for GoLanguageFeatures {
             unions
         };
         let type_aliases = ir.walk_type_aliases().collect::<Vec<_>>();
+        let invalid_cycles = ir
+            .structural_recursive_alias_cycles()
+            .iter()
+            .filter(|&cycle| {
+                // find all cycles considered_invalid in go
+                cycle.iter().any(|(_, field_type)| {
+                    // if any field is a union, its valid!
+                    !field_type
+                        .find_if(&|t| matches!(t, TypeIR::Union { .. }))
+                        .is_empty()
+                })
+            });
+        println!("--------------------------------");
+        for cycle in invalid_cycles {
+            println!(
+                "invalid cycle: {}",
+                cycle
+                    .iter()
+                    .map(|(name, t)| format!("{name}: {t}"))
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            );
+        }
+        println!("--------------------------------");
+
         let mut go_type_aliases = type_aliases
             .iter()
             .map(|c| ir_to_go::type_aliases::ir_type_alias_to_go(c.item, &pkg))

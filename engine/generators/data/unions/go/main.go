@@ -17,8 +17,7 @@ func main() {
 
 	fmt.Println("hello", b.Stream)
 
-	category := types.SystemComponentCategory{}
-	category.SetKservice("service")
+	category := types.Union2KresourceOrKservice__NewKservice()
 	input := types.ExistingSystemComponent{
 		Id:          1,
 		Name:        "Hello",

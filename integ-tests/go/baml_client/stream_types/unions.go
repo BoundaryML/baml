@@ -37,11 +37,11 @@ func (u *Union2BoolOrFloat) Decode(holder *cffi.CFFIValueUnionVariant) {
 	switch variantName {
 	case "float":
 		u.variant = "Float"
-		value := *baml.Decode(valueHolder).(*float64)
+		value := baml.Decode(valueHolder).(float64)
 		u.variant_Float = &value
 	case "bool":
 		u.variant = "Bool"
-		value := *baml.Decode(valueHolder).(*bool)
+		value := baml.Decode(valueHolder).(bool)
 		u.variant_Bool = &value
 
 	default:
@@ -112,7 +112,16 @@ func (u *Union2BoolOrFloat) UnmarshalJSON(data []byte) error {
 	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
+func Union2BoolOrFloat__NewFloat(v float64) Union2BoolOrFloat {
+
+	return Union2BoolOrFloat{
+		variant:       "Float",
+		variant_Float: &v,
+	}
+}
+
 func (u *Union2BoolOrFloat) SetFloat(v float64) {
+
 	u.variant = "Float"
 	u.variant_Float = &v
 
@@ -124,14 +133,23 @@ func (u *Union2BoolOrFloat) IsFloat() bool {
 	return u.variant == "Float"
 }
 
-func (u *Union2BoolOrFloat) Float() float64 {
+func (u *Union2BoolOrFloat) Float() *float64 {
 	if u.variant != "Float" {
-		return 0.0
+		return nil
 	}
-	return *u.variant_Float
+	return u.variant_Float
+}
+
+func Union2BoolOrFloat__NewBool(v bool) Union2BoolOrFloat {
+
+	return Union2BoolOrFloat{
+		variant:      "Bool",
+		variant_Bool: &v,
+	}
 }
 
 func (u *Union2BoolOrFloat) SetBool(v bool) {
+
 	u.variant = "Bool"
 	u.variant_Bool = &v
 
@@ -143,11 +161,11 @@ func (u *Union2BoolOrFloat) IsBool() bool {
 	return u.variant == "Bool"
 }
 
-func (u *Union2BoolOrFloat) Bool() bool {
+func (u *Union2BoolOrFloat) Bool() *bool {
 	if u.variant != "Bool" {
-		return false
+		return nil
 	}
-	return *u.variant_Bool
+	return u.variant_Bool
 }
 
 type Union2BoolOrString struct {
@@ -164,11 +182,11 @@ func (u *Union2BoolOrString) Decode(holder *cffi.CFFIValueUnionVariant) {
 	switch variantName {
 	case "string":
 		u.variant = "String"
-		value := *baml.Decode(valueHolder).(*string)
+		value := baml.Decode(valueHolder).(string)
 		u.variant_String = &value
 	case "bool":
 		u.variant = "Bool"
-		value := *baml.Decode(valueHolder).(*bool)
+		value := baml.Decode(valueHolder).(bool)
 		u.variant_Bool = &value
 
 	default:
@@ -239,7 +257,16 @@ func (u *Union2BoolOrString) UnmarshalJSON(data []byte) error {
 	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
+func Union2BoolOrString__NewString(v string) Union2BoolOrString {
+
+	return Union2BoolOrString{
+		variant:        "String",
+		variant_String: &v,
+	}
+}
+
 func (u *Union2BoolOrString) SetString(v string) {
+
 	u.variant = "String"
 	u.variant_String = &v
 
@@ -251,14 +278,23 @@ func (u *Union2BoolOrString) IsString() bool {
 	return u.variant == "String"
 }
 
-func (u *Union2BoolOrString) String() string {
+func (u *Union2BoolOrString) String() *string {
 	if u.variant != "String" {
-		return ""
+		return nil
 	}
-	return *u.variant_String
+	return u.variant_String
+}
+
+func Union2BoolOrString__NewBool(v bool) Union2BoolOrString {
+
+	return Union2BoolOrString{
+		variant:      "Bool",
+		variant_Bool: &v,
+	}
 }
 
 func (u *Union2BoolOrString) SetBool(v bool) {
+
 	u.variant = "Bool"
 	u.variant_Bool = &v
 
@@ -270,11 +306,11 @@ func (u *Union2BoolOrString) IsBool() bool {
 	return u.variant == "Bool"
 }
 
-func (u *Union2BoolOrString) Bool() bool {
+func (u *Union2BoolOrString) Bool() *bool {
 	if u.variant != "Bool" {
-		return false
+		return nil
 	}
-	return *u.variant_Bool
+	return u.variant_Bool
 }
 
 type Union2EarthlingOrMartian struct {
@@ -366,7 +402,16 @@ func (u *Union2EarthlingOrMartian) UnmarshalJSON(data []byte) error {
 	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
+func Union2EarthlingOrMartian__NewMartian(v Martian) Union2EarthlingOrMartian {
+
+	return Union2EarthlingOrMartian{
+		variant:         "Martian",
+		variant_Martian: &v,
+	}
+}
+
 func (u *Union2EarthlingOrMartian) SetMartian(v Martian) {
+
 	u.variant = "Martian"
 	u.variant_Martian = &v
 
@@ -378,14 +423,23 @@ func (u *Union2EarthlingOrMartian) IsMartian() bool {
 	return u.variant == "Martian"
 }
 
-func (u *Union2EarthlingOrMartian) Martian() Martian {
+func (u *Union2EarthlingOrMartian) Martian() *Martian {
 	if u.variant != "Martian" {
-		return Martian{}
+		return nil
 	}
-	return *u.variant_Martian
+	return u.variant_Martian
+}
+
+func Union2EarthlingOrMartian__NewEarthling(v Earthling) Union2EarthlingOrMartian {
+
+	return Union2EarthlingOrMartian{
+		variant:           "Earthling",
+		variant_Earthling: &v,
+	}
 }
 
 func (u *Union2EarthlingOrMartian) SetEarthling(v Earthling) {
+
 	u.variant = "Earthling"
 	u.variant_Earthling = &v
 
@@ -397,11 +451,11 @@ func (u *Union2EarthlingOrMartian) IsEarthling() bool {
 	return u.variant == "Earthling"
 }
 
-func (u *Union2EarthlingOrMartian) Earthling() Earthling {
+func (u *Union2EarthlingOrMartian) Earthling() *Earthling {
 	if u.variant != "Earthling" {
-		return Earthling{}
+		return nil
 	}
-	return *u.variant_Earthling
+	return u.variant_Earthling
 }
 
 type Union2EmailAddressOrPhoneNumber struct {
@@ -493,7 +547,16 @@ func (u *Union2EmailAddressOrPhoneNumber) UnmarshalJSON(data []byte) error {
 	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
+func Union2EmailAddressOrPhoneNumber__NewPhoneNumber(v PhoneNumber) Union2EmailAddressOrPhoneNumber {
+
+	return Union2EmailAddressOrPhoneNumber{
+		variant:             "PhoneNumber",
+		variant_PhoneNumber: &v,
+	}
+}
+
 func (u *Union2EmailAddressOrPhoneNumber) SetPhoneNumber(v PhoneNumber) {
+
 	u.variant = "PhoneNumber"
 	u.variant_PhoneNumber = &v
 
@@ -505,14 +568,23 @@ func (u *Union2EmailAddressOrPhoneNumber) IsPhoneNumber() bool {
 	return u.variant == "PhoneNumber"
 }
 
-func (u *Union2EmailAddressOrPhoneNumber) PhoneNumber() PhoneNumber {
+func (u *Union2EmailAddressOrPhoneNumber) PhoneNumber() *PhoneNumber {
 	if u.variant != "PhoneNumber" {
-		return PhoneNumber{}
+		return nil
 	}
-	return *u.variant_PhoneNumber
+	return u.variant_PhoneNumber
+}
+
+func Union2EmailAddressOrPhoneNumber__NewEmailAddress(v EmailAddress) Union2EmailAddressOrPhoneNumber {
+
+	return Union2EmailAddressOrPhoneNumber{
+		variant:              "EmailAddress",
+		variant_EmailAddress: &v,
+	}
 }
 
 func (u *Union2EmailAddressOrPhoneNumber) SetEmailAddress(v EmailAddress) {
+
 	u.variant = "EmailAddress"
 	u.variant_EmailAddress = &v
 
@@ -524,11 +596,11 @@ func (u *Union2EmailAddressOrPhoneNumber) IsEmailAddress() bool {
 	return u.variant == "EmailAddress"
 }
 
-func (u *Union2EmailAddressOrPhoneNumber) EmailAddress() EmailAddress {
+func (u *Union2EmailAddressOrPhoneNumber) EmailAddress() *EmailAddress {
 	if u.variant != "EmailAddress" {
-		return EmailAddress{}
+		return nil
 	}
-	return *u.variant_EmailAddress
+	return u.variant_EmailAddress
 }
 
 type Union2EventOrResume struct {
@@ -620,7 +692,16 @@ func (u *Union2EventOrResume) UnmarshalJSON(data []byte) error {
 	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
+func Union2EventOrResume__NewResume(v Resume) Union2EventOrResume {
+
+	return Union2EventOrResume{
+		variant:        "Resume",
+		variant_Resume: &v,
+	}
+}
+
 func (u *Union2EventOrResume) SetResume(v Resume) {
+
 	u.variant = "Resume"
 	u.variant_Resume = &v
 
@@ -632,14 +713,23 @@ func (u *Union2EventOrResume) IsResume() bool {
 	return u.variant == "Resume"
 }
 
-func (u *Union2EventOrResume) Resume() Resume {
+func (u *Union2EventOrResume) Resume() *Resume {
 	if u.variant != "Resume" {
-		return Resume{}
+		return nil
 	}
-	return *u.variant_Resume
+	return u.variant_Resume
+}
+
+func Union2EventOrResume__NewEvent(v Event) Union2EventOrResume {
+
+	return Union2EventOrResume{
+		variant:       "Event",
+		variant_Event: &v,
+	}
 }
 
 func (u *Union2EventOrResume) SetEvent(v Event) {
+
 	u.variant = "Event"
 	u.variant_Event = &v
 
@@ -651,11 +741,11 @@ func (u *Union2EventOrResume) IsEvent() bool {
 	return u.variant == "Event"
 }
 
-func (u *Union2EventOrResume) Event() Event {
+func (u *Union2EventOrResume) Event() *Event {
 	if u.variant != "Event" {
-		return Event{}
+		return nil
 	}
-	return *u.variant_Event
+	return u.variant_Event
 }
 
 type Union2FloatOrInt struct {
@@ -672,11 +762,11 @@ func (u *Union2FloatOrInt) Decode(holder *cffi.CFFIValueUnionVariant) {
 	switch variantName {
 	case "int":
 		u.variant = "Int"
-		value := *baml.Decode(valueHolder).(*int64)
+		value := baml.Decode(valueHolder).(int64)
 		u.variant_Int = &value
 	case "float":
 		u.variant = "Float"
-		value := *baml.Decode(valueHolder).(*float64)
+		value := baml.Decode(valueHolder).(float64)
 		u.variant_Float = &value
 
 	default:
@@ -747,7 +837,16 @@ func (u *Union2FloatOrInt) UnmarshalJSON(data []byte) error {
 	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
+func Union2FloatOrInt__NewInt(v int64) Union2FloatOrInt {
+
+	return Union2FloatOrInt{
+		variant:     "Int",
+		variant_Int: &v,
+	}
+}
+
 func (u *Union2FloatOrInt) SetInt(v int64) {
+
 	u.variant = "Int"
 	u.variant_Int = &v
 
@@ -759,14 +858,23 @@ func (u *Union2FloatOrInt) IsInt() bool {
 	return u.variant == "Int"
 }
 
-func (u *Union2FloatOrInt) Int() int64 {
+func (u *Union2FloatOrInt) Int() *int64 {
 	if u.variant != "Int" {
-		return 0
+		return nil
 	}
-	return *u.variant_Int
+	return u.variant_Int
+}
+
+func Union2FloatOrInt__NewFloat(v float64) Union2FloatOrInt {
+
+	return Union2FloatOrInt{
+		variant:       "Float",
+		variant_Float: &v,
+	}
 }
 
 func (u *Union2FloatOrInt) SetFloat(v float64) {
+
 	u.variant = "Float"
 	u.variant_Float = &v
 
@@ -778,11 +886,11 @@ func (u *Union2FloatOrInt) IsFloat() bool {
 	return u.variant == "Float"
 }
 
-func (u *Union2FloatOrInt) Float() float64 {
+func (u *Union2FloatOrInt) Float() *float64 {
 	if u.variant != "Float" {
-		return 0.0
+		return nil
 	}
-	return *u.variant_Float
+	return u.variant_Float
 }
 
 type Union2IntOrString struct {
@@ -799,11 +907,11 @@ func (u *Union2IntOrString) Decode(holder *cffi.CFFIValueUnionVariant) {
 	switch variantName {
 	case "string":
 		u.variant = "String"
-		value := *baml.Decode(valueHolder).(*string)
+		value := baml.Decode(valueHolder).(string)
 		u.variant_String = &value
 	case "int":
 		u.variant = "Int"
-		value := *baml.Decode(valueHolder).(*int64)
+		value := baml.Decode(valueHolder).(int64)
 		u.variant_Int = &value
 
 	default:
@@ -874,7 +982,16 @@ func (u *Union2IntOrString) UnmarshalJSON(data []byte) error {
 	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
+func Union2IntOrString__NewString(v string) Union2IntOrString {
+
+	return Union2IntOrString{
+		variant:        "String",
+		variant_String: &v,
+	}
+}
+
 func (u *Union2IntOrString) SetString(v string) {
+
 	u.variant = "String"
 	u.variant_String = &v
 
@@ -886,14 +1003,23 @@ func (u *Union2IntOrString) IsString() bool {
 	return u.variant == "String"
 }
 
-func (u *Union2IntOrString) String() string {
+func (u *Union2IntOrString) String() *string {
 	if u.variant != "String" {
-		return ""
+		return nil
 	}
-	return *u.variant_String
+	return u.variant_String
+}
+
+func Union2IntOrString__NewInt(v int64) Union2IntOrString {
+
+	return Union2IntOrString{
+		variant:     "Int",
+		variant_Int: &v,
+	}
 }
 
 func (u *Union2IntOrString) SetInt(v int64) {
+
 	u.variant = "Int"
 	u.variant_Int = &v
 
@@ -905,11 +1031,11 @@ func (u *Union2IntOrString) IsInt() bool {
 	return u.variant == "Int"
 }
 
-func (u *Union2IntOrString) Int() int64 {
+func (u *Union2IntOrString) Int() *int64 {
 	if u.variant != "Int" {
-		return 0
+		return nil
 	}
-	return *u.variant_Int
+	return u.variant_Int
 }
 
 type Union2JsonTemplateOrSimpleTag struct {
@@ -930,7 +1056,7 @@ func (u *Union2JsonTemplateOrSimpleTag) Decode(holder *cffi.CFFIValueUnionVarian
 		u.variant_SimpleTag = &value
 	case "JsonTemplate":
 		u.variant = "JsonTemplate"
-		value := *baml.Decode(valueHolder).(*JsonTemplate)
+		value := baml.Decode(valueHolder).(JsonTemplate)
 		u.variant_JsonTemplate = &value
 
 	default:
@@ -1001,7 +1127,16 @@ func (u *Union2JsonTemplateOrSimpleTag) UnmarshalJSON(data []byte) error {
 	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
+func Union2JsonTemplateOrSimpleTag__NewSimpleTag(v SimpleTag) Union2JsonTemplateOrSimpleTag {
+
+	return Union2JsonTemplateOrSimpleTag{
+		variant:           "SimpleTag",
+		variant_SimpleTag: &v,
+	}
+}
+
 func (u *Union2JsonTemplateOrSimpleTag) SetSimpleTag(v SimpleTag) {
+
 	u.variant = "SimpleTag"
 	u.variant_SimpleTag = &v
 
@@ -1013,14 +1148,23 @@ func (u *Union2JsonTemplateOrSimpleTag) IsSimpleTag() bool {
 	return u.variant == "SimpleTag"
 }
 
-func (u *Union2JsonTemplateOrSimpleTag) SimpleTag() SimpleTag {
+func (u *Union2JsonTemplateOrSimpleTag) SimpleTag() *SimpleTag {
 	if u.variant != "SimpleTag" {
-		return SimpleTag{}
+		return nil
 	}
-	return *u.variant_SimpleTag
+	return u.variant_SimpleTag
+}
+
+func Union2JsonTemplateOrSimpleTag__NewJsonTemplate(v JsonTemplate) Union2JsonTemplateOrSimpleTag {
+
+	return Union2JsonTemplateOrSimpleTag{
+		variant:              "JsonTemplate",
+		variant_JsonTemplate: &v,
+	}
 }
 
 func (u *Union2JsonTemplateOrSimpleTag) SetJsonTemplate(v JsonTemplate) {
+
 	u.variant = "JsonTemplate"
 	u.variant_JsonTemplate = &v
 
@@ -1032,11 +1176,11 @@ func (u *Union2JsonTemplateOrSimpleTag) IsJsonTemplate() bool {
 	return u.variant == "JsonTemplate"
 }
 
-func (u *Union2JsonTemplateOrSimpleTag) JsonTemplate() JsonTemplate {
+func (u *Union2JsonTemplateOrSimpleTag) JsonTemplate() *JsonTemplate {
 	if u.variant != "JsonTemplate" {
 		return nil
 	}
-	return *u.variant_JsonTemplate
+	return u.variant_JsonTemplate
 }
 
 type Union2KbarisaOrKox_burger struct {
@@ -1053,11 +1197,11 @@ func (u *Union2KbarisaOrKox_burger) Decode(holder *cffi.CFFIValueUnionVariant) {
 	switch variantName {
 	case "string_barisa":
 		u.variant = "Kbarisa"
-		value := *baml.Decode(valueHolder).(*string)
+		value := baml.Decode(valueHolder).(string)
 		u.variant_Kbarisa = &value
 	case "string_ox_burger":
 		u.variant = "Kox_burger"
-		value := *baml.Decode(valueHolder).(*string)
+		value := baml.Decode(valueHolder).(string)
 		u.variant_Kox_burger = &value
 
 	default:
@@ -1128,7 +1272,20 @@ func (u *Union2KbarisaOrKox_burger) UnmarshalJSON(data []byte) error {
 	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
-func (u *Union2KbarisaOrKox_burger) SetKbarisa(v string) {
+func Union2KbarisaOrKox_burger__NewKbarisa() Union2KbarisaOrKox_burger {
+
+	var v string = "barisa"
+
+	return Union2KbarisaOrKox_burger{
+		variant:         "Kbarisa",
+		variant_Kbarisa: &v,
+	}
+}
+
+func (u *Union2KbarisaOrKox_burger) SetKbarisa() {
+
+	var v string = "barisa"
+
 	u.variant = "Kbarisa"
 	u.variant_Kbarisa = &v
 
@@ -1140,14 +1297,27 @@ func (u *Union2KbarisaOrKox_burger) IsKbarisa() bool {
 	return u.variant == "Kbarisa"
 }
 
-func (u *Union2KbarisaOrKox_burger) Kbarisa() string {
+func (u *Union2KbarisaOrKox_burger) Kbarisa() *string {
 	if u.variant != "Kbarisa" {
-		return "barisa"
+		return nil
 	}
-	return *u.variant_Kbarisa
+	return u.variant_Kbarisa
 }
 
-func (u *Union2KbarisaOrKox_burger) SetKox_burger(v string) {
+func Union2KbarisaOrKox_burger__NewKox_burger() Union2KbarisaOrKox_burger {
+
+	var v string = "ox_burger"
+
+	return Union2KbarisaOrKox_burger{
+		variant:            "Kox_burger",
+		variant_Kox_burger: &v,
+	}
+}
+
+func (u *Union2KbarisaOrKox_burger) SetKox_burger() {
+
+	var v string = "ox_burger"
+
 	u.variant = "Kox_burger"
 	u.variant_Kox_burger = &v
 
@@ -1159,11 +1329,11 @@ func (u *Union2KbarisaOrKox_burger) IsKox_burger() bool {
 	return u.variant == "Kox_burger"
 }
 
-func (u *Union2KbarisaOrKox_burger) Kox_burger() string {
+func (u *Union2KbarisaOrKox_burger) Kox_burger() *string {
 	if u.variant != "Kox_burger" {
-		return "ox_burger"
+		return nil
 	}
-	return *u.variant_Kox_burger
+	return u.variant_Kox_burger
 }
 
 type Union2KbreakfastOrKdinner struct {
@@ -1180,11 +1350,11 @@ func (u *Union2KbreakfastOrKdinner) Decode(holder *cffi.CFFIValueUnionVariant) {
 	switch variantName {
 	case "string_breakfast":
 		u.variant = "Kbreakfast"
-		value := *baml.Decode(valueHolder).(*string)
+		value := baml.Decode(valueHolder).(string)
 		u.variant_Kbreakfast = &value
 	case "string_dinner":
 		u.variant = "Kdinner"
-		value := *baml.Decode(valueHolder).(*string)
+		value := baml.Decode(valueHolder).(string)
 		u.variant_Kdinner = &value
 
 	default:
@@ -1255,7 +1425,20 @@ func (u *Union2KbreakfastOrKdinner) UnmarshalJSON(data []byte) error {
 	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
-func (u *Union2KbreakfastOrKdinner) SetKbreakfast(v string) {
+func Union2KbreakfastOrKdinner__NewKbreakfast() Union2KbreakfastOrKdinner {
+
+	var v string = "breakfast"
+
+	return Union2KbreakfastOrKdinner{
+		variant:            "Kbreakfast",
+		variant_Kbreakfast: &v,
+	}
+}
+
+func (u *Union2KbreakfastOrKdinner) SetKbreakfast() {
+
+	var v string = "breakfast"
+
 	u.variant = "Kbreakfast"
 	u.variant_Kbreakfast = &v
 
@@ -1267,14 +1450,27 @@ func (u *Union2KbreakfastOrKdinner) IsKbreakfast() bool {
 	return u.variant == "Kbreakfast"
 }
 
-func (u *Union2KbreakfastOrKdinner) Kbreakfast() string {
+func (u *Union2KbreakfastOrKdinner) Kbreakfast() *string {
 	if u.variant != "Kbreakfast" {
-		return "breakfast"
+		return nil
 	}
-	return *u.variant_Kbreakfast
+	return u.variant_Kbreakfast
 }
 
-func (u *Union2KbreakfastOrKdinner) SetKdinner(v string) {
+func Union2KbreakfastOrKdinner__NewKdinner() Union2KbreakfastOrKdinner {
+
+	var v string = "dinner"
+
+	return Union2KbreakfastOrKdinner{
+		variant:         "Kdinner",
+		variant_Kdinner: &v,
+	}
+}
+
+func (u *Union2KbreakfastOrKdinner) SetKdinner() {
+
+	var v string = "dinner"
+
 	u.variant = "Kdinner"
 	u.variant_Kdinner = &v
 
@@ -1286,11 +1482,11 @@ func (u *Union2KbreakfastOrKdinner) IsKdinner() bool {
 	return u.variant == "Kdinner"
 }
 
-func (u *Union2KbreakfastOrKdinner) Kdinner() string {
+func (u *Union2KbreakfastOrKdinner) Kdinner() *string {
 	if u.variant != "Kdinner" {
-		return "dinner"
+		return nil
 	}
-	return *u.variant_Kdinner
+	return u.variant_Kdinner
 }
 
 type Union2KcuriosityOrKpersonal_finance struct {
@@ -1307,11 +1503,11 @@ func (u *Union2KcuriosityOrKpersonal_finance) Decode(holder *cffi.CFFIValueUnion
 	switch variantName {
 	case "string_curiosity":
 		u.variant = "Kcuriosity"
-		value := *baml.Decode(valueHolder).(*string)
+		value := baml.Decode(valueHolder).(string)
 		u.variant_Kcuriosity = &value
 	case "string_personal_finance":
 		u.variant = "Kpersonal_finance"
-		value := *baml.Decode(valueHolder).(*string)
+		value := baml.Decode(valueHolder).(string)
 		u.variant_Kpersonal_finance = &value
 
 	default:
@@ -1382,7 +1578,20 @@ func (u *Union2KcuriosityOrKpersonal_finance) UnmarshalJSON(data []byte) error {
 	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
-func (u *Union2KcuriosityOrKpersonal_finance) SetKcuriosity(v string) {
+func Union2KcuriosityOrKpersonal_finance__NewKcuriosity() Union2KcuriosityOrKpersonal_finance {
+
+	var v string = "curiosity"
+
+	return Union2KcuriosityOrKpersonal_finance{
+		variant:            "Kcuriosity",
+		variant_Kcuriosity: &v,
+	}
+}
+
+func (u *Union2KcuriosityOrKpersonal_finance) SetKcuriosity() {
+
+	var v string = "curiosity"
+
 	u.variant = "Kcuriosity"
 	u.variant_Kcuriosity = &v
 
@@ -1394,14 +1603,27 @@ func (u *Union2KcuriosityOrKpersonal_finance) IsKcuriosity() bool {
 	return u.variant == "Kcuriosity"
 }
 
-func (u *Union2KcuriosityOrKpersonal_finance) Kcuriosity() string {
+func (u *Union2KcuriosityOrKpersonal_finance) Kcuriosity() *string {
 	if u.variant != "Kcuriosity" {
-		return "curiosity"
+		return nil
 	}
-	return *u.variant_Kcuriosity
+	return u.variant_Kcuriosity
 }
 
-func (u *Union2KcuriosityOrKpersonal_finance) SetKpersonal_finance(v string) {
+func Union2KcuriosityOrKpersonal_finance__NewKpersonal_finance() Union2KcuriosityOrKpersonal_finance {
+
+	var v string = "personal_finance"
+
+	return Union2KcuriosityOrKpersonal_finance{
+		variant:                   "Kpersonal_finance",
+		variant_Kpersonal_finance: &v,
+	}
+}
+
+func (u *Union2KcuriosityOrKpersonal_finance) SetKpersonal_finance() {
+
+	var v string = "personal_finance"
+
 	u.variant = "Kpersonal_finance"
 	u.variant_Kpersonal_finance = &v
 
@@ -1413,11 +1635,11 @@ func (u *Union2KcuriosityOrKpersonal_finance) IsKpersonal_finance() bool {
 	return u.variant == "Kpersonal_finance"
 }
 
-func (u *Union2KcuriosityOrKpersonal_finance) Kpersonal_finance() string {
+func (u *Union2KcuriosityOrKpersonal_finance) Kpersonal_finance() *string {
 	if u.variant != "Kpersonal_finance" {
-		return "personal_finance"
+		return nil
 	}
-	return *u.variant_Kpersonal_finance
+	return u.variant_Kpersonal_finance
 }
 
 type Union2ListBoolOrListInt struct {
@@ -1435,13 +1657,13 @@ func (u *Union2ListBoolOrListInt) Decode(holder *cffi.CFFIValueUnionVariant) {
 	case "List__bool":
 		u.variant = "ListBool"
 		value := baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) bool {
-			return *baml.Decode(inner).(*bool)
+			return baml.Decode(inner).(bool)
 		})
 		u.variant_ListBool = &value
 	case "List__int":
 		u.variant = "ListInt"
 		value := baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) int64 {
-			return *baml.Decode(inner).(*int64)
+			return baml.Decode(inner).(int64)
 		})
 		u.variant_ListInt = &value
 
@@ -1513,7 +1735,16 @@ func (u *Union2ListBoolOrListInt) UnmarshalJSON(data []byte) error {
 	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
+func Union2ListBoolOrListInt__NewListBool(v []bool) Union2ListBoolOrListInt {
+
+	return Union2ListBoolOrListInt{
+		variant:          "ListBool",
+		variant_ListBool: &v,
+	}
+}
+
 func (u *Union2ListBoolOrListInt) SetListBool(v []bool) {
+
 	u.variant = "ListBool"
 	u.variant_ListBool = &v
 
@@ -1525,14 +1756,23 @@ func (u *Union2ListBoolOrListInt) IsListBool() bool {
 	return u.variant == "ListBool"
 }
 
-func (u *Union2ListBoolOrListInt) ListBool() []bool {
+func (u *Union2ListBoolOrListInt) ListBool() *[]bool {
 	if u.variant != "ListBool" {
 		return nil
 	}
-	return *u.variant_ListBool
+	return u.variant_ListBool
+}
+
+func Union2ListBoolOrListInt__NewListInt(v []int64) Union2ListBoolOrListInt {
+
+	return Union2ListBoolOrListInt{
+		variant:         "ListInt",
+		variant_ListInt: &v,
+	}
 }
 
 func (u *Union2ListBoolOrListInt) SetListInt(v []int64) {
+
 	u.variant = "ListInt"
 	u.variant_ListInt = &v
 
@@ -1544,11 +1784,11 @@ func (u *Union2ListBoolOrListInt) IsListInt() bool {
 	return u.variant == "ListInt"
 }
 
-func (u *Union2ListBoolOrListInt) ListInt() []int64 {
+func (u *Union2ListBoolOrListInt) ListInt() *[]int64 {
 	if u.variant != "ListInt" {
 		return nil
 	}
-	return *u.variant_ListInt
+	return u.variant_ListInt
 }
 
 type Union2ListNestedOrString struct {
@@ -1565,7 +1805,7 @@ func (u *Union2ListNestedOrString) Decode(holder *cffi.CFFIValueUnionVariant) {
 	switch variantName {
 	case "string":
 		u.variant = "String"
-		value := *baml.Decode(valueHolder).(*string)
+		value := baml.Decode(valueHolder).(string)
 		u.variant_String = &value
 	case "List__Nested":
 		u.variant = "ListNested"
@@ -1642,7 +1882,16 @@ func (u *Union2ListNestedOrString) UnmarshalJSON(data []byte) error {
 	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
+func Union2ListNestedOrString__NewString(v string) Union2ListNestedOrString {
+
+	return Union2ListNestedOrString{
+		variant:        "String",
+		variant_String: &v,
+	}
+}
+
 func (u *Union2ListNestedOrString) SetString(v string) {
+
 	u.variant = "String"
 	u.variant_String = &v
 
@@ -1654,14 +1903,23 @@ func (u *Union2ListNestedOrString) IsString() bool {
 	return u.variant == "String"
 }
 
-func (u *Union2ListNestedOrString) String() string {
+func (u *Union2ListNestedOrString) String() *string {
 	if u.variant != "String" {
-		return ""
+		return nil
 	}
-	return *u.variant_String
+	return u.variant_String
+}
+
+func Union2ListNestedOrString__NewListNested(v []Nested) Union2ListNestedOrString {
+
+	return Union2ListNestedOrString{
+		variant:            "ListNested",
+		variant_ListNested: &v,
+	}
 }
 
 func (u *Union2ListNestedOrString) SetListNested(v []Nested) {
+
 	u.variant = "ListNested"
 	u.variant_ListNested = &v
 
@@ -1673,11 +1931,11 @@ func (u *Union2ListNestedOrString) IsListNested() bool {
 	return u.variant == "ListNested"
 }
 
-func (u *Union2ListNestedOrString) ListNested() []Nested {
+func (u *Union2ListNestedOrString) ListNested() *[]Nested {
 	if u.variant != "ListNested" {
 		return nil
 	}
-	return *u.variant_ListNested
+	return u.variant_ListNested
 }
 
 type Union2LiteralClassOneOrLiteralClassTwo struct {
@@ -1769,7 +2027,16 @@ func (u *Union2LiteralClassOneOrLiteralClassTwo) UnmarshalJSON(data []byte) erro
 	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
+func Union2LiteralClassOneOrLiteralClassTwo__NewLiteralClassOne(v LiteralClassOne) Union2LiteralClassOneOrLiteralClassTwo {
+
+	return Union2LiteralClassOneOrLiteralClassTwo{
+		variant:                 "LiteralClassOne",
+		variant_LiteralClassOne: &v,
+	}
+}
+
 func (u *Union2LiteralClassOneOrLiteralClassTwo) SetLiteralClassOne(v LiteralClassOne) {
+
 	u.variant = "LiteralClassOne"
 	u.variant_LiteralClassOne = &v
 
@@ -1781,14 +2048,23 @@ func (u *Union2LiteralClassOneOrLiteralClassTwo) IsLiteralClassOne() bool {
 	return u.variant == "LiteralClassOne"
 }
 
-func (u *Union2LiteralClassOneOrLiteralClassTwo) LiteralClassOne() LiteralClassOne {
+func (u *Union2LiteralClassOneOrLiteralClassTwo) LiteralClassOne() *LiteralClassOne {
 	if u.variant != "LiteralClassOne" {
-		return LiteralClassOne{}
+		return nil
 	}
-	return *u.variant_LiteralClassOne
+	return u.variant_LiteralClassOne
+}
+
+func Union2LiteralClassOneOrLiteralClassTwo__NewLiteralClassTwo(v LiteralClassTwo) Union2LiteralClassOneOrLiteralClassTwo {
+
+	return Union2LiteralClassOneOrLiteralClassTwo{
+		variant:                 "LiteralClassTwo",
+		variant_LiteralClassTwo: &v,
+	}
 }
 
 func (u *Union2LiteralClassOneOrLiteralClassTwo) SetLiteralClassTwo(v LiteralClassTwo) {
+
 	u.variant = "LiteralClassTwo"
 	u.variant_LiteralClassTwo = &v
 
@@ -1800,11 +2076,11 @@ func (u *Union2LiteralClassOneOrLiteralClassTwo) IsLiteralClassTwo() bool {
 	return u.variant == "LiteralClassTwo"
 }
 
-func (u *Union2LiteralClassOneOrLiteralClassTwo) LiteralClassTwo() LiteralClassTwo {
+func (u *Union2LiteralClassOneOrLiteralClassTwo) LiteralClassTwo() *LiteralClassTwo {
 	if u.variant != "LiteralClassTwo" {
-		return LiteralClassTwo{}
+		return nil
 	}
-	return *u.variant_LiteralClassTwo
+	return u.variant_LiteralClassTwo
 }
 
 type Union2MapStringKeyRecursiveUnionValueOrString struct {
@@ -1821,12 +2097,12 @@ func (u *Union2MapStringKeyRecursiveUnionValueOrString) Decode(holder *cffi.CFFI
 	switch variantName {
 	case "string":
 		u.variant = "String"
-		value := *baml.Decode(valueHolder).(*string)
+		value := baml.Decode(valueHolder).(string)
 		u.variant_String = &value
 	case "Map__string_RecursiveUnion":
 		u.variant = "MapStringKeyRecursiveUnionValue"
 		value := baml.DecodeMap(valueHolder, func(inner *cffi.CFFIValueHolder) RecursiveUnion {
-			return *baml.Decode(inner).(*RecursiveUnion)
+			return baml.Decode(inner).(RecursiveUnion)
 		})
 		u.variant_MapStringKeyRecursiveUnionValue = &value
 
@@ -1898,7 +2174,16 @@ func (u *Union2MapStringKeyRecursiveUnionValueOrString) UnmarshalJSON(data []byt
 	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
+func Union2MapStringKeyRecursiveUnionValueOrString__NewString(v string) Union2MapStringKeyRecursiveUnionValueOrString {
+
+	return Union2MapStringKeyRecursiveUnionValueOrString{
+		variant:        "String",
+		variant_String: &v,
+	}
+}
+
 func (u *Union2MapStringKeyRecursiveUnionValueOrString) SetString(v string) {
+
 	u.variant = "String"
 	u.variant_String = &v
 
@@ -1910,14 +2195,23 @@ func (u *Union2MapStringKeyRecursiveUnionValueOrString) IsString() bool {
 	return u.variant == "String"
 }
 
-func (u *Union2MapStringKeyRecursiveUnionValueOrString) String() string {
+func (u *Union2MapStringKeyRecursiveUnionValueOrString) String() *string {
 	if u.variant != "String" {
-		return ""
+		return nil
 	}
-	return *u.variant_String
+	return u.variant_String
+}
+
+func Union2MapStringKeyRecursiveUnionValueOrString__NewMapStringKeyRecursiveUnionValue(v map[string]RecursiveUnion) Union2MapStringKeyRecursiveUnionValueOrString {
+
+	return Union2MapStringKeyRecursiveUnionValueOrString{
+		variant:                                 "MapStringKeyRecursiveUnionValue",
+		variant_MapStringKeyRecursiveUnionValue: &v,
+	}
 }
 
 func (u *Union2MapStringKeyRecursiveUnionValueOrString) SetMapStringKeyRecursiveUnionValue(v map[string]RecursiveUnion) {
+
 	u.variant = "MapStringKeyRecursiveUnionValue"
 	u.variant_MapStringKeyRecursiveUnionValue = &v
 
@@ -1929,11 +2223,11 @@ func (u *Union2MapStringKeyRecursiveUnionValueOrString) IsMapStringKeyRecursiveU
 	return u.variant == "MapStringKeyRecursiveUnionValue"
 }
 
-func (u *Union2MapStringKeyRecursiveUnionValueOrString) MapStringKeyRecursiveUnionValue() map[string]RecursiveUnion {
+func (u *Union2MapStringKeyRecursiveUnionValueOrString) MapStringKeyRecursiveUnionValue() *map[string]RecursiveUnion {
 	if u.variant != "MapStringKeyRecursiveUnionValue" {
 		return nil
 	}
-	return *u.variant_MapStringKeyRecursiveUnionValue
+	return u.variant_MapStringKeyRecursiveUnionValue
 }
 
 type Union2NestedOrString struct {
@@ -1954,7 +2248,7 @@ func (u *Union2NestedOrString) Decode(holder *cffi.CFFIValueUnionVariant) {
 		u.variant_Nested = &value
 	case "string":
 		u.variant = "String"
-		value := *baml.Decode(valueHolder).(*string)
+		value := baml.Decode(valueHolder).(string)
 		u.variant_String = &value
 
 	default:
@@ -2025,7 +2319,16 @@ func (u *Union2NestedOrString) UnmarshalJSON(data []byte) error {
 	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
+func Union2NestedOrString__NewNested(v Nested) Union2NestedOrString {
+
+	return Union2NestedOrString{
+		variant:        "Nested",
+		variant_Nested: &v,
+	}
+}
+
 func (u *Union2NestedOrString) SetNested(v Nested) {
+
 	u.variant = "Nested"
 	u.variant_Nested = &v
 
@@ -2037,14 +2340,23 @@ func (u *Union2NestedOrString) IsNested() bool {
 	return u.variant == "Nested"
 }
 
-func (u *Union2NestedOrString) Nested() Nested {
+func (u *Union2NestedOrString) Nested() *Nested {
 	if u.variant != "Nested" {
-		return Nested{}
+		return nil
 	}
-	return *u.variant_Nested
+	return u.variant_Nested
+}
+
+func Union2NestedOrString__NewString(v string) Union2NestedOrString {
+
+	return Union2NestedOrString{
+		variant:        "String",
+		variant_String: &v,
+	}
 }
 
 func (u *Union2NestedOrString) SetString(v string) {
+
 	u.variant = "String"
 	u.variant_String = &v
 
@@ -2056,11 +2368,11 @@ func (u *Union2NestedOrString) IsString() bool {
 	return u.variant == "String"
 }
 
-func (u *Union2NestedOrString) String() string {
+func (u *Union2NestedOrString) String() *string {
 	if u.variant != "String" {
-		return ""
+		return nil
 	}
-	return *u.variant_String
+	return u.variant_String
 }
 
 type Union2OriginalAOrOriginalB struct {
@@ -2152,7 +2464,16 @@ func (u *Union2OriginalAOrOriginalB) UnmarshalJSON(data []byte) error {
 	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
+func Union2OriginalAOrOriginalB__NewOriginalA(v OriginalA) Union2OriginalAOrOriginalB {
+
+	return Union2OriginalAOrOriginalB{
+		variant:           "OriginalA",
+		variant_OriginalA: &v,
+	}
+}
+
 func (u *Union2OriginalAOrOriginalB) SetOriginalA(v OriginalA) {
+
 	u.variant = "OriginalA"
 	u.variant_OriginalA = &v
 
@@ -2164,14 +2485,23 @@ func (u *Union2OriginalAOrOriginalB) IsOriginalA() bool {
 	return u.variant == "OriginalA"
 }
 
-func (u *Union2OriginalAOrOriginalB) OriginalA() OriginalA {
+func (u *Union2OriginalAOrOriginalB) OriginalA() *OriginalA {
 	if u.variant != "OriginalA" {
-		return OriginalA{}
+		return nil
 	}
-	return *u.variant_OriginalA
+	return u.variant_OriginalA
+}
+
+func Union2OriginalAOrOriginalB__NewOriginalB(v OriginalB) Union2OriginalAOrOriginalB {
+
+	return Union2OriginalAOrOriginalB{
+		variant:           "OriginalB",
+		variant_OriginalB: &v,
+	}
 }
 
 func (u *Union2OriginalAOrOriginalB) SetOriginalB(v OriginalB) {
+
 	u.variant = "OriginalB"
 	u.variant_OriginalB = &v
 
@@ -2183,11 +2513,11 @@ func (u *Union2OriginalAOrOriginalB) IsOriginalB() bool {
 	return u.variant == "OriginalB"
 }
 
-func (u *Union2OriginalAOrOriginalB) OriginalB() OriginalB {
+func (u *Union2OriginalAOrOriginalB) OriginalB() *OriginalB {
 	if u.variant != "OriginalB" {
-		return OriginalB{}
+		return nil
 	}
-	return *u.variant_OriginalB
+	return u.variant_OriginalB
 }
 
 type Union2StringOrTag struct {
@@ -2208,7 +2538,7 @@ func (u *Union2StringOrTag) Decode(holder *cffi.CFFIValueUnionVariant) {
 		u.variant_Tag = &value
 	case "string":
 		u.variant = "String"
-		value := *baml.Decode(valueHolder).(*string)
+		value := baml.Decode(valueHolder).(string)
 		u.variant_String = &value
 
 	default:
@@ -2279,7 +2609,16 @@ func (u *Union2StringOrTag) UnmarshalJSON(data []byte) error {
 	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
+func Union2StringOrTag__NewTag(v types.Tag) Union2StringOrTag {
+
+	return Union2StringOrTag{
+		variant:     "Tag",
+		variant_Tag: &v,
+	}
+}
+
 func (u *Union2StringOrTag) SetTag(v types.Tag) {
+
 	u.variant = "Tag"
 	u.variant_Tag = &v
 
@@ -2291,14 +2630,23 @@ func (u *Union2StringOrTag) IsTag() bool {
 	return u.variant == "Tag"
 }
 
-func (u *Union2StringOrTag) Tag() types.Tag {
+func (u *Union2StringOrTag) Tag() *types.Tag {
 	if u.variant != "Tag" {
-		return types.Tag("")
+		return nil
 	}
-	return *u.variant_Tag
+	return u.variant_Tag
+}
+
+func Union2StringOrTag__NewString(v string) Union2StringOrTag {
+
+	return Union2StringOrTag{
+		variant:        "String",
+		variant_String: &v,
+	}
 }
 
 func (u *Union2StringOrTag) SetString(v string) {
+
 	u.variant = "String"
 	u.variant_String = &v
 
@@ -2310,11 +2658,11 @@ func (u *Union2StringOrTag) IsString() bool {
 	return u.variant == "String"
 }
 
-func (u *Union2StringOrTag) String() string {
+func (u *Union2StringOrTag) String() *string {
 	if u.variant != "String" {
-		return ""
+		return nil
 	}
-	return *u.variant_String
+	return u.variant_String
 }
 
 type Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject struct {
@@ -2426,7 +2774,16 @@ func (u *Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject) UnmarshalJSON(d
 	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
+func Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject__NewMemoryObject(v MemoryObject) Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject {
+
+	return Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject{
+		variant:              "MemoryObject",
+		variant_MemoryObject: &v,
+	}
+}
+
 func (u *Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject) SetMemoryObject(v MemoryObject) {
+
 	u.variant = "MemoryObject"
 	u.variant_MemoryObject = &v
 
@@ -2440,14 +2797,23 @@ func (u *Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject) IsMemoryObject(
 	return u.variant == "MemoryObject"
 }
 
-func (u *Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject) MemoryObject() MemoryObject {
+func (u *Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject) MemoryObject() *MemoryObject {
 	if u.variant != "MemoryObject" {
-		return MemoryObject{}
+		return nil
 	}
-	return *u.variant_MemoryObject
+	return u.variant_MemoryObject
+}
+
+func Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject__NewComplexMemoryObject(v ComplexMemoryObject) Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject {
+
+	return Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject{
+		variant:                     "ComplexMemoryObject",
+		variant_ComplexMemoryObject: &v,
+	}
 }
 
 func (u *Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject) SetComplexMemoryObject(v ComplexMemoryObject) {
+
 	u.variant = "ComplexMemoryObject"
 	u.variant_ComplexMemoryObject = &v
 
@@ -2461,14 +2827,23 @@ func (u *Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject) IsComplexMemory
 	return u.variant == "ComplexMemoryObject"
 }
 
-func (u *Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject) ComplexMemoryObject() ComplexMemoryObject {
+func (u *Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject) ComplexMemoryObject() *ComplexMemoryObject {
 	if u.variant != "ComplexMemoryObject" {
-		return ComplexMemoryObject{}
+		return nil
 	}
-	return *u.variant_ComplexMemoryObject
+	return u.variant_ComplexMemoryObject
+}
+
+func Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject__NewAnotherObject(v AnotherObject) Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject {
+
+	return Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject{
+		variant:               "AnotherObject",
+		variant_AnotherObject: &v,
+	}
 }
 
 func (u *Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject) SetAnotherObject(v AnotherObject) {
+
 	u.variant = "AnotherObject"
 	u.variant_AnotherObject = &v
 
@@ -2482,11 +2857,11 @@ func (u *Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject) IsAnotherObject
 	return u.variant == "AnotherObject"
 }
 
-func (u *Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject) AnotherObject() AnotherObject {
+func (u *Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject) AnotherObject() *AnotherObject {
 	if u.variant != "AnotherObject" {
-		return AnotherObject{}
+		return nil
 	}
-	return *u.variant_AnotherObject
+	return u.variant_AnotherObject
 }
 
 type Union3BookOrderOrFlightConfirmationOrGroceryReceipt struct {
@@ -2598,7 +2973,16 @@ func (u *Union3BookOrderOrFlightConfirmationOrGroceryReceipt) UnmarshalJSON(data
 	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
+func Union3BookOrderOrFlightConfirmationOrGroceryReceipt__NewBookOrder(v BookOrder) Union3BookOrderOrFlightConfirmationOrGroceryReceipt {
+
+	return Union3BookOrderOrFlightConfirmationOrGroceryReceipt{
+		variant:           "BookOrder",
+		variant_BookOrder: &v,
+	}
+}
+
 func (u *Union3BookOrderOrFlightConfirmationOrGroceryReceipt) SetBookOrder(v BookOrder) {
+
 	u.variant = "BookOrder"
 	u.variant_BookOrder = &v
 
@@ -2612,14 +2996,23 @@ func (u *Union3BookOrderOrFlightConfirmationOrGroceryReceipt) IsBookOrder() bool
 	return u.variant == "BookOrder"
 }
 
-func (u *Union3BookOrderOrFlightConfirmationOrGroceryReceipt) BookOrder() BookOrder {
+func (u *Union3BookOrderOrFlightConfirmationOrGroceryReceipt) BookOrder() *BookOrder {
 	if u.variant != "BookOrder" {
-		return BookOrder{}
+		return nil
 	}
-	return *u.variant_BookOrder
+	return u.variant_BookOrder
+}
+
+func Union3BookOrderOrFlightConfirmationOrGroceryReceipt__NewFlightConfirmation(v FlightConfirmation) Union3BookOrderOrFlightConfirmationOrGroceryReceipt {
+
+	return Union3BookOrderOrFlightConfirmationOrGroceryReceipt{
+		variant:                    "FlightConfirmation",
+		variant_FlightConfirmation: &v,
+	}
 }
 
 func (u *Union3BookOrderOrFlightConfirmationOrGroceryReceipt) SetFlightConfirmation(v FlightConfirmation) {
+
 	u.variant = "FlightConfirmation"
 	u.variant_FlightConfirmation = &v
 
@@ -2633,14 +3026,23 @@ func (u *Union3BookOrderOrFlightConfirmationOrGroceryReceipt) IsFlightConfirmati
 	return u.variant == "FlightConfirmation"
 }
 
-func (u *Union3BookOrderOrFlightConfirmationOrGroceryReceipt) FlightConfirmation() FlightConfirmation {
+func (u *Union3BookOrderOrFlightConfirmationOrGroceryReceipt) FlightConfirmation() *FlightConfirmation {
 	if u.variant != "FlightConfirmation" {
-		return FlightConfirmation{}
+		return nil
 	}
-	return *u.variant_FlightConfirmation
+	return u.variant_FlightConfirmation
+}
+
+func Union3BookOrderOrFlightConfirmationOrGroceryReceipt__NewGroceryReceipt(v GroceryReceipt) Union3BookOrderOrFlightConfirmationOrGroceryReceipt {
+
+	return Union3BookOrderOrFlightConfirmationOrGroceryReceipt{
+		variant:                "GroceryReceipt",
+		variant_GroceryReceipt: &v,
+	}
 }
 
 func (u *Union3BookOrderOrFlightConfirmationOrGroceryReceipt) SetGroceryReceipt(v GroceryReceipt) {
+
 	u.variant = "GroceryReceipt"
 	u.variant_GroceryReceipt = &v
 
@@ -2654,11 +3056,11 @@ func (u *Union3BookOrderOrFlightConfirmationOrGroceryReceipt) IsGroceryReceipt()
 	return u.variant == "GroceryReceipt"
 }
 
-func (u *Union3BookOrderOrFlightConfirmationOrGroceryReceipt) GroceryReceipt() GroceryReceipt {
+func (u *Union3BookOrderOrFlightConfirmationOrGroceryReceipt) GroceryReceipt() *GroceryReceipt {
 	if u.variant != "GroceryReceipt" {
-		return GroceryReceipt{}
+		return nil
 	}
-	return *u.variant_GroceryReceipt
+	return u.variant_GroceryReceipt
 }
 
 type Union3BoolKTrueOrIntK1OrKstring_output struct {
@@ -2677,15 +3079,15 @@ func (u *Union3BoolKTrueOrIntK1OrKstring_output) Decode(holder *cffi.CFFIValueUn
 	switch variantName {
 	case "int_1":
 		u.variant = "IntK1"
-		value := *baml.Decode(valueHolder).(*int64)
+		value := baml.Decode(valueHolder).(int64)
 		u.variant_IntK1 = &value
 	case "bool_true":
 		u.variant = "BoolKTrue"
-		value := *baml.Decode(valueHolder).(*bool)
+		value := baml.Decode(valueHolder).(bool)
 		u.variant_BoolKTrue = &value
 	case "string_string_output":
 		u.variant = "Kstring_output"
-		value := *baml.Decode(valueHolder).(*string)
+		value := baml.Decode(valueHolder).(string)
 		u.variant_Kstring_output = &value
 
 	default:
@@ -2770,7 +3172,20 @@ func (u *Union3BoolKTrueOrIntK1OrKstring_output) UnmarshalJSON(data []byte) erro
 	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
-func (u *Union3BoolKTrueOrIntK1OrKstring_output) SetIntK1(v int64) {
+func Union3BoolKTrueOrIntK1OrKstring_output__NewIntK1() Union3BoolKTrueOrIntK1OrKstring_output {
+
+	var v int64 = 1
+
+	return Union3BoolKTrueOrIntK1OrKstring_output{
+		variant:       "IntK1",
+		variant_IntK1: &v,
+	}
+}
+
+func (u *Union3BoolKTrueOrIntK1OrKstring_output) SetIntK1() {
+
+	var v int64 = 1
+
 	u.variant = "IntK1"
 	u.variant_IntK1 = &v
 
@@ -2784,14 +3199,27 @@ func (u *Union3BoolKTrueOrIntK1OrKstring_output) IsIntK1() bool {
 	return u.variant == "IntK1"
 }
 
-func (u *Union3BoolKTrueOrIntK1OrKstring_output) IntK1() int64 {
+func (u *Union3BoolKTrueOrIntK1OrKstring_output) IntK1() *int64 {
 	if u.variant != "IntK1" {
-		return 1
+		return nil
 	}
-	return *u.variant_IntK1
+	return u.variant_IntK1
 }
 
-func (u *Union3BoolKTrueOrIntK1OrKstring_output) SetBoolKTrue(v bool) {
+func Union3BoolKTrueOrIntK1OrKstring_output__NewBoolKTrue() Union3BoolKTrueOrIntK1OrKstring_output {
+
+	var v bool = true
+
+	return Union3BoolKTrueOrIntK1OrKstring_output{
+		variant:           "BoolKTrue",
+		variant_BoolKTrue: &v,
+	}
+}
+
+func (u *Union3BoolKTrueOrIntK1OrKstring_output) SetBoolKTrue() {
+
+	var v bool = true
+
 	u.variant = "BoolKTrue"
 	u.variant_BoolKTrue = &v
 
@@ -2805,14 +3233,27 @@ func (u *Union3BoolKTrueOrIntK1OrKstring_output) IsBoolKTrue() bool {
 	return u.variant == "BoolKTrue"
 }
 
-func (u *Union3BoolKTrueOrIntK1OrKstring_output) BoolKTrue() bool {
+func (u *Union3BoolKTrueOrIntK1OrKstring_output) BoolKTrue() *bool {
 	if u.variant != "BoolKTrue" {
-		return true
+		return nil
 	}
-	return *u.variant_BoolKTrue
+	return u.variant_BoolKTrue
 }
 
-func (u *Union3BoolKTrueOrIntK1OrKstring_output) SetKstring_output(v string) {
+func Union3BoolKTrueOrIntK1OrKstring_output__NewKstring_output() Union3BoolKTrueOrIntK1OrKstring_output {
+
+	var v string = "string output"
+
+	return Union3BoolKTrueOrIntK1OrKstring_output{
+		variant:                "Kstring_output",
+		variant_Kstring_output: &v,
+	}
+}
+
+func (u *Union3BoolKTrueOrIntK1OrKstring_output) SetKstring_output() {
+
+	var v string = "string output"
+
 	u.variant = "Kstring_output"
 	u.variant_Kstring_output = &v
 
@@ -2826,11 +3267,11 @@ func (u *Union3BoolKTrueOrIntK1OrKstring_output) IsKstring_output() bool {
 	return u.variant == "Kstring_output"
 }
 
-func (u *Union3BoolKTrueOrIntK1OrKstring_output) Kstring_output() string {
+func (u *Union3BoolKTrueOrIntK1OrKstring_output) Kstring_output() *string {
 	if u.variant != "Kstring_output" {
-		return "string output"
+		return nil
 	}
-	return *u.variant_Kstring_output
+	return u.variant_Kstring_output
 }
 
 type Union3FloatOrIntOrString struct {
@@ -2849,15 +3290,15 @@ func (u *Union3FloatOrIntOrString) Decode(holder *cffi.CFFIValueUnionVariant) {
 	switch variantName {
 	case "string":
 		u.variant = "String"
-		value := *baml.Decode(valueHolder).(*string)
+		value := baml.Decode(valueHolder).(string)
 		u.variant_String = &value
 	case "int":
 		u.variant = "Int"
-		value := *baml.Decode(valueHolder).(*int64)
+		value := baml.Decode(valueHolder).(int64)
 		u.variant_Int = &value
 	case "float":
 		u.variant = "Float"
-		value := *baml.Decode(valueHolder).(*float64)
+		value := baml.Decode(valueHolder).(float64)
 		u.variant_Float = &value
 
 	default:
@@ -2942,7 +3383,16 @@ func (u *Union3FloatOrIntOrString) UnmarshalJSON(data []byte) error {
 	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
+func Union3FloatOrIntOrString__NewString(v string) Union3FloatOrIntOrString {
+
+	return Union3FloatOrIntOrString{
+		variant:        "String",
+		variant_String: &v,
+	}
+}
+
 func (u *Union3FloatOrIntOrString) SetString(v string) {
+
 	u.variant = "String"
 	u.variant_String = &v
 
@@ -2956,14 +3406,23 @@ func (u *Union3FloatOrIntOrString) IsString() bool {
 	return u.variant == "String"
 }
 
-func (u *Union3FloatOrIntOrString) String() string {
+func (u *Union3FloatOrIntOrString) String() *string {
 	if u.variant != "String" {
-		return ""
+		return nil
 	}
-	return *u.variant_String
+	return u.variant_String
+}
+
+func Union3FloatOrIntOrString__NewInt(v int64) Union3FloatOrIntOrString {
+
+	return Union3FloatOrIntOrString{
+		variant:     "Int",
+		variant_Int: &v,
+	}
 }
 
 func (u *Union3FloatOrIntOrString) SetInt(v int64) {
+
 	u.variant = "Int"
 	u.variant_Int = &v
 
@@ -2977,14 +3436,23 @@ func (u *Union3FloatOrIntOrString) IsInt() bool {
 	return u.variant == "Int"
 }
 
-func (u *Union3FloatOrIntOrString) Int() int64 {
+func (u *Union3FloatOrIntOrString) Int() *int64 {
 	if u.variant != "Int" {
-		return 0
+		return nil
 	}
-	return *u.variant_Int
+	return u.variant_Int
+}
+
+func Union3FloatOrIntOrString__NewFloat(v float64) Union3FloatOrIntOrString {
+
+	return Union3FloatOrIntOrString{
+		variant:       "Float",
+		variant_Float: &v,
+	}
 }
 
 func (u *Union3FloatOrIntOrString) SetFloat(v float64) {
+
 	u.variant = "Float"
 	u.variant_Float = &v
 
@@ -2998,11 +3466,11 @@ func (u *Union3FloatOrIntOrString) IsFloat() bool {
 	return u.variant == "Float"
 }
 
-func (u *Union3FloatOrIntOrString) Float() float64 {
+func (u *Union3FloatOrIntOrString) Float() *float64 {
 	if u.variant != "Float" {
-		return 0.0
+		return nil
 	}
-	return *u.variant_Float
+	return u.variant_Float
 }
 
 type Union4BoolOrFloatOrIntOrString struct {
@@ -3023,19 +3491,19 @@ func (u *Union4BoolOrFloatOrIntOrString) Decode(holder *cffi.CFFIValueUnionVaria
 	switch variantName {
 	case "int":
 		u.variant = "Int"
-		value := *baml.Decode(valueHolder).(*int64)
+		value := baml.Decode(valueHolder).(int64)
 		u.variant_Int = &value
 	case "string":
 		u.variant = "String"
-		value := *baml.Decode(valueHolder).(*string)
+		value := baml.Decode(valueHolder).(string)
 		u.variant_String = &value
 	case "bool":
 		u.variant = "Bool"
-		value := *baml.Decode(valueHolder).(*bool)
+		value := baml.Decode(valueHolder).(bool)
 		u.variant_Bool = &value
 	case "float":
 		u.variant = "Float"
-		value := *baml.Decode(valueHolder).(*float64)
+		value := baml.Decode(valueHolder).(float64)
 		u.variant_Float = &value
 
 	default:
@@ -3134,7 +3602,16 @@ func (u *Union4BoolOrFloatOrIntOrString) UnmarshalJSON(data []byte) error {
 	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
+func Union4BoolOrFloatOrIntOrString__NewInt(v int64) Union4BoolOrFloatOrIntOrString {
+
+	return Union4BoolOrFloatOrIntOrString{
+		variant:     "Int",
+		variant_Int: &v,
+	}
+}
+
 func (u *Union4BoolOrFloatOrIntOrString) SetInt(v int64) {
+
 	u.variant = "Int"
 	u.variant_Int = &v
 
@@ -3150,14 +3627,23 @@ func (u *Union4BoolOrFloatOrIntOrString) IsInt() bool {
 	return u.variant == "Int"
 }
 
-func (u *Union4BoolOrFloatOrIntOrString) Int() int64 {
+func (u *Union4BoolOrFloatOrIntOrString) Int() *int64 {
 	if u.variant != "Int" {
-		return 0
+		return nil
 	}
-	return *u.variant_Int
+	return u.variant_Int
+}
+
+func Union4BoolOrFloatOrIntOrString__NewString(v string) Union4BoolOrFloatOrIntOrString {
+
+	return Union4BoolOrFloatOrIntOrString{
+		variant:        "String",
+		variant_String: &v,
+	}
 }
 
 func (u *Union4BoolOrFloatOrIntOrString) SetString(v string) {
+
 	u.variant = "String"
 	u.variant_String = &v
 
@@ -3173,14 +3659,23 @@ func (u *Union4BoolOrFloatOrIntOrString) IsString() bool {
 	return u.variant == "String"
 }
 
-func (u *Union4BoolOrFloatOrIntOrString) String() string {
+func (u *Union4BoolOrFloatOrIntOrString) String() *string {
 	if u.variant != "String" {
-		return ""
+		return nil
 	}
-	return *u.variant_String
+	return u.variant_String
+}
+
+func Union4BoolOrFloatOrIntOrString__NewBool(v bool) Union4BoolOrFloatOrIntOrString {
+
+	return Union4BoolOrFloatOrIntOrString{
+		variant:      "Bool",
+		variant_Bool: &v,
+	}
 }
 
 func (u *Union4BoolOrFloatOrIntOrString) SetBool(v bool) {
+
 	u.variant = "Bool"
 	u.variant_Bool = &v
 
@@ -3196,14 +3691,23 @@ func (u *Union4BoolOrFloatOrIntOrString) IsBool() bool {
 	return u.variant == "Bool"
 }
 
-func (u *Union4BoolOrFloatOrIntOrString) Bool() bool {
+func (u *Union4BoolOrFloatOrIntOrString) Bool() *bool {
 	if u.variant != "Bool" {
-		return false
+		return nil
 	}
-	return *u.variant_Bool
+	return u.variant_Bool
+}
+
+func Union4BoolOrFloatOrIntOrString__NewFloat(v float64) Union4BoolOrFloatOrIntOrString {
+
+	return Union4BoolOrFloatOrIntOrString{
+		variant:       "Float",
+		variant_Float: &v,
+	}
 }
 
 func (u *Union4BoolOrFloatOrIntOrString) SetFloat(v float64) {
+
 	u.variant = "Float"
 	u.variant_Float = &v
 
@@ -3219,11 +3723,11 @@ func (u *Union4BoolOrFloatOrIntOrString) IsFloat() bool {
 	return u.variant == "Float"
 }
 
-func (u *Union4BoolOrFloatOrIntOrString) Float() float64 {
+func (u *Union4BoolOrFloatOrIntOrString) Float() *float64 {
 	if u.variant != "Float" {
-		return 0.0
+		return nil
 	}
-	return *u.variant_Float
+	return u.variant_Float
 }
 
 type Union4KfourOrKoneOrKthreeOrKtwo struct {
@@ -3244,19 +3748,19 @@ func (u *Union4KfourOrKoneOrKthreeOrKtwo) Decode(holder *cffi.CFFIValueUnionVari
 	switch variantName {
 	case "string_one":
 		u.variant = "Kone"
-		value := *baml.Decode(valueHolder).(*string)
+		value := baml.Decode(valueHolder).(string)
 		u.variant_Kone = &value
 	case "string_two":
 		u.variant = "Ktwo"
-		value := *baml.Decode(valueHolder).(*string)
+		value := baml.Decode(valueHolder).(string)
 		u.variant_Ktwo = &value
 	case "string_three":
 		u.variant = "Kthree"
-		value := *baml.Decode(valueHolder).(*string)
+		value := baml.Decode(valueHolder).(string)
 		u.variant_Kthree = &value
 	case "string_four":
 		u.variant = "Kfour"
-		value := *baml.Decode(valueHolder).(*string)
+		value := baml.Decode(valueHolder).(string)
 		u.variant_Kfour = &value
 
 	default:
@@ -3355,7 +3859,20 @@ func (u *Union4KfourOrKoneOrKthreeOrKtwo) UnmarshalJSON(data []byte) error {
 	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
-func (u *Union4KfourOrKoneOrKthreeOrKtwo) SetKone(v string) {
+func Union4KfourOrKoneOrKthreeOrKtwo__NewKone() Union4KfourOrKoneOrKthreeOrKtwo {
+
+	var v string = "one"
+
+	return Union4KfourOrKoneOrKthreeOrKtwo{
+		variant:      "Kone",
+		variant_Kone: &v,
+	}
+}
+
+func (u *Union4KfourOrKoneOrKthreeOrKtwo) SetKone() {
+
+	var v string = "one"
+
 	u.variant = "Kone"
 	u.variant_Kone = &v
 
@@ -3371,14 +3888,27 @@ func (u *Union4KfourOrKoneOrKthreeOrKtwo) IsKone() bool {
 	return u.variant == "Kone"
 }
 
-func (u *Union4KfourOrKoneOrKthreeOrKtwo) Kone() string {
+func (u *Union4KfourOrKoneOrKthreeOrKtwo) Kone() *string {
 	if u.variant != "Kone" {
-		return "one"
+		return nil
 	}
-	return *u.variant_Kone
+	return u.variant_Kone
 }
 
-func (u *Union4KfourOrKoneOrKthreeOrKtwo) SetKtwo(v string) {
+func Union4KfourOrKoneOrKthreeOrKtwo__NewKtwo() Union4KfourOrKoneOrKthreeOrKtwo {
+
+	var v string = "two"
+
+	return Union4KfourOrKoneOrKthreeOrKtwo{
+		variant:      "Ktwo",
+		variant_Ktwo: &v,
+	}
+}
+
+func (u *Union4KfourOrKoneOrKthreeOrKtwo) SetKtwo() {
+
+	var v string = "two"
+
 	u.variant = "Ktwo"
 	u.variant_Ktwo = &v
 
@@ -3394,14 +3924,27 @@ func (u *Union4KfourOrKoneOrKthreeOrKtwo) IsKtwo() bool {
 	return u.variant == "Ktwo"
 }
 
-func (u *Union4KfourOrKoneOrKthreeOrKtwo) Ktwo() string {
+func (u *Union4KfourOrKoneOrKthreeOrKtwo) Ktwo() *string {
 	if u.variant != "Ktwo" {
-		return "two"
+		return nil
 	}
-	return *u.variant_Ktwo
+	return u.variant_Ktwo
 }
 
-func (u *Union4KfourOrKoneOrKthreeOrKtwo) SetKthree(v string) {
+func Union4KfourOrKoneOrKthreeOrKtwo__NewKthree() Union4KfourOrKoneOrKthreeOrKtwo {
+
+	var v string = "three"
+
+	return Union4KfourOrKoneOrKthreeOrKtwo{
+		variant:        "Kthree",
+		variant_Kthree: &v,
+	}
+}
+
+func (u *Union4KfourOrKoneOrKthreeOrKtwo) SetKthree() {
+
+	var v string = "three"
+
 	u.variant = "Kthree"
 	u.variant_Kthree = &v
 
@@ -3417,14 +3960,27 @@ func (u *Union4KfourOrKoneOrKthreeOrKtwo) IsKthree() bool {
 	return u.variant == "Kthree"
 }
 
-func (u *Union4KfourOrKoneOrKthreeOrKtwo) Kthree() string {
+func (u *Union4KfourOrKoneOrKthreeOrKtwo) Kthree() *string {
 	if u.variant != "Kthree" {
-		return "three"
+		return nil
 	}
-	return *u.variant_Kthree
+	return u.variant_Kthree
 }
 
-func (u *Union4KfourOrKoneOrKthreeOrKtwo) SetKfour(v string) {
+func Union4KfourOrKoneOrKthreeOrKtwo__NewKfour() Union4KfourOrKoneOrKthreeOrKtwo {
+
+	var v string = "four"
+
+	return Union4KfourOrKoneOrKthreeOrKtwo{
+		variant:       "Kfour",
+		variant_Kfour: &v,
+	}
+}
+
+func (u *Union4KfourOrKoneOrKthreeOrKtwo) SetKfour() {
+
+	var v string = "four"
+
 	u.variant = "Kfour"
 	u.variant_Kfour = &v
 
@@ -3440,11 +3996,11 @@ func (u *Union4KfourOrKoneOrKthreeOrKtwo) IsKfour() bool {
 	return u.variant == "Kfour"
 }
 
-func (u *Union4KfourOrKoneOrKthreeOrKtwo) Kfour() string {
+func (u *Union4KfourOrKoneOrKthreeOrKtwo) Kfour() *string {
 	if u.variant != "Kfour" {
-		return "four"
+		return nil
 	}
-	return *u.variant_Kfour
+	return u.variant_Kfour
 }
 
 type Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString struct {
@@ -3469,27 +4025,27 @@ func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) Decode(holder *c
 	switch variantName {
 	case "int":
 		u.variant = "Int"
-		value := *baml.Decode(valueHolder).(*int64)
+		value := baml.Decode(valueHolder).(int64)
 		u.variant_Int = &value
 	case "string":
 		u.variant = "String"
-		value := *baml.Decode(valueHolder).(*string)
+		value := baml.Decode(valueHolder).(string)
 		u.variant_String = &value
 	case "bool":
 		u.variant = "Bool"
-		value := *baml.Decode(valueHolder).(*bool)
+		value := baml.Decode(valueHolder).(bool)
 		u.variant_Bool = &value
 	case "float":
 		u.variant = "Float"
-		value := *baml.Decode(valueHolder).(*float64)
+		value := baml.Decode(valueHolder).(float64)
 		u.variant_Float = &value
 	case "JsonObject":
 		u.variant = "JsonObject"
-		value := *baml.Decode(valueHolder).(*JsonObject)
+		value := baml.Decode(valueHolder).(JsonObject)
 		u.variant_JsonObject = &value
 	case "JsonArray":
 		u.variant = "JsonArray"
-		value := *baml.Decode(valueHolder).(*JsonArray)
+		value := baml.Decode(valueHolder).(JsonArray)
 		u.variant_JsonArray = &value
 
 	default:
@@ -3616,7 +4172,16 @@ func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) UnmarshalJSON(da
 	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
+func Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString__NewInt(v int64) Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString {
+
+	return Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString{
+		variant:     "Int",
+		variant_Int: &v,
+	}
+}
+
 func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) SetInt(v int64) {
+
 	u.variant = "Int"
 	u.variant_Int = &v
 
@@ -3636,14 +4201,23 @@ func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) IsInt() bool {
 	return u.variant == "Int"
 }
 
-func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) Int() int64 {
+func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) Int() *int64 {
 	if u.variant != "Int" {
-		return 0
+		return nil
 	}
-	return *u.variant_Int
+	return u.variant_Int
+}
+
+func Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString__NewString(v string) Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString {
+
+	return Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString{
+		variant:        "String",
+		variant_String: &v,
+	}
 }
 
 func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) SetString(v string) {
+
 	u.variant = "String"
 	u.variant_String = &v
 
@@ -3663,14 +4237,23 @@ func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) IsString() bool 
 	return u.variant == "String"
 }
 
-func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) String() string {
+func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) String() *string {
 	if u.variant != "String" {
-		return ""
+		return nil
 	}
-	return *u.variant_String
+	return u.variant_String
+}
+
+func Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString__NewBool(v bool) Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString {
+
+	return Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString{
+		variant:      "Bool",
+		variant_Bool: &v,
+	}
 }
 
 func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) SetBool(v bool) {
+
 	u.variant = "Bool"
 	u.variant_Bool = &v
 
@@ -3690,14 +4273,23 @@ func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) IsBool() bool {
 	return u.variant == "Bool"
 }
 
-func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) Bool() bool {
+func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) Bool() *bool {
 	if u.variant != "Bool" {
-		return false
+		return nil
 	}
-	return *u.variant_Bool
+	return u.variant_Bool
+}
+
+func Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString__NewFloat(v float64) Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString {
+
+	return Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString{
+		variant:       "Float",
+		variant_Float: &v,
+	}
 }
 
 func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) SetFloat(v float64) {
+
 	u.variant = "Float"
 	u.variant_Float = &v
 
@@ -3717,14 +4309,23 @@ func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) IsFloat() bool {
 	return u.variant == "Float"
 }
 
-func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) Float() float64 {
+func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) Float() *float64 {
 	if u.variant != "Float" {
-		return 0.0
+		return nil
 	}
-	return *u.variant_Float
+	return u.variant_Float
+}
+
+func Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString__NewJsonObject(v JsonObject) Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString {
+
+	return Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString{
+		variant:            "JsonObject",
+		variant_JsonObject: &v,
+	}
 }
 
 func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) SetJsonObject(v JsonObject) {
+
 	u.variant = "JsonObject"
 	u.variant_JsonObject = &v
 
@@ -3744,14 +4345,23 @@ func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) IsJsonObject() b
 	return u.variant == "JsonObject"
 }
 
-func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) JsonObject() JsonObject {
+func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) JsonObject() *JsonObject {
 	if u.variant != "JsonObject" {
 		return nil
 	}
-	return *u.variant_JsonObject
+	return u.variant_JsonObject
+}
+
+func Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString__NewJsonArray(v JsonArray) Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString {
+
+	return Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString{
+		variant:           "JsonArray",
+		variant_JsonArray: &v,
+	}
 }
 
 func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) SetJsonArray(v JsonArray) {
+
 	u.variant = "JsonArray"
 	u.variant_JsonArray = &v
 
@@ -3771,11 +4381,11 @@ func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) IsJsonArray() bo
 	return u.variant == "JsonArray"
 }
 
-func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) JsonArray() JsonArray {
+func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) JsonArray() *JsonArray {
 	if u.variant != "JsonArray" {
 		return nil
 	}
-	return *u.variant_JsonArray
+	return u.variant_JsonArray
 }
 
 type Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString struct {
@@ -3800,31 +4410,31 @@ func (u *Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString
 	switch variantName {
 	case "int":
 		u.variant = "Int"
-		value := *baml.Decode(valueHolder).(*int64)
+		value := baml.Decode(valueHolder).(int64)
 		u.variant_Int = &value
 	case "string":
 		u.variant = "String"
-		value := *baml.Decode(valueHolder).(*string)
+		value := baml.Decode(valueHolder).(string)
 		u.variant_String = &value
 	case "bool":
 		u.variant = "Bool"
-		value := *baml.Decode(valueHolder).(*bool)
+		value := baml.Decode(valueHolder).(bool)
 		u.variant_Bool = &value
 	case "float":
 		u.variant = "Float"
-		value := *baml.Decode(valueHolder).(*float64)
+		value := baml.Decode(valueHolder).(float64)
 		u.variant_Float = &value
 	case "List__string":
 		u.variant = "ListString"
 		value := baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) string {
-			return *baml.Decode(inner).(*string)
+			return baml.Decode(inner).(string)
 		})
 		u.variant_ListString = &value
 	case "Map__string_List__string":
 		u.variant = "MapStringKeyListStringValue"
 		value := baml.DecodeMap(valueHolder, func(inner *cffi.CFFIValueHolder) []string {
 			return baml.DecodeList(inner, func(inner *cffi.CFFIValueHolder) string {
-				return *baml.Decode(inner).(*string)
+				return baml.Decode(inner).(string)
 			})
 		})
 		u.variant_MapStringKeyListStringValue = &value
@@ -3953,7 +4563,16 @@ func (u *Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString
 	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
+func Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString__NewInt(v int64) Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString {
+
+	return Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString{
+		variant:     "Int",
+		variant_Int: &v,
+	}
+}
+
 func (u *Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString) SetInt(v int64) {
+
 	u.variant = "Int"
 	u.variant_Int = &v
 
@@ -3973,14 +4592,23 @@ func (u *Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString
 	return u.variant == "Int"
 }
 
-func (u *Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString) Int() int64 {
+func (u *Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString) Int() *int64 {
 	if u.variant != "Int" {
-		return 0
+		return nil
 	}
-	return *u.variant_Int
+	return u.variant_Int
+}
+
+func Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString__NewString(v string) Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString {
+
+	return Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString{
+		variant:        "String",
+		variant_String: &v,
+	}
 }
 
 func (u *Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString) SetString(v string) {
+
 	u.variant = "String"
 	u.variant_String = &v
 
@@ -4000,14 +4628,23 @@ func (u *Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString
 	return u.variant == "String"
 }
 
-func (u *Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString) String() string {
+func (u *Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString) String() *string {
 	if u.variant != "String" {
-		return ""
+		return nil
 	}
-	return *u.variant_String
+	return u.variant_String
+}
+
+func Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString__NewBool(v bool) Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString {
+
+	return Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString{
+		variant:      "Bool",
+		variant_Bool: &v,
+	}
 }
 
 func (u *Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString) SetBool(v bool) {
+
 	u.variant = "Bool"
 	u.variant_Bool = &v
 
@@ -4027,14 +4664,23 @@ func (u *Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString
 	return u.variant == "Bool"
 }
 
-func (u *Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString) Bool() bool {
+func (u *Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString) Bool() *bool {
 	if u.variant != "Bool" {
-		return false
+		return nil
 	}
-	return *u.variant_Bool
+	return u.variant_Bool
+}
+
+func Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString__NewFloat(v float64) Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString {
+
+	return Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString{
+		variant:       "Float",
+		variant_Float: &v,
+	}
 }
 
 func (u *Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString) SetFloat(v float64) {
+
 	u.variant = "Float"
 	u.variant_Float = &v
 
@@ -4054,14 +4700,23 @@ func (u *Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString
 	return u.variant == "Float"
 }
 
-func (u *Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString) Float() float64 {
+func (u *Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString) Float() *float64 {
 	if u.variant != "Float" {
-		return 0.0
+		return nil
 	}
-	return *u.variant_Float
+	return u.variant_Float
+}
+
+func Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString__NewListString(v []string) Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString {
+
+	return Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString{
+		variant:            "ListString",
+		variant_ListString: &v,
+	}
 }
 
 func (u *Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString) SetListString(v []string) {
+
 	u.variant = "ListString"
 	u.variant_ListString = &v
 
@@ -4081,14 +4736,23 @@ func (u *Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString
 	return u.variant == "ListString"
 }
 
-func (u *Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString) ListString() []string {
+func (u *Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString) ListString() *[]string {
 	if u.variant != "ListString" {
 		return nil
 	}
-	return *u.variant_ListString
+	return u.variant_ListString
+}
+
+func Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString__NewMapStringKeyListStringValue(v map[string][]string) Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString {
+
+	return Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString{
+		variant:                             "MapStringKeyListStringValue",
+		variant_MapStringKeyListStringValue: &v,
+	}
 }
 
 func (u *Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString) SetMapStringKeyListStringValue(v map[string][]string) {
+
 	u.variant = "MapStringKeyListStringValue"
 	u.variant_MapStringKeyListStringValue = &v
 
@@ -4108,9 +4772,9 @@ func (u *Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString
 	return u.variant == "MapStringKeyListStringValue"
 }
 
-func (u *Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString) MapStringKeyListStringValue() map[string][]string {
+func (u *Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString) MapStringKeyListStringValue() *map[string][]string {
 	if u.variant != "MapStringKeyListStringValue" {
 		return nil
 	}
-	return *u.variant_MapStringKeyListStringValue
+	return u.variant_MapStringKeyListStringValue
 }

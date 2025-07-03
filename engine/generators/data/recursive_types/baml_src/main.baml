@@ -11,6 +11,8 @@ function Foo(x: int) -> JSON {
         - f: null
         - g: 1.0
         - h: { a: 1, b: null, c: [1, 2, 3] }
+        
+        {{ ctx.output_format }}
     "#
 }
 
@@ -19,6 +21,8 @@ function JsonInput(x: JSON) -> JSON {
     prompt #"
         repeat back to me:
         {{ x }}
+        
+        {{ ctx.output_format }}
     "#
 }
 
