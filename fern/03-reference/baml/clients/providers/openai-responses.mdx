@@ -22,7 +22,9 @@ client<llm> MyResponsesClient {
   options {
     api_key env.MY_OPENAI_KEY
     model "gpt-4.1"
-    reasoning_effort "medium"
+    reasoning {
+      effort "medium"
+    }
   }
 }
 ```
@@ -90,7 +92,7 @@ client<llm> StandardOpenAIWithResponses {
 These are parameters specific to the OpenAI Responses API that are passed through to the provider.
 
 <ParamField
-  path="reasoning_effort"
+  path="reasnoning.effort"
   type="string"
 >
   Controls the amount of reasoning effort the model should use.
@@ -108,7 +110,9 @@ client<llm> HighReasoningClient {
   provider openai-responses
   options {
     model "o4-mini"
-    reasoning_effort "high"
+    reasoning {
+      effort "high"
+    }
   }
 }
 ```
@@ -156,6 +160,7 @@ client<llm> WebSearchClient {
   }
 }
 ```
+</ParamField>
 
 ## Additional Use Cases
 
@@ -190,7 +195,9 @@ client<llm> AdvancedReasoningClient {
   provider openai-responses
   options {
     model "o4-mini"
-    reasoning_effort "high"
+    reasoning {
+      effort "high"
+    }
   }
 }
 

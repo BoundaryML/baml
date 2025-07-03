@@ -315,7 +315,9 @@ client<llm> OpenAIResponsesReasoning {
   options {
     api_key env.OPENAI_API_KEY
     model "o4-mini"
-    reasoning_effort "high"
+    reasoning{
+      effort "high"
+    }
   }
 }
 

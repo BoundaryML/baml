@@ -24,7 +24,6 @@ async def run():
     # Creates a client using the OpenAI Responses API
     cr.add_llm_client(name='MyResponsesClient', provider='openai-responses', options={
         "model": "gpt-4.1",
-        "reasoning_effort": "medium",
         "api_key": os.environ.get('OPENAI_API_KEY')
     })
     
@@ -53,7 +52,6 @@ async function run() {
     // Creates a client using the OpenAI Responses API
     cr.addLlmClient('MyResponsesClient', 'openai-responses', {
         model: "gpt-4.1",
-        reasoning_effort: "medium",
         api_key: process.env.OPENAI_API_KEY
     })
     
@@ -91,7 +89,6 @@ def run
     'openai-responses',
     {
       model: 'gpt-4.1',
-      reasoning_effort: 'medium',
       api_key: ENV['OPENAI_API_KEY']
     }
   )
@@ -135,7 +132,6 @@ Example request body:
                     "retry_policy": null,
                     "options": {
                         "model": "gpt-4.1",
-                        "reasoning_effort": "medium",
                         "api_key": "sk-..."
                     }
                 }

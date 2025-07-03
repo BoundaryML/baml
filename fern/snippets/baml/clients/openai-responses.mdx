@@ -4,7 +4,9 @@ client<llm> OpenAIResponses {
   options {
     model gpt-4.1
     api_key env.OPENAI_API_KEY
-    reasoning_effort medium
+    reasoning {
+      effort medium
+    }
   }
 }
 ```

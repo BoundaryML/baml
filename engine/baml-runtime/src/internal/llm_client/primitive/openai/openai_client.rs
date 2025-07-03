@@ -89,19 +89,12 @@ impl WithChat for OpenAIClient {
             .get("model")
             .and_then(serde_json::Value::as_str)
             .map(str::to_string);
-        // TODO(Rahul): This is called for OpenAI client and hence just matches concerning openai, but not sure
-        // if this is clean.
-        let response_type = match self.provider.as_str() {
-            "openai-responses" => ResponseType::OpenAIResponses,
-            _ => ResponseType::OpenAI,
-        };
-
         make_parsed_request(
             self,
             model_name,
             either::Either::Right(prompt),
             false,
-            response_type,
+            self.properties.client_response_type.clone(),
             ctx,
         )
         .await
@@ -136,32 +129,8 @@ impl ProviderStrategy {
     ) -> Result<serde_json::Value> {
         match self {
             ProviderStrategy::ResponsesApi => {
-                let mut simple_body = serde_json::Map::new();
-
-                // Extract model from properties
-                if let Some(model) = properties.get("model") {
-                    simple_body.insert("model".into(), model.clone());
-                }
-
-                // Extract tools from properties for web search support
-                if let Some(tools) = properties.get("tools") {
-                    simple_body.insert("tools".into(), tools.clone());
-                }
-
-                // Extract tool_choice for function calling
-                if let Some(tool_choice) = properties.get("tool_choice") {
-                    simple_body.insert("tool_choice".into(), tool_choice.clone());
-                }
-
-                // Extract reasoning_effort and convert to nested reasoning.effort structure
-                if let Some(reasoning_effort) = properties.get("reasoning_effort") {
-                    simple_body.insert(
-                        "reasoning".into(),
-                        json!({
-                            "effort": reasoning_effort
-                        }),
-                    );
-                }
+                // Start with all properties passed through
+                let mut body = properties.clone();
 
                 // Convert prompt/messages to single input string
                 let input = match prompt {
@@ -186,9 +155,9 @@ impl ProviderStrategy {
                             .join("\n")
                     }
                 };
-                simple_body.insert("input".into(), json!(input));
+                body.insert("input".into(), json!(input));
 
-                Ok(json!(simple_body))
+                Ok(json!(body))
             }
             ProviderStrategy::StandardOpenAI { .. } => {
                 let mut body = json!(properties);
