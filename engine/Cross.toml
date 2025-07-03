@@ -8,7 +8,7 @@ pre-build = [
   "wget -q https://go.dev/dl/go1.21.13.linux-amd64.tar.gz",
   "tar -xzf go1.21.13.linux-amd64.tar.gz -C /usr/local",
   "export PATH=$PATH:/usr/local/go/bin",
-  "/usr/local/go/bin/go install google.golang.org/protobuf/protoc-gen-go@latest",
+  "/usr/local/go/bin/go install google.golang.org/protobuf/cmd/protoc-gen-go@latest",
   "cp /root/go/bin/protoc-gen-go /usr/local/bin/",
 ]
 
@@ -18,7 +18,7 @@ pre-build = [
   "wget -q https://go.dev/dl/go1.21.13.linux-amd64.tar.gz",
   "tar -xzf go1.21.13.linux-amd64.tar.gz -C /usr/local",
   "export PATH=$PATH:/usr/local/go/bin",
-  "/usr/local/go/bin/go install google.golang.org/protobuf/protoc-gen-go@latest",
+  "/usr/local/go/bin/go install google.golang.org/protobuf/cmd/protoc-gen-go@latest",
   "cp /root/go/bin/protoc-gen-go /usr/local/bin/",
 ]
 
@@ -29,7 +29,7 @@ pre-build = [
   "wget -q https://go.dev/dl/go1.21.13.linux-amd64.tar.gz",
   "tar -xzf go1.21.13.linux-amd64.tar.gz -C /usr/local",
   "export PATH=$PATH:/usr/local/go/bin",
-  "/usr/local/go/bin/go install google.golang.org/protobuf/protoc-gen-go@latest",
+  "/usr/local/go/bin/go install google.golang.org/protobuf/cmd/protoc-gen-go@latest",
   "cp /root/go/bin/protoc-gen-go /usr/local/bin/",
 ]
 
@@ -39,6 +39,6 @@ pre-build = [
   "wget -q https://go.dev/dl/go1.21.13.linux-amd64.tar.gz",
   "tar -xzf go1.21.13.linux-amd64.tar.gz -C /usr/local",
   "export PATH=$PATH:/usr/local/go/bin",
-  "/usr/local/go/bin/go install google.golang.org/protobuf/protoc-gen-go@latest",
+  "/usr/local/go/bin/go install google.golang.org/protobuf/cmd/protoc-gen-go@latest",
   "cp /root/go/bin/protoc-gen-go /usr/local/bin/",
 ]
