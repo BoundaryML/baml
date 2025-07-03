@@ -110,14 +110,12 @@ static ERROR_CALLBACK_FN: OnceCell<CallbackFn> = OnceCell::new();
 extern "C" fn register_callbacks(callback_fn: CallbackFn, error_callback_fn: CallbackFn) {
     let log_setup = baml_log::init();
     if let Err(e) = log_setup {
-        eprintln!("Error setting up logging: {e}");
+        eprintln!("Error setting up BAML_LOG logging: {e}");
     }
     let env = env_logger::Env::new().filter("BAML_INTERNAL_LOG");
     let log_setup = env_logger::try_init_from_env(env);
     if let Err(e) = log_setup {
-        eprintln!("Error setting up internal logging: {e}");
-    } else {
-        println!("Internal logging set up");
+        eprintln!("Error setting up BAML_INTERNAL_LOG logging: {e}");
     }
 
     // Create a global runtime or pass it along as needed.

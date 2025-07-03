@@ -64,7 +64,7 @@ func TestEncodeDecode(t *testing.T) {
 			Hair_color: &[]b.Color{b.ColorRED}[0],
 		}},
 		{&b.Recipe{
-			Recipe_type: b.Union2KbreakfastOrKdinner__NewKbreakfast("breakfast"),
+			Recipe_type: b.Union2KbreakfastOrKdinner__NewKbreakfast(),
 			Ingredients: map[string]b.Quantity{
 				"a": {
 					Amount: b.Union2FloatOrInt__NewInt(1),
