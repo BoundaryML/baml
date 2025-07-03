@@ -1,6 +1,7 @@
 use std::borrow::Cow;
 
 use anyhow::Result;
+use baml_rpc::ClientDetails;
 use baml_types::{tracing::events::FunctionType, type_meta, HasType};
 
 use super::{IntoRpcEvent, TypeLookup};
@@ -228,6 +229,11 @@ impl<'a> IntoRpcEvent<'a, baml_rpc::runtime_api::IntermediateData<'a>>
             status: self.status,
             headers: self.headers().cloned(),
             body: self.body.to_rpc_event(lookup),
+            client_details: ClientDetails {
+                name: self.client_details.name.clone(),
+                provider: self.client_details.provider.clone(),
+                options: self.client_details.options.clone(),
+            },
         }
     }
 }
