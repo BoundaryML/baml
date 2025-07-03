@@ -16,7 +16,7 @@ use super::{
     google::response_handler::scan_google_response_stream,
     openai::response_handler::scan_openai_chat_completion_stream,
     request::{
-        build_and_log_outbound_request, execute_request, make_request, to_prompt, EitherResponse,
+        build_and_log_outbound_request, execute_request, to_prompt, EitherResponse,
         RequestBuilder, ResponseType,
     },
     vertex::response_handler::scan_vertex_response_stream,

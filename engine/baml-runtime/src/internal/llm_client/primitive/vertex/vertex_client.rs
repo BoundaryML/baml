@@ -23,7 +23,7 @@ use crate::{
     internal::llm_client::{
         primitive::{
             anthropic::{self, AnthropicClient},
-            request::{make_parsed_request, make_request, RequestBuilder, ResponseType},
+            request::{make_parsed_request, RequestBuilder, ResponseType},
             stream_request::make_stream_request,
             vertex::types::VertexResponse,
         },
@@ -149,6 +149,7 @@ impl VertexClient {
                 provider: client.elem().provider.to_string(),
                 default_role: properties.default_role(),
                 allowed_roles: properties.allowed_roles(),
+                options: properties.properties.clone(),
             },
             features: ModelFeatures {
                 chat: true,
@@ -176,6 +177,7 @@ impl VertexClient {
                 provider: client.provider.to_string(),
                 default_role: properties.default_role(),
                 allowed_roles: properties.allowed_roles(),
+                options: properties.properties.clone(),
             },
             features: ModelFeatures {
                 chat: true,

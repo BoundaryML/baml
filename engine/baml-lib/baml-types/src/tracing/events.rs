@@ -2,6 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use anyhow::Result;
 use baml_ids::{FunctionCallId, FunctionEventId, HttpRequestId};
+use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 
 pub use super::errors::BamlError;
@@ -428,6 +429,16 @@ impl HTTPRequest {
     }
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ClientDetails {
+    /// e.g. for `client<llm> MyOpenaiClient` this is "MyOpenaiClient"
+    pub name: String,
+    /// e.g. for `client<llm> MyOpenaiClient` this is "openai"
+    pub provider: String,
+    /// e.g. for `client<llm> MyOpenaiClient` this is the options passed to the client
+    pub options: IndexMap<String, serde_json::Value>,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HTTPResponse {
     // since LLM requests could be made in parallel, we need to match the response to the request
@@ -437,6 +448,8 @@ pub struct HTTPResponse {
     #[serde(deserialize_with = "deserialize_optional_headers")]
     headers: Option<HashMap<String, String>>,
     pub body: HTTPBody,
+
+    pub client_details: ClientDetails,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -451,12 +464,14 @@ impl HTTPResponse {
         status: u16,
         headers: Option<HashMap<String, String>>,
         body: HTTPBody,
+        client_details: ClientDetails,
     ) -> Self {
         Self {
             request_id,
             status,
             headers,
             body,
+            client_details,
         }
     }
 
@@ -648,6 +663,11 @@ mod tests {
             200,
             Some(headers.clone()),
             HTTPBody::new(b"response body".to_vec()),
+            ClientDetails {
+                name: "test-client".to_string(),
+                provider: "test-provider".to_string(),
+                options: IndexMap::new(),
+            },
         );
 
         // Test that .headers() returns original headers

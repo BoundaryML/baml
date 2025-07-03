@@ -3,6 +3,7 @@ use colored::*;
 mod chat_message_part;
 
 mod output_format;
+use indexmap::IndexMap;
 use internal_baml_core::ir::{jinja_helpers::get_env, repr::IntermediateRepr};
 pub use output_format::types;
 mod baml_value_to_jinja_value;
@@ -26,6 +27,9 @@ pub struct RenderContext_Client {
     pub provider: String,
     pub default_role: String,
     pub allowed_roles: Vec<String>,
+
+    // properties of the client
+    pub options: IndexMap<String, serde_json::Value>,
 }
 
 #[derive(Debug)]
