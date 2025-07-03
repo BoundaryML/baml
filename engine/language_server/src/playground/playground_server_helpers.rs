@@ -19,10 +19,7 @@ use tokio::{fs as async_fs, sync::RwLock};
 use warp::{http::Response, ws::Message, Filter};
 
 use crate::{
-    playground::{
-        definitions::{FrontendMessage, PlaygroundState},
-        playground_server_rpc::handle_rpc_websocket,
-    },
+    playground::definitions::{FrontendMessage, PlaygroundState},
     session::Session,
 };
 
@@ -75,12 +72,6 @@ pub async fn start_client_connection(
         state.tx.subscribe()
     };
 
-    // Mark client as connected
-    {
-        let mut st = state.write().await;
-        st.mark_client_connected();
-    }
-
     // Send initial project state using the helper
     send_all_projects_to_client(&mut ws_tx, &session).await;
 
@@ -90,10 +81,9 @@ pub async fn start_client_connection(
         let buffered_events = st.drain_event_buffer();
         for event in buffered_events.clone() {
             let _ = ws_tx.send(Message::text(event)).await;
-            // Add configurable delay between buffered events
-            tokio::time::sleep(tokio::time::Duration::from_millis(400)).await;
         }
         tracing::info!("Sent {} buffered events", buffered_events.len());
+        st.mark_first_client_connected();
     }
     // --- END BUFFERED EVENTS ---
 
@@ -107,17 +97,11 @@ pub async fn start_client_connection(
                         Ok(msg) => {
                             if msg.is_close() {
                                 tracing::info!("Client disconnected");
-                                // Mark client as disconnected
-                                let mut st = state.write().await;
-                                st.mark_client_disconnected();
                                 break;
                             }
                         }
                         Err(e) => {
                             tracing::error!("WebSocket error: {}", e);
-                            // Mark client as disconnected on error
-                            let mut st = state.write().await;
-                            st.mark_client_disconnected();
                             break;
                         }
                     }
@@ -126,18 +110,10 @@ pub async fn start_client_connection(
                 Ok(msg) = rx.recv() => {
                     if let Err(e) = ws_tx.send(Message::text(msg)).await {
                         tracing::error!("Failed to send broadcast message: {}", e);
-                        // Mark client as disconnected on send error
-                        let mut st = state.write().await;
-                        st.mark_client_disconnected();
                         break;
                     }
                 }
-                else => {
-                    // Mark client as disconnected when loop ends
-                    let mut st = state.write().await;
-                    st.mark_client_disconnected();
-                    break;
-                }
+                else => break,
             }
         }
     });
@@ -152,13 +128,11 @@ pub fn create_server_routes(
     dist_dir: Option<std::path::PathBuf>,
 ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
     // WebSocket handler with error handling
-    let ws_state = state.clone();
-    let ws_session = session.clone();
     let ws_route = warp::path("ws")
         .and(warp::ws())
         .map(move |ws: warp::ws::Ws| {
-            let state = ws_state.clone();
-            let session = ws_session.clone();
+            let state = state.clone();
+            let session = session.clone();
             ws.on_upgrade(move |socket| async move {
                 start_client_connection(socket, state, session).await;
             })
@@ -330,17 +304,6 @@ pub async fn get_playground_dist(github_repo: &str, version: &str) -> anyhow::Re
     let web_panel_asset_name = format!("playground-dist-{version}.tar.gz");
     let checksum_asset_name = format!("playground-dist-{version}.tar.gz.sha256");
 
-    // Build the GitHub API URL
-    let api_url = match release_tag {
-        Some(tag) => format!(
-            "https://api.github.com/repos/{}/releases/tags/{}",
-            GITHUB_REPO, tag
-        ),
-        None => format!(
-            "https://api.github.com/repos/{}/releases/latest",
-            GITHUB_REPO
-        ),
-    };
     // Build the GitHub API URL using the version as the release tag
     let api_url = format!("https://api.github.com/repos/{github_repo}/releases/tags/{version}");
     tracing::info!("Fetching web-panel release metadata from: {}", api_url);
@@ -355,18 +318,6 @@ pub async fn get_playground_dist(github_repo: &str, version: &str) -> anyhow::Re
         .map_err(|e| anyhow::anyhow!("Failed to fetch release metadata: {e}"))?;
     let release: serde_json::Value = resp.json().await?;
 
-    // Find the asset
-    let assets = release["assets"]
-        .as_array()
-        .ok_or_else(|| anyhow::anyhow!("No assets in release metadata"))?;
-    let asset = assets
-        .iter()
-        .find(|a| a["name"].as_str() == Some(WEB_PANEL_ASSET_NAME))
-        .ok_or_else(|| anyhow::anyhow!("No asset named '{}' in release", WEB_PANEL_ASSET_NAME))?;
-    let download_url = asset["browser_download_url"]
-        .as_str()
-        .ok_or_else(|| anyhow::anyhow!("No download URL for asset"))?;
-    let version = release["tag_name"].as_str().unwrap_or("unknown");
     // Find the main asset
     let assets = release["assets"]
         .as_array()
@@ -397,9 +348,6 @@ pub async fn get_playground_dist(github_repo: &str, version: &str) -> anyhow::Re
     let home = home_dir().ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?;
     let extract_root: PathBuf = home
         .join(".baml/playground")
-        .join(format!("web-panel-dist-{}", version));
-    let extract_root: PathBuf = home
-        .join(".baml/playground")
         .join(format!("web-panel-dist-{version}"));
     let dist_dir = extract_root.join("dist");
 
@@ -414,19 +362,7 @@ pub async fn get_playground_dist(github_repo: &str, version: &str) -> anyhow::Re
                 extract_root.display()
             )
         })?;
-        fs::remove_dir_all(&extract_root).with_context(|| {
-            format!(
-                "Failed to remove old extraction directory: {}",
-                extract_root.display()
-            )
-        })?;
     }
-    fs::create_dir_all(&extract_root).with_context(|| {
-        format!(
-            "Failed to create extraction directory: {}",
-            extract_root.display()
-        )
-    })?;
     fs::create_dir_all(&extract_root).with_context(|| {
         format!(
             "Failed to create extraction directory: {}",
@@ -453,9 +389,6 @@ pub async fn get_playground_dist(github_repo: &str, version: &str) -> anyhow::Re
     archive
         .unpack(&extract_root)
         .with_context(|| format!("Failed to extract archive to: {}", extract_root.display()))?;
-    archive
-        .unpack(&extract_root)
-        .with_context(|| format!("Failed to extract archive to: {}", extract_root.display()))?;
 
     // Return the path to the actual dist directory if it exists, else the extraction root
     if dist_dir.exists() && dist_dir.read_dir()?.next().is_some() {
@@ -468,10 +401,6 @@ pub async fn get_playground_dist(github_repo: &str, version: &str) -> anyhow::Re
 /// Returns the expected extraction directory for a given version (not the nested dist directory)
 pub fn web_panel_extract_root(version: &str) -> String {
     let home = home_dir().expect("Could not determine home directory");
-    home.join(".baml/playground")
-        .join(format!("web-panel-dist-{}", version))
-        .to_string_lossy()
-        .to_string()
     home.join(".baml/playground")
         .join(format!("web-panel-dist-{version}"))
         .to_string_lossy()
