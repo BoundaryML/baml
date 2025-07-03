@@ -2469,6 +2469,19 @@ paths:
                 title: TestOpenAIResponsesShorthandResponse
                 type: string
       operationId: TestOpenAIResponsesShorthand
+  /call/TestOpenAIResponsesWebSearch:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestOpenAIResponsesWebSearch'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestOpenAIResponsesWebSearchResponse
+                type: string
+      operationId: TestOpenAIResponsesWebSearch
   /call/TestOpenAIResponsesWithOpenAIResponseType:
     post:
       requestBody:
@@ -5659,6 +5672,22 @@ components:
                 $ref: '#/components/schemas/BamlOptions'
             required:
             - input
+            additionalProperties: false
+    TestOpenAIResponsesWebSearch:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestOpenAIResponsesWebSearchRequest
+            type: object
+            properties:
+              query:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - query
             additionalProperties: false
     TestOpenAIResponsesWithOpenAIResponseType:
       required: true

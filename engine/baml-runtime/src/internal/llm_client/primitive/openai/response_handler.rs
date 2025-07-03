@@ -266,12 +266,19 @@ pub fn parse_openai_responses_response<C: WithClient + RequestBuilder>(
     };
 
     // Extract text content from the responses API format
+    // Handle both regular messages and web search results
     let content = response
         .output
-        .first()
-        .and_then(|output| output.content.first())
-        .and_then(|content| content.text.as_ref())
-        .map_or_else(String::new, |s| s.to_string());
+        .iter()
+        .find_map(|output| {
+            // Look for message outputs that have content
+            if output.output_type == "message" && !output.content.is_empty() {
+                output.content.first()?.text.as_ref().map(|s| s.to_string())
+            } else {
+                None
+            }
+        })
+        .unwrap_or_default();
 
     let usage = response.usage.as_ref();
 

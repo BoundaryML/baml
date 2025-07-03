@@ -1310,6 +1310,13 @@ class BamlSyncClient:
             "input": input,
         })
         return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    def TestOpenAIResponsesWebSearch(self, query: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestOpenAIResponsesWebSearch", args={
+            "query": query,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestOpenAIResponsesWithOpenAIResponseType(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
@@ -3573,6 +3580,18 @@ class BamlStreamClient:
           lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
+    def TestOpenAIResponsesWebSearch(self, query: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestOpenAIResponsesWebSearch", args={
+            "query": query,
+        })
+        return baml_py.BamlSyncStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
     def TestOpenAIResponsesWithOpenAIResponseType(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[str, str]:
@@ -5070,6 +5089,13 @@ class BamlHttpRequestClient:
             "input": input,
         }, mode="request")
         return result
+    def TestOpenAIResponsesWebSearch(self, query: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestOpenAIResponsesWebSearch", args={
+            "query": query,
+        }, mode="request")
+        return result
     def TestOpenAIResponsesWithOpenAIResponseType(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -6455,6 +6481,13 @@ class BamlHttpStreamRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestOpenAIResponsesShorthand", args={
             "input": input,
+        }, mode="stream")
+        return result
+    def TestOpenAIResponsesWebSearch(self, query: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestOpenAIResponsesWebSearch", args={
+            "query": query,
         }, mode="stream")
         return result
     def TestOpenAIResponsesWithOpenAIResponseType(self, input: str,

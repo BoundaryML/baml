@@ -6845,6 +6845,45 @@ func TestOpenAIResponsesShorthand(ctx context.Context, input string, opts ...Cal
 	return casted, nil
 }
 
+func TestOpenAIResponsesWebSearch(ctx context.Context, query string, opts ...CallOptionFunc) (string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"query": query},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := baml.EncodeArgs(args)
+	if err != nil {
+		panic(err)
+	}
+
+	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponsesWebSearch", encoded)
+	if err != nil {
+		return "", err
+	}
+
+	if result.Error != nil {
+		return "", result.Error
+	}
+
+	casted := *(result.Data).(*string)
+
+	return casted, nil
+}
+
 func TestOpenAIResponsesWithOpenAIResponseType(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
 	var callOpts callOption

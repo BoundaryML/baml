@@ -18,17 +18,21 @@ pub struct ResponsesApiResponse {
     pub usage: Option<CompletionUsage>,
     pub error: Option<serde_json::Value>,
     // Additional fields that may appear in responses
+    pub background: Option<bool>,
     pub incomplete_details: Option<serde_json::Value>,
     pub instructions: Option<serde_json::Value>,
     pub max_output_tokens: Option<u32>,
+    pub max_tool_calls: Option<u32>,
     pub parallel_tool_calls: Option<bool>,
     pub previous_response_id: Option<String>,
     pub reasoning: Option<serde_json::Value>,
+    pub service_tier: Option<String>,
     pub store: Option<bool>,
     pub temperature: Option<f32>,
     pub text: Option<serde_json::Value>,
     pub tool_choice: Option<serde_json::Value>,
     pub tools: Option<Vec<serde_json::Value>>,
+    pub top_logprobs: Option<u32>,
     pub top_p: Option<f32>,
     pub truncation: Option<String>,
     pub user: Option<serde_json::Value>,
@@ -42,7 +46,17 @@ pub struct ResponseOutput {
     pub id: Option<String>,
     pub status: Option<String>,
     pub role: Option<String>,
+    #[serde(default)]
     pub content: Vec<ResponseContent>,
+    // For web search calls
+    pub action: Option<WebSearchAction>,
+}
+
+#[derive(Debug, Deserialize, Clone, PartialEq)]
+pub struct WebSearchAction {
+    #[serde(rename = "type")]
+    pub action_type: String,
+    pub query: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]
@@ -51,6 +65,7 @@ pub struct ResponseContent {
     pub content_type: String,
     pub text: Option<String>,
     pub annotations: Option<Vec<serde_json::Value>>,
+    pub logprobs: Option<Vec<serde_json::Value>>,
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]
@@ -134,17 +149,21 @@ pub struct ResponsesApiStreamResponse {
     pub usage: Option<CompletionUsage>,
     pub error: Option<serde_json::Value>,
     // Additional fields that appear in streaming responses
+    pub background: Option<bool>,
     pub incomplete_details: Option<serde_json::Value>,
     pub instructions: Option<serde_json::Value>,
     pub max_output_tokens: Option<u32>,
+    pub max_tool_calls: Option<u32>,
     pub parallel_tool_calls: Option<bool>,
     pub previous_response_id: Option<String>,
     pub reasoning: Option<serde_json::Value>,
+    pub service_tier: Option<String>,
     pub store: Option<bool>,
     pub temperature: Option<f32>,
     pub text: Option<serde_json::Value>,
     pub tool_choice: Option<serde_json::Value>,
     pub tools: Option<Vec<serde_json::Value>>,
+    pub top_logprobs: Option<u32>,
     pub top_p: Option<f32>,
     pub truncation: Option<String>,
     pub user: Option<serde_json::Value>,

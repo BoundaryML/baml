@@ -3207,6 +3207,24 @@ export const TestOpenAIResponsesShorthand = async (
 };
 
 /**
+ * Executes the "TestOpenAIResponsesWebSearch" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestOpenAIResponsesWebSearch"
+ * with the specified parameters.
+ *
+ * @param { string } query - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestOpenAIResponsesWebSearch = async (
+  query: string,
+): Promise<string> => {
+  return b.TestOpenAIResponsesWebSearch(
+    query,
+  );
+};
+
+/**
  * Executes the "TestOpenAIResponsesWithOpenAIResponseType" BAML action.
  *
  * This server action calls the underlying BAML function "TestOpenAIResponsesWithOpenAIResponseType"
