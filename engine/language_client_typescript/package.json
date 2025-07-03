@@ -74,7 +74,8 @@
     "build:ts_build_local": "tsc ./typescript_src/*.ts --outDir ./artifacts --module nodenext --module nodenext --allowJs --declaration true --declarationMap true || true",
     "prepublishOnly": "napi prepublish --no-gh-release",
     "test": "jest --config jest.config.js",
-    "version": "napi version"
+    "version": "napi version",
+    "clean": "git clean -xdf .turbo node_modules target artifacts npm *.node"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.7.3",
