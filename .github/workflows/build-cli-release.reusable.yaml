@@ -90,7 +90,7 @@ jobs:
           # directly into a directory that is guaranteed to be in the PATH for cargo.
           # We also create a symlink from the go/bin to the cargo/bin for consistency.
           mkdir -p .cargo/bin
-          go install github.com/golang/protobuf/protoc-gen-go@latest
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
           cp "$HOME/go/bin/protoc-gen-go" ".cargo/bin/"
           echo "Installed protoc-gen-go into .cargo/bin:"
           ls -la .cargo/bin
