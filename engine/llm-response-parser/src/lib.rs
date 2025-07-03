@@ -1,7 +1,12 @@
 pub mod anthropic;
 pub mod azure;
+pub mod google;
 pub mod openai;
 pub mod openai_generic;
+pub mod provider;
+pub mod vertex;
+
+pub use provider::LLMProvider;
 
 #[cfg(test)]
 mod integration_tests {

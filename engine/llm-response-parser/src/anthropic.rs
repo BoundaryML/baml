@@ -22,6 +22,12 @@ pub enum AnthropicMessageContent {
 pub struct AnthropicUsage {
     pub input_tokens: u64,
     pub output_tokens: u64,
+    #[serde(default)]
+    pub cache_creation_input_tokens: u64,
+    #[serde(default)]
+    pub cache_read_input_tokens: u64,
+    #[serde(default)]
+    pub service_tier: String,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -148,28 +154,31 @@ mod tests {
     #[test]
     fn test_deserialize_message_response() {
         let json = r#"{
-            "id": "msg_01XFDUDYJgAACzvnptvVoYEL",
+            "id": "msg_013QyXSmCitiepWfcCMHPTsQ",
             "type": "message",
             "role": "assistant",
+            "model": "claude-3-haiku-20240307",
             "content": [
                 {
                     "type": "text",
                     "text": "Hello! How can I help you today?"
                 }
             ],
-            "model": "claude-3-sonnet-20240229",
             "stop_reason": "end_turn",
             "stop_sequence": null,
             "usage": {
-                "input_tokens": 12,
-                "output_tokens": 8
+                "input_tokens": 9,
+                "cache_creation_input_tokens": 51,
+                "cache_read_input_tokens": 2258,
+                "output_tokens": 8,
+                "service_tier": "standard"
             }
         }"#;
 
         let response: AnthropicMessageResponse = serde_json::from_str(json).unwrap();
-        assert_eq!(response.id, "msg_01XFDUDYJgAACzvnptvVoYEL");
+        assert_eq!(response.id, "msg_013QyXSmCitiepWfcCMHPTsQ");
         assert_eq!(response.role, "assistant");
-        assert_eq!(response.model, "claude-3-sonnet-20240229");
+        assert_eq!(response.model, "claude-3-haiku-20240307");
         assert_eq!(response.content.len(), 1);
         match &response.content[0] {
             AnthropicMessageContent::Text { text } => {
@@ -178,8 +187,11 @@ mod tests {
             _ => panic!("Expected text content"),
         }
         assert_eq!(response.stop_reason, Some("end_turn".to_string()));
-        assert_eq!(response.usage.input_tokens, 12);
+        assert_eq!(response.usage.input_tokens, 9);
         assert_eq!(response.usage.output_tokens, 8);
+        assert_eq!(response.usage.cache_creation_input_tokens, 51);
+        assert_eq!(response.usage.cache_read_input_tokens, 2258);
+        assert_eq!(response.usage.service_tier, "standard");
     }
 
     #[test]
