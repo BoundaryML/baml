@@ -157,51 +157,6 @@ client<llm> WebSearchClient {
 }
 ```
 
-Example with function calling:
-
-```baml BAML
-client<llm> FunctionCallClient {
-  provider openai-responses
-  options {
-    model "gpt-4.1"
-    tools [
-      {
-        type "function"
-        name "get_weather"
-        description "Get current weather information"
-        parameters {
-          type "object"
-          properties {
-            location {
-              type "string"
-              description "The city and state"
-            }
-          }
-          required ["location"]
-        }
-      }
-    ]
-    tool_choice "auto"
-  }
-}
-```
-
-</ParamField>
-
-<ParamField
-  path="tool_choice"
-  type="string | object"
->
-  Controls which tool the model should use.
-
-| Value    | Description                    |
-| -------- | ------------------------------ |
-| `auto`   | Model chooses tool automatically |
-| `none`   | Model doesn't use any tools      |
-| `required` | Model must use a tool          |
-
-</ParamField>
-
 ## Additional Use Cases
 
 ### Image Input Support
