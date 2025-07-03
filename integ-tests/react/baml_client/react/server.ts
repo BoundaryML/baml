@@ -3045,6 +3045,24 @@ export const TestOpenAIO1WithMaxTokens = async (
 };
 
 /**
+ * Executes the "TestOpenAIProviderWithResponsesType" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestOpenAIProviderWithResponsesType"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestOpenAIProviderWithResponsesType = async (
+  input: string,
+): Promise<string> => {
+  return b.TestOpenAIProviderWithResponsesType(
+    input,
+  );
+};
+
+/**
  * Executes the "TestOpenAIResponses" BAML action.
  *
  * This server action calls the underlying BAML function "TestOpenAIResponses"

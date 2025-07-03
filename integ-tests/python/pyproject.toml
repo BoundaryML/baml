@@ -10,7 +10,7 @@ dependencies = [
     "flask-httpauth>=4.8.0",
     "flask>=3.0.3",
     "maturin",
-    "openai>=1.63.2",
+    "openai>=1.93.0",
     "psutil",
     "pydantic>=2.10.6",
     "pytest",

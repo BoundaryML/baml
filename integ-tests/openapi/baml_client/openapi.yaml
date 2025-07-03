@@ -2352,6 +2352,19 @@ paths:
                 title: TestOpenAIO1WithMaxTokensResponse
                 type: string
       operationId: TestOpenAIO1WithMaxTokens
+  /call/TestOpenAIProviderWithResponsesType:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestOpenAIProviderWithResponsesType'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestOpenAIProviderWithResponsesTypeResponse
+                type: string
+      operationId: TestOpenAIProviderWithResponsesType
   /call/TestOpenAIResponses:
     post:
       requestBody:
@@ -5543,6 +5556,22 @@ components:
         application/json:
           schema:
             title: TestOpenAIO1WithMaxTokensRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    TestOpenAIProviderWithResponsesType:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestOpenAIProviderWithResponsesTypeRequest
             type: object
             properties:
               input:

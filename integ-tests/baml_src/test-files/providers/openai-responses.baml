@@ -172,7 +172,8 @@ test TestOpenAIResponsesValidation {
     TestOpenAIResponsesShorthand,
     TestOpenAIResponsesEndpoint,
     TestOpenAIResponsesAutoType,
-    TestOpenAIResponsesExplicit
+    TestOpenAIResponsesExplicit,
+    TestOpenAIProviderWithResponsesType
   ]
   args {
     input "artificial intelligence"
@@ -287,6 +288,25 @@ test TestOpenAIResponsesFunctionCallTest {
   args {
     query "What is the weather like in Boston today?"
   }
+}
+
+// Test using standard openai provider with openai-responses client_response_type
+client<llm> OpenAIWithResponsesType {
+  provider openai
+  options {
+    api_key env.OPENAI_API_KEY
+    model "gpt-4.1"
+    client_response_type "openai-responses"
+  }
+}
+
+function TestOpenAIProviderWithResponsesType(input: string) -> string {
+  client OpenAIWithResponsesType
+  prompt #"
+    {{ _.role("user") }}
+    This uses the openai provider but with openai-responses client_response_type.
+    Write a short summary about {{ input }}.
+  "#
 }
 
 // Test reasoning with OpenAI Responses API

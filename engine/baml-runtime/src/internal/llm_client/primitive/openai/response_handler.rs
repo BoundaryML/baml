@@ -248,8 +248,7 @@ pub fn parse_openai_responses_response<C: WithClient + RequestBuilder>(
 ) -> LLMResponse {
     let response = match ResponsesApiResponse::deserialize(&response_body)
         .context(format!(
-            "Failed to parse into a responses API response: {}",
-            response_body
+            "Failed to parse into a responses API response: {response_body}"
         ))
         .map_err(|e| LLMErrorResponse {
             client: client.context().name.to_string(),
@@ -344,8 +343,7 @@ pub fn scan_openai_responses_stream(
 
     let event = ResponsesApiStreamEvent::deserialize(&event_body)
         .context(format!(
-            "Failed to parse into a responses API stream event: {}",
-            event_body
+            "Failed to parse into a responses API stream event: {event_body}"
         ))
         .map_err(|e| LLMErrorResponse {
             client: client_name.to_string(),
@@ -404,7 +402,7 @@ pub fn scan_openai_responses_stream(
                     start_time: *system_now,
                     request_options: request_options.clone(),
                     latency: instant_now.elapsed(),
-                    message: format!("Response failed with error: {}", error),
+                    message: format!("Response failed with error: {error}"),
                     code: ErrorCode::Other(2),
                 });
             }

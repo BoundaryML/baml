@@ -1018,6 +1018,12 @@ class LlmResponseParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenAIO1WithMaxTokens", llm_response=llm_response, mode="request")
         return typing.cast(str, result)
 
+    def TestOpenAIProviderWithResponsesType(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenAIProviderWithResponsesType", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
     def TestOpenAIResponses(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> str:
@@ -2224,6 +2230,12 @@ class LlmStreamParser:
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenAIO1WithMaxTokens", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
+
+    def TestOpenAIProviderWithResponsesType(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenAIProviderWithResponsesType", llm_response=llm_response, mode="stream")
         return typing.cast(str, result)
 
     def TestOpenAIResponses(
