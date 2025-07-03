@@ -642,7 +642,7 @@ impl IntermediateRepr {
         let mut res = vec![];
         all_types.for_each(|t| {
             let found = t.to_non_streaming_type(self);
-            res.extend(found.find_if(&is_union).into_iter().cloned());
+            res.extend(found.find_if(&is_union, false).into_iter().cloned());
         });
 
         res.into_iter()
@@ -677,7 +677,7 @@ impl IntermediateRepr {
         let mut res = vec![];
         all_types.for_each(|t| {
             let found = t.to_streaming_type(self);
-            res.extend(found.find_if(&is_union).into_iter().cloned());
+            res.extend(found.find_if(&is_union, false).into_iter().cloned());
         });
 
         res.into_iter()

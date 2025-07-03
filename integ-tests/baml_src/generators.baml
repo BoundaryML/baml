@@ -49,5 +49,5 @@ generator lang_go {
   output_dir "../go"
   version "0.200.0"
   client_package_name "example.com/integ-tests"
-  on_generate "gofmt -w ."
+  on_generate "gofmt -w . && goimports -w . && go mod tidy"
 }
