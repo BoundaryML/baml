@@ -15,7 +15,6 @@ package baml_client
 
 import (
 	"context"
-	"fmt"
 
 	"example.com/integ-tests/baml_client/stream_types"
 	"example.com/integ-tests/baml_client/types"

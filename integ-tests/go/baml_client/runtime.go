@@ -14,10 +14,10 @@
 package baml_client
 
 import (
+	"context"
+	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 	"os"
 	"strings"
-
-	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 )
 
 var bamlRuntime *baml.BamlRuntime
