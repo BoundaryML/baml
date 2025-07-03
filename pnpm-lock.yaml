@@ -58,6 +58,8 @@ importers:
         specifier: workspace:*
         version: link:../language_client_typescript
 
+  engine/generators: {}
+
   engine/language_client_typescript:
     dependencies:
       '@scarf/scarf':
