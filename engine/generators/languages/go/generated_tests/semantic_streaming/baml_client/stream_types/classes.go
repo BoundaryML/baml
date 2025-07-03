@@ -43,29 +43,25 @@ func (c *ClassWithBlockDone) Decode(holder *cffi.CFFIValueClass) {
 
 		case "i_16_digits":
 			c.I_16_digits = func(param *cffi.CFFIValueHolder) *int64 {
-				fmt.Printf("\n=== FIELD DECODE ===\n")
-				fmt.Printf("Expecting type: *int64\n")
-				fmt.Printf("===================\n")
 				decoded := baml.Decode(param)
 				return func(result any) *int64 {
 					if result == nil {
 						return nil
 					}
-					return (result).(*int64)
+					casted := (result).(int64)
+					return &casted
 				}(decoded)
 			}(valueHolder)
 
 		case "s_20_words":
 			c.S_20_words = func(param *cffi.CFFIValueHolder) *string {
-				fmt.Printf("\n=== FIELD DECODE ===\n")
-				fmt.Printf("Expecting type: *string\n")
-				fmt.Printf("===================\n")
 				decoded := baml.Decode(param)
 				return func(result any) *string {
 					if result == nil {
 						return nil
 					}
-					return (result).(*string)
+					casted := (result).(string)
+					return &casted
 				}(decoded)
 			}(valueHolder)
 
@@ -118,30 +114,26 @@ func (c *ClassWithoutDone) Decode(holder *cffi.CFFIValueClass) {
 
 		case "i_16_digits":
 			c.I_16_digits = func(param *cffi.CFFIValueHolder) *int64 {
-				fmt.Printf("\n=== FIELD DECODE ===\n")
-				fmt.Printf("Expecting type: *int64\n")
-				fmt.Printf("===================\n")
 				decoded := baml.Decode(param)
 				return func(result any) *int64 {
 					if result == nil {
 						return nil
 					}
-					return (result).(*int64)
+					casted := (result).(int64)
+					return &casted
 				}(decoded)
 			}(valueHolder)
 
 		case "s_20_words":
 			c.S_20_words = baml.DecodeStreamingState(valueHolder, func(inner *cffi.CFFIValueHolder) *string {
 				return func(param *cffi.CFFIValueHolder) *string {
-					fmt.Printf("\n=== FIELD DECODE ===\n")
-					fmt.Printf("Expecting type: *string\n")
-					fmt.Printf("===================\n")
 					decoded := baml.Decode(param)
 					return func(result any) *string {
 						if result == nil {
 							return nil
 						}
-						return (result).(*string)
+						casted := (result).(string)
+						return &casted
 					}(decoded)
 				}(inner)
 			})
@@ -201,57 +193,49 @@ func (c *SemanticContainer) Decode(holder *cffi.CFFIValueClass) {
 
 		case "sixteen_digit_number":
 			c.Sixteen_digit_number = func(param *cffi.CFFIValueHolder) *int64 {
-				fmt.Printf("\n=== FIELD DECODE ===\n")
-				fmt.Printf("Expecting type: *int64\n")
-				fmt.Printf("===================\n")
 				decoded := baml.Decode(param)
 				return func(result any) *int64 {
 					if result == nil {
 						return nil
 					}
-					return (result).(*int64)
+					casted := (result).(int64)
+					return &casted
 				}(decoded)
 			}(valueHolder)
 
 		case "string_with_twenty_words":
 			c.String_with_twenty_words = func(param *cffi.CFFIValueHolder) *string {
-				fmt.Printf("\n=== FIELD DECODE ===\n")
-				fmt.Printf("Expecting type: *string\n")
-				fmt.Printf("===================\n")
 				decoded := baml.Decode(param)
 				return func(result any) *string {
 					if result == nil {
 						return nil
 					}
-					return (result).(*string)
+					casted := (result).(string)
+					return &casted
 				}(decoded)
 			}(valueHolder)
 
 		case "class_1":
 			c.Class_1 = func(param *cffi.CFFIValueHolder) *ClassWithoutDone {
-				fmt.Printf("\n=== FIELD DECODE ===\n")
-				fmt.Printf("Expecting type: *ClassWithoutDone\n")
-				fmt.Printf("===================\n")
 				decoded := baml.Decode(param)
 				return func(result any) *ClassWithoutDone {
 					if result == nil {
 						return nil
 					}
-					return (result).(*ClassWithoutDone)
+					casted := (result).(*ClassWithoutDone)
+					return casted
 				}(decoded)
 			}(valueHolder)
 
 		case "class_2":
 			c.Class_2 = func(param *cffi.CFFIValueHolder) *types.ClassWithBlockDone {
-				fmt.Printf("\n=== FIELD DECODE ===\n")
-				fmt.Printf("Expecting type: *types.ClassWithBlockDone\n")
-				fmt.Printf("===================\n")
 				decoded := baml.Decode(param)
 				return func(result any) *types.ClassWithBlockDone {
 					if result == nil {
 						return nil
 					}
-					return (result).(*types.ClassWithBlockDone)
+					casted := (result).(*types.ClassWithBlockDone)
+					return casted
 				}(decoded)
 			}(valueHolder)
 
@@ -268,15 +252,13 @@ func (c *SemanticContainer) Decode(holder *cffi.CFFIValueClass) {
 
 		case "final_string":
 			c.Final_string = func(param *cffi.CFFIValueHolder) *string {
-				fmt.Printf("\n=== FIELD DECODE ===\n")
-				fmt.Printf("Expecting type: *string\n")
-				fmt.Printf("===================\n")
 				decoded := baml.Decode(param)
 				return func(result any) *string {
 					if result == nil {
 						return nil
 					}
-					return (result).(*string)
+					casted := (result).(string)
+					return &casted
 				}(decoded)
 			}(valueHolder)
 
@@ -340,19 +322,17 @@ func (c *SmallThing) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "i_16_digits":
-			c.I_16_digits = *baml.Decode(valueHolder).(*int64)
+			c.I_16_digits = baml.Decode(valueHolder).(int64)
 
 		case "i_8_digits":
 			c.I_8_digits = func(param *cffi.CFFIValueHolder) *int64 {
-				fmt.Printf("\n=== FIELD DECODE ===\n")
-				fmt.Printf("Expecting type: *int64\n")
-				fmt.Printf("===================\n")
 				decoded := baml.Decode(param)
 				return func(result any) *int64 {
 					if result == nil {
 						return nil
 					}
-					return (result).(*int64)
+					casted := (result).(int64)
+					return &casted
 				}(decoded)
 			}(valueHolder)
 

@@ -64,14 +64,23 @@ pub(crate) fn stream_type_to_go(field: &TypeStreaming, _lookup: &impl TypeLookup
             name,
             meta: alias_meta,
             ..
-        } => TypeGo::TypeAlias {
-            package: match alias_meta.streaming_behavior.done {
-                true => types_pkg.clone(),
-                false => stream_pkg.clone(),
-            },
-            name: name.clone(),
-            meta,
-        },
+        } => {
+            if _lookup.expand_recursive_type(name).is_err() {
+                TypeGo::Any {
+                    reason: format!("Recursive type alias {name} is not supported in Go"),
+                    meta,
+                }
+            } else {
+                TypeGo::TypeAlias {
+                    package: match alias_meta.streaming_behavior.done {
+                        true => types_pkg.clone(),
+                        false => stream_pkg.clone(),
+                    },
+                    name: name.clone(),
+                    meta,
+                }
+            }
+        }
         T::Tuple(..) => TypeGo::Any {
             reason: "tuples are not supported in Go".to_string(),
             meta,
@@ -181,11 +190,20 @@ pub(crate) fn type_to_go(field: &TypeNonStreaming, _lookup: &impl TypeLookups) -
             reason: "arrow types are not supported in Go".to_string(),
             meta,
         },
-        T::RecursiveTypeAlias { name, .. } => TypeGo::TypeAlias {
-            package: type_pkg.clone(),
-            name: name.clone(),
-            meta,
-        },
+        T::RecursiveTypeAlias { name, .. } => {
+            if _lookup.expand_recursive_type(name).is_err() {
+                TypeGo::Any {
+                    reason: format!("Recursive type alias {name} is not supported in Go"),
+                    meta,
+                }
+            } else {
+                TypeGo::TypeAlias {
+                    package: type_pkg.clone(),
+                    name: name.clone(),
+                    meta,
+                }
+            }
+        }
         T::Union(union_type_generic, union_meta) => match union_type_generic.view() {
             baml_types::ir_type::UnionTypeViewGeneric::Null => TypeGo::Any {
                 reason: "Null types are not supported in Go".to_string(),
@@ -293,7 +311,11 @@ impl From<&TypeValue> for TypeGo {
             TypeValue::Bool => TypeGo::Bool(None, meta),
             TypeValue::Null => TypeGo::Any {
                 reason: "Null types are not supported in Go".to_string(),
-                meta,
+                meta: {
+                    let mut meta = meta;
+                    meta.make_optional();
+                    meta
+                },
             },
             TypeValue::Media(baml_media_type) => TypeGo::Media(baml_media_type.into(), meta),
         }

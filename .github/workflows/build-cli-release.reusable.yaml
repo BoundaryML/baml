@@ -4,11 +4,11 @@ on:
   workflow_call:
     inputs:
       version:
-        description: 'Release version'
+        description: "Release version"
         required: false
         type: string
       package_for_release:
-        description: 'Create archives for release instead of raw binaries'
+        description: "Create archives for release instead of raw binaries"
         type: boolean
         default: true
         required: false
@@ -17,7 +17,6 @@ on:
       - protoc-fix
 env:
   MACOSX_DEPLOYMENT_TARGET: "10.13"
-        
 
 concurrency:
   # suffix is important to prevent a concurrency deadlock with the calling workflow
@@ -55,7 +54,7 @@ jobs:
     # with a newer GLIBC version compatible with Node20 used by actions/checkout@v4
     # container: ${{ contains(matrix._.os, 'ubuntu') && (contains(matrix._.target, 'x86_64') && 'quay.io/pypa/manylinux_2_28_x86_64' || 'ghcr.io/rust-cross/manylinux_2_28-cross:aarch64') || '' }}
     runs-on: ${{ matrix._.os }}
-    
+
     env:
       CROSS_VERSION: v0.2.5
       CARGO: cargo
@@ -63,7 +62,7 @@ jobs:
       RUST_BACKTRACE: 1
       # When CARGO is set to CROSS, TARGET_DIR includes matrix.target.
       TARGET_DIR: ./engine/target
-      
+
     steps:
       - uses: actions/checkout@v4
       # - name: Install packages (Ubuntu)
@@ -82,8 +81,8 @@ jobs:
           prefix-key: "v5-rust-${{ matrix._.target }}"
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.21'
-      
+          go-version: "1.21"
+
       - name: Install protoc-gen-go into .cargo/bin
         shell: bash
         run: |
@@ -91,7 +90,8 @@ jobs:
           # directly into a directory that is guaranteed to be in the PATH for cargo.
           # We also create a symlink from the go/bin to the cargo/bin for consistency.
           mkdir -p .cargo/bin
-          go install github.com/golang/protobuf/protoc-gen-go@latest
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+          go install golang.org/x/tools/cmd/goimports@latest
           cp "$HOME/go/bin/protoc-gen-go" ".cargo/bin/"
           echo "Installed protoc-gen-go into .cargo/bin:"
           ls -la .cargo/bin
@@ -111,14 +111,12 @@ jobs:
           # Test that protoc can find the go plugin (this will show an error about missing .proto file, but that's expected)
           protoc --go_out=/tmp --help | grep -q "go_out" && echo "✅ protoc recognizes --go_out flag" || echo "❌ protoc does not recognize --go_out flag"
 
-  
-      
       - name: Use Cross
         if: contains(matrix._.os, 'ubuntu')
         run: |
           cargo install cross
           echo 'CARGO=cross' >> "$GITHUB_ENV"
-      
+
       - name: Set target variables
         shell: bash
         run: |
@@ -129,7 +127,7 @@ jobs:
         if: contains(matrix._.target, 'linux')
         run: |
           ldd --version
-      
+
       - name: Show command used for Cargo
         shell: bash
         run: |
@@ -137,7 +135,6 @@ jobs:
           echo "target flag is: ${{ env.TARGET_FLAGS }}"
           echo "target dir is: ${{ env.TARGET_DIR }}"
 
-    
       # Build the CLI - Always use static-ssl features
       - name: Build CLI Binary
         # This single step now handles all builds
@@ -159,13 +156,13 @@ jobs:
             export PROTOC_GEN_GO_PATH="${{ steps.protoc_gen_go_setup.outputs.protoc_gen_go_path }}"
           fi
           echo "Using PROTOC_GEN_GO_PATH: $PROTOC_GEN_GO_PATH"
-          
+
           # We must use PROTOC_GEN_GO_PATH to explicitly tell the build script
           # where to find the plugin, as the cross-compile environment is isolated.
           export GOPATH=$HOME/go
           export GOBIN=$GOPATH/bin
           export PATH=$PATH:$GOROOT:$GOPATH:$GOBIN
-          
+
           ${{ env.CARGO }} build --release -p baml_cffi ${{ env.TARGET_FLAGS }}
         working-directory: engine
         # Skip this step on Windows runners
@@ -201,17 +198,16 @@ jobs:
           echo "Original Filename: ${base_name}"
           echo "New Filename: ${new_name}"
 
-
       # List target directories to debug build outputs
       - name: List target directories
         shell: bash
         run: |
           echo "Listing target/ directory:"
           ls -la engine/target/
-          
+
           echo "Listing target/${{ matrix._.target }} directory:"
           ls -la engine/target/${{ matrix._.target }}/
-          
+
           echo "Listing target/${{ matrix._.target }}/release directory:"
           ls -la engine/target/${{ matrix._.target }}/release/
 
@@ -257,7 +253,7 @@ jobs:
           # Path now points to the *renamed* library file
           path: engine/target/${{ matrix._.target }}/release/${{ steps.cffi_info.outputs.new_lib_name }}
           if-no-files-found: error # Fail if the library file doesn't exist
-      
+
       # Determine binary path and archive name
       - name: Set binary and archive paths
         id: paths
@@ -281,7 +277,7 @@ jobs:
           archive_base="baml-cli-${version_name}-${{ matrix._.target }}"
           echo "archive_base=$archive_base" >> $GITHUB_OUTPUT
           # Directory to create for staging files
-          echo "archive_dir=./${archive_base}" >> $GITHUB_OUTPUT 
+          echo "archive_dir=./${archive_base}" >> $GITHUB_OUTPUT
 
       # Print determined paths for debugging
       - name: Print artifact details

@@ -16,6 +16,7 @@ import baml_py
 from . import stream_types, types, type_builder
 from .parser import LlmResponseParser, LlmStreamParser
 from .runtime import DoNotUseDirectlyCallManager, BamlCallOptions
+from .globals import DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME as __runtime__
 
 
 class BamlAsyncClient:
@@ -77,14 +78,14 @@ class BamlAsyncClient:
         result = await self.__options.merge_options(baml_options).call_function_async(function_name="ConsumeTestEnum", args={
             "input": input,
         })
-        return typing.cast(types.TestEnum, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.TestEnum, result.cast_to(types, types, stream_types, False, __runtime__))
     async def FnTestAliasedEnumOutput(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.TestEnum:
         result = await self.__options.merge_options(baml_options).call_function_async(function_name="FnTestAliasedEnumOutput", args={
             "input": input,
         })
-        return typing.cast(types.TestEnum, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.TestEnum, result.cast_to(types, types, stream_types, False, __runtime__))
     
 
 
@@ -102,8 +103,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlStream[types.TestEnum, types.TestEnum](
           result,
-          lambda x: typing.cast(types.TestEnum, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.TestEnum, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(types.TestEnum, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.TestEnum, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def FnTestAliasedEnumOutput(self, input: str,
@@ -114,8 +115,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlStream[types.TestEnum, types.TestEnum](
           result,
-          lambda x: typing.cast(types.TestEnum, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.TestEnum, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(types.TestEnum, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.TestEnum, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     

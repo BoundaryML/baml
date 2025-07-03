@@ -1,13 +1,17 @@
-use baml_types::ir_type::TypeGeneric;
+use baml_types::{ir_type::TypeGeneric, ToUnionName};
 
 use crate::{
     baml::cffi::*,
-    ctypes::utils::{Encode, WithIr},
+    ctypes::{
+        self,
+        utils::{Encode, WithIr},
+    },
 };
 
 impl<'a, TypeLookups, T> Encode<CffiFieldTypeHolder> for WithIr<'a, TypeGeneric<T>, TypeLookups>
 where
     TypeLookups: baml_types::baml_value::TypeLookups + 'a,
+    T: std::hash::Hash + std::cmp::Eq,
 {
     fn encode(self) -> CffiFieldTypeHolder {
         let WithIr { value, lookup } = self;
@@ -20,9 +24,14 @@ where
                 cType::EnumType(CffiFieldTypeEnum { name: name.clone() })
             }
             TypeGeneric::Literal(literal_value, _) => cType::LiteralType(literal_value.encode()),
-            TypeGeneric::Class { name, .. } => cType::ClassType(CffiFieldTypeClass {
+            TypeGeneric::Class { name, mode, .. } => cType::ClassType(CffiFieldTypeClass {
                 name: Some(CffiTypeName {
-                    namespace: CffiTypeNamespace::Types.into(),
+                    namespace: match mode {
+                        baml_types::StreamingMode::NonStreaming => CffiTypeNamespace::Types.into(),
+                        baml_types::StreamingMode::Streaming => {
+                            CffiTypeNamespace::StreamTypes.into()
+                        }
+                    },
                     name: name.clone(),
                 }),
             }),
@@ -66,12 +75,54 @@ where
                 unimplemented!("Arrow types are not supported in CFFI");
             }
             TypeGeneric::Union(union_type_generic, _) => {
-                let elements = union_type_generic
-                    .iter_include_null()
-                    .iter()
-                    .map(|&t| WithIr { value: t, lookup }.encode())
-                    .collect();
-                cType::UnionVariantType(CffiFieldTypeUnionVariant { options: elements })
+                let view = union_type_generic.view();
+                match view {
+                    baml_types::ir_type::UnionTypeViewGeneric::Null => {
+                        cType::NullType(CffiFieldTypeNull {})
+                    }
+                    baml_types::ir_type::UnionTypeViewGeneric::Optional(type_generic) => {
+                        let inner = WithIr {
+                            value: type_generic,
+                            lookup,
+                        }
+                        .encode();
+                        cType::OptionalType(Box::new(CffiFieldTypeOptional {
+                            value: Some(Box::new(inner)),
+                        }))
+                    }
+                    baml_types::ir_type::UnionTypeViewGeneric::OneOf(type_generics) => {
+                        let elements = type_generics
+                            .into_iter()
+                            .map(|t| WithIr { value: t, lookup }.encode())
+                            .collect();
+                        cType::UnionVariantType(CffiFieldTypeUnionVariant {
+                            name: Some(CffiTypeName {
+                                namespace: CffiTypeNamespace::Types.into(),
+                                name: value.to_union_name().to_string(),
+                            }),
+                            options: elements,
+                        })
+                    }
+                    baml_types::ir_type::UnionTypeViewGeneric::OneOfOptional(type_generics) => {
+                        let elements = type_generics
+                            .into_iter()
+                            .map(|t| WithIr { value: t, lookup }.encode())
+                            .collect();
+                        let inner = cType::UnionVariantType(CffiFieldTypeUnionVariant {
+                            name: Some(CffiTypeName {
+                                namespace: CffiTypeNamespace::Types.into(),
+                                name: value.to_union_name().to_string(),
+                            }),
+                            options: elements,
+                        });
+                        let inner = CffiFieldTypeHolder {
+                            r#type: Some(inner),
+                        };
+                        cType::OptionalType(Box::new(CffiFieldTypeOptional {
+                            value: Some(Box::new(inner)),
+                        }))
+                    }
+                }
             }
         };
 

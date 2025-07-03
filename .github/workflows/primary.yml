@@ -48,7 +48,9 @@ jobs:
         with:
           go-version: "1.24"
       - name: Install protoc-gen-go
-        run: go install github.com/golang/protobuf/protoc-gen-go@latest
+        run: go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+      - name: Install goimports
+        run: go install golang.org/x/tools/cmd/goimports@latest
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
@@ -79,7 +81,9 @@ jobs:
       - uses: jdx/mise-action@v2
       - uses: actions/setup-go@v5
       - name: Install protoc-gen-go
-        run: go install github.com/golang/protobuf/protoc-gen-go@latest
+        run: go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+      - name: Install goimports
+        run: go install golang.org/x/tools/cmd/goimports@latest
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -138,20 +142,20 @@ jobs:
         run: |
           git diff --exit-code || (echo "::error:: merge canary and run codegen again" && exit 1)
   build-wasm:
-      runs-on: ubuntu-latest
-      steps:
-        - uses: actions/checkout@v4
-        - uses: jdx/mise-action@v2
-        - uses: dtolnay/rust-toolchain@stable
-          with:
-            toolchain: stable
-        - run: rustup target add wasm32-unknown-unknown
-        - uses: Swatinem/rust-cache@v2
-          with:
-            workspaces: engine
-        - name: Build rust for wasm32
-          run: cargo build --target=wasm32-unknown-unknown
-          working-directory: engine/baml-schema-wasm
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+      - run: rustup target add wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: engine
+      - name: Build rust for wasm32
+        run: cargo build --target=wasm32-unknown-unknown
+        working-directory: engine/baml-schema-wasm
   build:
     runs-on: ubuntu-latest
     steps:
@@ -166,19 +170,19 @@ jobs:
           workspaces: engine
       - uses: actions/setup-go@v4
         with:
-          go-version: '1.24'
+          go-version: "1.24"
       - name: Install protoc-gen-go
-        run: go install github.com/golang/protobuf/protoc-gen-go@latest
+        run: go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
       - name: Install goimports
         run: go install golang.org/x/tools/cmd/goimports@latest
       - uses: actions/setup-python@v4
         with:
-          python-version: '3.13'
+          python-version: "3.13"
       - name: Install ruff
         run: pip install ruff
       - uses: actions/setup-node@v4
         with:
-          node-version: '24.2.0'
+          node-version: "24.2.0"
       - name: Install prettier
         run: npm install -g prettier
       - name: Install Biome
@@ -214,7 +218,9 @@ jobs:
         with:
           go-version: "1.21.x"
       - name: Install protoc-gen-go
-        run: go install github.com/golang/protobuf/protoc-gen-go@latest
+        run: go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+      - name: Install goimports
+        run: go install golang.org/x/tools/cmd/goimports@latest
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable

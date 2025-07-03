@@ -153,8 +153,9 @@ message CFFIFieldTypeHolder {
     CFFIFieldTypeMap map_type = 12;
     CFFIFieldTypeTuple tuple_type = 13;
     CFFIFieldTypeUnionVariant union_variant_type = 14;
-    CFFIFieldTypeChecked checked_type = 15;
-    CFFIFieldTypeStreamState stream_state_type = 16;
+    CFFIFieldTypeOptional optional_type = 15;
+    CFFIFieldTypeChecked checked_type = 16;
+    CFFIFieldTypeStreamState stream_state_type = 17;
   }
 }
 
@@ -217,7 +218,12 @@ message CFFIFieldTypeTuple {
 }
 
 message CFFIFieldTypeUnionVariant {
-  repeated CFFIFieldTypeHolder options = 1;
+  CFFITypeName name = 1;
+  repeated CFFIFieldTypeHolder options = 2;
+}
+
+message CFFIFieldTypeOptional {
+  CFFIFieldTypeHolder value = 1;
 }
 
 message CFFIFieldTypeChecked {

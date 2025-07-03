@@ -1,6 +1,5 @@
 use baml_types::{
-    baml_value::TypeQuery, ir_type::TypeGeneric, type_meta, BamlValue, BamlValueWithMeta, HasType,
-    ToUnionName,
+    baml_value::TypeQuery, ir_type::TypeGeneric, type_meta, BamlValueWithMeta, HasType, ToUnionName,
 };
 
 use crate::{
@@ -202,6 +201,7 @@ where
     TypeLookups: baml_types::baml_value::TypeLookups + 'a,
     for<'b> BamlValueWithMeta<Meta<'b, T>>: TypeQuery<T> + MaybeWrapUnion<TypeLookups>,
     TypeGeneric<T>: std::fmt::Display,
+    T: std::hash::Hash + std::cmp::Eq,
 {
     fn encode(self) -> CffiValueHolder {
         use cffi_value_holder::Value;

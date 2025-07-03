@@ -40,10 +40,10 @@ func (c *ClassWithBlockDone) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "i_16_digits":
-			c.I_16_digits = *baml.Decode(valueHolder).(*int64)
+			c.I_16_digits = baml.Decode(valueHolder).(int64)
 
 		case "s_20_words":
-			c.S_20_words = *baml.Decode(valueHolder).(*string)
+			c.S_20_words = baml.Decode(valueHolder).(string)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -93,10 +93,10 @@ func (c *ClassWithoutDone) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "i_16_digits":
-			c.I_16_digits = *baml.Decode(valueHolder).(*int64)
+			c.I_16_digits = baml.Decode(valueHolder).(int64)
 
 		case "s_20_words":
-			c.S_20_words = *baml.Decode(valueHolder).(*string)
+			c.S_20_words = baml.Decode(valueHolder).(string)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -152,10 +152,10 @@ func (c *SemanticContainer) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "sixteen_digit_number":
-			c.Sixteen_digit_number = *baml.Decode(valueHolder).(*int64)
+			c.Sixteen_digit_number = baml.Decode(valueHolder).(int64)
 
 		case "string_with_twenty_words":
-			c.String_with_twenty_words = *baml.Decode(valueHolder).(*string)
+			c.String_with_twenty_words = baml.Decode(valueHolder).(string)
 
 		case "class_1":
 			c.Class_1 = *baml.Decode(valueHolder).(*ClassWithoutDone)
@@ -175,7 +175,7 @@ func (c *SemanticContainer) Decode(holder *cffi.CFFIValueClass) {
 			})
 
 		case "final_string":
-			c.Final_string = *baml.Decode(valueHolder).(*string)
+			c.Final_string = baml.Decode(valueHolder).(string)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -237,10 +237,10 @@ func (c *SmallThing) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "i_16_digits":
-			c.I_16_digits = *baml.Decode(valueHolder).(*int64)
+			c.I_16_digits = baml.Decode(valueHolder).(int64)
 
 		case "i_8_digits":
-			c.I_8_digits = *baml.Decode(valueHolder).(*int64)
+			c.I_8_digits = baml.Decode(valueHolder).(int64)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))

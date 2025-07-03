@@ -16,7 +16,7 @@ import baml_py
 from . import stream_types, types, type_builder
 from .parser import LlmResponseParser, LlmStreamParser
 from .runtime import DoNotUseDirectlyCallManager, BamlCallOptions
-
+from .globals import DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME as __runtime__
 
 class BamlSyncClient:
     __options: DoNotUseDirectlyCallManager
@@ -90,14 +90,14 @@ class BamlSyncClient:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="Foo", args={
             "x": x,
         })
-        return typing.cast(types.JSON, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.JSON, result.cast_to(types, types, stream_types, False, __runtime__))
     def JsonInput(self, x: types.JSON,
         baml_options: BamlCallOptions = {},
     ) -> types.JSON:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="JsonInput", args={
             "x": x,
         })
-        return typing.cast(types.JSON, result.cast_to(types, types, stream_types, False))
+        return typing.cast(types.JSON, result.cast_to(types, types, stream_types, False, __runtime__))
     
 
 
@@ -115,8 +115,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[stream_types.JSON, types.JSON](
           result,
-          lambda x: typing.cast(stream_types.JSON, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.JSON, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(stream_types.JSON, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.JSON, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def JsonInput(self, x: types.JSON,
@@ -127,8 +127,8 @@ class BamlStreamClient:
         })
         return baml_py.BamlSyncStream[stream_types.JSON, types.JSON](
           result,
-          lambda x: typing.cast(stream_types.JSON, x.cast_to(types, types, stream_types, True)),
-          lambda x: typing.cast(types.JSON, x.cast_to(types, types, stream_types, False)),
+          lambda x: typing.cast(stream_types.JSON, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.JSON, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     
