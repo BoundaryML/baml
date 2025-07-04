@@ -17,12 +17,22 @@
       "persistent": true
     },
     "generate": {
-      "inputs": ["**/*.baml"],
+      "inputs": [
+        "**/*.rs",
+        "**/*.toml",
+        "**/Cargo.lock",
+        "**/*.j2",
+        "**/*.pest",
+        "**/*.ts",
+        "**/*.tsx",
+        "**/*.baml"
+      ],
       "outputs": ["baml_client/**"]
     },
     "typecheck": {
       "dependsOn": ["^typecheck"],
       "inputs": [
+        "**/*.baml",
         "**/*.rs",
         "**/*.toml",
         "**/Cargo.lock",
@@ -42,6 +52,7 @@
     "build": {
       "dependsOn": ["^build"],
       "inputs": [
+        "**/*.baml",
         "**/*.rs",
         "**/*.toml",
         "**/Cargo.lock",
@@ -62,6 +73,7 @@
     "release": {
       "dependsOn": ["^release"],
       "inputs": [
+        "**/*.baml",
         "**/*.rs",
         "**/*.toml",
         "**/Cargo.lock",

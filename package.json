@@ -17,7 +17,7 @@
     "dev:vscode": "pnpm build:playground && turbo run dev --parallel --filter=@baml/cli --filter=@baml/language-server --filter=baml-extension",
     "dev:language-server": "turbo run dev --filter=@baml/language-server",
     "dev:playground": "turbo run dev --filter=@baml/playground",
-    "generate": "pnpm build:cli && turbo run generate --concurrency=1",
+    "generate": "pnpm build:cli --force && turbo run generate --concurrency=1 --force",
     "typecheck": "turbo run typecheck",
     "lint:ws": "pnpm dlx sherif@latest",
     "postinstall.skip": "pnpm lint:ws",
