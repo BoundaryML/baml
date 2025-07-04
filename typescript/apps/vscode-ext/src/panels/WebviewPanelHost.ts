@@ -307,9 +307,19 @@ export class WebviewPanelHost {
                         : ''
                     }
                 </div>
+                <!-- 
+                  Sandbox permissions explained:
+                  - allow-scripts: Required for JavaScript execution
+                  - allow-forms: Required for form submissions
+                  - allow-same-origin: Required for accessing localStorage and other same-origin resources
+                  - allow-modals: Allows alert/confirm/prompt dialogs
+                  - allow-popups: Allows window.open() if needed
+                  - allow-clipboard-read: Enables reading from clipboard (copy operations)
+                  - allow-clipboard-write: Enables writing to clipboard (paste operations)
+                -->
                 <iframe
                     id="playground"
-                    sandbox="allow-scripts allow-forms allow-same-origin"
+                    sandbox="allow-scripts allow-forms allow-same-origin allow-modals allow-popups allow-clipboard-read allow-clipboard-write"
                     src="http://localhost:${this._playgroundPort}/"
                 ></iframe>
             </div>
