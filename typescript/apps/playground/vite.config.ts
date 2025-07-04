@@ -39,6 +39,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      '~': path.resolve(__dirname, './src'),
       '@gloo-ai/baml-schema-wasm-web': path.resolve(
         __dirname,
         '../../../engine/baml-schema-wasm/web/dist',

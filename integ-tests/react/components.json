@@ -11,9 +11,9 @@
   },
   "iconLibrary": "lucide",
   "aliases": {
-    "components": "@/components",
-    "hooks": "@/hooks",
-    "lib": "@/lib",
+    "components": "~/components",
+    "hooks": "~/hooks",
+    "lib": "~/lib",
     "utils": "@baml/ui/lib/utils",
     "ui": "@baml/ui/components"
   }

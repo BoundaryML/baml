@@ -6,7 +6,7 @@ import { PreviewToolbar } from '../preview-toolbar';
 import { isSidebarOpenAtom } from '../side-bar';
 import { EnvironmentVariablesDialog } from '../side-bar/env-vars';
 import { PromptRenderWrapper } from './prompt-render-wrapper';
-import { TestPanel } from './test-panel';
+import TestPanel from './test-panel';
 
 export const PromptPreview = ({ isEmbed = false }: { isEmbed?: boolean }) => {
   const [showEnvDialog, setShowEnvDialog] = useAtom(showEnvDialogAtom);

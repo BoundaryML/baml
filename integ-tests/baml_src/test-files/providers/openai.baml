@@ -33,7 +33,7 @@ function TestOpenAI(input: string) -> string {
   client GPT4
   prompt #"
     {{ _.role("user") }}
-    Write a nice haiku, given the user input. Make sure to reference the input in the haiku.
+    Write a nice haiku, given the user input. Make sure to reference the input in the haiku. Make it 50 paragraphs
 
     Input: {{ input }}
   "#
@@ -124,7 +124,6 @@ function TestOpenAIGPT4oMini3(input: string) -> string {
     Write a nice haiku, given the user input. Make sure to reference the input in the haiku.
   "#
 }
-
 
 // Add test cases to verify the behavior
 test TestOpenAIClients {

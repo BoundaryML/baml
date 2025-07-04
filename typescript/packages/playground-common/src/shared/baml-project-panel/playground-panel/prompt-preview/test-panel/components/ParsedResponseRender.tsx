@@ -1,39 +1,31 @@
-import { ScrollArea } from '@baml/ui/scroll-area';
-import type {
-  WasmFunctionResponse,
-  WasmTestResponse,
-} from '@gloo-ai/baml-schema-wasm-web';
-import JsonView from '@uiw/react-json-view';
-import { githubLightTheme as lightTheme } from '@uiw/react-json-view/githubLight';
-import { vscodeTheme as darkTheme } from '@uiw/react-json-view/vscode';
-import { useTheme } from 'next-themes';
-import { RenderPromptPart } from '../../render-text';
+import JsonView from '@uiw/react-json-view'
+import { githubLightTheme as lightTheme } from '@uiw/react-json-view/githubLight'
+import { vscodeTheme as darkTheme } from '@uiw/react-json-view/vscode'
+import { type WasmFunctionResponse, type WasmTestResponse } from '@gloo-ai/baml-schema-wasm-web'
+import { useTheme } from 'next-themes'
+import { RenderPromptPart } from '../../render-text'
+import { ScrollArea } from '@baml/ui/scroll-area'
 
 const ErrorText = ({ text }: { text: string }) => {
-  return <pre className="text-xs text-red-500 whitespace-pre-wrap">{text}</pre>;
-};
+  return <pre className='text-xs text-red-500 whitespace-pre-wrap'>{text}</pre>
+}
 
 // Renders the parsed response only
 export const ParsedResponseRenderer: React.FC<{
-  response?: WasmFunctionResponse | WasmTestResponse;
+  response?: WasmFunctionResponse | WasmTestResponse
 }> = ({ response }) => {
   if (!response) {
-    return (
-      <div className="text-xs text-muted-foreground">
-        Waiting for response...
-      </div>
-    );
+    return <div className='text-xs text-muted-foreground'>Waiting for response...</div>
   }
 
-  const llmFailure = response.llm_failure();
-  const failureMessage =
-    'failure_message' in response ? response.failure_message() : undefined;
+  const llmFailure = response.llm_failure()
+  const failureMessage = 'failure_message' in response ? response.failure_message() : undefined
 
   if (llmFailure) {
-    return <ErrorText text={llmFailure.message} />;
+    return <ErrorText text={llmFailure.message} />
   }
 
-  const parsedResponse = response.parsed_response();
+  const parsedResponse = response.parsed_response()
 
   return (
     <div>
@@ -44,37 +36,35 @@ export const ParsedResponseRenderer: React.FC<{
       )}
       {failureMessage && <ErrorText text={failureMessage} />}
     </div>
-  );
-};
+  )
+}
 
-const ParsedResponseRender = ({
-  response,
-}: { response: string | undefined }) => {
-  const { theme } = useTheme();
+const ParsedResponseRender = ({ response }: { response: string | undefined }) => {
+  const { theme } = useTheme()
 
   if (!response) {
-    return null;
+    return null
   }
 
-  let parsedResponseObj;
+  let parsedResponseObj
   try {
-    parsedResponseObj = JSON.parse(response);
+    parsedResponseObj = JSON.parse(response)
     if (parsedResponseObj === null || typeof parsedResponseObj !== 'object') {
-      return <RenderPromptPart text={response} />;
+      return <RenderPromptPart text={response} />
     }
   } catch (e) {
-    parsedResponseObj = response;
+    parsedResponseObj = response
   }
 
   if (typeof parsedResponseObj === 'string') {
-    return <RenderPromptPart text={parsedResponseObj} />;
+    return <RenderPromptPart text={parsedResponseObj} />
   }
 
   return (
-    <div className="flex h-full text-xs">
-      <ScrollArea className="pr-2 w-full text-xs" type="always">
+    <div className='flex max-h-[500px]  text-xs'>
+      <ScrollArea className='pr-2 w-full text-xs' type='always'>
         <JsonView
-          className="p-1 w-full rounded-md"
+          className='p-1 w-full rounded-md'
           value={parsedResponseObj || {}}
           collapsed={false}
           enableClipboard={true}
@@ -87,54 +77,50 @@ const ParsedResponseRender = ({
           <JsonView.String
             render={({ children, ...reset }, { type, value, keyName }) => {
               if (type === 'type') {
-                return <span />;
+                return <span />
               }
               if (type === 'value') {
                 return (
-                  <span {...reset} className="whitespace-pre-wrap break-all">
-                    &quot;{children}&quot;
-                    <span className="text-muted-foreground">, </span>
+                  <span {...reset} className='whitespace-pre-wrap break-all'>
+                    &quot;{children}&quot;<span className='text-muted-foreground'>, </span>
                   </span>
-                );
+                )
               }
             }}
           />
           <JsonView.Colon
             render={(props, { parentValue, value, keyName }) => {
               if (Array.isArray(parentValue) && props.children == ':') {
-                return <span />;
+                return <span />
               }
-              return <span {...props}>: </span>;
+              return <span {...props}>: </span>
             }}
           />
 
           <JsonView.Null
             render={({ children, ...reset }) => (
-              <span {...reset} className="whitespace-pre-wrap break-words">
+              <span {...reset} className='whitespace-pre-wrap break-words'>
                 null
               </span>
             )}
           />
           <JsonView.Undefined
             render={({ children, ...reset }) => (
-              <span {...reset} className="whitespace-pre-wrap break-words">
+              <span {...reset} className='whitespace-pre-wrap break-words'>
                 undefined
               </span>
             )}
           />
           <JsonView.KeyName
             render={({ ...props }, { parentValue, value, keyName }) => {
-              if (
-                Array.isArray(parentValue) &&
-                Number.isFinite(props.children)
-              ) {
-                return <span className="" />;
+              if (Array.isArray(parentValue) && Number.isFinite(props.children)) {
+                return <span className='' />
               }
-              return <span className="" {...props} />;
+              return <span className='' {...props} />
             }}
           />
         </JsonView>
       </ScrollArea>
     </div>
-  );
-};
+  )
+}
