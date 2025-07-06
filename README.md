@@ -155,6 +155,7 @@ We support: [OpenAI](https://docs.boundaryml.com/ref/llm-client-providers/open-a
 
 ## Build beautiful streaming UIs
 BAML generates a ton of utilities for NextJS, Python (and any language) to make streaming UIs easy.
+<br> <br>
 ![recipe-generator](https://github.com/user-attachments/assets/cf82495b-21fc-40bf-ae98-93eef923d620)
 
 BAML's streaming interfaces are fully type-safe. Check out the [Streaming Docs](https://docs.boundaryml.com/guide/baml-basics/streaming), and our [React hooks](https://docs.boundaryml.com/guide/framework-integration/react-next-js/quick-start)
