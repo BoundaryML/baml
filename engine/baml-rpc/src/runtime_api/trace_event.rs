@@ -100,7 +100,7 @@ pub struct EvaluationContext {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct ClientDetails {
+pub struct RpcClientDetails {
     pub name: String,
     pub provider: String,
     pub options: IndexMap<String, serde_json::Value>,
@@ -116,16 +116,18 @@ pub enum IntermediateData<'a> {
         prompt: Vec<LLMChatMessage<'a>>,
     },
     RawLLMRequest {
+        http_request_id: String,
         url: String,
         method: String,
         headers: HashMap<String, String>,
         body: HTTPBody<'a>,
     },
     RawLLMResponse {
+        http_request_id: String,
         status: u16,
         headers: Option<HashMap<String, String>>,
         body: HTTPBody<'a>,
-        client_details: ClientDetails,
+        client_details: RpcClientDetails,
     },
     RawLLMResponseStream {
         event: Event<'a>,

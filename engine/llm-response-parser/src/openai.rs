@@ -1,4 +1,4 @@
-use serde::{Deserialize, Deserializer};
+use serde::{Deserialize, Deserializer, Serialize};
 
 pub type CompletionResponse = ChatCompletionGeneric<CompletionChoice>;
 pub type ChatCompletionResponse = ChatCompletionGeneric<ChatCompletionChoice>;
@@ -49,7 +49,7 @@ pub struct ChatCompletionChoice {
     pub logprobs: Option<ChatChoiceLogprobs>,
 }
 
-#[derive(Debug, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 pub struct CompletionUsage {
     pub prompt_tokens: u64,
     pub completion_tokens: u64,
@@ -150,7 +150,10 @@ mod tests {
         assert_eq!(response.id, Some("chatcmpl-123".to_string()));
         assert_eq!(response.model, "gpt-3.5-turbo-0125");
         assert_eq!(response.choices.len(), 1);
-        assert_eq!(response.choices[0].message.content, Some("Hello! How can I help you today?".to_string()));
+        assert_eq!(
+            response.choices[0].message.content,
+            Some("Hello! How can I help you today?".to_string())
+        );
         assert_eq!(response.choices[0].finish_reason, Some("stop".to_string()));
         assert!(response.usage.is_some());
         assert_eq!(response.usage.as_ref().unwrap().total_tokens, 21);
