@@ -295,8 +295,18 @@ impl TypeGo {
                     _ => format!("*({param}).(*{})", self.serialize_type(pkg)),
                 }
             }
-            _ if self.meta().is_optional() => self.cast_from_any_skip_optional(param, pkg),
-            _ => format!("*({param}).(*{})", self.serialize_type(pkg)),
+            _ if !self.meta().is_optional()
+                && matches!(
+                    self,
+                    TypeGo::TypeAlias { .. }
+                        | TypeGo::Class { .. }
+                        | TypeGo::Union { .. }
+                        | TypeGo::Enum { .. }
+                ) =>
+            {
+                format!("*({param}).(*{})", self.serialize_type(pkg))
+            }
+            _ => format!("({param}).({})", self.serialize_type(pkg)),
         }
     }
 

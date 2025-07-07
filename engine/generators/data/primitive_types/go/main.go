@@ -11,6 +11,70 @@ import (
 func main() {
 	ctx := context.Background()
 
+	// Test top-level primitive types
+	fmt.Println("\nTesting top-level primitive types...")
+
+	// Test top-level string
+	stringResult, err := baml_client.TestTopLevelString(ctx, "test string")
+	if err != nil {
+		fmt.Printf("Error testing top-level string: %v\n", err)
+		os.Exit(1)
+	}
+	if stringResult != "Hello from BAML!" {
+		fmt.Printf("Expected 'Hello from BAML!', got '%s'\n", stringResult)
+		os.Exit(1)
+	}
+	fmt.Println("✓ TestTopLevelString passed")
+
+	// Test top-level int
+	intResult, err := baml_client.TestTopLevelInt(ctx, "test int")
+	if err != nil {
+		fmt.Printf("Error testing top-level int: %v\n", err)
+		os.Exit(1)
+	}
+	if intResult != 42 {
+		fmt.Printf("Expected 42, got %d\n", intResult)
+		os.Exit(1)
+	}
+	fmt.Println("✓ TestTopLevelInt passed")
+
+	// Test top-level float
+	floatResult, err := baml_client.TestTopLevelFloat(ctx, "test float")
+	if err != nil {
+		fmt.Printf("Error testing top-level float: %v\n", err)
+		os.Exit(1)
+	}
+	if floatResult < 3.14 || floatResult > 3.15 {
+		fmt.Printf("Expected ~3.14159, got %f\n", floatResult)
+		os.Exit(1)
+	}
+	fmt.Println("✓ TestTopLevelFloat passed")
+
+	// Test top-level bool
+	boolResult, err := baml_client.TestTopLevelBool(ctx, "test bool")
+	if err != nil {
+		fmt.Printf("Error testing top-level bool: %v\n", err)
+		os.Exit(1)
+	}
+	if !boolResult {
+		fmt.Printf("Expected true, got false\n")
+		os.Exit(1)
+	}
+	fmt.Println("✓ TestTopLevelBool passed")
+
+	// TODO(vbv): Top level null is not supported yet.
+	// Test top-level null
+	// nullResult, err := baml_client.TestTopLevelNull(ctx, "test null")
+	// if err != nil {
+	// 	fmt.Printf("Error testing top-level null: %v\n", err)
+	// 	os.Exit(1)
+	// }
+	// if nullResult != nil {
+	// 	fmt.Printf("Expected nil, got %v\n", nullResult)
+	// 	os.Exit(1)
+	// }
+	// fmt.Println("✓ TestTopLevelNull passed")
+
 	// Test basic primitive types
 	fmt.Println("Testing PrimitiveTypes...")
 	primitiveResult, err := baml_client.TestPrimitiveTypes(ctx, "test input")
