@@ -224,10 +224,11 @@ pub fn convert_ir_type(ir: &IntermediateRepr, ty: &TypeNonStreaming) -> TypeOpen
                 meta: meta_copy,
             },
             UnionTypeViewGeneric::Optional(inner) => {
-                let result = convert_ir_type(ir, inner);
-                // The following statement seems correct but does not match previous behavior.
+                // The seems correct but does not match previous behavior.
+                // let result = convert_ir_type(ir, inner);
                 // result.meta_mut().nullable = true;
-                result
+                // result
+                convert_ir_type(ir, inner)
             }
             UnionTypeViewGeneric::OneOf(inner) => TypeOpenApi::Union {
                 one_of: inner.iter().map(|i| convert_ir_type(ir, i)).collect(),
@@ -322,13 +323,14 @@ fn type_def_for_checks(checks: Vec<String>) -> TypeOpenApi {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use baml_types::{
         ir_type::{StreamingMode, TypeNonStreaming, TypeValue},
         type_meta::non_streaming::TypeMeta,
         BamlMediaType, LiteralValue,
     };
     use internal_baml_core::ir::repr::make_test_ir;
+
+    use super::*;
 
     fn create_test_meta() -> TypeMeta {
         TypeMeta {
