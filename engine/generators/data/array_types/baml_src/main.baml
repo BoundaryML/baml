@@ -138,3 +138,108 @@ function TestLargeArrays(input: string) -> SimpleArrays {
     Input: {{ input }}
   "#
 }
+
+// Top-level array return type tests
+function TestTopLevelStringArray(input: string) -> string[] {
+  client "openai/gpt-4o-mini"
+  prompt #"
+    Return an array of strings: ["apple", "banana", "cherry", "date"]
+    
+    Input: {{ input }}
+  "#
+}
+
+function TestTopLevelIntArray(input: string) -> int[] {
+  client "openai/gpt-4o-mini"
+  prompt #"
+    Return an array of integers: [10, 20, 30, 40, 50]
+    
+    Input: {{ input }}
+  "#
+}
+
+function TestTopLevelFloatArray(input: string) -> float[] {
+  client "openai/gpt-4o-mini"
+  prompt #"
+    Return an array of floats: [1.5, 2.5, 3.5, 4.5]
+    
+    Input: {{ input }}
+  "#
+}
+
+function TestTopLevelBoolArray(input: string) -> bool[] {
+  client "openai/gpt-4o-mini"
+  prompt #"
+    Return an array of booleans: [true, false, true, false, true]
+    
+    Input: {{ input }}
+  "#
+}
+
+function TestTopLevelNestedArray(input: string) -> int[][] {
+  client "openai/gpt-4o-mini"
+  prompt #"
+    Return a 2D array of integers:
+    [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
+    
+    Input: {{ input }}
+  "#
+}
+
+function TestTopLevel3DArray(input: string) -> string[][][] {
+  client "openai/gpt-4o-mini"
+  prompt #"
+    Return a 3D array of strings:
+    [[["a", "b"], ["c", "d"]], [["e", "f"], ["g", "h"]]]
+    
+    Input: {{ input }}
+  "#
+}
+
+function TestTopLevelEmptyArray(input: string) -> string[] {
+  client "openai/gpt-4o-mini"
+  prompt #"
+    Return an empty array: []
+    
+    Input: {{ input }}
+  "#
+}
+
+function TestTopLevelNullableArray(input: string) -> (string | null)[] {
+  client "openai/gpt-4o-mini"
+  prompt #"
+    Return an array with nullable strings: ["hello", null, "world", null, "!"]
+    
+    Input: {{ input }}
+  "#
+}
+
+function TestTopLevelObjectArray(input: string) -> User[] {
+  client "openai/gpt-4o-mini"
+  prompt #"
+    Return an array of 3 User objects with realistic data.
+    
+    {{ ctx.output_format }}
+    
+    Input: {{ input }}
+  "#
+}
+
+function TestTopLevelMixedArray(input: string) -> (string | int | bool)[] {
+  client "openai/gpt-4o-mini"
+  prompt #"
+    Return a mixed type array: ["hello", 42, true, "world", 100, false]
+    
+    Input: {{ input }}
+  "#
+}
+
+function TestTopLevelArrayOfMaps(input: string) -> map<string, int>[] {
+  client "openai/gpt-4o-mini"
+  prompt #"
+    Return an array of maps:
+    [{"a": 1, "b": 2}, {"x": 10, "y": 20}, {"foo": 100, "bar": 200}]
+    
+    Input: {{ input }}
+  "#
+}

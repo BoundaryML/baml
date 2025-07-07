@@ -188,5 +188,192 @@ func main() {
 	}
 	fmt.Println("✓ LargeArrays test passed")
 
+	// Test top-level array return types
+	fmt.Println("\nTesting top-level array return types...")
+
+	// Test top-level string array
+	stringArray, err := b.TestTopLevelStringArray(ctx, "test string array")
+	if err != nil {
+		fmt.Printf("Error testing top-level string array: %v\n", err)
+		os.Exit(1)
+	}
+	if len(stringArray) != 4 {
+		fmt.Printf("Expected 4 strings, got %d\n", len(stringArray))
+		os.Exit(1)
+	}
+	if stringArray[0] != "apple" || stringArray[1] != "banana" || stringArray[2] != "cherry" || stringArray[3] != "date" {
+		fmt.Printf("Unexpected values in string array\n")
+		os.Exit(1)
+	}
+	fmt.Println("✓ TestTopLevelStringArray passed")
+
+	// Test top-level int array
+	intArray, err := b.TestTopLevelIntArray(ctx, "test int array")
+	if err != nil {
+		fmt.Printf("Error testing top-level int array: %v\n", err)
+		os.Exit(1)
+	}
+	if len(intArray) != 5 {
+		fmt.Printf("Expected 5 integers, got %d\n", len(intArray))
+		os.Exit(1)
+	}
+	if intArray[0] != 10 || intArray[1] != 20 || intArray[2] != 30 || intArray[3] != 40 || intArray[4] != 50 {
+		fmt.Printf("Unexpected values in int array\n")
+		os.Exit(1)
+	}
+	fmt.Println("✓ TestTopLevelIntArray passed")
+
+	// Test top-level float array
+	floatArray, err := b.TestTopLevelFloatArray(ctx, "test float array")
+	if err != nil {
+		fmt.Printf("Error testing top-level float array: %v\n", err)
+		os.Exit(1)
+	}
+	if len(floatArray) != 4 {
+		fmt.Printf("Expected 4 floats, got %d\n", len(floatArray))
+		os.Exit(1)
+	}
+	if floatArray[0] != 1.5 || floatArray[1] != 2.5 || floatArray[2] != 3.5 || floatArray[3] != 4.5 {
+		fmt.Printf("Unexpected values in float array\n")
+		os.Exit(1)
+	}
+	fmt.Println("✓ TestTopLevelFloatArray passed")
+
+	// Test top-level bool array
+	boolArray, err := b.TestTopLevelBoolArray(ctx, "test bool array")
+	if err != nil {
+		fmt.Printf("Error testing top-level bool array: %v\n", err)
+		os.Exit(1)
+	}
+	if len(boolArray) != 5 {
+		fmt.Printf("Expected 5 booleans, got %d\n", len(boolArray))
+		os.Exit(1)
+	}
+	if !boolArray[0] || boolArray[1] || !boolArray[2] || boolArray[3] || !boolArray[4] {
+		fmt.Printf("Unexpected values in bool array\n")
+		os.Exit(1)
+	}
+	fmt.Println("✓ TestTopLevelBoolArray passed")
+
+	// Test top-level nested array
+	nestedArray, err := b.TestTopLevelNestedArray(ctx, "test nested array")
+	if err != nil {
+		fmt.Printf("Error testing top-level nested array: %v\n", err)
+		os.Exit(1)
+	}
+	if len(nestedArray) != 3 {
+		fmt.Printf("Expected 3 rows, got %d\n", len(nestedArray))
+		os.Exit(1)
+	}
+	for i, row := range nestedArray {
+		if len(row) != 3 {
+			fmt.Printf("Expected 3 columns in row %d, got %d\n", i, len(row))
+			os.Exit(1)
+		}
+	}
+	fmt.Println("✓ TestTopLevelNestedArray passed")
+
+	// Test top-level 3D array
+	threeDArray, err := b.TestTopLevel3DArray(ctx, "test 3D array")
+	if err != nil {
+		fmt.Printf("Error testing top-level 3D array: %v\n", err)
+		os.Exit(1)
+	}
+	if len(threeDArray) != 2 {
+		fmt.Printf("Expected 2 levels, got %d\n", len(threeDArray))
+		os.Exit(1)
+	}
+	for i, level := range threeDArray {
+		if len(level) != 2 {
+			fmt.Printf("Expected 2 rows in level %d, got %d\n", i, len(level))
+			os.Exit(1)
+		}
+		for j, row := range level {
+			if len(row) != 2 {
+				fmt.Printf("Expected 2 columns in level %d row %d, got %d\n", i, j, len(row))
+				os.Exit(1)
+			}
+		}
+	}
+	fmt.Println("✓ TestTopLevel3DArray passed")
+
+	// Test top-level empty array
+	emptyArray, err := b.TestTopLevelEmptyArray(ctx, "test empty array")
+	if err != nil {
+		fmt.Printf("Error testing top-level empty array: %v\n", err)
+		os.Exit(1)
+	}
+	if len(emptyArray) != 0 {
+		fmt.Printf("Expected empty array, got %d elements\n", len(emptyArray))
+		os.Exit(1)
+	}
+	fmt.Println("✓ TestTopLevelEmptyArray passed")
+
+	// Test top-level nullable array
+	nullableArray, err := b.TestTopLevelNullableArray(ctx, "test nullable array")
+	if err != nil {
+		fmt.Printf("Error testing top-level nullable array: %v\n", err)
+		os.Exit(1)
+	}
+	if len(nullableArray) != 5 {
+		fmt.Printf("Expected 5 elements in nullable array, got %d\n", len(nullableArray))
+		os.Exit(1)
+	}
+	if nullableArray[0] == nil || *nullableArray[0] != "hello" {
+		fmt.Printf("Expected first element to be 'hello'\n")
+		os.Exit(1)
+	}
+	if nullableArray[1] != nil {
+		fmt.Printf("Expected second element to be nil\n")
+		os.Exit(1)
+	}
+	fmt.Println("✓ TestTopLevelNullableArray passed")
+
+	// Test top-level object array
+	objectArray, err := b.TestTopLevelObjectArray(ctx, "test object array")
+	if err != nil {
+		fmt.Printf("Error testing top-level object array: %v\n", err)
+		os.Exit(1)
+	}
+	if len(objectArray) != 3 {
+		fmt.Printf("Expected 3 users, got %d\n", len(objectArray))
+		os.Exit(1)
+	}
+	for i, user := range objectArray {
+		if user.Name == "" || user.Email == "" {
+			fmt.Printf("User %d has empty fields\n", i)
+			os.Exit(1)
+		}
+	}
+	fmt.Println("✓ TestTopLevelObjectArray passed")
+
+	// Test top-level mixed array
+	mixedArray, err := b.TestTopLevelMixedArray(ctx, "test mixed array")
+	if err != nil {
+		fmt.Printf("Error testing top-level mixed array: %v\n", err)
+		os.Exit(1)
+	}
+	if len(mixedArray) != 6 {
+		fmt.Printf("Expected 6 elements in mixed array, got %d\n", len(mixedArray))
+		os.Exit(1)
+	}
+	fmt.Println("✓ TestTopLevelMixedArray passed")
+
+	// Test top-level array of maps
+	arrayOfMaps, err := b.TestTopLevelArrayOfMaps(ctx, "test array of maps")
+	if err != nil {
+		fmt.Printf("Error testing top-level array of maps: %v\n", err)
+		os.Exit(1)
+	}
+	if len(arrayOfMaps) != 3 {
+		fmt.Printf("Expected 3 maps in array, got %d\n", len(arrayOfMaps))
+		os.Exit(1)
+	}
+	if len(arrayOfMaps[0]) != 2 || len(arrayOfMaps[1]) != 2 || len(arrayOfMaps[2]) != 2 {
+		fmt.Printf("Unexpected map sizes in array of maps\n")
+		os.Exit(1)
+	}
+	fmt.Println("✓ TestTopLevelArrayOfMaps passed")
+
 	fmt.Println("\n✅ All array type tests passed!")
 }
