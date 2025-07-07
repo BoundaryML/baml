@@ -361,10 +361,8 @@ impl<Meta: Clone> UnresolvedOpenAI<Meta> {
                 .unwrap_or_else(|| StringOr::EnvVar("OPENAI_API_KEY".to_string())),
         );
 
-        let mut instance =
+        let instance =
             Self::create_common(properties, Some(either::Either::Left(base_url)), api_key)?;
-        // Set client response type to OpenAIResponses for responses API
-        instance.client_response_type = Some(UnresolvedResponseType::OpenAIResponses);
 
         Ok(instance)
     }
