@@ -92,17 +92,19 @@ pub fn render_functions(
 /// var Stream = &stream{}
 ///
 /// type StreamValue[TStream any, TFinal any] struct {
+///     IsError   bool
+///     Error     error
 ///     IsFinal   bool
 ///     as_final  *TFinal
 ///     as_stream *TStream
 /// }
 ///
-/// func (s *StreamValue[TStream, TFinal]) Final() TFinal {
-///     return *s.as_final
+/// func (s *StreamValue[TStream, TFinal]) Final() *TFinal {
+///     return s.as_final
 /// }
 ///
-/// func (s *StreamValue[TStream, TFinal]) Stream() TStream {
-///     return *s.as_stream
+/// func (s *StreamValue[TStream, TFinal]) Stream() *TStream {
+///     return s.as_stream
 /// }
 ///
 /// {% for function in functions %}

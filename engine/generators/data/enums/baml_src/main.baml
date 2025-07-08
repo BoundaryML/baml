@@ -26,7 +26,7 @@ enum TestEnum {
 }
 
 function FnTestAliasedEnumOutput(input: string) -> TestEnum {
-  client "ollama/phi4:latest"
+  client "openai/gpt-4o-mini"
   prompt #"
     Classify the user input into the following category
       
@@ -41,7 +41,7 @@ function FnTestAliasedEnumOutput(input: string) -> TestEnum {
 }
 
 function ConsumeTestEnum(input: TestEnum) -> TestEnum {
-  client "ollama/phi4:latest"
+  client "openai/gpt-4o-mini"
   prompt #"
     Return back to me verbatim:
     

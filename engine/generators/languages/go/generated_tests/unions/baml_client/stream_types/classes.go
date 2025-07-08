@@ -43,64 +43,19 @@ func (c *ExistingSystemComponent) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "id":
-			c.Id = func(param *cffi.CFFIValueHolder) *int64 {
-				decoded := baml.Decode(param)
-				return func(result any) *int64 {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(int64)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Id = baml.Decode(valueHolder).Interface().(*int64)
 
 		case "name":
-			c.Name = func(param *cffi.CFFIValueHolder) *string {
-				decoded := baml.Decode(param)
-				return func(result any) *string {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(string)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Name = baml.Decode(valueHolder).Interface().(*string)
 
 		case "type":
-			c.Type = func(param *cffi.CFFIValueHolder) *string {
-				decoded := baml.Decode(param)
-				return func(result any) *string {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(string)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Type = baml.Decode(valueHolder).Interface().(*string)
 
 		case "category":
-			c.Category = func(param *cffi.CFFIValueHolder) *Union2KresourceOrKservice {
-				decoded := baml.Decode(param)
-				return func(result any) *Union2KresourceOrKservice {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(*Union2KresourceOrKservice)
-					return casted
-				}(decoded)
-			}(valueHolder)
+			c.Category = baml.Decode(valueHolder).Interface().(*Union2KresourceOrKservice)
 
 		case "explanation":
-			c.Explanation = func(param *cffi.CFFIValueHolder) *string {
-				decoded := baml.Decode(param)
-				return func(result any) *string {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(string)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Explanation = baml.Decode(valueHolder).Interface().(*string)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -155,16 +110,7 @@ func (c *UseMyUnion) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "u":
-			c.U = func(param *cffi.CFFIValueHolder) *Union3IntOrRecursive1OrString {
-				decoded := baml.Decode(param)
-				return func(result any) *Union3IntOrRecursive1OrString {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(*Union3IntOrRecursive1OrString)
-					return casted
-				}(decoded)
-			}(valueHolder)
+			c.U = baml.Decode(valueHolder).Interface().(*Union3IntOrRecursive1OrString)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))

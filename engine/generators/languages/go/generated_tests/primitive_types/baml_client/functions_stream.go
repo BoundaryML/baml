@@ -28,17 +28,19 @@ type stream struct{}
 var Stream = &stream{}
 
 type StreamValue[TStream any, TFinal any] struct {
+	IsError   bool
+	Error     error
 	IsFinal   bool
 	as_final  *TFinal
 	as_stream *TStream
 }
 
-func (s *StreamValue[TStream, TFinal]) Final() TFinal {
-	return *s.as_final
+func (s *StreamValue[TStream, TFinal]) Final() *TFinal {
+	return s.as_final
 }
 
-func (s *StreamValue[TStream, TFinal]) Stream() TStream {
-	return *s.as_stream
+func (s *StreamValue[TStream, TFinal]) Stream() *TStream {
+	return s.as_stream
 }
 
 // / Streaming version of TestEmptyCollections
@@ -88,21 +90,26 @@ func (*stream) TestEmptyCollections(ctx context.Context, input string, opts ...C
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.PrimitiveArrays, types.PrimitiveArrays]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.PrimitiveArrays)
+					data := (result.Data).(types.PrimitiveArrays)
 					channel <- StreamValue[stream_types.PrimitiveArrays, types.PrimitiveArrays]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.PrimitiveArrays)
+					data := (result.StreamData).(stream_types.PrimitiveArrays)
 					channel <- StreamValue[stream_types.PrimitiveArrays, types.PrimitiveArrays]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -161,21 +168,26 @@ func (*stream) TestMixedPrimitives(ctx context.Context, input string, opts ...Ca
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.MixedPrimitives, types.MixedPrimitives]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.MixedPrimitives)
+					data := (result.Data).(types.MixedPrimitives)
 					channel <- StreamValue[stream_types.MixedPrimitives, types.MixedPrimitives]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.MixedPrimitives)
+					data := (result.StreamData).(stream_types.MixedPrimitives)
 					channel <- StreamValue[stream_types.MixedPrimitives, types.MixedPrimitives]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -234,21 +246,26 @@ func (*stream) TestPrimitiveArrays(ctx context.Context, input string, opts ...Ca
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.PrimitiveArrays, types.PrimitiveArrays]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.PrimitiveArrays)
+					data := (result.Data).(types.PrimitiveArrays)
 					channel <- StreamValue[stream_types.PrimitiveArrays, types.PrimitiveArrays]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.PrimitiveArrays)
+					data := (result.StreamData).(stream_types.PrimitiveArrays)
 					channel <- StreamValue[stream_types.PrimitiveArrays, types.PrimitiveArrays]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -307,21 +324,26 @@ func (*stream) TestPrimitiveMaps(ctx context.Context, input string, opts ...Call
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.PrimitiveMaps, types.PrimitiveMaps]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.PrimitiveMaps)
+					data := (result.Data).(types.PrimitiveMaps)
 					channel <- StreamValue[stream_types.PrimitiveMaps, types.PrimitiveMaps]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.PrimitiveMaps)
+					data := (result.StreamData).(stream_types.PrimitiveMaps)
 					channel <- StreamValue[stream_types.PrimitiveMaps, types.PrimitiveMaps]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -380,21 +402,26 @@ func (*stream) TestPrimitiveTypes(ctx context.Context, input string, opts ...Cal
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.PrimitiveTypes, types.PrimitiveTypes]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.PrimitiveTypes)
+					data := (result.Data).(types.PrimitiveTypes)
 					channel <- StreamValue[stream_types.PrimitiveTypes, types.PrimitiveTypes]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.PrimitiveTypes)
+					data := (result.StreamData).(stream_types.PrimitiveTypes)
 					channel <- StreamValue[stream_types.PrimitiveTypes, types.PrimitiveTypes]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -453,10 +480,15 @@ func (*stream) TestTopLevelBool(ctx context.Context, input string, opts ...CallO
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[bool, bool]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
@@ -526,10 +558,15 @@ func (*stream) TestTopLevelFloat(ctx context.Context, input string, opts ...Call
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[float64, float64]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
@@ -599,10 +636,15 @@ func (*stream) TestTopLevelInt(ctx context.Context, input string, opts ...CallOp
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[int64, int64]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
@@ -672,10 +714,15 @@ func (*stream) TestTopLevelNull(ctx context.Context, input string, opts ...CallO
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[any, *any]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
@@ -745,10 +792,15 @@ func (*stream) TestTopLevelString(ctx context.Context, input string, opts ...Cal
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}

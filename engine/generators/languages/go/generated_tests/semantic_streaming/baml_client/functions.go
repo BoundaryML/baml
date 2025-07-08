@@ -55,7 +55,7 @@ func MakeClassWithBlockDone(ctx context.Context, opts ...CallOptionFunc) (types.
 		return types.ClassWithBlockDone{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.ClassWithBlockDone)
+	casted := (result.Data).(types.ClassWithBlockDone)
 
 	return casted, nil
 }
@@ -94,7 +94,7 @@ func MakeClassWithExternalDone(ctx context.Context, opts ...CallOptionFunc) (typ
 		return types.ClassWithoutDone{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.ClassWithoutDone)
+	casted := (result.Data).(types.ClassWithoutDone)
 
 	return casted, nil
 }
@@ -133,7 +133,7 @@ func MakeSemanticContainer(ctx context.Context, opts ...CallOptionFunc) (types.S
 		return types.SemanticContainer{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.SemanticContainer)
+	casted := (result.Data).(types.SemanticContainer)
 
 	return casted, nil
 }

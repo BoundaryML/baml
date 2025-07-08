@@ -35,11 +35,11 @@ func (u *Union2ExampleOrExample2) Decode(holder *cffi.CFFIValueUnionVariant) {
 	switch variantName {
 	case "Example":
 		u.variant = "Example"
-		value := *baml.Decode(valueHolder).(*Example)
+		value := baml.Decode(valueHolder).Interface().(Example)
 		u.variant_Example = &value
 	case "Example2":
 		u.variant = "Example2"
-		value := *baml.Decode(valueHolder).(*Example2)
+		value := baml.Decode(valueHolder).Interface().(Example2)
 		u.variant_Example2 = &value
 
 	default:

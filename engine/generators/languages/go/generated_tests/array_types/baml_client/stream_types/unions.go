@@ -37,15 +37,15 @@ func (u *Union3BoolOrIntOrString) Decode(holder *cffi.CFFIValueUnionVariant) {
 	switch variantName {
 	case "string":
 		u.variant = "String"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_String = &value
 	case "int":
 		u.variant = "Int"
-		value := baml.Decode(valueHolder).(int64)
+		value := baml.Decode(valueHolder).Interface().(int64)
 		u.variant_Int = &value
 	case "bool":
 		u.variant = "Bool"
-		value := baml.Decode(valueHolder).(bool)
+		value := baml.Decode(valueHolder).Interface().(bool)
 		u.variant_Bool = &value
 
 	default:
@@ -236,15 +236,15 @@ func (u *Union3ProductOrTagOrUser) Decode(holder *cffi.CFFIValueUnionVariant) {
 	switch variantName {
 	case "User":
 		u.variant = "User"
-		value := *baml.Decode(valueHolder).(*User)
+		value := baml.Decode(valueHolder).Interface().(User)
 		u.variant_User = &value
 	case "Product":
 		u.variant = "Product"
-		value := *baml.Decode(valueHolder).(*Product)
+		value := baml.Decode(valueHolder).Interface().(Product)
 		u.variant_Product = &value
 	case "Tag":
 		u.variant = "Tag"
-		value := *baml.Decode(valueHolder).(*Tag)
+		value := baml.Decode(valueHolder).Interface().(Tag)
 		u.variant_Tag = &value
 
 	default:
@@ -437,19 +437,19 @@ func (u *Union4BoolOrFloatOrIntOrString) Decode(holder *cffi.CFFIValueUnionVaria
 	switch variantName {
 	case "string":
 		u.variant = "String"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_String = &value
 	case "int":
 		u.variant = "Int"
-		value := baml.Decode(valueHolder).(int64)
+		value := baml.Decode(valueHolder).Interface().(int64)
 		u.variant_Int = &value
 	case "float":
 		u.variant = "Float"
-		value := baml.Decode(valueHolder).(float64)
+		value := baml.Decode(valueHolder).Interface().(float64)
 		u.variant_Float = &value
 	case "bool":
 		u.variant = "Bool"
-		value := baml.Decode(valueHolder).(bool)
+		value := baml.Decode(valueHolder).Interface().(bool)
 		u.variant_Bool = &value
 
 	default:

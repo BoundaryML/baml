@@ -55,7 +55,7 @@ func TestComplexMaps(ctx context.Context, input string, opts ...CallOptionFunc) 
 		return types.ComplexMaps{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.ComplexMaps)
+	casted := (result.Data).(types.ComplexMaps)
 
 	return casted, nil
 }
@@ -94,7 +94,7 @@ func TestEdgeCaseMaps(ctx context.Context, input string, opts ...CallOptionFunc)
 		return types.EdgeCaseMaps{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.EdgeCaseMaps)
+	casted := (result.Data).(types.EdgeCaseMaps)
 
 	return casted, nil
 }
@@ -133,7 +133,7 @@ func TestLargeMaps(ctx context.Context, input string, opts ...CallOptionFunc) (t
 		return types.SimpleMaps{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.SimpleMaps)
+	casted := (result.Data).(types.SimpleMaps)
 
 	return casted, nil
 }
@@ -172,7 +172,7 @@ func TestNestedMaps(ctx context.Context, input string, opts ...CallOptionFunc) (
 		return types.NestedMaps{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.NestedMaps)
+	casted := (result.Data).(types.NestedMaps)
 
 	return casted, nil
 }
@@ -211,7 +211,7 @@ func TestSimpleMaps(ctx context.Context, input string, opts ...CallOptionFunc) (
 		return types.SimpleMaps{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.SimpleMaps)
+	casted := (result.Data).(types.SimpleMaps)
 
 	return casted, nil
 }

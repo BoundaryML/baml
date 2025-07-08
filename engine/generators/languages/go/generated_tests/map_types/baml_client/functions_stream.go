@@ -28,17 +28,19 @@ type stream struct{}
 var Stream = &stream{}
 
 type StreamValue[TStream any, TFinal any] struct {
+	IsError   bool
+	Error     error
 	IsFinal   bool
 	as_final  *TFinal
 	as_stream *TStream
 }
 
-func (s *StreamValue[TStream, TFinal]) Final() TFinal {
-	return *s.as_final
+func (s *StreamValue[TStream, TFinal]) Final() *TFinal {
+	return s.as_final
 }
 
-func (s *StreamValue[TStream, TFinal]) Stream() TStream {
-	return *s.as_stream
+func (s *StreamValue[TStream, TFinal]) Stream() *TStream {
+	return s.as_stream
 }
 
 // / Streaming version of TestComplexMaps
@@ -88,21 +90,26 @@ func (*stream) TestComplexMaps(ctx context.Context, input string, opts ...CallOp
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.ComplexMaps, types.ComplexMaps]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.ComplexMaps)
+					data := (result.Data).(types.ComplexMaps)
 					channel <- StreamValue[stream_types.ComplexMaps, types.ComplexMaps]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.ComplexMaps)
+					data := (result.StreamData).(stream_types.ComplexMaps)
 					channel <- StreamValue[stream_types.ComplexMaps, types.ComplexMaps]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -161,21 +168,26 @@ func (*stream) TestEdgeCaseMaps(ctx context.Context, input string, opts ...CallO
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.EdgeCaseMaps, types.EdgeCaseMaps]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.EdgeCaseMaps)
+					data := (result.Data).(types.EdgeCaseMaps)
 					channel <- StreamValue[stream_types.EdgeCaseMaps, types.EdgeCaseMaps]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.EdgeCaseMaps)
+					data := (result.StreamData).(stream_types.EdgeCaseMaps)
 					channel <- StreamValue[stream_types.EdgeCaseMaps, types.EdgeCaseMaps]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -234,21 +246,26 @@ func (*stream) TestLargeMaps(ctx context.Context, input string, opts ...CallOpti
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.SimpleMaps, types.SimpleMaps]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.SimpleMaps)
+					data := (result.Data).(types.SimpleMaps)
 					channel <- StreamValue[stream_types.SimpleMaps, types.SimpleMaps]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.SimpleMaps)
+					data := (result.StreamData).(stream_types.SimpleMaps)
 					channel <- StreamValue[stream_types.SimpleMaps, types.SimpleMaps]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -307,21 +324,26 @@ func (*stream) TestNestedMaps(ctx context.Context, input string, opts ...CallOpt
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.NestedMaps, types.NestedMaps]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.NestedMaps)
+					data := (result.Data).(types.NestedMaps)
 					channel <- StreamValue[stream_types.NestedMaps, types.NestedMaps]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.NestedMaps)
+					data := (result.StreamData).(stream_types.NestedMaps)
 					channel <- StreamValue[stream_types.NestedMaps, types.NestedMaps]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -380,21 +402,26 @@ func (*stream) TestSimpleMaps(ctx context.Context, input string, opts ...CallOpt
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.SimpleMaps, types.SimpleMaps]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.SimpleMaps)
+					data := (result.Data).(types.SimpleMaps)
 					channel <- StreamValue[stream_types.SimpleMaps, types.SimpleMaps]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.SimpleMaps)
+					data := (result.StreamData).(stream_types.SimpleMaps)
 					channel <- StreamValue[stream_types.SimpleMaps, types.SimpleMaps]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -453,10 +480,15 @@ func (*stream) TestTopLevelBoolMap(ctx context.Context, input string, opts ...Ca
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[map[string]bool, map[string]bool]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
@@ -526,10 +558,15 @@ func (*stream) TestTopLevelEmptyMap(ctx context.Context, input string, opts ...C
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[map[string]string, map[string]string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
@@ -599,10 +636,15 @@ func (*stream) TestTopLevelFloatMap(ctx context.Context, input string, opts ...C
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[map[string]float64, map[string]float64]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
@@ -672,10 +714,15 @@ func (*stream) TestTopLevelIntMap(ctx context.Context, input string, opts ...Cal
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[map[string]int64, map[string]int64]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
@@ -745,10 +792,15 @@ func (*stream) TestTopLevelMapOfArrays(ctx context.Context, input string, opts .
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[map[string][]int64, map[string][]int64]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
@@ -818,10 +870,15 @@ func (*stream) TestTopLevelMapOfObjects(ctx context.Context, input string, opts 
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[map[string]stream_types.User, map[string]types.User]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
@@ -891,10 +948,15 @@ func (*stream) TestTopLevelMapWithNullable(ctx context.Context, input string, op
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[map[string]*string, map[string]*string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
@@ -964,10 +1026,15 @@ func (*stream) TestTopLevelNestedMap(ctx context.Context, input string, opts ...
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[map[string]map[string]string, map[string]map[string]string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
@@ -1037,10 +1104,15 @@ func (*stream) TestTopLevelStringMap(ctx context.Context, input string, opts ...
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[map[string]string, map[string]string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}

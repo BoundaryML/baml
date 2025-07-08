@@ -103,7 +103,7 @@ func trigger_callback(id C.uint32_t, isDone C.int, content *C.int8_t, length C.i
 			return
 		}
 
-		decoded_data := Decode(&content_holder)
+		decoded_data := Decode(&content_holder).Interface()
 
 		var res ResultCallback
 		if isDone == 1 {

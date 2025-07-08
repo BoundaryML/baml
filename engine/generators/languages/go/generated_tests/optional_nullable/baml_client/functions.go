@@ -55,7 +55,7 @@ func TestAllNull(ctx context.Context, input string, opts ...CallOptionFunc) (typ
 		return types.NullableTypes{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.NullableTypes)
+	casted := (result.Data).(types.NullableTypes)
 
 	return casted, nil
 }
@@ -94,7 +94,7 @@ func TestAllOptionalOmitted(ctx context.Context, input string, opts ...CallOptio
 		return types.OptionalFields{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.OptionalFields)
+	casted := (result.Data).(types.OptionalFields)
 
 	return casted, nil
 }
@@ -133,7 +133,7 @@ func TestMixedOptionalNullable(ctx context.Context, input string, opts ...CallOp
 		return types.MixedOptionalNullable{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.MixedOptionalNullable)
+	casted := (result.Data).(types.MixedOptionalNullable)
 
 	return casted, nil
 }
@@ -172,7 +172,7 @@ func TestNullableTypes(ctx context.Context, input string, opts ...CallOptionFunc
 		return types.NullableTypes{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.NullableTypes)
+	casted := (result.Data).(types.NullableTypes)
 
 	return casted, nil
 }
@@ -211,7 +211,7 @@ func TestOptionalFields(ctx context.Context, input string, opts ...CallOptionFun
 		return types.OptionalFields{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.OptionalFields)
+	casted := (result.Data).(types.OptionalFields)
 
 	return casted, nil
 }

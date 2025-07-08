@@ -55,7 +55,7 @@ func ConsumeSimpleClass(ctx context.Context, item types.SimpleClass, opts ...Cal
 		return types.SimpleClass{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.SimpleClass)
+	casted := (result.Data).(types.SimpleClass)
 
 	return casted, nil
 }
@@ -94,7 +94,7 @@ func MakeSimpleClass(ctx context.Context, opts ...CallOptionFunc) (types.SimpleC
 		return types.SimpleClass{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.SimpleClass)
+	casted := (result.Data).(types.SimpleClass)
 
 	return casted, nil
 }

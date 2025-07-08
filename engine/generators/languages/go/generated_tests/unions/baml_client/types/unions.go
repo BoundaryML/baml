@@ -35,13 +35,11 @@ func (u *Union2IntOrListRecursive1) Decode(holder *cffi.CFFIValueUnionVariant) {
 	switch variantName {
 	case "int":
 		u.variant = "Int"
-		value := baml.Decode(valueHolder).(int64)
+		value := baml.Decode(valueHolder).Interface().(int64)
 		u.variant_Int = &value
 	case "List__Recursive1":
 		u.variant = "ListRecursive1"
-		value := baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) Recursive1 {
-			return baml.Decode(inner).(Recursive1)
-		})
+		value := baml.Decode(valueHolder).Interface().([]Recursive1)
 		u.variant_ListRecursive1 = &value
 
 	default:
@@ -182,11 +180,11 @@ func (u *Union2KresourceOrKservice) Decode(holder *cffi.CFFIValueUnionVariant) {
 	switch variantName {
 	case "string_service":
 		u.variant = "Kservice"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Kservice = &value
 	case "string_resource":
 		u.variant = "Kresource"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Kresource = &value
 
 	default:
@@ -337,15 +335,15 @@ func (u *Union3IntOrRecursive1OrString) Decode(holder *cffi.CFFIValueUnionVarian
 	switch variantName {
 	case "Recursive1":
 		u.variant = "Recursive1"
-		value := baml.Decode(valueHolder).(Recursive1)
+		value := baml.Decode(valueHolder).Interface().(Recursive1)
 		u.variant_Recursive1 = &value
 	case "int":
 		u.variant = "Int"
-		value := baml.Decode(valueHolder).(int64)
+		value := baml.Decode(valueHolder).Interface().(int64)
 		u.variant_Int = &value
 	case "string":
 		u.variant = "String"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_String = &value
 
 	default:

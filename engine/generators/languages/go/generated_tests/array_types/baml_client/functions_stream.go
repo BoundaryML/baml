@@ -28,17 +28,19 @@ type stream struct{}
 var Stream = &stream{}
 
 type StreamValue[TStream any, TFinal any] struct {
+	IsError   bool
+	Error     error
 	IsFinal   bool
 	as_final  *TFinal
 	as_stream *TStream
 }
 
-func (s *StreamValue[TStream, TFinal]) Final() TFinal {
-	return *s.as_final
+func (s *StreamValue[TStream, TFinal]) Final() *TFinal {
+	return s.as_final
 }
 
-func (s *StreamValue[TStream, TFinal]) Stream() TStream {
-	return *s.as_stream
+func (s *StreamValue[TStream, TFinal]) Stream() *TStream {
+	return s.as_stream
 }
 
 // / Streaming version of TestEmptyArrays
@@ -88,21 +90,26 @@ func (*stream) TestEmptyArrays(ctx context.Context, input string, opts ...CallOp
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.SimpleArrays, types.SimpleArrays]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.SimpleArrays)
+					data := (result.Data).(types.SimpleArrays)
 					channel <- StreamValue[stream_types.SimpleArrays, types.SimpleArrays]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.SimpleArrays)
+					data := (result.StreamData).(stream_types.SimpleArrays)
 					channel <- StreamValue[stream_types.SimpleArrays, types.SimpleArrays]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -161,21 +168,26 @@ func (*stream) TestLargeArrays(ctx context.Context, input string, opts ...CallOp
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.SimpleArrays, types.SimpleArrays]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.SimpleArrays)
+					data := (result.Data).(types.SimpleArrays)
 					channel <- StreamValue[stream_types.SimpleArrays, types.SimpleArrays]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.SimpleArrays)
+					data := (result.StreamData).(stream_types.SimpleArrays)
 					channel <- StreamValue[stream_types.SimpleArrays, types.SimpleArrays]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -234,21 +246,26 @@ func (*stream) TestMixedArrays(ctx context.Context, input string, opts ...CallOp
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.MixedArrays, types.MixedArrays]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.MixedArrays)
+					data := (result.Data).(types.MixedArrays)
 					channel <- StreamValue[stream_types.MixedArrays, types.MixedArrays]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.MixedArrays)
+					data := (result.StreamData).(stream_types.MixedArrays)
 					channel <- StreamValue[stream_types.MixedArrays, types.MixedArrays]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -307,21 +324,26 @@ func (*stream) TestNestedArrays(ctx context.Context, input string, opts ...CallO
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.NestedArrays, types.NestedArrays]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.NestedArrays)
+					data := (result.Data).(types.NestedArrays)
 					channel <- StreamValue[stream_types.NestedArrays, types.NestedArrays]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.NestedArrays)
+					data := (result.StreamData).(stream_types.NestedArrays)
 					channel <- StreamValue[stream_types.NestedArrays, types.NestedArrays]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -380,21 +402,26 @@ func (*stream) TestObjectArrays(ctx context.Context, input string, opts ...CallO
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.ObjectArrays, types.ObjectArrays]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.ObjectArrays)
+					data := (result.Data).(types.ObjectArrays)
 					channel <- StreamValue[stream_types.ObjectArrays, types.ObjectArrays]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.ObjectArrays)
+					data := (result.StreamData).(stream_types.ObjectArrays)
 					channel <- StreamValue[stream_types.ObjectArrays, types.ObjectArrays]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -453,21 +480,26 @@ func (*stream) TestSimpleArrays(ctx context.Context, input string, opts ...CallO
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.SimpleArrays, types.SimpleArrays]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.SimpleArrays)
+					data := (result.Data).(types.SimpleArrays)
 					channel <- StreamValue[stream_types.SimpleArrays, types.SimpleArrays]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.SimpleArrays)
+					data := (result.StreamData).(stream_types.SimpleArrays)
 					channel <- StreamValue[stream_types.SimpleArrays, types.SimpleArrays]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -526,10 +558,15 @@ func (*stream) TestTopLevel3DArray(ctx context.Context, input string, opts ...Ca
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[[][][]string, [][][]string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
@@ -599,10 +636,15 @@ func (*stream) TestTopLevelArrayOfMaps(ctx context.Context, input string, opts .
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[[]map[string]int64, []map[string]int64]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
@@ -672,10 +714,15 @@ func (*stream) TestTopLevelBoolArray(ctx context.Context, input string, opts ...
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[[]bool, []bool]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
@@ -745,10 +792,15 @@ func (*stream) TestTopLevelEmptyArray(ctx context.Context, input string, opts ..
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[[]string, []string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
@@ -818,10 +870,15 @@ func (*stream) TestTopLevelFloatArray(ctx context.Context, input string, opts ..
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[[]float64, []float64]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
@@ -891,10 +948,15 @@ func (*stream) TestTopLevelIntArray(ctx context.Context, input string, opts ...C
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[[]int64, []int64]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
@@ -964,10 +1026,15 @@ func (*stream) TestTopLevelMixedArray(ctx context.Context, input string, opts ..
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[[]stream_types.Union3BoolOrIntOrString, []types.Union3BoolOrIntOrString]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
@@ -1037,10 +1104,15 @@ func (*stream) TestTopLevelNestedArray(ctx context.Context, input string, opts .
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[[][]int64, [][]int64]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
@@ -1110,10 +1182,15 @@ func (*stream) TestTopLevelNullableArray(ctx context.Context, input string, opts
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[[]*string, []*string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
@@ -1183,10 +1260,15 @@ func (*stream) TestTopLevelObjectArray(ctx context.Context, input string, opts .
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[[]stream_types.User, []types.User]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
@@ -1256,10 +1338,15 @@ func (*stream) TestTopLevelStringArray(ctx context.Context, input string, opts .
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[[]string, []string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}

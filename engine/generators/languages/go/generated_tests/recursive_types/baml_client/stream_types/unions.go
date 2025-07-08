@@ -35,13 +35,11 @@ func (u *Union2IntOrListRecursive1) Decode(holder *cffi.CFFIValueUnionVariant) {
 	switch variantName {
 	case "int":
 		u.variant = "Int"
-		value := baml.Decode(valueHolder).(int64)
+		value := baml.Decode(valueHolder).Interface().(int64)
 		u.variant_Int = &value
 	case "List__Recursive1":
 		u.variant = "ListRecursive1"
-		value := baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) Recursive1 {
-			return baml.Decode(inner).(Recursive1)
-		})
+		value := baml.Decode(valueHolder).Interface().([]Recursive1)
 		u.variant_ListRecursive1 = &value
 
 	default:
@@ -184,15 +182,15 @@ func (u *Union3IntOrRecursive1OrString) Decode(holder *cffi.CFFIValueUnionVarian
 	switch variantName {
 	case "Recursive1":
 		u.variant = "Recursive1"
-		value := baml.Decode(valueHolder).(Recursive1)
+		value := baml.Decode(valueHolder).Interface().(Recursive1)
 		u.variant_Recursive1 = &value
 	case "int":
 		u.variant = "Int"
-		value := baml.Decode(valueHolder).(int64)
+		value := baml.Decode(valueHolder).Interface().(int64)
 		u.variant_Int = &value
 	case "string":
 		u.variant = "String"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_String = &value
 
 	default:
@@ -387,39 +385,23 @@ func (u *Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString) Decode(holde
 	switch variantName {
 	case "string":
 		u.variant = "String"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_String = &value
 	case "int":
 		u.variant = "Int"
-		value := baml.Decode(valueHolder).(int64)
+		value := baml.Decode(valueHolder).Interface().(int64)
 		u.variant_Int = &value
 	case "float":
 		u.variant = "Float"
-		value := baml.Decode(valueHolder).(float64)
+		value := baml.Decode(valueHolder).Interface().(float64)
 		u.variant_Float = &value
 	case "Map__string_JSON":
 		u.variant = "MapStringKeyJSONValue"
-		value := baml.DecodeMap(valueHolder, func(inner *cffi.CFFIValueHolder) JSON {
-			return func(param *cffi.CFFIValueHolder) JSON {
-				decoded := baml.Decode(param)
-				if decoded == nil {
-					return nil
-				}
-				return decoded.(JSON)
-			}(inner)
-		})
+		value := baml.Decode(valueHolder).Interface().(map[string]JSON)
 		u.variant_MapStringKeyJSONValue = &value
 	case "List__JSON":
 		u.variant = "ListJSON"
-		value := baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) JSON {
-			return func(param *cffi.CFFIValueHolder) JSON {
-				decoded := baml.Decode(param)
-				if decoded == nil {
-					return nil
-				}
-				return decoded.(JSON)
-			}(inner)
-		})
+		value := baml.Decode(valueHolder).Interface().([]JSON)
 		u.variant_ListJSON = &value
 
 	default:

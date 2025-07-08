@@ -428,6 +428,10 @@ func convertFieldTypeToGoType(fieldType *cffi.CFFIFieldTypeHolder) reflect.Type 
 		return reflect.TypeOf(nil)
 	}
 
+	// if _, ok := type_.(*cffi.CFFIFieldTypeHolder_TypeAliasType); ok {
+	// 	return reflect.TypeOf(StreamState[any]{})
+	// }
+
 	panic("error decoding value, unknown field type: " + fmt.Sprintf("%+v", fieldType))
 }
 
@@ -512,11 +516,11 @@ func Decode(holder *cffi.CFFIValueHolder) reflect.Value {
 	}
 
 	if checkedVal, ok := value.(*cffi.CFFIValueHolder_CheckedValue); ok {
-		return maybeOptional(reflect.ValueOf(decodeCheckedValue[any](checkedVal.CheckedValue)), holder.Type)
+		return maybeOptional(reflect.ValueOf(decodeCheckedValue[any](checkedVal.CheckedValue)).Elem(), holder.Type)
 	}
 
 	if streamingVal, ok := value.(*cffi.CFFIValueHolder_StreamingStateValue); ok {
-		return reflect.ValueOf(decodeStreamingStateValue(streamingVal.StreamingStateValue))
+		return reflect.ValueOf(decodeStreamingStateValue(streamingVal.StreamingStateValue)).Elem()
 	}
 
 	panic("error decoding value: " + holder.String())

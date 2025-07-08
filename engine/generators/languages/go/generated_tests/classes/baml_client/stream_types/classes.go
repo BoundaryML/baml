@@ -40,29 +40,11 @@ func (c *SimpleClass) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "digits":
-			c.Digits = func(param *cffi.CFFIValueHolder) *int64 {
-				decoded := baml.Decode(param)
-				return func(result any) *int64 {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(int64)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Digits = baml.Decode(valueHolder).Interface().(*int64)
 
 		case "words":
 			c.Words = baml.DecodeStreamingState(valueHolder, func(inner *cffi.CFFIValueHolder) *string {
-				return func(param *cffi.CFFIValueHolder) *string {
-					decoded := baml.Decode(param)
-					return func(result any) *string {
-						if result == nil {
-							return nil
-						}
-						casted := (result).(string)
-						return &casted
-					}(decoded)
-				}(inner)
+				return baml.Decode(inner).Interface().(*string)
 			})
 
 		default:

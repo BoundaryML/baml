@@ -55,7 +55,7 @@ func TestEmptyCollections(ctx context.Context, input string, opts ...CallOptionF
 		return types.PrimitiveArrays{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.PrimitiveArrays)
+	casted := (result.Data).(types.PrimitiveArrays)
 
 	return casted, nil
 }
@@ -94,7 +94,7 @@ func TestMixedPrimitives(ctx context.Context, input string, opts ...CallOptionFu
 		return types.MixedPrimitives{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.MixedPrimitives)
+	casted := (result.Data).(types.MixedPrimitives)
 
 	return casted, nil
 }
@@ -133,7 +133,7 @@ func TestPrimitiveArrays(ctx context.Context, input string, opts ...CallOptionFu
 		return types.PrimitiveArrays{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.PrimitiveArrays)
+	casted := (result.Data).(types.PrimitiveArrays)
 
 	return casted, nil
 }
@@ -172,7 +172,7 @@ func TestPrimitiveMaps(ctx context.Context, input string, opts ...CallOptionFunc
 		return types.PrimitiveMaps{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.PrimitiveMaps)
+	casted := (result.Data).(types.PrimitiveMaps)
 
 	return casted, nil
 }
@@ -211,7 +211,7 @@ func TestPrimitiveTypes(ctx context.Context, input string, opts ...CallOptionFun
 		return types.PrimitiveTypes{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.PrimitiveTypes)
+	casted := (result.Data).(types.PrimitiveTypes)
 
 	return casted, nil
 }

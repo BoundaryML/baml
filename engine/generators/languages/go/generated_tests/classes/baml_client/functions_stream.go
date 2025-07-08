@@ -28,17 +28,19 @@ type stream struct{}
 var Stream = &stream{}
 
 type StreamValue[TStream any, TFinal any] struct {
+	IsError   bool
+	Error     error
 	IsFinal   bool
 	as_final  *TFinal
 	as_stream *TStream
 }
 
-func (s *StreamValue[TStream, TFinal]) Final() TFinal {
-	return *s.as_final
+func (s *StreamValue[TStream, TFinal]) Final() *TFinal {
+	return s.as_final
 }
 
-func (s *StreamValue[TStream, TFinal]) Stream() TStream {
-	return *s.as_stream
+func (s *StreamValue[TStream, TFinal]) Stream() *TStream {
+	return s.as_stream
 }
 
 // / Streaming version of ConsumeSimpleClass
@@ -88,21 +90,26 @@ func (*stream) ConsumeSimpleClass(ctx context.Context, item types.SimpleClass, o
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.SimpleClass, types.SimpleClass]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.SimpleClass)
+					data := (result.Data).(types.SimpleClass)
 					channel <- StreamValue[stream_types.SimpleClass, types.SimpleClass]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.SimpleClass)
+					data := (result.StreamData).(stream_types.SimpleClass)
 					channel <- StreamValue[stream_types.SimpleClass, types.SimpleClass]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -161,21 +168,26 @@ func (*stream) MakeSimpleClass(ctx context.Context, opts ...CallOptionFunc) (<-c
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.SimpleClass, types.SimpleClass]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.SimpleClass)
+					data := (result.Data).(types.SimpleClass)
 					channel <- StreamValue[stream_types.SimpleClass, types.SimpleClass]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.SimpleClass)
+					data := (result.StreamData).(stream_types.SimpleClass)
 					channel <- StreamValue[stream_types.SimpleClass, types.SimpleClass]{
 						IsFinal:   false,
 						as_stream: &data,

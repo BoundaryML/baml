@@ -55,7 +55,7 @@ func TestEmptyArrays(ctx context.Context, input string, opts ...CallOptionFunc) 
 		return types.SimpleArrays{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.SimpleArrays)
+	casted := (result.Data).(types.SimpleArrays)
 
 	return casted, nil
 }
@@ -94,7 +94,7 @@ func TestLargeArrays(ctx context.Context, input string, opts ...CallOptionFunc) 
 		return types.SimpleArrays{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.SimpleArrays)
+	casted := (result.Data).(types.SimpleArrays)
 
 	return casted, nil
 }
@@ -133,7 +133,7 @@ func TestMixedArrays(ctx context.Context, input string, opts ...CallOptionFunc) 
 		return types.MixedArrays{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.MixedArrays)
+	casted := (result.Data).(types.MixedArrays)
 
 	return casted, nil
 }
@@ -172,7 +172,7 @@ func TestNestedArrays(ctx context.Context, input string, opts ...CallOptionFunc)
 		return types.NestedArrays{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.NestedArrays)
+	casted := (result.Data).(types.NestedArrays)
 
 	return casted, nil
 }
@@ -211,7 +211,7 @@ func TestObjectArrays(ctx context.Context, input string, opts ...CallOptionFunc)
 		return types.ObjectArrays{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.ObjectArrays)
+	casted := (result.Data).(types.ObjectArrays)
 
 	return casted, nil
 }
@@ -250,7 +250,7 @@ func TestSimpleArrays(ctx context.Context, input string, opts ...CallOptionFunc)
 		return types.SimpleArrays{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.SimpleArrays)
+	casted := (result.Data).(types.SimpleArrays)
 
 	return casted, nil
 }
