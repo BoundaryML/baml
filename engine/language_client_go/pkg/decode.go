@@ -428,9 +428,15 @@ func convertFieldTypeToGoType(fieldType *cffi.CFFIFieldTypeHolder) reflect.Type 
 		return reflect.TypeOf(nil)
 	}
 
-	// if _, ok := type_.(*cffi.CFFIFieldTypeHolder_TypeAliasType); ok {
-	// 	return reflect.TypeOf(StreamState[any]{})
-	// }
+	if typeAlias, ok := type_.(*cffi.CFFIFieldTypeHolder_TypeAliasType); ok {
+		name := typeAlias.TypeAliasType.Name.Name
+		namespace := typeAlias.TypeAliasType.Name.Namespace.String()
+		goType, ok := typeMap[namespace+"."+name]
+		if !ok {
+			panic("error decoding value, type alias not found: " + namespace + "." + name)
+		}
+		return goType
+	}
 
 	panic("error decoding value, unknown field type: " + fmt.Sprintf("%+v", fieldType))
 }

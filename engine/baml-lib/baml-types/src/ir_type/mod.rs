@@ -11,6 +11,7 @@ mod display;
 mod simplify;
 pub mod type_meta;
 mod union_type;
+pub use display::MetaSuffix;
 pub use union_type::UnionConstructor;
 
 // Types, depending on the context, have different metadata attached to them.
@@ -36,6 +37,7 @@ pub enum TypeGeneric<T> {
     Map(Box<TypeGeneric<T>>, Box<TypeGeneric<T>>, T),
     RecursiveTypeAlias {
         name: String,
+        mode: StreamingMode,
         meta: T,
     },
     Tuple(Vec<TypeGeneric<T>>, T),
@@ -476,8 +478,9 @@ impl<T> TypeGeneric<T> {
                 Box::new(field_type1.map_meta(f)),
                 f(type_metadata_ir),
             ),
-            TypeGeneric::RecursiveTypeAlias { meta, name } => TypeGeneric::RecursiveTypeAlias {
+            TypeGeneric::RecursiveTypeAlias { meta, name, mode } => TypeGeneric::RecursiveTypeAlias {
                 meta: f(meta),
+                mode: mode.clone(),
                 name: name.clone(),
             },
             TypeGeneric::Tuple(inner, type_metadata_ir) => TypeGeneric::Tuple(
@@ -1404,6 +1407,7 @@ mod tests {
                 UnionTypeGeneric::new_unsafe(vec![
                     TypeStreaming::RecursiveTypeAlias {
                         name: "MyAlias".to_string(),
+                        mode: StreamingMode::Streaming,
                         meta: Default::default(),
                     },
                     TypeStreaming::null(),

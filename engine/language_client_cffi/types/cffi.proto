@@ -202,7 +202,7 @@ message CFFIFieldTypeClass {
 }
 
 message CFFIFieldTypeTypeAlias {
-  string name = 1;
+  CFFITypeName name = 1;
 }
 
 message CFFIFieldTypeList {

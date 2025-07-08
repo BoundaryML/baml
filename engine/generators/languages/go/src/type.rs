@@ -231,63 +231,64 @@ impl TypeGo {
         }
     }
 
-    fn cast_from_any_skip_optional(&self, param: &str, pkg: &CurrentRenderPackage) -> String {
-        format!("({param}).({})", self.serialize_type(pkg))
-            .trim()
-            .to_string()
-    }
+    pub fn construct_instance(&self, pkg: &CurrentRenderPackage) -> String {
+        let instance = match self {
+            TypeGo::String(val, _) => val.as_ref().map_or("\"\"".to_string(), |v| {
+                format!("\"{}\"", v.replace("\"", "\\\"")).to_string()
+            }),
+            TypeGo::Int(val, _) => val.map_or("int64(0)".to_string(), |v| format!("int64({v})")),
+            // TODO: is float supposed to have a format here for non nill values?
+            TypeGo::Float(_) => "float64(0.0)".to_string(),
+            TypeGo::Bool(val, _) => val.map_or("false".to_string(), |v| {
+                if v { "true" } else { "false" }.to_string()
+            }),
+            TypeGo::Media(..) | TypeGo::Class { .. } | TypeGo::Union { .. } => {
+                format!("{}{{}}", self.serialize_type(pkg))
+            }
+            TypeGo::Enum { .. } => {
+                format!("{}(\"\")", self.serialize_type(pkg))
+            }
+            TypeGo::TypeAlias { name, package, .. } => {
+                let lookup = pkg.lookup();
+                match lookup.expand_recursive_type(name) {
+                    Ok(expansion) => {
+                        if package == &Package::types() {
+                            crate::ir_to_go::type_to_go(
+                                &expansion.to_non_streaming_type(lookup),
+                                lookup,
+                            )
+                            .construct_instance(pkg)
+                        } else {
+                            crate::ir_to_go::stream_type_to_go(
+                                &expansion.to_streaming_type(lookup),
+                                lookup,
+                            )
+                            .construct_instance(pkg)
+                        }
+                    }
+                    Err(_) => format!("{}{{}}", self.serialize_type(pkg)),
+                }
+            }
+            TypeGo::List(inner, _) => format!("[]{}", inner.construct_instance(pkg)),
+            TypeGo::Map(key, value, _) => {
+                format!("map[{}]{}{{}}", key.construct_instance(pkg), value.construct_instance(pkg))
+            }
+            TypeGo::Any { .. } => "any".to_string(),
+        };
 
-    fn cast_return_value(&self, pkg: &CurrentRenderPackage) -> String {
-        if self.meta().wrap_stream_state {
-            format!(
-                "{}{{Value: nil, State: StreamStatePending}}",
-                self.serialize_type(pkg)
-            )
+        if matches!(self.meta().type_wrapper, TypeWrapper::Optional(_)) {
+            match self {
+                TypeGo::String(_, _) => "(*string)(nil)".to_string(),
+                TypeGo::Int(_, _) => "(*int64)(nil)".to_string(),
+                TypeGo::Float(_) => "(*float64)(nil)".to_string(),
+                TypeGo::Bool(_, _) => "(*bool)(nil)".to_string(),
+                _ => format!("({})(nil)", instance.trim_end_matches("{}"))
+            }
         } else {
-            self.zero_value(pkg)
+            instance
         }
     }
-
-    pub fn cast_from_any(&self, param: &str, pkg: &CurrentRenderPackage) -> String {
-        format!("({param}).({})", self.serialize_type(pkg))
-        // if self.meta().is_optional() {
-        //     let mut self_no_optional = self.clone();
-        //     let final_type = match self_no_optional {
-        //         TypeGo::String(..)
-        //         | TypeGo::Int(..)
-        //         | TypeGo::Float(..)
-        //         | TypeGo::Bool(..)
-        //         | TypeGo::Media(..)
-        //         | TypeGo::TypeAlias { .. }
-        //         | TypeGo::List(..)
-        //         | TypeGo::Map(..)
-        //         | TypeGo::Any { .. } => {
-        //             self_no_optional.meta_mut().type_wrapper.pop_optional();
-        //             "&casted"
-        //         }
-        //         TypeGo::Class { .. } | TypeGo::Union { .. } | TypeGo::Enum { .. } => "casted",
-        //     };
-        //     format!(
-        //         r#"
-        //         func(result any) {t} {{
-        //             if result == nil {{
-        //                 return {return_value}
-        //             }}
-        //             casted := {casted}
-        //             return {final_type}
-        //         }}({param})
-        //     "#,
-        //         t = self.serialize_type(pkg),
-        //         casted = self_no_optional.cast_from_any_skip_optional("result", pkg),
-        //         return_value = self.cast_return_value(pkg)
-        //     )
-        // } else {
-        //     self.cast_from_any_skip_optional(param, pkg)
-        // }
-        // .trim()
-        // .to_string()
-    }
-
+    
     pub fn cast_from_function(&self, param: &str, pkg: &CurrentRenderPackage) -> String {
         format!("({param}).({})", self.serialize_type(pkg))
     }
