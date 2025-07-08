@@ -88,6 +88,13 @@ where
             };
 
             CffiValueHolder {
+                r#type: Some(
+                    WithIr {
+                        value: target_type,
+                        lookup,
+                    }
+                    .encode(),
+                ),
                 value: Some(cffi_value_holder::Value::UnionVariantValue(Box::new(
                     union_variant,
                 ))),
@@ -165,6 +172,13 @@ where
             };
 
             CffiValueHolder {
+                r#type: Some(
+                    WithIr {
+                        value: target_type,
+                        lookup,
+                    }
+                    .encode(),
+                ),
                 value: Some(cffi_value_holder::Value::UnionVariantValue(Box::new(
                     union_variant,
                 ))),
@@ -177,7 +191,7 @@ where
     fn maybe_wrap_stream_state(
         &self,
         holder: CffiValueHolder,
-        _lookup: &TypeLookups,
+        lookup: &TypeLookups,
     ) -> CffiValueHolder {
         if self.field_type().meta().streaming_behavior.state {
             let stream_state = CffiValueStreamingState {
@@ -185,6 +199,8 @@ where
                 state: CffiStreamState::Pending.into(),
             };
             CffiValueHolder {
+                // Not present for Streaming State
+                r#type: None,
                 value: Some(cffi_value_holder::Value::StreamingStateValue(Box::new(
                     stream_state,
                 ))),
@@ -208,7 +224,7 @@ where
         let WithIr { value, lookup } = self;
 
         let holder = {
-            let value = match value {
+            let encoded_value = match value {
                 BamlValueWithMeta::String(val, _) => Value::StringValue(val.clone()),
                 BamlValueWithMeta::Int(val, _) => Value::IntValue(*val),
                 BamlValueWithMeta::Float(val, _) => Value::FloatValue(*val),
@@ -305,7 +321,16 @@ where
                 }
                 BamlValueWithMeta::Null(_) => Value::NullValue(CffiValueNull {}),
             };
-            CffiValueHolder { value: Some(value) }
+            CffiValueHolder {
+                r#type: Some(
+                    WithIr {
+                        value: value.field_type(),
+                        lookup,
+                    }
+                    .encode(),
+                ),
+                value: Some(encoded_value),
+            }
         };
 
         let meta = value.meta().checks;
@@ -318,6 +343,8 @@ where
             };
 
             CffiValueHolder {
+                // Checks don't have a type
+                r#type: None,
                 value: Some(Value::CheckedValue(Box::new(checked_value))),
             }
         } else {

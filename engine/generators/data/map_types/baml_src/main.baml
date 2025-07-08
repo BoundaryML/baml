@@ -229,7 +229,7 @@ function TestTopLevelMapWithNullable(input: string) -> map<string, string | null
     - "absent": null
     - "another": "data"
     
-    Input: {{ input }}
+    {{ ctx.output_format }}
   "#
 }
 

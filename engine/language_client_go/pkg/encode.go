@@ -86,8 +86,15 @@ func EncodeUnion(nameEncoder func() *cffi.CFFITypeName, variantName string, valu
 // encodeValue is the core recursive helper for Encode
 // It takes a Go value, encodes it using the builder, and returns
 func encodeValue(value any) (*cffi.CFFIValueHolder, error) {
+	value_type, err := encodeFieldType(reflect.TypeOf(value))
+	if err != nil {
+		return nil, err
+	}
+	debugLog("encoding value: %v\n", value_type)
+
 	if value == nil {
 		return &cffi.CFFIValueHolder{
+			Type:  value_type,
 			Value: &cffi.CFFIValueHolder_NullValue{},
 		}, nil
 	}
@@ -100,6 +107,7 @@ func encodeValue(value any) (*cffi.CFFIValueHolder, error) {
 	if rv.Kind() == reflect.Ptr {
 		if rv.IsNil() {
 			return &cffi.CFFIValueHolder{
+				Type:  value_type,
 				Value: &cffi.CFFIValueHolder_NullValue{},
 			}, nil // Treat nil pointers as nil values
 		}
@@ -119,6 +127,7 @@ func encodeValue(value any) (*cffi.CFFIValueHolder, error) {
 		if err != nil {
 			return nil, err
 		}
+		encoded.Type = value_type
 		return encoded, nil
 	}
 
@@ -136,13 +145,14 @@ func encodeValue(value any) (*cffi.CFFIValueHolder, error) {
 		}
 		return encoded, nil
 	case BamlFunctionArguments:
-		panic("BamlFunctionArguments not supported here, must be encoded separately")
+		return nil, fmt.Errorf("BamlFunctionArguments not supported here, must be encoded separately")
 	}
 
 	// Handle primitive kinds and collections using reflection value rv (points to underlying value)
 	switch rv.Kind() {
 	case reflect.String:
 		return &cffi.CFFIValueHolder{
+			Type: value_type,
 			Value: &cffi.CFFIValueHolder_StringValue{
 				StringValue: rv.String(),
 			},
@@ -150,6 +160,7 @@ func encodeValue(value any) (*cffi.CFFIValueHolder, error) {
 
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		return &cffi.CFFIValueHolder{
+			Type: value_type,
 			Value: &cffi.CFFIValueHolder_IntValue{
 				IntValue: rv.Int(),
 			},
@@ -157,6 +168,7 @@ func encodeValue(value any) (*cffi.CFFIValueHolder, error) {
 
 	case reflect.Float32, reflect.Float64:
 		return &cffi.CFFIValueHolder{
+			Type: value_type,
 			Value: &cffi.CFFIValueHolder_FloatValue{
 				FloatValue: rv.Float(),
 			},
@@ -164,6 +176,7 @@ func encodeValue(value any) (*cffi.CFFIValueHolder, error) {
 
 	case reflect.Bool:
 		return &cffi.CFFIValueHolder{
+			Type: value_type,
 			Value: &cffi.CFFIValueHolder_BoolValue{
 				BoolValue: rv.Bool(),
 			},
@@ -174,6 +187,7 @@ func encodeValue(value any) (*cffi.CFFIValueHolder, error) {
 		if err != nil {
 			return nil, fmt.Errorf("encoding list: %w", err)
 		}
+		encoded.Type = value_type
 		return encoded, nil
 
 	case reflect.Map:
@@ -185,6 +199,7 @@ func encodeValue(value any) (*cffi.CFFIValueHolder, error) {
 		if err != nil {
 			return nil, fmt.Errorf("encoding map: %w", err)
 		}
+		encoded.Type = value_type
 		return encoded, nil
 
 	default:
@@ -208,7 +223,10 @@ func encodeList(value reflect.Value) (*cffi.CFFIValueHolder, error) {
 
 	goType := value.Type()
 	goValueType := goType.Elem()
-	valueType := encodeFieldType(goValueType)
+	valueType, err := encodeFieldType(goValueType)
+	if err != nil {
+		return nil, fmt.Errorf("encoding list value type: %w", err)
+	}
 
 	return &cffi.CFFIValueHolder{
 		Value: &cffi.CFFIValueHolder_ListValue{
@@ -236,8 +254,14 @@ func encodeMap(mapValue reflect.Value) (*cffi.CFFIValueHolder, error) {
 		})
 	}
 
-	keyType := encodeFieldType(mapValue.Type().Key())
-	valueType := encodeFieldType(mapValue.Type().Elem())
+	keyType, err := encodeFieldType(mapValue.Type().Key())
+	if err != nil {
+		return nil, fmt.Errorf("encoding map key type: %w", err)
+	}
+	valueType, err := encodeFieldType(mapValue.Type().Elem())
+	if err != nil {
+		return nil, fmt.Errorf("encoding map value type: %w", err)
+	}
 
 	// Create the CFFIValueMap table
 	return &cffi.CFFIValueHolder{
@@ -420,37 +444,71 @@ func encodeClientRegistry(clientRegistryVal *ClientRegistry) (*cffi.CFFIClientRe
 	return &clients, nil
 }
 
-func encodeFieldType(fieldType reflect.Type) *cffi.CFFIFieldTypeHolder {
+func encodeFieldType(fieldType reflect.Type) (*cffi.CFFIFieldTypeHolder, error) {
+	// Someone passed in a `nil` directly
+	if fieldType == nil {
+		return &cffi.CFFIFieldTypeHolder{
+			Type: &cffi.CFFIFieldTypeHolder_NullType{
+				NullType: &cffi.CFFIFieldTypeNull{},
+			},
+		}, nil
+	}
 
 	switch fieldType.Kind() {
 	case reflect.Ptr:
-		return encodeFieldType(fieldType.Elem())
+		inner, err := encodeFieldType(fieldType.Elem())
+		if err != nil {
+			return nil, err
+		}
+		// this this is optional.
+		return &cffi.CFFIFieldTypeHolder{
+			Type: &cffi.CFFIFieldTypeHolder_OptionalType{
+				OptionalType: &cffi.CFFIFieldTypeOptional{
+					Value: inner,
+				},
+			},
+		}, nil
 	case reflect.String:
+		// String that implements BamlSerializer is an enum
+		if fieldType.Implements(reflect.TypeOf((*BamlSerializer)(nil)).Elem()) {
+			serializer := reflect.New(fieldType).Interface().(BamlSerializer)
+			name := serializer.BamlEncodeName()
+			return &cffi.CFFIFieldTypeHolder{
+				Type: &cffi.CFFIFieldTypeHolder_EnumType{
+					EnumType: &cffi.CFFIFieldTypeEnum{
+						Name: name.Name,
+					},
+				},
+			}, nil
+		}
 		return &cffi.CFFIFieldTypeHolder{
 			Type: &cffi.CFFIFieldTypeHolder_StringType{
 				StringType: &cffi.CFFIFieldTypeString{},
 			},
-		}
+		}, nil
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		return &cffi.CFFIFieldTypeHolder{
 			Type: &cffi.CFFIFieldTypeHolder_IntType{
 				IntType: &cffi.CFFIFieldTypeInt{},
 			},
-		}
+		}, nil
 	case reflect.Float32, reflect.Float64:
 		return &cffi.CFFIFieldTypeHolder{
 			Type: &cffi.CFFIFieldTypeHolder_FloatType{
 				FloatType: &cffi.CFFIFieldTypeFloat{},
 			},
-		}
+		}, nil
 	case reflect.Bool:
 		return &cffi.CFFIFieldTypeHolder{
 			Type: &cffi.CFFIFieldTypeHolder_BoolType{
 				BoolType: &cffi.CFFIFieldTypeBool{},
 			},
-		}
+		}, nil
 	case reflect.Slice, reflect.Array:
-		sliceFieldType := encodeFieldType(fieldType.Elem())
+		sliceFieldType, err := encodeFieldType(fieldType.Elem())
+		if err != nil {
+			return nil, err
+		}
 
 		return &cffi.CFFIFieldTypeHolder{
 			Type: &cffi.CFFIFieldTypeHolder_ListType{
@@ -458,10 +516,16 @@ func encodeFieldType(fieldType reflect.Type) *cffi.CFFIFieldTypeHolder {
 					Element: sliceFieldType,
 				},
 			},
-		}
+		}, nil
 	case reflect.Map:
-		keyType := encodeFieldType(fieldType.Key())
-		valueType := encodeFieldType(fieldType.Elem())
+		keyType, err := encodeFieldType(fieldType.Key())
+		if err != nil {
+			return nil, err
+		}
+		valueType, err := encodeFieldType(fieldType.Elem())
+		if err != nil {
+			return nil, err
+		}
 
 		return &cffi.CFFIFieldTypeHolder{
 			Type: &cffi.CFFIFieldTypeHolder_MapType{
@@ -470,7 +534,7 @@ func encodeFieldType(fieldType reflect.Type) *cffi.CFFIFieldTypeHolder {
 					Value: valueType,
 				},
 			},
-		}
+		}, nil
 	case reflect.Struct:
 		// determine if the struct implements BamlSerializer
 		if fieldType.Implements(reflect.TypeOf((*BamlSerializer)(nil)).Elem()) {
@@ -482,12 +546,12 @@ func encodeFieldType(fieldType reflect.Type) *cffi.CFFIFieldTypeHolder {
 						Name: name,
 					},
 				},
-			}
+			}, nil
 		} else {
-			panic(fmt.Sprintf("struct %s does not implement BamlSerializer", fieldType.Name()))
+			return nil, fmt.Errorf("struct %s does not implement BamlSerializer", fieldType.Name())
 		}
 	default:
-		panic(fmt.Sprintf("unexpected field type: %s", fieldType.Kind()))
+		return nil, fmt.Errorf("unexpected field type: %s", fieldType.Kind())
 	}
 }
 

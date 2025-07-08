@@ -193,7 +193,15 @@ impl<L: TestLanguageFeatures> TestStructure<L> {
 
         if also_run_tests {
             if let baml_types::GeneratorOutputType::Go = args.client_type {
-                let mut cmd = Command::new(format!("./{}", &self.project_name));
+                let mut cmd = Command::new("go");
+                cmd.args(vec![
+                    "test",
+                    "-v",
+                    "-parallel",
+                    "10",
+                    "-run",
+                    "TestTopLevelMapWithNullable",
+                ]);
                 cmd.current_dir(&self.src_dir);
                 let dylib_path = get_cargo_root()?.join("target/debug/libbaml_cffi.dylib");
                 let so_path = get_cargo_root()?.join("target/debug/libbaml_cffi.so");

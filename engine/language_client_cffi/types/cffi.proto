@@ -31,6 +31,7 @@ message CFFIValueHolder {
     CFFIValueChecked checked_value = 14;
     CFFIValueStreamingState streaming_state_value = 15;
   }
+  CFFIFieldTypeHolder type = 16;
 }
 
 enum CFFITypeNamespace {
