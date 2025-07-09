@@ -264,7 +264,7 @@ impl TypeGo {
             let mut non_optional = self.clone();
             non_optional.meta_mut().type_wrapper.pop_optional();
             let base_type = non_optional.serialize_type(pkg);
-            format!("(*{})(nil)", base_type)
+            format!("(*{base_type})(nil)")
         } else {
             instance
         }
