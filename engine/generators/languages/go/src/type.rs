@@ -237,7 +237,6 @@ impl TypeGo {
                 format!("\"{}\"", v.replace("\"", "\\\"")).to_string()
             }),
             TypeGo::Int(val, _) => val.map_or("int64(0)".to_string(), |v| format!("int64({v})")),
-            // TODO: is float supposed to have a format here for non nill values?
             TypeGo::Float(_) => "float64(0.0)".to_string(),
             TypeGo::Bool(val, _) => val.map_or("false".to_string(), |v| {
                 if v { "true" } else { "false" }.to_string()
@@ -248,46 +247,24 @@ impl TypeGo {
             TypeGo::Enum { .. } => {
                 format!("{}(\"\")", self.serialize_type(pkg))
             }
-            TypeGo::TypeAlias { name, package, .. } => {
-                let lookup = pkg.lookup();
-                match lookup.expand_recursive_type(name) {
-                    Ok(expansion) => {
-                        if package == &Package::types() {
-                            crate::ir_to_go::type_to_go(
-                                &expansion.to_non_streaming_type(lookup),
-                                lookup,
-                            )
-                            .construct_instance(pkg)
-                        } else {
-                            crate::ir_to_go::stream_type_to_go(
-                                &expansion.to_streaming_type(lookup),
-                                lookup,
-                            )
-                            .construct_instance(pkg)
-                        }
-                    }
-                    Err(_) => format!("{}{{}}", self.serialize_type(pkg)),
-                }
+            TypeGo::TypeAlias { .. } => { 
+                format!("{}{{}}", self.serialize_type(pkg))
             }
-            TypeGo::List(inner, _) => format!("[]{}", inner.construct_instance(pkg)),
+            TypeGo::List(inner, _) => format!("[]{}{{}}", inner.serialize_type(pkg)),
             TypeGo::Map(key, value, _) => {
                 format!(
                     "map[{}]{}{{}}",
-                    key.construct_instance(pkg),
-                    value.construct_instance(pkg)
+                    key.serialize_type(pkg),
+                    value.serialize_type(pkg)
                 )
             }
             TypeGo::Any { .. } => "any".to_string(),
         };
-
         if matches!(self.meta().type_wrapper, TypeWrapper::Optional(_)) {
-            match self {
-                TypeGo::String(_, _) => "(*string)(nil)".to_string(),
-                TypeGo::Int(_, _) => "(*int64)(nil)".to_string(),
-                TypeGo::Float(_) => "(*float64)(nil)".to_string(),
-                TypeGo::Bool(_, _) => "(*bool)(nil)".to_string(),
-                _ => format!("({})(nil)", instance.trim_end_matches("{}")),
-            }
+            let mut non_optional = self.clone();
+            non_optional.meta_mut().type_wrapper.pop_optional();
+            let base_type = non_optional.serialize_type(pkg);
+            format!("(*{})(nil)", base_type)
         } else {
             instance
         }

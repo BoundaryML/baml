@@ -54,7 +54,7 @@ func AaaSamOutputFormat(ctx context.Context, recipe string, opts ...CallOptionFu
 		return types.Recipe{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.Recipe)
+	casted := (result.Data).(types.Recipe)
 
 	return casted, nil
 }
@@ -93,7 +93,7 @@ func AliasThatPointsToRecursiveType(ctx context.Context, data types.LinkedListAl
 		return types.LinkedListAliasNode{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.LinkedListAliasNode)
+	casted := (result.Data).(types.LinkedListAliasNode)
 
 	return casted, nil
 }
@@ -132,7 +132,7 @@ func AliasWithMultipleAttrs(ctx context.Context, money int64, opts ...CallOption
 		return 0, result.Error
 	}
 
-	casted := *(result.Data).(*int64)
+	casted := (result.Data).(int64)
 
 	return casted, nil
 }
@@ -171,7 +171,7 @@ func AliasedInputClass(ctx context.Context, input types.InputClass, opts ...Call
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -210,7 +210,7 @@ func AliasedInputClass2(ctx context.Context, input types.InputClass, opts ...Cal
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -249,7 +249,7 @@ func AliasedInputClassNested(ctx context.Context, input types.InputClassNested, 
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -288,7 +288,7 @@ func AliasedInputEnum(ctx context.Context, input types.AliasedEnum, opts ...Call
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -327,7 +327,7 @@ func AliasedInputList(ctx context.Context, input []types.AliasedEnum, opts ...Ca
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -366,7 +366,7 @@ func AllowedOptionals(ctx context.Context, optionals types.OptionalListAndMap, o
 		return types.OptionalListAndMap{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.OptionalListAndMap)
+	casted := (result.Data).(types.OptionalListAndMap)
 
 	return casted, nil
 }
@@ -405,7 +405,7 @@ func AssertFn(ctx context.Context, a int64, opts ...CallOptionFunc) (int64, erro
 		return 0, result.Error
 	}
 
-	casted := *(result.Data).(*int64)
+	casted := (result.Data).(int64)
 
 	return casted, nil
 }
@@ -444,7 +444,7 @@ func AudioInput(ctx context.Context, aud any, opts ...CallOptionFunc) (string, e
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -483,7 +483,7 @@ func AudioInputOpenai(ctx context.Context, aud any, prompt string, opts ...CallO
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -522,7 +522,7 @@ func BuildLinkedList(ctx context.Context, input []int64, opts ...CallOptionFunc)
 		return types.LinkedList{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.LinkedList)
+	casted := (result.Data).(types.LinkedList)
 
 	return casted, nil
 }
@@ -561,7 +561,7 @@ func BuildTree(ctx context.Context, input types.BinaryNode, opts ...CallOptionFu
 		return types.Tree{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.Tree)
+	casted := (result.Data).(types.Tree)
 
 	return casted, nil
 }
@@ -600,7 +600,7 @@ func ClassThatPointsToRecursiveClassThroughAlias(ctx context.Context, cls types.
 		return types.ClassToRecAlias{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.ClassToRecAlias)
+	casted := (result.Data).(types.ClassToRecAlias)
 
 	return casted, nil
 }
@@ -639,7 +639,7 @@ func ClassifyDynEnumTwo(ctx context.Context, input string, opts ...CallOptionFun
 		return types.DynEnumTwo(""), result.Error
 	}
 
-	casted := *(result.Data).(*types.DynEnumTwo)
+	casted := (result.Data).(types.DynEnumTwo)
 
 	return casted, nil
 }
@@ -678,7 +678,7 @@ func ClassifyMessage(ctx context.Context, input string, opts ...CallOptionFunc) 
 		return types.Category(""), result.Error
 	}
 
-	casted := *(result.Data).(*types.Category)
+	casted := (result.Data).(types.Category)
 
 	return casted, nil
 }
@@ -717,7 +717,7 @@ func ClassifyMessage2(ctx context.Context, input string, opts ...CallOptionFunc)
 		return types.Category(""), result.Error
 	}
 
-	casted := *(result.Data).(*types.Category)
+	casted := (result.Data).(types.Category)
 
 	return casted, nil
 }
@@ -756,7 +756,7 @@ func ClassifyMessage3(ctx context.Context, input string, opts ...CallOptionFunc)
 		return types.Category(""), result.Error
 	}
 
-	casted := *(result.Data).(*types.Category)
+	casted := (result.Data).(types.Category)
 
 	return casted, nil
 }
@@ -795,7 +795,7 @@ func Completion(ctx context.Context, prefix string, suffix string, language stri
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -834,7 +834,7 @@ func CustomTask(ctx context.Context, input string, opts ...CallOptionFunc) (type
 		return types.Union3BookOrderOrFlightConfirmationOrGroceryReceipt{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.Union3BookOrderOrFlightConfirmationOrGroceryReceipt)
+	casted := (result.Data).(types.Union3BookOrderOrFlightConfirmationOrGroceryReceipt)
 
 	return casted, nil
 }
@@ -873,7 +873,7 @@ func DescribeImage(ctx context.Context, img any, opts ...CallOptionFunc) (string
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -912,7 +912,7 @@ func DescribeImage2(ctx context.Context, classWithImage types.ClassWithImage, im
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -951,7 +951,7 @@ func DescribeImage3(ctx context.Context, classWithImage types.ClassWithImage, im
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -990,7 +990,7 @@ func DescribeImage4(ctx context.Context, classWithImage types.ClassWithImage, im
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -1029,7 +1029,7 @@ func DescribeMedia1599(ctx context.Context, img any, client_sector string, clien
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -1068,7 +1068,7 @@ func DifferentiateUnions(ctx context.Context, opts ...CallOptionFunc) (types.Uni
 		return types.Union2OriginalAOrOriginalB{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.Union2OriginalAOrOriginalB)
+	casted := (result.Data).(types.Union2OriginalAOrOriginalB)
 
 	return casted, nil
 }
@@ -1107,7 +1107,7 @@ func DummyOutputFunction(ctx context.Context, input string, opts ...CallOptionFu
 		return types.DummyOutput{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.DummyOutput)
+	casted := (result.Data).(types.DummyOutput)
 
 	return casted, nil
 }
@@ -1146,7 +1146,7 @@ func DynamicFunc(ctx context.Context, input types.DynamicClassOne, opts ...CallO
 		return types.DynamicClassTwo{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.DynamicClassTwo)
+	casted := (result.Data).(types.DynamicClassTwo)
 
 	return casted, nil
 }
@@ -1185,7 +1185,7 @@ func DynamicInputOutput(ctx context.Context, input types.DynInputOutput, opts ..
 		return types.DynInputOutput{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.DynInputOutput)
+	casted := (result.Data).(types.DynInputOutput)
 
 	return casted, nil
 }
@@ -1263,7 +1263,7 @@ func ExpectFailure(ctx context.Context, opts ...CallOptionFunc) (string, error) 
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -1302,7 +1302,7 @@ func ExtractContactInfo(ctx context.Context, document string, opts ...CallOption
 		return types.ContactInfo{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.ContactInfo)
+	casted := (result.Data).(types.ContactInfo)
 
 	return casted, nil
 }
@@ -1341,7 +1341,7 @@ func ExtractEntities(ctx context.Context, text string, opts ...CallOptionFunc) (
 		return types.DynamicSchema{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.DynamicSchema)
+	casted := (result.Data).(types.DynamicSchema)
 
 	return casted, nil
 }
@@ -1497,7 +1497,7 @@ func ExtractReceiptInfo(ctx context.Context, email string, reason types.Union2Kc
 		return types.ReceiptInfo{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.ReceiptInfo)
+	casted := (result.Data).(types.ReceiptInfo)
 
 	return casted, nil
 }
@@ -1536,7 +1536,7 @@ func ExtractResume(ctx context.Context, resume string, img *any, opts ...CallOpt
 		return types.Resume{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.Resume)
+	casted := (result.Data).(types.Resume)
 
 	return casted, nil
 }
@@ -1575,7 +1575,7 @@ func ExtractResume2(ctx context.Context, resume string, opts ...CallOptionFunc) 
 		return types.Resume{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.Resume)
+	casted := (result.Data).(types.Resume)
 
 	return casted, nil
 }
@@ -1731,7 +1731,7 @@ func FnEnumOutput(ctx context.Context, input string, opts ...CallOptionFunc) (ty
 		return types.EnumOutput(""), result.Error
 	}
 
-	casted := *(result.Data).(*types.EnumOutput)
+	casted := (result.Data).(types.EnumOutput)
 
 	return casted, nil
 }
@@ -1770,7 +1770,7 @@ func FnLiteralClassInputOutput(ctx context.Context, input types.LiteralClassHell
 		return types.LiteralClassHello{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.LiteralClassHello)
+	casted := (result.Data).(types.LiteralClassHello)
 
 	return casted, nil
 }
@@ -1809,7 +1809,7 @@ func FnLiteralUnionClassInputOutput(ctx context.Context, input types.Union2Liter
 		return types.Union2LiteralClassOneOrLiteralClassTwo{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.Union2LiteralClassOneOrLiteralClassTwo)
+	casted := (result.Data).(types.Union2LiteralClassOneOrLiteralClassTwo)
 
 	return casted, nil
 }
@@ -1848,7 +1848,7 @@ func FnNamedArgsSingleStringOptional(ctx context.Context, myString *string, opts
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -1887,7 +1887,7 @@ func FnOutputBool(ctx context.Context, input string, opts ...CallOptionFunc) (bo
 		return false, result.Error
 	}
 
-	casted := *(result.Data).(*bool)
+	casted := (result.Data).(bool)
 
 	return casted, nil
 }
@@ -1926,7 +1926,7 @@ func FnOutputClass(ctx context.Context, input string, opts ...CallOptionFunc) (t
 		return types.TestOutputClass{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.TestOutputClass)
+	casted := (result.Data).(types.TestOutputClass)
 
 	return casted, nil
 }
@@ -2004,7 +2004,7 @@ func FnOutputClassNested(ctx context.Context, input string, opts ...CallOptionFu
 		return types.TestClassNested{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.TestClassNested)
+	casted := (result.Data).(types.TestClassNested)
 
 	return casted, nil
 }
@@ -2043,7 +2043,7 @@ func FnOutputClassWithEnum(ctx context.Context, input string, opts ...CallOption
 		return types.TestClassWithEnum{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.TestClassWithEnum)
+	casted := (result.Data).(types.TestClassWithEnum)
 
 	return casted, nil
 }
@@ -2082,7 +2082,7 @@ func FnOutputInt(ctx context.Context, input string, opts ...CallOptionFunc) (int
 		return 0, result.Error
 	}
 
-	casted := *(result.Data).(*int64)
+	casted := (result.Data).(int64)
 
 	return casted, nil
 }
@@ -2121,7 +2121,7 @@ func FnOutputLiteralBool(ctx context.Context, input string, opts ...CallOptionFu
 		return false, result.Error
 	}
 
-	casted := *(result.Data).(*bool)
+	casted := (result.Data).(bool)
 
 	return casted, nil
 }
@@ -2160,7 +2160,7 @@ func FnOutputLiteralInt(ctx context.Context, input string, opts ...CallOptionFun
 		return 5, result.Error
 	}
 
-	casted := *(result.Data).(*int64)
+	casted := (result.Data).(int64)
 
 	return casted, nil
 }
@@ -2199,7 +2199,7 @@ func FnOutputLiteralString(ctx context.Context, input string, opts ...CallOption
 		return "example output", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -2277,7 +2277,7 @@ func FnTestAliasedEnumOutput(ctx context.Context, input string, opts ...CallOpti
 		return types.TestEnum(""), result.Error
 	}
 
-	casted := *(result.Data).(*types.TestEnum)
+	casted := (result.Data).(types.TestEnum)
 
 	return casted, nil
 }
@@ -2316,7 +2316,7 @@ func FnTestClassAlias(ctx context.Context, input string, opts ...CallOptionFunc)
 		return types.TestClassAlias{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.TestClassAlias)
+	casted := (result.Data).(types.TestClassAlias)
 
 	return casted, nil
 }
@@ -2355,7 +2355,7 @@ func FnTestNamedArgsSingleEnum(ctx context.Context, myArg types.NamedArgsSingleE
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -2394,7 +2394,7 @@ func GetDataType(ctx context.Context, text string, opts ...CallOptionFunc) (type
 		return types.RaysData{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.RaysData)
+	casted := (result.Data).(types.RaysData)
 
 	return casted, nil
 }
@@ -2433,7 +2433,7 @@ func GetOrderInfo(ctx context.Context, email types.Email, opts ...CallOptionFunc
 		return types.OrderInfo{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.OrderInfo)
+	casted := (result.Data).(types.OrderInfo)
 
 	return casted, nil
 }
@@ -2472,7 +2472,7 @@ func GetQuery(ctx context.Context, query string, opts ...CallOptionFunc) (types.
 		return types.SearchParams{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.SearchParams)
+	casted := (result.Data).(types.SearchParams)
 
 	return casted, nil
 }
@@ -2628,7 +2628,7 @@ func JsonTypeAliasCycle(ctx context.Context, input types.JsonValue, opts ...Call
 		return types.Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.JsonValue)
+	casted := (result.Data).(types.JsonValue)
 
 	return casted, nil
 }
@@ -2667,7 +2667,7 @@ func LLMEcho(ctx context.Context, input string, opts ...CallOptionFunc) (string,
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -2706,7 +2706,7 @@ func LiteralUnionsTest(ctx context.Context, input string, opts ...CallOptionFunc
 		return types.Union3BoolKTrueOrIntK1OrKstring_output{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.Union3BoolKTrueOrIntK1OrKstring_output)
+	casted := (result.Data).(types.Union3BoolKTrueOrIntK1OrKstring_output)
 
 	return casted, nil
 }
@@ -2745,7 +2745,7 @@ func MakeBlockConstraint(ctx context.Context, opts ...CallOptionFunc) (types.Che
 		return types.Checked[types.BlockConstraint]{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.Checked[types.BlockConstraint])
+	casted := (result.Data).(types.Checked[types.BlockConstraint])
 
 	return casted, nil
 }
@@ -2784,7 +2784,7 @@ func MakeClassWithBlockDone(ctx context.Context, opts ...CallOptionFunc) (types.
 		return types.ClassWithBlockDone{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.ClassWithBlockDone)
+	casted := (result.Data).(types.ClassWithBlockDone)
 
 	return casted, nil
 }
@@ -2823,7 +2823,7 @@ func MakeClassWithExternalDone(ctx context.Context, opts ...CallOptionFunc) (typ
 		return types.ClassWithoutDone{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.ClassWithoutDone)
+	casted := (result.Data).(types.ClassWithoutDone)
 
 	return casted, nil
 }
@@ -2862,7 +2862,7 @@ func MakeNestedBlockConstraint(ctx context.Context, opts ...CallOptionFunc) (typ
 		return types.NestedBlockConstraint{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.NestedBlockConstraint)
+	casted := (result.Data).(types.NestedBlockConstraint)
 
 	return casted, nil
 }
@@ -2901,7 +2901,7 @@ func MakeSemanticContainer(ctx context.Context, opts ...CallOptionFunc) (types.S
 		return types.SemanticContainer{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.SemanticContainer)
+	casted := (result.Data).(types.SemanticContainer)
 
 	return casted, nil
 }
@@ -2979,7 +2979,7 @@ func MergeAliasAttributes(ctx context.Context, money int64, opts ...CallOptionFu
 		return types.MergeAttrs{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.MergeAttrs)
+	casted := (result.Data).(types.MergeAttrs)
 
 	return casted, nil
 }
@@ -3018,7 +3018,7 @@ func MyFunc(ctx context.Context, input string, opts ...CallOptionFunc) (types.Dy
 		return types.DynamicOutput{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.DynamicOutput)
+	casted := (result.Data).(types.DynamicOutput)
 
 	return casted, nil
 }
@@ -3057,7 +3057,7 @@ func NestedAlias(ctx context.Context, c types.Union6BoolOrFloatOrIntOrListString
 		return types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString)
+	casted := (result.Data).(types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString)
 
 	return casted, nil
 }
@@ -3096,7 +3096,7 @@ func NullLiteralClassHello(ctx context.Context, s string, opts ...CallOptionFunc
 		return types.ClassForNullLiteral{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.ClassForNullLiteral)
+	casted := (result.Data).(types.ClassForNullLiteral)
 
 	return casted, nil
 }
@@ -3135,7 +3135,7 @@ func OpenAIWithAnthropicResponseHello(ctx context.Context, s string, opts ...Cal
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -3213,7 +3213,7 @@ func PredictAge(ctx context.Context, name string, opts ...CallOptionFunc) (types
 		return types.FooAny{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.FooAny)
+	casted := (result.Data).(types.FooAny)
 
 	return casted, nil
 }
@@ -3252,7 +3252,7 @@ func PredictAgeBare(ctx context.Context, inp string, opts ...CallOptionFunc) (in
 		return 0, result.Error
 	}
 
-	casted := *(result.Data).(*int64)
+	casted := (result.Data).(int64)
 
 	return casted, nil
 }
@@ -3291,7 +3291,7 @@ func PrimitiveAlias(ctx context.Context, p types.Union4BoolOrFloatOrIntOrString,
 		return types.Union4BoolOrFloatOrIntOrString{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.Union4BoolOrFloatOrIntOrString)
+	casted := (result.Data).(types.Union4BoolOrFloatOrIntOrString)
 
 	return casted, nil
 }
@@ -3330,7 +3330,7 @@ func PromptTestClaude(ctx context.Context, input string, opts ...CallOptionFunc)
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -3369,7 +3369,7 @@ func PromptTestClaudeChat(ctx context.Context, input string, opts ...CallOptionF
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -3408,7 +3408,7 @@ func PromptTestClaudeChatNoSystem(ctx context.Context, input string, opts ...Cal
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -3447,7 +3447,7 @@ func PromptTestOpenAI(ctx context.Context, input string, opts ...CallOptionFunc)
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -3486,7 +3486,7 @@ func PromptTestOpenAIChat(ctx context.Context, input string, opts ...CallOptionF
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -3525,7 +3525,7 @@ func PromptTestOpenAIChatNoSystem(ctx context.Context, input string, opts ...Cal
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -3564,7 +3564,7 @@ func PromptTestStreaming(ctx context.Context, input string, opts ...CallOptionFu
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -3603,7 +3603,7 @@ func RecursiveAliasCycle(ctx context.Context, input types.RecAliasOne, opts ...C
 		return nil, result.Error
 	}
 
-	casted := *(result.Data).(*types.RecAliasOne)
+	casted := (result.Data).(types.RecAliasOne)
 
 	return casted, nil
 }
@@ -3642,7 +3642,7 @@ func RecursiveClassWithAliasIndirection(ctx context.Context, cls types.NodeWithA
 		return types.NodeWithAliasIndirection{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.NodeWithAliasIndirection)
+	casted := (result.Data).(types.NodeWithAliasIndirection)
 
 	return casted, nil
 }
@@ -3681,7 +3681,7 @@ func RecursiveUnionTest(ctx context.Context, input types.RecursiveUnion, opts ..
 		return types.Union2MapStringKeyRecursiveUnionValueOrString{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.RecursiveUnion)
+	casted := (result.Data).(types.RecursiveUnion)
 
 	return casted, nil
 }
@@ -3720,7 +3720,7 @@ func ReturnAliasWithMergedAttributes(ctx context.Context, money int64, opts ...C
 		return 0, result.Error
 	}
 
-	casted := *(result.Data).(*int64)
+	casted := (result.Data).(int64)
 
 	return casted, nil
 }
@@ -3759,7 +3759,7 @@ func ReturnFailingAssert(ctx context.Context, inp int64, opts ...CallOptionFunc)
 		return 0, result.Error
 	}
 
-	casted := *(result.Data).(*int64)
+	casted := (result.Data).(int64)
 
 	return casted, nil
 }
@@ -3798,7 +3798,7 @@ func ReturnJsonEntry(ctx context.Context, s string, opts ...CallOptionFunc) (typ
 		return nil, result.Error
 	}
 
-	casted := *(result.Data).(*types.JsonTemplate)
+	casted := (result.Data).(types.JsonTemplate)
 
 	return casted, nil
 }
@@ -3837,7 +3837,7 @@ func ReturnMalformedConstraints(ctx context.Context, a int64, opts ...CallOption
 		return types.MalformedConstraints{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.MalformedConstraints)
+	casted := (result.Data).(types.MalformedConstraints)
 
 	return casted, nil
 }
@@ -3876,7 +3876,7 @@ func SchemaDescriptions(ctx context.Context, input string, opts ...CallOptionFun
 		return types.Schema{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.Schema)
+	casted := (result.Data).(types.Schema)
 
 	return casted, nil
 }
@@ -3915,7 +3915,7 @@ func SimpleRecursiveListAlias(ctx context.Context, input types.RecursiveListAlia
 		return nil, result.Error
 	}
 
-	casted := *(result.Data).(*types.RecursiveListAlias)
+	casted := (result.Data).(types.RecursiveListAlias)
 
 	return casted, nil
 }
@@ -3954,7 +3954,7 @@ func SimpleRecursiveMapAlias(ctx context.Context, input types.RecursiveMapAlias,
 		return nil, result.Error
 	}
 
-	casted := *(result.Data).(*types.RecursiveMapAlias)
+	casted := (result.Data).(types.RecursiveMapAlias)
 
 	return casted, nil
 }
@@ -3993,7 +3993,7 @@ func StreamBigNumbers(ctx context.Context, digits int64, opts ...CallOptionFunc)
 		return types.BigNumbers{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.BigNumbers)
+	casted := (result.Data).(types.BigNumbers)
 
 	return casted, nil
 }
@@ -4032,7 +4032,7 @@ func StreamFailingAssertion(ctx context.Context, theme string, length int64, opt
 		return types.TwoStoriesOneTitle{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.TwoStoriesOneTitle)
+	casted := (result.Data).(types.TwoStoriesOneTitle)
 
 	return casted, nil
 }
@@ -4071,7 +4071,7 @@ func StreamFailingCheck(ctx context.Context, theme string, length int64, opts ..
 		return types.TwoStoriesOneTitleCheck{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.TwoStoriesOneTitleCheck)
+	casted := (result.Data).(types.TwoStoriesOneTitleCheck)
 
 	return casted, nil
 }
@@ -4110,7 +4110,7 @@ func StreamOneBigNumber(ctx context.Context, digits int64, opts ...CallOptionFun
 		return 0, result.Error
 	}
 
-	casted := *(result.Data).(*int64)
+	casted := (result.Data).(int64)
 
 	return casted, nil
 }
@@ -4188,7 +4188,7 @@ func StreamingCompoundNumbers(ctx context.Context, digits int64, yapping bool, o
 		return types.CompoundBigNumbers{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.CompoundBigNumbers)
+	casted := (result.Data).(types.CompoundBigNumbers)
 
 	return casted, nil
 }
@@ -4227,7 +4227,7 @@ func StructureDocument1559(ctx context.Context, document_txt string, opts ...Cal
 		return types.Document1559{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.Document1559)
+	casted := (result.Data).(types.Document1559)
 
 	return casted, nil
 }
@@ -4266,7 +4266,7 @@ func TakeRecAliasDep(ctx context.Context, input types.RecursiveAliasDependency, 
 		return types.RecursiveAliasDependency{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.RecursiveAliasDependency)
+	casted := (result.Data).(types.RecursiveAliasDependency)
 
 	return casted, nil
 }
@@ -4305,7 +4305,7 @@ func TellStory(ctx context.Context, story string, opts ...CallOptionFunc) (strin
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -4344,7 +4344,7 @@ func TestAnthropic(ctx context.Context, input string, opts ...CallOptionFunc) (s
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -4383,7 +4383,7 @@ func TestAnthropicShorthand(ctx context.Context, input string, opts ...CallOptio
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -4422,7 +4422,7 @@ func TestAws(ctx context.Context, input string, opts ...CallOptionFunc) (string,
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -4461,7 +4461,7 @@ func TestAwsClaude37(ctx context.Context, input string, opts ...CallOptionFunc) 
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -4500,7 +4500,7 @@ func TestAwsInferenceProfile(ctx context.Context, input string, opts ...CallOpti
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -4539,7 +4539,7 @@ func TestAwsInvalidAccessKey(ctx context.Context, input string, opts ...CallOpti
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -4578,7 +4578,7 @@ func TestAwsInvalidProfile(ctx context.Context, input string, opts ...CallOption
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -4617,7 +4617,7 @@ func TestAwsInvalidRegion(ctx context.Context, input string, opts ...CallOptionF
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -4656,7 +4656,7 @@ func TestAwsInvalidSessionToken(ctx context.Context, input string, opts ...CallO
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -4695,7 +4695,7 @@ func TestAzure(ctx context.Context, input string, opts ...CallOptionFunc) (strin
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -4734,7 +4734,7 @@ func TestAzureFailure(ctx context.Context, input string, opts ...CallOptionFunc)
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -4773,7 +4773,7 @@ func TestAzureO1NoMaxTokens(ctx context.Context, input string, opts ...CallOptio
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -4812,7 +4812,7 @@ func TestAzureO1WithMaxCompletionTokens(ctx context.Context, input string, opts 
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -4851,7 +4851,7 @@ func TestAzureO1WithMaxTokens(ctx context.Context, input string, opts ...CallOpt
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -4890,7 +4890,7 @@ func TestAzureO3NoMaxTokens(ctx context.Context, input string, opts ...CallOptio
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -4929,7 +4929,7 @@ func TestAzureO3WithMaxCompletionTokens(ctx context.Context, input string, opts 
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -4968,7 +4968,7 @@ func TestAzureWithMaxTokens(ctx context.Context, input string, opts ...CallOptio
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -5007,7 +5007,7 @@ func TestCaching(ctx context.Context, input string, not_cached string, opts ...C
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -5046,7 +5046,7 @@ func TestFallbackClient(ctx context.Context, opts ...CallOptionFunc) (string, er
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -5085,7 +5085,7 @@ func TestFallbackStrategy(ctx context.Context, input string, opts ...CallOptionF
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -5124,7 +5124,7 @@ func TestFallbackToShorthand(ctx context.Context, input string, opts ...CallOpti
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -5163,7 +5163,7 @@ func TestFnNamedArgsSingleBool(ctx context.Context, myBool bool, opts ...CallOpt
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -5202,7 +5202,7 @@ func TestFnNamedArgsSingleClass(ctx context.Context, myArg types.NamedArgsSingle
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -5241,7 +5241,7 @@ func TestFnNamedArgsSingleEnumList(ctx context.Context, myArg []types.NamedArgsS
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -5280,7 +5280,7 @@ func TestFnNamedArgsSingleFloat(ctx context.Context, myFloat float64, opts ...Ca
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -5319,7 +5319,7 @@ func TestFnNamedArgsSingleInt(ctx context.Context, myInt int64, opts ...CallOpti
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -5475,7 +5475,7 @@ func TestFnNamedArgsSingleString(ctx context.Context, myString string, opts ...C
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -5514,7 +5514,7 @@ func TestFnNamedArgsSingleStringArray(ctx context.Context, myStringArray []strin
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -5592,7 +5592,7 @@ func TestGemini(ctx context.Context, input string, opts ...CallOptionFunc) (stri
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -5631,7 +5631,7 @@ func TestGeminiOpenAiGeneric(ctx context.Context, opts ...CallOptionFunc) (strin
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -5670,7 +5670,7 @@ func TestGeminiSystem(ctx context.Context, input string, opts ...CallOptionFunc)
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -5709,7 +5709,7 @@ func TestGeminiSystemAsChat(ctx context.Context, input string, opts ...CallOptio
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -5748,7 +5748,7 @@ func TestGroq(ctx context.Context, input string, opts ...CallOptionFunc) (string
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -5787,7 +5787,7 @@ func TestImageInput(ctx context.Context, img any, opts ...CallOptionFunc) (strin
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -5826,7 +5826,7 @@ func TestImageInputAnthropic(ctx context.Context, img any, opts ...CallOptionFun
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -5865,7 +5865,7 @@ func TestImageListInput(ctx context.Context, imgs []any, opts ...CallOptionFunc)
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -5904,7 +5904,7 @@ func TestMemory(ctx context.Context, input string, opts ...CallOptionFunc) (type
 		return types.TestMemoryOutput{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.TestMemoryOutput)
+	casted := (result.Data).(types.TestMemoryOutput)
 
 	return casted, nil
 }
@@ -5943,7 +5943,7 @@ func TestMulticlassNamedArgs(ctx context.Context, myArg types.NamedArgsSingleCla
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -5982,7 +5982,7 @@ func TestNamedArgsLiteralBool(ctx context.Context, myBool bool, opts ...CallOpti
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -6021,7 +6021,7 @@ func TestNamedArgsLiteralInt(ctx context.Context, myInt int64, opts ...CallOptio
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -6060,7 +6060,7 @@ func TestNamedArgsLiteralString(ctx context.Context, myString string, opts ...Ca
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -6138,7 +6138,7 @@ func TestOllamaHaiku(ctx context.Context, input string, opts ...CallOptionFunc) 
 		return types.Haiku{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.Haiku)
+	casted := (result.Data).(types.Haiku)
 
 	return casted, nil
 }
@@ -6177,7 +6177,7 @@ func TestOpenAI(ctx context.Context, input string, opts ...CallOptionFunc) (stri
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -6216,7 +6216,7 @@ func TestOpenAIDummyClient(ctx context.Context, input string, opts ...CallOption
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -6255,7 +6255,7 @@ func TestOpenAIGPT4oMini(ctx context.Context, input string, opts ...CallOptionFu
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -6294,7 +6294,7 @@ func TestOpenAIGPT4oMini2(ctx context.Context, input string, opts ...CallOptionF
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -6333,7 +6333,7 @@ func TestOpenAIGPT4oMini3(ctx context.Context, input string, opts ...CallOptionF
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -6372,7 +6372,7 @@ func TestOpenAILegacyProvider(ctx context.Context, input string, opts ...CallOpt
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -6411,7 +6411,7 @@ func TestOpenAIO1NoMaxTokens(ctx context.Context, input string, opts ...CallOpti
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -6450,7 +6450,7 @@ func TestOpenAIO1WithMaxCompletionTokens(ctx context.Context, input string, opts
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -6489,7 +6489,7 @@ func TestOpenAIO1WithMaxTokens(ctx context.Context, input string, opts ...CallOp
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -6528,7 +6528,7 @@ func TestOpenAIProviderWithResponsesType(ctx context.Context, input string, opts
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -6567,7 +6567,7 @@ func TestOpenAIResponses(ctx context.Context, input string, opts ...CallOptionFu
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -6606,7 +6606,7 @@ func TestOpenAIResponsesAutoType(ctx context.Context, input string, opts ...Call
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -6645,7 +6645,7 @@ func TestOpenAIResponsesConversation(ctx context.Context, topic string, opts ...
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -6684,7 +6684,7 @@ func TestOpenAIResponsesCustomURL(ctx context.Context, input string, opts ...Cal
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -6723,7 +6723,7 @@ func TestOpenAIResponsesDifferentModel(ctx context.Context, input string, opts .
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -6762,7 +6762,7 @@ func TestOpenAIResponsesEndpoint(ctx context.Context, input string, opts ...Call
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -6801,7 +6801,7 @@ func TestOpenAIResponsesExplicit(ctx context.Context, input string, opts ...Call
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -6840,7 +6840,7 @@ func TestOpenAIResponsesFunctionCall(ctx context.Context, query string, opts ...
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -6879,7 +6879,7 @@ func TestOpenAIResponsesImageInput(ctx context.Context, image types.Union2ImageO
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -6918,7 +6918,7 @@ func TestOpenAIResponsesReasoning(ctx context.Context, problem string, opts ...C
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -6957,7 +6957,7 @@ func TestOpenAIResponsesShorthand(ctx context.Context, input string, opts ...Cal
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -6996,7 +6996,7 @@ func TestOpenAIResponsesWebSearch(ctx context.Context, query string, opts ...Cal
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -7035,7 +7035,7 @@ func TestOpenAIResponsesWithOpenAIResponseType(ctx context.Context, input string
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -7074,7 +7074,7 @@ func TestOpenAIShorthand(ctx context.Context, input string, opts ...CallOptionFu
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -7113,7 +7113,7 @@ func TestOpenAIWithFinishReasonError(ctx context.Context, input string, opts ...
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -7152,7 +7152,7 @@ func TestOpenAIWithMaxTokens(ctx context.Context, input string, opts ...CallOpti
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -7191,7 +7191,7 @@ func TestOpenAIWithNullMaxTokens(ctx context.Context, input string, opts ...Call
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -7230,7 +7230,7 @@ func TestOpenRouterMistralSmall3_1_24b(ctx context.Context, input string, opts .
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -7269,7 +7269,7 @@ func TestRetryConstant(ctx context.Context, opts ...CallOptionFunc) (string, err
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -7308,7 +7308,7 @@ func TestRetryExponential(ctx context.Context, opts ...CallOptionFunc) (string, 
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -7347,7 +7347,7 @@ func TestRoundRobinStrategy(ctx context.Context, input string, opts ...CallOptio
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -7386,7 +7386,7 @@ func TestSingleFallbackClient(ctx context.Context, opts ...CallOptionFunc) (stri
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -7425,7 +7425,7 @@ func TestThinking(ctx context.Context, input string, opts ...CallOptionFunc) (ty
 		return types.CustomStory{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.CustomStory)
+	casted := (result.Data).(types.CustomStory)
 
 	return casted, nil
 }
@@ -7464,7 +7464,7 @@ func TestUniverseQuestion(ctx context.Context, question types.UniverseQuestionIn
 		return types.UniverseQuestion{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.UniverseQuestion)
+	casted := (result.Data).(types.UniverseQuestion)
 
 	return casted, nil
 }
@@ -7503,7 +7503,7 @@ func TestVertex(ctx context.Context, input string, opts ...CallOptionFunc) (stri
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -7542,7 +7542,7 @@ func TestVertexClaude(ctx context.Context, input string, opts ...CallOptionFunc)
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -7581,7 +7581,7 @@ func TestVertexWithSystemInstructions(ctx context.Context, opts ...CallOptionFun
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -7620,7 +7620,7 @@ func UnionTest_Function(ctx context.Context, input types.Union2BoolOrString, opt
 		return types.UnionTest_ReturnType{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.UnionTest_ReturnType)
+	casted := (result.Data).(types.UnionTest_ReturnType)
 
 	return casted, nil
 }
@@ -7659,7 +7659,7 @@ func UseBlockConstraint(ctx context.Context, inp types.BlockConstraintForParam, 
 		return 0, result.Error
 	}
 
-	casted := *(result.Data).(*int64)
+	casted := (result.Data).(int64)
 
 	return casted, nil
 }
@@ -7698,7 +7698,7 @@ func UseMaintainFieldOrder(ctx context.Context, input types.MaintainFieldOrder, 
 		return types.MaintainFieldOrder{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.MaintainFieldOrder)
+	casted := (result.Data).(types.MaintainFieldOrder)
 
 	return casted, nil
 }
@@ -7737,7 +7737,7 @@ func UseMalformedConstraints(ctx context.Context, a types.MalformedConstraints2,
 		return 0, result.Error
 	}
 
-	casted := *(result.Data).(*int64)
+	casted := (result.Data).(int64)
 
 	return casted, nil
 }
@@ -7776,7 +7776,7 @@ func UseNestedBlockConstraint(ctx context.Context, inp types.NestedBlockConstrai
 		return 0, result.Error
 	}
 
-	casted := *(result.Data).(*int64)
+	casted := (result.Data).(int64)
 
 	return casted, nil
 }
@@ -7815,7 +7815,7 @@ func ValidateBasicResponses(ctx context.Context, input string, opts ...CallOptio
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -7854,7 +7854,7 @@ func ValidateResponseTypes(ctx context.Context, input string, opts ...CallOption
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
