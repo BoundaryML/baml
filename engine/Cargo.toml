@@ -1,14 +1,12 @@
 [workspace]
 resolver = "2"
 members = [
-  "baml-compiler",
   "baml-lib/*",
   "baml-lsp-types",
   "baml-rpc",
   "baml-ids",
   "baml-runtime",
   "baml-schema-wasm",
-  "baml-vm",
   "bstd",
   "cli",
   "language_client_codegen",
@@ -23,7 +21,6 @@ members = [
   "zed",
 ]
 default-members = [
-  "baml-compiler",
   "baml-lsp-types",
   "baml-lib/*",
   "baml-rpc",
@@ -34,7 +31,6 @@ default-members = [
   # and it's OK to not build this by default because we have to build ts separately (this may
   # also have something to do with resolver=2 and how duplicate dep builds are handled)
   # "baml-schema-wasm",
-  "baml-vm",
   "bstd",
   "cli",
   "language_client_cffi",
