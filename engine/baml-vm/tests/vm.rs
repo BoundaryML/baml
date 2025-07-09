@@ -252,7 +252,7 @@ fn for_loop_simple() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: "
             fn main() -> int {
-                let yyyyyyyy = [1, 2, 3];
+                let yyyyyyyy = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
                 for (i in yyyyyyyy) { i };
                 42
             }
@@ -267,12 +267,13 @@ fn for_loop_with_expressions() -> anyhow::Result<()> {
     // Test that arrays with expressions work properly
     assert_vm_executes(Program {
         source: "
-            fn helper(x: int) -> int {
-                x + 2
+            fn three(x: int) -> int {
+                3
             }
-            
+
             fn main() -> int {
-                let y = for (item in [helper(1), helper(2), helper(3)]) { item };
+                let yyyyyyyy = [three(1), three(2), three(3)];
+                for (i in yyyyyyyy) { i };
                 42
             }
         ",
