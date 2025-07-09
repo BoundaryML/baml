@@ -569,24 +569,31 @@ impl ToProviderMessage for OpenAIClient {
                 }
             }
             BamlMediaType::Pdf => {
-                let type_value = "document";
-                let payload_key = "document";
+                let type_value = "file";
+                let payload_key = "file";
                 content.insert("type".into(), json!(type_value));
 
                 match &media.content {
                     BamlMediaContent::Url(url_content) => {
-                        content.insert(payload_key.into(), json!({ "url": url_content.url }));
+                        // For URLs, we need to resolve them to base64 first
+                        anyhow::bail!(
+                            "BAML internal error (openai): PDF URL should have been resolved to base64 before this stage."
+                        );
                     }
                     BamlMediaContent::Base64(b64_media) => {
                         content.insert(
                             payload_key.into(),
                             json!({
-                                "url": format!("data:{};base64,{}", media.mime_type_as_ok()?, b64_media.base64)
+                                "filename": "document.pdf",
+                                "file_data": format!("data:{};base64,{}", media.mime_type_as_ok()?, b64_media.base64)
                             }),
                         );
                     }
-                    BamlMediaContent::File(_) => {
-                        anyhow::bail!("BAML internal error (openai): PDF file should have been resolved, not processed directly.");
+                    BamlMediaContent::File(media_file) => {
+                        // For files, we need to resolve them to base64 first
+                        anyhow::bail!(
+                            "BAML internal error (openai): PDF file should have been resolved to base64 before this stage."
+                        );
                     }
                 }
             }
