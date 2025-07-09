@@ -144,7 +144,15 @@ impl LanguageFeatures for GoLanguageFeatures {
 
         let _ = collector.add_file(
             "type_map.go",
-            render_type_map(&go_classes, &enums, &unions, &go_type_aliases, &stream_type_aliases, go_mod_name, &pkg)?,
+            render_type_map(
+                &go_classes,
+                &enums,
+                &unions,
+                &go_type_aliases,
+                &stream_type_aliases,
+                go_mod_name,
+                &pkg,
+            )?,
         );
 
         pkg.set("baml_client.types");
@@ -168,7 +176,6 @@ impl LanguageFeatures for GoLanguageFeatures {
             unions
         };
 
-        
         let go_classes = ir
             .walk_classes()
             .map(|c| ir_to_go::classes::ir_class_to_go_stream(c.item, &pkg))

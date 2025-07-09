@@ -478,11 +478,13 @@ impl<T> TypeGeneric<T> {
                 Box::new(field_type1.map_meta(f)),
                 f(type_metadata_ir),
             ),
-            TypeGeneric::RecursiveTypeAlias { meta, name, mode } => TypeGeneric::RecursiveTypeAlias {
-                meta: f(meta),
-                mode: mode.clone(),
-                name: name.clone(),
-            },
+            TypeGeneric::RecursiveTypeAlias { meta, name, mode } => {
+                TypeGeneric::RecursiveTypeAlias {
+                    meta: f(meta),
+                    mode: mode.clone(),
+                    name: name.clone(),
+                }
+            }
             TypeGeneric::Tuple(inner, type_metadata_ir) => TypeGeneric::Tuple(
                 inner.iter().map(|t| t.map_meta(f)).collect(),
                 f(type_metadata_ir),

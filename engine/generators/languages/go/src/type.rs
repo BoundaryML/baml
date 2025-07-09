@@ -271,7 +271,11 @@ impl TypeGo {
             }
             TypeGo::List(inner, _) => format!("[]{}", inner.construct_instance(pkg)),
             TypeGo::Map(key, value, _) => {
-                format!("map[{}]{}{{}}", key.construct_instance(pkg), value.construct_instance(pkg))
+                format!(
+                    "map[{}]{}{{}}",
+                    key.construct_instance(pkg),
+                    value.construct_instance(pkg)
+                )
             }
             TypeGo::Any { .. } => "any".to_string(),
         };
@@ -282,13 +286,13 @@ impl TypeGo {
                 TypeGo::Int(_, _) => "(*int64)(nil)".to_string(),
                 TypeGo::Float(_) => "(*float64)(nil)".to_string(),
                 TypeGo::Bool(_, _) => "(*bool)(nil)".to_string(),
-                _ => format!("({})(nil)", instance.trim_end_matches("{}"))
+                _ => format!("({})(nil)", instance.trim_end_matches("{}")),
             }
         } else {
             instance
         }
     }
-    
+
     pub fn cast_from_function(&self, param: &str, pkg: &CurrentRenderPackage) -> String {
         format!("({param}).({})", self.serialize_type(pkg))
     }

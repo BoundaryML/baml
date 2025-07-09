@@ -5,7 +5,11 @@ use std::{
 
 use anyhow::{anyhow, Result};
 use baml_types::{
-    baml_value::TypeLookups, expr::{self, Builtin, Expr, ExprMetadata, Name, VarIndex}, ir_type::{ArrowGeneric, TypeNonStreaming, TypeStreaming, UnionConstructor}, type_meta, Arrow, BamlMap, BamlValueWithMeta, Constraint, ConstraintLevel, JinjaExpression, Resolvable, StreamingMode, StringOr, TypeIR, TypeValue, UnionType, UnresolvedValue
+    baml_value::TypeLookups,
+    expr::{self, Builtin, Expr, ExprMetadata, Name, VarIndex},
+    ir_type::{ArrowGeneric, TypeNonStreaming, TypeStreaming, UnionConstructor},
+    type_meta, Arrow, BamlMap, BamlValueWithMeta, Constraint, ConstraintLevel, JinjaExpression,
+    Resolvable, StreamingMode, StringOr, TypeIR, TypeValue, UnionType, UnresolvedValue,
 };
 use either::Either;
 use indexmap::{IndexMap, IndexSet};
