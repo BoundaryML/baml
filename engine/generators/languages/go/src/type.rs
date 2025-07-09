@@ -247,7 +247,7 @@ impl TypeGo {
             TypeGo::Enum { .. } => {
                 format!("{}(\"\")", self.serialize_type(pkg))
             }
-            TypeGo::TypeAlias { .. } => { 
+            TypeGo::TypeAlias { .. } => {
                 format!("{}{{}}", self.serialize_type(pkg))
             }
             TypeGo::List(inner, _) => format!("[]{}{{}}", inner.serialize_type(pkg)),
