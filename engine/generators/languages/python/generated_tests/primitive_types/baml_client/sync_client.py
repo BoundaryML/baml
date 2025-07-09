@@ -11,6 +11,7 @@
 # baml-cli is available with the baml package.
 
 import typing
+import typing_extensions
 import baml_py
 
 from . import stream_types, types, type_builder
@@ -119,6 +120,41 @@ class BamlSyncClient:
             "input": input,
         })
         return typing.cast(types.PrimitiveTypes, result.cast_to(types, types, stream_types, False, __runtime__))
+    def TestTopLevelBool(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> bool:
+        result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestTopLevelBool", args={
+            "input": input,
+        })
+        return typing.cast(bool, result.cast_to(types, types, stream_types, False, __runtime__))
+    def TestTopLevelFloat(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> float:
+        result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestTopLevelFloat", args={
+            "input": input,
+        })
+        return typing.cast(float, result.cast_to(types, types, stream_types, False, __runtime__))
+    def TestTopLevelInt(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestTopLevelInt", args={
+            "input": input,
+        })
+        return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
+    def TestTopLevelNull(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> typing.Any:
+        result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestTopLevelNull", args={
+            "input": input,
+        })
+        return typing.cast(typing.Any, result.cast_to(types, types, stream_types, False, __runtime__))
+    def TestTopLevelString(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestTopLevelString", args={
+            "input": input,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     
 
 
@@ -188,6 +224,66 @@ class BamlStreamClient:
           lambda x: typing.cast(types.PrimitiveTypes, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
+    def TestTopLevelBool(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[bool, bool]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestTopLevelBool", args={
+            "input": input,
+        })
+        return baml_py.BamlSyncStream[bool, bool](
+          result,
+          lambda x: typing.cast(bool, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(bool, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def TestTopLevelFloat(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[float, float]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestTopLevelFloat", args={
+            "input": input,
+        })
+        return baml_py.BamlSyncStream[float, float](
+          result,
+          lambda x: typing.cast(float, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(float, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def TestTopLevelInt(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[int, int]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestTopLevelInt", args={
+            "input": input,
+        })
+        return baml_py.BamlSyncStream[int, int](
+          result,
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def TestTopLevelNull(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[typing.Any, typing.Any]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestTopLevelNull", args={
+            "input": input,
+        })
+        return baml_py.BamlSyncStream[typing.Any, typing.Any](
+          result,
+          lambda x: typing.cast(typing.Any, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing.Any, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def TestTopLevelString(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestTopLevelString", args={
+            "input": input,
+        })
+        return baml_py.BamlSyncStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
     
 
 class BamlHttpRequestClient:
@@ -231,6 +327,41 @@ class BamlHttpRequestClient:
             "input": input,
         }, mode="request")
         return result
+    def TestTopLevelBool(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelBool", args={
+            "input": input,
+        }, mode="request")
+        return result
+    def TestTopLevelFloat(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelFloat", args={
+            "input": input,
+        }, mode="request")
+        return result
+    def TestTopLevelInt(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelInt", args={
+            "input": input,
+        }, mode="request")
+        return result
+    def TestTopLevelNull(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelNull", args={
+            "input": input,
+        }, mode="request")
+        return result
+    def TestTopLevelString(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelString", args={
+            "input": input,
+        }, mode="request")
+        return result
     
 
 class BamlHttpStreamRequestClient:
@@ -271,6 +402,41 @@ class BamlHttpStreamRequestClient:
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestPrimitiveTypes", args={
+            "input": input,
+        }, mode="stream")
+        return result
+    def TestTopLevelBool(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelBool", args={
+            "input": input,
+        }, mode="stream")
+        return result
+    def TestTopLevelFloat(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelFloat", args={
+            "input": input,
+        }, mode="stream")
+        return result
+    def TestTopLevelInt(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelInt", args={
+            "input": input,
+        }, mode="stream")
+        return result
+    def TestTopLevelNull(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelNull", args={
+            "input": input,
+        }, mode="stream")
+        return result
+    def TestTopLevelString(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelString", args={
             "input": input,
         }, mode="stream")
         return result
