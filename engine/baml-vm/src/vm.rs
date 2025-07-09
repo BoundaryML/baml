@@ -636,6 +636,18 @@ impl Vm {
                     function = self.objects[frame.function].as_function()?;
                 }
 
+                Instruction::EndBlock(n) => {
+                    let Some(value) = self.stack.pop() else {
+                        return Err(InternalError::UnexpectedEmptyStack.into());
+                    };
+
+                    // Pop the last `n` locals from the stack.
+                    self.stack.drain(self.stack.len() - n..).for_each(drop);
+
+                    // Push the value back on top of the stack.
+                    self.stack.push(value);
+                }
+
                 Instruction::Call(arg_count) => {
                     // Function calls are pushed onto the stack like this:
                     //

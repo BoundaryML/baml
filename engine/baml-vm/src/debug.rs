@@ -121,6 +121,7 @@ pub fn display_instruction(
         Instruction::Pop
         | Instruction::AllocArray(_)
         | Instruction::Call(_)
+        | Instruction::EndBlock(_)
         | Instruction::Return => String::new(),
     };
 

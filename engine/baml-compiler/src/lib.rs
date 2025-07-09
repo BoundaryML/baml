@@ -12,7 +12,7 @@
 use std::collections::{HashMap, HashSet};
 
 use baml_vm::{Bytecode, Class, Function, FunctionKind, Instruction, Object, Value};
-use internal_baml_core::ast::{self, ClassConstructorField, Expression, WithName};
+use internal_baml_core::ast::{self, ClassConstructorField, Expression, ExpressionBlock, WithName};
 use internal_baml_parser_database::ParserDatabase;
 
 /// Baml compiler.
@@ -42,8 +42,34 @@ struct Compiler<'g> {
     /// Maps the name of the variable to its final index in the eval stack.
     locals: HashMap<String, usize>,
 
+    /// Current scope.
+    ///
+    /// The scope increments with each nested block. Example:
+    ///
+    /// ```ignore
+    /// fn example() {          // Scope is 0.
+    ///     let a = 1;
+    ///     {                   // Scope is 1.
+    ///         let b = 2;
+    ///         {               // Scope is 2.
+    ///             let c  = 3;
+    ///         }
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// This is used to keep track of local variables present in the evaluation
+    /// stack.
+    scope: usize,
+
     /// Bytecode to generate.
     bytecode: Bytecode,
+
+    /// Objects pool.
+    ///
+    /// Stores heap-allocated objects that are created during compilation,
+    /// such as string constants.
+    objects: &'g mut Vec<Object>,
 }
 
 impl<'g> Compiler<'g> {
@@ -51,10 +77,13 @@ impl<'g> Compiler<'g> {
     pub fn new(
         globals: &'g HashMap<String, usize>,
         classes: &'g HashMap<String, HashMap<String, usize>>,
+        objects: &'g mut Vec<Object>,
     ) -> Self {
         Self {
             globals,
             classes,
+            objects,
+            scope: 0,
             locals: HashMap::new(),
             bytecode: Bytecode::new(),
         }
@@ -70,97 +99,8 @@ impl<'g> Compiler<'g> {
                 .insert(param_name.to_string(), self.locals.len() + 1);
         }
 
-        // Compile statements
-        for statement in function.body.stmts.iter() {
-            match statement {
-                ast::Stmt::Let(identifier, expr, _span) => {
-                    // Compile the expression for the let binding
-                    self.compile_expression(expr);
-
-                    let local_index = self.locals.len() + 1;
-
-                    self.locals
-                        .insert(identifier.name().to_string(), local_index);
-                }
-                ast::Stmt::ForLoop(identifier, iterator, body, _span) => {
-                    // Compile the iterator expression (array) - leaves array on stack
-                    self.compile_expression(iterator);
-
-                    // Create iterator from array - replaces array with iterator on stack
-                    self.emit(Instruction::CreateIterator);
-
-                    // Loop start - iterator is on top of stack
-                    let loop_start = self.bytecode.instructions.len();
-
-                    // Get next element - pops iterator, pushes iterator, element, has_next
-                    self.emit(Instruction::IterNext);
-
-                    // Check if we have more elements (has_next is on top of stack)
-                    let jump_to_end = self.emit(Instruction::JumpIfFalse(0));
-
-                    // Pop the has_next boolean
-                    self.emit(Instruction::Pop);
-
-                    // Now we have: [function, args..., locals..., iterator, element] on stack
-                    // The element is what we want for the loop variable.
-                    // The element is always 2 positions after the last local
-                    // (iterator is at last_local + 1, element is at last_local + 2)
-                    let last_local_index = self.locals.values().max().copied().unwrap_or(0);
-                    let item_local = last_local_index + 2;
-                    self.locals
-                        .insert(identifier.name().to_string(), item_local);
-
-                    // Compile all statements in the loop body
-                    for stmt in &body.stmts {
-                        match stmt {
-                            ast::Stmt::Let(id, expr, _) => {
-                                self.compile_expression(expr);
-                                let local_idx = self.locals.len() + 1;
-                                self.locals.insert(id.name().to_string(), local_idx);
-                            }
-                            ast::Stmt::ForLoop(_, _, _, _) => {
-                                // Nested for loops would need recursive handling
-                                // For now, this would need more complex implementation
-                                panic!("Nested for loops not yet supported");
-                            }
-                        }
-                    }
-
-                    // Compile the loop body expression
-                    self.compile_expression(&body.expr);
-
-                    // Pop the body result
-                    self.emit(Instruction::Pop);
-
-                    // Pop the element since we're done with it for this iteration
-                    self.emit(Instruction::Pop);
-
-                    // Now iterator is back on top of stack. Jump back to loop start.
-                    let current_pos = self.bytecode.instructions.len();
-                    self.emit(Instruction::Jump(
-                        (loop_start as isize) - (current_pos as isize),
-                    ));
-
-                    // Patch the jump to end - this is where we land when has_next is false
-                    self.patch_jump(jump_to_end);
-
-                    // Clean up remaining stack values
-                    self.emit(Instruction::Pop); // Pop has_next boolean
-                    self.emit(Instruction::Pop); // Pop element
-                    self.emit(Instruction::Pop); // Pop iterator
-
-                    // Remove the loop variable from locals since it's no longer in scope
-                    self.locals.remove(identifier.name());
-
-                    // Push null as the for loop result
-                    let null_index = self.add_constant(Value::Null);
-                    self.emit(Instruction::LoadConst(null_index));
-                }
-            }
-        }
-
-        // Compile the return expression.
-        self.compile_expression(&function.body.expr);
+        // Expr block.
+        self.compile_expression_block(&function.body);
 
         // Pop off the stack.
         self.emit(Instruction::Return);
@@ -232,6 +172,121 @@ impl<'g> Compiler<'g> {
         }
     }
 
+    /// Compiles [`ExpressionBlock`] instances.
+    ///
+    /// [`ExpressionBlock`] is not a variant of [`Expression`], instead it's
+    /// part of [`ast::ExprFn`] and [`Expression::ExprBlock`], and since
+    /// compilation is recursive it needs it's own separate function.
+    fn compile_expression_block(&mut self, block: &ExpressionBlock) {
+        // Start new scope.
+        self.scope += 1;
+
+        let mut scope_locals = HashSet::new();
+
+        // Compile statements and resolve locals.
+        for statement in &block.stmts {
+            match statement {
+                ast::Stmt::Let(identifier, expr, _span) => {
+                    // Compile the assignment expression.
+                    self.compile_expression(expr);
+
+                    // Resolve the index of the local variable at runtime.
+                    self.locals
+                        .insert(identifier.to_string(), self.locals.len() + 1);
+
+                    // We'll remove scoped locals so that outer local indexes are not
+                    // affected.
+                    scope_locals.insert(identifier.name());
+
+                    // We don't need to emit Instruction::StoreVar because when the
+                    // expression is executed and leaves the value on top of the stack,
+                    // that index in the stack will be the index of the local variable.
+                    // It's already "stored".
+                }
+                ast::Stmt::ForLoop(identifier, iterator, body, _span) => {
+                    // Compile the iterator expression (array) - leaves array on stack
+                    self.compile_expression(iterator);
+
+                    // Create iterator from array - replaces array with iterator on stack
+                    self.emit(Instruction::CreateIterator);
+
+                    // Loop start - iterator is on top of stack
+                    let loop_start = self.bytecode.instructions.len();
+
+                    // Get next element - pops iterator, pushes iterator, element, has_next
+                    self.emit(Instruction::IterNext);
+
+                    // Check if we have more elements (has_next is on top of stack)
+                    let jump_to_end = self.emit(Instruction::JumpIfFalse(0));
+
+                    // Pop the has_next boolean
+                    self.emit(Instruction::Pop);
+
+                    // Now we have: [function, args..., locals..., iterator, element] on stack
+                    // The element is what we want for the loop variable.
+                    // The element is always 2 positions after the last local
+                    // (iterator is at last_local + 1, element is at last_local + 2)
+                    let last_local_index = self.locals.values().max().copied().unwrap_or(0);
+                    let item_local = last_local_index + 2;
+                    self.locals
+                        .insert(identifier.name().to_string(), item_local);
+
+                    // Compile the loop body (nested expression block)
+                    self.compile_expression_block(body);
+
+                    // Pop the body result
+                    self.emit(Instruction::Pop);
+
+                    // Pop the element since we're done with it for this iteration
+                    self.emit(Instruction::Pop);
+
+                    // Now iterator is back on top of stack. Jump back to loop start.
+                    let current_pos = self.bytecode.instructions.len();
+                    self.emit(Instruction::Jump(
+                        (loop_start as isize) - (current_pos as isize),
+                    ));
+
+                    // Patch the jump to end - this is where we land when has_next is false
+                    self.patch_jump(jump_to_end);
+
+                    // Clean up remaining stack values
+                    self.emit(Instruction::Pop); // Pop has_next boolean
+                    self.emit(Instruction::Pop); // Pop element
+                    self.emit(Instruction::Pop); // Pop iterator
+
+                    // Remove the loop variable from locals since it's no longer in scope
+                    self.locals.remove(identifier.name());
+
+                    // Push null as the for loop result
+                    let null_index = self.add_constant(Value::Null);
+                    self.emit(Instruction::LoadConst(null_index));
+
+                    // Track this as a local so it gets cleaned up in EndBlock
+                    scope_locals.insert(identifier.name());
+                }
+            }
+        }
+
+        // Compile the return expression.
+        self.compile_expression(&block.expr);
+
+        // Scope 1 is the function's body. After that we have subblocks. If
+        // those subblocks contain locals, then we have to pop them from the
+        // stack. Otherwise we do nothing, we simply leave the resulting value
+        // on top of the stack and that will be exactly the slot of the outer
+        // local variable assignment.
+        if self.scope > 1 && !block.stmts.is_empty() {
+            self.emit(Instruction::EndBlock(block.stmts.len()));
+
+            for local in scope_locals {
+                self.locals.remove(local);
+            }
+        }
+
+        // End scope.
+        self.scope -= 1;
+    }
+
     /// Generate bytecode for an expression.
     ///
     /// # Dev notes
@@ -259,7 +314,15 @@ impl<'g> Compiler<'g> {
                 self.emit(Instruction::LoadConst(index));
             }
 
-            Expression::StringValue(string, _span) => todo!(),
+            Expression::StringValue(string, _span) => {
+                // Allocate the string in the objects pool
+                self.objects.push(Object::String(string.to_string()));
+                let object_index = self.objects.len() - 1;
+
+                // Add a constant that points to the string object
+                let const_index = self.add_constant(Value::Object(object_index));
+                self.emit(Instruction::LoadConst(const_index));
+            }
 
             Expression::RawStringValue(raw_string) => todo!(),
 
@@ -433,7 +496,7 @@ impl<'g> Compiler<'g> {
 
             Expression::JinjaExpressionValue(jinja_expression, span) => todo!(),
 
-            Expression::ExprBlock(expression_block, span) => todo!(),
+            Expression::ExprBlock(block, span) => self.compile_expression_block(block),
 
             // Branching.
             Expression::If(condition, r#if, r#else, _span) => {
@@ -517,8 +580,8 @@ pub fn compile(ast: ParserDatabase) -> anyhow::Result<(Vec<Object>, Vec<Value>)>
     let mut globals = Vec::with_capacity(resolved_globals.len());
 
     for function in ast.walk_expr_fns() {
-        let function =
-            Compiler::new(&resolved_globals, &resolved_classes).compile(function.expr_fn())?;
+        let function = Compiler::new(&resolved_globals, &resolved_classes, &mut objects)
+            .compile(function.expr_fn())?;
 
         // Add the function to the globals and objects pools.
         globals.push(Value::Object(objects.len()));
@@ -849,5 +912,43 @@ mod tests {
         assert_eq!(result, Value::Int(10)); // Should return first element
 
         Ok(())
+    }
+
+    #[test]
+    fn function_returning_string() -> anyhow::Result<()> {
+        assert_compiles(Program {
+            source: r#"
+                fn main() -> string {
+                    "hello"
+                }
+            "#,
+            expected: vec![("main", vec![Instruction::LoadConst(0), Instruction::Return])],
+        })
+    }
+
+    #[test]
+    fn block_expr() -> anyhow::Result<()> {
+        assert_compiles(Program {
+            source: "
+                fn main() -> int {
+                    let a = {
+                        let b = 1;
+                        b
+                    };
+
+                    a
+                }
+            ",
+            expected: vec![(
+                "main",
+                vec![
+                    Instruction::LoadConst(0),
+                    Instruction::LoadVar(1),
+                    Instruction::EndBlock(1),
+                    Instruction::LoadVar(1),
+                    Instruction::Return,
+                ],
+            )],
+        })
     }
 }
