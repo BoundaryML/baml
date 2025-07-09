@@ -246,3 +246,36 @@ fn class_constructor_with_spread_operator() -> anyhow::Result<()> {
         },
     )
 }
+
+#[test]
+fn for_loop_simple_test() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: "
+            fn main() -> int {
+                let x = for (i in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]) { i };
+                42
+            }
+        ",
+        function: "main",
+        expected: Value::Int(42),
+    })
+}
+
+#[test]
+fn for_loop_with_expressions() -> anyhow::Result<()> {
+    // Test that arrays with expressions work properly
+    assert_vm_executes(Program {
+        source: "
+            fn helper(x: int) -> int {
+                x + 2
+            }
+            
+            fn main() -> int {
+                let y = for (item in [helper(1), helper(2), helper(3)]) { item };
+                42
+            }
+        ",
+        function: "main",
+        expected: Value::Int(42),
+    })
+}

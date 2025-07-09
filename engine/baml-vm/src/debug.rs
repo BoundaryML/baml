@@ -107,6 +107,17 @@ pub fn display_instruction(
             format!("({})", display_value(&globals[*index], objects))
         }
 
+        Instruction::CreateIterator => {
+            // display debug information for create iterator
+            // stack before: [array]
+            // stack after: [iterator]
+            format!("(array)")
+        }
+
+        Instruction::IterNext => {
+            format!("(iterator)")
+        }
+
         Instruction::Pop
         | Instruction::AllocArray(_)
         | Instruction::Call(_)

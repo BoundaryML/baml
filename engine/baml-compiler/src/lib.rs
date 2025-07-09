@@ -413,7 +413,63 @@ impl<'g> Compiler<'g> {
                 iterator,
                 body,
                 span,
-            } => todo!(),
+            } => {
+                // Compile the iterator expression (array) - leaves array on stack
+                self.compile_expression(iterator);
+
+                // Create iterator from array - replaces array with iterator on stack
+                self.emit(Instruction::CreateIterator);
+
+                // Loop start - iterator is on top of stack
+                let loop_start = self.bytecode.instructions.len();
+
+                // Get next element - pops iterator, pushes iterator, element, has_next
+                self.emit(Instruction::IterNext);
+
+                // Check if we have more elements (has_next is on top of stack)
+                let jump_to_end = self.emit(Instruction::JumpIfFalse(0));
+
+                // Pop the has_next boolean
+                self.emit(Instruction::Pop);
+
+                // Now we have: [function, iterator, element] on stack
+                // The element is what we want for the loop variable.
+                // Stack layout: [fn(0), iterator(1), element(2)]
+                // The element is at index 2
+                let item_local = 2;
+                self.locals
+                    .insert(identifier.name().to_string(), item_local);
+
+                // Compile the loop body - the element is accessible as a local variable
+                self.compile_expression(&body.expr);
+
+                // Pop the body result
+                self.emit(Instruction::Pop);
+
+                // Pop the element since we're done with it for this iteration
+                self.emit(Instruction::Pop);
+
+                // Now iterator is back on top of stack. Jump back to loop start.
+                let current_pos = self.bytecode.instructions.len();
+                self.emit(Instruction::Jump(
+                    (loop_start as isize) - (current_pos as isize),
+                ));
+
+                // Patch the jump to end - this is where we land when has_next is false
+                self.patch_jump(jump_to_end);
+
+                // Clean up remaining stack values
+                self.emit(Instruction::Pop); // Pop has_next boolean
+                self.emit(Instruction::Pop); // Pop element
+                self.emit(Instruction::Pop); // Pop iterator
+
+                // Remove the loop variable from locals since it's no longer in scope
+                self.locals.remove(identifier.name());
+
+                // 14. Push null as the for loop result
+                let null_index = self.add_constant(Value::Null);
+                self.emit(Instruction::LoadConst(null_index));
+            }
         }
     }
 }
@@ -681,5 +737,108 @@ mod tests {
                 ],
             )],
         })
+    }
+
+    #[test]
+    fn create_iterator_instruction() -> anyhow::Result<()> {
+        use baml_vm::{Bytecode, Frame, Function, FunctionKind, Instruction, Object, Value, Vm};
+
+        // Create a simple function that tests CreateIterator instruction
+        let function = Function {
+            name: "test_create_iterator".to_string(),
+            arity: 0,
+            bytecode: Bytecode {
+                instructions: vec![
+                    Instruction::LoadConst(0),   // Load 1
+                    Instruction::LoadConst(1),   // Load 2
+                    Instruction::LoadConst(2),   // Load 3
+                    Instruction::AllocArray(3),  // Create array [1, 2, 3]
+                    Instruction::CreateIterator, // Create iterator
+                    Instruction::Return,
+                ],
+                constants: vec![Value::Int(1), Value::Int(2), Value::Int(3)],
+            },
+            kind: FunctionKind::Exec,
+            local_var_names: vec!["<fn test_create_iterator>".to_string()],
+        };
+
+        let objects = vec![Object::Function(function)];
+        let globals = vec![Value::Object(0)];
+
+        let mut vm = Vm {
+            frames: vec![Frame {
+                function: 0,
+                instruction_ptr: 0,
+                locals_offset: 0,
+            }],
+            stack: vec![Value::Object(0)],
+            objects,
+            globals,
+        };
+
+        let result = vm.exec()?;
+        // Result should be an iterator object
+        if let Value::Object(index) = result {
+            if let Object::Iterator {
+                array,
+                index: iter_index,
+            } = &vm.objects[index]
+            {
+                assert_eq!(*iter_index, 0); // Should start at index 0
+                                            // Array should be at index 1 (after function at index 0)
+                assert_eq!(*array, 1);
+            } else {
+                panic!("Expected Iterator object");
+            }
+        } else {
+            panic!("Expected Object value");
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn iter_next_instruction() -> anyhow::Result<()> {
+        use baml_vm::{Bytecode, Frame, Function, FunctionKind, Instruction, Object, Value, Vm};
+
+        // Create a simple function that tests IterNext instruction
+        let function = Function {
+            name: "test_iter_next".to_string(),
+            arity: 0,
+            bytecode: Bytecode {
+                instructions: vec![
+                    Instruction::LoadConst(0),   // Load 10
+                    Instruction::LoadConst(1),   // Load 20
+                    Instruction::LoadConst(2),   // Load 30
+                    Instruction::AllocArray(3),  // Create array [10, 20, 30]
+                    Instruction::CreateIterator, // Create iterator
+                    Instruction::IterNext,       // Get first element
+                    Instruction::Pop,            // Remove has_next boolean
+                    Instruction::Return,         // Return the element
+                ],
+                constants: vec![Value::Int(10), Value::Int(20), Value::Int(30)],
+            },
+            kind: FunctionKind::Exec,
+            local_var_names: vec!["<fn test_iter_next>".to_string()],
+        };
+
+        let objects = vec![Object::Function(function)];
+        let globals = vec![Value::Object(0)];
+
+        let mut vm = Vm {
+            frames: vec![Frame {
+                function: 0,
+                instruction_ptr: 0,
+                locals_offset: 0,
+            }],
+            stack: vec![Value::Object(0)],
+            objects,
+            globals,
+        };
+
+        let result = vm.exec()?;
+        assert_eq!(result, Value::Int(10)); // Should return first element
+
+        Ok(())
     }
 }

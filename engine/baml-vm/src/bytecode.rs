@@ -121,6 +121,21 @@ pub enum Instruction {
     /// No arguments needed, result is stored in the eval stack and the VM
     /// simply has to clean up the call stack and continue execution.
     Return,
+
+    /// Create an iterator from an array.
+    ///
+    /// Format: `CREATE_ITERATOR` - pops an array from the stack and pushes an iterator.
+    /// Stack before: [array]
+    /// Stack after: [iterator]
+    CreateIterator,
+
+    /// Get the next element from an iterator.
+    ///
+    /// Format: `ITER_NEXT` - pops an iterator from the stack and pushes the next element and a boolean.
+    /// Stack before: [iterator]
+    /// Stack after: [iterator, element, has_next]
+    /// TODO(Rahul): Check with Antonio, if this insn is complex than needed.
+    IterNext,
 }
 
 impl std::fmt::Display for Instruction {
@@ -140,6 +155,8 @@ impl std::fmt::Display for Instruction {
             Instruction::AllocInstance(i) => write!(f, "ALLOC_INSTANCE {i}"),
             Instruction::Call(n) => write!(f, "CALL {n}"),
             Instruction::Return => f.write_str("RETURN"),
+            Instruction::CreateIterator => f.write_str("CREATE_ITERATOR"),
+            Instruction::IterNext => f.write_str("ITER_NEXT"),
         }
     }
 }
