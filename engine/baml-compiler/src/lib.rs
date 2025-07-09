@@ -79,12 +79,6 @@ impl<'g> Compiler<'g> {
 
                     let local_index = self.locals.len() + 1;
 
-                    // We don't need to emit this because when the expression is
-                    // executed and leaves the value on top of the stack, that index in
-                    // the stack will be the index of the local variable. It's already
-                    // "stored".
-                    // self.emit(Instruction::StoreVar(local_index));
-
                     self.locals
                         .insert(identifier.name().to_string(), local_index);
                 }
