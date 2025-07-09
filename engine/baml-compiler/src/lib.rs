@@ -70,21 +70,99 @@ impl<'g> Compiler<'g> {
                 .insert(param_name.to_string(), self.locals.len() + 1);
         }
 
-        // Compile expressions and resolve rest of locals.
+        // Compile statements
         for statement in function.body.stmts.iter() {
-            self.compile_expression(&statement.body);
+            match statement {
+                ast::Stmt::Let(identifier, expr, _span) => {
+                    // Compile the expression for the let binding
+                    self.compile_expression(expr);
 
-            let local_index = self.locals.len() + 1;
+                    let local_index = self.locals.len() + 1;
 
-            // We don't need to emit this because when the expression is
-            // executed and leaves the value on top of the stack, that index in
-            // the stack will be the index of the local variable. It's already
-            // "stored".
+                    // We don't need to emit this because when the expression is
+                    // executed and leaves the value on top of the stack, that index in
+                    // the stack will be the index of the local variable. It's already
+                    // "stored".
+                    // self.emit(Instruction::StoreVar(local_index));
 
-            // self.emit(Instruction::StoreVar(local_index));
+                    self.locals
+                        .insert(identifier.name().to_string(), local_index);
+                }
+                ast::Stmt::ForLoop(identifier, iterator, body, _span) => {
+                    // Compile the iterator expression (array) - leaves array on stack
+                    self.compile_expression(iterator);
 
-            self.locals
-                .insert(statement.identifier.to_string(), local_index);
+                    // Create iterator from array - replaces array with iterator on stack
+                    self.emit(Instruction::CreateIterator);
+
+                    // Loop start - iterator is on top of stack
+                    let loop_start = self.bytecode.instructions.len();
+
+                    // Get next element - pops iterator, pushes iterator, element, has_next
+                    self.emit(Instruction::IterNext);
+
+                    // Check if we have more elements (has_next is on top of stack)
+                    let jump_to_end = self.emit(Instruction::JumpIfFalse(0));
+
+                    // Pop the has_next boolean
+                    self.emit(Instruction::Pop);
+
+                    // Now we have: [function, args..., locals..., iterator, element] on stack
+                    // The element is what we want for the loop variable.
+                    // The element is always 2 positions after the last local
+                    // (iterator is at last_local + 1, element is at last_local + 2)
+                    let last_local_index = self.locals.values().max().copied().unwrap_or(0);
+                    let item_local = last_local_index + 2;
+                    self.locals
+                        .insert(identifier.name().to_string(), item_local);
+
+                    // Compile all statements in the loop body
+                    for stmt in &body.stmts {
+                        match stmt {
+                            ast::Stmt::Let(id, expr, _) => {
+                                self.compile_expression(expr);
+                                let local_idx = self.locals.len() + 1;
+                                self.locals.insert(id.name().to_string(), local_idx);
+                            }
+                            ast::Stmt::ForLoop(_, _, _, _) => {
+                                // Nested for loops would need recursive handling
+                                // For now, this would need more complex implementation
+                                panic!("Nested for loops not yet supported");
+                            }
+                        }
+                    }
+
+                    // Compile the loop body expression
+                    self.compile_expression(&body.expr);
+
+                    // Pop the body result
+                    self.emit(Instruction::Pop);
+
+                    // Pop the element since we're done with it for this iteration
+                    self.emit(Instruction::Pop);
+
+                    // Now iterator is back on top of stack. Jump back to loop start.
+                    let current_pos = self.bytecode.instructions.len();
+                    self.emit(Instruction::Jump(
+                        (loop_start as isize) - (current_pos as isize),
+                    ));
+
+                    // Patch the jump to end - this is where we land when has_next is false
+                    self.patch_jump(jump_to_end);
+
+                    // Clean up remaining stack values
+                    self.emit(Instruction::Pop); // Pop has_next boolean
+                    self.emit(Instruction::Pop); // Pop element
+                    self.emit(Instruction::Pop); // Pop iterator
+
+                    // Remove the loop variable from locals since it's no longer in scope
+                    self.locals.remove(identifier.name());
+
+                    // Push null as the for loop result
+                    let null_index = self.add_constant(Value::Null);
+                    self.emit(Instruction::LoadConst(null_index));
+                }
+            }
         }
 
         // Compile the return expression.
@@ -406,69 +484,6 @@ impl<'g> Compiler<'g> {
                 // POP_JUMP instruction like Python does, but for now I want
                 // the simplest possible VM (very limited instructions).
                 self.patch_jump(skip_else);
-            }
-
-            Expression::ForLoop {
-                identifier,
-                iterator,
-                body,
-                span,
-            } => {
-                // Compile the iterator expression (array) - leaves array on stack
-                self.compile_expression(iterator);
-
-                // Create iterator from array - replaces array with iterator on stack
-                self.emit(Instruction::CreateIterator);
-
-                // Loop start - iterator is on top of stack
-                let loop_start = self.bytecode.instructions.len();
-
-                // Get next element - pops iterator, pushes iterator, element, has_next
-                self.emit(Instruction::IterNext);
-
-                // Check if we have more elements (has_next is on top of stack)
-                let jump_to_end = self.emit(Instruction::JumpIfFalse(0));
-
-                // Pop the has_next boolean
-                self.emit(Instruction::Pop);
-
-                // Now we have: [function, iterator, element] on stack
-                // The element is what we want for the loop variable.
-                // Stack layout: [fn(0), iterator(1), element(2)]
-                // The element is at index 2
-                let item_local = 2;
-                self.locals
-                    .insert(identifier.name().to_string(), item_local);
-
-                // Compile the loop body - the element is accessible as a local variable
-                self.compile_expression(&body.expr);
-
-                // Pop the body result
-                self.emit(Instruction::Pop);
-
-                // Pop the element since we're done with it for this iteration
-                self.emit(Instruction::Pop);
-
-                // Now iterator is back on top of stack. Jump back to loop start.
-                let current_pos = self.bytecode.instructions.len();
-                self.emit(Instruction::Jump(
-                    (loop_start as isize) - (current_pos as isize),
-                ));
-
-                // Patch the jump to end - this is where we land when has_next is false
-                self.patch_jump(jump_to_end);
-
-                // Clean up remaining stack values
-                self.emit(Instruction::Pop); // Pop has_next boolean
-                self.emit(Instruction::Pop); // Pop element
-                self.emit(Instruction::Pop); // Pop iterator
-
-                // Remove the loop variable from locals since it's no longer in scope
-                self.locals.remove(identifier.name());
-
-                // 14. Push null as the for loop result
-                let null_index = self.add_constant(Value::Null);
-                self.emit(Instruction::LoadConst(null_index));
             }
         }
     }

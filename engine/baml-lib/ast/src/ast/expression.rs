@@ -8,7 +8,7 @@ use std::fmt;
 use baml_types::JinjaExpression;
 use bstd::dedent;
 
-use super::{app::App, ArgumentsList, Identifier, WithName, WithSpan};
+use super::{app::App, ArgumentsList, Identifier, Stmt, WithName, WithSpan};
 use crate::ast::Span;
 
 #[derive(Debug, Clone)]
@@ -126,12 +126,6 @@ pub enum Expression {
         Option<Box<Expression>>,
         Span,
     ),
-    ForLoop {
-        identifier: Identifier,
-        iterator: Box<Expression>,
-        body: ExpressionBlock,
-        span: Span,
-    },
 }
 
 impl fmt::Display for Expression {
@@ -198,14 +192,6 @@ impl fmt::Display for Expression {
                 Some(else_) => write!(f, "if {cond} {{ {then} }} else {{ {else_} }}"),
                 None => write!(f, "if {cond} {{ {then} }}"),
             },
-            Expression::ForLoop {
-                identifier,
-                iterator,
-                body,
-                ..
-            } => {
-                write!(f, "for ({identifier} in {iterator}) {{ {body} }}")
-            }
         }
     }
 }
@@ -321,7 +307,6 @@ impl Expression {
             Self::App(app) => app.span(),
             Self::ExprBlock(_, span) => span,
             Self::If(_, _, _, span) => span,
-            Self::ForLoop { span, .. } => span,
         }
     }
 
@@ -351,7 +336,6 @@ impl Expression {
             Expression::App(_) => "function_application",
             Expression::ExprBlock(_, _) => "expression_block",
             Expression::If(_, _, _, _) => "if_expression",
-            Expression::ForLoop { .. } => "for_loop",
         }
     }
 
@@ -447,25 +431,6 @@ impl Expression {
                 }
             }
             (If(_, _, _, _), _) => panic!("Types do not match: {self:?} and {other:?}"),
-            (
-                ForLoop {
-                    identifier: id1,
-                    iterator: it1,
-                    body: d1,
-                    ..
-                },
-                ForLoop {
-                    identifier: id2,
-                    iterator: it2,
-                    body: d2,
-                    ..
-                },
-            ) => {
-                id1.assert_eq_up_to_span(id2);
-                it1.assert_eq_up_to_span(it2);
-                d1.assert_eq_up_to_span(d2);
-            }
-            (ForLoop { .. }, _) => panic!("Types do not match: {self:?} and {other:?}"),
         }
     }
 
@@ -557,7 +522,6 @@ impl Expression {
             Expression::App(_) => None,          // Is this right?
             Expression::ExprBlock(_, _) => None, // Is this right?
             Expression::If(_, _, _, _) => None,
-            Expression::ForLoop { .. } => None,
         }
     }
 }
@@ -643,63 +607,5 @@ impl ExpressionBlock {
                 a.assert_eq_up_to_span(b);
             });
         self.expr.assert_eq_up_to_span(&other.expr);
-    }
-}
-
-// Stmt(statements) perform actions and not often return values.
-#[derive(Debug, Clone)]
-pub enum Stmt {
-    Let(Identifier, Expression, Span),
-    ForLoop(Identifier, Expression, ExpressionBlock, Span),
-}
-
-impl fmt::Display for Stmt {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Stmt::Let(identifier, expr, span) => write!(f, "let {} = {}", identifier, expr)?,
-            Stmt::ForLoop(identifier, expr, block, span) => {
-                write!(f, "for {} in {}", identifier, expr)?
-            }
-        }
-        Ok(())
-    }
-}
-
-impl Stmt {
-    pub fn assert_eq_up_to_span(&self, other: &Stmt) {
-        match (self, other) {
-            (Stmt::Let(identifier1, expr1, span1), Stmt::Let(identifier2, expr2, span2)) => {
-                identifier1.assert_eq_up_to_span(identifier2);
-                expr1.assert_eq_up_to_span(expr2);
-            }
-            (
-                Stmt::ForLoop(identifier1, expr1, block1, span1),
-                Stmt::ForLoop(identifier2, expr2, block2, span2),
-            ) => {
-                identifier1.assert_eq_up_to_span(identifier2);
-                expr1.assert_eq_up_to_span(expr2);
-                block1.assert_eq_up_to_span(block2);
-            }
-            (Stmt::Let(_, _, _), Stmt::ForLoop(_, _, _, _)) => {
-                panic!("Types do not match: {self:?} and {other:?}")
-            }
-            (Stmt::ForLoop(_, _, _, _), Stmt::Let(_, _, _)) => {
-                panic!("Types do not match: {self:?} and {other:?}")
-            }
-        }
-    }
-
-    pub fn identifier(&self) -> &Identifier {
-        match self {
-            Stmt::Let(identifier, _, _) => identifier,
-            Stmt::ForLoop(identifier, _, _, _) => identifier,
-        }
-    }
-
-    pub fn span(&self) -> &Span {
-        match self {
-            Stmt::Let(_, _, span) => span,
-            Stmt::ForLoop(_, _, _, span) => span,
-        }
     }
 }

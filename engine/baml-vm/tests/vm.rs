@@ -248,11 +248,12 @@ fn class_constructor_with_spread_operator() -> anyhow::Result<()> {
 }
 
 #[test]
-fn for_loop_simple_test() -> anyhow::Result<()> {
+fn for_loop_simple() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: "
             fn main() -> int {
-                let x = for (i in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]) { i };
+                let yyyyyyyy = [1, 2, 3];
+                for (i in yyyyyyyy) { i };
                 42
             }
         ",
