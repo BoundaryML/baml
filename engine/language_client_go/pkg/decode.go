@@ -473,13 +473,22 @@ func maybeDecodePrimitive(holder *cffi.CFFIValueHolder) (*reflect.Value, bool) {
 
 // Used when we have a nil value but its of unknown type
 
-func maybeOptional(value reflect.Value, targetType *cffi.CFFIFieldTypeHolder) reflect.Value {
-	debugLog("decoding value: %v\n", targetType)
-	if targetType.GetOptionalType() != nil {
-		debugLog("  -> Making optional")
-		ptr := reflect.New(value.Type())
-		ptr.Elem().Set(value)
-		return ptr
+func maybeOptional(value reflect.Value, targetType *cffi.CFFIFieldTypeHolder, isUnion bool) reflect.Value {
+	// debugLog("decoding value: %v\n", targetType)
+	if optional, ok := targetType.Type.(*cffi.CFFIFieldTypeHolder_OptionalType); ok {
+		optionalType := optional.OptionalType
+		if optionalType.Value.GetUnionVariantType() != nil {
+			if isUnion {
+				ptr := reflect.New(value.Type())
+				ptr.Elem().Set(value)
+				return ptr
+			}
+		} else {
+			goType := convertFieldTypeToGoType(optionalType.Value)
+			ptr := reflect.New(goType)
+			ptr.Elem().Set(value)
+			return ptr
+		}
 	}
 	debugLog("  -> Not making optional")
 	return value
@@ -498,31 +507,32 @@ func Decode(holder *cffi.CFFIValueHolder) reflect.Value {
 	}
 
 	if primitiveValue, found := maybeDecodePrimitive(holder); found {
-		return maybeOptional(*primitiveValue, holder.Type)
+		return maybeOptional(*primitiveValue, holder.Type, false)
 	}
 
 	if listVal, ok := value.(*cffi.CFFIValueHolder_ListValue); ok {
-		return maybeOptional(decodeListValue(listVal.ListValue), holder.Type)
+		return maybeOptional(decodeListValue(listVal.ListValue), holder.Type, false)
 	}
 
 	if mapVal, ok := value.(*cffi.CFFIValueHolder_MapValue); ok {
-		return maybeOptional(decodeMapValue(mapVal.MapValue), holder.Type)
+		return maybeOptional(decodeMapValue(mapVal.MapValue), holder.Type, false)
 	}
 
 	if classVal, ok := value.(*cffi.CFFIValueHolder_ClassValue); ok {
-		return maybeOptional(decodeClassValue(classVal.ClassValue), holder.Type)
+		return maybeOptional(decodeClassValue(classVal.ClassValue), holder.Type, false)
 	}
 
 	if enumVal, ok := value.(*cffi.CFFIValueHolder_EnumValue); ok {
-		return maybeOptional(decodeEnumValue(enumVal.EnumValue), holder.Type)
+		return maybeOptional(decodeEnumValue(enumVal.EnumValue), holder.Type, false)
 	}
 
 	if unionVal, ok := value.(*cffi.CFFIValueHolder_UnionVariantValue); ok {
-		return maybeOptional(decodeUnionValue(unionVal.UnionVariantValue), holder.Type)
+		decoded := decodeUnionValue(unionVal.UnionVariantValue)
+		return maybeOptional(decoded, holder.Type, true)
 	}
 
 	if checkedVal, ok := value.(*cffi.CFFIValueHolder_CheckedValue); ok {
-		return maybeOptional(reflect.ValueOf(decodeCheckedValue[any](checkedVal.CheckedValue)).Elem(), holder.Type)
+		return maybeOptional(reflect.ValueOf(decodeCheckedValue[any](checkedVal.CheckedValue)).Elem(), holder.Type, false)
 	}
 
 	if streamingVal, ok := value.(*cffi.CFFIValueHolder_StreamingStateValue); ok {
