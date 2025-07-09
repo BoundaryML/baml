@@ -8,7 +8,8 @@
       "Bash(uv run:*)",
       "Bash(find:*)",
       "Bash(rg:*)",
-      "Bash(cargo check:*)"
+      "Bash(cargo check:*)",
+      "Bash(cargo build:*)"
     ],
     "deny": []
   }

@@ -3045,6 +3045,258 @@ export const TestOpenAIO1WithMaxTokens = async (
 };
 
 /**
+ * Executes the "TestOpenAIProviderWithResponsesType" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestOpenAIProviderWithResponsesType"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestOpenAIProviderWithResponsesType = async (
+  input: string,
+): Promise<string> => {
+  return b.TestOpenAIProviderWithResponsesType(
+    input,
+  );
+};
+
+/**
+ * Executes the "TestOpenAIResponses" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestOpenAIResponses"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestOpenAIResponses = async (
+  input: string,
+): Promise<string> => {
+  return b.TestOpenAIResponses(
+    input,
+  );
+};
+
+/**
+ * Executes the "TestOpenAIResponsesAutoType" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestOpenAIResponsesAutoType"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestOpenAIResponsesAutoType = async (
+  input: string,
+): Promise<string> => {
+  return b.TestOpenAIResponsesAutoType(
+    input,
+  );
+};
+
+/**
+ * Executes the "TestOpenAIResponsesConversation" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestOpenAIResponsesConversation"
+ * with the specified parameters.
+ *
+ * @param { string } topic - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestOpenAIResponsesConversation = async (
+  topic: string,
+): Promise<string> => {
+  return b.TestOpenAIResponsesConversation(
+    topic,
+  );
+};
+
+/**
+ * Executes the "TestOpenAIResponsesCustomURL" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestOpenAIResponsesCustomURL"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestOpenAIResponsesCustomURL = async (
+  input: string,
+): Promise<string> => {
+  return b.TestOpenAIResponsesCustomURL(
+    input,
+  );
+};
+
+/**
+ * Executes the "TestOpenAIResponsesDifferentModel" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestOpenAIResponsesDifferentModel"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestOpenAIResponsesDifferentModel = async (
+  input: string,
+): Promise<string> => {
+  return b.TestOpenAIResponsesDifferentModel(
+    input,
+  );
+};
+
+/**
+ * Executes the "TestOpenAIResponsesEndpoint" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestOpenAIResponsesEndpoint"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestOpenAIResponsesEndpoint = async (
+  input: string,
+): Promise<string> => {
+  return b.TestOpenAIResponsesEndpoint(
+    input,
+  );
+};
+
+/**
+ * Executes the "TestOpenAIResponsesExplicit" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestOpenAIResponsesExplicit"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestOpenAIResponsesExplicit = async (
+  input: string,
+): Promise<string> => {
+  return b.TestOpenAIResponsesExplicit(
+    input,
+  );
+};
+
+/**
+ * Executes the "TestOpenAIResponsesFunctionCall" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestOpenAIResponsesFunctionCall"
+ * with the specified parameters.
+ *
+ * @param { string } query - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestOpenAIResponsesFunctionCall = async (
+  query: string,
+): Promise<string> => {
+  return b.TestOpenAIResponsesFunctionCall(
+    query,
+  );
+};
+
+/**
+ * Executes the "TestOpenAIResponsesImageInput" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestOpenAIResponsesImageInput"
+ * with the specified parameters.
+ *
+ * @param { Image | string } image - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestOpenAIResponsesImageInput = async (
+  image: Image | string,
+): Promise<string> => {
+  return b.TestOpenAIResponsesImageInput(
+    image,
+  );
+};
+
+/**
+ * Executes the "TestOpenAIResponsesReasoning" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestOpenAIResponsesReasoning"
+ * with the specified parameters.
+ *
+ * @param { string } problem - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestOpenAIResponsesReasoning = async (
+  problem: string,
+): Promise<string> => {
+  return b.TestOpenAIResponsesReasoning(
+    problem,
+  );
+};
+
+/**
+ * Executes the "TestOpenAIResponsesShorthand" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestOpenAIResponsesShorthand"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestOpenAIResponsesShorthand = async (
+  input: string,
+): Promise<string> => {
+  return b.TestOpenAIResponsesShorthand(
+    input,
+  );
+};
+
+/**
+ * Executes the "TestOpenAIResponsesWebSearch" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestOpenAIResponsesWebSearch"
+ * with the specified parameters.
+ *
+ * @param { string } query - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestOpenAIResponsesWebSearch = async (
+  query: string,
+): Promise<string> => {
+  return b.TestOpenAIResponsesWebSearch(
+    query,
+  );
+};
+
+/**
+ * Executes the "TestOpenAIResponsesWithOpenAIResponseType" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestOpenAIResponsesWithOpenAIResponseType"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestOpenAIResponsesWithOpenAIResponseType = async (
+  input: string,
+): Promise<string> => {
+  return b.TestOpenAIResponsesWithOpenAIResponseType(
+    input,
+  );
+};
+
+/**
  * Executes the "TestOpenAIShorthand" BAML action.
  *
  * This server action calls the underlying BAML function "TestOpenAIShorthand"
@@ -3371,5 +3623,41 @@ export const UseNestedBlockConstraint = async (
 ): Promise<number> => {
   return b.UseNestedBlockConstraint(
     inp,
+  );
+};
+
+/**
+ * Executes the "ValidateBasicResponses" BAML action.
+ *
+ * This server action calls the underlying BAML function "ValidateBasicResponses"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const ValidateBasicResponses = async (
+  input: string,
+): Promise<string> => {
+  return b.ValidateBasicResponses(
+    input,
+  );
+};
+
+/**
+ * Executes the "ValidateResponseTypes" BAML action.
+ *
+ * This server action calls the underlying BAML function "ValidateResponseTypes"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const ValidateResponseTypes = async (
+  input: string,
+): Promise<string> => {
+  return b.ValidateResponseTypes(
+    input,
   );
 };

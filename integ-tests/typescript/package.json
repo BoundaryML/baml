@@ -39,7 +39,7 @@
     "@google/generative-ai": "^0.24.0",
     "dotenv": "^16.4.5",
     "esbuild": "^0.25.2",
-    "openai": "^4.87.3"
+    "openai": "^5.8.2"
   },
   "packageManager": "pnpm@9.12.0+sha512.4abf725084d7bcbafbd728bfc7bee61f2f791f977fd87542b3579dcb23504d170d46337945e4c66485cd12d588a0c0e570ed9c477e7ccdd8507cf05f3f92eaca"
 }

@@ -11,7 +11,7 @@ use serde::de::DeserializeOwned;
 use super::{
     anthropic::response_handler::scan_anthropic_response_stream,
     google::response_handler::scan_google_response_stream,
-    openai::response_handler::scan_openai_response_stream,
+    openai::response_handler::scan_openai_chat_completion_stream,
     request::{
         build_and_log_outbound_request, execute_request, make_request, to_prompt, EitherResponse,
         RequestBuilder, ResponseType,
@@ -105,7 +105,7 @@ pub async fn make_stream_request(
                         }
                     };
                     let update = match response_type {
-                        ResponseType::OpenAI => scan_openai_response_stream(
+                        ResponseType::OpenAI => scan_openai_chat_completion_stream(
                             &client_name,
                             &params,
                             &prompt,
@@ -115,6 +115,18 @@ pub async fn make_stream_request(
                             accumulated,
                             event_body,
                         ),
+                        ResponseType::OpenAIResponses => {
+                            super::openai::response_handler::scan_openai_responses_stream(
+                                &client_name,
+                                &params,
+                                &prompt,
+                                &start_time_system,
+                                &start_time_instant,
+                                &model_name,
+                                accumulated,
+                                event_body,
+                            )
+                        }
                         ResponseType::Anthropic => scan_anthropic_response_stream(
                             &client_name,
                             &params,

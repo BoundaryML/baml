@@ -251,6 +251,8 @@ var typeMap = map[string]reflect.Type{
 	"STREAM_TYPES.Union__Event__Resume":                                                    reflect.TypeOf(stream_types.Union2EventOrResume{}),
 	"TYPES.Union__float__int":                                                              reflect.TypeOf(types.Union2FloatOrInt{}),
 	"STREAM_TYPES.Union__float__int":                                                       reflect.TypeOf(stream_types.Union2FloatOrInt{}),
+	"TYPES.Union__image__string":                                                           reflect.TypeOf(types.Union2ImageOrString{}),
+	"STREAM_TYPES.Union__image__string":                                                    reflect.TypeOf(stream_types.Union2ImageOrString{}),
 	"TYPES.Union__int__string":                                                             reflect.TypeOf(types.Union2IntOrString{}),
 	"STREAM_TYPES.Union__int__string":                                                      reflect.TypeOf(stream_types.Union2IntOrString{}),
 	"TYPES.Union__JsonTemplate__SimpleTag":                                                 reflect.TypeOf(types.Union2JsonTemplateOrSimpleTag{}),

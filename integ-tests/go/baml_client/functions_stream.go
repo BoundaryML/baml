@@ -12158,6 +12158,1028 @@ func (*stream) TestOpenAIO1WithMaxTokens(ctx context.Context, input string, opts
 	return channel, nil
 }
 
+// / Streaming version of TestOpenAIProviderWithResponsesType
+func (*stream) TestOpenAIProviderWithResponsesType(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := baml.EncodeArgs(args)
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestOpenAIProviderWithResponsesType: %w", err)
+		panic(wrapped_err)
+	}
+
+	internal_ctx := context.Background()
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIProviderWithResponsesType", encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	channel := make(chan StreamValue[string, string])
+	go func() {
+		defer func() {
+			internal_ctx.Done()
+		}()
+		for {
+			select {
+			case <-ctx.Done():
+				close(channel)
+				return
+			case result, ok := <-internal_channel:
+				if !ok {
+					close(channel)
+					return
+				}
+				if result.Error != nil {
+					close(channel)
+					return
+				}
+				if result.HasData {
+					data := *(result.Data).(*string)
+					channel <- StreamValue[string, string]{
+						IsFinal:  true,
+						as_final: &data,
+					}
+				} else {
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
+						IsFinal:   false,
+						as_stream: &data,
+					}
+				}
+			}
+		}
+	}()
+	return channel, nil
+}
+
+// / Streaming version of TestOpenAIResponses
+func (*stream) TestOpenAIResponses(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := baml.EncodeArgs(args)
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestOpenAIResponses: %w", err)
+		panic(wrapped_err)
+	}
+
+	internal_ctx := context.Background()
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIResponses", encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	channel := make(chan StreamValue[string, string])
+	go func() {
+		defer func() {
+			internal_ctx.Done()
+		}()
+		for {
+			select {
+			case <-ctx.Done():
+				close(channel)
+				return
+			case result, ok := <-internal_channel:
+				if !ok {
+					close(channel)
+					return
+				}
+				if result.Error != nil {
+					close(channel)
+					return
+				}
+				if result.HasData {
+					data := *(result.Data).(*string)
+					channel <- StreamValue[string, string]{
+						IsFinal:  true,
+						as_final: &data,
+					}
+				} else {
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
+						IsFinal:   false,
+						as_stream: &data,
+					}
+				}
+			}
+		}
+	}()
+	return channel, nil
+}
+
+// / Streaming version of TestOpenAIResponsesAutoType
+func (*stream) TestOpenAIResponsesAutoType(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := baml.EncodeArgs(args)
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestOpenAIResponsesAutoType: %w", err)
+		panic(wrapped_err)
+	}
+
+	internal_ctx := context.Background()
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIResponsesAutoType", encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	channel := make(chan StreamValue[string, string])
+	go func() {
+		defer func() {
+			internal_ctx.Done()
+		}()
+		for {
+			select {
+			case <-ctx.Done():
+				close(channel)
+				return
+			case result, ok := <-internal_channel:
+				if !ok {
+					close(channel)
+					return
+				}
+				if result.Error != nil {
+					close(channel)
+					return
+				}
+				if result.HasData {
+					data := *(result.Data).(*string)
+					channel <- StreamValue[string, string]{
+						IsFinal:  true,
+						as_final: &data,
+					}
+				} else {
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
+						IsFinal:   false,
+						as_stream: &data,
+					}
+				}
+			}
+		}
+	}()
+	return channel, nil
+}
+
+// / Streaming version of TestOpenAIResponsesConversation
+func (*stream) TestOpenAIResponsesConversation(ctx context.Context, topic string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"topic": topic},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := baml.EncodeArgs(args)
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestOpenAIResponsesConversation: %w", err)
+		panic(wrapped_err)
+	}
+
+	internal_ctx := context.Background()
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIResponsesConversation", encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	channel := make(chan StreamValue[string, string])
+	go func() {
+		defer func() {
+			internal_ctx.Done()
+		}()
+		for {
+			select {
+			case <-ctx.Done():
+				close(channel)
+				return
+			case result, ok := <-internal_channel:
+				if !ok {
+					close(channel)
+					return
+				}
+				if result.Error != nil {
+					close(channel)
+					return
+				}
+				if result.HasData {
+					data := *(result.Data).(*string)
+					channel <- StreamValue[string, string]{
+						IsFinal:  true,
+						as_final: &data,
+					}
+				} else {
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
+						IsFinal:   false,
+						as_stream: &data,
+					}
+				}
+			}
+		}
+	}()
+	return channel, nil
+}
+
+// / Streaming version of TestOpenAIResponsesCustomURL
+func (*stream) TestOpenAIResponsesCustomURL(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := baml.EncodeArgs(args)
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestOpenAIResponsesCustomURL: %w", err)
+		panic(wrapped_err)
+	}
+
+	internal_ctx := context.Background()
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIResponsesCustomURL", encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	channel := make(chan StreamValue[string, string])
+	go func() {
+		defer func() {
+			internal_ctx.Done()
+		}()
+		for {
+			select {
+			case <-ctx.Done():
+				close(channel)
+				return
+			case result, ok := <-internal_channel:
+				if !ok {
+					close(channel)
+					return
+				}
+				if result.Error != nil {
+					close(channel)
+					return
+				}
+				if result.HasData {
+					data := *(result.Data).(*string)
+					channel <- StreamValue[string, string]{
+						IsFinal:  true,
+						as_final: &data,
+					}
+				} else {
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
+						IsFinal:   false,
+						as_stream: &data,
+					}
+				}
+			}
+		}
+	}()
+	return channel, nil
+}
+
+// / Streaming version of TestOpenAIResponsesDifferentModel
+func (*stream) TestOpenAIResponsesDifferentModel(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := baml.EncodeArgs(args)
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestOpenAIResponsesDifferentModel: %w", err)
+		panic(wrapped_err)
+	}
+
+	internal_ctx := context.Background()
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIResponsesDifferentModel", encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	channel := make(chan StreamValue[string, string])
+	go func() {
+		defer func() {
+			internal_ctx.Done()
+		}()
+		for {
+			select {
+			case <-ctx.Done():
+				close(channel)
+				return
+			case result, ok := <-internal_channel:
+				if !ok {
+					close(channel)
+					return
+				}
+				if result.Error != nil {
+					close(channel)
+					return
+				}
+				if result.HasData {
+					data := *(result.Data).(*string)
+					channel <- StreamValue[string, string]{
+						IsFinal:  true,
+						as_final: &data,
+					}
+				} else {
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
+						IsFinal:   false,
+						as_stream: &data,
+					}
+				}
+			}
+		}
+	}()
+	return channel, nil
+}
+
+// / Streaming version of TestOpenAIResponsesEndpoint
+func (*stream) TestOpenAIResponsesEndpoint(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := baml.EncodeArgs(args)
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestOpenAIResponsesEndpoint: %w", err)
+		panic(wrapped_err)
+	}
+
+	internal_ctx := context.Background()
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIResponsesEndpoint", encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	channel := make(chan StreamValue[string, string])
+	go func() {
+		defer func() {
+			internal_ctx.Done()
+		}()
+		for {
+			select {
+			case <-ctx.Done():
+				close(channel)
+				return
+			case result, ok := <-internal_channel:
+				if !ok {
+					close(channel)
+					return
+				}
+				if result.Error != nil {
+					close(channel)
+					return
+				}
+				if result.HasData {
+					data := *(result.Data).(*string)
+					channel <- StreamValue[string, string]{
+						IsFinal:  true,
+						as_final: &data,
+					}
+				} else {
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
+						IsFinal:   false,
+						as_stream: &data,
+					}
+				}
+			}
+		}
+	}()
+	return channel, nil
+}
+
+// / Streaming version of TestOpenAIResponsesExplicit
+func (*stream) TestOpenAIResponsesExplicit(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := baml.EncodeArgs(args)
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestOpenAIResponsesExplicit: %w", err)
+		panic(wrapped_err)
+	}
+
+	internal_ctx := context.Background()
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIResponsesExplicit", encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	channel := make(chan StreamValue[string, string])
+	go func() {
+		defer func() {
+			internal_ctx.Done()
+		}()
+		for {
+			select {
+			case <-ctx.Done():
+				close(channel)
+				return
+			case result, ok := <-internal_channel:
+				if !ok {
+					close(channel)
+					return
+				}
+				if result.Error != nil {
+					close(channel)
+					return
+				}
+				if result.HasData {
+					data := *(result.Data).(*string)
+					channel <- StreamValue[string, string]{
+						IsFinal:  true,
+						as_final: &data,
+					}
+				} else {
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
+						IsFinal:   false,
+						as_stream: &data,
+					}
+				}
+			}
+		}
+	}()
+	return channel, nil
+}
+
+// / Streaming version of TestOpenAIResponsesFunctionCall
+func (*stream) TestOpenAIResponsesFunctionCall(ctx context.Context, query string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"query": query},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := baml.EncodeArgs(args)
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestOpenAIResponsesFunctionCall: %w", err)
+		panic(wrapped_err)
+	}
+
+	internal_ctx := context.Background()
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIResponsesFunctionCall", encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	channel := make(chan StreamValue[string, string])
+	go func() {
+		defer func() {
+			internal_ctx.Done()
+		}()
+		for {
+			select {
+			case <-ctx.Done():
+				close(channel)
+				return
+			case result, ok := <-internal_channel:
+				if !ok {
+					close(channel)
+					return
+				}
+				if result.Error != nil {
+					close(channel)
+					return
+				}
+				if result.HasData {
+					data := *(result.Data).(*string)
+					channel <- StreamValue[string, string]{
+						IsFinal:  true,
+						as_final: &data,
+					}
+				} else {
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
+						IsFinal:   false,
+						as_stream: &data,
+					}
+				}
+			}
+		}
+	}()
+	return channel, nil
+}
+
+// / Streaming version of TestOpenAIResponsesImageInput
+func (*stream) TestOpenAIResponsesImageInput(ctx context.Context, image types.Union2ImageOrString, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"image": image},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := baml.EncodeArgs(args)
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestOpenAIResponsesImageInput: %w", err)
+		panic(wrapped_err)
+	}
+
+	internal_ctx := context.Background()
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIResponsesImageInput", encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	channel := make(chan StreamValue[string, string])
+	go func() {
+		defer func() {
+			internal_ctx.Done()
+		}()
+		for {
+			select {
+			case <-ctx.Done():
+				close(channel)
+				return
+			case result, ok := <-internal_channel:
+				if !ok {
+					close(channel)
+					return
+				}
+				if result.Error != nil {
+					close(channel)
+					return
+				}
+				if result.HasData {
+					data := *(result.Data).(*string)
+					channel <- StreamValue[string, string]{
+						IsFinal:  true,
+						as_final: &data,
+					}
+				} else {
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
+						IsFinal:   false,
+						as_stream: &data,
+					}
+				}
+			}
+		}
+	}()
+	return channel, nil
+}
+
+// / Streaming version of TestOpenAIResponsesReasoning
+func (*stream) TestOpenAIResponsesReasoning(ctx context.Context, problem string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"problem": problem},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := baml.EncodeArgs(args)
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestOpenAIResponsesReasoning: %w", err)
+		panic(wrapped_err)
+	}
+
+	internal_ctx := context.Background()
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIResponsesReasoning", encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	channel := make(chan StreamValue[string, string])
+	go func() {
+		defer func() {
+			internal_ctx.Done()
+		}()
+		for {
+			select {
+			case <-ctx.Done():
+				close(channel)
+				return
+			case result, ok := <-internal_channel:
+				if !ok {
+					close(channel)
+					return
+				}
+				if result.Error != nil {
+					close(channel)
+					return
+				}
+				if result.HasData {
+					data := *(result.Data).(*string)
+					channel <- StreamValue[string, string]{
+						IsFinal:  true,
+						as_final: &data,
+					}
+				} else {
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
+						IsFinal:   false,
+						as_stream: &data,
+					}
+				}
+			}
+		}
+	}()
+	return channel, nil
+}
+
+// / Streaming version of TestOpenAIResponsesShorthand
+func (*stream) TestOpenAIResponsesShorthand(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := baml.EncodeArgs(args)
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestOpenAIResponsesShorthand: %w", err)
+		panic(wrapped_err)
+	}
+
+	internal_ctx := context.Background()
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIResponsesShorthand", encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	channel := make(chan StreamValue[string, string])
+	go func() {
+		defer func() {
+			internal_ctx.Done()
+		}()
+		for {
+			select {
+			case <-ctx.Done():
+				close(channel)
+				return
+			case result, ok := <-internal_channel:
+				if !ok {
+					close(channel)
+					return
+				}
+				if result.Error != nil {
+					close(channel)
+					return
+				}
+				if result.HasData {
+					data := *(result.Data).(*string)
+					channel <- StreamValue[string, string]{
+						IsFinal:  true,
+						as_final: &data,
+					}
+				} else {
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
+						IsFinal:   false,
+						as_stream: &data,
+					}
+				}
+			}
+		}
+	}()
+	return channel, nil
+}
+
+// / Streaming version of TestOpenAIResponsesWebSearch
+func (*stream) TestOpenAIResponsesWebSearch(ctx context.Context, query string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"query": query},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := baml.EncodeArgs(args)
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestOpenAIResponsesWebSearch: %w", err)
+		panic(wrapped_err)
+	}
+
+	internal_ctx := context.Background()
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIResponsesWebSearch", encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	channel := make(chan StreamValue[string, string])
+	go func() {
+		defer func() {
+			internal_ctx.Done()
+		}()
+		for {
+			select {
+			case <-ctx.Done():
+				close(channel)
+				return
+			case result, ok := <-internal_channel:
+				if !ok {
+					close(channel)
+					return
+				}
+				if result.Error != nil {
+					close(channel)
+					return
+				}
+				if result.HasData {
+					data := *(result.Data).(*string)
+					channel <- StreamValue[string, string]{
+						IsFinal:  true,
+						as_final: &data,
+					}
+				} else {
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
+						IsFinal:   false,
+						as_stream: &data,
+					}
+				}
+			}
+		}
+	}()
+	return channel, nil
+}
+
+// / Streaming version of TestOpenAIResponsesWithOpenAIResponseType
+func (*stream) TestOpenAIResponsesWithOpenAIResponseType(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := baml.EncodeArgs(args)
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestOpenAIResponsesWithOpenAIResponseType: %w", err)
+		panic(wrapped_err)
+	}
+
+	internal_ctx := context.Background()
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIResponsesWithOpenAIResponseType", encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	channel := make(chan StreamValue[string, string])
+	go func() {
+		defer func() {
+			internal_ctx.Done()
+		}()
+		for {
+			select {
+			case <-ctx.Done():
+				close(channel)
+				return
+			case result, ok := <-internal_channel:
+				if !ok {
+					close(channel)
+					return
+				}
+				if result.Error != nil {
+					close(channel)
+					return
+				}
+				if result.HasData {
+					data := *(result.Data).(*string)
+					channel <- StreamValue[string, string]{
+						IsFinal:  true,
+						as_final: &data,
+					}
+				} else {
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
+						IsFinal:   false,
+						as_stream: &data,
+					}
+				}
+			}
+		}
+	}()
+	return channel, nil
+}
+
 // / Streaming version of TestOpenAIShorthand
 func (*stream) TestOpenAIShorthand(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
@@ -13535,6 +14557,152 @@ func (*stream) UseNestedBlockConstraint(ctx context.Context, inp types.NestedBlo
 				} else {
 					data := *(result.StreamData).(*int64)
 					channel <- StreamValue[int64, int64]{
+						IsFinal:   false,
+						as_stream: &data,
+					}
+				}
+			}
+		}
+	}()
+	return channel, nil
+}
+
+// / Streaming version of ValidateBasicResponses
+func (*stream) ValidateBasicResponses(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := baml.EncodeArgs(args)
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: ValidateBasicResponses: %w", err)
+		panic(wrapped_err)
+	}
+
+	internal_ctx := context.Background()
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "ValidateBasicResponses", encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	channel := make(chan StreamValue[string, string])
+	go func() {
+		defer func() {
+			internal_ctx.Done()
+		}()
+		for {
+			select {
+			case <-ctx.Done():
+				close(channel)
+				return
+			case result, ok := <-internal_channel:
+				if !ok {
+					close(channel)
+					return
+				}
+				if result.Error != nil {
+					close(channel)
+					return
+				}
+				if result.HasData {
+					data := *(result.Data).(*string)
+					channel <- StreamValue[string, string]{
+						IsFinal:  true,
+						as_final: &data,
+					}
+				} else {
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
+						IsFinal:   false,
+						as_stream: &data,
+					}
+				}
+			}
+		}
+	}()
+	return channel, nil
+}
+
+// / Streaming version of ValidateResponseTypes
+func (*stream) ValidateResponseTypes(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := baml.EncodeArgs(args)
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: ValidateResponseTypes: %w", err)
+		panic(wrapped_err)
+	}
+
+	internal_ctx := context.Background()
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "ValidateResponseTypes", encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	channel := make(chan StreamValue[string, string])
+	go func() {
+		defer func() {
+			internal_ctx.Done()
+		}()
+		for {
+			select {
+			case <-ctx.Done():
+				close(channel)
+				return
+			case result, ok := <-internal_channel:
+				if !ok {
+					close(channel)
+					return
+				}
+				if result.Error != nil {
+					close(channel)
+					return
+				}
+				if result.HasData {
+					data := *(result.Data).(*string)
+					channel <- StreamValue[string, string]{
+						IsFinal:  true,
+						as_final: &data,
+					}
+				} else {
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}

@@ -1,0 +1,228 @@
+---
+title: openai-responses
+---
+
+The `openai-responses` provider supports OpenAI's `/responses` endpoint which uses the newer Responses API instead of the traditional Chat Completions API.
+Read more about the differences between the Chat Completions API and the Responses API in [OpenAI's comparison guide](https://platform.openai.com/docs/guides/responses-vs-chat-completions).
+
+
+<Tip>
+  If you're a new user, OpenAI recommends using the `openai-responses` provider instead of the `openai` provider.
+</Tip>
+
+<Error>
+`o1-mini` is not supported with the `openai-responses` provider.
+</Error>
+
+Example:
+
+```baml BAML
+client<llm> MyResponsesClient {
+  provider "openai-responses"
+  options {
+    api_key env.MY_OPENAI_KEY
+    model "gpt-4.1"
+    reasoning {
+      effort "medium"
+    }
+  }
+}
+```
+
+## BAML-specific request `options`
+These unique parameters (aka `options`) modify the API request sent to the provider.
+
+<ParamField path="api_key" type="string" default="env.OPENAI_API_KEY">
+  Will be used to build the `Authorization` header, like so: `Authorization: Bearer $api_key`
+
+  **Default: `env.OPENAI_API_KEY`**
+</ParamField>
+
+<ParamField path="base_url" type="string">
+  The base URL for the API.
+
+  **Default: `https://api.openai.com/v1`**
+</ParamField>
+
+<ParamField path="headers" type="object">
+  Additional headers to send with the request.
+
+Example:
+
+```baml BAML
+client<llm> MyResponsesClient {
+  provider openai-responses
+  options {
+    api_key env.MY_OPENAI_KEY
+    model "gpt-4.1"
+    headers {
+      "X-My-Header" "my-value"
+    }
+  }
+}
+```
+
+</ParamField>
+
+<ParamField path="client_response_type" type="string">
+  Override the response format type. When using `openai-responses` provider, this defaults to `"openai-responses"`.
+  
+  You can also use the standard `openai` provider with `client_response_type: "openai-responses"` to format the response as a `openai-responses` response.  
+
+Example:
+
+```baml BAML
+client<llm> StandardOpenAIWithResponses {
+  provider openai
+  options {
+    api_key env.MY_OPENAI_KEY
+    model "gpt-4.1"
+    client_response_type "openai-responses"
+  }
+}
+```
+
+</ParamField>
+
+<Markdown src="/snippets/role-selection.mdx" />
+
+<Markdown src="/snippets/allowed-role-metadata-basic.mdx" />
+
+## Provider request parameters
+These are parameters specific to the OpenAI Responses API that are passed through to the provider.
+
+<ParamField
+  path="reasnoning.effort"
+  type="string"
+>
+  Controls the amount of reasoning effort the model should use.
+
+| Value    | Description                    |
+| -------- | ------------------------------ |
+| `low`    | Minimal reasoning effort       |
+| `medium` | Balanced reasoning effort      |
+| `high`   | Maximum reasoning effort       |
+
+Example:
+
+```baml BAML
+client<llm> HighReasoningClient {
+  provider openai-responses
+  options {
+    model "o4-mini"
+    reasoning {
+      effort "high"
+    }
+  }
+}
+```
+
+</ParamField>
+
+<ParamField
+  path="model"
+  type="string"
+>
+Most models support the Responses API, some of the most popular models are:
+
+| Model           | Description                    |
+| --------------- | ------------------------------ |
+| `gpt-4.1`       | Enhanced reasoning model       |
+| `gpt-4`         | Standard GPT-4 model           |
+| `o4-mini`       | Advanced reasoning model       |
+
+<Error>
+  `o1-mini` is not supported with the `openai-responses` provider.
+</Error>
+
+See OpenAI's Responses API documentation for the latest available models.
+
+</ParamField>
+
+<ParamField
+  path="tools"
+  type="array"
+>
+  Tools that the model can use during reasoning. Supports function calling and web search.
+
+Example with web search:
+
+```baml BAML
+client<llm> WebSearchClient {
+  provider openai-responses
+  options {
+    model "gpt-4.1"
+    tools [
+      {
+        type "web_search_preview"
+      }
+    ]
+  }
+}
+```
+</ParamField>
+
+## Additional Use Cases
+
+### Image Input Support
+
+The `openai-responses` provider supports image inputs for vision-capable models:
+
+```baml BAML
+client<llm> OpenAIResponsesVision {
+  provider openai-responses
+  options {
+    model "gpt-4.1"
+  }
+}
+
+function AnalyzeImage(image: image|string) -> string {
+  client OpenAIResponsesVision
+  prompt #"
+    {{ _.role("user") }}
+    What is in this image?
+    {{ image }}
+  "#
+}
+```
+
+### Advanced Reasoning
+
+Using reasoning models with high effort for complex problem solving:
+
+```baml BAML
+client<llm> AdvancedReasoningClient {
+  provider openai-responses
+  options {
+    model "o4-mini"
+    reasoning {
+      effort "high"
+    }
+  }
+}
+
+function SolveComplexProblem(problem: string) -> string {
+  client AdvancedReasoningClient
+  prompt #"
+    {{ _.role("user") }}
+    Solve this step by step: {{ problem }}
+  "#
+}
+```
+
+## Modular API Support
+
+The `openai-responses` provider works with the [Modular API](../../../../../guide/baml-advanced/modular-api) for custom integrations:
+
+```python Python
+from openai import AsyncOpenAI
+from openai.types.responses import Response
+import typing
+
+client = AsyncOpenAI()
+req = await b.request.MyFunction("input")
+res = typing.cast(Response, await client.responses.create(**req.body.json()))
+parsed = b.parse.MyFunction(res.output_text)
+```
+
+For all other options, see the [official OpenAI Responses API documentation](https://platform.openai.com/docs/api-reference/responses).

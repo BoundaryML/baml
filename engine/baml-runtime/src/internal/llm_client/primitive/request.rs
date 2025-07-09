@@ -477,5 +477,15 @@ pub async fn make_parsed_request(
             instant_now,
             model_name,
         ),
+        ResponseType::OpenAIResponses => {
+            super::openai::response_handler::parse_openai_responses_response(
+                client,
+                prompt,
+                response_body,
+                system_now,
+                instant_now,
+                model_name,
+            )
+        }
     }
 }
