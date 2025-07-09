@@ -375,6 +375,8 @@ mod tests {
                     max_one_system_prompt: false,
                     resolve_audio_urls: crate::internal::llm_client::ResolveMediaUrls::Always,
                     resolve_image_urls: crate::internal::llm_client::ResolveMediaUrls::Always,
+                    resolve_pdf_urls: crate::internal::llm_client::ResolveMediaUrls::Always,
+                    resolve_video_urls: crate::internal::llm_client::ResolveMediaUrls::Always,
                     allowed_metadata: crate::internal::llm_client::AllowedRoleMetadata::All,
                 },
                 context: internal_baml_jinja::RenderContext_Client {

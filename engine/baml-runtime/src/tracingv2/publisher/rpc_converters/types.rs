@@ -84,6 +84,8 @@ impl<'a> IntoRpcEvent<'a, baml_rpc::TypeReference> for baml_types::ir_type::Type
                     TypeReference::media(match baml_media_type {
                         baml_types::BamlMediaType::Image => MediaTypeDefinition::Image,
                         baml_types::BamlMediaType::Audio => MediaTypeDefinition::Audio,
+                        baml_types::BamlMediaType::Pdf => MediaTypeDefinition::Pdf,
+                        baml_types::BamlMediaType::Video => MediaTypeDefinition::Video,
                     })
                 }
             },

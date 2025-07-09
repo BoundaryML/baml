@@ -108,6 +108,9 @@ export type StreamingServerTypes = {
   NullLiteralClassHello: ClassForNullLiteral,
   OpenAIWithAnthropicResponseHello: string,
   OptionalTest_Function: (OptionalTest_ReturnType | null)[],
+  PdfInput: string,
+  PdfInputAnthropic: string,
+  PdfInputOpenai: string,
   PredictAge: FooAny,
   PredictAgeBare: types.Checked<number,"too_big">,
   PrimitiveAlias: number | string | boolean | number,
@@ -228,4 +231,7 @@ export type StreamingServerTypes = {
   UseNestedBlockConstraint: number,
   ValidateBasicResponses: string,
   ValidateResponseTypes: string,
+  VideoInput: string,
+  VideoInputAnthropic: string,
+  VideoInputOpenai: string,
 }

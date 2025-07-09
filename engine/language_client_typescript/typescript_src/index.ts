@@ -27,6 +27,17 @@ if (!isNode) {
     get: () => browserError('Audio'),
     enumerable: true,
   });
+
+  Object.defineProperty(exports, 'Pdf', {
+    get: () => browserError('Pdf'),
+    enumerable: true,
+  });
+
+  Object.defineProperty(exports, 'Video', {
+    get: () => browserError('Video'),
+    enumerable: true,
+  });
+  
 }
 
 export {
@@ -35,6 +46,8 @@ export {
   FunctionResultStream,
   BamlImage as Image,
   BamlAudio as Audio,
+  BamlPdf as Pdf,
+  BamlVideo as Video,
   invoke_runtime_cli,
   ClientRegistry,
   BamlLogEvent,

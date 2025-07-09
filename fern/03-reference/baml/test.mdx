@@ -199,6 +199,88 @@ test AudioBase64Test {
         audio {
             base64 "..."
             media_type "audio/mp3"
+            }
+  }
+}
+```
+
+### Pdfs
+
+Similar to images, Pdfs can be specified in three ways:
+
+1. **File Reference**
+```baml
+test PDFFileTest {
+    functions [AnalyzePDF]
+    args {
+        pdf {
+            file "../documents/report.pdf"
+        }
+    }
+}
+```
+
+2. **URL Reference**
+```baml
+test PDFUrlTest {
+    functions [AnalyzePDF]
+    args {
+        pdf {
+            url "https://example.com/document.pdf"
+        }
+    }
+}
+```
+
+3. **Base64 Data**
+```baml
+test PDFBase64Test {
+    functions [AnalyzePDF]
+    args {
+        pdf {
+            base64 "JVBERi0K..."
+            media_type "application/pdf"
+        }
+    }
+}
+```
+
+### Videos
+
+Similar to other media types, videos can be specified in three ways:
+
+1. **File Reference**
+```baml
+test VideoFileTest {
+    functions [AnalyzeVideo]
+    args {
+        video {
+            file "../videos/sample.mp4"
+        }
+    }
+}
+```
+
+2. **URL Reference**
+```baml
+test VideoUrlTest {
+    functions [AnalyzeVideo]
+    args {
+        video {
+            url "https://example.com/video.mp4"
+        }
+    }
+}
+```
+
+3. **Base64 Data**
+```baml
+test VideoBase64Test {
+    functions [AnalyzeVideo]
+    args {
+        video {
+            base64 "AAAAGGZ0eXBpc29t..."
+            media_type "video/mp4"
         }
     }
 }

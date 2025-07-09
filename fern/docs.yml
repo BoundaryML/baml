@@ -682,6 +682,12 @@ navigation:
           - page: Audio
             slug: audio
             path: 03-reference/baml_client/audio.mdx
+          - page: Pdf
+            slug: pdf
+            path: 03-reference/baml_client/pdf.mdx
+          - page: Video
+            slug: video
+            path: 03-reference/baml_client/video.mdx
           - section: Errors
             contents:
               - page: Overview

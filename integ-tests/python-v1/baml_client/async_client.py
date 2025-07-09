@@ -640,6 +640,27 @@ class BamlAsyncClient:
             "input": input,
         })
         return typing.cast(typing.List[typing.Optional["types.OptionalTest_ReturnType"]], result.cast_to(types, types, stream_types, False, __runtime__))
+    async def PdfInput(self, pdf: baml_py.Image,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = await self.__options.merge_options(baml_options).call_function_async(function_name="PdfInput", args={
+            "pdf": pdf,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def PdfInputAnthropic(self, pdf: baml_py.Image,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = await self.__options.merge_options(baml_options).call_function_async(function_name="PdfInputAnthropic", args={
+            "pdf": pdf,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def PdfInputOpenai(self, pdf: baml_py.Image,prompt: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = await self.__options.merge_options(baml_options).call_function_async(function_name="PdfInputOpenai", args={
+            "pdf": pdf,"prompt": prompt,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     async def PredictAge(self, name: str,
         baml_options: BamlCallOptions = {},
     ) -> types.FooAny:
@@ -1478,6 +1499,27 @@ class BamlAsyncClient:
     ) -> str:
         result = await self.__options.merge_options(baml_options).call_function_async(function_name="ValidateResponseTypes", args={
             "input": input,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def VideoInput(self, vid: baml_py.Image,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = await self.__options.merge_options(baml_options).call_function_async(function_name="VideoInput", args={
+            "vid": vid,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def VideoInputAnthropic(self, vid: baml_py.Image,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = await self.__options.merge_options(baml_options).call_function_async(function_name="VideoInputAnthropic", args={
+            "vid": vid,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def VideoInputOpenai(self, vid: baml_py.Image,prompt: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = await self.__options.merge_options(baml_options).call_function_async(function_name="VideoInputOpenai", args={
+            "vid": vid,"prompt": prompt,
         })
         return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     
@@ -2459,6 +2501,42 @@ class BamlStreamClient:
           result,
           lambda x: typing.cast(typing.List[typing.Optional["stream_types.OptionalTest_ReturnType"]], x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(typing.List[typing.Optional["types.OptionalTest_ReturnType"]], x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def PdfInput(self, pdf: baml_py.Image,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="PdfInput", args={
+            "pdf": pdf,
+        })
+        return baml_py.BamlStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def PdfInputAnthropic(self, pdf: baml_py.Image,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="PdfInputAnthropic", args={
+            "pdf": pdf,
+        })
+        return baml_py.BamlStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def PdfInputOpenai(self, pdf: baml_py.Image,prompt: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="PdfInputOpenai", args={
+            "pdf": pdf,"prompt": prompt,
+        })
+        return baml_py.BamlStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def PredictAge(self, name: str,
@@ -3901,6 +3979,42 @@ class BamlStreamClient:
           lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
+    def VideoInput(self, vid: baml_py.Image,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="VideoInput", args={
+            "vid": vid,
+        })
+        return baml_py.BamlStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def VideoInputAnthropic(self, vid: baml_py.Image,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="VideoInputAnthropic", args={
+            "vid": vid,
+        })
+        return baml_py.BamlStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def VideoInputOpenai(self, vid: baml_py.Image,prompt: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="VideoInputOpenai", args={
+            "vid": vid,"prompt": prompt,
+        })
+        return baml_py.BamlStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
     
 
 class BamlHttpRequestClient:
@@ -4474,6 +4588,27 @@ class BamlHttpRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="OptionalTest_Function", args={
             "input": input,
+        }, mode="request")
+        return result
+    async def PdfInput(self, pdf: baml_py.Image,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="PdfInput", args={
+            "pdf": pdf,
+        }, mode="request")
+        return result
+    async def PdfInputAnthropic(self, pdf: baml_py.Image,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="PdfInputAnthropic", args={
+            "pdf": pdf,
+        }, mode="request")
+        return result
+    async def PdfInputOpenai(self, pdf: baml_py.Image,prompt: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="PdfInputOpenai", args={
+            "pdf": pdf,"prompt": prompt,
         }, mode="request")
         return result
     async def PredictAge(self, name: str,
@@ -5314,6 +5449,27 @@ class BamlHttpRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ValidateResponseTypes", args={
             "input": input,
+        }, mode="request")
+        return result
+    async def VideoInput(self, vid: baml_py.Image,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="VideoInput", args={
+            "vid": vid,
+        }, mode="request")
+        return result
+    async def VideoInputAnthropic(self, vid: baml_py.Image,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="VideoInputAnthropic", args={
+            "vid": vid,
+        }, mode="request")
+        return result
+    async def VideoInputOpenai(self, vid: baml_py.Image,prompt: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="VideoInputOpenai", args={
+            "vid": vid,"prompt": prompt,
         }, mode="request")
         return result
     
@@ -5891,6 +6047,27 @@ class BamlHttpStreamRequestClient:
             "input": input,
         }, mode="stream")
         return result
+    async def PdfInput(self, pdf: baml_py.Image,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="PdfInput", args={
+            "pdf": pdf,
+        }, mode="stream")
+        return result
+    async def PdfInputAnthropic(self, pdf: baml_py.Image,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="PdfInputAnthropic", args={
+            "pdf": pdf,
+        }, mode="stream")
+        return result
+    async def PdfInputOpenai(self, pdf: baml_py.Image,prompt: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="PdfInputOpenai", args={
+            "pdf": pdf,"prompt": prompt,
+        }, mode="stream")
+        return result
     async def PredictAge(self, name: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -6729,6 +6906,27 @@ class BamlHttpStreamRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ValidateResponseTypes", args={
             "input": input,
+        }, mode="stream")
+        return result
+    async def VideoInput(self, vid: baml_py.Image,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="VideoInput", args={
+            "vid": vid,
+        }, mode="stream")
+        return result
+    async def VideoInputAnthropic(self, vid: baml_py.Image,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="VideoInputAnthropic", args={
+            "vid": vid,
+        }, mode="stream")
+        return result
+    async def VideoInputOpenai(self, vid: baml_py.Image,prompt: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="VideoInputOpenai", args={
+            "vid": vid,"prompt": prompt,
         }, mode="stream")
         return result
     

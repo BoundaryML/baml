@@ -1362,6 +1362,12 @@ fn get_dummy_value(
                 TypeValue::Media(BamlMediaType::Audio) => {
                     "{ url \"https://actions.google.com/sounds/v1/emergency/beeper_emergency_call.ogg\" }".to_string()
                 }
+                TypeValue::Media(BamlMediaType::Pdf) => {
+                    "{ url \"https://ia801801.us.archive.org/15/items/the-great-gatsby_202101/TheGreatGatsby.pdf\" }".to_string()
+                }
+                TypeValue::Media(BamlMediaType::Video) => {
+                    "{ url \"https://samplelib.com/lib/preview/mp4/sample-5s.mp4\" }".to_string()
+                }
             };
 
             Some(dummy)

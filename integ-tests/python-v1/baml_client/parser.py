@@ -508,6 +508,24 @@ class LlmResponseParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="OptionalTest_Function", llm_response=llm_response, mode="request")
         return typing.cast(typing.List[typing.Optional["types.OptionalTest_ReturnType"]], result)
 
+    def PdfInput(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="PdfInput", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
+    def PdfInputAnthropic(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="PdfInputAnthropic", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
+    def PdfInputOpenai(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="PdfInputOpenai", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
     def PredictAge(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.FooAny:
@@ -1228,6 +1246,24 @@ class LlmResponseParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="ValidateResponseTypes", llm_response=llm_response, mode="request")
         return typing.cast(str, result)
 
+    def VideoInput(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="VideoInput", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
+    def VideoInputAnthropic(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="VideoInputAnthropic", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
+    def VideoInputOpenai(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="VideoInputOpenai", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
     
 
 class LlmStreamParser:
@@ -1721,6 +1757,24 @@ class LlmStreamParser:
     ) -> typing.List[typing.Optional["stream_types.OptionalTest_ReturnType"]]:
         result = self.__options.merge_options(baml_options).parse_response(function_name="OptionalTest_Function", llm_response=llm_response, mode="stream")
         return typing.cast(typing.List[typing.Optional["stream_types.OptionalTest_ReturnType"]], result)
+
+    def PdfInput(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="PdfInput", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
+
+    def PdfInputAnthropic(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="PdfInputAnthropic", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
+
+    def PdfInputOpenai(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="PdfInputOpenai", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
 
     def PredictAge(
         self, llm_response: str, baml_options: BamlCallOptions = {},
@@ -2440,6 +2494,24 @@ class LlmStreamParser:
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="ValidateResponseTypes", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
+
+    def VideoInput(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="VideoInput", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
+
+    def VideoInputAnthropic(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="VideoInputAnthropic", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
+
+    def VideoInputOpenai(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="VideoInputOpenai", llm_response=llm_response, mode="stream")
         return typing.cast(str, result)
 
     

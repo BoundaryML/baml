@@ -109,7 +109,7 @@ table CFFIValueChecked {
 
 // We need to handle CFFIMediaType. Since one variant is "Other(String)",
 // we represent it as a table with an enum tag and an optional string.
-enum MediaTypeEnum : byte { Image, Audio, Other }
+enum MediaTypeEnum : byte { Image, Audio, Pdf, Video, Other }
 
 table CFFIMediaType {
   type: MediaTypeEnum;

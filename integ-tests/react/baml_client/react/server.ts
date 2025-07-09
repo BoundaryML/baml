@@ -1506,6 +1506,63 @@ export const OptionalTest_Function = async (
 };
 
 /**
+ * Executes the "PdfInput" BAML action.
+ *
+ * This server action calls the underlying BAML function "PdfInput"
+ * with the specified parameters.
+ *
+ * @param { Image } pdf - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const PdfInput = async (
+  pdf: Image,
+): Promise<string> => {
+  return b.PdfInput(
+    pdf,
+  );
+};
+
+/**
+ * Executes the "PdfInputAnthropic" BAML action.
+ *
+ * This server action calls the underlying BAML function "PdfInputAnthropic"
+ * with the specified parameters.
+ *
+ * @param { Image } pdf - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const PdfInputAnthropic = async (
+  pdf: Image,
+): Promise<string> => {
+  return b.PdfInputAnthropic(
+    pdf,
+  );
+};
+
+/**
+ * Executes the "PdfInputOpenai" BAML action.
+ *
+ * This server action calls the underlying BAML function "PdfInputOpenai"
+ * with the specified parameters.
+ *
+ * @param { Image } pdf - Input parameter.
+ * @param { string } prompt - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const PdfInputOpenai = async (
+  pdf: Image,
+  prompt: string,
+): Promise<string> => {
+  return b.PdfInputOpenai(
+    pdf,
+    prompt,
+  );
+};
+
+/**
  * Executes the "PredictAge" BAML action.
  *
  * This server action calls the underlying BAML function "PredictAge"
@@ -3659,5 +3716,62 @@ export const ValidateResponseTypes = async (
 ): Promise<string> => {
   return b.ValidateResponseTypes(
     input,
+  );
+};
+
+/**
+ * Executes the "VideoInput" BAML action.
+ *
+ * This server action calls the underlying BAML function "VideoInput"
+ * with the specified parameters.
+ *
+ * @param { Image } vid - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const VideoInput = async (
+  vid: Image,
+): Promise<string> => {
+  return b.VideoInput(
+    vid,
+  );
+};
+
+/**
+ * Executes the "VideoInputAnthropic" BAML action.
+ *
+ * This server action calls the underlying BAML function "VideoInputAnthropic"
+ * with the specified parameters.
+ *
+ * @param { Image } vid - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const VideoInputAnthropic = async (
+  vid: Image,
+): Promise<string> => {
+  return b.VideoInputAnthropic(
+    vid,
+  );
+};
+
+/**
+ * Executes the "VideoInputOpenai" BAML action.
+ *
+ * This server action calls the underlying BAML function "VideoInputOpenai"
+ * with the specified parameters.
+ *
+ * @param { Image } vid - Input parameter.
+ * @param { string } prompt - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const VideoInputOpenai = async (
+  vid: Image,
+  prompt: string,
+): Promise<string> => {
+  return b.VideoInputOpenai(
+    vid,
+    prompt,
   );
 };

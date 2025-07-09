@@ -109,6 +109,8 @@ message CFFIValueChecked {
 enum MediaTypeEnum {
   IMAGE = 0;
   AUDIO = 1;
+  PDF = 2;
+  VIDEO = 3;
 }
 
 message CFFIMediaContentUrl {

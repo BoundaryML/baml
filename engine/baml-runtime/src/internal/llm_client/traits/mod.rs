@@ -170,6 +170,8 @@ where
             RenderedPrompt::Chat(chat) => match process_media_urls(
                 self.model_features().resolve_audio_urls,
                 self.model_features().resolve_image_urls,
+                self.model_features().resolve_pdf_urls,
+                self.model_features().resolve_video_urls,
                 true,
                 None,
                 ctx.runtime_context(),
@@ -238,6 +240,8 @@ where
                 let chat = process_media_urls(
                     features.resolve_audio_urls,
                     features.resolve_image_urls,
+                    features.resolve_pdf_urls,
+                    features.resolve_video_urls,
                     true,
                     None,
                     ctx,
@@ -296,6 +300,8 @@ where
         let chat_messages: Vec<RenderedChatMessage> = process_media_urls(
             self.model_features().resolve_audio_urls,
             self.model_features().resolve_image_urls,
+            self.model_features().resolve_pdf_urls,
+            self.model_features().resolve_video_urls,
             true,
             Some(render_settings),
             ctx,
@@ -374,6 +380,8 @@ where
                 match process_media_urls(
                     self.model_features().resolve_audio_urls,
                     self.model_features().resolve_image_urls,
+                    self.model_features().resolve_pdf_urls,
+                    self.model_features().resolve_video_urls,
                     true,
                     None,
                     ctx.runtime_context(),
@@ -420,6 +428,8 @@ where
 async fn process_media_urls(
     resolve_audio_urls: ResolveMediaUrls,
     resolve_image_urls: ResolveMediaUrls,
+    resolve_pdf_urls: ResolveMediaUrls,
+    resolve_video_urls: ResolveMediaUrls,
     resolve_files: bool,
     render_settings: Option<RenderCurlSettings>,
     ctx: &RuntimeContext,
@@ -442,6 +452,8 @@ async fn process_media_urls(
                 let resolve_mode = match part.media_type {
                     BamlMediaType::Audio => resolve_audio_urls,
                     BamlMediaType::Image => resolve_image_urls,
+                    BamlMediaType::Pdf => resolve_pdf_urls,
+                    BamlMediaType::Video => resolve_video_urls,
                 };
                 let media = process_media(resolve_mode, resolve_files, render_settings, ctx, part)
                     .await

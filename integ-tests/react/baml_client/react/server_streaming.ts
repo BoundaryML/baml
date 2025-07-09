@@ -1587,6 +1587,66 @@ export const OptionalTest_Function = async (
 };
 
 /**
+ * Executes the streaming variant of the "PdfInput" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { Image } pdf - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const PdfInput = async (
+  pdf: Image,
+): Promise<ReadableStream<Uint8Array>> => {
+  const stream = b.stream.PdfInput(
+    pdf,
+  );
+  return Promise.resolve(stream.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "PdfInputAnthropic" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { Image } pdf - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const PdfInputAnthropic = async (
+  pdf: Image,
+): Promise<ReadableStream<Uint8Array>> => {
+  const stream = b.stream.PdfInputAnthropic(
+    pdf,
+  );
+  return Promise.resolve(stream.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "PdfInputOpenai" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { Image } pdf - Input parameter.
+ * @param { string } prompt - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const PdfInputOpenai = async (
+  pdf: Image,
+  prompt: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const stream = b.stream.PdfInputOpenai(
+    pdf,
+    prompt,
+  );
+  return Promise.resolve(stream.toStreamable());
+};
+
+/**
  * Executes the streaming variant of the "PredictAge" BAML action.
  *
  * This action initiates a streaming response by calling the corresponding
@@ -3859,6 +3919,66 @@ export const ValidateResponseTypes = async (
 ): Promise<ReadableStream<Uint8Array>> => {
   const stream = b.stream.ValidateResponseTypes(
     input,
+  );
+  return Promise.resolve(stream.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "VideoInput" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { Image } vid - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const VideoInput = async (
+  vid: Image,
+): Promise<ReadableStream<Uint8Array>> => {
+  const stream = b.stream.VideoInput(
+    vid,
+  );
+  return Promise.resolve(stream.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "VideoInputAnthropic" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { Image } vid - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const VideoInputAnthropic = async (
+  vid: Image,
+): Promise<ReadableStream<Uint8Array>> => {
+  const stream = b.stream.VideoInputAnthropic(
+    vid,
+  );
+  return Promise.resolve(stream.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "VideoInputOpenai" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { Image } vid - Input parameter.
+ * @param { string } prompt - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const VideoInputOpenai = async (
+  vid: Image,
+  prompt: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const stream = b.stream.VideoInputOpenai(
+    vid,
+    prompt,
   );
   return Promise.resolve(stream.toStreamable());
 };

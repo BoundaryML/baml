@@ -91,6 +91,8 @@ impl WrapType for TypeMetaTS {
 pub enum MediaTypeTS {
     Image,
     Audio,
+    Pdf,
+    Video,
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -167,6 +169,8 @@ impl TypeTS {
             TypeTS::Media(media_type, _) => match media_type {
                 MediaTypeTS::Image => "Image".to_string(),
                 MediaTypeTS::Audio => "Audio".to_string(),
+                MediaTypeTS::Pdf => "Pdf".to_string(),
+                MediaTypeTS::Video => "Video".to_string(),
             },
             TypeTS::TypeAlias { name, .. } => name.clone(),
             TypeTS::Class { name, .. } => name.clone(),
@@ -247,6 +251,8 @@ impl SerializeType for TypeTS {
             TypeTS::Media(media, _) => match media {
                 MediaTypeTS::Image => "Image".to_string(),
                 MediaTypeTS::Audio => "Audio".to_string(),
+                MediaTypeTS::Pdf => "Pdf".to_string(),
+                MediaTypeTS::Video => "Video".to_string(),
             },
             TypeTS::Class { package, name, .. } => {
                 format!("{}{}", package.relative_from(pkg), name)
@@ -302,6 +308,8 @@ impl SerializeType for MediaTypeTS {
         match self {
             MediaTypeTS::Image => format!("{}.Image", Package::imported_base().relative_from(pkg)),
             MediaTypeTS::Audio => format!("{}.Audio", Package::imported_base().relative_from(pkg)),
+            MediaTypeTS::Pdf => format!("{}.Pdf", Package::imported_base().relative_from(pkg)),
+            MediaTypeTS::Video => format!("{}.Video", Package::imported_base().relative_from(pkg)),
         }
     }
 }

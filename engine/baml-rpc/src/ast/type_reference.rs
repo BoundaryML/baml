@@ -223,6 +223,8 @@ pub struct NarrowingType<T> {
 pub enum MediaTypeDefinition {
     Image,
     Audio,
+    Pdf,
+    Video,
 }
 
 /// Subset of [`crate::BamlValue`] allowed for literal type definitions.

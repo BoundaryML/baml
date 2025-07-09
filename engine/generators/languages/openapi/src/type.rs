@@ -188,6 +188,8 @@ pub fn convert_ir_type(ir: &IntermediateRepr, ty: &TypeNonStreaming) -> TypeOpen
                 let media_type = match media_type {
                     BamlMediaType::Image => "BamlImage",
                     BamlMediaType::Audio => "BamlAudio",
+                    BamlMediaType::Pdf => "BamlPdf",
+                    BamlMediaType::Video => "BamlVideo",
                 };
                 TypeOpenApi::Ref {
                     r#ref: format!("#/components/schemas/{media_type}"),

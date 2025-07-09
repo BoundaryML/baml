@@ -162,6 +162,18 @@ pub enum ContentPart {
     UrlAudio(String),
     #[serde(rename = "b64_audio")]
     B64Audio(String),
+    #[serde(rename = "file_pdf")]
+    FilePdf(String, String),
+    #[serde(rename = "url_pdf")]
+    UrlPdf(String),
+    #[serde(rename = "b64_pdf")]
+    B64Pdf(String),
+    #[serde(rename = "file_video")]
+    FileVideo(String, String),
+    #[serde(rename = "url_video")]
+    UrlVideo(String),
+    #[serde(rename = "b64_video")]
+    B64Video(String),
     #[serde(rename = "with_meta")]
     WithMeta(Box<ContentPart>, HashMap<String, Value>),
 }

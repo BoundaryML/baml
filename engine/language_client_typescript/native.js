@@ -363,8 +363,10 @@ if (!nativeBinding) {
 
 module.exports.BamlAudio = nativeBinding.BamlAudio
 module.exports.BamlImage = nativeBinding.BamlImage
+module.exports.BamlPdfNapi = nativeBinding.BamlPdfNapi
 module.exports.BamlRuntime = nativeBinding.BamlRuntime
 module.exports.BamlSpan = nativeBinding.BamlSpan
+module.exports.BamlVideoNapi = nativeBinding.BamlVideoNapi
 module.exports.ClassBuilder = nativeBinding.ClassBuilder
 module.exports.ClassPropertyBuilder = nativeBinding.ClassPropertyBuilder
 module.exports.ClientRegistry = nativeBinding.ClientRegistry

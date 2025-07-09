@@ -85,6 +85,8 @@ impl BamlValue {
             BamlValue::Media(m) => match m.media_type {
                 BamlMediaType::Image => "image",
                 BamlMediaType::Audio => "audio",
+                BamlMediaType::Pdf => "pdf",
+                BamlMediaType::Video => "video",
             }
             .into(),
             BamlValue::Enum(e, _) => format!("enum {e}"),
@@ -847,6 +849,8 @@ impl<T> BamlValueWithMeta<T> {
                 T::from(match m.media_type {
                     BamlMediaType::Image => TypeIR::image(),
                     BamlMediaType::Audio => TypeIR::audio(),
+                    BamlMediaType::Pdf => TypeIR::pdf(),
+                    BamlMediaType::Video => TypeIR::video(),
                 }),
             ),
             BamlValue::Enum(n, v) => Enum(n.clone(), v.clone(), T::from(TypeIR::r#enum(n))),
