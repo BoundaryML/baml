@@ -76,6 +76,9 @@ fn baml_py(m: Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<types::FunctionLog>()?;
     m.add_class::<types::LLMCall>()?;
     m.add_class::<types::Timing>()?;
+    m.add_class::<types::LLMStreamCall>()?;
+    m.add_class::<types::SSEResponse>()?;
+    m.add_class::<types::StreamTiming>()?;
     m.add_class::<types::Usage>()?;
     m.add_class::<types::HTTPRequest>()?;
     m.add_wrapped(wrap_pyfunction!(invoke_runtime_cli))?;

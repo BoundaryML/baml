@@ -361,16 +361,10 @@ impl Timing {
 impl StreamTiming {
     pub fn to_s(&self) -> String {
         format!(
-            "StreamTiming(start_time_utc_ms={}, duration_ms={}, time_to_first_parsed_ms={}, time_to_first_token_ms={})",
+            "StreamTiming(start_time_utc_ms={}, duration_ms={})",
             self.inner.start_time_utc_ms,
             self.inner
                 .duration_ms
-                .map_or("null".to_string(), |v| v.to_string()),
-            self.inner
-                .time_to_first_parsed_ms
-                .map_or("null".to_string(), |v| v.to_string()),
-            self.inner
-                .time_to_first_token_ms
                 .map_or("null".to_string(), |v| v.to_string())
         )
     }
@@ -383,14 +377,6 @@ impl StreamTiming {
         self.inner.duration_ms
     }
 
-    pub fn time_to_first_parsed_ms(&self) -> Option<i64> {
-        self.inner.time_to_first_parsed_ms
-    }
-
-    pub fn time_to_first_token_ms(&self) -> Option<i64> {
-        self.inner.time_to_first_token_ms
-    }
-
     pub fn define_in_ruby(module: &RModule) -> Result<()> {
         let cls = module.define_class("StreamTiming", class::object())?;
 
@@ -400,14 +386,6 @@ impl StreamTiming {
             method!(StreamTiming::start_time_utc_ms, 0),
         )?;
         cls.define_method("duration_ms", method!(StreamTiming::duration_ms, 0))?;
-        cls.define_method(
-            "time_to_first_parsed_ms",
-            method!(StreamTiming::time_to_first_parsed_ms, 0),
-        )?;
-        cls.define_method(
-            "time_to_first_token_ms",
-            method!(StreamTiming::time_to_first_token_ms, 0),
-        )?;
 
         Ok(())
     }

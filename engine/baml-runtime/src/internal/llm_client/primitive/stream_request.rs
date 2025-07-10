@@ -1,7 +1,10 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, ops::Deref};
 
 use anyhow::{Context, Result};
-use baml_types::BamlMap;
+use baml_types::{
+    tracing::events::{HTTPRequest, HTTPResponse, HTTPResponseStream, SSEEvent, TraceEvent},
+    BamlMap,
+};
 use eventsource_stream::Eventsource;
 use futures::{StreamExt, TryStreamExt};
 use internal_baml_jinja::RenderedChatMessage;
@@ -23,6 +26,7 @@ use crate::{
         traits::{HttpContext, StreamResponse, WithClient},
         ErrorCode, LLMCompleteResponse, LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse,
     },
+    tracingv2::storage::storage::BAML_TRACER,
     RuntimeContext,
 };
 
@@ -58,13 +62,33 @@ pub async fn make_stream_request(
         Err(e) => return Err(e),
     };
 
+    let call_id_stack = runtime_context.runtime_context().call_id_stack.clone();
+    let http_request_id = std::sync::Arc::new(runtime_context.http_request_id().clone());
+
     let client_name = client.context().name.clone();
     let params = client.request_options().clone();
     let prompt = to_prompt(prompt);
     Ok(Box::pin(
         resp.bytes_stream()
             .eventsource()
-            .take_while(|event| {
+            .take_while(move |event| {
+                if let Ok(event) = event {
+                    let trace_event = TraceEvent::new_raw_llm_response_stream(
+                        call_id_stack.clone(),
+                        std::sync::Arc::new(HTTPResponseStream::new(
+                            http_request_id.deref().clone(),
+                            SSEEvent::new(
+                                event.event.clone(),
+                                event.data.clone(),
+                                event.id.clone(),
+                            ),
+                        )),
+                    );
+                    BAML_TRACER
+                        .lock()
+                        .unwrap()
+                        .put(std::sync::Arc::new(trace_event));
+                }
                 std::future::ready(event.as_ref().is_ok_and(|e| e.data != "[DONE]"))
             })
             .map(|event| -> Result<serde_json::Value> { Ok(serde_json::from_str(&event?.data)?) })
