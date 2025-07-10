@@ -315,13 +315,10 @@ impl FunctionLog {
 impl Timing {
     pub fn to_s(&self) -> String {
         format!(
-            "Timing(start_time_utc_ms={}, duration_ms={}, time_to_first_parsed_ms={})",
+            "Timing(start_time_utc_ms={}, duration_ms={})",
             self.inner.start_time_utc_ms,
             self.inner
                 .duration_ms
-                .map_or("null".to_string(), |v| v.to_string()),
-            self.inner
-                .time_to_first_parsed_ms
                 .map_or("null".to_string(), |v| v.to_string())
         )
     }
@@ -334,20 +331,12 @@ impl Timing {
         self.inner.duration_ms
     }
 
-    pub fn time_to_first_parsed_ms(&self) -> Option<i64> {
-        self.inner.time_to_first_parsed_ms
-    }
-
     pub fn define_in_ruby(module: &RModule) -> Result<()> {
         let cls = module.define_class("Timing", class::object())?;
 
         cls.define_method("to_s", method!(Timing::to_s, 0))?;
         cls.define_method("start_time_utc_ms", method!(Timing::start_time_utc_ms, 0))?;
         cls.define_method("duration_ms", method!(Timing::duration_ms, 0))?;
-        cls.define_method(
-            "time_to_first_parsed_ms",
-            method!(Timing::time_to_first_parsed_ms, 0),
-        )?;
 
         Ok(())
     }
