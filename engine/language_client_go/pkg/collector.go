@@ -2,7 +2,6 @@ package baml
 
 import (
 	"encoding/json"
-	"fmt"
 	"runtime"
 	"sync/atomic"
 	"unsafe"
@@ -123,8 +122,6 @@ func (c *collector) Name() (string, error) {
 	}
 
 	ret := cStringToGoString(namePtr)
-	fmt.Println("name", ret)
-
 	// The returned pointer is a CString that we need to free
 	defer baml_go.CallCollectorFunction(namePtr, "string", "destroy", nil)
 
@@ -514,14 +511,14 @@ func (l *LLMCall) SSEResponses() ([]*SSEResponse, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	count := int(uintptr(countPtr))
 	if count == 0 {
 		return nil, nil
 	}
-	
+
 	responses := make([]*SSEResponse, count)
-	
+
 	for i := 0; i < count; i++ {
 		args := BamlFunctionArguments{
 			Kwargs: map[string]any{"index": i},
@@ -530,19 +527,19 @@ func (l *LLMCall) SSEResponses() ([]*SSEResponse, error) {
 		if err != nil {
 			return nil, err
 		}
-		
+
 		ssePtr, err := baml_go.CallCollectorFunction(l.c, llmCallType, "sse_response_at", encodedArgs)
 		if err != nil {
 			return nil, err
 		}
-		
+
 		if ssePtr != nil {
 			sse := &SSEResponse{c: ssePtr, parent: l}
 			runtime.SetFinalizer(sse, (*SSEResponse).finalize)
 			responses[i] = sse
 		}
 	}
-	
+
 	return responses, nil
 }
 
@@ -576,7 +573,7 @@ func (s *SSEResponse) JSON() (any, error) {
 	if jsonPtr == nil {
 		return nil, nil
 	}
-	
+
 	jsonStr := cStringToGoString(jsonPtr)
 	var result any
 	err = json.Unmarshal([]byte(jsonStr), &result)

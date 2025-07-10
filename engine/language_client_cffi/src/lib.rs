@@ -422,7 +422,6 @@ fn call_collector_function_inner(
                 "name" => {
                     let name = collector.name();
                     let c_string = CString::new(name).unwrap();
-                    println!("cffi name: {c_string:?} {name:?}", name = collector.name());
                     Ok(c_string.into_raw() as *const libc::c_void)
                 }
                 "logs_count" => {
