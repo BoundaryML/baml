@@ -206,7 +206,7 @@ test AudioBase64Test {
 
 ### Pdfs
 
-Similar to images, Pdfs can be specified in three ways:
+Unlike images and audio, **PDFs cannot be supplied via URL**. They must be provided either as a local file reference or as Base64 data.
 
 1. **File Reference**
 ```baml
@@ -220,19 +220,7 @@ test PDFFileTest {
 }
 ```
 
-2. **URL Reference**
-```baml
-test PDFUrlTest {
-    functions [AnalyzePDF]
-    args {
-        pdf {
-            url "https://example.com/document.pdf"
-        }
-    }
-}
-```
-
-3. **Base64 Data**
+2. **Base64 Data**
 ```baml
 test PDFBase64Test {
     functions [AnalyzePDF]

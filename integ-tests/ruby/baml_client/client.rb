@@ -297,7 +297,7 @@ module BamlClient
       end
       sig {params(
           varargs: T.untyped,
-          aud: Baml::Image,
+          aud: Baml::Audio,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)}
       def AudioInput(
@@ -322,7 +322,7 @@ module BamlClient
       end
       sig {params(
           varargs: T.untyped,
-          aud: Baml::Image,prompt: String,
+          aud: Baml::Audio,prompt: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)}
       def AudioInputOpenai(
@@ -2072,7 +2072,7 @@ module BamlClient
       end
       sig {params(
           varargs: T.untyped,
-          pdf: Baml::Image,
+          pdf: Baml::Pdf,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)}
       def PdfInput(
@@ -2097,7 +2097,7 @@ module BamlClient
       end
       sig {params(
           varargs: T.untyped,
-          pdf: Baml::Image,
+          pdf: Baml::Pdf,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)}
       def PdfInputAnthropic(
@@ -2122,7 +2122,7 @@ module BamlClient
       end
       sig {params(
           varargs: T.untyped,
-          pdf: Baml::Image,prompt: String,
+          pdf: Baml::Pdf,prompt: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)}
       def PdfInputOpenai(
@@ -5147,7 +5147,7 @@ module BamlClient
       end
       sig {params(
           varargs: T.untyped,
-          vid: Baml::Image,
+          vid: Baml::Video,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)}
       def VideoInputGemini(
@@ -5433,7 +5433,7 @@ module BamlClient
       end
       sig {params(
           varargs: T.untyped,
-          aud: Baml::Image,
+          aud: Baml::Audio,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String, String])}
       def AudioInput(
@@ -5458,7 +5458,7 @@ module BamlClient
       end
       sig {params(
           varargs: T.untyped,
-          aud: Baml::Image,prompt: String,
+          aud: Baml::Audio,prompt: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String, String])}
       def AudioInputOpenai(
@@ -7208,7 +7208,7 @@ module BamlClient
       end
       sig {params(
           varargs: T.untyped,
-          pdf: Baml::Image,
+          pdf: Baml::Pdf,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String, String])}
       def PdfInput(
@@ -7233,7 +7233,7 @@ module BamlClient
       end
       sig {params(
           varargs: T.untyped,
-          pdf: Baml::Image,
+          pdf: Baml::Pdf,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String, String])}
       def PdfInputAnthropic(
@@ -7258,7 +7258,7 @@ module BamlClient
       end
       sig {params(
           varargs: T.untyped,
-          pdf: Baml::Image,prompt: String,
+          pdf: Baml::Pdf,prompt: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String, String])}
       def PdfInputOpenai(
@@ -10283,7 +10283,7 @@ module BamlClient
       end
       sig {params(
           varargs: T.untyped,
-          vid: Baml::Image,
+          vid: Baml::Video,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String, String])}
       def VideoInputGemini(

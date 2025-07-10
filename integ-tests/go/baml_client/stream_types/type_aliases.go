@@ -14,15 +14,8 @@
 package stream_types
 
 import (
-    "encoding/json"
-    "fmt"
-
-    baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
-    "github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
-
-    "example.com/integ-tests/baml_client/types"
+	"example.com/integ-tests/baml_client/types"
 )
-
 
 type Amount = *int64
 type Combination = *Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString

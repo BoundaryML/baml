@@ -218,12 +218,12 @@ export const AssertFn = async (
  * This server action calls the underlying BAML function "AudioInput"
  * with the specified parameters.
  *
- * @param { Image } aud - Input parameter.
+ * @param { Audio } aud - Input parameter.
  *
  * @returns {Promise<string>} A promise that resolves with the result of the action.
  */
 export const AudioInput = async (
-  aud: Image,
+  aud: Audio,
 ): Promise<string> => {
   return b.AudioInput(
     aud,
@@ -236,13 +236,13 @@ export const AudioInput = async (
  * This server action calls the underlying BAML function "AudioInputOpenai"
  * with the specified parameters.
  *
- * @param { Image } aud - Input parameter.
+ * @param { Audio } aud - Input parameter.
  * @param { string } prompt - Input parameter.
  *
  * @returns {Promise<string>} A promise that resolves with the result of the action.
  */
 export const AudioInputOpenai = async (
-  aud: Image,
+  aud: Audio,
   prompt: string,
 ): Promise<string> => {
   return b.AudioInputOpenai(
@@ -1511,12 +1511,12 @@ export const OptionalTest_Function = async (
  * This server action calls the underlying BAML function "PdfInput"
  * with the specified parameters.
  *
- * @param { Image } pdf - Input parameter.
+ * @param { Pdf } pdf - Input parameter.
  *
  * @returns {Promise<string>} A promise that resolves with the result of the action.
  */
 export const PdfInput = async (
-  pdf: Image,
+  pdf: Pdf,
 ): Promise<string> => {
   return b.PdfInput(
     pdf,
@@ -1529,12 +1529,12 @@ export const PdfInput = async (
  * This server action calls the underlying BAML function "PdfInputAnthropic"
  * with the specified parameters.
  *
- * @param { Image } pdf - Input parameter.
+ * @param { Pdf } pdf - Input parameter.
  *
  * @returns {Promise<string>} A promise that resolves with the result of the action.
  */
 export const PdfInputAnthropic = async (
-  pdf: Image,
+  pdf: Pdf,
 ): Promise<string> => {
   return b.PdfInputAnthropic(
     pdf,
@@ -1547,13 +1547,13 @@ export const PdfInputAnthropic = async (
  * This server action calls the underlying BAML function "PdfInputOpenai"
  * with the specified parameters.
  *
- * @param { Image } pdf - Input parameter.
+ * @param { Pdf } pdf - Input parameter.
  * @param { string } prompt - Input parameter.
  *
  * @returns {Promise<string>} A promise that resolves with the result of the action.
  */
 export const PdfInputOpenai = async (
-  pdf: Image,
+  pdf: Pdf,
   prompt: string,
 ): Promise<string> => {
   return b.PdfInputOpenai(
@@ -3725,12 +3725,12 @@ export const ValidateResponseTypes = async (
  * This server action calls the underlying BAML function "VideoInputGemini"
  * with the specified parameters.
  *
- * @param { Image } vid - Input parameter.
+ * @param { Video } vid - Input parameter.
  *
  * @returns {Promise<string>} A promise that resolves with the result of the action.
  */
 export const VideoInputGemini = async (
-  vid: Image,
+  vid: Video,
 ): Promise<string> => {
   return b.VideoInputGemini(
     vid,

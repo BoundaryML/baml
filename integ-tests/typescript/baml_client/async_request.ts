@@ -286,7 +286,7 @@ export class AsyncHttpRequest {
   }
   
   async AudioInput(
-      aud: Image,
+      aud: Audio,
       __baml_options__?: BamlCallOptions
   ): Promise<HTTPRequest> {
     try {
@@ -311,7 +311,7 @@ export class AsyncHttpRequest {
   }
   
   async AudioInputOpenai(
-      aud: Image,prompt: string,
+      aud: Audio,prompt: string,
       __baml_options__?: BamlCallOptions
   ): Promise<HTTPRequest> {
     try {
@@ -2061,7 +2061,7 @@ export class AsyncHttpRequest {
   }
   
   async PdfInput(
-      pdf: Image,
+      pdf: Pdf,
       __baml_options__?: BamlCallOptions
   ): Promise<HTTPRequest> {
     try {
@@ -2086,7 +2086,7 @@ export class AsyncHttpRequest {
   }
   
   async PdfInputAnthropic(
-      pdf: Image,
+      pdf: Pdf,
       __baml_options__?: BamlCallOptions
   ): Promise<HTTPRequest> {
     try {
@@ -2111,7 +2111,7 @@ export class AsyncHttpRequest {
   }
   
   async PdfInputOpenai(
-      pdf: Image,prompt: string,
+      pdf: Pdf,prompt: string,
       __baml_options__?: BamlCallOptions
   ): Promise<HTTPRequest> {
     try {
@@ -5136,7 +5136,7 @@ export class AsyncHttpRequest {
   }
   
   async VideoInputGemini(
-      vid: Image,
+      vid: Video,
       __baml_options__?: BamlCallOptions
   ): Promise<HTTPRequest> {
     try {
@@ -5417,7 +5417,7 @@ export class AsyncHttpStreamRequest {
   }
   
   async AudioInput(
-      aud: Image,
+      aud: Audio,
       __baml_options__?: BamlCallOptions
   ): Promise<HTTPRequest> {
     try {
@@ -5442,7 +5442,7 @@ export class AsyncHttpStreamRequest {
   }
   
   async AudioInputOpenai(
-      aud: Image,prompt: string,
+      aud: Audio,prompt: string,
       __baml_options__?: BamlCallOptions
   ): Promise<HTTPRequest> {
     try {
@@ -7192,7 +7192,7 @@ export class AsyncHttpStreamRequest {
   }
   
   async PdfInput(
-      pdf: Image,
+      pdf: Pdf,
       __baml_options__?: BamlCallOptions
   ): Promise<HTTPRequest> {
     try {
@@ -7217,7 +7217,7 @@ export class AsyncHttpStreamRequest {
   }
   
   async PdfInputAnthropic(
-      pdf: Image,
+      pdf: Pdf,
       __baml_options__?: BamlCallOptions
   ): Promise<HTTPRequest> {
     try {
@@ -7242,7 +7242,7 @@ export class AsyncHttpStreamRequest {
   }
   
   async PdfInputOpenai(
-      pdf: Image,prompt: string,
+      pdf: Pdf,prompt: string,
       __baml_options__?: BamlCallOptions
   ): Promise<HTTPRequest> {
     try {
@@ -10267,7 +10267,7 @@ export class AsyncHttpStreamRequest {
   }
   
   async VideoInputGemini(
-      vid: Image,
+      vid: Video,
       __baml_options__?: BamlCallOptions
   ): Promise<HTTPRequest> {
     try {

@@ -3038,7 +3038,7 @@ components:
             type: object
             properties:
               aud:
-                $ref: '#/components/schemas/BamlImage'
+                $ref: '#/components/schemas/BamlAudio'
               __baml_options__:
                 nullable: true
                 $ref: '#/components/schemas/BamlOptions'
@@ -3054,7 +3054,7 @@ components:
             type: object
             properties:
               aud:
-                $ref: '#/components/schemas/BamlImage'
+                $ref: '#/components/schemas/BamlAudio'
               prompt:
                 type: string
               __baml_options__:
@@ -4231,7 +4231,7 @@ components:
             type: object
             properties:
               pdf:
-                $ref: '#/components/schemas/BamlImage'
+                $ref: '#/components/schemas/BamlPdf'
               __baml_options__:
                 nullable: true
                 $ref: '#/components/schemas/BamlOptions'
@@ -4247,7 +4247,7 @@ components:
             type: object
             properties:
               pdf:
-                $ref: '#/components/schemas/BamlImage'
+                $ref: '#/components/schemas/BamlPdf'
               __baml_options__:
                 nullable: true
                 $ref: '#/components/schemas/BamlOptions'
@@ -4263,7 +4263,7 @@ components:
             type: object
             properties:
               pdf:
-                $ref: '#/components/schemas/BamlImage'
+                $ref: '#/components/schemas/BamlPdf'
               prompt:
                 type: string
               __baml_options__:
@@ -6230,7 +6230,7 @@ components:
             type: object
             properties:
               vid:
-                $ref: '#/components/schemas/BamlImage'
+                $ref: '#/components/schemas/BamlVideo'
               __baml_options__:
                 nullable: true
                 $ref: '#/components/schemas/BamlOptions'

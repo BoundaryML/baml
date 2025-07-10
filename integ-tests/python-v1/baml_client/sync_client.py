@@ -155,14 +155,14 @@ class BamlSyncClient:
             "a": a,
         })
         return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
-    def AudioInput(self, aud: baml_py.Image,
+    def AudioInput(self, aud: baml_py.Audio,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="AudioInput", args={
             "aud": aud,
         })
         return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
-    def AudioInputOpenai(self, aud: baml_py.Image,prompt: str,
+    def AudioInputOpenai(self, aud: baml_py.Audio,prompt: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="AudioInputOpenai", args={
@@ -652,21 +652,21 @@ class BamlSyncClient:
             "input": input,
         })
         return typing.cast(typing.List[typing.Optional["types.OptionalTest_ReturnType"]], result.cast_to(types, types, stream_types, False, __runtime__))
-    def PdfInput(self, pdf: baml_py.Image,
+    def PdfInput(self, pdf: baml_py.Pdf,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="PdfInput", args={
             "pdf": pdf,
         })
         return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
-    def PdfInputAnthropic(self, pdf: baml_py.Image,
+    def PdfInputAnthropic(self, pdf: baml_py.Pdf,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="PdfInputAnthropic", args={
             "pdf": pdf,
         })
         return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
-    def PdfInputOpenai(self, pdf: baml_py.Image,prompt: str,
+    def PdfInputOpenai(self, pdf: baml_py.Pdf,prompt: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="PdfInputOpenai", args={
@@ -1513,7 +1513,7 @@ class BamlSyncClient:
             "input": input,
         })
         return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
-    def VideoInputGemini(self, vid: baml_py.Image,
+    def VideoInputGemini(self, vid: baml_py.Video,
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="VideoInputGemini", args={
@@ -1649,7 +1649,7 @@ class BamlStreamClient:
           lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
-    def AudioInput(self, aud: baml_py.Image,
+    def AudioInput(self, aud: baml_py.Audio,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[str, str]:
         ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="AudioInput", args={
@@ -1661,7 +1661,7 @@ class BamlStreamClient:
           lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
-    def AudioInputOpenai(self, aud: baml_py.Image,prompt: str,
+    def AudioInputOpenai(self, aud: baml_py.Audio,prompt: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[str, str]:
         ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="AudioInputOpenai", args={
@@ -2501,7 +2501,7 @@ class BamlStreamClient:
           lambda x: typing.cast(typing.List[typing.Optional["types.OptionalTest_ReturnType"]], x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
-    def PdfInput(self, pdf: baml_py.Image,
+    def PdfInput(self, pdf: baml_py.Pdf,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[str, str]:
         ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="PdfInput", args={
@@ -2513,7 +2513,7 @@ class BamlStreamClient:
           lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
-    def PdfInputAnthropic(self, pdf: baml_py.Image,
+    def PdfInputAnthropic(self, pdf: baml_py.Pdf,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[str, str]:
         ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="PdfInputAnthropic", args={
@@ -2525,7 +2525,7 @@ class BamlStreamClient:
           lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
-    def PdfInputOpenai(self, pdf: baml_py.Image,prompt: str,
+    def PdfInputOpenai(self, pdf: baml_py.Pdf,prompt: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[str, str]:
         ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="PdfInputOpenai", args={
@@ -3977,7 +3977,7 @@ class BamlStreamClient:
           lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
-    def VideoInputGemini(self, vid: baml_py.Image,
+    def VideoInputGemini(self, vid: baml_py.Video,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[str, str]:
         ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="VideoInputGemini", args={
@@ -4067,14 +4067,14 @@ class BamlHttpRequestClient:
             "a": a,
         }, mode="request")
         return result
-    def AudioInput(self, aud: baml_py.Image,
+    def AudioInput(self, aud: baml_py.Audio,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="AudioInput", args={
             "aud": aud,
         }, mode="request")
         return result
-    def AudioInputOpenai(self, aud: baml_py.Image,prompt: str,
+    def AudioInputOpenai(self, aud: baml_py.Audio,prompt: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="AudioInputOpenai", args={
@@ -4564,21 +4564,21 @@ class BamlHttpRequestClient:
             "input": input,
         }, mode="request")
         return result
-    def PdfInput(self, pdf: baml_py.Image,
+    def PdfInput(self, pdf: baml_py.Pdf,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="PdfInput", args={
             "pdf": pdf,
         }, mode="request")
         return result
-    def PdfInputAnthropic(self, pdf: baml_py.Image,
+    def PdfInputAnthropic(self, pdf: baml_py.Pdf,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="PdfInputAnthropic", args={
             "pdf": pdf,
         }, mode="request")
         return result
-    def PdfInputOpenai(self, pdf: baml_py.Image,prompt: str,
+    def PdfInputOpenai(self, pdf: baml_py.Pdf,prompt: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="PdfInputOpenai", args={
@@ -5425,7 +5425,7 @@ class BamlHttpRequestClient:
             "input": input,
         }, mode="request")
         return result
-    def VideoInputGemini(self, vid: baml_py.Image,
+    def VideoInputGemini(self, vid: baml_py.Video,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="VideoInputGemini", args={
@@ -5510,14 +5510,14 @@ class BamlHttpStreamRequestClient:
             "a": a,
         }, mode="stream")
         return result
-    def AudioInput(self, aud: baml_py.Image,
+    def AudioInput(self, aud: baml_py.Audio,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="AudioInput", args={
             "aud": aud,
         }, mode="stream")
         return result
-    def AudioInputOpenai(self, aud: baml_py.Image,prompt: str,
+    def AudioInputOpenai(self, aud: baml_py.Audio,prompt: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="AudioInputOpenai", args={
@@ -6007,21 +6007,21 @@ class BamlHttpStreamRequestClient:
             "input": input,
         }, mode="stream")
         return result
-    def PdfInput(self, pdf: baml_py.Image,
+    def PdfInput(self, pdf: baml_py.Pdf,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="PdfInput", args={
             "pdf": pdf,
         }, mode="stream")
         return result
-    def PdfInputAnthropic(self, pdf: baml_py.Image,
+    def PdfInputAnthropic(self, pdf: baml_py.Pdf,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="PdfInputAnthropic", args={
             "pdf": pdf,
         }, mode="stream")
         return result
-    def PdfInputOpenai(self, pdf: baml_py.Image,prompt: str,
+    def PdfInputOpenai(self, pdf: baml_py.Pdf,prompt: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="PdfInputOpenai", args={
@@ -6868,7 +6868,7 @@ class BamlHttpStreamRequestClient:
             "input": input,
         }, mode="stream")
         return result
-    def VideoInputGemini(self, vid: baml_py.Image,
+    def VideoInputGemini(self, vid: baml_py.Video,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="VideoInputGemini", args={

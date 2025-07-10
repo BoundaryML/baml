@@ -21,9 +21,18 @@ test TestFileVideoInput{
 test TestFileVideoInputWithMediaType{
   functions [VideoInputGemini]
   args {
-    vid{ 
+    vid { 
       file "../../../../../sample-5s.mp4"
       media_type "video/mp4"
+    }
+  }  
+}
+
+test TestFileVideoInputWithUrl{
+  functions [VideoInputGemini]
+  args {
+    vid { 
+      url "https://youtu.be/dQw4w9WgXcQ?si=aQdfsK0DdcDtCCud"
     }
   }  
 }

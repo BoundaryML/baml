@@ -5,6 +5,10 @@ description: Learn how to handle video inputs in BAML functions
 
 Video values to BAML functions can be created in client libraries. This document explains how to use these functions both at compile time and runtime to handle video data. For more details, refer to [video types](/ref/baml/types#video).
 
+<Info>
+  When you create a `Video` using `from_url` or `fromUrl`, the URL is passed directly to the model without any intermediate fetching. If the model cannot access external media, it will fail on such inputs. In these cases, convert the video to Base64 before passing it to the model.
+</Info>
+
 ## Usage Examples
 
 <CodeBlocks>
@@ -14,7 +18,7 @@ from baml_client import b
 
 async def test_video_input():
     # Create a Video object from a URL
-    video = Video.from_url("https://example.com/sample.mp4")
+    video = Video.from_url("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
     res = await b.TestVideoInput(video=video)
 
     # Create a Video object from Base64 data
@@ -29,7 +33,7 @@ import { Video } from "@boundaryml/baml"
 
 // Create a Video object from a URL
 let res = await b.TestVideoInput(
-    Video.fromUrl('https://example.com/sample.mp4')
+    Video.fromUrl('https://www.youtube.com/watch?v=dQw4w9WgXcQ')
 )
 
 // Create a Video object from Base64 data
@@ -41,7 +45,7 @@ res = await b.TestVideoInput(
 // Browser-specific methods
 const fileVideo = await Video.fromFile(file)
 const blobVideo = await Video.fromBlob(blob, 'video/mp4')
-const fetchedVideo = await Video.fromUrlAsync('https://example.com/sample.mp4')
+const fetchedVideo = await Video.fromUrlAsync('https://www.youtube.com/watch?v=dQw4w9WgXcQ')
 ```
 
 ```tsx
@@ -52,7 +56,7 @@ export function TestVideoInput() {
     const { mutate } = useTestVideoInput()
 
     const handleClick = async () => {
-        const video = await Video.fromUrl('https://example.com/sample.mp4')
+        const video = await Video.fromUrl('https://www.youtube.com/watch?v=dQw4w9WgXcQ')
         mutate(video)
     }
 

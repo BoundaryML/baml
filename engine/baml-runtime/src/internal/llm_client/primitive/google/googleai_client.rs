@@ -136,7 +136,7 @@ impl GoogleAIClient {
                 resolve_audio_urls: ResolveMediaUrls::IfMatchesGoogleFileUri,
                 resolve_image_urls: ResolveMediaUrls::IfMatchesGoogleFileUri,
                 resolve_pdf_urls: ResolveMediaUrls::IfMatchesGoogleFileUri,
-                resolve_video_urls: ResolveMediaUrls::IfMatchesGoogleFileUri,
+                resolve_video_urls: ResolveMediaUrls::Never,
                 allowed_metadata: properties.allowed_metadata.clone(),
             },
             retry_policy: client.elem().retry_policy_id.as_ref().map(String::to_owned),
@@ -163,7 +163,7 @@ impl GoogleAIClient {
                 resolve_audio_urls: ResolveMediaUrls::Always,
                 resolve_image_urls: ResolveMediaUrls::Always,
                 resolve_pdf_urls: ResolveMediaUrls::Always,
-                resolve_video_urls: ResolveMediaUrls::Always,
+                resolve_video_urls: ResolveMediaUrls::Never,
                 allowed_metadata: properties.allowed_metadata.clone(),
             },
             retry_policy: client.retry_policy.clone(),
@@ -326,15 +326,14 @@ impl ToProviderMessage for GoogleAIClient {
                 Ok(content)
             }
             BamlMediaContent::Url(data) => {
-                // Pass through the URL reference as required by the Gemini REST API.
-                // Include the mime_type when it is known so callers can rely on it.
-                let mut file_data = json!({"file_uri": data.url});
+                // Pass through external media via `file_data` as required by Gemini API.
+                let mut file_data = json!({ "file_uri": data.url });
                 if let Some(mime) = &media.mime_type {
                     file_data["mime_type"] = json!(mime);
                 }
                 content.insert("file_data".into(), file_data);
                 Ok(content)
-            }
+            },
             BamlMediaContent::File(_) => anyhow::bail!(
                 "BAML internal error (google-ai): file should have been resolved to base64"
             ),

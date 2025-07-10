@@ -852,7 +852,7 @@ export function useAssertFn(
  *
  * **Input Types:**
  *
- * - aud: Image
+ * - aud: Audio
  *
  *
  * **Return Type:**
@@ -902,7 +902,7 @@ export function useAudioInput(
  *
  * **Input Types:**
  *
- * - aud: Image
+ * - aud: Audio
  *
  * - prompt: string
  *
@@ -4412,7 +4412,7 @@ export function useOptionalTest_Function(
  *
  * **Input Types:**
  *
- * - pdf: Image
+ * - pdf: Pdf
  *
  *
  * **Return Type:**
@@ -4462,7 +4462,7 @@ export function usePdfInput(
  *
  * **Input Types:**
  *
- * - pdf: Image
+ * - pdf: Pdf
  *
  *
  * **Return Type:**
@@ -4512,7 +4512,7 @@ export function usePdfInputAnthropic(
  *
  * **Input Types:**
  *
- * - pdf: Image
+ * - pdf: Pdf
  *
  * - prompt: string
  *
@@ -10562,7 +10562,7 @@ export function useValidateResponseTypes(
  *
  * **Input Types:**
  *
- * - vid: Image
+ * - vid: Video
  *
  *
  * **Return Type:**

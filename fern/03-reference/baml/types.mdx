@@ -250,7 +250,7 @@ function AnalyzePDF(myPdf: pdf) -> string {
   "#
 }
 ```
-Calling functions that have `pdf` types.
+> **Note** PDF inputs must be provided as Base64 data using `Pdf.from_base64`. URL-based inputs are not currently supported.
 
 <CodeBlocks>
 ```python Python
@@ -258,57 +258,39 @@ from baml_py import Pdf
 from baml_client import b
 
 async def run():
-  # from URL
-  res = await b.TestPDFInput(
-      pdf=PDF.from_url(
-          "https://example.com/document.pdf"
-      )
-  )
-
-  # Base64
+  # Base64 data
   b64 = "JVBERi0K...."
   res = await b.TestPDFInput(
-    pdf=PDF.from_base64("application/pdf", b64)
+    pdf=Pdf.from_base64("application/pdf", b64)
   )
 ```
 
 ```typescript TypeScript
 import { b } from '../baml_client'
-import { PDF } from "@boundaryml/baml"
+import { Pdf } from "@boundaryml/baml"
 ...
-
-  // URL
-  let res = await b.TestPDFInput(
-    PDF.fromUrl('https://example.com/document.pdf'),
-  )
 
   // Base64
   const pdf_base64 = ".."
   let res = await b.TestPDFInput(
-    PDF.fromBase64('application/pdf', pdf_base64),
+    Pdf.fromBase64('application/pdf', pdf_base64),
   )
   
 ```
 
 ```ruby Ruby
+# PDF inputs must be provided as Base64. URL support is currently unavailable.
 require_relative "baml_client/client"
 
 b = Baml.Client
-PDF = Baml::PDF
+Pdf = Baml::Pdf
 
 def test_pdf_input
-  # from URL
+  # Base64 PDF
+  pdf_b64 = "JVBERi0K...."
   res = b.TestPDFInput(
-  pdf: Pdf.from_url(
-    "https://example.com/document.pdf"
+    pdf: Pdf.from_base64("application/pdf", pdf_b64)
   )
-)
-
-# Base64 Pdf
-pdf_b64 = "JVBERi0K...."
-res = b.TestPDFInput(
-  pdf: Pdf.from_base64("application/pdf", pdf_b64)
-)
 end
 ```
 </CodeBlocks>
@@ -327,6 +309,8 @@ function DescribeVideo(myVideo: video) -> string {
 }
 ```
 Calling functions that have `video` types.
+
+> **Note** When you provide a `Video` via URL the URL is passed directly to the model. Some models cannot download external media; in that case convert the video to Base64 first.
 
 <CodeBlocks>
 ```python Python
