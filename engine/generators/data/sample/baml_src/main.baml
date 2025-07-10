@@ -13,7 +13,7 @@ class Example2 {
 }
 
 function Foo(x: int) -> Example2 | Example {
-    client "ollama/phi4:latest"
+    client "openai/gpt-4o-mini"
     prompt #"
         Fill out this data model with some examples.
 
@@ -25,7 +25,7 @@ function Foo(x: int) -> Example2 | Example {
 
 // use flipped unions to ensure order doesn't matter for code-gen
 function Bar(x: int) -> Example | Example2 {
-    client "ollama/phi4:latest"
+    client "openai/gpt-4o-mini"
     prompt #"
         Fill out this data model with some examples.
 

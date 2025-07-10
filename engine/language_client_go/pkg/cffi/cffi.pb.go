@@ -191,6 +191,7 @@ type CFFIValueHolder struct {
 	//	*CFFIValueHolder_CheckedValue
 	//	*CFFIValueHolder_StreamingStateValue
 	Value         isCFFIValueHolder_Value `protobuf_oneof:"value"`
+	Type          *CFFIFieldTypeHolder    `protobuf:"bytes,16,opt,name=type,proto3" json:"type,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -354,6 +355,13 @@ func (x *CFFIValueHolder) GetStreamingStateValue() *CFFIValueStreamingState {
 		if x, ok := x.Value.(*CFFIValueHolder_StreamingStateValue); ok {
 			return x.StreamingStateValue
 		}
+	}
+	return nil
+}
+
+func (x *CFFIValueHolder) GetType() *CFFIFieldTypeHolder {
+	if x != nil {
+		return x.Type
 	}
 	return nil
 }
@@ -2155,7 +2163,7 @@ func (x *CFFIFieldTypeClass) GetName() *CFFITypeName {
 
 type CFFIFieldTypeTypeAlias struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Name          *CFFITypeName          `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2190,11 +2198,11 @@ func (*CFFIFieldTypeTypeAlias) Descriptor() ([]byte, []int) {
 	return file_types_cffi_proto_rawDescGZIP(), []int{29}
 }
 
-func (x *CFFIFieldTypeTypeAlias) GetName() string {
+func (x *CFFIFieldTypeTypeAlias) GetName() *CFFITypeName {
 	if x != nil {
 		return x.Name
 	}
-	return ""
+	return nil
 }
 
 type CFFIFieldTypeList struct {
@@ -2991,7 +2999,7 @@ var File_types_cffi_proto protoreflect.FileDescriptor
 
 const file_types_cffi_proto_rawDesc = "" +
 	"\n" +
-	"\x10types/cffi.proto\x12\tbaml.cffi\"\xb7\x06\n" +
+	"\x10types/cffi.proto\x12\tbaml.cffi\"\xeb\x06\n" +
 	"\x0fCFFIValueHolder\x129\n" +
 	"\n" +
 	"null_value\x18\x02 \x01(\v2\x18.baml.cffi.CFFIValueNullH\x00R\tnullValue\x12#\n" +
@@ -3015,7 +3023,8 @@ const file_types_cffi_proto_rawDesc = "" +
 	"tupleValue\x12R\n" +
 	"\x13union_variant_value\x18\r \x01(\v2 .baml.cffi.CFFIValueUnionVariantH\x00R\x11unionVariantValue\x12B\n" +
 	"\rchecked_value\x18\x0e \x01(\v2\x1b.baml.cffi.CFFIValueCheckedH\x00R\fcheckedValue\x12X\n" +
-	"\x15streaming_state_value\x18\x0f \x01(\v2\".baml.cffi.CFFIValueStreamingStateH\x00R\x13streamingStateValueB\a\n" +
+	"\x15streaming_state_value\x18\x0f \x01(\v2\".baml.cffi.CFFIValueStreamingStateH\x00R\x13streamingStateValue\x122\n" +
+	"\x04type\x18\x10 \x01(\v2\x1e.baml.cffi.CFFIFieldTypeHolderR\x04typeB\a\n" +
 	"\x05value\"^\n" +
 	"\fCFFITypeName\x12:\n" +
 	"\tnamespace\x18\x01 \x01(\x0e2\x1c.baml.cffi.CFFITypeNamespaceR\tnamespace\x12\x12\n" +
@@ -3121,9 +3130,9 @@ const file_types_cffi_proto_rawDesc = "" +
 	"\x11CFFIFieldTypeEnum\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\"A\n" +
 	"\x12CFFIFieldTypeClass\x12+\n" +
-	"\x04name\x18\x01 \x01(\v2\x17.baml.cffi.CFFITypeNameR\x04name\",\n" +
-	"\x16CFFIFieldTypeTypeAlias\x12\x12\n" +
-	"\x04name\x18\x01 \x01(\tR\x04name\"M\n" +
+	"\x04name\x18\x01 \x01(\v2\x17.baml.cffi.CFFITypeNameR\x04name\"E\n" +
+	"\x16CFFIFieldTypeTypeAlias\x12+\n" +
+	"\x04name\x18\x01 \x01(\v2\x17.baml.cffi.CFFITypeNameR\x04name\"M\n" +
 	"\x11CFFIFieldTypeList\x128\n" +
 	"\aelement\x18\x01 \x01(\v2\x1e.baml.cffi.CFFIFieldTypeHolderR\aelement\"z\n" +
 	"\x10CFFIFieldTypeMap\x120\n" +
@@ -3264,75 +3273,77 @@ var file_types_cffi_proto_depIdxs = []int32{
 	13, // 7: baml.cffi.CFFIValueHolder.union_variant_value:type_name -> baml.cffi.CFFIValueUnionVariant
 	14, // 8: baml.cffi.CFFIValueHolder.checked_value:type_name -> baml.cffi.CFFIValueChecked
 	47, // 9: baml.cffi.CFFIValueHolder.streaming_state_value:type_name -> baml.cffi.CFFIValueStreamingState
-	0,  // 10: baml.cffi.CFFITypeName.namespace:type_name -> baml.cffi.CFFITypeNamespace
-	19, // 11: baml.cffi.CFFIValueList.value_type:type_name -> baml.cffi.CFFIFieldTypeHolder
-	3,  // 12: baml.cffi.CFFIValueList.values:type_name -> baml.cffi.CFFIValueHolder
-	3,  // 13: baml.cffi.CFFIMapEntry.value:type_name -> baml.cffi.CFFIValueHolder
-	19, // 14: baml.cffi.CFFIValueMap.key_type:type_name -> baml.cffi.CFFIFieldTypeHolder
-	19, // 15: baml.cffi.CFFIValueMap.value_type:type_name -> baml.cffi.CFFIFieldTypeHolder
-	7,  // 16: baml.cffi.CFFIValueMap.entries:type_name -> baml.cffi.CFFIMapEntry
-	4,  // 17: baml.cffi.CFFIValueClass.name:type_name -> baml.cffi.CFFITypeName
-	7,  // 18: baml.cffi.CFFIValueClass.fields:type_name -> baml.cffi.CFFIMapEntry
-	7,  // 19: baml.cffi.CFFIValueClass.dynamic_fields:type_name -> baml.cffi.CFFIMapEntry
-	4,  // 20: baml.cffi.CFFIValueEnum.name:type_name -> baml.cffi.CFFITypeName
-	29, // 21: baml.cffi.CFFIValueMedia.media_type:type_name -> baml.cffi.CFFIFieldTypeMedia
-	18, // 22: baml.cffi.CFFIValueMedia.media_value:type_name -> baml.cffi.CFFIMediaValue
-	3,  // 23: baml.cffi.CFFIValueTuple.values:type_name -> baml.cffi.CFFIValueHolder
-	4,  // 24: baml.cffi.CFFIValueUnionVariant.name:type_name -> baml.cffi.CFFITypeName
-	19, // 25: baml.cffi.CFFIValueUnionVariant.field_types:type_name -> baml.cffi.CFFIFieldTypeHolder
-	3,  // 26: baml.cffi.CFFIValueUnionVariant.value:type_name -> baml.cffi.CFFIValueHolder
-	3,  // 27: baml.cffi.CFFIValueChecked.value:type_name -> baml.cffi.CFFIValueHolder
-	46, // 28: baml.cffi.CFFIValueChecked.checks:type_name -> baml.cffi.CFFICheckValue
-	15, // 29: baml.cffi.CFFIMediaValue.url_content:type_name -> baml.cffi.CFFIMediaContentUrl
-	16, // 30: baml.cffi.CFFIMediaValue.base64_content:type_name -> baml.cffi.CFFIMediaContentBase64
-	17, // 31: baml.cffi.CFFIMediaValue.file_content:type_name -> baml.cffi.CFFIMediaContentFile
-	20, // 32: baml.cffi.CFFIFieldTypeHolder.string_type:type_name -> baml.cffi.CFFIFieldTypeString
-	21, // 33: baml.cffi.CFFIFieldTypeHolder.int_type:type_name -> baml.cffi.CFFIFieldTypeInt
-	22, // 34: baml.cffi.CFFIFieldTypeHolder.float_type:type_name -> baml.cffi.CFFIFieldTypeFloat
-	23, // 35: baml.cffi.CFFIFieldTypeHolder.bool_type:type_name -> baml.cffi.CFFIFieldTypeBool
-	24, // 36: baml.cffi.CFFIFieldTypeHolder.null_type:type_name -> baml.cffi.CFFIFieldTypeNull
-	28, // 37: baml.cffi.CFFIFieldTypeHolder.literal_type:type_name -> baml.cffi.CFFIFieldTypeLiteral
-	29, // 38: baml.cffi.CFFIFieldTypeHolder.media_type:type_name -> baml.cffi.CFFIFieldTypeMedia
-	30, // 39: baml.cffi.CFFIFieldTypeHolder.enum_type:type_name -> baml.cffi.CFFIFieldTypeEnum
-	31, // 40: baml.cffi.CFFIFieldTypeHolder.class_type:type_name -> baml.cffi.CFFIFieldTypeClass
-	32, // 41: baml.cffi.CFFIFieldTypeHolder.type_alias_type:type_name -> baml.cffi.CFFIFieldTypeTypeAlias
-	33, // 42: baml.cffi.CFFIFieldTypeHolder.list_type:type_name -> baml.cffi.CFFIFieldTypeList
-	34, // 43: baml.cffi.CFFIFieldTypeHolder.map_type:type_name -> baml.cffi.CFFIFieldTypeMap
-	35, // 44: baml.cffi.CFFIFieldTypeHolder.tuple_type:type_name -> baml.cffi.CFFIFieldTypeTuple
-	36, // 45: baml.cffi.CFFIFieldTypeHolder.union_variant_type:type_name -> baml.cffi.CFFIFieldTypeUnionVariant
-	37, // 46: baml.cffi.CFFIFieldTypeHolder.optional_type:type_name -> baml.cffi.CFFIFieldTypeOptional
-	38, // 47: baml.cffi.CFFIFieldTypeHolder.checked_type:type_name -> baml.cffi.CFFIFieldTypeChecked
-	39, // 48: baml.cffi.CFFIFieldTypeHolder.stream_state_type:type_name -> baml.cffi.CFFIFieldTypeStreamState
-	25, // 49: baml.cffi.CFFIFieldTypeLiteral.string_literal:type_name -> baml.cffi.CFFILiteralString
-	26, // 50: baml.cffi.CFFIFieldTypeLiteral.int_literal:type_name -> baml.cffi.CFFILiteralInt
-	27, // 51: baml.cffi.CFFIFieldTypeLiteral.bool_literal:type_name -> baml.cffi.CFFILiteralBool
-	1,  // 52: baml.cffi.CFFIFieldTypeMedia.media:type_name -> baml.cffi.MediaTypeEnum
-	4,  // 53: baml.cffi.CFFIFieldTypeClass.name:type_name -> baml.cffi.CFFITypeName
-	19, // 54: baml.cffi.CFFIFieldTypeList.element:type_name -> baml.cffi.CFFIFieldTypeHolder
-	19, // 55: baml.cffi.CFFIFieldTypeMap.key:type_name -> baml.cffi.CFFIFieldTypeHolder
-	19, // 56: baml.cffi.CFFIFieldTypeMap.value:type_name -> baml.cffi.CFFIFieldTypeHolder
-	19, // 57: baml.cffi.CFFIFieldTypeTuple.elements:type_name -> baml.cffi.CFFIFieldTypeHolder
-	4,  // 58: baml.cffi.CFFIFieldTypeUnionVariant.name:type_name -> baml.cffi.CFFITypeName
-	19, // 59: baml.cffi.CFFIFieldTypeUnionVariant.options:type_name -> baml.cffi.CFFIFieldTypeHolder
-	19, // 60: baml.cffi.CFFIFieldTypeOptional.value:type_name -> baml.cffi.CFFIFieldTypeHolder
-	19, // 61: baml.cffi.CFFIFieldTypeChecked.value:type_name -> baml.cffi.CFFIFieldTypeHolder
-	45, // 62: baml.cffi.CFFIFieldTypeChecked.checks:type_name -> baml.cffi.CFFICheckType
-	19, // 63: baml.cffi.CFFIFieldTypeStreamState.value:type_name -> baml.cffi.CFFIFieldTypeHolder
-	7,  // 64: baml.cffi.CFFIFunctionArguments.kwargs:type_name -> baml.cffi.CFFIMapEntry
-	43, // 65: baml.cffi.CFFIFunctionArguments.client_registry:type_name -> baml.cffi.CFFIClientRegistry
-	40, // 66: baml.cffi.CFFIFunctionArguments.env:type_name -> baml.cffi.CFFIEnvVar
-	42, // 67: baml.cffi.CFFIFunctionArguments.collectors:type_name -> baml.cffi.CFFICollector
-	44, // 68: baml.cffi.CFFIClientRegistry.clients:type_name -> baml.cffi.CFFIClientProperty
-	7,  // 69: baml.cffi.CFFIClientProperty.options:type_name -> baml.cffi.CFFIMapEntry
-	19, // 70: baml.cffi.CFFICheckType.returns:type_name -> baml.cffi.CFFIFieldTypeHolder
-	3,  // 71: baml.cffi.CFFICheckValue.value:type_name -> baml.cffi.CFFIValueHolder
-	3,  // 72: baml.cffi.CFFIValueStreamingState.value:type_name -> baml.cffi.CFFIValueHolder
-	2,  // 73: baml.cffi.CFFIValueStreamingState.state:type_name -> baml.cffi.CFFIStreamState
-	74, // [74:74] is the sub-list for method output_type
-	74, // [74:74] is the sub-list for method input_type
-	74, // [74:74] is the sub-list for extension type_name
-	74, // [74:74] is the sub-list for extension extendee
-	0,  // [0:74] is the sub-list for field type_name
+	19, // 10: baml.cffi.CFFIValueHolder.type:type_name -> baml.cffi.CFFIFieldTypeHolder
+	0,  // 11: baml.cffi.CFFITypeName.namespace:type_name -> baml.cffi.CFFITypeNamespace
+	19, // 12: baml.cffi.CFFIValueList.value_type:type_name -> baml.cffi.CFFIFieldTypeHolder
+	3,  // 13: baml.cffi.CFFIValueList.values:type_name -> baml.cffi.CFFIValueHolder
+	3,  // 14: baml.cffi.CFFIMapEntry.value:type_name -> baml.cffi.CFFIValueHolder
+	19, // 15: baml.cffi.CFFIValueMap.key_type:type_name -> baml.cffi.CFFIFieldTypeHolder
+	19, // 16: baml.cffi.CFFIValueMap.value_type:type_name -> baml.cffi.CFFIFieldTypeHolder
+	7,  // 17: baml.cffi.CFFIValueMap.entries:type_name -> baml.cffi.CFFIMapEntry
+	4,  // 18: baml.cffi.CFFIValueClass.name:type_name -> baml.cffi.CFFITypeName
+	7,  // 19: baml.cffi.CFFIValueClass.fields:type_name -> baml.cffi.CFFIMapEntry
+	7,  // 20: baml.cffi.CFFIValueClass.dynamic_fields:type_name -> baml.cffi.CFFIMapEntry
+	4,  // 21: baml.cffi.CFFIValueEnum.name:type_name -> baml.cffi.CFFITypeName
+	29, // 22: baml.cffi.CFFIValueMedia.media_type:type_name -> baml.cffi.CFFIFieldTypeMedia
+	18, // 23: baml.cffi.CFFIValueMedia.media_value:type_name -> baml.cffi.CFFIMediaValue
+	3,  // 24: baml.cffi.CFFIValueTuple.values:type_name -> baml.cffi.CFFIValueHolder
+	4,  // 25: baml.cffi.CFFIValueUnionVariant.name:type_name -> baml.cffi.CFFITypeName
+	19, // 26: baml.cffi.CFFIValueUnionVariant.field_types:type_name -> baml.cffi.CFFIFieldTypeHolder
+	3,  // 27: baml.cffi.CFFIValueUnionVariant.value:type_name -> baml.cffi.CFFIValueHolder
+	3,  // 28: baml.cffi.CFFIValueChecked.value:type_name -> baml.cffi.CFFIValueHolder
+	46, // 29: baml.cffi.CFFIValueChecked.checks:type_name -> baml.cffi.CFFICheckValue
+	15, // 30: baml.cffi.CFFIMediaValue.url_content:type_name -> baml.cffi.CFFIMediaContentUrl
+	16, // 31: baml.cffi.CFFIMediaValue.base64_content:type_name -> baml.cffi.CFFIMediaContentBase64
+	17, // 32: baml.cffi.CFFIMediaValue.file_content:type_name -> baml.cffi.CFFIMediaContentFile
+	20, // 33: baml.cffi.CFFIFieldTypeHolder.string_type:type_name -> baml.cffi.CFFIFieldTypeString
+	21, // 34: baml.cffi.CFFIFieldTypeHolder.int_type:type_name -> baml.cffi.CFFIFieldTypeInt
+	22, // 35: baml.cffi.CFFIFieldTypeHolder.float_type:type_name -> baml.cffi.CFFIFieldTypeFloat
+	23, // 36: baml.cffi.CFFIFieldTypeHolder.bool_type:type_name -> baml.cffi.CFFIFieldTypeBool
+	24, // 37: baml.cffi.CFFIFieldTypeHolder.null_type:type_name -> baml.cffi.CFFIFieldTypeNull
+	28, // 38: baml.cffi.CFFIFieldTypeHolder.literal_type:type_name -> baml.cffi.CFFIFieldTypeLiteral
+	29, // 39: baml.cffi.CFFIFieldTypeHolder.media_type:type_name -> baml.cffi.CFFIFieldTypeMedia
+	30, // 40: baml.cffi.CFFIFieldTypeHolder.enum_type:type_name -> baml.cffi.CFFIFieldTypeEnum
+	31, // 41: baml.cffi.CFFIFieldTypeHolder.class_type:type_name -> baml.cffi.CFFIFieldTypeClass
+	32, // 42: baml.cffi.CFFIFieldTypeHolder.type_alias_type:type_name -> baml.cffi.CFFIFieldTypeTypeAlias
+	33, // 43: baml.cffi.CFFIFieldTypeHolder.list_type:type_name -> baml.cffi.CFFIFieldTypeList
+	34, // 44: baml.cffi.CFFIFieldTypeHolder.map_type:type_name -> baml.cffi.CFFIFieldTypeMap
+	35, // 45: baml.cffi.CFFIFieldTypeHolder.tuple_type:type_name -> baml.cffi.CFFIFieldTypeTuple
+	36, // 46: baml.cffi.CFFIFieldTypeHolder.union_variant_type:type_name -> baml.cffi.CFFIFieldTypeUnionVariant
+	37, // 47: baml.cffi.CFFIFieldTypeHolder.optional_type:type_name -> baml.cffi.CFFIFieldTypeOptional
+	38, // 48: baml.cffi.CFFIFieldTypeHolder.checked_type:type_name -> baml.cffi.CFFIFieldTypeChecked
+	39, // 49: baml.cffi.CFFIFieldTypeHolder.stream_state_type:type_name -> baml.cffi.CFFIFieldTypeStreamState
+	25, // 50: baml.cffi.CFFIFieldTypeLiteral.string_literal:type_name -> baml.cffi.CFFILiteralString
+	26, // 51: baml.cffi.CFFIFieldTypeLiteral.int_literal:type_name -> baml.cffi.CFFILiteralInt
+	27, // 52: baml.cffi.CFFIFieldTypeLiteral.bool_literal:type_name -> baml.cffi.CFFILiteralBool
+	1,  // 53: baml.cffi.CFFIFieldTypeMedia.media:type_name -> baml.cffi.MediaTypeEnum
+	4,  // 54: baml.cffi.CFFIFieldTypeClass.name:type_name -> baml.cffi.CFFITypeName
+	4,  // 55: baml.cffi.CFFIFieldTypeTypeAlias.name:type_name -> baml.cffi.CFFITypeName
+	19, // 56: baml.cffi.CFFIFieldTypeList.element:type_name -> baml.cffi.CFFIFieldTypeHolder
+	19, // 57: baml.cffi.CFFIFieldTypeMap.key:type_name -> baml.cffi.CFFIFieldTypeHolder
+	19, // 58: baml.cffi.CFFIFieldTypeMap.value:type_name -> baml.cffi.CFFIFieldTypeHolder
+	19, // 59: baml.cffi.CFFIFieldTypeTuple.elements:type_name -> baml.cffi.CFFIFieldTypeHolder
+	4,  // 60: baml.cffi.CFFIFieldTypeUnionVariant.name:type_name -> baml.cffi.CFFITypeName
+	19, // 61: baml.cffi.CFFIFieldTypeUnionVariant.options:type_name -> baml.cffi.CFFIFieldTypeHolder
+	19, // 62: baml.cffi.CFFIFieldTypeOptional.value:type_name -> baml.cffi.CFFIFieldTypeHolder
+	19, // 63: baml.cffi.CFFIFieldTypeChecked.value:type_name -> baml.cffi.CFFIFieldTypeHolder
+	45, // 64: baml.cffi.CFFIFieldTypeChecked.checks:type_name -> baml.cffi.CFFICheckType
+	19, // 65: baml.cffi.CFFIFieldTypeStreamState.value:type_name -> baml.cffi.CFFIFieldTypeHolder
+	7,  // 66: baml.cffi.CFFIFunctionArguments.kwargs:type_name -> baml.cffi.CFFIMapEntry
+	43, // 67: baml.cffi.CFFIFunctionArguments.client_registry:type_name -> baml.cffi.CFFIClientRegistry
+	40, // 68: baml.cffi.CFFIFunctionArguments.env:type_name -> baml.cffi.CFFIEnvVar
+	42, // 69: baml.cffi.CFFIFunctionArguments.collectors:type_name -> baml.cffi.CFFICollector
+	44, // 70: baml.cffi.CFFIClientRegistry.clients:type_name -> baml.cffi.CFFIClientProperty
+	7,  // 71: baml.cffi.CFFIClientProperty.options:type_name -> baml.cffi.CFFIMapEntry
+	19, // 72: baml.cffi.CFFICheckType.returns:type_name -> baml.cffi.CFFIFieldTypeHolder
+	3,  // 73: baml.cffi.CFFICheckValue.value:type_name -> baml.cffi.CFFIValueHolder
+	3,  // 74: baml.cffi.CFFIValueStreamingState.value:type_name -> baml.cffi.CFFIValueHolder
+	2,  // 75: baml.cffi.CFFIValueStreamingState.state:type_name -> baml.cffi.CFFIStreamState
+	76, // [76:76] is the sub-list for method output_type
+	76, // [76:76] is the sub-list for method input_type
+	76, // [76:76] is the sub-list for extension type_name
+	76, // [76:76] is the sub-list for extension extendee
+	0,  // [0:76] is the sub-list for field type_name
 }
 
 func init() { file_types_cffi_proto_init() }

@@ -40,10 +40,10 @@ func (c *ClassWithBlockDone) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "i_16_digits":
-			c.I_16_digits = baml.Decode(valueHolder).(int64)
+			c.I_16_digits = baml.Decode(valueHolder).Interface().(int64)
 
 		case "s_20_words":
-			c.S_20_words = baml.Decode(valueHolder).(string)
+			c.S_20_words = baml.Decode(valueHolder).Interface().(string)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -93,10 +93,10 @@ func (c *ClassWithoutDone) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "i_16_digits":
-			c.I_16_digits = baml.Decode(valueHolder).(int64)
+			c.I_16_digits = baml.Decode(valueHolder).Interface().(int64)
 
 		case "s_20_words":
-			c.S_20_words = baml.Decode(valueHolder).(string)
+			c.S_20_words = baml.Decode(valueHolder).Interface().(string)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -152,30 +152,28 @@ func (c *SemanticContainer) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "sixteen_digit_number":
-			c.Sixteen_digit_number = baml.Decode(valueHolder).(int64)
+			c.Sixteen_digit_number = baml.Decode(valueHolder).Interface().(int64)
 
 		case "string_with_twenty_words":
-			c.String_with_twenty_words = baml.Decode(valueHolder).(string)
+			c.String_with_twenty_words = baml.Decode(valueHolder).Interface().(string)
 
 		case "class_1":
-			c.Class_1 = *baml.Decode(valueHolder).(*ClassWithoutDone)
+			c.Class_1 = baml.Decode(valueHolder).Interface().(ClassWithoutDone)
 
 		case "class_2":
-			c.Class_2 = *baml.Decode(valueHolder).(*ClassWithBlockDone)
+			c.Class_2 = baml.Decode(valueHolder).Interface().(ClassWithBlockDone)
 
 		case "class_done_needed":
-			c.Class_done_needed = *baml.Decode(valueHolder).(*ClassWithBlockDone)
+			c.Class_done_needed = baml.Decode(valueHolder).Interface().(ClassWithBlockDone)
 
 		case "class_needed":
-			c.Class_needed = *baml.Decode(valueHolder).(*ClassWithoutDone)
+			c.Class_needed = baml.Decode(valueHolder).Interface().(ClassWithoutDone)
 
 		case "three_small_things":
-			c.Three_small_things = baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) SmallThing {
-				return *baml.Decode(inner).(*SmallThing)
-			})
+			c.Three_small_things = baml.Decode(valueHolder).Interface().([]SmallThing)
 
 		case "final_string":
-			c.Final_string = baml.Decode(valueHolder).(string)
+			c.Final_string = baml.Decode(valueHolder).Interface().(string)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -237,10 +235,10 @@ func (c *SmallThing) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "i_16_digits":
-			c.I_16_digits = baml.Decode(valueHolder).(int64)
+			c.I_16_digits = baml.Decode(valueHolder).Interface().(int64)
 
 		case "i_8_digits":
-			c.I_8_digits = baml.Decode(valueHolder).(int64)
+			c.I_8_digits = baml.Decode(valueHolder).Interface().(int64)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))

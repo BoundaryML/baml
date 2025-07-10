@@ -40,28 +40,10 @@ func (c *Example) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "a":
-			c.A = func(param *cffi.CFFIValueHolder) *int64 {
-				decoded := baml.Decode(param)
-				return func(result any) *int64 {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(int64)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.A = baml.Decode(valueHolder).Interface().(*int64)
 
 		case "b":
-			c.B = func(param *cffi.CFFIValueHolder) *string {
-				decoded := baml.Decode(param)
-				return func(result any) *string {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(string)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.B = baml.Decode(valueHolder).Interface().(*string)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -112,40 +94,13 @@ func (c *Example2) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "item":
-			c.Item = func(param *cffi.CFFIValueHolder) *Example {
-				decoded := baml.Decode(param)
-				return func(result any) *Example {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(*Example)
-					return casted
-				}(decoded)
-			}(valueHolder)
+			c.Item = baml.Decode(valueHolder).Interface().(*Example)
 
 		case "element":
-			c.Element = func(param *cffi.CFFIValueHolder) *string {
-				decoded := baml.Decode(param)
-				return func(result any) *string {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(string)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Element = baml.Decode(valueHolder).Interface().(*string)
 
 		case "element2":
-			c.Element2 = func(param *cffi.CFFIValueHolder) *string {
-				decoded := baml.Decode(param)
-				return func(result any) *string {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(string)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Element2 = baml.Decode(valueHolder).Interface().(*string)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))

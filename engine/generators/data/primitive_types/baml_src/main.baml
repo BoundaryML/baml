@@ -101,3 +101,49 @@ function TestEmptyCollections(input: string) -> PrimitiveArrays {
     Input: {{ input }}
   "#
 }
+
+// Test functions for top-level primitive types
+function TestTopLevelString(input: string) -> string {
+  client "openai/gpt-4o-mini"
+  prompt #"
+    Return the string "Hello from BAML!" exactly as written.
+    
+    Input: {{ input }}
+  "#
+}
+
+function TestTopLevelInt(input: string) -> int {
+  client "openai/gpt-4o-mini"
+  prompt #"
+    Return the integer 42.
+    
+    Input: {{ input }}
+  "#
+}
+
+function TestTopLevelFloat(input: string) -> float {
+  client "openai/gpt-4o-mini"
+  prompt #"
+    Return the floating point number 3.14159.
+    
+    Input: {{ input }}
+  "#
+}
+
+function TestTopLevelBool(input: string) -> bool {
+  client "openai/gpt-4o-mini"
+  prompt #"
+    Return the boolean value true.
+    
+    Input: {{ input }}
+  "#
+}
+
+function TestTopLevelNull(input: string) -> null {
+  client "openai/gpt-4o-mini"
+  prompt #"
+    Return null.
+    
+    Input: {{ input }}
+  "#
+}

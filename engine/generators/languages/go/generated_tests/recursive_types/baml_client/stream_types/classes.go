@@ -39,16 +39,7 @@ func (c *UseMyUnion) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "u":
-			c.U = func(param *cffi.CFFIValueHolder) *Union3IntOrRecursive1OrString {
-				decoded := baml.Decode(param)
-				return func(result any) *Union3IntOrRecursive1OrString {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(*Union3IntOrRecursive1OrString)
-					return casted
-				}(decoded)
-			}(valueHolder)
+			c.U = baml.Decode(valueHolder).Interface().(*Union3IntOrRecursive1OrString)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))

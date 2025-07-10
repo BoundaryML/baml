@@ -586,6 +586,7 @@ mod tests {
 
         let recursive_type = TypeNonStreaming::RecursiveTypeAlias {
             name: "RecursiveType".to_string(),
+            mode: StreamingMode::NonStreaming,
             meta: create_test_meta(),
         };
         let openapi_recursive = convert_ir_type(&ir, &recursive_type);
@@ -832,6 +833,7 @@ mod tests {
         };
         let alias_type = TypeNonStreaming::RecursiveTypeAlias {
             name: "UserAlias".to_string(),
+            mode: StreamingMode::NonStreaming,
             meta: create_test_meta(),
         };
 

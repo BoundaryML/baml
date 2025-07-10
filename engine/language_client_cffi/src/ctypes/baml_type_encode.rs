@@ -61,8 +61,20 @@ where
                     value: Some(Box::new(value)),
                 }))
             }
-            TypeGeneric::RecursiveTypeAlias { name, .. } => {
-                cType::TypeAliasType(CffiFieldTypeTypeAlias { name: name.clone() })
+            TypeGeneric::RecursiveTypeAlias { name, mode, .. } => {
+                cType::TypeAliasType(CffiFieldTypeTypeAlias {
+                    name: Some(CffiTypeName {
+                        namespace: match mode {
+                            baml_types::StreamingMode::NonStreaming => {
+                                CffiTypeNamespace::Types.into()
+                            }
+                            baml_types::StreamingMode::Streaming => {
+                                CffiTypeNamespace::StreamTypes.into()
+                            }
+                        },
+                        name: name.clone(),
+                    }),
+                })
             }
             TypeGeneric::Tuple(type_generics, _) => {
                 let elements = type_generics
