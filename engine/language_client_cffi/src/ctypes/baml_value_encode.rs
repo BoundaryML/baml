@@ -293,7 +293,6 @@ where
                 }
                 BamlValueWithMeta::Null(_) => Value::NullValue(CffiValueNull {}),
             };
-            println!("encoded_value: {}", value.field_type());
             CffiValueHolder {
                 r#type: Some(
                     WithIr {

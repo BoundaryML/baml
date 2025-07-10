@@ -3,7 +3,10 @@ use std::{
     sync::{atomic::AtomicBool, Arc},
 };
 
-use baml_runtime::tracingv2::storage::storage::{Collector, Usage};
+use baml_runtime::tracingv2::storage::storage::{
+    Collector, FunctionLog, LLMCallKind, StreamTiming, Timing, Usage,
+};
+use baml_types::tracing::events::{HTTPBody, HTTPRequest, HTTPResponse, SSEEvent};
 
 pub struct RawPtrWrapper<T> {
     inner: Arc<T>,
@@ -59,3 +62,11 @@ impl<T> Drop for RawPtrWrapper<T> {
 
 pub type CollectorWrapper = RawPtrWrapper<Collector>;
 pub type UsageWrapper = RawPtrWrapper<Usage>;
+pub type FunctionLogWrapper = RawPtrWrapper<FunctionLog>;
+pub type TimingWrapper = RawPtrWrapper<Timing>;
+pub type StreamTimingWrapper = RawPtrWrapper<StreamTiming>;
+pub type LLMCallKindWrapper = RawPtrWrapper<LLMCallKind>;
+pub type HTTPRequestWrapper = RawPtrWrapper<HTTPRequest>;
+pub type HTTPResponseWrapper = RawPtrWrapper<HTTPResponse>;
+pub type HTTPBodyWrapper = RawPtrWrapper<HTTPBody>;
+pub type SSEResponseWrapper = RawPtrWrapper<SSEEvent>;

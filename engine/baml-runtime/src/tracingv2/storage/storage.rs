@@ -571,6 +571,20 @@ impl LLMCallKind {
             LLMCallKind::Stream(c) => c.selected,
         }
     }
+
+    pub fn as_request(&self) -> Option<&LLMCall> {
+        match self {
+            LLMCallKind::Basic(c) => Some(c),
+            LLMCallKind::Stream(c) => None,
+        }
+    }
+
+    pub fn as_stream(&self) -> Option<&LLMStreamCall> {
+        match self {
+            LLMCallKind::Basic(c) => None,
+            LLMCallKind::Stream(c) => Some(c),
+        }
+    }
 }
 
 #[derive(Debug, Default, Clone, Serialize)]
