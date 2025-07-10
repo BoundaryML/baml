@@ -5135,7 +5135,7 @@ export class HttpRequest {
     }
   }
   
-  VideoInput(
+  VideoInputGemini(
       vid: Image,
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
@@ -5145,59 +5145,9 @@ export class HttpRequest {
         Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.buildRequestSync(
-        "VideoInput",
+        "VideoInputGemini",
         {
           "vid": vid
-        },
-        this.ctxManager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
-        false,
-        env,
-      )
-    } catch (error) {
-      throw toBamlError(error);
-    }
-  }
-  
-  VideoInputAnthropic(
-      vid: Image,
-      __baml_options__?: BamlCallOptions
-  ): HTTPRequest {
-    try {
-      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const env: Record<string, string> = Object.fromEntries(
-        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
-      );
-      return this.runtime.buildRequestSync(
-        "VideoInputAnthropic",
-        {
-          "vid": vid
-        },
-        this.ctxManager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
-        false,
-        env,
-      )
-    } catch (error) {
-      throw toBamlError(error);
-    }
-  }
-  
-  VideoInputOpenai(
-      vid: Image,prompt: string,
-      __baml_options__?: BamlCallOptions
-  ): HTTPRequest {
-    try {
-      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const env: Record<string, string> = Object.fromEntries(
-        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
-      );
-      return this.runtime.buildRequestSync(
-        "VideoInputOpenai",
-        {
-          "vid": vid,"prompt": prompt
         },
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
@@ -10316,7 +10266,7 @@ export class HttpStreamRequest {
     }
   }
   
-  VideoInput(
+  VideoInputGemini(
       vid: Image,
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
@@ -10326,59 +10276,9 @@ export class HttpStreamRequest {
         Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.buildRequestSync(
-        "VideoInput",
+        "VideoInputGemini",
         {
           "vid": vid
-        },
-        this.ctxManager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
-        true,
-        env,
-      )
-    } catch (error) {
-      throw toBamlError(error);
-    }
-  }
-  
-  VideoInputAnthropic(
-      vid: Image,
-      __baml_options__?: BamlCallOptions
-  ): HTTPRequest {
-    try {
-      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const env: Record<string, string> = Object.fromEntries(
-        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
-      );
-      return this.runtime.buildRequestSync(
-        "VideoInputAnthropic",
-        {
-          "vid": vid
-        },
-        this.ctxManager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
-        true,
-        env,
-      )
-    } catch (error) {
-      throw toBamlError(error);
-    }
-  }
-  
-  VideoInputOpenai(
-      vid: Image,prompt: string,
-      __baml_options__?: BamlCallOptions
-  ): HTTPRequest {
-    try {
-      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const env: Record<string, string> = Object.fromEntries(
-        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
-      );
-      return this.runtime.buildRequestSync(
-        "VideoInputOpenai",
-        {
-          "vid": vid,"prompt": prompt
         },
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),

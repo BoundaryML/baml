@@ -14,667 +14,677 @@
 package types
 
 import (
-	"encoding/json"
-	"fmt"
+    "encoding/json"
+    "fmt"
 
-	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
-	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
+    baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
+    "github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
 )
+
 
 type AliasedEnum string
 
 const (
-	AliasedEnumKEY_ONE AliasedEnum = "KEY_ONE"
-	AliasedEnumKEY_TWO AliasedEnum = "KEY_TWO"
+    
+    AliasedEnumKEY_ONE AliasedEnum = "KEY_ONE"
+    AliasedEnumKEY_TWO AliasedEnum = "KEY_TWO"
 )
 
 // Values returns all allowed values for the AliasedEnum type.
 func (AliasedEnum) Values() []AliasedEnum {
-	return []AliasedEnum{
-		AliasedEnumKEY_ONE,
-		AliasedEnumKEY_TWO,
-	}
+    return []AliasedEnum{
+        AliasedEnumKEY_ONE,
+        AliasedEnumKEY_TWO,
+    }
 }
 
 // IsValid checks whether the given AliasedEnum value is valid.
 func (e AliasedEnum) IsValid() bool {
-
-	for _, v := range e.Values() {
-		if e == v {
-			return true
-		}
-	}
-	return false
-
+  
+  for _, v := range e.Values() {
+      if e == v {
+          return true
+      }
+  }
+  return false
+  
 }
 
 // MarshalJSON customizes JSON marshaling for AliasedEnum.
 func (e AliasedEnum) MarshalJSON() ([]byte, error) {
-	if !e.IsValid() {
-		return nil, fmt.Errorf("invalid AliasedEnum: %q", e)
-	}
-	return json.Marshal(string(e))
+    if !e.IsValid() {
+        return nil, fmt.Errorf("invalid AliasedEnum: %q", e)
+    }
+    return json.Marshal(string(e))
 }
 
 // UnmarshalJSON customizes JSON unmarshaling for AliasedEnum.
 func (e *AliasedEnum) UnmarshalJSON(data []byte) error {
-	var s string
-	if err := json.Unmarshal(data, &s); err != nil {
-		return err
-	}
-	*e = AliasedEnum(s)
-	if !e.IsValid() {
-		return fmt.Errorf("invalid AliasedEnum: %q", s)
-	}
-	return nil
+    var s string
+    if err := json.Unmarshal(data, &s); err != nil {
+        return err
+    }
+    *e = AliasedEnum(s)
+    if !e.IsValid() {
+        return fmt.Errorf("invalid AliasedEnum: %q", s)
+    }
+    return nil
 }
 
 func (e *AliasedEnum) Decode(holder *cffi.CFFIValueEnum) {
-	name := holder.Name
-	if name.Name != "AliasedEnum" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
-		panic(fmt.Sprintf("expected types.AliasedEnum, got %s.%s", string(name.Namespace.String()), string(name.Name)))
-	}
-	value := holder.Value
-	*e = AliasedEnum(value)
+    name := holder.Name
+    if name.Name != "AliasedEnum" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
+        panic(fmt.Sprintf("expected types.AliasedEnum, got %s.%s", string(name.Namespace.String()), string(name.Name)))
+    }
+    value := holder.Value
+    *e = AliasedEnum(value)
 }
 
 func (e AliasedEnum) Encode() (*cffi.CFFIValueHolder, error) {
-	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
+    return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
 }
 
 func (e AliasedEnum) BamlTypeName() string {
-	return "AliasedEnum"
+    return "AliasedEnum"
 }
 
 func (u AliasedEnum) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "AliasedEnum",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
+    return &cffi.CFFITypeName{
+        Name:      "AliasedEnum",
+        Namespace: cffi.CFFITypeNamespace_TYPES,
+    }
 }
 
 type Category string
 
 const (
-	CategoryRefund           Category = "Refund"
-	CategoryCancelOrder      Category = "CancelOrder"
-	CategoryTechnicalSupport Category = "TechnicalSupport"
-	CategoryAccountIssue     Category = "AccountIssue"
-	CategoryQuestion         Category = "Question"
+    
+    CategoryRefund Category = "Refund"
+    CategoryCancelOrder Category = "CancelOrder"
+    CategoryTechnicalSupport Category = "TechnicalSupport"
+    CategoryAccountIssue Category = "AccountIssue"
+    CategoryQuestion Category = "Question"
 )
 
 // Values returns all allowed values for the Category type.
 func (Category) Values() []Category {
-	return []Category{
-		CategoryRefund,
-		CategoryCancelOrder,
-		CategoryTechnicalSupport,
-		CategoryAccountIssue,
-		CategoryQuestion,
-	}
+    return []Category{
+        CategoryRefund,
+        CategoryCancelOrder,
+        CategoryTechnicalSupport,
+        CategoryAccountIssue,
+        CategoryQuestion,
+    }
 }
 
 // IsValid checks whether the given Category value is valid.
 func (e Category) IsValid() bool {
-
-	for _, v := range e.Values() {
-		if e == v {
-			return true
-		}
-	}
-	return false
-
+  
+  for _, v := range e.Values() {
+      if e == v {
+          return true
+      }
+  }
+  return false
+  
 }
 
 // MarshalJSON customizes JSON marshaling for Category.
 func (e Category) MarshalJSON() ([]byte, error) {
-	if !e.IsValid() {
-		return nil, fmt.Errorf("invalid Category: %q", e)
-	}
-	return json.Marshal(string(e))
+    if !e.IsValid() {
+        return nil, fmt.Errorf("invalid Category: %q", e)
+    }
+    return json.Marshal(string(e))
 }
 
 // UnmarshalJSON customizes JSON unmarshaling for Category.
 func (e *Category) UnmarshalJSON(data []byte) error {
-	var s string
-	if err := json.Unmarshal(data, &s); err != nil {
-		return err
-	}
-	*e = Category(s)
-	if !e.IsValid() {
-		return fmt.Errorf("invalid Category: %q", s)
-	}
-	return nil
+    var s string
+    if err := json.Unmarshal(data, &s); err != nil {
+        return err
+    }
+    *e = Category(s)
+    if !e.IsValid() {
+        return fmt.Errorf("invalid Category: %q", s)
+    }
+    return nil
 }
 
 func (e *Category) Decode(holder *cffi.CFFIValueEnum) {
-	name := holder.Name
-	if name.Name != "Category" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
-		panic(fmt.Sprintf("expected types.Category, got %s.%s", string(name.Namespace.String()), string(name.Name)))
-	}
-	value := holder.Value
-	*e = Category(value)
+    name := holder.Name
+    if name.Name != "Category" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
+        panic(fmt.Sprintf("expected types.Category, got %s.%s", string(name.Namespace.String()), string(name.Name)))
+    }
+    value := holder.Value
+    *e = Category(value)
 }
 
 func (e Category) Encode() (*cffi.CFFIValueHolder, error) {
-	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
+    return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
 }
 
 func (e Category) BamlTypeName() string {
-	return "Category"
+    return "Category"
 }
 
 func (u Category) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "Category",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
+    return &cffi.CFFITypeName{
+        Name:      "Category",
+        Namespace: cffi.CFFITypeNamespace_TYPES,
+    }
 }
 
 type Category2 string
 
 const (
-	Category2Refund           Category2 = "Refund"
-	Category2CancelOrder      Category2 = "CancelOrder"
-	Category2TechnicalSupport Category2 = "TechnicalSupport"
-	Category2AccountIssue     Category2 = "AccountIssue"
-	Category2Question         Category2 = "Question"
+    
+    Category2Refund Category2 = "Refund"
+    Category2CancelOrder Category2 = "CancelOrder"
+    Category2TechnicalSupport Category2 = "TechnicalSupport"
+    Category2AccountIssue Category2 = "AccountIssue"
+    Category2Question Category2 = "Question"
 )
 
 // Values returns all allowed values for the Category2 type.
 func (Category2) Values() []Category2 {
-	return []Category2{
-		Category2Refund,
-		Category2CancelOrder,
-		Category2TechnicalSupport,
-		Category2AccountIssue,
-		Category2Question,
-	}
+    return []Category2{
+        Category2Refund,
+        Category2CancelOrder,
+        Category2TechnicalSupport,
+        Category2AccountIssue,
+        Category2Question,
+    }
 }
 
 // IsValid checks whether the given Category2 value is valid.
 func (e Category2) IsValid() bool {
-
-	for _, v := range e.Values() {
-		if e == v {
-			return true
-		}
-	}
-	return false
-
+  
+  for _, v := range e.Values() {
+      if e == v {
+          return true
+      }
+  }
+  return false
+  
 }
 
 // MarshalJSON customizes JSON marshaling for Category2.
 func (e Category2) MarshalJSON() ([]byte, error) {
-	if !e.IsValid() {
-		return nil, fmt.Errorf("invalid Category2: %q", e)
-	}
-	return json.Marshal(string(e))
+    if !e.IsValid() {
+        return nil, fmt.Errorf("invalid Category2: %q", e)
+    }
+    return json.Marshal(string(e))
 }
 
 // UnmarshalJSON customizes JSON unmarshaling for Category2.
 func (e *Category2) UnmarshalJSON(data []byte) error {
-	var s string
-	if err := json.Unmarshal(data, &s); err != nil {
-		return err
-	}
-	*e = Category2(s)
-	if !e.IsValid() {
-		return fmt.Errorf("invalid Category2: %q", s)
-	}
-	return nil
+    var s string
+    if err := json.Unmarshal(data, &s); err != nil {
+        return err
+    }
+    *e = Category2(s)
+    if !e.IsValid() {
+        return fmt.Errorf("invalid Category2: %q", s)
+    }
+    return nil
 }
 
 func (e *Category2) Decode(holder *cffi.CFFIValueEnum) {
-	name := holder.Name
-	if name.Name != "Category2" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
-		panic(fmt.Sprintf("expected types.Category2, got %s.%s", string(name.Namespace.String()), string(name.Name)))
-	}
-	value := holder.Value
-	*e = Category2(value)
+    name := holder.Name
+    if name.Name != "Category2" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
+        panic(fmt.Sprintf("expected types.Category2, got %s.%s", string(name.Namespace.String()), string(name.Name)))
+    }
+    value := holder.Value
+    *e = Category2(value)
 }
 
 func (e Category2) Encode() (*cffi.CFFIValueHolder, error) {
-	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
+    return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
 }
 
 func (e Category2) BamlTypeName() string {
-	return "Category2"
+    return "Category2"
 }
 
 func (u Category2) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "Category2",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
+    return &cffi.CFFITypeName{
+        Name:      "Category2",
+        Namespace: cffi.CFFITypeNamespace_TYPES,
+    }
 }
 
 type Category3 string
 
 const (
-	Category3Refund           Category3 = "Refund"
-	Category3CancelOrder      Category3 = "CancelOrder"
-	Category3TechnicalSupport Category3 = "TechnicalSupport"
-	Category3AccountIssue     Category3 = "AccountIssue"
-	Category3Question         Category3 = "Question"
+    
+    Category3Refund Category3 = "Refund"
+    Category3CancelOrder Category3 = "CancelOrder"
+    Category3TechnicalSupport Category3 = "TechnicalSupport"
+    Category3AccountIssue Category3 = "AccountIssue"
+    Category3Question Category3 = "Question"
 )
 
 // Values returns all allowed values for the Category3 type.
 func (Category3) Values() []Category3 {
-	return []Category3{
-		Category3Refund,
-		Category3CancelOrder,
-		Category3TechnicalSupport,
-		Category3AccountIssue,
-		Category3Question,
-	}
+    return []Category3{
+        Category3Refund,
+        Category3CancelOrder,
+        Category3TechnicalSupport,
+        Category3AccountIssue,
+        Category3Question,
+    }
 }
 
 // IsValid checks whether the given Category3 value is valid.
 func (e Category3) IsValid() bool {
-
-	for _, v := range e.Values() {
-		if e == v {
-			return true
-		}
-	}
-	return false
-
+  
+  for _, v := range e.Values() {
+      if e == v {
+          return true
+      }
+  }
+  return false
+  
 }
 
 // MarshalJSON customizes JSON marshaling for Category3.
 func (e Category3) MarshalJSON() ([]byte, error) {
-	if !e.IsValid() {
-		return nil, fmt.Errorf("invalid Category3: %q", e)
-	}
-	return json.Marshal(string(e))
+    if !e.IsValid() {
+        return nil, fmt.Errorf("invalid Category3: %q", e)
+    }
+    return json.Marshal(string(e))
 }
 
 // UnmarshalJSON customizes JSON unmarshaling for Category3.
 func (e *Category3) UnmarshalJSON(data []byte) error {
-	var s string
-	if err := json.Unmarshal(data, &s); err != nil {
-		return err
-	}
-	*e = Category3(s)
-	if !e.IsValid() {
-		return fmt.Errorf("invalid Category3: %q", s)
-	}
-	return nil
+    var s string
+    if err := json.Unmarshal(data, &s); err != nil {
+        return err
+    }
+    *e = Category3(s)
+    if !e.IsValid() {
+        return fmt.Errorf("invalid Category3: %q", s)
+    }
+    return nil
 }
 
 func (e *Category3) Decode(holder *cffi.CFFIValueEnum) {
-	name := holder.Name
-	if name.Name != "Category3" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
-		panic(fmt.Sprintf("expected types.Category3, got %s.%s", string(name.Namespace.String()), string(name.Name)))
-	}
-	value := holder.Value
-	*e = Category3(value)
+    name := holder.Name
+    if name.Name != "Category3" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
+        panic(fmt.Sprintf("expected types.Category3, got %s.%s", string(name.Namespace.String()), string(name.Name)))
+    }
+    value := holder.Value
+    *e = Category3(value)
 }
 
 func (e Category3) Encode() (*cffi.CFFIValueHolder, error) {
-	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
+    return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
 }
 
 func (e Category3) BamlTypeName() string {
-	return "Category3"
+    return "Category3"
 }
 
 func (u Category3) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "Category3",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
+    return &cffi.CFFITypeName{
+        Name:      "Category3",
+        Namespace: cffi.CFFITypeNamespace_TYPES,
+    }
 }
 
 type Color string
 
 const (
-	ColorRED    Color = "RED"
-	ColorBLUE   Color = "BLUE"
-	ColorGREEN  Color = "GREEN"
-	ColorYELLOW Color = "YELLOW"
-	ColorBLACK  Color = "BLACK"
-	ColorWHITE  Color = "WHITE"
+    
+    ColorRED Color = "RED"
+    ColorBLUE Color = "BLUE"
+    ColorGREEN Color = "GREEN"
+    ColorYELLOW Color = "YELLOW"
+    ColorBLACK Color = "BLACK"
+    ColorWHITE Color = "WHITE"
 )
 
 // Values returns all allowed values for the Color type.
 func (Color) Values() []Color {
-	return []Color{
-		ColorRED,
-		ColorBLUE,
-		ColorGREEN,
-		ColorYELLOW,
-		ColorBLACK,
-		ColorWHITE,
-	}
+    return []Color{
+        ColorRED,
+        ColorBLUE,
+        ColorGREEN,
+        ColorYELLOW,
+        ColorBLACK,
+        ColorWHITE,
+    }
 }
 
 // IsValid checks whether the given Color value is valid.
 func (e Color) IsValid() bool {
-
-	// dynamic enums are always valid
-	return true
-
+  
+  // dynamic enums are always valid
+  return true
+  
 }
 
 // MarshalJSON customizes JSON marshaling for Color.
 func (e Color) MarshalJSON() ([]byte, error) {
-	if !e.IsValid() {
-		return nil, fmt.Errorf("invalid Color: %q", e)
-	}
-	return json.Marshal(string(e))
+    if !e.IsValid() {
+        return nil, fmt.Errorf("invalid Color: %q", e)
+    }
+    return json.Marshal(string(e))
 }
 
 // UnmarshalJSON customizes JSON unmarshaling for Color.
 func (e *Color) UnmarshalJSON(data []byte) error {
-	var s string
-	if err := json.Unmarshal(data, &s); err != nil {
-		return err
-	}
-	*e = Color(s)
-	if !e.IsValid() {
-		return fmt.Errorf("invalid Color: %q", s)
-	}
-	return nil
+    var s string
+    if err := json.Unmarshal(data, &s); err != nil {
+        return err
+    }
+    *e = Color(s)
+    if !e.IsValid() {
+        return fmt.Errorf("invalid Color: %q", s)
+    }
+    return nil
 }
 
 func (e *Color) Decode(holder *cffi.CFFIValueEnum) {
-	name := holder.Name
-	if name.Name != "Color" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
-		panic(fmt.Sprintf("expected types.Color, got %s.%s", string(name.Namespace.String()), string(name.Name)))
-	}
-	value := holder.Value
-	*e = Color(value)
+    name := holder.Name
+    if name.Name != "Color" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
+        panic(fmt.Sprintf("expected types.Color, got %s.%s", string(name.Namespace.String()), string(name.Name)))
+    }
+    value := holder.Value
+    *e = Color(value)
 }
 
 func (e Color) Encode() (*cffi.CFFIValueHolder, error) {
-	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
+    return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
 }
 
 func (e Color) BamlTypeName() string {
-	return "Color"
+    return "Color"
 }
 
 func (u Color) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "Color",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
+    return &cffi.CFFITypeName{
+        Name:      "Color",
+        Namespace: cffi.CFFITypeNamespace_TYPES,
+    }
 }
 
 type DataType string
 
 const (
-	DataTypeResume DataType = "Resume"
-	DataTypeEvent  DataType = "Event"
+    
+    DataTypeResume DataType = "Resume"
+    DataTypeEvent DataType = "Event"
 )
 
 // Values returns all allowed values for the DataType type.
 func (DataType) Values() []DataType {
-	return []DataType{
-		DataTypeResume,
-		DataTypeEvent,
-	}
+    return []DataType{
+        DataTypeResume,
+        DataTypeEvent,
+    }
 }
 
 // IsValid checks whether the given DataType value is valid.
 func (e DataType) IsValid() bool {
-
-	for _, v := range e.Values() {
-		if e == v {
-			return true
-		}
-	}
-	return false
-
+  
+  for _, v := range e.Values() {
+      if e == v {
+          return true
+      }
+  }
+  return false
+  
 }
 
 // MarshalJSON customizes JSON marshaling for DataType.
 func (e DataType) MarshalJSON() ([]byte, error) {
-	if !e.IsValid() {
-		return nil, fmt.Errorf("invalid DataType: %q", e)
-	}
-	return json.Marshal(string(e))
+    if !e.IsValid() {
+        return nil, fmt.Errorf("invalid DataType: %q", e)
+    }
+    return json.Marshal(string(e))
 }
 
 // UnmarshalJSON customizes JSON unmarshaling for DataType.
 func (e *DataType) UnmarshalJSON(data []byte) error {
-	var s string
-	if err := json.Unmarshal(data, &s); err != nil {
-		return err
-	}
-	*e = DataType(s)
-	if !e.IsValid() {
-		return fmt.Errorf("invalid DataType: %q", s)
-	}
-	return nil
+    var s string
+    if err := json.Unmarshal(data, &s); err != nil {
+        return err
+    }
+    *e = DataType(s)
+    if !e.IsValid() {
+        return fmt.Errorf("invalid DataType: %q", s)
+    }
+    return nil
 }
 
 func (e *DataType) Decode(holder *cffi.CFFIValueEnum) {
-	name := holder.Name
-	if name.Name != "DataType" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
-		panic(fmt.Sprintf("expected types.DataType, got %s.%s", string(name.Namespace.String()), string(name.Name)))
-	}
-	value := holder.Value
-	*e = DataType(value)
+    name := holder.Name
+    if name.Name != "DataType" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
+        panic(fmt.Sprintf("expected types.DataType, got %s.%s", string(name.Namespace.String()), string(name.Name)))
+    }
+    value := holder.Value
+    *e = DataType(value)
 }
 
 func (e DataType) Encode() (*cffi.CFFIValueHolder, error) {
-	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
+    return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
 }
 
 func (e DataType) BamlTypeName() string {
-	return "DataType"
+    return "DataType"
 }
 
 func (u DataType) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "DataType",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
+    return &cffi.CFFITypeName{
+        Name:      "DataType",
+        Namespace: cffi.CFFITypeNamespace_TYPES,
+    }
 }
 
 type DynEnumOne string
 
 const (
-
-// no values defined for DynEnumOne
+    
+    // no values defined for DynEnumOne
 )
 
 // Values returns all allowed values for the DynEnumOne type.
 func (DynEnumOne) Values() []DynEnumOne {
-	return []DynEnumOne{}
+    return []DynEnumOne{
+    }
 }
 
 // IsValid checks whether the given DynEnumOne value is valid.
 func (e DynEnumOne) IsValid() bool {
-
-	// dynamic enums are always valid
-	return true
-
+  
+  // dynamic enums are always valid
+  return true
+  
 }
 
 // MarshalJSON customizes JSON marshaling for DynEnumOne.
 func (e DynEnumOne) MarshalJSON() ([]byte, error) {
-	if !e.IsValid() {
-		return nil, fmt.Errorf("invalid DynEnumOne: %q", e)
-	}
-	return json.Marshal(string(e))
+    if !e.IsValid() {
+        return nil, fmt.Errorf("invalid DynEnumOne: %q", e)
+    }
+    return json.Marshal(string(e))
 }
 
 // UnmarshalJSON customizes JSON unmarshaling for DynEnumOne.
 func (e *DynEnumOne) UnmarshalJSON(data []byte) error {
-	var s string
-	if err := json.Unmarshal(data, &s); err != nil {
-		return err
-	}
-	*e = DynEnumOne(s)
-	if !e.IsValid() {
-		return fmt.Errorf("invalid DynEnumOne: %q", s)
-	}
-	return nil
+    var s string
+    if err := json.Unmarshal(data, &s); err != nil {
+        return err
+    }
+    *e = DynEnumOne(s)
+    if !e.IsValid() {
+        return fmt.Errorf("invalid DynEnumOne: %q", s)
+    }
+    return nil
 }
 
 func (e *DynEnumOne) Decode(holder *cffi.CFFIValueEnum) {
-	name := holder.Name
-	if name.Name != "DynEnumOne" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
-		panic(fmt.Sprintf("expected types.DynEnumOne, got %s.%s", string(name.Namespace.String()), string(name.Name)))
-	}
-	value := holder.Value
-	*e = DynEnumOne(value)
+    name := holder.Name
+    if name.Name != "DynEnumOne" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
+        panic(fmt.Sprintf("expected types.DynEnumOne, got %s.%s", string(name.Namespace.String()), string(name.Name)))
+    }
+    value := holder.Value
+    *e = DynEnumOne(value)
 }
 
 func (e DynEnumOne) Encode() (*cffi.CFFIValueHolder, error) {
-	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
+    return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
 }
 
 func (e DynEnumOne) BamlTypeName() string {
-	return "DynEnumOne"
+    return "DynEnumOne"
 }
 
 func (u DynEnumOne) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "DynEnumOne",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
+    return &cffi.CFFITypeName{
+        Name:      "DynEnumOne",
+        Namespace: cffi.CFFITypeNamespace_TYPES,
+    }
 }
 
 type DynEnumTwo string
 
 const (
-
-// no values defined for DynEnumTwo
+    
+    // no values defined for DynEnumTwo
 )
 
 // Values returns all allowed values for the DynEnumTwo type.
 func (DynEnumTwo) Values() []DynEnumTwo {
-	return []DynEnumTwo{}
+    return []DynEnumTwo{
+    }
 }
 
 // IsValid checks whether the given DynEnumTwo value is valid.
 func (e DynEnumTwo) IsValid() bool {
-
-	// dynamic enums are always valid
-	return true
-
+  
+  // dynamic enums are always valid
+  return true
+  
 }
 
 // MarshalJSON customizes JSON marshaling for DynEnumTwo.
 func (e DynEnumTwo) MarshalJSON() ([]byte, error) {
-	if !e.IsValid() {
-		return nil, fmt.Errorf("invalid DynEnumTwo: %q", e)
-	}
-	return json.Marshal(string(e))
+    if !e.IsValid() {
+        return nil, fmt.Errorf("invalid DynEnumTwo: %q", e)
+    }
+    return json.Marshal(string(e))
 }
 
 // UnmarshalJSON customizes JSON unmarshaling for DynEnumTwo.
 func (e *DynEnumTwo) UnmarshalJSON(data []byte) error {
-	var s string
-	if err := json.Unmarshal(data, &s); err != nil {
-		return err
-	}
-	*e = DynEnumTwo(s)
-	if !e.IsValid() {
-		return fmt.Errorf("invalid DynEnumTwo: %q", s)
-	}
-	return nil
+    var s string
+    if err := json.Unmarshal(data, &s); err != nil {
+        return err
+    }
+    *e = DynEnumTwo(s)
+    if !e.IsValid() {
+        return fmt.Errorf("invalid DynEnumTwo: %q", s)
+    }
+    return nil
 }
 
 func (e *DynEnumTwo) Decode(holder *cffi.CFFIValueEnum) {
-	name := holder.Name
-	if name.Name != "DynEnumTwo" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
-		panic(fmt.Sprintf("expected types.DynEnumTwo, got %s.%s", string(name.Namespace.String()), string(name.Name)))
-	}
-	value := holder.Value
-	*e = DynEnumTwo(value)
+    name := holder.Name
+    if name.Name != "DynEnumTwo" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
+        panic(fmt.Sprintf("expected types.DynEnumTwo, got %s.%s", string(name.Namespace.String()), string(name.Name)))
+    }
+    value := holder.Value
+    *e = DynEnumTwo(value)
 }
 
 func (e DynEnumTwo) Encode() (*cffi.CFFIValueHolder, error) {
-	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
+    return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
 }
 
 func (e DynEnumTwo) BamlTypeName() string {
-	return "DynEnumTwo"
+    return "DynEnumTwo"
 }
 
 func (u DynEnumTwo) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "DynEnumTwo",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
+    return &cffi.CFFITypeName{
+        Name:      "DynEnumTwo",
+        Namespace: cffi.CFFITypeNamespace_TYPES,
+    }
 }
 
 type EnumInClass string
 
 const (
-	EnumInClassONE EnumInClass = "ONE"
-	EnumInClassTWO EnumInClass = "TWO"
+    
+    EnumInClassONE EnumInClass = "ONE"
+    EnumInClassTWO EnumInClass = "TWO"
 )
 
 // Values returns all allowed values for the EnumInClass type.
 func (EnumInClass) Values() []EnumInClass {
-	return []EnumInClass{
-		EnumInClassONE,
-		EnumInClassTWO,
-	}
+    return []EnumInClass{
+        EnumInClassONE,
+        EnumInClassTWO,
+    }
 }
 
 // IsValid checks whether the given EnumInClass value is valid.
 func (e EnumInClass) IsValid() bool {
-
-	for _, v := range e.Values() {
-		if e == v {
-			return true
-		}
-	}
-	return false
-
+  
+  for _, v := range e.Values() {
+      if e == v {
+          return true
+      }
+  }
+  return false
+  
 }
 
 // MarshalJSON customizes JSON marshaling for EnumInClass.
 func (e EnumInClass) MarshalJSON() ([]byte, error) {
-	if !e.IsValid() {
-		return nil, fmt.Errorf("invalid EnumInClass: %q", e)
-	}
-	return json.Marshal(string(e))
+    if !e.IsValid() {
+        return nil, fmt.Errorf("invalid EnumInClass: %q", e)
+    }
+    return json.Marshal(string(e))
 }
 
 // UnmarshalJSON customizes JSON unmarshaling for EnumInClass.
 func (e *EnumInClass) UnmarshalJSON(data []byte) error {
-	var s string
-	if err := json.Unmarshal(data, &s); err != nil {
-		return err
-	}
-	*e = EnumInClass(s)
-	if !e.IsValid() {
-		return fmt.Errorf("invalid EnumInClass: %q", s)
-	}
-	return nil
+    var s string
+    if err := json.Unmarshal(data, &s); err != nil {
+        return err
+    }
+    *e = EnumInClass(s)
+    if !e.IsValid() {
+        return fmt.Errorf("invalid EnumInClass: %q", s)
+    }
+    return nil
 }
 
 func (e *EnumInClass) Decode(holder *cffi.CFFIValueEnum) {
-	name := holder.Name
-	if name.Name != "EnumInClass" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
-		panic(fmt.Sprintf("expected types.EnumInClass, got %s.%s", string(name.Namespace.String()), string(name.Name)))
-	}
-	value := holder.Value
-	*e = EnumInClass(value)
+    name := holder.Name
+    if name.Name != "EnumInClass" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
+        panic(fmt.Sprintf("expected types.EnumInClass, got %s.%s", string(name.Namespace.String()), string(name.Name)))
+    }
+    value := holder.Value
+    *e = EnumInClass(value)
 }
 
 func (e EnumInClass) Encode() (*cffi.CFFIValueHolder, error) {
-	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
+    return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
 }
 
 func (e EnumInClass) BamlTypeName() string {
-	return "EnumInClass"
+    return "EnumInClass"
 }
 
 func (u EnumInClass) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "EnumInClass",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
+    return &cffi.CFFITypeName{
+        Name:      "EnumInClass",
+        Namespace: cffi.CFFITypeNamespace_TYPES,
+    }
 }
 
 // An enum with three values,
@@ -682,670 +692,679 @@ func (u EnumInClass) BamlEncodeName() *cffi.CFFITypeName {
 type EnumOutput string
 
 const (
-
-	// The first enum.
-	EnumOutputONE EnumOutput = "ONE"
-	// The second enum.
-	EnumOutputTWO   EnumOutput = "TWO"
-	EnumOutputTHREE EnumOutput = "THREE"
+    
+    // The first enum.
+    EnumOutputONE EnumOutput = "ONE"
+    // The second enum.
+    EnumOutputTWO EnumOutput = "TWO"
+    EnumOutputTHREE EnumOutput = "THREE"
 )
 
 // Values returns all allowed values for the EnumOutput type.
 func (EnumOutput) Values() []EnumOutput {
-	return []EnumOutput{
-		EnumOutputONE,
-		EnumOutputTWO,
-		EnumOutputTHREE,
-	}
+    return []EnumOutput{
+        EnumOutputONE,
+        EnumOutputTWO,
+        EnumOutputTHREE,
+    }
 }
 
 // IsValid checks whether the given EnumOutput value is valid.
 func (e EnumOutput) IsValid() bool {
-
-	for _, v := range e.Values() {
-		if e == v {
-			return true
-		}
-	}
-	return false
-
+  
+  for _, v := range e.Values() {
+      if e == v {
+          return true
+      }
+  }
+  return false
+  
 }
 
 // MarshalJSON customizes JSON marshaling for EnumOutput.
 func (e EnumOutput) MarshalJSON() ([]byte, error) {
-	if !e.IsValid() {
-		return nil, fmt.Errorf("invalid EnumOutput: %q", e)
-	}
-	return json.Marshal(string(e))
+    if !e.IsValid() {
+        return nil, fmt.Errorf("invalid EnumOutput: %q", e)
+    }
+    return json.Marshal(string(e))
 }
 
 // UnmarshalJSON customizes JSON unmarshaling for EnumOutput.
 func (e *EnumOutput) UnmarshalJSON(data []byte) error {
-	var s string
-	if err := json.Unmarshal(data, &s); err != nil {
-		return err
-	}
-	*e = EnumOutput(s)
-	if !e.IsValid() {
-		return fmt.Errorf("invalid EnumOutput: %q", s)
-	}
-	return nil
+    var s string
+    if err := json.Unmarshal(data, &s); err != nil {
+        return err
+    }
+    *e = EnumOutput(s)
+    if !e.IsValid() {
+        return fmt.Errorf("invalid EnumOutput: %q", s)
+    }
+    return nil
 }
 
 func (e *EnumOutput) Decode(holder *cffi.CFFIValueEnum) {
-	name := holder.Name
-	if name.Name != "EnumOutput" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
-		panic(fmt.Sprintf("expected types.EnumOutput, got %s.%s", string(name.Namespace.String()), string(name.Name)))
-	}
-	value := holder.Value
-	*e = EnumOutput(value)
+    name := holder.Name
+    if name.Name != "EnumOutput" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
+        panic(fmt.Sprintf("expected types.EnumOutput, got %s.%s", string(name.Namespace.String()), string(name.Name)))
+    }
+    value := holder.Value
+    *e = EnumOutput(value)
 }
 
 func (e EnumOutput) Encode() (*cffi.CFFIValueHolder, error) {
-	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
+    return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
 }
 
 func (e EnumOutput) BamlTypeName() string {
-	return "EnumOutput"
+    return "EnumOutput"
 }
 
 func (u EnumOutput) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "EnumOutput",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
+    return &cffi.CFFITypeName{
+        Name:      "EnumOutput",
+        Namespace: cffi.CFFITypeNamespace_TYPES,
+    }
 }
 
 type Hobby string
 
 const (
-	HobbySPORTS  Hobby = "SPORTS"
-	HobbyMUSIC   Hobby = "MUSIC"
-	HobbyREADING Hobby = "READING"
+    
+    HobbySPORTS Hobby = "SPORTS"
+    HobbyMUSIC Hobby = "MUSIC"
+    HobbyREADING Hobby = "READING"
 )
 
 // Values returns all allowed values for the Hobby type.
 func (Hobby) Values() []Hobby {
-	return []Hobby{
-		HobbySPORTS,
-		HobbyMUSIC,
-		HobbyREADING,
-	}
+    return []Hobby{
+        HobbySPORTS,
+        HobbyMUSIC,
+        HobbyREADING,
+    }
 }
 
 // IsValid checks whether the given Hobby value is valid.
 func (e Hobby) IsValid() bool {
-
-	// dynamic enums are always valid
-	return true
-
+  
+  // dynamic enums are always valid
+  return true
+  
 }
 
 // MarshalJSON customizes JSON marshaling for Hobby.
 func (e Hobby) MarshalJSON() ([]byte, error) {
-	if !e.IsValid() {
-		return nil, fmt.Errorf("invalid Hobby: %q", e)
-	}
-	return json.Marshal(string(e))
+    if !e.IsValid() {
+        return nil, fmt.Errorf("invalid Hobby: %q", e)
+    }
+    return json.Marshal(string(e))
 }
 
 // UnmarshalJSON customizes JSON unmarshaling for Hobby.
 func (e *Hobby) UnmarshalJSON(data []byte) error {
-	var s string
-	if err := json.Unmarshal(data, &s); err != nil {
-		return err
-	}
-	*e = Hobby(s)
-	if !e.IsValid() {
-		return fmt.Errorf("invalid Hobby: %q", s)
-	}
-	return nil
+    var s string
+    if err := json.Unmarshal(data, &s); err != nil {
+        return err
+    }
+    *e = Hobby(s)
+    if !e.IsValid() {
+        return fmt.Errorf("invalid Hobby: %q", s)
+    }
+    return nil
 }
 
 func (e *Hobby) Decode(holder *cffi.CFFIValueEnum) {
-	name := holder.Name
-	if name.Name != "Hobby" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
-		panic(fmt.Sprintf("expected types.Hobby, got %s.%s", string(name.Namespace.String()), string(name.Name)))
-	}
-	value := holder.Value
-	*e = Hobby(value)
+    name := holder.Name
+    if name.Name != "Hobby" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
+        panic(fmt.Sprintf("expected types.Hobby, got %s.%s", string(name.Namespace.String()), string(name.Name)))
+    }
+    value := holder.Value
+    *e = Hobby(value)
 }
 
 func (e Hobby) Encode() (*cffi.CFFIValueHolder, error) {
-	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
+    return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
 }
 
 func (e Hobby) BamlTypeName() string {
-	return "Hobby"
+    return "Hobby"
 }
 
 func (u Hobby) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "Hobby",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
+    return &cffi.CFFITypeName{
+        Name:      "Hobby",
+        Namespace: cffi.CFFITypeNamespace_TYPES,
+    }
 }
 
 type MapKey string
 
 const (
-	MapKeyA MapKey = "A"
-	MapKeyB MapKey = "B"
-	MapKeyC MapKey = "C"
+    
+    MapKeyA MapKey = "A"
+    MapKeyB MapKey = "B"
+    MapKeyC MapKey = "C"
 )
 
 // Values returns all allowed values for the MapKey type.
 func (MapKey) Values() []MapKey {
-	return []MapKey{
-		MapKeyA,
-		MapKeyB,
-		MapKeyC,
-	}
+    return []MapKey{
+        MapKeyA,
+        MapKeyB,
+        MapKeyC,
+    }
 }
 
 // IsValid checks whether the given MapKey value is valid.
 func (e MapKey) IsValid() bool {
-
-	for _, v := range e.Values() {
-		if e == v {
-			return true
-		}
-	}
-	return false
-
+  
+  for _, v := range e.Values() {
+      if e == v {
+          return true
+      }
+  }
+  return false
+  
 }
 
 // MarshalJSON customizes JSON marshaling for MapKey.
 func (e MapKey) MarshalJSON() ([]byte, error) {
-	if !e.IsValid() {
-		return nil, fmt.Errorf("invalid MapKey: %q", e)
-	}
-	return json.Marshal(string(e))
+    if !e.IsValid() {
+        return nil, fmt.Errorf("invalid MapKey: %q", e)
+    }
+    return json.Marshal(string(e))
 }
 
 // UnmarshalJSON customizes JSON unmarshaling for MapKey.
 func (e *MapKey) UnmarshalJSON(data []byte) error {
-	var s string
-	if err := json.Unmarshal(data, &s); err != nil {
-		return err
-	}
-	*e = MapKey(s)
-	if !e.IsValid() {
-		return fmt.Errorf("invalid MapKey: %q", s)
-	}
-	return nil
+    var s string
+    if err := json.Unmarshal(data, &s); err != nil {
+        return err
+    }
+    *e = MapKey(s)
+    if !e.IsValid() {
+        return fmt.Errorf("invalid MapKey: %q", s)
+    }
+    return nil
 }
 
 func (e *MapKey) Decode(holder *cffi.CFFIValueEnum) {
-	name := holder.Name
-	if name.Name != "MapKey" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
-		panic(fmt.Sprintf("expected types.MapKey, got %s.%s", string(name.Namespace.String()), string(name.Name)))
-	}
-	value := holder.Value
-	*e = MapKey(value)
+    name := holder.Name
+    if name.Name != "MapKey" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
+        panic(fmt.Sprintf("expected types.MapKey, got %s.%s", string(name.Namespace.String()), string(name.Name)))
+    }
+    value := holder.Value
+    *e = MapKey(value)
 }
 
 func (e MapKey) Encode() (*cffi.CFFIValueHolder, error) {
-	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
+    return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
 }
 
 func (e MapKey) BamlTypeName() string {
-	return "MapKey"
+    return "MapKey"
 }
 
 func (u MapKey) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "MapKey",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
+    return &cffi.CFFITypeName{
+        Name:      "MapKey",
+        Namespace: cffi.CFFITypeNamespace_TYPES,
+    }
 }
 
 type NamedArgsSingleEnum string
 
 const (
-	NamedArgsSingleEnumONE NamedArgsSingleEnum = "ONE"
-	NamedArgsSingleEnumTWO NamedArgsSingleEnum = "TWO"
+    
+    NamedArgsSingleEnumONE NamedArgsSingleEnum = "ONE"
+    NamedArgsSingleEnumTWO NamedArgsSingleEnum = "TWO"
 )
 
 // Values returns all allowed values for the NamedArgsSingleEnum type.
 func (NamedArgsSingleEnum) Values() []NamedArgsSingleEnum {
-	return []NamedArgsSingleEnum{
-		NamedArgsSingleEnumONE,
-		NamedArgsSingleEnumTWO,
-	}
+    return []NamedArgsSingleEnum{
+        NamedArgsSingleEnumONE,
+        NamedArgsSingleEnumTWO,
+    }
 }
 
 // IsValid checks whether the given NamedArgsSingleEnum value is valid.
 func (e NamedArgsSingleEnum) IsValid() bool {
-
-	for _, v := range e.Values() {
-		if e == v {
-			return true
-		}
-	}
-	return false
-
+  
+  for _, v := range e.Values() {
+      if e == v {
+          return true
+      }
+  }
+  return false
+  
 }
 
 // MarshalJSON customizes JSON marshaling for NamedArgsSingleEnum.
 func (e NamedArgsSingleEnum) MarshalJSON() ([]byte, error) {
-	if !e.IsValid() {
-		return nil, fmt.Errorf("invalid NamedArgsSingleEnum: %q", e)
-	}
-	return json.Marshal(string(e))
+    if !e.IsValid() {
+        return nil, fmt.Errorf("invalid NamedArgsSingleEnum: %q", e)
+    }
+    return json.Marshal(string(e))
 }
 
 // UnmarshalJSON customizes JSON unmarshaling for NamedArgsSingleEnum.
 func (e *NamedArgsSingleEnum) UnmarshalJSON(data []byte) error {
-	var s string
-	if err := json.Unmarshal(data, &s); err != nil {
-		return err
-	}
-	*e = NamedArgsSingleEnum(s)
-	if !e.IsValid() {
-		return fmt.Errorf("invalid NamedArgsSingleEnum: %q", s)
-	}
-	return nil
+    var s string
+    if err := json.Unmarshal(data, &s); err != nil {
+        return err
+    }
+    *e = NamedArgsSingleEnum(s)
+    if !e.IsValid() {
+        return fmt.Errorf("invalid NamedArgsSingleEnum: %q", s)
+    }
+    return nil
 }
 
 func (e *NamedArgsSingleEnum) Decode(holder *cffi.CFFIValueEnum) {
-	name := holder.Name
-	if name.Name != "NamedArgsSingleEnum" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
-		panic(fmt.Sprintf("expected types.NamedArgsSingleEnum, got %s.%s", string(name.Namespace.String()), string(name.Name)))
-	}
-	value := holder.Value
-	*e = NamedArgsSingleEnum(value)
+    name := holder.Name
+    if name.Name != "NamedArgsSingleEnum" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
+        panic(fmt.Sprintf("expected types.NamedArgsSingleEnum, got %s.%s", string(name.Namespace.String()), string(name.Name)))
+    }
+    value := holder.Value
+    *e = NamedArgsSingleEnum(value)
 }
 
 func (e NamedArgsSingleEnum) Encode() (*cffi.CFFIValueHolder, error) {
-	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
+    return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
 }
 
 func (e NamedArgsSingleEnum) BamlTypeName() string {
-	return "NamedArgsSingleEnum"
+    return "NamedArgsSingleEnum"
 }
 
 func (u NamedArgsSingleEnum) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "NamedArgsSingleEnum",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
+    return &cffi.CFFITypeName{
+        Name:      "NamedArgsSingleEnum",
+        Namespace: cffi.CFFITypeNamespace_TYPES,
+    }
 }
 
 type NamedArgsSingleEnumList string
 
 const (
-	NamedArgsSingleEnumListONE NamedArgsSingleEnumList = "ONE"
-	NamedArgsSingleEnumListTWO NamedArgsSingleEnumList = "TWO"
+    
+    NamedArgsSingleEnumListONE NamedArgsSingleEnumList = "ONE"
+    NamedArgsSingleEnumListTWO NamedArgsSingleEnumList = "TWO"
 )
 
 // Values returns all allowed values for the NamedArgsSingleEnumList type.
 func (NamedArgsSingleEnumList) Values() []NamedArgsSingleEnumList {
-	return []NamedArgsSingleEnumList{
-		NamedArgsSingleEnumListONE,
-		NamedArgsSingleEnumListTWO,
-	}
+    return []NamedArgsSingleEnumList{
+        NamedArgsSingleEnumListONE,
+        NamedArgsSingleEnumListTWO,
+    }
 }
 
 // IsValid checks whether the given NamedArgsSingleEnumList value is valid.
 func (e NamedArgsSingleEnumList) IsValid() bool {
-
-	for _, v := range e.Values() {
-		if e == v {
-			return true
-		}
-	}
-	return false
-
+  
+  for _, v := range e.Values() {
+      if e == v {
+          return true
+      }
+  }
+  return false
+  
 }
 
 // MarshalJSON customizes JSON marshaling for NamedArgsSingleEnumList.
 func (e NamedArgsSingleEnumList) MarshalJSON() ([]byte, error) {
-	if !e.IsValid() {
-		return nil, fmt.Errorf("invalid NamedArgsSingleEnumList: %q", e)
-	}
-	return json.Marshal(string(e))
+    if !e.IsValid() {
+        return nil, fmt.Errorf("invalid NamedArgsSingleEnumList: %q", e)
+    }
+    return json.Marshal(string(e))
 }
 
 // UnmarshalJSON customizes JSON unmarshaling for NamedArgsSingleEnumList.
 func (e *NamedArgsSingleEnumList) UnmarshalJSON(data []byte) error {
-	var s string
-	if err := json.Unmarshal(data, &s); err != nil {
-		return err
-	}
-	*e = NamedArgsSingleEnumList(s)
-	if !e.IsValid() {
-		return fmt.Errorf("invalid NamedArgsSingleEnumList: %q", s)
-	}
-	return nil
+    var s string
+    if err := json.Unmarshal(data, &s); err != nil {
+        return err
+    }
+    *e = NamedArgsSingleEnumList(s)
+    if !e.IsValid() {
+        return fmt.Errorf("invalid NamedArgsSingleEnumList: %q", s)
+    }
+    return nil
 }
 
 func (e *NamedArgsSingleEnumList) Decode(holder *cffi.CFFIValueEnum) {
-	name := holder.Name
-	if name.Name != "NamedArgsSingleEnumList" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
-		panic(fmt.Sprintf("expected types.NamedArgsSingleEnumList, got %s.%s", string(name.Namespace.String()), string(name.Name)))
-	}
-	value := holder.Value
-	*e = NamedArgsSingleEnumList(value)
+    name := holder.Name
+    if name.Name != "NamedArgsSingleEnumList" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
+        panic(fmt.Sprintf("expected types.NamedArgsSingleEnumList, got %s.%s", string(name.Namespace.String()), string(name.Name)))
+    }
+    value := holder.Value
+    *e = NamedArgsSingleEnumList(value)
 }
 
 func (e NamedArgsSingleEnumList) Encode() (*cffi.CFFIValueHolder, error) {
-	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
+    return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
 }
 
 func (e NamedArgsSingleEnumList) BamlTypeName() string {
-	return "NamedArgsSingleEnumList"
+    return "NamedArgsSingleEnumList"
 }
 
 func (u NamedArgsSingleEnumList) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "NamedArgsSingleEnumList",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
+    return &cffi.CFFITypeName{
+        Name:      "NamedArgsSingleEnumList",
+        Namespace: cffi.CFFITypeNamespace_TYPES,
+    }
 }
 
 type OptionalTest_CategoryType string
 
 const (
-	OptionalTest_CategoryTypeAleph OptionalTest_CategoryType = "Aleph"
-	OptionalTest_CategoryTypeBeta  OptionalTest_CategoryType = "Beta"
-	OptionalTest_CategoryTypeGamma OptionalTest_CategoryType = "Gamma"
+    
+    OptionalTest_CategoryTypeAleph OptionalTest_CategoryType = "Aleph"
+    OptionalTest_CategoryTypeBeta OptionalTest_CategoryType = "Beta"
+    OptionalTest_CategoryTypeGamma OptionalTest_CategoryType = "Gamma"
 )
 
 // Values returns all allowed values for the OptionalTest_CategoryType type.
 func (OptionalTest_CategoryType) Values() []OptionalTest_CategoryType {
-	return []OptionalTest_CategoryType{
-		OptionalTest_CategoryTypeAleph,
-		OptionalTest_CategoryTypeBeta,
-		OptionalTest_CategoryTypeGamma,
-	}
+    return []OptionalTest_CategoryType{
+        OptionalTest_CategoryTypeAleph,
+        OptionalTest_CategoryTypeBeta,
+        OptionalTest_CategoryTypeGamma,
+    }
 }
 
 // IsValid checks whether the given OptionalTest_CategoryType value is valid.
 func (e OptionalTest_CategoryType) IsValid() bool {
-
-	for _, v := range e.Values() {
-		if e == v {
-			return true
-		}
-	}
-	return false
-
+  
+  for _, v := range e.Values() {
+      if e == v {
+          return true
+      }
+  }
+  return false
+  
 }
 
 // MarshalJSON customizes JSON marshaling for OptionalTest_CategoryType.
 func (e OptionalTest_CategoryType) MarshalJSON() ([]byte, error) {
-	if !e.IsValid() {
-		return nil, fmt.Errorf("invalid OptionalTest_CategoryType: %q", e)
-	}
-	return json.Marshal(string(e))
+    if !e.IsValid() {
+        return nil, fmt.Errorf("invalid OptionalTest_CategoryType: %q", e)
+    }
+    return json.Marshal(string(e))
 }
 
 // UnmarshalJSON customizes JSON unmarshaling for OptionalTest_CategoryType.
 func (e *OptionalTest_CategoryType) UnmarshalJSON(data []byte) error {
-	var s string
-	if err := json.Unmarshal(data, &s); err != nil {
-		return err
-	}
-	*e = OptionalTest_CategoryType(s)
-	if !e.IsValid() {
-		return fmt.Errorf("invalid OptionalTest_CategoryType: %q", s)
-	}
-	return nil
+    var s string
+    if err := json.Unmarshal(data, &s); err != nil {
+        return err
+    }
+    *e = OptionalTest_CategoryType(s)
+    if !e.IsValid() {
+        return fmt.Errorf("invalid OptionalTest_CategoryType: %q", s)
+    }
+    return nil
 }
 
 func (e *OptionalTest_CategoryType) Decode(holder *cffi.CFFIValueEnum) {
-	name := holder.Name
-	if name.Name != "OptionalTest_CategoryType" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
-		panic(fmt.Sprintf("expected types.OptionalTest_CategoryType, got %s.%s", string(name.Namespace.String()), string(name.Name)))
-	}
-	value := holder.Value
-	*e = OptionalTest_CategoryType(value)
+    name := holder.Name
+    if name.Name != "OptionalTest_CategoryType" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
+        panic(fmt.Sprintf("expected types.OptionalTest_CategoryType, got %s.%s", string(name.Namespace.String()), string(name.Name)))
+    }
+    value := holder.Value
+    *e = OptionalTest_CategoryType(value)
 }
 
 func (e OptionalTest_CategoryType) Encode() (*cffi.CFFIValueHolder, error) {
-	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
+    return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
 }
 
 func (e OptionalTest_CategoryType) BamlTypeName() string {
-	return "OptionalTest_CategoryType"
+    return "OptionalTest_CategoryType"
 }
 
 func (u OptionalTest_CategoryType) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "OptionalTest_CategoryType",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
+    return &cffi.CFFITypeName{
+        Name:      "OptionalTest_CategoryType",
+        Namespace: cffi.CFFITypeNamespace_TYPES,
+    }
 }
 
 type OrderStatus string
 
 const (
-	OrderStatusORDERED   OrderStatus = "ORDERED"
-	OrderStatusSHIPPED   OrderStatus = "SHIPPED"
-	OrderStatusDELIVERED OrderStatus = "DELIVERED"
-	OrderStatusCANCELLED OrderStatus = "CANCELLED"
+    
+    OrderStatusORDERED OrderStatus = "ORDERED"
+    OrderStatusSHIPPED OrderStatus = "SHIPPED"
+    OrderStatusDELIVERED OrderStatus = "DELIVERED"
+    OrderStatusCANCELLED OrderStatus = "CANCELLED"
 )
 
 // Values returns all allowed values for the OrderStatus type.
 func (OrderStatus) Values() []OrderStatus {
-	return []OrderStatus{
-		OrderStatusORDERED,
-		OrderStatusSHIPPED,
-		OrderStatusDELIVERED,
-		OrderStatusCANCELLED,
-	}
+    return []OrderStatus{
+        OrderStatusORDERED,
+        OrderStatusSHIPPED,
+        OrderStatusDELIVERED,
+        OrderStatusCANCELLED,
+    }
 }
 
 // IsValid checks whether the given OrderStatus value is valid.
 func (e OrderStatus) IsValid() bool {
-
-	for _, v := range e.Values() {
-		if e == v {
-			return true
-		}
-	}
-	return false
-
+  
+  for _, v := range e.Values() {
+      if e == v {
+          return true
+      }
+  }
+  return false
+  
 }
 
 // MarshalJSON customizes JSON marshaling for OrderStatus.
 func (e OrderStatus) MarshalJSON() ([]byte, error) {
-	if !e.IsValid() {
-		return nil, fmt.Errorf("invalid OrderStatus: %q", e)
-	}
-	return json.Marshal(string(e))
+    if !e.IsValid() {
+        return nil, fmt.Errorf("invalid OrderStatus: %q", e)
+    }
+    return json.Marshal(string(e))
 }
 
 // UnmarshalJSON customizes JSON unmarshaling for OrderStatus.
 func (e *OrderStatus) UnmarshalJSON(data []byte) error {
-	var s string
-	if err := json.Unmarshal(data, &s); err != nil {
-		return err
-	}
-	*e = OrderStatus(s)
-	if !e.IsValid() {
-		return fmt.Errorf("invalid OrderStatus: %q", s)
-	}
-	return nil
+    var s string
+    if err := json.Unmarshal(data, &s); err != nil {
+        return err
+    }
+    *e = OrderStatus(s)
+    if !e.IsValid() {
+        return fmt.Errorf("invalid OrderStatus: %q", s)
+    }
+    return nil
 }
 
 func (e *OrderStatus) Decode(holder *cffi.CFFIValueEnum) {
-	name := holder.Name
-	if name.Name != "OrderStatus" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
-		panic(fmt.Sprintf("expected types.OrderStatus, got %s.%s", string(name.Namespace.String()), string(name.Name)))
-	}
-	value := holder.Value
-	*e = OrderStatus(value)
+    name := holder.Name
+    if name.Name != "OrderStatus" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
+        panic(fmt.Sprintf("expected types.OrderStatus, got %s.%s", string(name.Namespace.String()), string(name.Name)))
+    }
+    value := holder.Value
+    *e = OrderStatus(value)
 }
 
 func (e OrderStatus) Encode() (*cffi.CFFIValueHolder, error) {
-	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
+    return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
 }
 
 func (e OrderStatus) BamlTypeName() string {
-	return "OrderStatus"
+    return "OrderStatus"
 }
 
 func (u OrderStatus) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "OrderStatus",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
+    return &cffi.CFFITypeName{
+        Name:      "OrderStatus",
+        Namespace: cffi.CFFITypeNamespace_TYPES,
+    }
 }
 
 type Tag string
 
 const (
-	TagSecurity   Tag = "Security"
-	TagAI         Tag = "AI"
-	TagBlockchain Tag = "Blockchain"
+    
+    TagSecurity Tag = "Security"
+    TagAI Tag = "AI"
+    TagBlockchain Tag = "Blockchain"
 )
 
 // Values returns all allowed values for the Tag type.
 func (Tag) Values() []Tag {
-	return []Tag{
-		TagSecurity,
-		TagAI,
-		TagBlockchain,
-	}
+    return []Tag{
+        TagSecurity,
+        TagAI,
+        TagBlockchain,
+    }
 }
 
 // IsValid checks whether the given Tag value is valid.
 func (e Tag) IsValid() bool {
-
-	for _, v := range e.Values() {
-		if e == v {
-			return true
-		}
-	}
-	return false
-
+  
+  for _, v := range e.Values() {
+      if e == v {
+          return true
+      }
+  }
+  return false
+  
 }
 
 // MarshalJSON customizes JSON marshaling for Tag.
 func (e Tag) MarshalJSON() ([]byte, error) {
-	if !e.IsValid() {
-		return nil, fmt.Errorf("invalid Tag: %q", e)
-	}
-	return json.Marshal(string(e))
+    if !e.IsValid() {
+        return nil, fmt.Errorf("invalid Tag: %q", e)
+    }
+    return json.Marshal(string(e))
 }
 
 // UnmarshalJSON customizes JSON unmarshaling for Tag.
 func (e *Tag) UnmarshalJSON(data []byte) error {
-	var s string
-	if err := json.Unmarshal(data, &s); err != nil {
-		return err
-	}
-	*e = Tag(s)
-	if !e.IsValid() {
-		return fmt.Errorf("invalid Tag: %q", s)
-	}
-	return nil
+    var s string
+    if err := json.Unmarshal(data, &s); err != nil {
+        return err
+    }
+    *e = Tag(s)
+    if !e.IsValid() {
+        return fmt.Errorf("invalid Tag: %q", s)
+    }
+    return nil
 }
 
 func (e *Tag) Decode(holder *cffi.CFFIValueEnum) {
-	name := holder.Name
-	if name.Name != "Tag" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
-		panic(fmt.Sprintf("expected types.Tag, got %s.%s", string(name.Namespace.String()), string(name.Name)))
-	}
-	value := holder.Value
-	*e = Tag(value)
+    name := holder.Name
+    if name.Name != "Tag" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
+        panic(fmt.Sprintf("expected types.Tag, got %s.%s", string(name.Namespace.String()), string(name.Name)))
+    }
+    value := holder.Value
+    *e = Tag(value)
 }
 
 func (e Tag) Encode() (*cffi.CFFIValueHolder, error) {
-	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
+    return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
 }
 
 func (e Tag) BamlTypeName() string {
-	return "Tag"
+    return "Tag"
 }
 
 func (u Tag) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "Tag",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
+    return &cffi.CFFITypeName{
+        Name:      "Tag",
+        Namespace: cffi.CFFITypeNamespace_TYPES,
+    }
 }
 
 type TestEnum string
 
 const (
-	TestEnumA TestEnum = "A"
-	TestEnumB TestEnum = "B"
-	TestEnumC TestEnum = "C"
-	TestEnumD TestEnum = "D"
-	TestEnumE TestEnum = "E"
-	TestEnumF TestEnum = "F"
-	TestEnumG TestEnum = "G"
+    
+    TestEnumA TestEnum = "A"
+    TestEnumB TestEnum = "B"
+    TestEnumC TestEnum = "C"
+    TestEnumD TestEnum = "D"
+    TestEnumE TestEnum = "E"
+    TestEnumF TestEnum = "F"
+    TestEnumG TestEnum = "G"
 )
 
 // Values returns all allowed values for the TestEnum type.
 func (TestEnum) Values() []TestEnum {
-	return []TestEnum{
-		TestEnumA,
-		TestEnumB,
-		TestEnumC,
-		TestEnumD,
-		TestEnumE,
-		TestEnumF,
-		TestEnumG,
-	}
+    return []TestEnum{
+        TestEnumA,
+        TestEnumB,
+        TestEnumC,
+        TestEnumD,
+        TestEnumE,
+        TestEnumF,
+        TestEnumG,
+    }
 }
 
 // IsValid checks whether the given TestEnum value is valid.
 func (e TestEnum) IsValid() bool {
-
-	for _, v := range e.Values() {
-		if e == v {
-			return true
-		}
-	}
-	return false
-
+  
+  for _, v := range e.Values() {
+      if e == v {
+          return true
+      }
+  }
+  return false
+  
 }
 
 // MarshalJSON customizes JSON marshaling for TestEnum.
 func (e TestEnum) MarshalJSON() ([]byte, error) {
-	if !e.IsValid() {
-		return nil, fmt.Errorf("invalid TestEnum: %q", e)
-	}
-	return json.Marshal(string(e))
+    if !e.IsValid() {
+        return nil, fmt.Errorf("invalid TestEnum: %q", e)
+    }
+    return json.Marshal(string(e))
 }
 
 // UnmarshalJSON customizes JSON unmarshaling for TestEnum.
 func (e *TestEnum) UnmarshalJSON(data []byte) error {
-	var s string
-	if err := json.Unmarshal(data, &s); err != nil {
-		return err
-	}
-	*e = TestEnum(s)
-	if !e.IsValid() {
-		return fmt.Errorf("invalid TestEnum: %q", s)
-	}
-	return nil
+    var s string
+    if err := json.Unmarshal(data, &s); err != nil {
+        return err
+    }
+    *e = TestEnum(s)
+    if !e.IsValid() {
+        return fmt.Errorf("invalid TestEnum: %q", s)
+    }
+    return nil
 }
 
 func (e *TestEnum) Decode(holder *cffi.CFFIValueEnum) {
-	name := holder.Name
-	if name.Name != "TestEnum" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
-		panic(fmt.Sprintf("expected types.TestEnum, got %s.%s", string(name.Namespace.String()), string(name.Name)))
-	}
-	value := holder.Value
-	*e = TestEnum(value)
+    name := holder.Name
+    if name.Name != "TestEnum" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
+        panic(fmt.Sprintf("expected types.TestEnum, got %s.%s", string(name.Namespace.String()), string(name.Name)))
+    }
+    value := holder.Value
+    *e = TestEnum(value)
 }
 
 func (e TestEnum) Encode() (*cffi.CFFIValueHolder, error) {
-	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
+    return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
 }
 
 func (e TestEnum) BamlTypeName() string {
-	return "TestEnum"
+    return "TestEnum"
 }
 
 func (u TestEnum) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "TestEnum",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
+    return &cffi.CFFITypeName{
+        Name:      "TestEnum",
+        Namespace: cffi.CFFITypeNamespace_TYPES,
+    }
 }
+

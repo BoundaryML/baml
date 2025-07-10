@@ -221,7 +221,7 @@ mod type_aliases {
 /// A list of types in TS.
 ///
 /// ```askama
-/// import type { Image, Audio } from "@boundaryml/baml"
+/// import type { Image, Audio, Pdf, Video } from "@boundaryml/baml"
 /// /**
 ///  * Recursively partial type that can be null.
 ///  *

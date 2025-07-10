@@ -1246,22 +1246,10 @@ class LlmResponseParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="ValidateResponseTypes", llm_response=llm_response, mode="request")
         return typing.cast(str, result)
 
-    def VideoInput(
+    def VideoInputGemini(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> str:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="VideoInput", llm_response=llm_response, mode="request")
-        return typing.cast(str, result)
-
-    def VideoInputAnthropic(
-        self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> str:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="VideoInputAnthropic", llm_response=llm_response, mode="request")
-        return typing.cast(str, result)
-
-    def VideoInputOpenai(
-        self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> str:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="VideoInputOpenai", llm_response=llm_response, mode="request")
+        result = self.__options.merge_options(baml_options).parse_response(function_name="VideoInputGemini", llm_response=llm_response, mode="request")
         return typing.cast(str, result)
 
     
@@ -2496,22 +2484,10 @@ class LlmStreamParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="ValidateResponseTypes", llm_response=llm_response, mode="stream")
         return typing.cast(str, result)
 
-    def VideoInput(
+    def VideoInputGemini(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> str:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="VideoInput", llm_response=llm_response, mode="stream")
-        return typing.cast(str, result)
-
-    def VideoInputAnthropic(
-        self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> str:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="VideoInputAnthropic", llm_response=llm_response, mode="stream")
-        return typing.cast(str, result)
-
-    def VideoInputOpenai(
-        self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> str:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="VideoInputOpenai", llm_response=llm_response, mode="stream")
+        result = self.__options.merge_options(baml_options).parse_response(function_name="VideoInputGemini", llm_response=llm_response, mode="stream")
         return typing.cast(str, result)
 
     

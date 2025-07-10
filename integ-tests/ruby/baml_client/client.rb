@@ -5150,69 +5150,19 @@ module BamlClient
           vid: Baml::Image,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)}
-      def VideoInput(
+      def VideoInputGemini(
           *varargs,
           vid:,
           baml_options: {}
       )
           if varargs.any?
-              raise ArgumentError.new("VideoInput may only be called with keyword arguments")
+              raise ArgumentError.new("VideoInputGemini may only be called with keyword arguments")
           end
 
           options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "VideoInput", args: {
+          result = options.call_function_sync(function_name: "VideoInputGemini", args: {
               vid: vid,
-          })
-
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
-          # for sorbet we need to cast to the return type since parsed is now the right value
-          # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
-      end
-      sig {params(
-          varargs: T.untyped,
-          vid: Baml::Image,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(String)}
-      def VideoInputAnthropic(
-          *varargs,
-          vid:,
-          baml_options: {}
-      )
-          if varargs.any?
-              raise ArgumentError.new("VideoInputAnthropic may only be called with keyword arguments")
-          end
-
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
-
-          result = options.call_function_sync(function_name: "VideoInputAnthropic", args: {
-              vid: vid,
-          })
-
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
-          # for sorbet we need to cast to the return type since parsed is now the right value
-          # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
-      end
-      sig {params(
-          varargs: T.untyped,
-          vid: Baml::Image,prompt: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(String)}
-      def VideoInputOpenai(
-          *varargs,
-          vid:,prompt:,
-          baml_options: {}
-      )
-          if varargs.any?
-              raise ArgumentError.new("VideoInputOpenai may only be called with keyword arguments")
-          end
-
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
-
-          result = options.call_function_sync(function_name: "VideoInputOpenai", args: {
-              vid: vid,prompt: prompt,
           })
 
           parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
@@ -10336,69 +10286,19 @@ module BamlClient
           vid: Baml::Image,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String, String])}
-      def VideoInput(
+      def VideoInputGemini(
           *varargs,
           vid:,
           baml_options: {}
       )
           if varargs.any?
-              raise ArgumentError.new("VideoInput may only be called with keyword arguments")
+              raise ArgumentError.new("VideoInputGemini may only be called with keyword arguments")
           end
 
           options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "VideoInput", args: {
+          ctx, result = options.create_sync_stream(function_name: "VideoInputGemini", args: {
               vid: vid,
-          })
-
-          Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
-          )
-      end
-      sig {params(
-          varargs: T.untyped,
-          vid: Baml::Image,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[String, String])}
-      def VideoInputAnthropic(
-          *varargs,
-          vid:,
-          baml_options: {}
-      )
-          if varargs.any?
-              raise ArgumentError.new("VideoInputAnthropic may only be called with keyword arguments")
-          end
-
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
-
-          ctx, result = options.create_sync_stream(function_name: "VideoInputAnthropic", args: {
-              vid: vid,
-          })
-
-          Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
-          )
-      end
-      sig {params(
-          varargs: T.untyped,
-          vid: Baml::Image,prompt: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[String, String])}
-      def VideoInputOpenai(
-          *varargs,
-          vid:,prompt:,
-          baml_options: {}
-      )
-          if varargs.any?
-              raise ArgumentError.new("VideoInputOpenai may only be called with keyword arguments")
-          end
-
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
-
-          ctx, result = options.create_sync_stream(function_name: "VideoInputOpenai", args: {
-              vid: vid,prompt: prompt,
           })
 
           Baml::BamlStream[String, String].new(

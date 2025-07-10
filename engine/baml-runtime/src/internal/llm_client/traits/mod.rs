@@ -515,7 +515,12 @@ async fn process_media(
                                 .strip_prefix("file://")
                                 .unwrap_or(media_path.as_str())
                         ),
-                        Some(format!("{}/{}", part.media_type, ext)),
+                        // necessary due to media type is used in the pdf mime type
+                        Some(if part.media_type == BamlMediaType::Pdf {
+                            "application/pdf".to_string()
+                        } else {
+                            format!("{}/{}", part.media_type, ext)
+                        }),
                     ));
                 }
             }
@@ -532,7 +537,11 @@ async fn process_media(
 
             if mime_type.is_none() {
                 if let Some(ext) = media_file.extension() {
-                    mime_type = Some(format!("{}/{}", part.media_type, ext));
+                    mime_type = Some(if part.media_type == BamlMediaType::Pdf {
+                        "application/pdf".to_string()
+                    } else {
+                        format!("{}/{}", part.media_type, ext)
+                    });
                 }
             }
 
@@ -558,6 +567,15 @@ async fn process_media(
             ))
         }
         BamlMediaContent::Url(media_url) => {
+            // PDF URLs: leave them untouched (no base64 conversion) but make sure mime-type is set
+            if part.media_type == BamlMediaType::Pdf {
+                let mut new_part = part.clone();
+                if new_part.mime_type.as_deref().map(|s| s.is_empty()).unwrap_or(true) {
+                    new_part.mime_type = Some("application/pdf".to_string());
+                }
+                return Ok(new_part);
+            }
+
             // URLs may have an attached mime-type or not
             // URLs can be converted to either a url with mime-type or base64 with mime-type
 

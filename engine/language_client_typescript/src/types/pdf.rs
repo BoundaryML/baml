@@ -4,21 +4,21 @@ use serde_json::json;
 
 use crate::errors::invalid_argument_error;
 
-crate::lang_wrapper!(BamlPdfNapi, baml_types::BamlMedia);
+crate::lang_wrapper!(BamlPdf, baml_types::BamlMedia);
 
 #[napi]
-impl BamlPdfNapi {
-    #[napi(ts_return_type = "BamlPdfNapi")]
-    pub fn from_url(url: String, media_type: Option<String>) -> External<BamlPdfNapi> {
-        let pdf = BamlPdfNapi {
+impl BamlPdf {
+    #[napi(ts_return_type = "BamlPdf")]
+    pub fn from_url(url: String, media_type: Option<String>) -> External<BamlPdf> {
+        let pdf = BamlPdf {
             inner: baml_types::BamlMedia::url(baml_types::BamlMediaType::Pdf, url, media_type),
         };
         External::new(pdf)
     }
 
-    #[napi(ts_return_type = "BamlPdfNapi")]
-    pub fn from_base64(media_type: String, base64: String) -> External<BamlPdfNapi> {
-        let pdf = BamlPdfNapi {
+    #[napi(ts_return_type = "BamlPdf")]
+    pub fn from_base64(media_type: String, base64: String) -> External<BamlPdf> {
+        let pdf = BamlPdf {
             inner: baml_types::BamlMedia::base64(
                 baml_types::BamlMediaType::Pdf,
                 base64,
@@ -70,7 +70,7 @@ impl BamlPdfNapi {
                 "base64": base64.base64,
                 "media_type": self.inner.mime_type.clone().unwrap_or("".to_string())
             }),
-            _ => "Unknown BamlPdfNapi variant".into(),
+            _ => "Unknown BamlPdf variant".into(),
         })
     }
 }

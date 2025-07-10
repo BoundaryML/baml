@@ -18,9 +18,9 @@ export declare class BamlImage {
   toJSON(): any
 }
 
-export declare class BamlPdfNapi {
-  static fromUrl(url: string, mediaType?: string | undefined | null): BamlPdfNapi
-  static fromBase64(mediaType: string, base64: string): BamlPdfNapi
+export declare class BamlPdf {
+  static fromUrl(url: string, mediaType?: string | undefined | null): BamlPdf
+  static fromBase64(mediaType: string, base64: string): BamlPdf
   get url(): string | null
   asUrl(): string
   isUrl(): boolean
@@ -50,9 +50,9 @@ export declare class BamlSpan {
   finish(result: any, ctx: RuntimeContextManager, envVars: any): any
 }
 
-export declare class BamlVideoNapi {
-  static fromUrl(url: string, mediaType?: string | undefined | null): BamlVideoNapi
-  static fromBase64(mediaType: string, base64: string): BamlVideoNapi
+export declare class BamlVideo {
+  static fromUrl(url: string, mediaType?: string | undefined | null): BamlVideo
+  static fromBase64(mediaType: string, base64: string): BamlVideo
   get url(): string | null
   asUrl(): string
   isUrl(): boolean

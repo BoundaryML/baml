@@ -3720,58 +3720,19 @@ export const ValidateResponseTypes = async (
 };
 
 /**
- * Executes the "VideoInput" BAML action.
+ * Executes the "VideoInputGemini" BAML action.
  *
- * This server action calls the underlying BAML function "VideoInput"
+ * This server action calls the underlying BAML function "VideoInputGemini"
  * with the specified parameters.
  *
  * @param { Image } vid - Input parameter.
  *
  * @returns {Promise<string>} A promise that resolves with the result of the action.
  */
-export const VideoInput = async (
+export const VideoInputGemini = async (
   vid: Image,
 ): Promise<string> => {
-  return b.VideoInput(
+  return b.VideoInputGemini(
     vid,
-  );
-};
-
-/**
- * Executes the "VideoInputAnthropic" BAML action.
- *
- * This server action calls the underlying BAML function "VideoInputAnthropic"
- * with the specified parameters.
- *
- * @param { Image } vid - Input parameter.
- *
- * @returns {Promise<string>} A promise that resolves with the result of the action.
- */
-export const VideoInputAnthropic = async (
-  vid: Image,
-): Promise<string> => {
-  return b.VideoInputAnthropic(
-    vid,
-  );
-};
-
-/**
- * Executes the "VideoInputOpenai" BAML action.
- *
- * This server action calls the underlying BAML function "VideoInputOpenai"
- * with the specified parameters.
- *
- * @param { Image } vid - Input parameter.
- * @param { string } prompt - Input parameter.
- *
- * @returns {Promise<string>} A promise that resolves with the result of the action.
- */
-export const VideoInputOpenai = async (
-  vid: Image,
-  prompt: string,
-): Promise<string> => {
-  return b.VideoInputOpenai(
-    vid,
-    prompt,
   );
 };

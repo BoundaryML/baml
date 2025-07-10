@@ -3,7 +3,7 @@ function PdfInput(pdf: pdf) -> string{
   prompt #"
     {{ _.role("user") }}
 
-   Describe the main topic of this PDF document in 5 words or less.
+   Describe the contents of this PDF document and what it is about in 5 words or less.
     
     {{ pdf }}
   "#   
@@ -31,34 +31,6 @@ function PdfInputAnthropic(pdf: pdf) -> string{
   "#
 }
        
-test TestURLPdfInput{
-  functions [PdfInput]
-  args {
-    pdf{ 
-      url "https://ia801801.us.archive.org/15/items/the-great-gatsby_202101/TheGreatGatsby.pdf"
-    }
-  }  
-}
-
-test TestURLPdfInputOpenai{
-  functions [PdfInputOpenai]
-  args {
-    pdf{ 
-      url "https://ia801801.us.archive.org/15/items/the-great-gatsby_202101/TheGreatGatsby.pdf"
-    }
-    prompt "What is the main subject of this PDF document? Answer in 3-4 words."
-  }  
-}
-
-test TestURLPdfInputAnthropic{
-  functions [PdfInputAnthropic]
-  args {
-    pdf{ 
-      url "https://ia801801.us.archive.org/15/items/the-great-gatsby_202101/TheGreatGatsby.pdf"
-    }
-  }  
-}
-
 test TestFilePdfInput{
   functions [PdfInput]
   args {

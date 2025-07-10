@@ -14,8081 +14,8209 @@
 package baml_client
 
 import (
-	"context"
+    "context"
 
-	"example.com/integ-tests/baml_client/types"
-	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
+    "example.com/integ-tests/baml_client/types"
+    baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 )
+
+
 
 func AaaSamOutputFormat(ctx context.Context, recipe string, opts ...CallOptionFunc) (types.Recipe, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"recipe": recipe},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "recipe": recipe, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "AaaSamOutputFormat", encoded)
-	if err != nil {
-		return types.Recipe{}, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "AaaSamOutputFormat", encoded)
+    if err != nil {
+        return types.Recipe{}, err
+    }
 
-	if result.Error != nil {
-		return types.Recipe{}, result.Error
-	}
+    if result.Error != nil {
+        return types.Recipe{}, result.Error
+    }
 
-	casted := *(result.Data).(*types.Recipe)
+    casted := *(result.Data).(*types.Recipe)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func AliasThatPointsToRecursiveType(ctx context.Context, data types.LinkedListAliasNode, opts ...CallOptionFunc) (types.LinkedListAliasNode, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"data": data},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "data": data, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "AliasThatPointsToRecursiveType", encoded)
-	if err != nil {
-		return types.LinkedListAliasNode{}, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "AliasThatPointsToRecursiveType", encoded)
+    if err != nil {
+        return types.LinkedListAliasNode{}, err
+    }
 
-	if result.Error != nil {
-		return types.LinkedListAliasNode{}, result.Error
-	}
+    if result.Error != nil {
+        return types.LinkedListAliasNode{}, result.Error
+    }
 
-	casted := *(result.Data).(*types.LinkedListAliasNode)
+    casted := *(result.Data).(*types.LinkedListAliasNode)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func AliasWithMultipleAttrs(ctx context.Context, money int64, opts ...CallOptionFunc) (int64, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"money": money},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "money": money, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "AliasWithMultipleAttrs", encoded)
-	if err != nil {
-		return 0, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "AliasWithMultipleAttrs", encoded)
+    if err != nil {
+        return 0, err
+    }
 
-	if result.Error != nil {
-		return 0, result.Error
-	}
+    if result.Error != nil {
+        return 0, result.Error
+    }
 
-	casted := *(result.Data).(*int64)
+    casted := *(result.Data).(*int64)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func AliasedInputClass(ctx context.Context, input types.InputClass, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "AliasedInputClass", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "AliasedInputClass", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func AliasedInputClass2(ctx context.Context, input types.InputClass, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "AliasedInputClass2", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "AliasedInputClass2", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func AliasedInputClassNested(ctx context.Context, input types.InputClassNested, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "AliasedInputClassNested", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "AliasedInputClassNested", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func AliasedInputEnum(ctx context.Context, input types.AliasedEnum, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "AliasedInputEnum", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "AliasedInputEnum", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func AliasedInputList(ctx context.Context, input []types.AliasedEnum, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "AliasedInputList", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "AliasedInputList", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func AllowedOptionals(ctx context.Context, optionals types.OptionalListAndMap, opts ...CallOptionFunc) (types.OptionalListAndMap, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"optionals": optionals},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "optionals": optionals, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "AllowedOptionals", encoded)
-	if err != nil {
-		return types.OptionalListAndMap{}, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "AllowedOptionals", encoded)
+    if err != nil {
+        return types.OptionalListAndMap{}, err
+    }
 
-	if result.Error != nil {
-		return types.OptionalListAndMap{}, result.Error
-	}
+    if result.Error != nil {
+        return types.OptionalListAndMap{}, result.Error
+    }
 
-	casted := *(result.Data).(*types.OptionalListAndMap)
+    casted := *(result.Data).(*types.OptionalListAndMap)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func AssertFn(ctx context.Context, a int64, opts ...CallOptionFunc) (int64, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"a": a},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "a": a, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "AssertFn", encoded)
-	if err != nil {
-		return 0, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "AssertFn", encoded)
+    if err != nil {
+        return 0, err
+    }
 
-	if result.Error != nil {
-		return 0, result.Error
-	}
+    if result.Error != nil {
+        return 0, result.Error
+    }
 
-	casted := *(result.Data).(*int64)
+    casted := *(result.Data).(*int64)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func AudioInput(ctx context.Context, aud any, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"aud": aud},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "aud": aud, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "AudioInput", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "AudioInput", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func AudioInputOpenai(ctx context.Context, aud any, prompt string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"aud": aud, "prompt": prompt},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "aud": aud,"prompt": prompt, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "AudioInputOpenai", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "AudioInputOpenai", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func BuildLinkedList(ctx context.Context, input []int64, opts ...CallOptionFunc) (types.LinkedList, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "BuildLinkedList", encoded)
-	if err != nil {
-		return types.LinkedList{}, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "BuildLinkedList", encoded)
+    if err != nil {
+        return types.LinkedList{}, err
+    }
 
-	if result.Error != nil {
-		return types.LinkedList{}, result.Error
-	}
+    if result.Error != nil {
+        return types.LinkedList{}, result.Error
+    }
 
-	casted := *(result.Data).(*types.LinkedList)
+    casted := *(result.Data).(*types.LinkedList)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func BuildTree(ctx context.Context, input types.BinaryNode, opts ...CallOptionFunc) (types.Tree, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "BuildTree", encoded)
-	if err != nil {
-		return types.Tree{}, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "BuildTree", encoded)
+    if err != nil {
+        return types.Tree{}, err
+    }
 
-	if result.Error != nil {
-		return types.Tree{}, result.Error
-	}
+    if result.Error != nil {
+        return types.Tree{}, result.Error
+    }
 
-	casted := *(result.Data).(*types.Tree)
+    casted := *(result.Data).(*types.Tree)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func ClassThatPointsToRecursiveClassThroughAlias(ctx context.Context, cls types.ClassToRecAlias, opts ...CallOptionFunc) (types.ClassToRecAlias, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"cls": cls},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "cls": cls, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "ClassThatPointsToRecursiveClassThroughAlias", encoded)
-	if err != nil {
-		return types.ClassToRecAlias{}, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "ClassThatPointsToRecursiveClassThroughAlias", encoded)
+    if err != nil {
+        return types.ClassToRecAlias{}, err
+    }
 
-	if result.Error != nil {
-		return types.ClassToRecAlias{}, result.Error
-	}
+    if result.Error != nil {
+        return types.ClassToRecAlias{}, result.Error
+    }
 
-	casted := *(result.Data).(*types.ClassToRecAlias)
+    casted := *(result.Data).(*types.ClassToRecAlias)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func ClassifyDynEnumTwo(ctx context.Context, input string, opts ...CallOptionFunc) (types.DynEnumTwo, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "ClassifyDynEnumTwo", encoded)
-	if err != nil {
-		return types.DynEnumTwo(""), err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "ClassifyDynEnumTwo", encoded)
+    if err != nil {
+        return types.DynEnumTwo(""), err
+    }
 
-	if result.Error != nil {
-		return types.DynEnumTwo(""), result.Error
-	}
+    if result.Error != nil {
+        return types.DynEnumTwo(""), result.Error
+    }
 
-	casted := *(result.Data).(*types.DynEnumTwo)
+    casted := *(result.Data).(*types.DynEnumTwo)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func ClassifyMessage(ctx context.Context, input string, opts ...CallOptionFunc) (types.Category, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "ClassifyMessage", encoded)
-	if err != nil {
-		return types.Category(""), err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "ClassifyMessage", encoded)
+    if err != nil {
+        return types.Category(""), err
+    }
 
-	if result.Error != nil {
-		return types.Category(""), result.Error
-	}
+    if result.Error != nil {
+        return types.Category(""), result.Error
+    }
 
-	casted := *(result.Data).(*types.Category)
+    casted := *(result.Data).(*types.Category)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func ClassifyMessage2(ctx context.Context, input string, opts ...CallOptionFunc) (types.Category, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "ClassifyMessage2", encoded)
-	if err != nil {
-		return types.Category(""), err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "ClassifyMessage2", encoded)
+    if err != nil {
+        return types.Category(""), err
+    }
 
-	if result.Error != nil {
-		return types.Category(""), result.Error
-	}
+    if result.Error != nil {
+        return types.Category(""), result.Error
+    }
 
-	casted := *(result.Data).(*types.Category)
+    casted := *(result.Data).(*types.Category)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func ClassifyMessage3(ctx context.Context, input string, opts ...CallOptionFunc) (types.Category, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "ClassifyMessage3", encoded)
-	if err != nil {
-		return types.Category(""), err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "ClassifyMessage3", encoded)
+    if err != nil {
+        return types.Category(""), err
+    }
 
-	if result.Error != nil {
-		return types.Category(""), result.Error
-	}
+    if result.Error != nil {
+        return types.Category(""), result.Error
+    }
 
-	casted := *(result.Data).(*types.Category)
+    casted := *(result.Data).(*types.Category)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func Completion(ctx context.Context, prefix string, suffix string, language string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"prefix": prefix, "suffix": suffix, "language": language},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "prefix": prefix,"suffix": suffix,"language": language, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "Completion", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "Completion", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func CustomTask(ctx context.Context, input string, opts ...CallOptionFunc) (types.Union3BookOrderOrFlightConfirmationOrGroceryReceipt, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "CustomTask", encoded)
-	if err != nil {
-		return types.Union3BookOrderOrFlightConfirmationOrGroceryReceipt{}, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "CustomTask", encoded)
+    if err != nil {
+        return types.Union3BookOrderOrFlightConfirmationOrGroceryReceipt{}, err
+    }
 
-	if result.Error != nil {
-		return types.Union3BookOrderOrFlightConfirmationOrGroceryReceipt{}, result.Error
-	}
+    if result.Error != nil {
+        return types.Union3BookOrderOrFlightConfirmationOrGroceryReceipt{}, result.Error
+    }
 
-	casted := *(result.Data).(*types.Union3BookOrderOrFlightConfirmationOrGroceryReceipt)
+    casted := *(result.Data).(*types.Union3BookOrderOrFlightConfirmationOrGroceryReceipt)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func DescribeImage(ctx context.Context, img any, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"img": img},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "img": img, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "DescribeImage", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "DescribeImage", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func DescribeImage2(ctx context.Context, classWithImage types.ClassWithImage, img2 any, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"classWithImage": classWithImage, "img2": img2},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "classWithImage": classWithImage,"img2": img2, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "DescribeImage2", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "DescribeImage2", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func DescribeImage3(ctx context.Context, classWithImage types.ClassWithImage, img2 any, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"classWithImage": classWithImage, "img2": img2},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "classWithImage": classWithImage,"img2": img2, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "DescribeImage3", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "DescribeImage3", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func DescribeImage4(ctx context.Context, classWithImage types.ClassWithImage, img2 any, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"classWithImage": classWithImage, "img2": img2},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "classWithImage": classWithImage,"img2": img2, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "DescribeImage4", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "DescribeImage4", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func DescribeMedia1599(ctx context.Context, img any, client_sector string, client_name string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"img": img, "client_sector": client_sector, "client_name": client_name},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "img": img,"client_sector": client_sector,"client_name": client_name, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "DescribeMedia1599", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "DescribeMedia1599", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func DifferentiateUnions(ctx context.Context, opts ...CallOptionFunc) (types.Union2OriginalAOrOriginalB, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{  },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "DifferentiateUnions", encoded)
-	if err != nil {
-		return types.Union2OriginalAOrOriginalB{}, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "DifferentiateUnions", encoded)
+    if err != nil {
+        return types.Union2OriginalAOrOriginalB{}, err
+    }
 
-	if result.Error != nil {
-		return types.Union2OriginalAOrOriginalB{}, result.Error
-	}
+    if result.Error != nil {
+        return types.Union2OriginalAOrOriginalB{}, result.Error
+    }
 
-	casted := *(result.Data).(*types.Union2OriginalAOrOriginalB)
+    casted := *(result.Data).(*types.Union2OriginalAOrOriginalB)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func DummyOutputFunction(ctx context.Context, input string, opts ...CallOptionFunc) (types.DummyOutput, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "DummyOutputFunction", encoded)
-	if err != nil {
-		return types.DummyOutput{}, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "DummyOutputFunction", encoded)
+    if err != nil {
+        return types.DummyOutput{}, err
+    }
 
-	if result.Error != nil {
-		return types.DummyOutput{}, result.Error
-	}
+    if result.Error != nil {
+        return types.DummyOutput{}, result.Error
+    }
 
-	casted := *(result.Data).(*types.DummyOutput)
+    casted := *(result.Data).(*types.DummyOutput)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func DynamicFunc(ctx context.Context, input types.DynamicClassOne, opts ...CallOptionFunc) (types.DynamicClassTwo, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "DynamicFunc", encoded)
-	if err != nil {
-		return types.DynamicClassTwo{}, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "DynamicFunc", encoded)
+    if err != nil {
+        return types.DynamicClassTwo{}, err
+    }
 
-	if result.Error != nil {
-		return types.DynamicClassTwo{}, result.Error
-	}
+    if result.Error != nil {
+        return types.DynamicClassTwo{}, result.Error
+    }
 
-	casted := *(result.Data).(*types.DynamicClassTwo)
+    casted := *(result.Data).(*types.DynamicClassTwo)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func DynamicInputOutput(ctx context.Context, input types.DynInputOutput, opts ...CallOptionFunc) (types.DynInputOutput, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "DynamicInputOutput", encoded)
-	if err != nil {
-		return types.DynInputOutput{}, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "DynamicInputOutput", encoded)
+    if err != nil {
+        return types.DynInputOutput{}, err
+    }
 
-	if result.Error != nil {
-		return types.DynInputOutput{}, result.Error
-	}
+    if result.Error != nil {
+        return types.DynInputOutput{}, result.Error
+    }
 
-	casted := *(result.Data).(*types.DynInputOutput)
+    casted := *(result.Data).(*types.DynInputOutput)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func DynamicListInputOutput(ctx context.Context, input []types.DynInputOutput, opts ...CallOptionFunc) ([]types.DynInputOutput, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "DynamicListInputOutput", encoded)
-	if err != nil {
-		return nil, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "DynamicListInputOutput", encoded)
+    if err != nil {
+        return nil, err
+    }
 
-	if result.Error != nil {
-		return nil, result.Error
-	}
+    if result.Error != nil {
+        return nil, result.Error
+    }
 
-	casted := (result.Data).([]types.DynInputOutput)
+    casted := (result.Data).([]types.DynInputOutput)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func ExpectFailure(ctx context.Context, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{  },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "ExpectFailure", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "ExpectFailure", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func ExtractContactInfo(ctx context.Context, document string, opts ...CallOptionFunc) (types.ContactInfo, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"document": document},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "document": document, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "ExtractContactInfo", encoded)
-	if err != nil {
-		return types.ContactInfo{}, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "ExtractContactInfo", encoded)
+    if err != nil {
+        return types.ContactInfo{}, err
+    }
 
-	if result.Error != nil {
-		return types.ContactInfo{}, result.Error
-	}
+    if result.Error != nil {
+        return types.ContactInfo{}, result.Error
+    }
 
-	casted := *(result.Data).(*types.ContactInfo)
+    casted := *(result.Data).(*types.ContactInfo)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func ExtractEntities(ctx context.Context, text string, opts ...CallOptionFunc) (types.DynamicSchema, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"text": text},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "text": text, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "ExtractEntities", encoded)
-	if err != nil {
-		return types.DynamicSchema{}, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "ExtractEntities", encoded)
+    if err != nil {
+        return types.DynamicSchema{}, err
+    }
 
-	if result.Error != nil {
-		return types.DynamicSchema{}, result.Error
-	}
+    if result.Error != nil {
+        return types.DynamicSchema{}, result.Error
+    }
 
-	casted := *(result.Data).(*types.DynamicSchema)
+    casted := *(result.Data).(*types.DynamicSchema)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func ExtractHobby(ctx context.Context, text string, opts ...CallOptionFunc) ([]types.Hobby, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"text": text},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "text": text, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "ExtractHobby", encoded)
-	if err != nil {
-		return nil, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "ExtractHobby", encoded)
+    if err != nil {
+        return nil, err
+    }
 
-	if result.Error != nil {
-		return nil, result.Error
-	}
+    if result.Error != nil {
+        return nil, result.Error
+    }
 
-	casted := (result.Data).([]types.Hobby)
+    casted := (result.Data).([]types.Hobby)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func ExtractNames(ctx context.Context, input string, opts ...CallOptionFunc) ([]string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "ExtractNames", encoded)
-	if err != nil {
-		return nil, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "ExtractNames", encoded)
+    if err != nil {
+        return nil, err
+    }
 
-	if result.Error != nil {
-		return nil, result.Error
-	}
+    if result.Error != nil {
+        return nil, result.Error
+    }
 
-	casted := (result.Data).([]string)
+    casted := (result.Data).([]string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func ExtractPeople(ctx context.Context, text string, opts ...CallOptionFunc) ([]types.Person, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"text": text},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "text": text, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "ExtractPeople", encoded)
-	if err != nil {
-		return nil, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "ExtractPeople", encoded)
+    if err != nil {
+        return nil, err
+    }
 
-	if result.Error != nil {
-		return nil, result.Error
-	}
+    if result.Error != nil {
+        return nil, result.Error
+    }
 
-	casted := (result.Data).([]types.Person)
+    casted := (result.Data).([]types.Person)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func ExtractReceiptInfo(ctx context.Context, email string, reason types.Union2KcuriosityOrKpersonal_finance, opts ...CallOptionFunc) (types.ReceiptInfo, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"email": email, "reason": reason},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "email": email,"reason": reason, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "ExtractReceiptInfo", encoded)
-	if err != nil {
-		return types.ReceiptInfo{}, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "ExtractReceiptInfo", encoded)
+    if err != nil {
+        return types.ReceiptInfo{}, err
+    }
 
-	if result.Error != nil {
-		return types.ReceiptInfo{}, result.Error
-	}
+    if result.Error != nil {
+        return types.ReceiptInfo{}, result.Error
+    }
 
-	casted := *(result.Data).(*types.ReceiptInfo)
+    casted := *(result.Data).(*types.ReceiptInfo)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func ExtractResume(ctx context.Context, resume string, img *any, opts ...CallOptionFunc) (types.Resume, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"resume": resume, "img": img},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "resume": resume,"img": img, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "ExtractResume", encoded)
-	if err != nil {
-		return types.Resume{}, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "ExtractResume", encoded)
+    if err != nil {
+        return types.Resume{}, err
+    }
 
-	if result.Error != nil {
-		return types.Resume{}, result.Error
-	}
+    if result.Error != nil {
+        return types.Resume{}, result.Error
+    }
 
-	casted := *(result.Data).(*types.Resume)
+    casted := *(result.Data).(*types.Resume)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func ExtractResume2(ctx context.Context, resume string, opts ...CallOptionFunc) (types.Resume, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"resume": resume},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "resume": resume, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "ExtractResume2", encoded)
-	if err != nil {
-		return types.Resume{}, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "ExtractResume2", encoded)
+    if err != nil {
+        return types.Resume{}, err
+    }
 
-	if result.Error != nil {
-		return types.Resume{}, result.Error
-	}
+    if result.Error != nil {
+        return types.Resume{}, result.Error
+    }
 
-	casted := *(result.Data).(*types.Resume)
+    casted := *(result.Data).(*types.Resume)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func FnClassOptionalOutput(ctx context.Context, input string, opts ...CallOptionFunc) (*types.ClassOptionalOutput, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "FnClassOptionalOutput", encoded)
-	if err != nil {
-		return nil, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "FnClassOptionalOutput", encoded)
+    if err != nil {
+        return nil, err
+    }
 
-	if result.Error != nil {
-		return nil, result.Error
-	}
+    if result.Error != nil {
+        return nil, result.Error
+    }
 
-	casted := (result.Data).(*types.ClassOptionalOutput)
+    casted := (result.Data).(*types.ClassOptionalOutput)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func FnClassOptionalOutput2(ctx context.Context, input string, opts ...CallOptionFunc) (*types.ClassOptionalOutput2, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "FnClassOptionalOutput2", encoded)
-	if err != nil {
-		return nil, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "FnClassOptionalOutput2", encoded)
+    if err != nil {
+        return nil, err
+    }
 
-	if result.Error != nil {
-		return nil, result.Error
-	}
+    if result.Error != nil {
+        return nil, result.Error
+    }
 
-	casted := (result.Data).(*types.ClassOptionalOutput2)
+    casted := (result.Data).(*types.ClassOptionalOutput2)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func FnEnumListOutput(ctx context.Context, input string, opts ...CallOptionFunc) ([]types.EnumOutput, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "FnEnumListOutput", encoded)
-	if err != nil {
-		return nil, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "FnEnumListOutput", encoded)
+    if err != nil {
+        return nil, err
+    }
 
-	if result.Error != nil {
-		return nil, result.Error
-	}
+    if result.Error != nil {
+        return nil, result.Error
+    }
 
-	casted := (result.Data).([]types.EnumOutput)
+    casted := (result.Data).([]types.EnumOutput)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func FnEnumOutput(ctx context.Context, input string, opts ...CallOptionFunc) (types.EnumOutput, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "FnEnumOutput", encoded)
-	if err != nil {
-		return types.EnumOutput(""), err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "FnEnumOutput", encoded)
+    if err != nil {
+        return types.EnumOutput(""), err
+    }
 
-	if result.Error != nil {
-		return types.EnumOutput(""), result.Error
-	}
+    if result.Error != nil {
+        return types.EnumOutput(""), result.Error
+    }
 
-	casted := *(result.Data).(*types.EnumOutput)
+    casted := *(result.Data).(*types.EnumOutput)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func FnLiteralClassInputOutput(ctx context.Context, input types.LiteralClassHello, opts ...CallOptionFunc) (types.LiteralClassHello, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "FnLiteralClassInputOutput", encoded)
-	if err != nil {
-		return types.LiteralClassHello{}, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "FnLiteralClassInputOutput", encoded)
+    if err != nil {
+        return types.LiteralClassHello{}, err
+    }
 
-	if result.Error != nil {
-		return types.LiteralClassHello{}, result.Error
-	}
+    if result.Error != nil {
+        return types.LiteralClassHello{}, result.Error
+    }
 
-	casted := *(result.Data).(*types.LiteralClassHello)
+    casted := *(result.Data).(*types.LiteralClassHello)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func FnLiteralUnionClassInputOutput(ctx context.Context, input types.Union2LiteralClassOneOrLiteralClassTwo, opts ...CallOptionFunc) (types.Union2LiteralClassOneOrLiteralClassTwo, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "FnLiteralUnionClassInputOutput", encoded)
-	if err != nil {
-		return types.Union2LiteralClassOneOrLiteralClassTwo{}, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "FnLiteralUnionClassInputOutput", encoded)
+    if err != nil {
+        return types.Union2LiteralClassOneOrLiteralClassTwo{}, err
+    }
 
-	if result.Error != nil {
-		return types.Union2LiteralClassOneOrLiteralClassTwo{}, result.Error
-	}
+    if result.Error != nil {
+        return types.Union2LiteralClassOneOrLiteralClassTwo{}, result.Error
+    }
 
-	casted := *(result.Data).(*types.Union2LiteralClassOneOrLiteralClassTwo)
+    casted := *(result.Data).(*types.Union2LiteralClassOneOrLiteralClassTwo)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func FnNamedArgsSingleStringOptional(ctx context.Context, myString *string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"myString": myString},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "myString": myString, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "FnNamedArgsSingleStringOptional", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "FnNamedArgsSingleStringOptional", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func FnOutputBool(ctx context.Context, input string, opts ...CallOptionFunc) (bool, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "FnOutputBool", encoded)
-	if err != nil {
-		return false, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "FnOutputBool", encoded)
+    if err != nil {
+        return false, err
+    }
 
-	if result.Error != nil {
-		return false, result.Error
-	}
+    if result.Error != nil {
+        return false, result.Error
+    }
 
-	casted := *(result.Data).(*bool)
+    casted := *(result.Data).(*bool)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func FnOutputClass(ctx context.Context, input string, opts ...CallOptionFunc) (types.TestOutputClass, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "FnOutputClass", encoded)
-	if err != nil {
-		return types.TestOutputClass{}, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "FnOutputClass", encoded)
+    if err != nil {
+        return types.TestOutputClass{}, err
+    }
 
-	if result.Error != nil {
-		return types.TestOutputClass{}, result.Error
-	}
+    if result.Error != nil {
+        return types.TestOutputClass{}, result.Error
+    }
 
-	casted := *(result.Data).(*types.TestOutputClass)
+    casted := *(result.Data).(*types.TestOutputClass)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func FnOutputClassList(ctx context.Context, input string, opts ...CallOptionFunc) ([]types.TestOutputClass, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "FnOutputClassList", encoded)
-	if err != nil {
-		return nil, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "FnOutputClassList", encoded)
+    if err != nil {
+        return nil, err
+    }
 
-	if result.Error != nil {
-		return nil, result.Error
-	}
+    if result.Error != nil {
+        return nil, result.Error
+    }
 
-	casted := (result.Data).([]types.TestOutputClass)
+    casted := (result.Data).([]types.TestOutputClass)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func FnOutputClassNested(ctx context.Context, input string, opts ...CallOptionFunc) (types.TestClassNested, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "FnOutputClassNested", encoded)
-	if err != nil {
-		return types.TestClassNested{}, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "FnOutputClassNested", encoded)
+    if err != nil {
+        return types.TestClassNested{}, err
+    }
 
-	if result.Error != nil {
-		return types.TestClassNested{}, result.Error
-	}
+    if result.Error != nil {
+        return types.TestClassNested{}, result.Error
+    }
 
-	casted := *(result.Data).(*types.TestClassNested)
+    casted := *(result.Data).(*types.TestClassNested)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func FnOutputClassWithEnum(ctx context.Context, input string, opts ...CallOptionFunc) (types.TestClassWithEnum, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "FnOutputClassWithEnum", encoded)
-	if err != nil {
-		return types.TestClassWithEnum{}, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "FnOutputClassWithEnum", encoded)
+    if err != nil {
+        return types.TestClassWithEnum{}, err
+    }
 
-	if result.Error != nil {
-		return types.TestClassWithEnum{}, result.Error
-	}
+    if result.Error != nil {
+        return types.TestClassWithEnum{}, result.Error
+    }
 
-	casted := *(result.Data).(*types.TestClassWithEnum)
+    casted := *(result.Data).(*types.TestClassWithEnum)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func FnOutputInt(ctx context.Context, input string, opts ...CallOptionFunc) (int64, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "FnOutputInt", encoded)
-	if err != nil {
-		return 0, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "FnOutputInt", encoded)
+    if err != nil {
+        return 0, err
+    }
 
-	if result.Error != nil {
-		return 0, result.Error
-	}
+    if result.Error != nil {
+        return 0, result.Error
+    }
 
-	casted := *(result.Data).(*int64)
+    casted := *(result.Data).(*int64)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func FnOutputLiteralBool(ctx context.Context, input string, opts ...CallOptionFunc) (bool, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "FnOutputLiteralBool", encoded)
-	if err != nil {
-		return false, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "FnOutputLiteralBool", encoded)
+    if err != nil {
+        return false, err
+    }
 
-	if result.Error != nil {
-		return false, result.Error
-	}
+    if result.Error != nil {
+        return false, result.Error
+    }
 
-	casted := *(result.Data).(*bool)
+    casted := *(result.Data).(*bool)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func FnOutputLiteralInt(ctx context.Context, input string, opts ...CallOptionFunc) (int64, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "FnOutputLiteralInt", encoded)
-	if err != nil {
-		return 5, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "FnOutputLiteralInt", encoded)
+    if err != nil {
+        return 5, err
+    }
 
-	if result.Error != nil {
-		return 5, result.Error
-	}
+    if result.Error != nil {
+        return 5, result.Error
+    }
 
-	casted := *(result.Data).(*int64)
+    casted := *(result.Data).(*int64)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func FnOutputLiteralString(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "FnOutputLiteralString", encoded)
-	if err != nil {
-		return "example output", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "FnOutputLiteralString", encoded)
+    if err != nil {
+        return "example output", err
+    }
 
-	if result.Error != nil {
-		return "example output", result.Error
-	}
+    if result.Error != nil {
+        return "example output", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func FnOutputStringList(ctx context.Context, input string, opts ...CallOptionFunc) ([]string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "FnOutputStringList", encoded)
-	if err != nil {
-		return nil, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "FnOutputStringList", encoded)
+    if err != nil {
+        return nil, err
+    }
 
-	if result.Error != nil {
-		return nil, result.Error
-	}
+    if result.Error != nil {
+        return nil, result.Error
+    }
 
-	casted := (result.Data).([]string)
+    casted := (result.Data).([]string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func FnTestAliasedEnumOutput(ctx context.Context, input string, opts ...CallOptionFunc) (types.TestEnum, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "FnTestAliasedEnumOutput", encoded)
-	if err != nil {
-		return types.TestEnum(""), err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "FnTestAliasedEnumOutput", encoded)
+    if err != nil {
+        return types.TestEnum(""), err
+    }
 
-	if result.Error != nil {
-		return types.TestEnum(""), result.Error
-	}
+    if result.Error != nil {
+        return types.TestEnum(""), result.Error
+    }
 
-	casted := *(result.Data).(*types.TestEnum)
+    casted := *(result.Data).(*types.TestEnum)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func FnTestClassAlias(ctx context.Context, input string, opts ...CallOptionFunc) (types.TestClassAlias, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "FnTestClassAlias", encoded)
-	if err != nil {
-		return types.TestClassAlias{}, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "FnTestClassAlias", encoded)
+    if err != nil {
+        return types.TestClassAlias{}, err
+    }
 
-	if result.Error != nil {
-		return types.TestClassAlias{}, result.Error
-	}
+    if result.Error != nil {
+        return types.TestClassAlias{}, result.Error
+    }
 
-	casted := *(result.Data).(*types.TestClassAlias)
+    casted := *(result.Data).(*types.TestClassAlias)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func FnTestNamedArgsSingleEnum(ctx context.Context, myArg types.NamedArgsSingleEnum, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"myArg": myArg},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "myArg": myArg, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "FnTestNamedArgsSingleEnum", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "FnTestNamedArgsSingleEnum", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func GetDataType(ctx context.Context, text string, opts ...CallOptionFunc) (types.RaysData, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"text": text},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "text": text, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "GetDataType", encoded)
-	if err != nil {
-		return types.RaysData{}, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "GetDataType", encoded)
+    if err != nil {
+        return types.RaysData{}, err
+    }
 
-	if result.Error != nil {
-		return types.RaysData{}, result.Error
-	}
+    if result.Error != nil {
+        return types.RaysData{}, result.Error
+    }
 
-	casted := *(result.Data).(*types.RaysData)
+    casted := *(result.Data).(*types.RaysData)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func GetOrderInfo(ctx context.Context, email types.Email, opts ...CallOptionFunc) (types.OrderInfo, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"email": email},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "email": email, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "GetOrderInfo", encoded)
-	if err != nil {
-		return types.OrderInfo{}, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "GetOrderInfo", encoded)
+    if err != nil {
+        return types.OrderInfo{}, err
+    }
 
-	if result.Error != nil {
-		return types.OrderInfo{}, result.Error
-	}
+    if result.Error != nil {
+        return types.OrderInfo{}, result.Error
+    }
 
-	casted := *(result.Data).(*types.OrderInfo)
+    casted := *(result.Data).(*types.OrderInfo)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func GetQuery(ctx context.Context, query string, opts ...CallOptionFunc) (types.SearchParams, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"query": query},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "query": query, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "GetQuery", encoded)
-	if err != nil {
-		return types.SearchParams{}, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "GetQuery", encoded)
+    if err != nil {
+        return types.SearchParams{}, err
+    }
 
-	if result.Error != nil {
-		return types.SearchParams{}, result.Error
-	}
+    if result.Error != nil {
+        return types.SearchParams{}, result.Error
+    }
 
-	casted := *(result.Data).(*types.SearchParams)
+    casted := *(result.Data).(*types.SearchParams)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func InOutEnumMapKey(ctx context.Context, i1 map[types.MapKey]string, i2 map[types.MapKey]string, opts ...CallOptionFunc) (map[types.MapKey]string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"i1": i1, "i2": i2},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "i1": i1,"i2": i2, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "InOutEnumMapKey", encoded)
-	if err != nil {
-		return nil, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "InOutEnumMapKey", encoded)
+    if err != nil {
+        return nil, err
+    }
 
-	if result.Error != nil {
-		return nil, result.Error
-	}
+    if result.Error != nil {
+        return nil, result.Error
+    }
 
-	casted := (result.Data).(map[types.MapKey]string)
+    casted := (result.Data).(map[types.MapKey]string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func InOutLiteralStringUnionMapKey(ctx context.Context, i1 map[types.Union4KfourOrKoneOrKthreeOrKtwo]string, i2 map[types.Union4KfourOrKoneOrKthreeOrKtwo]string, opts ...CallOptionFunc) (map[types.Union4KfourOrKoneOrKthreeOrKtwo]string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"i1": i1, "i2": i2},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "i1": i1,"i2": i2, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "InOutLiteralStringUnionMapKey", encoded)
-	if err != nil {
-		return nil, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "InOutLiteralStringUnionMapKey", encoded)
+    if err != nil {
+        return nil, err
+    }
 
-	if result.Error != nil {
-		return nil, result.Error
-	}
+    if result.Error != nil {
+        return nil, result.Error
+    }
 
-	casted := (result.Data).(map[types.Union4KfourOrKoneOrKthreeOrKtwo]string)
+    casted := (result.Data).(map[types.Union4KfourOrKoneOrKthreeOrKtwo]string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func InOutSingleLiteralStringMapKey(ctx context.Context, m map[string]string, opts ...CallOptionFunc) (map[string]string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"m": m},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "m": m, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "InOutSingleLiteralStringMapKey", encoded)
-	if err != nil {
-		return nil, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "InOutSingleLiteralStringMapKey", encoded)
+    if err != nil {
+        return nil, err
+    }
 
-	if result.Error != nil {
-		return nil, result.Error
-	}
+    if result.Error != nil {
+        return nil, result.Error
+    }
 
-	casted := (result.Data).(map[string]string)
+    casted := (result.Data).(map[string]string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func JsonTypeAliasCycle(ctx context.Context, input types.JsonValue, opts ...CallOptionFunc) (types.JsonValue, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "JsonTypeAliasCycle", encoded)
-	if err != nil {
-		return types.Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString{}, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "JsonTypeAliasCycle", encoded)
+    if err != nil {
+        return types.Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString{}, err
+    }
 
-	if result.Error != nil {
-		return types.Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString{}, result.Error
-	}
+    if result.Error != nil {
+        return types.Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString{}, result.Error
+    }
 
-	casted := *(result.Data).(*types.JsonValue)
+    casted := *(result.Data).(*types.JsonValue)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func LLMEcho(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "LLMEcho", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "LLMEcho", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func LiteralUnionsTest(ctx context.Context, input string, opts ...CallOptionFunc) (types.Union3BoolKTrueOrIntK1OrKstring_output, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "LiteralUnionsTest", encoded)
-	if err != nil {
-		return types.Union3BoolKTrueOrIntK1OrKstring_output{}, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "LiteralUnionsTest", encoded)
+    if err != nil {
+        return types.Union3BoolKTrueOrIntK1OrKstring_output{}, err
+    }
 
-	if result.Error != nil {
-		return types.Union3BoolKTrueOrIntK1OrKstring_output{}, result.Error
-	}
+    if result.Error != nil {
+        return types.Union3BoolKTrueOrIntK1OrKstring_output{}, result.Error
+    }
 
-	casted := *(result.Data).(*types.Union3BoolKTrueOrIntK1OrKstring_output)
+    casted := *(result.Data).(*types.Union3BoolKTrueOrIntK1OrKstring_output)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func MakeBlockConstraint(ctx context.Context, opts ...CallOptionFunc) (types.Checked[types.BlockConstraint], error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{  },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "MakeBlockConstraint", encoded)
-	if err != nil {
-		return types.Checked[types.BlockConstraint]{}, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "MakeBlockConstraint", encoded)
+    if err != nil {
+        return types.Checked[types.BlockConstraint]{}, err
+    }
 
-	if result.Error != nil {
-		return types.Checked[types.BlockConstraint]{}, result.Error
-	}
+    if result.Error != nil {
+        return types.Checked[types.BlockConstraint]{}, result.Error
+    }
 
-	casted := *(result.Data).(*types.Checked[types.BlockConstraint])
+    casted := *(result.Data).(*types.Checked[types.BlockConstraint])
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func MakeClassWithBlockDone(ctx context.Context, opts ...CallOptionFunc) (types.ClassWithBlockDone, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{  },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "MakeClassWithBlockDone", encoded)
-	if err != nil {
-		return types.ClassWithBlockDone{}, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "MakeClassWithBlockDone", encoded)
+    if err != nil {
+        return types.ClassWithBlockDone{}, err
+    }
 
-	if result.Error != nil {
-		return types.ClassWithBlockDone{}, result.Error
-	}
+    if result.Error != nil {
+        return types.ClassWithBlockDone{}, result.Error
+    }
 
-	casted := *(result.Data).(*types.ClassWithBlockDone)
+    casted := *(result.Data).(*types.ClassWithBlockDone)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func MakeClassWithExternalDone(ctx context.Context, opts ...CallOptionFunc) (types.ClassWithoutDone, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{  },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "MakeClassWithExternalDone", encoded)
-	if err != nil {
-		return types.ClassWithoutDone{}, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "MakeClassWithExternalDone", encoded)
+    if err != nil {
+        return types.ClassWithoutDone{}, err
+    }
 
-	if result.Error != nil {
-		return types.ClassWithoutDone{}, result.Error
-	}
+    if result.Error != nil {
+        return types.ClassWithoutDone{}, result.Error
+    }
 
-	casted := *(result.Data).(*types.ClassWithoutDone)
+    casted := *(result.Data).(*types.ClassWithoutDone)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func MakeNestedBlockConstraint(ctx context.Context, opts ...CallOptionFunc) (types.NestedBlockConstraint, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{  },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "MakeNestedBlockConstraint", encoded)
-	if err != nil {
-		return types.NestedBlockConstraint{}, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "MakeNestedBlockConstraint", encoded)
+    if err != nil {
+        return types.NestedBlockConstraint{}, err
+    }
 
-	if result.Error != nil {
-		return types.NestedBlockConstraint{}, result.Error
-	}
+    if result.Error != nil {
+        return types.NestedBlockConstraint{}, result.Error
+    }
 
-	casted := *(result.Data).(*types.NestedBlockConstraint)
+    casted := *(result.Data).(*types.NestedBlockConstraint)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func MakeSemanticContainer(ctx context.Context, opts ...CallOptionFunc) (types.SemanticContainer, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{  },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "MakeSemanticContainer", encoded)
-	if err != nil {
-		return types.SemanticContainer{}, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "MakeSemanticContainer", encoded)
+    if err != nil {
+        return types.SemanticContainer{}, err
+    }
 
-	if result.Error != nil {
-		return types.SemanticContainer{}, result.Error
-	}
+    if result.Error != nil {
+        return types.SemanticContainer{}, result.Error
+    }
 
-	casted := *(result.Data).(*types.SemanticContainer)
+    casted := *(result.Data).(*types.SemanticContainer)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func MapAlias(ctx context.Context, m map[string][]string, opts ...CallOptionFunc) (map[string][]string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"m": m},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "m": m, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "MapAlias", encoded)
-	if err != nil {
-		return nil, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "MapAlias", encoded)
+    if err != nil {
+        return nil, err
+    }
 
-	if result.Error != nil {
-		return nil, result.Error
-	}
+    if result.Error != nil {
+        return nil, result.Error
+    }
 
-	casted := (result.Data).(map[string][]string)
+    casted := (result.Data).(map[string][]string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func MergeAliasAttributes(ctx context.Context, money int64, opts ...CallOptionFunc) (types.MergeAttrs, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"money": money},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "money": money, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "MergeAliasAttributes", encoded)
-	if err != nil {
-		return types.MergeAttrs{}, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "MergeAliasAttributes", encoded)
+    if err != nil {
+        return types.MergeAttrs{}, err
+    }
 
-	if result.Error != nil {
-		return types.MergeAttrs{}, result.Error
-	}
+    if result.Error != nil {
+        return types.MergeAttrs{}, result.Error
+    }
 
-	casted := *(result.Data).(*types.MergeAttrs)
+    casted := *(result.Data).(*types.MergeAttrs)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func MyFunc(ctx context.Context, input string, opts ...CallOptionFunc) (types.DynamicOutput, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "MyFunc", encoded)
-	if err != nil {
-		return types.DynamicOutput{}, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "MyFunc", encoded)
+    if err != nil {
+        return types.DynamicOutput{}, err
+    }
 
-	if result.Error != nil {
-		return types.DynamicOutput{}, result.Error
-	}
+    if result.Error != nil {
+        return types.DynamicOutput{}, result.Error
+    }
 
-	casted := *(result.Data).(*types.DynamicOutput)
+    casted := *(result.Data).(*types.DynamicOutput)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func NestedAlias(ctx context.Context, c types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString, opts ...CallOptionFunc) (types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"c": c},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "c": c, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "NestedAlias", encoded)
-	if err != nil {
-		return types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString{}, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "NestedAlias", encoded)
+    if err != nil {
+        return types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString{}, err
+    }
 
-	if result.Error != nil {
-		return types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString{}, result.Error
-	}
+    if result.Error != nil {
+        return types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString{}, result.Error
+    }
 
-	casted := *(result.Data).(*types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString)
+    casted := *(result.Data).(*types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func NullLiteralClassHello(ctx context.Context, s string, opts ...CallOptionFunc) (types.ClassForNullLiteral, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"s": s},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "s": s, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "NullLiteralClassHello", encoded)
-	if err != nil {
-		return types.ClassForNullLiteral{}, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "NullLiteralClassHello", encoded)
+    if err != nil {
+        return types.ClassForNullLiteral{}, err
+    }
 
-	if result.Error != nil {
-		return types.ClassForNullLiteral{}, result.Error
-	}
+    if result.Error != nil {
+        return types.ClassForNullLiteral{}, result.Error
+    }
 
-	casted := *(result.Data).(*types.ClassForNullLiteral)
+    casted := *(result.Data).(*types.ClassForNullLiteral)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func OpenAIWithAnthropicResponseHello(ctx context.Context, s string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"s": s},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "s": s, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "OpenAIWithAnthropicResponseHello", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "OpenAIWithAnthropicResponseHello", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func OptionalTest_Function(ctx context.Context, input string, opts ...CallOptionFunc) ([]*types.OptionalTest_ReturnType, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "OptionalTest_Function", encoded)
-	if err != nil {
-		return nil, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "OptionalTest_Function", encoded)
+    if err != nil {
+        return nil, err
+    }
 
-	if result.Error != nil {
-		return nil, result.Error
-	}
+    if result.Error != nil {
+        return nil, result.Error
+    }
 
-	casted := (result.Data).([]*types.OptionalTest_ReturnType)
+    casted := (result.Data).([]*types.OptionalTest_ReturnType)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func PdfInput(ctx context.Context, pdf any, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"pdf": pdf},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "pdf": pdf, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "PdfInput", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "PdfInput", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func PdfInputAnthropic(ctx context.Context, pdf any, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"pdf": pdf},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "pdf": pdf, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "PdfInputAnthropic", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "PdfInputAnthropic", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func PdfInputOpenai(ctx context.Context, pdf any, prompt string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"pdf": pdf, "prompt": prompt},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "pdf": pdf,"prompt": prompt, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "PdfInputOpenai", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "PdfInputOpenai", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func PredictAge(ctx context.Context, name string, opts ...CallOptionFunc) (types.FooAny, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"name": name},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "name": name, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "PredictAge", encoded)
-	if err != nil {
-		return types.FooAny{}, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "PredictAge", encoded)
+    if err != nil {
+        return types.FooAny{}, err
+    }
 
-	if result.Error != nil {
-		return types.FooAny{}, result.Error
-	}
+    if result.Error != nil {
+        return types.FooAny{}, result.Error
+    }
 
-	casted := *(result.Data).(*types.FooAny)
+    casted := *(result.Data).(*types.FooAny)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func PredictAgeBare(ctx context.Context, inp string, opts ...CallOptionFunc) (int64, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"inp": inp},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "inp": inp, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "PredictAgeBare", encoded)
-	if err != nil {
-		return 0, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "PredictAgeBare", encoded)
+    if err != nil {
+        return 0, err
+    }
 
-	if result.Error != nil {
-		return 0, result.Error
-	}
+    if result.Error != nil {
+        return 0, result.Error
+    }
 
-	casted := *(result.Data).(*int64)
+    casted := *(result.Data).(*int64)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func PrimitiveAlias(ctx context.Context, p types.Union4BoolOrFloatOrIntOrString, opts ...CallOptionFunc) (types.Union4BoolOrFloatOrIntOrString, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"p": p},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "p": p, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "PrimitiveAlias", encoded)
-	if err != nil {
-		return types.Union4BoolOrFloatOrIntOrString{}, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "PrimitiveAlias", encoded)
+    if err != nil {
+        return types.Union4BoolOrFloatOrIntOrString{}, err
+    }
 
-	if result.Error != nil {
-		return types.Union4BoolOrFloatOrIntOrString{}, result.Error
-	}
+    if result.Error != nil {
+        return types.Union4BoolOrFloatOrIntOrString{}, result.Error
+    }
 
-	casted := *(result.Data).(*types.Union4BoolOrFloatOrIntOrString)
+    casted := *(result.Data).(*types.Union4BoolOrFloatOrIntOrString)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func PromptTestClaude(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "PromptTestClaude", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "PromptTestClaude", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func PromptTestClaudeChat(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "PromptTestClaudeChat", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "PromptTestClaudeChat", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func PromptTestClaudeChatNoSystem(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "PromptTestClaudeChatNoSystem", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "PromptTestClaudeChatNoSystem", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func PromptTestOpenAI(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "PromptTestOpenAI", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "PromptTestOpenAI", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func PromptTestOpenAIChat(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "PromptTestOpenAIChat", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "PromptTestOpenAIChat", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func PromptTestOpenAIChatNoSystem(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "PromptTestOpenAIChatNoSystem", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "PromptTestOpenAIChatNoSystem", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func PromptTestStreaming(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "PromptTestStreaming", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "PromptTestStreaming", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func RecursiveAliasCycle(ctx context.Context, input types.RecAliasOne, opts ...CallOptionFunc) (types.RecAliasOne, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "RecursiveAliasCycle", encoded)
-	if err != nil {
-		return nil, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "RecursiveAliasCycle", encoded)
+    if err != nil {
+        return nil, err
+    }
 
-	if result.Error != nil {
-		return nil, result.Error
-	}
+    if result.Error != nil {
+        return nil, result.Error
+    }
 
-	casted := *(result.Data).(*types.RecAliasOne)
+    casted := *(result.Data).(*types.RecAliasOne)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func RecursiveClassWithAliasIndirection(ctx context.Context, cls types.NodeWithAliasIndirection, opts ...CallOptionFunc) (types.NodeWithAliasIndirection, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"cls": cls},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "cls": cls, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "RecursiveClassWithAliasIndirection", encoded)
-	if err != nil {
-		return types.NodeWithAliasIndirection{}, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "RecursiveClassWithAliasIndirection", encoded)
+    if err != nil {
+        return types.NodeWithAliasIndirection{}, err
+    }
 
-	if result.Error != nil {
-		return types.NodeWithAliasIndirection{}, result.Error
-	}
+    if result.Error != nil {
+        return types.NodeWithAliasIndirection{}, result.Error
+    }
 
-	casted := *(result.Data).(*types.NodeWithAliasIndirection)
+    casted := *(result.Data).(*types.NodeWithAliasIndirection)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func RecursiveUnionTest(ctx context.Context, input types.RecursiveUnion, opts ...CallOptionFunc) (types.RecursiveUnion, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "RecursiveUnionTest", encoded)
-	if err != nil {
-		return types.Union2MapStringKeyRecursiveUnionValueOrString{}, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "RecursiveUnionTest", encoded)
+    if err != nil {
+        return types.Union2MapStringKeyRecursiveUnionValueOrString{}, err
+    }
 
-	if result.Error != nil {
-		return types.Union2MapStringKeyRecursiveUnionValueOrString{}, result.Error
-	}
+    if result.Error != nil {
+        return types.Union2MapStringKeyRecursiveUnionValueOrString{}, result.Error
+    }
 
-	casted := *(result.Data).(*types.RecursiveUnion)
+    casted := *(result.Data).(*types.RecursiveUnion)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func ReturnAliasWithMergedAttributes(ctx context.Context, money int64, opts ...CallOptionFunc) (int64, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"money": money},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "money": money, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "ReturnAliasWithMergedAttributes", encoded)
-	if err != nil {
-		return 0, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "ReturnAliasWithMergedAttributes", encoded)
+    if err != nil {
+        return 0, err
+    }
 
-	if result.Error != nil {
-		return 0, result.Error
-	}
+    if result.Error != nil {
+        return 0, result.Error
+    }
 
-	casted := *(result.Data).(*int64)
+    casted := *(result.Data).(*int64)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func ReturnFailingAssert(ctx context.Context, inp int64, opts ...CallOptionFunc) (int64, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"inp": inp},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "inp": inp, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "ReturnFailingAssert", encoded)
-	if err != nil {
-		return 0, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "ReturnFailingAssert", encoded)
+    if err != nil {
+        return 0, err
+    }
 
-	if result.Error != nil {
-		return 0, result.Error
-	}
+    if result.Error != nil {
+        return 0, result.Error
+    }
 
-	casted := *(result.Data).(*int64)
+    casted := *(result.Data).(*int64)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func ReturnJsonEntry(ctx context.Context, s string, opts ...CallOptionFunc) (types.JsonTemplate, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"s": s},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "s": s, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "ReturnJsonEntry", encoded)
-	if err != nil {
-		return nil, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "ReturnJsonEntry", encoded)
+    if err != nil {
+        return nil, err
+    }
 
-	if result.Error != nil {
-		return nil, result.Error
-	}
+    if result.Error != nil {
+        return nil, result.Error
+    }
 
-	casted := *(result.Data).(*types.JsonTemplate)
+    casted := *(result.Data).(*types.JsonTemplate)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func ReturnMalformedConstraints(ctx context.Context, a int64, opts ...CallOptionFunc) (types.MalformedConstraints, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"a": a},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "a": a, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "ReturnMalformedConstraints", encoded)
-	if err != nil {
-		return types.MalformedConstraints{}, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "ReturnMalformedConstraints", encoded)
+    if err != nil {
+        return types.MalformedConstraints{}, err
+    }
 
-	if result.Error != nil {
-		return types.MalformedConstraints{}, result.Error
-	}
+    if result.Error != nil {
+        return types.MalformedConstraints{}, result.Error
+    }
 
-	casted := *(result.Data).(*types.MalformedConstraints)
+    casted := *(result.Data).(*types.MalformedConstraints)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func SchemaDescriptions(ctx context.Context, input string, opts ...CallOptionFunc) (types.Schema, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "SchemaDescriptions", encoded)
-	if err != nil {
-		return types.Schema{}, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "SchemaDescriptions", encoded)
+    if err != nil {
+        return types.Schema{}, err
+    }
 
-	if result.Error != nil {
-		return types.Schema{}, result.Error
-	}
+    if result.Error != nil {
+        return types.Schema{}, result.Error
+    }
 
-	casted := *(result.Data).(*types.Schema)
+    casted := *(result.Data).(*types.Schema)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func SimpleRecursiveListAlias(ctx context.Context, input types.RecursiveListAlias, opts ...CallOptionFunc) (types.RecursiveListAlias, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "SimpleRecursiveListAlias", encoded)
-	if err != nil {
-		return nil, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "SimpleRecursiveListAlias", encoded)
+    if err != nil {
+        return nil, err
+    }
 
-	if result.Error != nil {
-		return nil, result.Error
-	}
+    if result.Error != nil {
+        return nil, result.Error
+    }
 
-	casted := *(result.Data).(*types.RecursiveListAlias)
+    casted := *(result.Data).(*types.RecursiveListAlias)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func SimpleRecursiveMapAlias(ctx context.Context, input types.RecursiveMapAlias, opts ...CallOptionFunc) (types.RecursiveMapAlias, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "SimpleRecursiveMapAlias", encoded)
-	if err != nil {
-		return nil, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "SimpleRecursiveMapAlias", encoded)
+    if err != nil {
+        return nil, err
+    }
 
-	if result.Error != nil {
-		return nil, result.Error
-	}
+    if result.Error != nil {
+        return nil, result.Error
+    }
 
-	casted := *(result.Data).(*types.RecursiveMapAlias)
+    casted := *(result.Data).(*types.RecursiveMapAlias)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func StreamBigNumbers(ctx context.Context, digits int64, opts ...CallOptionFunc) (types.BigNumbers, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"digits": digits},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "digits": digits, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "StreamBigNumbers", encoded)
-	if err != nil {
-		return types.BigNumbers{}, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "StreamBigNumbers", encoded)
+    if err != nil {
+        return types.BigNumbers{}, err
+    }
 
-	if result.Error != nil {
-		return types.BigNumbers{}, result.Error
-	}
+    if result.Error != nil {
+        return types.BigNumbers{}, result.Error
+    }
 
-	casted := *(result.Data).(*types.BigNumbers)
+    casted := *(result.Data).(*types.BigNumbers)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func StreamFailingAssertion(ctx context.Context, theme string, length int64, opts ...CallOptionFunc) (types.TwoStoriesOneTitle, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"theme": theme, "length": length},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "theme": theme,"length": length, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "StreamFailingAssertion", encoded)
-	if err != nil {
-		return types.TwoStoriesOneTitle{}, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "StreamFailingAssertion", encoded)
+    if err != nil {
+        return types.TwoStoriesOneTitle{}, err
+    }
 
-	if result.Error != nil {
-		return types.TwoStoriesOneTitle{}, result.Error
-	}
+    if result.Error != nil {
+        return types.TwoStoriesOneTitle{}, result.Error
+    }
 
-	casted := *(result.Data).(*types.TwoStoriesOneTitle)
+    casted := *(result.Data).(*types.TwoStoriesOneTitle)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func StreamFailingCheck(ctx context.Context, theme string, length int64, opts ...CallOptionFunc) (types.TwoStoriesOneTitleCheck, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"theme": theme, "length": length},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "theme": theme,"length": length, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "StreamFailingCheck", encoded)
-	if err != nil {
-		return types.TwoStoriesOneTitleCheck{}, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "StreamFailingCheck", encoded)
+    if err != nil {
+        return types.TwoStoriesOneTitleCheck{}, err
+    }
 
-	if result.Error != nil {
-		return types.TwoStoriesOneTitleCheck{}, result.Error
-	}
+    if result.Error != nil {
+        return types.TwoStoriesOneTitleCheck{}, result.Error
+    }
 
-	casted := *(result.Data).(*types.TwoStoriesOneTitleCheck)
+    casted := *(result.Data).(*types.TwoStoriesOneTitleCheck)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func StreamOneBigNumber(ctx context.Context, digits int64, opts ...CallOptionFunc) (int64, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"digits": digits},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "digits": digits, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "StreamOneBigNumber", encoded)
-	if err != nil {
-		return 0, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "StreamOneBigNumber", encoded)
+    if err != nil {
+        return 0, err
+    }
 
-	if result.Error != nil {
-		return 0, result.Error
-	}
+    if result.Error != nil {
+        return 0, result.Error
+    }
 
-	casted := *(result.Data).(*int64)
+    casted := *(result.Data).(*int64)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func StreamUnionIntegers(ctx context.Context, digits int64, opts ...CallOptionFunc) ([]types.Union2IntOrString, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"digits": digits},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "digits": digits, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "StreamUnionIntegers", encoded)
-	if err != nil {
-		return nil, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "StreamUnionIntegers", encoded)
+    if err != nil {
+        return nil, err
+    }
 
-	if result.Error != nil {
-		return nil, result.Error
-	}
+    if result.Error != nil {
+        return nil, result.Error
+    }
 
-	casted := (result.Data).([]types.Union2IntOrString)
+    casted := (result.Data).([]types.Union2IntOrString)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func StreamingCompoundNumbers(ctx context.Context, digits int64, yapping bool, opts ...CallOptionFunc) (types.CompoundBigNumbers, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"digits": digits, "yapping": yapping},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "digits": digits,"yapping": yapping, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "StreamingCompoundNumbers", encoded)
-	if err != nil {
-		return types.CompoundBigNumbers{}, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "StreamingCompoundNumbers", encoded)
+    if err != nil {
+        return types.CompoundBigNumbers{}, err
+    }
 
-	if result.Error != nil {
-		return types.CompoundBigNumbers{}, result.Error
-	}
+    if result.Error != nil {
+        return types.CompoundBigNumbers{}, result.Error
+    }
 
-	casted := *(result.Data).(*types.CompoundBigNumbers)
+    casted := *(result.Data).(*types.CompoundBigNumbers)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func StructureDocument1559(ctx context.Context, document_txt string, opts ...CallOptionFunc) (types.Document1559, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"document_txt": document_txt},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "document_txt": document_txt, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "StructureDocument1559", encoded)
-	if err != nil {
-		return types.Document1559{}, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "StructureDocument1559", encoded)
+    if err != nil {
+        return types.Document1559{}, err
+    }
 
-	if result.Error != nil {
-		return types.Document1559{}, result.Error
-	}
+    if result.Error != nil {
+        return types.Document1559{}, result.Error
+    }
 
-	casted := *(result.Data).(*types.Document1559)
+    casted := *(result.Data).(*types.Document1559)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TakeRecAliasDep(ctx context.Context, input types.RecursiveAliasDependency, opts ...CallOptionFunc) (types.RecursiveAliasDependency, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TakeRecAliasDep", encoded)
-	if err != nil {
-		return types.RecursiveAliasDependency{}, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TakeRecAliasDep", encoded)
+    if err != nil {
+        return types.RecursiveAliasDependency{}, err
+    }
 
-	if result.Error != nil {
-		return types.RecursiveAliasDependency{}, result.Error
-	}
+    if result.Error != nil {
+        return types.RecursiveAliasDependency{}, result.Error
+    }
 
-	casted := *(result.Data).(*types.RecursiveAliasDependency)
+    casted := *(result.Data).(*types.RecursiveAliasDependency)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TellStory(ctx context.Context, story string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"story": story},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "story": story, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TellStory", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TellStory", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestAnthropic(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestAnthropic", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestAnthropic", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestAnthropicShorthand(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestAnthropicShorthand", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestAnthropicShorthand", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestAws(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestAws", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestAws", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestAwsClaude37(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestAwsClaude37", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestAwsClaude37", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestAwsInferenceProfile(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestAwsInferenceProfile", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestAwsInferenceProfile", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestAwsInvalidAccessKey(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestAwsInvalidAccessKey", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestAwsInvalidAccessKey", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestAwsInvalidProfile(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestAwsInvalidProfile", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestAwsInvalidProfile", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestAwsInvalidRegion(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestAwsInvalidRegion", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestAwsInvalidRegion", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestAwsInvalidSessionToken(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestAwsInvalidSessionToken", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestAwsInvalidSessionToken", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestAzure(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestAzure", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestAzure", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestAzureFailure(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestAzureFailure", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestAzureFailure", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestAzureO1NoMaxTokens(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestAzureO1NoMaxTokens", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestAzureO1NoMaxTokens", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestAzureO1WithMaxCompletionTokens(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestAzureO1WithMaxCompletionTokens", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestAzureO1WithMaxCompletionTokens", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestAzureO1WithMaxTokens(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestAzureO1WithMaxTokens", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestAzureO1WithMaxTokens", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestAzureO3NoMaxTokens(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestAzureO3NoMaxTokens", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestAzureO3NoMaxTokens", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestAzureO3WithMaxCompletionTokens(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestAzureO3WithMaxCompletionTokens", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestAzureO3WithMaxCompletionTokens", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestAzureWithMaxTokens(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestAzureWithMaxTokens", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestAzureWithMaxTokens", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestCaching(ctx context.Context, input string, not_cached string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input, "not_cached": not_cached},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input,"not_cached": not_cached, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestCaching", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestCaching", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestFallbackClient(ctx context.Context, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{  },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestFallbackClient", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestFallbackClient", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestFallbackStrategy(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestFallbackStrategy", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestFallbackStrategy", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestFallbackToShorthand(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestFallbackToShorthand", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestFallbackToShorthand", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestFnNamedArgsSingleBool(ctx context.Context, myBool bool, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"myBool": myBool},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "myBool": myBool, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestFnNamedArgsSingleBool", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestFnNamedArgsSingleBool", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestFnNamedArgsSingleClass(ctx context.Context, myArg types.NamedArgsSingleClass, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"myArg": myArg},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "myArg": myArg, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestFnNamedArgsSingleClass", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestFnNamedArgsSingleClass", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestFnNamedArgsSingleEnumList(ctx context.Context, myArg []types.NamedArgsSingleEnumList, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"myArg": myArg},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "myArg": myArg, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestFnNamedArgsSingleEnumList", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestFnNamedArgsSingleEnumList", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestFnNamedArgsSingleFloat(ctx context.Context, myFloat float64, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"myFloat": myFloat},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "myFloat": myFloat, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestFnNamedArgsSingleFloat", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestFnNamedArgsSingleFloat", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestFnNamedArgsSingleInt(ctx context.Context, myInt int64, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"myInt": myInt},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "myInt": myInt, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestFnNamedArgsSingleInt", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestFnNamedArgsSingleInt", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestFnNamedArgsSingleMapStringToClass(ctx context.Context, myMap map[string]types.StringToClassEntry, opts ...CallOptionFunc) (map[string]types.StringToClassEntry, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"myMap": myMap},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "myMap": myMap, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestFnNamedArgsSingleMapStringToClass", encoded)
-	if err != nil {
-		return nil, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestFnNamedArgsSingleMapStringToClass", encoded)
+    if err != nil {
+        return nil, err
+    }
 
-	if result.Error != nil {
-		return nil, result.Error
-	}
+    if result.Error != nil {
+        return nil, result.Error
+    }
 
-	casted := (result.Data).(map[string]types.StringToClassEntry)
+    casted := (result.Data).(map[string]types.StringToClassEntry)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestFnNamedArgsSingleMapStringToMap(ctx context.Context, myMap map[string]map[string]string, opts ...CallOptionFunc) (map[string]map[string]string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"myMap": myMap},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "myMap": myMap, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestFnNamedArgsSingleMapStringToMap", encoded)
-	if err != nil {
-		return nil, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestFnNamedArgsSingleMapStringToMap", encoded)
+    if err != nil {
+        return nil, err
+    }
 
-	if result.Error != nil {
-		return nil, result.Error
-	}
+    if result.Error != nil {
+        return nil, result.Error
+    }
 
-	casted := (result.Data).(map[string]map[string]string)
+    casted := (result.Data).(map[string]map[string]string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestFnNamedArgsSingleMapStringToString(ctx context.Context, myMap map[string]string, opts ...CallOptionFunc) (map[string]string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"myMap": myMap},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "myMap": myMap, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestFnNamedArgsSingleMapStringToString", encoded)
-	if err != nil {
-		return nil, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestFnNamedArgsSingleMapStringToString", encoded)
+    if err != nil {
+        return nil, err
+    }
 
-	if result.Error != nil {
-		return nil, result.Error
-	}
+    if result.Error != nil {
+        return nil, result.Error
+    }
 
-	casted := (result.Data).(map[string]string)
+    casted := (result.Data).(map[string]string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestFnNamedArgsSingleString(ctx context.Context, myString string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"myString": myString},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "myString": myString, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestFnNamedArgsSingleString", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestFnNamedArgsSingleString", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestFnNamedArgsSingleStringArray(ctx context.Context, myStringArray []string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"myStringArray": myStringArray},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "myStringArray": myStringArray, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestFnNamedArgsSingleStringArray", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestFnNamedArgsSingleStringArray", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestFnNamedArgsSingleStringList(ctx context.Context, myArg []string, opts ...CallOptionFunc) ([]string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"myArg": myArg},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "myArg": myArg, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestFnNamedArgsSingleStringList", encoded)
-	if err != nil {
-		return nil, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestFnNamedArgsSingleStringList", encoded)
+    if err != nil {
+        return nil, err
+    }
 
-	if result.Error != nil {
-		return nil, result.Error
-	}
+    if result.Error != nil {
+        return nil, result.Error
+    }
 
-	casted := (result.Data).([]string)
+    casted := (result.Data).([]string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestGemini(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestGemini", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestGemini", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestGeminiOpenAiGeneric(ctx context.Context, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{  },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestGeminiOpenAiGeneric", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestGeminiOpenAiGeneric", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestGeminiSystem(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestGeminiSystem", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestGeminiSystem", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestGeminiSystemAsChat(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestGeminiSystemAsChat", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestGeminiSystemAsChat", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestGroq(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestGroq", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestGroq", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestImageInput(ctx context.Context, img any, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"img": img},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "img": img, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestImageInput", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestImageInput", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestImageInputAnthropic(ctx context.Context, img any, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"img": img},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "img": img, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestImageInputAnthropic", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestImageInputAnthropic", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestImageListInput(ctx context.Context, imgs []any, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"imgs": imgs},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "imgs": imgs, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestImageListInput", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestImageListInput", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestMemory(ctx context.Context, input string, opts ...CallOptionFunc) (types.TestMemoryOutput, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestMemory", encoded)
-	if err != nil {
-		return types.TestMemoryOutput{}, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestMemory", encoded)
+    if err != nil {
+        return types.TestMemoryOutput{}, err
+    }
 
-	if result.Error != nil {
-		return types.TestMemoryOutput{}, result.Error
-	}
+    if result.Error != nil {
+        return types.TestMemoryOutput{}, result.Error
+    }
 
-	casted := *(result.Data).(*types.TestMemoryOutput)
+    casted := *(result.Data).(*types.TestMemoryOutput)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestMulticlassNamedArgs(ctx context.Context, myArg types.NamedArgsSingleClass, myArg2 types.NamedArgsSingleClass, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"myArg": myArg, "myArg2": myArg2},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "myArg": myArg,"myArg2": myArg2, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestMulticlassNamedArgs", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestMulticlassNamedArgs", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestNamedArgsLiteralBool(ctx context.Context, myBool bool, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"myBool": myBool},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "myBool": myBool, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestNamedArgsLiteralBool", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestNamedArgsLiteralBool", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestNamedArgsLiteralInt(ctx context.Context, myInt int64, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"myInt": myInt},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "myInt": myInt, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestNamedArgsLiteralInt", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestNamedArgsLiteralInt", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestNamedArgsLiteralString(ctx context.Context, myString string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"myString": myString},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "myString": myString, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestNamedArgsLiteralString", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestNamedArgsLiteralString", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestOllama(ctx context.Context, input string, opts ...CallOptionFunc) (*string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOllama", encoded)
-	if err != nil {
-		return nil, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestOllama", encoded)
+    if err != nil {
+        return nil, err
+    }
 
-	if result.Error != nil {
-		return nil, result.Error
-	}
+    if result.Error != nil {
+        return nil, result.Error
+    }
 
-	casted := (result.Data).(*string)
+    casted := (result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestOllamaHaiku(ctx context.Context, input string, opts ...CallOptionFunc) (types.Haiku, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOllamaHaiku", encoded)
-	if err != nil {
-		return types.Haiku{}, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestOllamaHaiku", encoded)
+    if err != nil {
+        return types.Haiku{}, err
+    }
 
-	if result.Error != nil {
-		return types.Haiku{}, result.Error
-	}
+    if result.Error != nil {
+        return types.Haiku{}, result.Error
+    }
 
-	casted := *(result.Data).(*types.Haiku)
+    casted := *(result.Data).(*types.Haiku)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestOpenAI(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAI", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestOpenAI", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestOpenAIDummyClient(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIDummyClient", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIDummyClient", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestOpenAIGPT4oMini(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIGPT4oMini", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIGPT4oMini", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestOpenAIGPT4oMini2(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIGPT4oMini2", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIGPT4oMini2", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestOpenAIGPT4oMini3(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIGPT4oMini3", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIGPT4oMini3", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestOpenAILegacyProvider(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAILegacyProvider", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestOpenAILegacyProvider", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestOpenAIO1NoMaxTokens(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIO1NoMaxTokens", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIO1NoMaxTokens", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestOpenAIO1WithMaxCompletionTokens(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIO1WithMaxCompletionTokens", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIO1WithMaxCompletionTokens", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestOpenAIO1WithMaxTokens(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIO1WithMaxTokens", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIO1WithMaxTokens", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestOpenAIProviderWithResponsesType(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIProviderWithResponsesType", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIProviderWithResponsesType", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestOpenAIResponses(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponses", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponses", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestOpenAIResponsesAutoType(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponsesAutoType", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponsesAutoType", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestOpenAIResponsesConversation(ctx context.Context, topic string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"topic": topic},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "topic": topic, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponsesConversation", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponsesConversation", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestOpenAIResponsesCustomURL(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponsesCustomURL", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponsesCustomURL", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestOpenAIResponsesDifferentModel(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponsesDifferentModel", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponsesDifferentModel", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestOpenAIResponsesEndpoint(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponsesEndpoint", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponsesEndpoint", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestOpenAIResponsesExplicit(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponsesExplicit", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponsesExplicit", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestOpenAIResponsesFunctionCall(ctx context.Context, query string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"query": query},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "query": query, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponsesFunctionCall", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponsesFunctionCall", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestOpenAIResponsesImageInput(ctx context.Context, image types.Union2ImageOrString, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"image": image},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "image": image, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponsesImageInput", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponsesImageInput", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestOpenAIResponsesReasoning(ctx context.Context, problem string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"problem": problem},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "problem": problem, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponsesReasoning", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponsesReasoning", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestOpenAIResponsesShorthand(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponsesShorthand", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponsesShorthand", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestOpenAIResponsesWebSearch(ctx context.Context, query string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"query": query},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "query": query, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponsesWebSearch", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponsesWebSearch", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestOpenAIResponsesWithOpenAIResponseType(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponsesWithOpenAIResponseType", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponsesWithOpenAIResponseType", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestOpenAIShorthand(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIShorthand", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIShorthand", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestOpenAIWithFinishReasonError(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIWithFinishReasonError", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIWithFinishReasonError", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestOpenAIWithMaxTokens(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIWithMaxTokens", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIWithMaxTokens", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestOpenAIWithNullMaxTokens(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIWithNullMaxTokens", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIWithNullMaxTokens", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestOpenRouterMistralSmall3_1_24b(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOpenRouterMistralSmall3_1_24b", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestOpenRouterMistralSmall3_1_24b", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestRetryConstant(ctx context.Context, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{  },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestRetryConstant", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestRetryConstant", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestRetryExponential(ctx context.Context, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{  },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestRetryExponential", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestRetryExponential", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestRoundRobinStrategy(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestRoundRobinStrategy", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestRoundRobinStrategy", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestSingleFallbackClient(ctx context.Context, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{  },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestSingleFallbackClient", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestSingleFallbackClient", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestThinking(ctx context.Context, input string, opts ...CallOptionFunc) (types.CustomStory, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestThinking", encoded)
-	if err != nil {
-		return types.CustomStory{}, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestThinking", encoded)
+    if err != nil {
+        return types.CustomStory{}, err
+    }
 
-	if result.Error != nil {
-		return types.CustomStory{}, result.Error
-	}
+    if result.Error != nil {
+        return types.CustomStory{}, result.Error
+    }
 
-	casted := *(result.Data).(*types.CustomStory)
+    casted := *(result.Data).(*types.CustomStory)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestUniverseQuestion(ctx context.Context, question types.UniverseQuestionInput, opts ...CallOptionFunc) (types.UniverseQuestion, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"question": question},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "question": question, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestUniverseQuestion", encoded)
-	if err != nil {
-		return types.UniverseQuestion{}, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestUniverseQuestion", encoded)
+    if err != nil {
+        return types.UniverseQuestion{}, err
+    }
 
-	if result.Error != nil {
-		return types.UniverseQuestion{}, result.Error
-	}
+    if result.Error != nil {
+        return types.UniverseQuestion{}, result.Error
+    }
 
-	casted := *(result.Data).(*types.UniverseQuestion)
+    casted := *(result.Data).(*types.UniverseQuestion)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestVertex(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestVertex", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestVertex", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestVertexClaude(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestVertexClaude", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestVertexClaude", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func TestVertexWithSystemInstructions(ctx context.Context, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{  },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestVertexWithSystemInstructions", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "TestVertexWithSystemInstructions", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func UnionTest_Function(ctx context.Context, input types.Union2BoolOrString, opts ...CallOptionFunc) (types.UnionTest_ReturnType, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "UnionTest_Function", encoded)
-	if err != nil {
-		return types.UnionTest_ReturnType{}, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "UnionTest_Function", encoded)
+    if err != nil {
+        return types.UnionTest_ReturnType{}, err
+    }
 
-	if result.Error != nil {
-		return types.UnionTest_ReturnType{}, result.Error
-	}
+    if result.Error != nil {
+        return types.UnionTest_ReturnType{}, result.Error
+    }
 
-	casted := *(result.Data).(*types.UnionTest_ReturnType)
+    casted := *(result.Data).(*types.UnionTest_ReturnType)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func UseBlockConstraint(ctx context.Context, inp types.BlockConstraintForParam, opts ...CallOptionFunc) (int64, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"inp": inp},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "inp": inp, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "UseBlockConstraint", encoded)
-	if err != nil {
-		return 0, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "UseBlockConstraint", encoded)
+    if err != nil {
+        return 0, err
+    }
 
-	if result.Error != nil {
-		return 0, result.Error
-	}
+    if result.Error != nil {
+        return 0, result.Error
+    }
 
-	casted := *(result.Data).(*int64)
+    casted := *(result.Data).(*int64)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func UseMaintainFieldOrder(ctx context.Context, input types.MaintainFieldOrder, opts ...CallOptionFunc) (types.MaintainFieldOrder, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "UseMaintainFieldOrder", encoded)
-	if err != nil {
-		return types.MaintainFieldOrder{}, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "UseMaintainFieldOrder", encoded)
+    if err != nil {
+        return types.MaintainFieldOrder{}, err
+    }
 
-	if result.Error != nil {
-		return types.MaintainFieldOrder{}, result.Error
-	}
+    if result.Error != nil {
+        return types.MaintainFieldOrder{}, result.Error
+    }
 
-	casted := *(result.Data).(*types.MaintainFieldOrder)
+    casted := *(result.Data).(*types.MaintainFieldOrder)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func UseMalformedConstraints(ctx context.Context, a types.MalformedConstraints2, opts ...CallOptionFunc) (int64, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"a": a},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "a": a, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "UseMalformedConstraints", encoded)
-	if err != nil {
-		return 0, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "UseMalformedConstraints", encoded)
+    if err != nil {
+        return 0, err
+    }
 
-	if result.Error != nil {
-		return 0, result.Error
-	}
+    if result.Error != nil {
+        return 0, result.Error
+    }
 
-	casted := *(result.Data).(*int64)
+    casted := *(result.Data).(*int64)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func UseNestedBlockConstraint(ctx context.Context, inp types.NestedBlockConstraintForParam, opts ...CallOptionFunc) (int64, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"inp": inp},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "inp": inp, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "UseNestedBlockConstraint", encoded)
-	if err != nil {
-		return 0, err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "UseNestedBlockConstraint", encoded)
+    if err != nil {
+        return 0, err
+    }
 
-	if result.Error != nil {
-		return 0, result.Error
-	}
+    if result.Error != nil {
+        return 0, result.Error
+    }
 
-	casted := *(result.Data).(*int64)
+    casted := *(result.Data).(*int64)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func ValidateBasicResponses(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "ValidateBasicResponses", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "ValidateBasicResponses", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
+
 
 func ValidateResponseTypes(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"input": input},
-		Env:    getEnvVars(callOpts.env),
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "input": input, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "ValidateResponseTypes", encoded)
-	if err != nil {
-		return "", err
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "ValidateResponseTypes", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	casted := *(result.Data).(*string)
+    casted := *(result.Data).(*string)
 
-	return casted, nil
+    return casted, nil
 }
 
-func VideoInput(ctx context.Context, vid any, opts ...CallOptionFunc) (string, error) {
 
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
+func VideoInputGemini(ctx context.Context, vid any, opts ...CallOptionFunc) (string, error) {
 
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"vid": vid},
-		Env:    getEnvVars(callOpts.env),
-	}
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
 
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "vid": vid, },
+        Env: getEnvVars(callOpts.env),
+    }
 
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
 
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
 
-	result, err := bamlRuntime.CallFunction(ctx, "VideoInput", encoded)
-	if err != nil {
-		return "", err
-	}
+    encoded, err := baml.EncodeArgs(args)
+    if err != nil {
+        panic(err)
+    }
 
-	if result.Error != nil {
-		return "", result.Error
-	}
+    result, err := bamlRuntime.CallFunction(ctx, "VideoInputGemini", encoded)
+    if err != nil {
+        return "", err
+    }
 
-	casted := *(result.Data).(*string)
+    if result.Error != nil {
+        return "", result.Error
+    }
 
-	return casted, nil
-}
+    casted := *(result.Data).(*string)
 
-func VideoInputAnthropic(ctx context.Context, vid any, opts ...CallOptionFunc) (string, error) {
-
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
-
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"vid": vid},
-		Env:    getEnvVars(callOpts.env),
-	}
-
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
-
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
-
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
-
-	result, err := bamlRuntime.CallFunction(ctx, "VideoInputAnthropic", encoded)
-	if err != nil {
-		return "", err
-	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := *(result.Data).(*string)
-
-	return casted, nil
-}
-
-func VideoInputOpenai(ctx context.Context, vid any, prompt string, opts ...CallOptionFunc) (string, error) {
-
-	var callOpts callOption
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
-
-	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"vid": vid, "prompt": prompt},
-		Env:    getEnvVars(callOpts.env),
-	}
-
-	if callOpts.clientRegistry != nil {
-		args.ClientRegistry = callOpts.clientRegistry
-	}
-
-	if callOpts.collectors != nil {
-		args.Collectors = callOpts.collectors
-	}
-
-	encoded, err := baml.EncodeArgs(args)
-	if err != nil {
-		panic(err)
-	}
-
-	result, err := bamlRuntime.CallFunction(ctx, "VideoInputOpenai", encoded)
-	if err != nil {
-		return "", err
-	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := *(result.Data).(*string)
-
-	return casted, nil
+    return casted, nil
 }

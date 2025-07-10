@@ -231,7 +231,5 @@ export type StreamingServerTypes = {
   UseNestedBlockConstraint: number,
   ValidateBasicResponses: string,
   ValidateResponseTypes: string,
-  VideoInput: string,
-  VideoInputAnthropic: string,
-  VideoInputOpenai: string,
+  VideoInputGemini: string,
 }

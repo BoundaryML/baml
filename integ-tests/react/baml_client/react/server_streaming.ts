@@ -3924,7 +3924,7 @@ export const ValidateResponseTypes = async (
 };
 
 /**
- * Executes the streaming variant of the "VideoInput" BAML action.
+ * Executes the streaming variant of the "VideoInputGemini" BAML action.
  *
  * This action initiates a streaming response by calling the corresponding
  * BAML stream function. The returned stream yields incremental updates.
@@ -3933,52 +3933,11 @@ export const ValidateResponseTypes = async (
  *
  * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
  */
-export const VideoInput = async (
+export const VideoInputGemini = async (
   vid: Image,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.VideoInput(
+  const stream = b.stream.VideoInputGemini(
     vid,
-  );
-  return Promise.resolve(stream.toStreamable());
-};
-
-/**
- * Executes the streaming variant of the "VideoInputAnthropic" BAML action.
- *
- * This action initiates a streaming response by calling the corresponding
- * BAML stream function. The returned stream yields incremental updates.
- *
- * @param { Image } vid - Input parameter.
- *
- * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
- */
-export const VideoInputAnthropic = async (
-  vid: Image,
-): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.VideoInputAnthropic(
-    vid,
-  );
-  return Promise.resolve(stream.toStreamable());
-};
-
-/**
- * Executes the streaming variant of the "VideoInputOpenai" BAML action.
- *
- * This action initiates a streaming response by calling the corresponding
- * BAML stream function. The returned stream yields incremental updates.
- *
- * @param { Image } vid - Input parameter.
- * @param { string } prompt - Input parameter.
- *
- * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
- */
-export const VideoInputOpenai = async (
-  vid: Image,
-  prompt: string,
-): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.VideoInputOpenai(
-    vid,
-    prompt,
   );
   return Promise.resolve(stream.toStreamable());
 };

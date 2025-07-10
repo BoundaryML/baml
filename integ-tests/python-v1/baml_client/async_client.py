@@ -1501,25 +1501,11 @@ class BamlAsyncClient:
             "input": input,
         })
         return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
-    async def VideoInput(self, vid: baml_py.Image,
+    async def VideoInputGemini(self, vid: baml_py.Image,
         baml_options: BamlCallOptions = {},
     ) -> str:
-        result = await self.__options.merge_options(baml_options).call_function_async(function_name="VideoInput", args={
+        result = await self.__options.merge_options(baml_options).call_function_async(function_name="VideoInputGemini", args={
             "vid": vid,
-        })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
-    async def VideoInputAnthropic(self, vid: baml_py.Image,
-        baml_options: BamlCallOptions = {},
-    ) -> str:
-        result = await self.__options.merge_options(baml_options).call_function_async(function_name="VideoInputAnthropic", args={
-            "vid": vid,
-        })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
-    async def VideoInputOpenai(self, vid: baml_py.Image,prompt: str,
-        baml_options: BamlCallOptions = {},
-    ) -> str:
-        result = await self.__options.merge_options(baml_options).call_function_async(function_name="VideoInputOpenai", args={
-            "vid": vid,"prompt": prompt,
         })
         return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     
@@ -3979,35 +3965,11 @@ class BamlStreamClient:
           lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
-    def VideoInput(self, vid: baml_py.Image,
+    def VideoInputGemini(self, vid: baml_py.Image,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[str, str]:
-        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="VideoInput", args={
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="VideoInputGemini", args={
             "vid": vid,
-        })
-        return baml_py.BamlStream[str, str](
-          result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
-          ctx,
-        )
-    def VideoInputAnthropic(self, vid: baml_py.Image,
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlStream[str, str]:
-        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="VideoInputAnthropic", args={
-            "vid": vid,
-        })
-        return baml_py.BamlStream[str, str](
-          result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
-          ctx,
-        )
-    def VideoInputOpenai(self, vid: baml_py.Image,prompt: str,
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlStream[str, str]:
-        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="VideoInputOpenai", args={
-            "vid": vid,"prompt": prompt,
         })
         return baml_py.BamlStream[str, str](
           result,
@@ -5451,25 +5413,11 @@ class BamlHttpRequestClient:
             "input": input,
         }, mode="request")
         return result
-    async def VideoInput(self, vid: baml_py.Image,
+    async def VideoInputGemini(self, vid: baml_py.Image,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="VideoInput", args={
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="VideoInputGemini", args={
             "vid": vid,
-        }, mode="request")
-        return result
-    async def VideoInputAnthropic(self, vid: baml_py.Image,
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.baml_py.HTTPRequest:
-        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="VideoInputAnthropic", args={
-            "vid": vid,
-        }, mode="request")
-        return result
-    async def VideoInputOpenai(self, vid: baml_py.Image,prompt: str,
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.baml_py.HTTPRequest:
-        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="VideoInputOpenai", args={
-            "vid": vid,"prompt": prompt,
         }, mode="request")
         return result
     
@@ -6908,25 +6856,11 @@ class BamlHttpStreamRequestClient:
             "input": input,
         }, mode="stream")
         return result
-    async def VideoInput(self, vid: baml_py.Image,
+    async def VideoInputGemini(self, vid: baml_py.Image,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="VideoInput", args={
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="VideoInputGemini", args={
             "vid": vid,
-        }, mode="stream")
-        return result
-    async def VideoInputAnthropic(self, vid: baml_py.Image,
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.baml_py.HTTPRequest:
-        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="VideoInputAnthropic", args={
-            "vid": vid,
-        }, mode="stream")
-        return result
-    async def VideoInputOpenai(self, vid: baml_py.Image,prompt: str,
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.baml_py.HTTPRequest:
-        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="VideoInputOpenai", args={
-            "vid": vid,"prompt": prompt,
         }, mode="stream")
         return result
     

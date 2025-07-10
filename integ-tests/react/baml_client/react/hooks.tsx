@@ -10558,7 +10558,7 @@ export function useValidateResponseTypes(
   }
 }
 /**
- * A specialized hook for the VideoInput BAML function that supports both streaming and non‑streaming responses.
+ * A specialized hook for the VideoInputGemini BAML function that supports both streaming and non‑streaming responses.
  *
  * **Input Types:**
  *
@@ -10583,10 +10583,10 @@ export function useValidateResponseTypes(
  * @example
  * ```tsx
  * // Basic non‑streaming usage:
- * const { data, error, isLoading, mutate } = useVideoInput({ stream: false});
+ * const { data, error, isLoading, mutate } = useVideoInputGemini({ stream: false});
  *
  * // Streaming usage:
- * const { data, streamData, isLoading, error, mutate } = useVideoInput({
+ * const { data, streamData, isLoading, error, mutate } = useVideoInputGemini({
  *   stream: true | undefined,
  *   onStreamData: (partial) => console.log('Partial update:', partial),
  *   onFinalData: (final) => console.log('Final result:', final),
@@ -10594,118 +10594,16 @@ export function useValidateResponseTypes(
  * });
  * ```
  */
-export function useVideoInput(props: HookInput<'VideoInput', { stream: false }>): HookOutput<'VideoInput', { stream: false }>
-export function useVideoInput(props?: HookInput<'VideoInput', { stream?: true }>): HookOutput<'VideoInput', { stream: true }>
-export function useVideoInput(
-  props: HookInput<'VideoInput', { stream?: boolean }> = {},
-): HookOutput<'VideoInput', { stream: true }> | HookOutput<'VideoInput', { stream: false }> {
-  let action: ServerAction = Actions.VideoInput;
+export function useVideoInputGemini(props: HookInput<'VideoInputGemini', { stream: false }>): HookOutput<'VideoInputGemini', { stream: false }>
+export function useVideoInputGemini(props?: HookInput<'VideoInputGemini', { stream?: true }>): HookOutput<'VideoInputGemini', { stream: true }>
+export function useVideoInputGemini(
+  props: HookInput<'VideoInputGemini', { stream?: boolean }> = {},
+): HookOutput<'VideoInputGemini', { stream: true }> | HookOutput<'VideoInputGemini', { stream: false }> {
+  let action: ServerAction = Actions.VideoInputGemini;
   if (isStreamingProps(props)) {
-    action = StreamingActions.VideoInput;
+    action = StreamingActions.VideoInputGemini;
     return useBamlAction(action, props)
   } else {
-    return useBamlAction(action, props as HookInput<'VideoInput', { stream: false }>)
-  }
-}
-/**
- * A specialized hook for the VideoInputAnthropic BAML function that supports both streaming and non‑streaming responses.
- *
- * **Input Types:**
- *
- * - vid: Image
- *
- *
- * **Return Type:**
- * - **Non‑streaming:** string
- * - **Streaming Partial:** string
- * - **Streaming Final:** string
- *
- * **Usage Patterns:**
- * 1. **Non‑streaming (Default)**
- *    - Best for quick responses and simple UI updates.
- * 2. **Streaming**
- *    - Ideal for long‑running operations or real‑time feedback.
- *
- * **Edge Cases:**
- * - Ensure robust error handling via `onError`.
- * - Handle cases where partial data may be incomplete or missing.
- *
- * @example
- * ```tsx
- * // Basic non‑streaming usage:
- * const { data, error, isLoading, mutate } = useVideoInputAnthropic({ stream: false});
- *
- * // Streaming usage:
- * const { data, streamData, isLoading, error, mutate } = useVideoInputAnthropic({
- *   stream: true | undefined,
- *   onStreamData: (partial) => console.log('Partial update:', partial),
- *   onFinalData: (final) => console.log('Final result:', final),
- *   onError: (err) => console.error('Error:', err),
- * });
- * ```
- */
-export function useVideoInputAnthropic(props: HookInput<'VideoInputAnthropic', { stream: false }>): HookOutput<'VideoInputAnthropic', { stream: false }>
-export function useVideoInputAnthropic(props?: HookInput<'VideoInputAnthropic', { stream?: true }>): HookOutput<'VideoInputAnthropic', { stream: true }>
-export function useVideoInputAnthropic(
-  props: HookInput<'VideoInputAnthropic', { stream?: boolean }> = {},
-): HookOutput<'VideoInputAnthropic', { stream: true }> | HookOutput<'VideoInputAnthropic', { stream: false }> {
-  let action: ServerAction = Actions.VideoInputAnthropic;
-  if (isStreamingProps(props)) {
-    action = StreamingActions.VideoInputAnthropic;
-    return useBamlAction(action, props)
-  } else {
-    return useBamlAction(action, props as HookInput<'VideoInputAnthropic', { stream: false }>)
-  }
-}
-/**
- * A specialized hook for the VideoInputOpenai BAML function that supports both streaming and non‑streaming responses.
- *
- * **Input Types:**
- *
- * - vid: Image
- *
- * - prompt: string
- *
- *
- * **Return Type:**
- * - **Non‑streaming:** string
- * - **Streaming Partial:** string
- * - **Streaming Final:** string
- *
- * **Usage Patterns:**
- * 1. **Non‑streaming (Default)**
- *    - Best for quick responses and simple UI updates.
- * 2. **Streaming**
- *    - Ideal for long‑running operations or real‑time feedback.
- *
- * **Edge Cases:**
- * - Ensure robust error handling via `onError`.
- * - Handle cases where partial data may be incomplete or missing.
- *
- * @example
- * ```tsx
- * // Basic non‑streaming usage:
- * const { data, error, isLoading, mutate } = useVideoInputOpenai({ stream: false});
- *
- * // Streaming usage:
- * const { data, streamData, isLoading, error, mutate } = useVideoInputOpenai({
- *   stream: true | undefined,
- *   onStreamData: (partial) => console.log('Partial update:', partial),
- *   onFinalData: (final) => console.log('Final result:', final),
- *   onError: (err) => console.error('Error:', err),
- * });
- * ```
- */
-export function useVideoInputOpenai(props: HookInput<'VideoInputOpenai', { stream: false }>): HookOutput<'VideoInputOpenai', { stream: false }>
-export function useVideoInputOpenai(props?: HookInput<'VideoInputOpenai', { stream?: true }>): HookOutput<'VideoInputOpenai', { stream: true }>
-export function useVideoInputOpenai(
-  props: HookInput<'VideoInputOpenai', { stream?: boolean }> = {},
-): HookOutput<'VideoInputOpenai', { stream: true }> | HookOutput<'VideoInputOpenai', { stream: false }> {
-  let action: ServerAction = Actions.VideoInputOpenai;
-  if (isStreamingProps(props)) {
-    action = StreamingActions.VideoInputOpenai;
-    return useBamlAction(action, props)
-  } else {
-    return useBamlAction(action, props as HookInput<'VideoInputOpenai', { stream: false }>)
+    return useBamlAction(action, props as HookInput<'VideoInputGemini', { stream: false }>)
   }
 }

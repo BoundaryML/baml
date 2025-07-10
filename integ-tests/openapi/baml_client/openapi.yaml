@@ -2846,45 +2846,19 @@ paths:
                 title: ValidateResponseTypesResponse
                 type: string
       operationId: ValidateResponseTypes
-  /call/VideoInput:
+  /call/VideoInputGemini:
     post:
       requestBody:
-        $ref: '#/components/requestBodies/VideoInput'
+        $ref: '#/components/requestBodies/VideoInputGemini'
       responses:
         '200':
           description: Successful operation
           content:
             application/json:
               schema:
-                title: VideoInputResponse
+                title: VideoInputGeminiResponse
                 type: string
-      operationId: VideoInput
-  /call/VideoInputAnthropic:
-    post:
-      requestBody:
-        $ref: '#/components/requestBodies/VideoInputAnthropic'
-      responses:
-        '200':
-          description: Successful operation
-          content:
-            application/json:
-              schema:
-                title: VideoInputAnthropicResponse
-                type: string
-      operationId: VideoInputAnthropic
-  /call/VideoInputOpenai:
-    post:
-      requestBody:
-        $ref: '#/components/requestBodies/VideoInputOpenai'
-      responses:
-        '200':
-          description: Successful operation
-          content:
-            application/json:
-              schema:
-                title: VideoInputOpenaiResponse
-                type: string
-      operationId: VideoInputOpenai
+      operationId: VideoInputGemini
 components:
   requestBodies:
     AaaSamOutputFormat:
@@ -6247,12 +6221,12 @@ components:
             required:
             - input
             additionalProperties: false
-    VideoInput:
+    VideoInputGemini:
       required: true
       content:
         application/json:
           schema:
-            title: VideoInputRequest
+            title: VideoInputGeminiRequest
             type: object
             properties:
               vid:
@@ -6261,41 +6235,6 @@ components:
                 nullable: true
                 $ref: '#/components/schemas/BamlOptions'
             required:
-            - vid
-            additionalProperties: false
-    VideoInputAnthropic:
-      required: true
-      content:
-        application/json:
-          schema:
-            title: VideoInputAnthropicRequest
-            type: object
-            properties:
-              vid:
-                $ref: '#/components/schemas/BamlImage'
-              __baml_options__:
-                nullable: true
-                $ref: '#/components/schemas/BamlOptions'
-            required:
-            - vid
-            additionalProperties: false
-    VideoInputOpenai:
-      required: true
-      content:
-        application/json:
-          schema:
-            title: VideoInputOpenaiRequest
-            type: object
-            properties:
-              prompt:
-                type: string
-              vid:
-                $ref: '#/components/schemas/BamlImage'
-              __baml_options__:
-                nullable: true
-                $ref: '#/components/schemas/BamlOptions'
-            required:
-            - prompt
             - vid
             additionalProperties: false
   schemas:

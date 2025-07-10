@@ -4,21 +4,21 @@ use serde_json::json;
 
 use crate::errors::invalid_argument_error;
 
-crate::lang_wrapper!(BamlVideoNapi, baml_types::BamlMedia);
+crate::lang_wrapper!(BamlVideo, baml_types::BamlMedia);
 
 #[napi]
-impl BamlVideoNapi {
-    #[napi(ts_return_type = "BamlVideoNapi")]
-    pub fn from_url(url: String, media_type: Option<String>) -> External<BamlVideoNapi> {
-        let video = BamlVideoNapi {
+impl BamlVideo {
+    #[napi(ts_return_type = "BamlVideo")]
+    pub fn from_url(url: String, media_type: Option<String>) -> External<BamlVideo> {
+        let video = BamlVideo {
             inner: baml_types::BamlMedia::url(baml_types::BamlMediaType::Video, url, media_type),
         };
         External::new(video)
     }
 
-    #[napi(ts_return_type = "BamlVideoNapi")]
-    pub fn from_base64(media_type: String, base64: String) -> External<BamlVideoNapi> {
-        let video = BamlVideoNapi {
+    #[napi(ts_return_type = "BamlVideo")]
+    pub fn from_base64(media_type: String, base64: String) -> External<BamlVideo> {
+        let video = BamlVideo {
             inner: baml_types::BamlMedia::base64(
                 baml_types::BamlMediaType::Video,
                 base64,
@@ -70,7 +70,7 @@ impl BamlVideoNapi {
                 "base64": base64.base64,
                 "media_type": self.inner.mime_type.clone().unwrap_or("".to_string())
             }),
-            _ => "Unknown BamlVideoNapi variant".into(),
+            _ => "Unknown BamlVideo variant".into(),
         })
     }
 }

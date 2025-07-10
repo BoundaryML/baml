@@ -317,19 +317,26 @@ impl ToProviderMessage for GoogleAIClient {
         match &media.content {
             BamlMediaContent::Base64(data) => {
                 content.insert(
-                    "inlineData".into(),
+                    "inline_data".into(),
                     json!({
-                        "mimeType": media.mime_type_as_ok()?,
+                        "mime_type": media.mime_type_as_ok()?,
                         "data": data.base64
                     }),
                 );
                 Ok(content)
             }
+            BamlMediaContent::Url(data) => {
+                // Pass through the URL reference as required by the Gemini REST API.
+                // Include the mime_type when it is known so callers can rely on it.
+                let mut file_data = json!({"file_uri": data.url});
+                if let Some(mime) = &media.mime_type {
+                    file_data["mime_type"] = json!(mime);
+                }
+                content.insert("file_data".into(), file_data);
+                Ok(content)
+            }
             BamlMediaContent::File(_) => anyhow::bail!(
                 "BAML internal error (google-ai): file should have been resolved to base64"
-            ),
-            BamlMediaContent::Url(_) => anyhow::bail!(
-                "BAML internal error (google-ai): media URL should have been resolved to base64"
             ),
         }
     }
