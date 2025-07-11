@@ -410,3 +410,15 @@ client<llm> VertexLlama {
 }
 ```
 
+For anthropic  
+
+```baml
+client<llm> VertexClaudeSonnet {
+  provider vertex-ai
+  options {
+    model "claude-sonnet-4"
+    anthropic_version "${ANTHROPIC_VERSION}"
+    base_url "https://${LOCATION}-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/${LOCATION}/publishers/anthropic/models"
+  }
+}
+```
