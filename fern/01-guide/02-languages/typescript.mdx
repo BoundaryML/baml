@@ -11,81 +11,110 @@ To set up BAML with Typescript do the following:
       - prompt previews
 
   ### Install BAML
-      <CodeBlocks>
-        ```bash npm
-        npm install @boundaryml/baml
-        ```
+      <Tabs>
+        <Tab title="npm" language="npm">
+          ```bash npm
+          npm install @boundaryml/baml
+          ```
+        </Tab>
 
-        ```bash pnpm
-        pnpm add @boundaryml/baml
-        ```
+        <Tab title="pnpm" language="pnpm">
+          ```bash pnpm
+          pnpm add @boundaryml/baml
+          ```
+        </Tab>
 
-        ```bash yarn
-        yarn add @boundaryml/baml
-        ```
+        <Tab title="yarn" language="yarn">
+          ```bash yarn
+          yarn add @boundaryml/baml
+          ```
+        </Tab>
 
-        ```bash bun
-        bun add @boundaryml/baml
-        ```
+        <Tab title="bun" language="bun">
+          ```bash bun
+          bun add @boundaryml/baml
+          ```
+        </Tab>
 
-        ```bash deno
-        deno install npm:@boundaryml/baml
-        ```
-    </CodeBlocks>
+        <Tab title="deno" language="deno">
+          ```bash deno
+          deno install npm:@boundaryml/baml
+          ```
+        </Tab>
+      </Tabs>
 
   ### Add BAML to your existing project
       This will give you some starter BAML code in a `baml_src` directory.
 
-      <CodeBlocks>
-        ```bash npm
-        npx baml-cli init
-        ```
+      <Tabs>
+        <Tab title="npm" language="npm">
+          ```bash npm
+          npx baml-cli init
+          ```
+        </Tab>
 
-        ```bash pnpm
-        pnpm exec baml-cli init
-        ```
+        <Tab title="pnpm" language="pnpm">
+          ```bash pnpm
+          pnpm exec baml-cli init
+          ```
+        </Tab>
 
-        ```bash yarn
-        yarn baml-cli init
-        ```
+        <Tab title="yarn" language="yarn">
+          ```bash yarn
+          yarn baml-cli init
+          ```
+        </Tab>
 
-        ```bash bun
-        bun baml-cli init
-        ```
+        <Tab title="bun" language="bun">
+          ```bash bun
+          bun baml-cli init
+          ```
+        </Tab>
 
-        ```bash deno
-        deno run -A npm:@boundaryml/baml/baml-cli init
-        ```
-    </CodeBlocks>
+        <Tab title="deno" language="deno">
+          ```bash deno
+          deno run -A npm:@boundaryml/baml/baml-cli init
+          ```
+        </Tab>
+      </Tabs>
 
   ### Generate the `baml_client` typescript package from `.baml` files
 
     One of the files in your `baml_src` directory will have a [generator block](/ref/baml/generator). This tells BAML how to generate the `baml_client` directory, which will have auto-generated typescript code to call your BAML functions.
 
-    <CodeBlocks>
-      ```bash npm
-      npx baml-cli generate
-      ```
+    <Tabs>
+      <Tab title="npm" language="npm">
+        ```bash npm
+        npx baml-cli generate
+        ```
+      </Tab>
 
-      ```bash pnpm
-      pnpm exec baml-cli generate
-      ```
+      <Tab title="pnpm" language="pnpm">
+        ```bash pnpm
+        pnpm exec baml-cli generate
+        ```
+      </Tab>
 
-      ```bash yarn
-      yarn baml-cli generate
-      ```
+      <Tab title="yarn" language="yarn">
+        ```bash yarn
+        yarn baml-cli generate
+        ```
+      </Tab>
 
-      ```bash bun
-      bun baml-cli generate
-      ```
+      <Tab title="bun" language="bun">
+        ```bash bun
+        bun baml-cli generate
+        ```
+      </Tab>
 
-      ```bash deno
-      deno run -A npm:@boundaryml/baml/baml-cli generate
-      # You may need to use the --unstable-sloppy-imports flag if you get an error about ESM
-      # https://github.com/BoundaryML/baml/issues/1213#issuecomment-2526200783
-
-      ```
-    </CodeBlocks>
+      <Tab title="deno" language="deno">
+        ```bash deno
+        deno run -A npm:@boundaryml/baml/baml-cli generate
+        # You may need to use the --unstable-sloppy-imports flag if you get an error about ESM
+        # https://github.com/BoundaryML/baml/issues/1213#issuecomment-2526200783
+        ```
+      </Tab>
+    </Tabs>
 
     <Note>
       If you need baml_client to be 'ESM' compatible, you can add the following `generator` configuration to your `.baml` file:
@@ -122,7 +151,8 @@ To set up BAML with Typescript do the following:
   ### Use a BAML function in Typescript!
     <Error>If `baml_client` doesn't exist, make sure to run the previous step! </Error>
 
-    <CodeBlocks>
+    <Tabs>
+    <Tab title="Async" language="typescript">
     ```typescript index.ts
     import { b } from "./baml_client"
     import type { Resume } from "./baml_client/types"
@@ -144,7 +174,9 @@ To set up BAML with Typescript do the following:
       return await stream.getFinalResponse();
     }
     ```
+    </Tab>
 
+    <Tab title="Sync" language="typescript">
     ```typescript sync_example.ts
     import { b } from "./baml_client/sync_client"
     import type { Resume } from "./baml_client/types"
@@ -157,7 +189,7 @@ To set up BAML with Typescript do the following:
     }
 
     // Streaming is not available in the sync_client.
-
     ```
-    </CodeBlocks>
+    </Tab>
+    </Tabs>
 </Steps>
