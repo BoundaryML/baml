@@ -1,0 +1,28 @@
+[tool.poetry]
+name = "friday-bot"
+version = "0.1.0"
+description = ""
+authors = ["Antonio Sarosi <sarosiantonio@gmail.com>"]
+readme = "README.md"
+packages = [
+    { include = "fridaybot", from = "." }
+]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+requests = "^2.32.3"
+baml-py = "^0.70.0"
+discord = "^2.3.2"
+python-dotenv = "^1.0.1"
+pydantic = "^2.9.2"
+notion-client = "^2.2.1"
+
+[tool.poetry.scripts]
+fridaybot = "fridaybot.app:main"
+
+[tool.poetry.group.dev.dependencies]
+types-requests = "^2.32.0.20241016"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
