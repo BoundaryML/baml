@@ -1,24 +1,24 @@
 {
-    "name": "BAML",
-    "build": {
-        "dockerfile": "Dockerfile"
-    },
-    "customizations": {
-        "vscode": {
-            "extensions": [
-                "rust-lang.rust-analyzer",
-                "ms-python.python",
-                "Shopify.ruby-lsp",
-                "golang.go",
-                "vadimcn.vscode-lldb",
-                "Boundary.baml-extension",
-                "ms-azuretools.vscode-docker",
-                "tamasfe.even-better-toml",
-                "samuelcolvin.jinjahtml",
-                "unifiedjs.vscode-mdx",
-                "pest.pest-ide-tools",
-                "biomejs.biome"
-            ]
-        }
+  "name": "BAML",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "rust-lang.rust-analyzer",
+        "ms-python.python",
+        "Shopify.ruby-lsp",
+        "golang.go",
+        "vadimcn.vscode-lldb",
+        "Boundary.baml-extension",
+        "ms-azuretools.vscode-docker",
+        "tamasfe.even-better-toml",
+        "samuelcolvin.jinjahtml",
+        "unifiedjs.vscode-mdx",
+        "pest.pest-ide-tools",
+        "biomejs.biome"
+      ]
     }
+  }
 }

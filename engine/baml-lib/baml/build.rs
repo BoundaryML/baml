@@ -4,7 +4,7 @@ const VALIDATIONS_ROOT_DIR: &str = "tests/validation_files";
 const CARGO_MANIFEST_DIR: &str = env!("CARGO_MANIFEST_DIR");
 const BAML_CLI_INIT_DIR: &str = concat!("/../../baml-runtime/src/cli/initial_project/baml_src");
 const PROMPT_FIDDLE_EXAMPLE_DIR: &str =
-    concat!("/../../../typescript/fiddle-frontend/public/_examples/all-projects/baml_src");
+    concat!("/../../../typescript/apps/fiddle-web-app/public/_examples/all-projects/baml_src");
 
 fn main() {
     if std::env::var("SKIP_BAML_VALIDATION").unwrap_or_default() == "1" {

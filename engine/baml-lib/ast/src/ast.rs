@@ -8,6 +8,7 @@ mod config;
 pub mod expr;
 mod expression;
 mod field;
+mod stmt;
 
 mod app;
 mod identifier;
@@ -27,13 +28,14 @@ pub use attribute::{Attribute, AttributeContainer, AttributeId};
 pub use config::ConfigBlockProperty;
 pub use expr::{ExprFn, TopLevelAssignment};
 pub use expression::{
-    ClassConstructor, ClassConstructorField, Expression, ExpressionBlock, RawString, Stmt,
+    ClassConstructor, ClassConstructorField, Expression, ExpressionBlock, RawString,
 };
 pub use field::{Field, FieldArity, FieldType};
 pub use identifier::{Identifier, RefIdentifier};
 pub use indentation_type::IndentationType;
 pub use internal_baml_diagnostics::Span;
 pub use newline_type::NewlineType;
+pub use stmt::{ForLoopStmt, LetStmt, Stmt};
 pub use template_string::TemplateString;
 pub use top::Top;
 pub use traits::{WithAttributes, WithDocumentation, WithIdentifier, WithName, WithSpan};

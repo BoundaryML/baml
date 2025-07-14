@@ -72,12 +72,18 @@ itertools = "0.14.0"
 url.workspace = true
 
 tokio = { version = "1.36", features = ["full"] }
-warp = "0.3"
-futures-util = "0.3"
-include_dir = "0.7"
-mime_guess = "2.0.4"
 
-webbrowser = "0.8"
+# Playground server dependencies
+warp = { version = "0.3", optional = true }
+futures-util = { version = "0.3", optional = true }
+include_dir = { version = "0.7", optional = true }
+mime_guess = { version = "2.0.4", optional = true }
+webbrowser = { version = "0.8", optional = true }
+reqwest = { version = "0.12", features = ["blocking", "json"], optional = true }
+tar = { version = "0.4", optional = true }
+flate2 = { version = "1.0", optional = true }
+dirs = { version = "5.0", optional = true }
+sha2 = { version = "0.10", optional = true }
 
 [dev-dependencies]
 insta = { version = "1.42.1" }
@@ -87,3 +93,19 @@ libc = { version = "0.2.169" }
 
 # [lints]
 # workspace = true
+
+[features]
+# Enables the playground server functionality and its dependencies
+default = ["playground-server"]
+playground-server = [
+    "warp",
+    "futures-util",
+    "include_dir",
+    "mime_guess",
+    "webbrowser",
+    "reqwest",
+    "tar",
+    "flate2",
+    "dirs",
+    "sha2",
+]

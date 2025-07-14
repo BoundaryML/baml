@@ -1,11 +1,12 @@
 'use client';
 
-import { ExampleSelector } from '@/components/example-selector';
-import { TestClient } from '@/components/test-client';
-import { ModeToggle } from '@/components/theme-toggle';
-import { Button } from '@/components/ui/button';
+import { ExampleSelector } from '~/components/example-selector';
+import { TestClient } from '~/components/test-client';
+import { ModeToggle } from '~/components/theme-toggle';
+import { Button } from '@baml/ui/button';
 import { GithubIcon } from 'lucide-react';
 import Image from 'next/image';
+import { Suspense } from 'react';
 
 export default function Home() {
   return (
@@ -56,13 +57,16 @@ export default function Home() {
           </div>
         </header>
 
-        <main className="mx-auto w-full max-w-[95vw] space-y-8">
+        <Suspense fallback={<div>Loading...</div>}>
+
+          <main className="mx-auto w-full max-w-[95vw] space-y-8">
           <ExampleSelector />
 
           <div className="w-full">
             <TestClient />
           </div>
         </main>
+          </Suspense>
 
         <footer className="mt-16 text-center">
           <p className="text-muted-foreground text-sm">

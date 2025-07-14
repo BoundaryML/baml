@@ -272,7 +272,7 @@ case "$_path" in
     fi
     ;;
 
-  /typescript/codemirror-lang-baml | /typescript/codemirror-lang-baml/* )
+  /typescript/packages/codemirror-lang-baml | /typescript/packages/codemirror-lang-baml/* )
     if [ "$_watch_mode" -eq 1 ]; then
       npx nodemon \
         --ext grammar,js,ts,tsx,json \
