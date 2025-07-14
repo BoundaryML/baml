@@ -22,21 +22,21 @@ runs:
       uses: actions/setup-python@v5
       with:
         python-version: ${{ inputs.python-version }}
-        cache: ${{ inputs.cache == 'true' && 'pip' || '' }}
+        # cache: ${{ inputs.cache == 'true' && 'pip' || '' }}
 
     - name: Setup uv
       if: inputs.use-uv == 'true'
       uses: astral-sh/setup-uv@v5
-      with:
-        enable-cache: ${{ inputs.cache }}
-        cache-dependency-glob: |
-          **/requirements*.txt
-          **/requirements*.in
-          **/constraints*.txt
-          **/constraints*.in
-          **/pyproject.toml
-          **/uv.lock
-          !**/node_modules/**
+      # with:
+      # enable-cache: ${{ inputs.cache }}
+      # cache-dependency-glob: |
+      #   **/requirements*.txt
+      #   **/requirements*.in
+      #   **/constraints*.txt
+      #   **/constraints*.in
+      #   **/pyproject.toml
+      #   **/uv.lock
+      #   !**/node_modules/**
 
     - name: Install Python project dependencies
       if: inputs.use-uv == 'true'
