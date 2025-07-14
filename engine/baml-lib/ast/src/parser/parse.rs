@@ -424,7 +424,7 @@ mod tests {
         let (ast, _) = parse(Path::new(path), &source).unwrap();
         match ast.tops.as_slice() {
             [Top::TopLevelAssignment(x)] => {
-                assert_eq!(x.stmt.identifier.name(), "x");
+                assert_eq!(x.stmt.identifier().name(), "x");
             }
             _ => panic!("Expected a single top level assignment."),
         }
@@ -445,11 +445,11 @@ mod tests {
             [Top::TopLevelAssignment(x)] => {
                 dbg!(&x);
                 dbg!(&x.stmt);
-                assert_eq!(x.stmt.identifier.name(), "x");
-                match &x.stmt.body {
+                assert_eq!(x.stmt.identifier().name(), "x");
+                match &x.stmt.body() {
                     Expression::ExprBlock(ExpressionBlock { stmts, expr }, _) => {
                         assert_eq!(stmts.len(), 1);
-                        assert_eq!(stmts[0].identifier.name(), "y");
+                        assert_eq!(stmts[0].identifier().name(), "y");
                         assert!(matches!(expr.as_ref(), Expression::App(_)));
                     }
                     _ => panic!("Expected ExpressionBlock"),

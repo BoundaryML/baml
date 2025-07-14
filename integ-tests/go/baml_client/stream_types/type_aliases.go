@@ -14,12 +14,6 @@
 package stream_types
 
 import (
-	"encoding/json"
-	"fmt"
-
-	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
-	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
-
 	"example.com/integ-tests/baml_client/types"
 )
 
@@ -38,8 +32,8 @@ type MultipleAttrs = *types.Checked[int64]
 type NodeIndirection = *NodeWithAliasIndirection
 type Primitive = *Union4BoolOrFloatOrIntOrString
 type RecAliasOne = *RecAliasTwo
-type RecAliasThree = *[]RecAliasOne
+type RecAliasThree = *[]any
 type RecAliasTwo = *RecAliasThree
-type RecursiveListAlias = *[]RecursiveListAlias
-type RecursiveMapAlias = *map[string]RecursiveMapAlias
+type RecursiveListAlias = *[]any
+type RecursiveMapAlias = *map[string]any
 type RecursiveUnion = *Union2MapStringKeyRecursiveUnionValueOrString

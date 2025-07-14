@@ -1,9 +1,12 @@
-import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
-import { cn } from '@/lib/utils';
+import { Badge } from '@baml/ui/badge';
+import { cn } from '@baml/ui/lib/utils';
+import { Separator } from '@baml/ui/separator';
 import {} from 'lucide-react';
 import * as React from 'react';
-import type { FunctionNames, HookOutput } from '../../../baml_client/react/hooks';
+import type {
+  FunctionNames,
+  HookOutput,
+} from '../../../baml_client/react/hooks';
 
 type NetworkState =
   | 'idle'
@@ -199,7 +202,15 @@ function StatusBadge<TFunctionName extends FunctionNames = FunctionNames>({
   return (
     <div className="flex w-full items-center justify-center text-center">
       <Badge
-        variant={getVariant()}
+        variant={
+          getVariant() as
+            | 'default'
+            | 'secondary'
+            | 'destructive'
+            | 'outline'
+            | null
+            | undefined
+        }
         className={cn('w-full justify-center text-center', {
           'bg-muted text-muted-foreground': status === 'idle',
           // 'bg-blue-500 hover:bg-blue-500/80 text-white': status === 'loading',
@@ -226,7 +237,15 @@ function BooleanBadge({ label, value }: { label: string; value: boolean }) {
   return (
     <div className="flex w-full items-center justify-center text-center">
       <Badge
-        variant={getVariant()}
+        variant={
+          getVariant() as
+            | 'default'
+            | 'secondary'
+            | 'destructive'
+            | 'outline'
+            | null
+            | undefined
+        }
         className={cn('w-full justify-center text-center', {
           'bg-muted text-muted-foreground': !value,
           'bg-red-500 text-white hover:bg-red-500/80':
@@ -241,7 +260,9 @@ function BooleanBadge({ label, value }: { label: string; value: boolean }) {
   );
 }
 
-export function NetworkTimeline<TFunctionName extends FunctionNames = FunctionNames>({
+export function NetworkTimeline<
+  TFunctionName extends FunctionNames = FunctionNames,
+>({
   hookResult,
   className,
   hasStarted,
@@ -350,7 +371,7 @@ export function NetworkTimeline<TFunctionName extends FunctionNames = FunctionNa
         if (
           state !== 'success' &&
           timeline[state as NetworkState] &&
-          !timeline[state as NetworkState]!.endTime
+          !timeline[state as NetworkState]?.endTime
         ) {
           dispatch({
             type: 'STATE_END',
@@ -368,7 +389,7 @@ export function NetworkTimeline<TFunctionName extends FunctionNames = FunctionNa
         if (
           state !== 'error' &&
           timeline[state as NetworkState] &&
-          !timeline[state as NetworkState]!.endTime
+          !timeline[state as NetworkState]?.endTime
         ) {
           dispatch({
             type: 'STATE_END',

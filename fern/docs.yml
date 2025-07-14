@@ -734,6 +734,8 @@ navigation:
             path: 03-reference/baml/clients/providers/vertex.mdx
           - page: "OpenAI"
             path: 03-reference/baml/clients/providers/openai.mdx
+          - page: "OpenAI Responses API"
+            path: 03-reference/baml/clients/providers/openai-responses.mdx
           - page: "OpenAI from Azure"
             path: 03-reference/baml/clients/providers/azure.mdx
           - page: "openai-generic"
@@ -1019,6 +1021,8 @@ redirects:
     destination: "/ref/llm-client-providers/openai-generic-ollama"
   - source: "/docs/snippets/clients/providers/openai"
     destination: "/ref/llm-client-providers/open-ai"
+  - source: "/docs/snippets/clients/providers/openai-responses"
+    destination: "/ref/llm-client-providers/open-ai-responses-api"
   - source: "/docs/snippets/clients/providers/openai-generic"
     destination: "/ref/llm-client-providers/openai-generic"
   - source: "/docs/snippets/clients/providers/google-vertex"

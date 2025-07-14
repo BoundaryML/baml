@@ -30,7 +30,6 @@ function TestUniverseQuestion(question: UniverseQuestionInput) -> UniverseQuesti
   "#
 }
 
-
 function TestAwsInvalidRegion(input: string) -> string {
   client AwsBedrockInvalidRegion
   prompt #"
@@ -82,6 +81,7 @@ test TestName {
     "#
   }
 }
+
 
 client<llm> AwsBedrockClaude37Client {
   provider "aws-bedrock"

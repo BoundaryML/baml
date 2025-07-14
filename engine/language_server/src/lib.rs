@@ -13,6 +13,7 @@ mod message;
 
 pub mod edit;
 pub mod logging;
+#[cfg(feature = "playground-server")]
 pub mod playground;
 pub mod server;
 pub mod session;

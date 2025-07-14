@@ -40,7 +40,8 @@ To set up BAML with Ruby do the following:
   ### Use a BAML function in Ruby!
     <Error>If `baml_client` doesn't exist, make sure to run the previous step!</Error>
 
-    <CodeBlocks>
+    <Tabs>
+    <Tab title="Regular" language="ruby">
     ```ruby main.rb
     require_relative "baml_client/client"
 
@@ -51,6 +52,14 @@ To set up BAML with Ruby do the following:
         puts "ExtractResume response:"
         puts r.inspect
     end
+
+    example 'Grace Hopper created COBOL'
+    ```
+    </Tab>
+
+    <Tab title="Streaming" language="ruby">
+    ```ruby stream_example.rb
+    require_relative "baml_client/client"
 
     def example_stream(raw_resume)
         stream = Baml.Client.stream.ExtractResume(resume: raw_resume)
@@ -64,8 +73,8 @@ To set up BAML with Ruby do the following:
         stream.get_final_response
     end
 
-    example 'Grace Hopper created COBOL'
     example_stream 'Grace Hopper created COBOL'
     ```
-    </CodeBlocks>
+    </Tab>
+    </Tabs>
 </Steps>

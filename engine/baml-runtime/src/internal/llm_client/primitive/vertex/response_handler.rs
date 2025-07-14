@@ -221,7 +221,7 @@ mod tests {
       }
     ]
   },
-  "modelVersion": "gemini-1.5-pro-001"
+  "modelVersion": "gemini-1.5-pro"
 }
     "#;
 

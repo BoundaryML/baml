@@ -118,6 +118,9 @@ pub enum IntermediateData<'a> {
         headers: Option<HashMap<String, String>>,
         body: HTTPBody<'a>,
     },
+    RawLLMResponseStream {
+        event: Event<'a>,
+    },
     LLMResponse {
         client_stack: Vec<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -136,6 +139,11 @@ pub enum IntermediateData<'a> {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HTTPBody<'a> {
     pub raw: Cow<'a, [u8]>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Event<'a> {
+    pub raw: Cow<'a, str>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

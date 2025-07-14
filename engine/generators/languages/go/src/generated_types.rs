@@ -84,6 +84,7 @@ mod union {
     pub struct VariantGo {
         pub name: String,
         pub cffi_name: String,
+        pub literal_repr: Option<String>,
         pub type_: TypeGo,
     }
 }

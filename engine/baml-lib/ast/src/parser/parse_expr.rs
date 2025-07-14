@@ -8,8 +8,8 @@ use super::{
 use crate::{
     assert_correct_parser,
     ast::{
-        self, expr::ExprFn, App, ArgumentsList, Expression, ExpressionBlock, Stmt,
-        TopLevelAssignment, *,
+        self, expr::ExprFn, App, ArgumentsList, Expression, ExpressionBlock, ForLoopStmt, LetStmt,
+        Stmt, TopLevelAssignment, *,
     },
     parser::{
         parse_arguments::parse_arguments_list, parse_expression::parse_expression,
@@ -64,33 +64,67 @@ pub fn parse_top_level_assignment(
     Some(TopLevelAssignment { stmt })
 }
 
+pub fn parse_for_loop(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Stmt> {
+    assert_correct_parser!(token, Rule::for_loop);
+    let span = diagnostics.span(token.as_span());
+    let mut tokens = token.into_inner();
+    let identifier = parse_identifier(tokens.next()?, diagnostics);
+    let iterator = parse_expression(tokens.next()?, diagnostics)?;
+    let body = parse_expr_block(tokens.next()?, diagnostics)?;
+    Some(Stmt::ForLoop(ForLoopStmt {
+        identifier,
+        iterator,
+        body,
+        span,
+    }))
+}
+
 pub fn parse_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Stmt> {
     assert_correct_parser!(token, Rule::stmt);
     let span = diagnostics.span(token.as_span());
     let mut tokens = token.into_inner();
-    // Our only statements are let bindings, so:
-    let let_binding_token = tokens.next()?;
-    assert_correct_parser!(let_binding_token, Rule::let_expr);
-    let mut let_binding_tokens = let_binding_token.into_inner();
-    let identifier = parse_identifier(let_binding_tokens.next()?, diagnostics);
 
-    let rhs = let_binding_tokens.next()?;
-    let rhs_span = diagnostics.span(rhs.as_span());
-    let maybe_body = match rhs.as_rule() {
-        Rule::expr_block => {
-            let block_span = diagnostics.span(rhs.as_span());
-            let maybe_expr_block = parse_expr_block(rhs, diagnostics);
-            maybe_expr_block.map(|expr_block| Expression::ExprBlock(expr_block, block_span))
+    let stmt_token = tokens.next()?;
+    let stmt = match stmt_token.as_rule() {
+        Rule::let_expr => {
+            let mut let_binding_tokens = stmt_token.into_inner();
+            let identifier = parse_identifier(let_binding_tokens.next()?, diagnostics);
+
+            let rhs = let_binding_tokens.next()?;
+            let rhs_span = diagnostics.span(rhs.as_span());
+            let maybe_body = match rhs.as_rule() {
+                Rule::expr_block => {
+                    let block_span = diagnostics.span(rhs.as_span());
+                    let maybe_expr_block = parse_expr_block(rhs, diagnostics);
+                    maybe_expr_block.map(|expr_block| Expression::ExprBlock(expr_block, block_span))
+                }
+                Rule::expression => parse_expression(rhs, diagnostics),
+                _ => {
+                    diagnostics.push_error(DatamodelError::new_static(
+                        "Parser only allows expr_block and expr here",
+                        rhs_span,
+                    ));
+                    None
+                }
+            };
+            maybe_body.map(|body| {
+                Stmt::Let(LetStmt {
+                    identifier,
+                    expr: body,
+                    span: span.clone(),
+                })
+            })
         }
-        Rule::expression => parse_expression(rhs, diagnostics),
+        Rule::for_loop => parse_for_loop(stmt_token, diagnostics),
         _ => {
             diagnostics.push_error(DatamodelError::new_static(
-                "Parser only allows expr_block and expr here",
-                rhs_span,
+                "Expected let expression or for loop",
+                span.clone(),
             ));
             None
         }
     };
+
     let maybe_semicolon = tokens.next();
     match maybe_semicolon {
         Some(p) if p.as_str() == ";" => {}
@@ -101,11 +135,8 @@ pub fn parse_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
             ));
         }
     }
-    maybe_body.map(|body| Stmt {
-        identifier,
-        body,
-        span,
-    })
+
+    stmt
 }
 
 pub fn parse_expr_block(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<ExpressionBlock> {
@@ -253,19 +284,4 @@ pub fn parse_if_expression(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Op
         else_branch.map(Box::new),
         span,
     ))
-}
-
-pub fn parse_for_loop(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Expression> {
-    assert_correct_parser!(token, Rule::for_loop);
-    let span = diagnostics.span(token.as_span());
-    let mut tokens = token.into_inner();
-    let identifier = parse_identifier(tokens.next()?, diagnostics);
-    let iterator = parse_expression(tokens.next()?, diagnostics)?;
-    let body = parse_expr_block(tokens.next()?, diagnostics)?;
-    Some(Expression::ForLoop {
-        identifier,
-        iterator: Box::new(iterator),
-        body,
-        span,
-    })
 }

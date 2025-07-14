@@ -44,7 +44,6 @@ impl Decode for BamlFunctionArguments {
             }
         };
 
-        println!("collectors: {collectors:?}");
         Ok(BamlFunctionArguments {
             kwargs,
             client_registry,

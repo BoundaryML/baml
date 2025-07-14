@@ -117,6 +117,14 @@ impl<'a, T: HasType<type_meta::NonStreaming>> TraceEvent<'a, T> {
         Self::from_existing_call(call_stack, TraceData::RawLLMResponse(response))
             .expect("Failed to create raw LLM response event")
     }
+
+    pub fn new_raw_llm_response_stream(
+        call_stack: Vec<FunctionCallId>,
+        response: Arc<HTTPResponseStream>,
+    ) -> Self {
+        Self::from_existing_call(call_stack, TraceData::RawLLMResponseStream(response))
+            .expect("Failed to create raw LLM response stream event")
+    }
 }
 
 // DO NOT CLONE!
@@ -140,6 +148,10 @@ pub enum TraceData<'a, T: HasType<type_meta::NonStreaming>> {
     // ----
     // Raw HTTP response from the LLM
     RawLLMResponse(Arc<HTTPResponse>),
+
+    // Raw HTTP response stream from the LLM
+    RawLLMResponseStream(Arc<HTTPResponseStream>),
+
     /// LLM response now a plain struct, so we don't wrap it in `Result`.
     LLMResponse(Arc<LoggedLLMResponse>),
     // ----
@@ -155,6 +167,7 @@ impl<T: HasType<type_meta::NonStreaming>> TraceData<'_, T> {
             Self::LLMRequest(_) => "LLMRequest",
             Self::RawLLMRequest(_) => "RawLLMRequest",
             Self::RawLLMResponse(_) => "RawLLMResponse",
+            Self::RawLLMResponseStream(_) => "RawLLMResponseStream",
             Self::LLMResponse(_) => "LLMResponse",
             Self::SetTags(_) => "SetTags",
         }
@@ -426,6 +439,12 @@ pub struct HTTPResponse {
     pub body: HTTPBody,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct HTTPResponseStream {
+    pub request_id: HttpRequestId,
+    pub event: Arc<SSEEvent>,
+}
+
 impl HTTPResponse {
     pub fn new(
         request_id: HttpRequestId,
@@ -443,6 +462,37 @@ impl HTTPResponse {
 
     pub fn headers(&self) -> Option<&HashMap<String, String>> {
         self.headers.as_ref()
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SSEEvent {
+    pub timestamp_utc_ms: i64,
+    pub event: String,
+    pub data: String,
+    pub id: String,
+}
+
+impl HTTPResponseStream {
+    pub fn new(request_id: HttpRequestId, event: SSEEvent) -> Self {
+        Self {
+            request_id,
+            event: Arc::new(event),
+        }
+    }
+}
+
+impl SSEEvent {
+    pub fn new(event: String, data: String, id: String) -> Self {
+        Self {
+            event,
+            data,
+            id,
+            timestamp_utc_ms: web_time::SystemTime::now()
+                .duration_since(web_time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as i64,
+        }
     }
 }
 

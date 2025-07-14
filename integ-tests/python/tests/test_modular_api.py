@@ -7,6 +7,7 @@ import requests
 from google import genai
 from openai import AsyncOpenAI, OpenAI, AsyncStream, Stream
 from openai.types.chat import ChatCompletion, ChatCompletionChunk
+from openai.types.responses import Response
 from baml_py import ClientRegistry, HTTPRequest as BamlHttpRequest
 from ..baml_client import b
 from ..baml_client.sync_client import b as sync_b
@@ -309,3 +310,25 @@ async def test_openai_batch_api():
         received[result["custom_id"]] = parsed
 
     assert received == expected
+
+
+@pytest.mark.asyncio
+async def test_modular_openai_responses():
+    """Test openai-responses provider using the modular API"""
+    from openai import AsyncOpenAI
+    
+    client = AsyncOpenAI()
+    
+    # Use TestOpenAIResponses from the providers directory
+    req = await b.request.TestOpenAIResponses("mountains")
+    
+    # The openai-responses provider should use the /v1/responses endpoint.
+
+    response = typing.cast(
+        Response, await client.responses.create(**req.body.json())
+    )
+    
+    parsed = b.parse.TestOpenAIResponses(response.output_text)
+    
+    assert isinstance(parsed, str)
+    assert len(parsed) > 0

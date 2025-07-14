@@ -43,74 +43,19 @@ func (c *ExistingSystemComponent) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "id":
-			c.Id = func(param *cffi.CFFIValueHolder) *int64 {
-				fmt.Printf("\n=== FIELD DECODE ===\n")
-				fmt.Printf("Expecting type: *int64\n")
-				fmt.Printf("===================\n")
-				decoded := baml.Decode(param)
-				return func(result any) *int64 {
-					if result == nil {
-						return nil
-					}
-					return (result).(*int64)
-				}(decoded)
-			}(valueHolder)
+			c.Id = baml.Decode(valueHolder).Interface().(*int64)
 
 		case "name":
-			c.Name = func(param *cffi.CFFIValueHolder) *string {
-				fmt.Printf("\n=== FIELD DECODE ===\n")
-				fmt.Printf("Expecting type: *string\n")
-				fmt.Printf("===================\n")
-				decoded := baml.Decode(param)
-				return func(result any) *string {
-					if result == nil {
-						return nil
-					}
-					return (result).(*string)
-				}(decoded)
-			}(valueHolder)
+			c.Name = baml.Decode(valueHolder).Interface().(*string)
 
 		case "type":
-			c.Type = func(param *cffi.CFFIValueHolder) *string {
-				fmt.Printf("\n=== FIELD DECODE ===\n")
-				fmt.Printf("Expecting type: *string\n")
-				fmt.Printf("===================\n")
-				decoded := baml.Decode(param)
-				return func(result any) *string {
-					if result == nil {
-						return nil
-					}
-					return (result).(*string)
-				}(decoded)
-			}(valueHolder)
+			c.Type = baml.Decode(valueHolder).Interface().(*string)
 
 		case "category":
-			c.Category = func(param *cffi.CFFIValueHolder) *Union2KresourceOrKservice {
-				fmt.Printf("\n=== FIELD DECODE ===\n")
-				fmt.Printf("Expecting type: *Union2KresourceOrKservice\n")
-				fmt.Printf("===================\n")
-				decoded := baml.Decode(param)
-				return func(result any) *Union2KresourceOrKservice {
-					if result == nil {
-						return nil
-					}
-					return (result).(*Union2KresourceOrKservice)
-				}(decoded)
-			}(valueHolder)
+			c.Category = baml.Decode(valueHolder).Interface().(*Union2KresourceOrKservice)
 
 		case "explanation":
-			c.Explanation = func(param *cffi.CFFIValueHolder) *string {
-				fmt.Printf("\n=== FIELD DECODE ===\n")
-				fmt.Printf("Expecting type: *string\n")
-				fmt.Printf("===================\n")
-				decoded := baml.Decode(param)
-				return func(result any) *string {
-					if result == nil {
-						return nil
-					}
-					return (result).(*string)
-				}(decoded)
-			}(valueHolder)
+			c.Explanation = baml.Decode(valueHolder).Interface().(*string)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -165,18 +110,7 @@ func (c *UseMyUnion) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "u":
-			c.U = func(param *cffi.CFFIValueHolder) *Union3IntOrRecursive1OrString {
-				fmt.Printf("\n=== FIELD DECODE ===\n")
-				fmt.Printf("Expecting type: *Union3IntOrRecursive1OrString\n")
-				fmt.Printf("===================\n")
-				decoded := baml.Decode(param)
-				return func(result any) *Union3IntOrRecursive1OrString {
-					if result == nil {
-						return nil
-					}
-					return (result).(*Union3IntOrRecursive1OrString)
-				}(decoded)
-			}(valueHolder)
+			c.U = baml.Decode(valueHolder).Interface().(*Union3IntOrRecursive1OrString)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))

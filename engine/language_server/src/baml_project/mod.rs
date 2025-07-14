@@ -63,7 +63,7 @@ pub struct BamlProject {
 
 impl Drop for BamlProject {
     fn drop(&mut self) {
-        tracing::info!("Dropping BamlProject");
+        tracing::debug!("Dropping BamlProject");
     }
 }
 
@@ -83,7 +83,7 @@ impl std::fmt::Debug for BamlProject {
 
 impl BamlProject {
     pub fn new(root_dir: PathBuf) -> Self {
-        tracing::info!("Creating BamlProject for {}", root_dir.display());
+        tracing::debug!("Creating BamlProject for {}", root_dir.display());
         Self {
             root_dir_name: root_dir,
             files: HashMap::new(),
@@ -172,7 +172,7 @@ impl BamlProject {
         let generated = match runtime.run_codegen(&all_files, no_version_check.unwrap_or(false)) {
             Ok(gen) => {
                 let elapsed = start_time.elapsed();
-                tracing::info!(
+                tracing::debug!(
                     "Generated {:?} baml_clients in {:?}ms",
                     gen.len(),
                     elapsed.as_millis()
@@ -181,7 +181,7 @@ impl BamlProject {
             }
             Err(e) => {
                 let elapsed = start_time.elapsed();
-                tracing::info!(
+                tracing::debug!(
                     "Failed to run codegen in {:?}ms: {:?}",
                     elapsed.as_millis(),
                     e
@@ -192,11 +192,11 @@ impl BamlProject {
         };
 
         match generated.len() {
-            1 => tracing::info!(
+            1 => tracing::debug!(
                 "Generated 1 baml_client: {}",
                 generated[0].output_dir_full.display()
             ),
-            n => tracing::info!(
+            n => tracing::debug!(
                 "Generated {n} baml_clients: {}",
                 generated
                     .iter()
@@ -209,7 +209,7 @@ impl BamlProject {
     }
 
     pub fn set_unsaved_file(&mut self, document_key: &DocumentKey, content: Option<String>) {
-        tracing::info!(
+        tracing::debug!(
             "Setting unsaved file: {}, {}",
             document_key.path().display(),
             content.clone().unwrap_or("None".to_string())
@@ -228,7 +228,7 @@ impl BamlProject {
         self.cached_runtime = None;
     }
     pub fn save_file(&mut self, document_key: &DocumentKey, content: &str) {
-        tracing::info!(
+        tracing::debug!(
             "Saving file: {}, {}",
             document_key.path().display(),
             content
@@ -240,7 +240,7 @@ impl BamlProject {
     }
 
     pub fn update_file(&mut self, document_key: &DocumentKey, content: Option<String>) {
-        tracing::info!(
+        tracing::debug!(
             "Updating file: {}, {}",
             document_key.path().display(),
             content.clone().unwrap_or("None".to_string())
@@ -303,7 +303,7 @@ impl BamlProject {
     ) -> Result<BamlRuntime, Diagnostics> {
         let mut all_files_for_hash = self.files.iter().collect::<Vec<_>>();
 
-        log::info!(
+        log::debug!(
             "Baml Project saved files: {:#?}, Unsaved files: {:#?}",
             all_files_for_hash.len(),
             self.unsaved_files.len()
@@ -329,13 +329,13 @@ impl BamlProject {
                 tracing::debug!("Runtime cache hit ({})", current_hash);
                 return cached_result.clone();
             }
-            tracing::info!(
+            tracing::debug!(
                 "Runtime cache miss (hash mismatch: {} != {})",
                 *cached_hash,
                 current_hash
             );
         } else {
-            tracing::info!("Runtime cache miss (no cache entry)");
+            tracing::debug!("Runtime cache miss (no cache entry)");
         }
 
         let files_for_runtime = self
@@ -1007,7 +1007,7 @@ impl Project {
         }
 
         let elapsed = start_time.elapsed();
-        tracing::info!("update_runtime took {:?}ms", elapsed.as_millis());
+        tracing::debug!("update_runtime took {:?}ms", elapsed.as_millis());
         Ok(())
     }
 

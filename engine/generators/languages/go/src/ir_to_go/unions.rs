@@ -1,5 +1,5 @@
 use baml_types::{
-    ir_type::{TypeNonStreaming, TypeStreaming},
+    ir_type::{TypeGeneric, TypeNonStreaming, TypeStreaming},
     ToUnionName,
 };
 
@@ -22,6 +22,18 @@ pub fn ir_union_to_go<'a>(
                 crate::generated_types::VariantGo {
                     name: go_type.default_name_within_union(),
                     cffi_name: t.to_union_name(),
+                    literal_repr: match t {
+                        TypeGeneric::Literal(l, ..) => match l {
+                            baml_types::LiteralValue::String(s) => Some(format!(
+                                "\"{}\"",
+                                s.replace("\\", "\\\\").replace("\"", "\\\"")
+                            )),
+                            baml_types::LiteralValue::Int(i) => Some(i.to_string()),
+                            baml_types::LiteralValue::Bool(true) => Some("true".to_string()),
+                            baml_types::LiteralValue::Bool(false) => Some("false".to_string()),
+                        },
+                        _ => None,
+                    },
                     type_: go_type,
                 }
             })
@@ -55,6 +67,18 @@ pub fn ir_union_to_go_stream<'a>(
                 crate::generated_types::VariantGo {
                     name: go_type.default_name_within_union(),
                     cffi_name: t.to_union_name(),
+                    literal_repr: match t {
+                        TypeGeneric::Literal(l, ..) => match l {
+                            baml_types::LiteralValue::String(s) => Some(format!(
+                                "\"{}\"",
+                                s.replace("\\", "\\\\").replace("\"", "\\\"")
+                            )),
+                            baml_types::LiteralValue::Int(i) => Some(i.to_string()),
+                            baml_types::LiteralValue::Bool(true) => Some("true".to_string()),
+                            baml_types::LiteralValue::Bool(false) => Some("false".to_string()),
+                        },
+                        _ => None,
+                    },
                     type_: go_type,
                 }
             })

@@ -50,10 +50,15 @@ func (*stream) {{ fn.name }}(ctx context.Context{% for (name, go_type) in fn.arg
                 return
             case result, ok := <-internal_channel:
                 if !ok {
+                    // channel closed for some reason
                     close(channel)
                     return
                 }
                 if result.Error != nil {
+                    channel <- StreamValue[{{ fn.stream_return_type.serialize_type(pkg) }}, {{ fn.return_type.serialize_type(pkg) }}]{
+                        IsError: true,
+                        Error:   result.Error,
+                    }
                     close(channel)
                     return
                 }

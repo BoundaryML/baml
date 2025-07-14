@@ -71,7 +71,20 @@ func (u *{{ name }}) UnmarshalJSON(data []byte) error {
 }
 
 {% for v in variants %}
-func (u *{{ name }}) Set{{ v.name|exported_name }}(v {{ v.type_.serialize_type(pkg) }}) {
+func {{ name }}__New{{ v.name|exported_name }}({% if v.literal_repr.is_none() %}v {{ v.type_.serialize_type(pkg) }}{% endif %}) {{ name }} {
+    {% if let Some(literal_repr) = v.literal_repr %}
+    var v {{ v.type_.serialize_type(pkg) }} = {{ literal_repr }}
+    {% endif %}
+    return {{ name }}{
+        variant: "{{ v.name }}",
+        variant_{{ v.name }}: &v,
+    }
+}
+
+func (u *{{ name }}) Set{{ v.name|exported_name }}({% if v.literal_repr.is_none() %}v {{ v.type_.serialize_type(pkg) }}{% endif %}) {
+    {% if let Some(literal_repr) = v.literal_repr %}
+    var v {{ v.type_.serialize_type(pkg) }} = {{ literal_repr }}
+    {% endif %}
     u.variant = "{{ v.name }}"
     u.variant_{{ v.name }} = &v
     {% for v2 in variants -%}
@@ -85,10 +98,10 @@ func (u *{{ name }}) Is{{ v.name|exported_name }}() bool {
     return u.variant == "{{ v.name }}"
 }
 
-func (u *{{ name }}) {{ v.name|exported_name }}() {{ v.type_.serialize_type(pkg) }} {
+func (u *{{ name }}) {{ v.name|exported_name }}() *{{ v.type_.serialize_type(pkg) }} {
     if u.variant != "{{ v.name }}" {
-        return {{ v.type_.zero_value(pkg) }}
+        return nil
     }
-    return *u.variant_{{ v.name }}
+    return u.variant_{{ v.name }}
 }
 {% endfor %}
