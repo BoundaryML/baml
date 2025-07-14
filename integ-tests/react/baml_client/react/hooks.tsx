@@ -1404,6 +1404,106 @@ export function useCustomTask(
   }
 }
 /**
+ * A specialized hook for the DescribeAudio BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - audio: Audio
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** string
+ * - **Streaming Partial:** string
+ * - **Streaming Final:** string
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useDescribeAudio({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useDescribeAudio({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useDescribeAudio(props: HookInput<'DescribeAudio', { stream: false }>): HookOutput<'DescribeAudio', { stream: false }>
+export function useDescribeAudio(props?: HookInput<'DescribeAudio', { stream?: true }>): HookOutput<'DescribeAudio', { stream: true }>
+export function useDescribeAudio(
+  props: HookInput<'DescribeAudio', { stream?: boolean }> = {},
+): HookOutput<'DescribeAudio', { stream: true }> | HookOutput<'DescribeAudio', { stream: false }> {
+  let action: ServerAction = Actions.DescribeAudio;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.DescribeAudio;
+    return useBamlAction(action, props)
+  } else {
+    return useBamlAction(action, props as HookInput<'DescribeAudio', { stream: false }>)
+  }
+}
+/**
+ * A specialized hook for the DescribeAudio2 BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - audio: Audio
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** string
+ * - **Streaming Partial:** string
+ * - **Streaming Final:** string
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useDescribeAudio2({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useDescribeAudio2({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useDescribeAudio2(props: HookInput<'DescribeAudio2', { stream: false }>): HookOutput<'DescribeAudio2', { stream: false }>
+export function useDescribeAudio2(props?: HookInput<'DescribeAudio2', { stream?: true }>): HookOutput<'DescribeAudio2', { stream: true }>
+export function useDescribeAudio2(
+  props: HookInput<'DescribeAudio2', { stream?: boolean }> = {},
+): HookOutput<'DescribeAudio2', { stream: true }> | HookOutput<'DescribeAudio2', { stream: false }> {
+  let action: ServerAction = Actions.DescribeAudio2;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.DescribeAudio2;
+    return useBamlAction(action, props)
+  } else {
+    return useBamlAction(action, props as HookInput<'DescribeAudio2', { stream: false }>)
+  }
+}
+/**
  * A specialized hook for the DescribeImage BAML function that supports both streaming and non‑streaming responses.
  *
  * **Input Types:**
@@ -4557,6 +4657,56 @@ export function usePdfInputOpenai(
     return useBamlAction(action, props)
   } else {
     return useBamlAction(action, props as HookInput<'PdfInputOpenai', { stream: false }>)
+  }
+}
+/**
+ * A specialized hook for the PdfInputVertex BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - pdf: Pdf
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** string
+ * - **Streaming Partial:** string
+ * - **Streaming Final:** string
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = usePdfInputVertex({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = usePdfInputVertex({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function usePdfInputVertex(props: HookInput<'PdfInputVertex', { stream: false }>): HookOutput<'PdfInputVertex', { stream: false }>
+export function usePdfInputVertex(props?: HookInput<'PdfInputVertex', { stream?: true }>): HookOutput<'PdfInputVertex', { stream: true }>
+export function usePdfInputVertex(
+  props: HookInput<'PdfInputVertex', { stream?: boolean }> = {},
+): HookOutput<'PdfInputVertex', { stream: true }> | HookOutput<'PdfInputVertex', { stream: false }> {
+  let action: ServerAction = Actions.PdfInputVertex;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.PdfInputVertex;
+    return useBamlAction(action, props)
+  } else {
+    return useBamlAction(action, props as HookInput<'PdfInputVertex', { stream: false }>)
   }
 }
 /**
@@ -10605,5 +10755,55 @@ export function useVideoInputGemini(
     return useBamlAction(action, props)
   } else {
     return useBamlAction(action, props as HookInput<'VideoInputGemini', { stream: false }>)
+  }
+}
+/**
+ * A specialized hook for the VideoInputVertex BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - vid: Video
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** string
+ * - **Streaming Partial:** string
+ * - **Streaming Final:** string
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useVideoInputVertex({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useVideoInputVertex({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useVideoInputVertex(props: HookInput<'VideoInputVertex', { stream: false }>): HookOutput<'VideoInputVertex', { stream: false }>
+export function useVideoInputVertex(props?: HookInput<'VideoInputVertex', { stream?: true }>): HookOutput<'VideoInputVertex', { stream: true }>
+export function useVideoInputVertex(
+  props: HookInput<'VideoInputVertex', { stream?: boolean }> = {},
+): HookOutput<'VideoInputVertex', { stream: true }> | HookOutput<'VideoInputVertex', { stream: false }> {
+  let action: ServerAction = Actions.VideoInputVertex;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.VideoInputVertex;
+    return useBamlAction(action, props)
+  } else {
+    return useBamlAction(action, props as HookInput<'VideoInputVertex', { stream: false }>)
   }
 }

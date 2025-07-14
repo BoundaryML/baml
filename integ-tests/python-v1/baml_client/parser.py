@@ -148,6 +148,18 @@ class LlmResponseParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="CustomTask", llm_response=llm_response, mode="request")
         return typing.cast(typing.Union["types.BookOrder", "types.FlightConfirmation", "types.GroceryReceipt"], result)
 
+    def DescribeAudio(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="DescribeAudio", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
+    def DescribeAudio2(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="DescribeAudio2", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
     def DescribeImage(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> str:
@@ -524,6 +536,12 @@ class LlmResponseParser:
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="PdfInputOpenai", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
+    def PdfInputVertex(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="PdfInputVertex", llm_response=llm_response, mode="request")
         return typing.cast(str, result)
 
     def PredictAge(
@@ -1252,6 +1270,12 @@ class LlmResponseParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="VideoInputGemini", llm_response=llm_response, mode="request")
         return typing.cast(str, result)
 
+    def VideoInputVertex(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="VideoInputVertex", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
     
 
 class LlmStreamParser:
@@ -1385,6 +1409,18 @@ class LlmStreamParser:
     ) -> typing.Union["stream_types.BookOrder", "stream_types.FlightConfirmation", "stream_types.GroceryReceipt"]:
         result = self.__options.merge_options(baml_options).parse_response(function_name="CustomTask", llm_response=llm_response, mode="stream")
         return typing.cast(typing.Union["stream_types.BookOrder", "stream_types.FlightConfirmation", "stream_types.GroceryReceipt"], result)
+
+    def DescribeAudio(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="DescribeAudio", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
+
+    def DescribeAudio2(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="DescribeAudio2", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
 
     def DescribeImage(
         self, llm_response: str, baml_options: BamlCallOptions = {},
@@ -1762,6 +1798,12 @@ class LlmStreamParser:
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="PdfInputOpenai", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
+
+    def PdfInputVertex(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="PdfInputVertex", llm_response=llm_response, mode="stream")
         return typing.cast(str, result)
 
     def PredictAge(
@@ -2488,6 +2530,12 @@ class LlmStreamParser:
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="VideoInputGemini", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
+
+    def VideoInputVertex(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="VideoInputVertex", llm_response=llm_response, mode="stream")
         return typing.cast(str, result)
 
     

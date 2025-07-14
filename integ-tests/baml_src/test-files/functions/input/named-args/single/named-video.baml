@@ -29,6 +29,16 @@ test TestFileVideoInput{
   }  
 }
 
+test TestFileVideoInput2{
+  functions [VideoInputVertex]
+  args {
+    vid{ 
+      file "../../../../../sample-5s.mp4"
+    }
+  }  
+}
+
+
 test TestFileVideoInputWithMediaType{
   functions [VideoInputGemini]
   args {

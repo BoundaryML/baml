@@ -232,6 +232,20 @@ class BamlSyncClient:
             "input": input,
         })
         return typing.cast(typing.Union["types.BookOrder", "types.FlightConfirmation", "types.GroceryReceipt"], result.cast_to(types, types, stream_types, False, __runtime__))
+    def DescribeAudio(self, audio: baml_py.Audio,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).call_function_sync(function_name="DescribeAudio", args={
+            "audio": audio,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    def DescribeAudio2(self, audio: baml_py.Audio,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).call_function_sync(function_name="DescribeAudio2", args={
+            "audio": audio,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def DescribeImage(self, img: baml_py.Image,
         baml_options: BamlCallOptions = {},
     ) -> str:
@@ -671,6 +685,13 @@ class BamlSyncClient:
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="PdfInputOpenai", args={
             "pdf": pdf,"prompt": prompt,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    def PdfInputVertex(self, pdf: baml_py.Pdf,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).call_function_sync(function_name="PdfInputVertex", args={
+            "pdf": pdf,
         })
         return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def PredictAge(self, name: str,
@@ -1520,6 +1541,13 @@ class BamlSyncClient:
             "vid": vid,
         })
         return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    def VideoInputVertex(self, vid: baml_py.Video,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).call_function_sync(function_name="VideoInputVertex", args={
+            "vid": vid,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     
 
 
@@ -1779,6 +1807,30 @@ class BamlStreamClient:
           result,
           lambda x: typing.cast(typing.Union["stream_types.BookOrder", "stream_types.FlightConfirmation", "stream_types.GroceryReceipt"], x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(typing.Union["types.BookOrder", "types.FlightConfirmation", "types.GroceryReceipt"], x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def DescribeAudio(self, audio: baml_py.Audio,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="DescribeAudio", args={
+            "audio": audio,
+        })
+        return baml_py.BamlSyncStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def DescribeAudio2(self, audio: baml_py.Audio,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="DescribeAudio2", args={
+            "audio": audio,
+        })
+        return baml_py.BamlSyncStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def DescribeImage(self, img: baml_py.Image,
@@ -2530,6 +2582,18 @@ class BamlStreamClient:
     ) -> baml_py.BamlSyncStream[str, str]:
         ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="PdfInputOpenai", args={
             "pdf": pdf,"prompt": prompt,
+        })
+        return baml_py.BamlSyncStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def PdfInputVertex(self, pdf: baml_py.Pdf,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="PdfInputVertex", args={
+            "pdf": pdf,
         })
         return baml_py.BamlSyncStream[str, str](
           result,
@@ -3989,6 +4053,18 @@ class BamlStreamClient:
           lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
+    def VideoInputVertex(self, vid: baml_py.Video,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="VideoInputVertex", args={
+            "vid": vid,
+        })
+        return baml_py.BamlSyncStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
     
 
 class BamlHttpRequestClient:
@@ -4142,6 +4218,20 @@ class BamlHttpRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="CustomTask", args={
             "input": input,
+        }, mode="request")
+        return result
+    def DescribeAudio(self, audio: baml_py.Audio,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="DescribeAudio", args={
+            "audio": audio,
+        }, mode="request")
+        return result
+    def DescribeAudio2(self, audio: baml_py.Audio,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="DescribeAudio2", args={
+            "audio": audio,
         }, mode="request")
         return result
     def DescribeImage(self, img: baml_py.Image,
@@ -4583,6 +4673,13 @@ class BamlHttpRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="PdfInputOpenai", args={
             "pdf": pdf,"prompt": prompt,
+        }, mode="request")
+        return result
+    def PdfInputVertex(self, pdf: baml_py.Pdf,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="PdfInputVertex", args={
+            "pdf": pdf,
         }, mode="request")
         return result
     def PredictAge(self, name: str,
@@ -5432,6 +5529,13 @@ class BamlHttpRequestClient:
             "vid": vid,
         }, mode="request")
         return result
+    def VideoInputVertex(self, vid: baml_py.Video,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="VideoInputVertex", args={
+            "vid": vid,
+        }, mode="request")
+        return result
     
 
 class BamlHttpStreamRequestClient:
@@ -5585,6 +5689,20 @@ class BamlHttpStreamRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="CustomTask", args={
             "input": input,
+        }, mode="stream")
+        return result
+    def DescribeAudio(self, audio: baml_py.Audio,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="DescribeAudio", args={
+            "audio": audio,
+        }, mode="stream")
+        return result
+    def DescribeAudio2(self, audio: baml_py.Audio,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="DescribeAudio2", args={
+            "audio": audio,
         }, mode="stream")
         return result
     def DescribeImage(self, img: baml_py.Image,
@@ -6026,6 +6144,13 @@ class BamlHttpStreamRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="PdfInputOpenai", args={
             "pdf": pdf,"prompt": prompt,
+        }, mode="stream")
+        return result
+    def PdfInputVertex(self, pdf: baml_py.Pdf,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="PdfInputVertex", args={
+            "pdf": pdf,
         }, mode="stream")
         return result
     def PredictAge(self, name: str,
@@ -6872,6 +6997,13 @@ class BamlHttpStreamRequestClient:
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="VideoInputGemini", args={
+            "vid": vid,
+        }, mode="stream")
+        return result
+    def VideoInputVertex(self, vid: baml_py.Video,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="VideoInputVertex", args={
             "vid": vid,
         }, mode="stream")
         return result

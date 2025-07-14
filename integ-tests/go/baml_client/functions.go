@@ -3374,6 +3374,45 @@ func PdfInputOpenai(ctx context.Context, pdf any, prompt string, opts ...CallOpt
 	return casted, nil
 }
 
+func PdfInputVertex(ctx context.Context, pdf any, opts ...CallOptionFunc) (string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"pdf": pdf},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := baml.EncodeArgs(args)
+	if err != nil {
+		panic(err)
+	}
+
+	result, err := bamlRuntime.CallFunction(ctx, "PdfInputVertex", encoded)
+	if err != nil {
+		return "", err
+	}
+
+	if result.Error != nil {
+		return "", result.Error
+	}
+
+	casted := (result.Data).(string)
+
+	return casted, nil
+}
+
 func PredictAge(ctx context.Context, name string, opts ...CallOptionFunc) (types.FooAny, error) {
 
 	var callOpts callOption
@@ -8080,6 +8119,45 @@ func VideoInputGemini(ctx context.Context, vid any, opts ...CallOptionFunc) (str
 	}
 
 	result, err := bamlRuntime.CallFunction(ctx, "VideoInputGemini", encoded)
+	if err != nil {
+		return "", err
+	}
+
+	if result.Error != nil {
+		return "", result.Error
+	}
+
+	casted := (result.Data).(string)
+
+	return casted, nil
+}
+
+func VideoInputVertex(ctx context.Context, vid any, opts ...CallOptionFunc) (string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"vid": vid},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := baml.EncodeArgs(args)
+	if err != nil {
+		panic(err)
+	}
+
+	result, err := bamlRuntime.CallFunction(ctx, "VideoInputVertex", encoded)
 	if err != nil {
 		return "", err
 	}
