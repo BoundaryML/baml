@@ -20,7 +20,7 @@ async def test_pdf_input():
     # Create a Pdf object from Base64 data
     pdf_b64 = "JVBERi0K..."
     pdf = Pdf.from_base64("application/pdf", pdf_b64)
-    res = await b.TestPDFInput(pdf=pdf)
+    res = await b.TestPdfInput(pdf=pdf)
 ```
 
 ```typescript
@@ -29,7 +29,7 @@ import { Pdf } from "@boundaryml/baml"
 
 // Create a Pdf object from Base64 data
 const pdf_b64 = "JVBERi0K..."
-const res = await b.TestPDFInput(
+const res = await b.TestPdfInput(
   Pdf.fromBase64('application/pdf', pdf_b64)
 )
 
@@ -39,11 +39,11 @@ const blobPdf = await Pdf.fromBlob(blob, 'application/pdf')
 ```
 
 ```tsx
-import { useTestPDFInput } from '../baml_client/react/hooks'
+import { useTestPdfInput } from '../baml_client/react/hooks'
 import { Pdf } from "../baml_client/react/media"
 
-export function TestPDFInput() {
-    const { mutate } = useTestPDFInput()
+export function TestPdfInput() {
+    const { mutate } = useTestPdfInput()
 
     const handleClick = async () => {
         const pdf_b64 = "JVBERi0K..."

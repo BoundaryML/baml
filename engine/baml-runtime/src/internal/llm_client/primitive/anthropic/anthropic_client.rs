@@ -339,7 +339,7 @@ impl ToProviderMessage for AnthropicClient {
                 }
             }
             baml_types::BamlMediaType::Pdf => {
-                // Anthropic supports PDF inline as Base64 or URL (max 32 MB, 100 pages)
+                // Anthropic supports Pdf inline as Base64 or URL (max 32 MB, 100 pages)
                 match &media.content {
                     BamlMediaContent::Base64(data) => {
                         content.insert("type".into(), "document".into());

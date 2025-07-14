@@ -241,16 +241,16 @@ end
 
 Example
 ```rust
-function AnalyzePDF(myPdf: pdf) -> string {
+function AnalyzePdf(myPdf: pdf) -> string {
   client GPT4Turbo
   prompt #"
     {{ _.role("user")}}
-    Summarize the main points of this PDF:
+    Summarize the main points of this Pdf:
     {{ myPdf }}
   "#
 }
 ```
-> **Note** PDF inputs must be provided as Base64 data using `Pdf.from_base64`. URL-based inputs are not currently supported.
+> **Note** Pdf inputs must be provided as Base64 data using `Pdf.from_base64`. URL-based inputs are not currently supported.
 
 <CodeBlocks>
 ```python Python
@@ -260,7 +260,7 @@ from baml_client import b
 async def run():
   # Base64 data
   b64 = "JVBERi0K...."
-  res = await b.TestPDFInput(
+  res = await b.TestPdfInput(
     pdf=Pdf.from_base64("application/pdf", b64)
   )
 ```
@@ -272,23 +272,23 @@ import { Pdf } from "@boundaryml/baml"
 
   // Base64
   const pdf_base64 = ".."
-  let res = await b.TestPDFInput(
+  let res = await b.TestPdfInput(
     Pdf.fromBase64('application/pdf', pdf_base64),
   )
   
 ```
 
 ```ruby Ruby
-# PDF inputs must be provided as Base64. URL support is currently unavailable.
+# Pdf inputs must be provided as Base64. URL support is currently unavailable.
 require_relative "baml_client/client"
 
 b = Baml.Client
 Pdf = Baml::Pdf
 
 def test_pdf_input
-  # Base64 PDF
+  # Base64 Pdf
   pdf_b64 = "JVBERi0K...."
-  res = b.TestPDFInput(
+  res = b.TestPdfInput(
     pdf: Pdf.from_base64("application/pdf", pdf_b64)
   )
 end

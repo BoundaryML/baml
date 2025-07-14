@@ -16,7 +16,7 @@ impl fmt::Display for BamlMediaType {
         match *self {
             BamlMediaType::Image => write!(f, "image"),
             BamlMediaType::Audio => write!(f, "audio"),
-            BamlMediaType::Pdf => write!(f, "pdf"),
+            BamlMediaType::Pdf => write!(f, "application"),
             BamlMediaType::Video => write!(f, "video"),
         }
     }

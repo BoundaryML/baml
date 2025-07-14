@@ -35,8 +35,18 @@ test TestFilePdfInput{
   functions [PdfInput]
   args {
     pdf{ 
-      // TODO: Replace with actual local PDF file for testing
       file "../../../../../dummy.pdf"
+    }
+  }  
+}
+
+//https://www.usenix.org/system/files/conference/nsdi13/nsdi13-final85.pdf
+//https://arxiv.org/pdf/2305.08675
+test TestFilePdfInputUrl{
+  functions [PdfInput]
+  args {
+    pdf{ 
+      url "https://www.usenix.org/system/files/conference/nsdi13/nsdi13-final85.pdf"
     }
   }  
 }
@@ -45,7 +55,6 @@ test TestFilePdfInputWithMediaType{
   functions [PdfInput]
   args {
     pdf{ 
-      // TODO: Replace with actual local PDF file for testing
       file "../../../../../dummy.pdf"
       media_type "application/pdf"
     }

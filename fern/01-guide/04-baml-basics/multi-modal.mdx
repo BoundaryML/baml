@@ -142,10 +142,10 @@ we're working on it!
 ```
 </CodeBlocks>
 
-### PDF
+### Pdf
 Calling functions that have `pdf` types. See [pdf types](/ref/baml/types#pdf)
 
-> **⚠️ Warning** PDF inputs must be provided as Base64 data (e.g. `Pdf.from_base64`). URL-based PDF inputs are not currently supported. Additionally, PDF inputs are only supported by models that explicitly allow document (PDF) modalities, such as Gemini 2.x Flash/Pro or VertexAI Gemini. Make sure the `client` you select advertises PDF support, otherwise your request will fail.
+> **⚠️ Warning** Pdf inputs must be provided as Base64 data (e.g. `Pdf.from_base64`). URL-based Pdf inputs are not currently supported. Additionally, Pdf inputs are only supported by models that explicitly allow document (Pdf) modalities, such as Gemini 2.x Flash/Pro or VertexAI Gemini. Make sure the `client` you select advertises Pdf support, otherwise your request will fail.
 
 <CodeBlocks>
 ```python Python
@@ -155,7 +155,7 @@ from baml_client import b
 async def run():
   # Base64 data
   b64 = "JVBERi0K...."
-  res = await b.TestPDFInput(
+  res = await b.TestPdfInput(
     pdf=Pdf.from_base64("application/pdf", b64)
   )
 ```
@@ -167,7 +167,7 @@ import { Pdf } from "@boundaryml/baml"
 
   // Base64
   const pdf_base64 = ".."
-  let res = await b.TestPDFInput(
+  let res = await b.TestPdfInput(
     Pdf.fromBase64('application/pdf', pdf_base64),
   )
   

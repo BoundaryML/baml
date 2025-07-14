@@ -577,7 +577,7 @@ impl ToProviderMessage for OpenAIClient {
                     BamlMediaContent::Url(url_content) => {
                         // For URLs, we need to resolve them to base64 first
                         anyhow::bail!(
-                            "BAML internal error (openai): PDF URL are not supported by OpenAI use base64."
+                            "BAML internal error (openai): Pdf URL are not supported by OpenAI use base64."
                         );
                     }
                     BamlMediaContent::Base64(b64_media) => {
@@ -592,7 +592,7 @@ impl ToProviderMessage for OpenAIClient {
                     BamlMediaContent::File(media_file) => {
                         // For files, we need to resolve them to base64 first
                         anyhow::bail!(
-                            "BAML internal error (openai): PDF file should have been resolved to base64 before this stage."
+                            "BAML internal error (openai): Pdf file should have been resolved to base64 before this stage."
                         );
                     }
                 }

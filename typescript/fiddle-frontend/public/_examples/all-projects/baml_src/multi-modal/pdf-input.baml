@@ -1,4 +1,4 @@
-// BAML supports multi-modal inputs including PDFs!
+// BAML supports multi-modal inputs including Pdfs!
 
 // How to call this BAML function in python or Typescript: https://docs.boundaryml.com/docs/snippets/supported-types#pdf
 

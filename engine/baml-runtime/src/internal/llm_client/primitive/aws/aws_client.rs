@@ -833,33 +833,33 @@ impl AwsClient {
                 match &media.content {
                     BamlMediaContent::File(_) => {
                         anyhow::bail!(
-                            "BAML internal error (AWSBedrock): PDF file should have been resolved to base64"
+                            "BAML internal error (AWSBedrock): Pdf file should have been resolved to base64"
                         )
                     }
                     BamlMediaContent::Url(url_media) => {
-                        // AWS Bedrock supports PDF as document type via URL
+                        // AWS Bedrock supports Pdf as document type via URL
                         Ok(bedrock::types::ContentBlock::Document(
                             bedrock::types::DocumentBlock::builder()
                                 .set_format(Some(bedrock::types::DocumentFormat::Pdf))
-                                .set_name(Some("document.pdf".to_string())) // Default name for URL-based PDFs
+                                .set_name(Some("document.pdf".to_string())) // Default name for URL-based Pdfs
                                 .set_source(Some(bedrock::types::DocumentSource::Bytes(Blob::new(
                                     url_media.url.as_bytes().to_vec()
                                 ))))
                                 .build()
-                                .context("Failed to build PDF document block")?,
+                                .context("Failed to build Pdf document block")?,
                         ))
                     }
                     BamlMediaContent::Base64(b64_media) => {
-                        // AWS Bedrock supports PDF as document type via Base64
+                        // AWS Bedrock supports Pdf as document type via Base64
                         Ok(bedrock::types::ContentBlock::Document(
                             bedrock::types::DocumentBlock::builder()
                                 .set_format(Some(bedrock::types::DocumentFormat::Pdf))
-                                .set_name(Some("document.pdf".to_string())) // Default name for Base64 PDFs
+                                .set_name(Some("document.pdf".to_string())) // Default name for Base64 Pdfs
                                 .set_source(Some(bedrock::types::DocumentSource::Bytes(Blob::new(
                                     aws_smithy_types::base64::decode(b64_media.base64.clone())?,
                                 ))))
                                 .build()
-                                .context("Failed to build PDF document block")?,
+                                .context("Failed to build Pdf document block")?,
                         ))
                     }
                 }

@@ -206,12 +206,12 @@ test AudioBase64Test {
 
 ### Pdfs
 
-Unlike images and audio, **PDFs cannot be supplied via URL**. They must be provided either as a local file reference or as Base64 data.
+Unlike images and audio, **Pdfs cannot be supplied via URL**. They must be provided either as a local file reference or as Base64 data.
 
 1. **File Reference**
 ```baml
-test PDFFileTest {
-    functions [AnalyzePDF]
+test PdfFileTest {
+    functions [AnalyzePdf]
     args {
         pdf {
             file "../documents/report.pdf"
@@ -222,8 +222,8 @@ test PDFFileTest {
 
 2. **Base64 Data**
 ```baml
-test PDFBase64Test {
-    functions [AnalyzePDF]
+test PdfBase64Test {
+    functions [AnalyzePdf]
     args {
         pdf {
             base64 "JVBERi0K..."

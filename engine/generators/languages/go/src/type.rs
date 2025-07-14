@@ -481,7 +481,7 @@ impl SerializeType for MediaTypeGo {
         match self {
             MediaTypeGo::Image => "any".to_string(), // format!("{}Image", Package::imported_base().relative_from(pkg)),
             MediaTypeGo::Audio => "any".to_string(), // format!("{}Audio", Package::imported_base().relative_from(pkg)),
-            MediaTypeGo::Pdf => "any".to_string(), // format!("{}PDF", Package::imported_base().relative_from(pkg)),
+            MediaTypeGo::Pdf => "any".to_string(), // format!("{}Pdf", Package::imported_base().relative_from(pkg)),
             MediaTypeGo::Video => "any".to_string(), // format!("{}Video", Package::imported_base().relative_from(pkg)),
         }
     }

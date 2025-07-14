@@ -567,14 +567,6 @@ async fn process_media(
             ))
         }
         BamlMediaContent::Url(media_url) => {
-            // PDF URLs: leave them untouched (no base64 conversion) but make sure mime-type is set
-            if part.media_type == BamlMediaType::Pdf {
-                let mut new_part = part.clone();
-                if new_part.mime_type.as_deref().map(|s| s.is_empty()).unwrap_or(true) {
-                    new_part.mime_type = Some("application/pdf".to_string());
-                }
-                return Ok(new_part);
-            }
 
             // URLs may have an attached mime-type or not
             // URLs can be converted to either a url with mime-type or base64 with mime-type
@@ -613,6 +605,41 @@ async fn process_media(
 
             let (base64, inferred_mime_type) =
                 to_base64_with_inferred_mime_type(ctx, media_url).await?;
+
+            // Validate MIME type – if the user has explicitly set one, or if the
+            // media type implies a canonical MIME (e.g. PDFs), ensure the fetched
+            // content matches what was requested.
+
+            let expected_mime_type: Option<String> = if let Some(mt) = &part.mime_type {
+                if !mt.is_empty() {
+                    Some(mt.clone())
+                } else {
+                    None
+                }
+            } else {
+                match part.media_type {
+                    BamlMediaType::Pdf => Some("application/pdf".to_string()),
+                    _ => None,
+                }
+            };
+
+            if let Some(expected) = &expected_mime_type {
+                // we accept subtype matches (e.g. image/jpeg starts_with image/)
+                let mismatch = if expected.contains('/') {
+                    &inferred_mime_type != expected
+                } else {
+                    !inferred_mime_type.starts_with(expected)
+                };
+
+                if mismatch {
+                    anyhow::bail!(
+                        "Requested media of MIME type '{}' but fetched '{}' from URL {}. Please ensure the URL points to the correct file or update the mime_type in BAML.",
+                        expected,
+                        inferred_mime_type,
+                        media_url.url
+                    );
+                }
+            }
 
             Ok(BamlMedia::base64(
                 part.media_type,

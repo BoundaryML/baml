@@ -141,7 +141,7 @@ impl ParsingContext<'_> {
 
     pub(crate) fn error_pdf_not_supported(&self) -> ParsingError {
         ParsingError {
-            reason: "PDF type is not supported here".to_string(),
+            reason: "Pdf type is not supported here".to_string(),
             scope: self.scope.clone(),
             causes: vec![],
         }

@@ -73,11 +73,11 @@ impl CloneAsBamlValue for Audio {
 }
 
 #[magnus::wrap(class = "Baml::Ffi::Pdf", free_immediately, size)]
-pub(crate) struct PDF {
+pub(crate) struct Pdf {
     pub(crate) inner: BamlMedia,
 }
 
-impl PDF {
+impl Pdf {
     pub fn from_url(url: String, media_type: Option<String>) -> Self {
         Self {
             inner: BamlMedia::url(BamlMediaType::Pdf, url, media_type),
@@ -91,14 +91,14 @@ impl PDF {
 
     pub fn define_in_ruby(module: &RModule) -> Result<()> {
         let cls = module.define_class("Pdf", class::object())?;
-        cls.define_singleton_method("from_url", function!(PDF::from_url, 2))?;
-        cls.define_singleton_method("from_base64", function!(PDF::from_base64, 2))?;
+        cls.define_singleton_method("from_url", function!(Pdf::from_url, 2))?;
+        cls.define_singleton_method("from_base64", function!(Pdf::from_base64, 2))?;
 
         Ok(())
     }
 }
 
-impl CloneAsBamlValue for PDF {
+impl CloneAsBamlValue for Pdf {
     fn clone_as_baml_value(&self) -> BamlValue {
         BamlValue::Media(self.inner.clone())
     }
