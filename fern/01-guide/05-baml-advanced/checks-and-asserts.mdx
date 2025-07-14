@@ -146,9 +146,9 @@ class Citation {
 }
 ```
 
-<CodeBlocks>
-
-```python Python
+<Tabs>
+<Tab title="Python" language="python">
+```python
 from baml_client import b
 from baml_client.types import Citation
 
@@ -165,10 +165,11 @@ def main():
         print(f"Validation error: {str(e)}")
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
-
 ```
+</Tab>
 
-```typescript Typescript
+<Tab title="TypeScript" language="typescript">
+```typescript
 import { b, BamlValidationError } from './baml_client';
 import { Citation } from './baml_client/types';
 
@@ -196,8 +197,8 @@ const main = () => {
     }
 };
 ```
-
-</CodeBlocks>
+</Tab>
+</Tabs>
 
 
 ## Checks
@@ -211,15 +212,19 @@ runtime.
 ( bar int @check(less_than_zero, {{ this < 0 }}) )[]
 ```
 
-<CodeBlocks>
-```python Python
+<Tabs>
+<Tab title="Python" language="python">
+```python
 List[Checked[int, Dict[Literal["less_than_zero"]]]]
 ```
+</Tab>
 
-```typescript Typescript
+<Tab title="TypeScript" language="typescript">
+```typescript
 Checked<int,"less_than_zero">[]
 ```
-</CodeBlocks>
+</Tab>
+</Tabs>
 
 
 The following example uses both `@check` and `@assert`. If `line_number` fails its
@@ -252,8 +257,9 @@ function GetCitation(full_text: string) -> Citation {
 
 ```
 
-<CodeBlocks>
-```python Python
+<Tabs>
+<Tab title="Python" language="python">
+```python
 from baml_client import b
 from baml_client.types import Citation, get_checks
 
@@ -272,13 +278,15 @@ def main():
     for check in get_checks(citation.quote.checks):
         print(f"Check {check.name}: {check.status}")
 ```
+</Tab>
 
-```typescript Typescript
+<Tab title="TypeScript" language="typescript">
+```typescript
 import { b, get_checks } from './baml_client'
 import { Citation } from './baml_client/types'
 
 const main = () => {
-    const citation = b.GetCitation("SpaceX, is an American spacecraft manufacturer, launch service provider...")
+    const citation = b.GetCitation("SpaceX, is an American spacecraft manufacturer, launch service provider...");
 
     // Access the value of the quote field
     const quote = citation.quote.value
@@ -294,9 +302,8 @@ const main = () => {
     }
 }
 ```
-
-
-</CodeBlocks>
+</Tab>
+</Tabs>
 
 You can also chain multiple `@check` and `@assert` attributes on a single field.
 
@@ -359,4 +366,5 @@ class Person {
         this.age >= 18 or this.address.country != "USA",
     }})
 }
+
 ```

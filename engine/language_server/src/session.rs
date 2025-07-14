@@ -211,10 +211,20 @@ impl Session {
 
     pub fn reload(&mut self, notifier: Option<Notifier>) -> anyhow::Result<()> {
         tracing::info!("Reloading session");
-        let project_updates: Vec<HashMap<_, _>> = self
-            .baml_src_projects
-            .lock()
-            .unwrap()
+        let mut baml_src_projects = self.baml_src_projects.lock().unwrap();
+
+        // Drop moved "baml_src" directories, otherwise the project_updates
+        // code below will fail trying to read directories that no longer exist.
+        let removed_baml_src_dirs = baml_src_projects
+            .keys()
+            .filter(|project_root| !project_root.exists())
+            .cloned()
+            .collect::<Vec<_>>();
+        for baml_src_dir in &removed_baml_src_dirs {
+            baml_src_projects.remove(baml_src_dir);
+        }
+
+        let project_updates: Vec<HashMap<_, _>> = baml_src_projects
             .iter_mut()
             .map(|(_project_root, project)| {
                 let files_map = project
@@ -235,6 +245,10 @@ impl Session {
             })
             .collect::<anyhow::Result<Vec<_>>>()?;
         tracing::info!("Initial reload of {} files", project_updates.len());
+
+        // Guard no longer used. We can drop now instead of waiting for the end
+        // of scope.
+        drop(baml_src_projects);
 
         let files: Vec<(DocumentKey, String)> = project_updates
             .into_iter()

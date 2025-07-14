@@ -177,10 +177,10 @@ impl WithRepr<TopLevelAssignment> for TopLevelAssignmentWalker<'_> {
         let name = self
             .top_level_assignment()
             .stmt
-            .identifier
+            .identifier()
             .name()
             .to_string();
-        let expr = self.top_level_assignment().stmt.body.repr(db)?;
+        let expr = self.top_level_assignment().stmt.body().repr(db)?;
         Ok(TopLevelAssignment {
             name: Node {
                 elem: name,
@@ -315,12 +315,12 @@ fn convert_function_body(
         stmts.reverse();
         let expr = stmts
             .iter()
-            .fold(fn_body, |acc, stmt| match stmt.body.repr(db) {
+            .fold(fn_body, |acc, stmt| match stmt.body().repr(db) {
                 Ok(stmt_expr) => Expr::Let(
-                    stmt.identifier.name().to_string(),
+                    stmt.identifier().name().to_string(),
                     Arc::new(stmt_expr),
                     Arc::new(acc),
-                    (stmt.body.span().clone(), None),
+                    (stmt.span().clone(), None),
                 ),
                 Err(e) => acc,
             });
@@ -493,21 +493,6 @@ impl WithRepr<Expr<ExprMetadata>> for ast::Expression {
                     else_.map(Arc::new),
                     (span.clone(), None),
                 ))
-            }
-            ast::Expression::ForLoop {
-                identifier,
-                iterator,
-                body,
-                span,
-            } => {
-                let iterator = iterator.repr(db)?;
-                let body = convert_function_body(body.clone(), db)?;
-                Ok(Expr::ForLoop {
-                    item: identifier.to_string(),
-                    iterable: Arc::new(iterator),
-                    body: Arc::new(body),
-                    meta: (span.clone(), None),
-                })
             }
         }
     }

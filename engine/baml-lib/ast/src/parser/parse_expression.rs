@@ -46,7 +46,6 @@ pub(crate) fn parse_expression(
         Rule::lambda => parse_lambda(first_child, diagnostics),
         Rule::expr_block => parse_expr_block(first_child, diagnostics)
             .map(|block| Expression::ExprBlock(block, span)),
-        Rule::for_loop => parse_for_loop(first_child, diagnostics),
         Rule::if_expression => parse_if_expression(first_child, diagnostics),
 
         Rule::BLOCK_LEVEL_CATCH_ALL => {

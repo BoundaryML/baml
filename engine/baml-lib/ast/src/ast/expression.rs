@@ -8,7 +8,7 @@ use std::fmt;
 use baml_types::JinjaExpression;
 use bstd::dedent;
 
-use super::{app::App, ArgumentsList, Identifier, WithName, WithSpan};
+use super::{app::App, ArgumentsList, Identifier, Stmt, WithName, WithSpan};
 use crate::ast::Span;
 
 #[derive(Debug, Clone)]
@@ -126,12 +126,6 @@ pub enum Expression {
         Option<Box<Expression>>,
         Span,
     ),
-    ForLoop {
-        identifier: Identifier,
-        iterator: Box<Expression>,
-        body: ExpressionBlock,
-        span: Span,
-    },
 }
 
 impl fmt::Display for Expression {
@@ -198,14 +192,6 @@ impl fmt::Display for Expression {
                 Some(else_) => write!(f, "if {cond} {{ {then} }} else {{ {else_} }}"),
                 None => write!(f, "if {cond} {{ {then} }}"),
             },
-            Expression::ForLoop {
-                identifier,
-                iterator,
-                body,
-                ..
-            } => {
-                write!(f, "for ({identifier} in {iterator}) {{ {body} }}")
-            }
         }
     }
 }
@@ -321,7 +307,6 @@ impl Expression {
             Self::App(app) => app.span(),
             Self::ExprBlock(_, span) => span,
             Self::If(_, _, _, span) => span,
-            Self::ForLoop { span, .. } => span,
         }
     }
 
@@ -351,7 +336,6 @@ impl Expression {
             Expression::App(_) => "function_application",
             Expression::ExprBlock(_, _) => "expression_block",
             Expression::If(_, _, _, _) => "if_expression",
-            Expression::ForLoop { .. } => "for_loop",
         }
     }
 
@@ -447,25 +431,6 @@ impl Expression {
                 }
             }
             (If(_, _, _, _), _) => panic!("Types do not match: {self:?} and {other:?}"),
-            (
-                ForLoop {
-                    identifier: id1,
-                    iterator: it1,
-                    body: d1,
-                    ..
-                },
-                ForLoop {
-                    identifier: id2,
-                    iterator: it2,
-                    body: d2,
-                    ..
-                },
-            ) => {
-                id1.assert_eq_up_to_span(id2);
-                it1.assert_eq_up_to_span(it2);
-                d1.assert_eq_up_to_span(d2);
-            }
-            (ForLoop { .. }, _) => panic!("Types do not match: {self:?} and {other:?}"),
         }
     }
 
@@ -557,7 +522,6 @@ impl Expression {
             Expression::App(_) => None,          // Is this right?
             Expression::ExprBlock(_, _) => None, // Is this right?
             Expression::If(_, _, _, _) => None,
-            Expression::ForLoop { .. } => None,
         }
     }
 }
@@ -643,28 +607,5 @@ impl ExpressionBlock {
                 a.assert_eq_up_to_span(b);
             });
         self.expr.assert_eq_up_to_span(&other.expr);
-    }
-}
-
-// TODO: Stmt statements have the form` `let x = some_expr`.
-// When we add more statements, `Stmt` will become an enum.
-#[derive(Debug, Clone)]
-pub struct Stmt {
-    pub identifier: Identifier,
-    pub body: Expression,
-    pub span: Span,
-}
-
-impl fmt::Display for Stmt {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "let {} = {}", self.identifier, self.body)?;
-        Ok(())
-    }
-}
-
-impl Stmt {
-    pub fn assert_eq_up_to_span(&self, other: &Stmt) {
-        self.identifier.assert_eq_up_to_span(&other.identifier);
-        self.body.assert_eq_up_to_span(&other.body);
     }
 }

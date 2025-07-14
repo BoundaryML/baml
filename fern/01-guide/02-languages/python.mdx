@@ -22,36 +22,48 @@ To set up BAML with Python do the following:
       </Tip>
   
   ### Install BAML
-      <CodeBlocks>
-        ```bash pip
-        pip install baml-py
-        ```
+      <Tabs>
+        <Tab title="pip" language="pip">
+          ```bash pip
+          pip install baml-py
+          ```
+        </Tab>
 
-        ```bash poetry
-        poetry add baml-py
-        ```
+        <Tab title="poetry" language="poetry">
+          ```bash poetry
+          poetry add baml-py
+          ```
+        </Tab>
 
-         ```bash uv
-        uv add baml-py
-        ```
-        </CodeBlocks>
+        <Tab title="uv" language="uv">
+          ```bash uv
+          uv add baml-py
+          ```
+        </Tab>
+      </Tabs>
   
   ### Add BAML to your existing project
       This will give you some starter BAML code in a `baml_src` directory.
 
-      <CodeBlocks>
-      ```bash pip
-      baml-cli init
-      ```
+      <Tabs>
+        <Tab title="pip" language="pip">
+          ```bash pip
+          baml-cli init
+          ```
+        </Tab>
 
-      ```bash poetry
-      poetry run baml-cli init
-      ```
+        <Tab title="poetry" language="poetry">
+          ```bash poetry
+          poetry run baml-cli init
+          ```
+        </Tab>
 
-      ```bash uv
-      uv run baml-cli init
-      ```
-      </CodeBlocks>
+        <Tab title="uv" language="uv">
+          ```bash uv
+          uv run baml-cli init
+          ```
+        </Tab>
+      </Tabs>
   
   ### Generate the `baml_client` python module from `.baml` files
 
@@ -60,22 +72,27 @@ To set up BAML with Python do the following:
   Any types defined in .baml files will be converted into Pydantic models in the `baml_client` directory.
 
 
-    <CodeBlocks>
-    ```bash pip
-    baml-cli generate
-    ```
+      <Tabs>
+        <Tab title="pip" language="pip">
+          ```bash pip
+          baml-cli generate
+          ```
+        </Tab>
 
+        <Tab title="poetry" language="poetry">
+          ```bash poetry
+          poetry run baml-cli generate
+          ```
+        </Tab>
 
-    ```bash poetry
-    poetry run baml-cli generate
-    ```
+        <Tab title="uv" language="uv">
+          ```bash uv
+          uv run baml-cli generate
+          ```
+        </Tab>
+      </Tabs>
 
-    ```bash uv
-    uv run baml-cli generate
-    ```
-    </CodeBlocks>
-
-    See [What is baml_client](/guide/introduction/baml_client) to learn more about how this works.
+      See [What is baml_client](/guide/introduction/baml_client) to learn more about how this works.
     <img src="/assets/languages/baml-to-py.png" />
 
     <Tip>
@@ -86,50 +103,53 @@ To set up BAML with Python do the following:
   ### Use a BAML function in Python!
     <Error>If `baml_client` doesn't exist, make sure to run the previous step! </Error>
 
-    <CodeBlocks>
-    ```python main.py 
-    from baml_client.sync_client import b
-    from baml_client.types import Resume
+      <Tabs>
+      <Tab title="Sync" language="python">
+      ```python main.py 
+      from baml_client.sync_client import b
+      from baml_client.types import Resume
 
-    def example(raw_resume: str) -> Resume: 
-      # BAML's internal parser guarantees ExtractResume
-      # to be always return a Resume type
-      response = b.ExtractResume(raw_resume)
-      return response
+      def example(raw_resume: str) -> Resume: 
+        # BAML's internal parser guarantees ExtractResume
+        # to be always return a Resume type
+        response = b.ExtractResume(raw_resume)
+        return response
 
-    def example_stream(raw_resume: str) -> Resume:
-      stream = b.stream.ExtractResume(raw_resume)
-      for msg in stream:
-        print(msg) # This will be a PartialResume type
-      
-      # This will be a Resume type
-      final = stream.get_final_response()
+      def example_stream(raw_resume: str) -> Resume:
+        stream = b.stream.ExtractResume(raw_resume)
+        for msg in stream:
+          print(msg) # This will be a PartialResume type
+        
+        # This will be a Resume type
+        final = stream.get_final_response()
 
-      return final
-    ```
+        return final
+      ```
+      </Tab>
 
-    ```python async_main.py
-    from baml_client.async_client import b
-    from baml_client.types import Resume
+      <Tab title="Async" language="python">
+      ```python async_main.py
+      from baml_client.async_client import b
+      from baml_client.types import Resume
 
-    async def example(raw_resume: str) -> Resume: 
-      # BAML's internal parser guarantees ExtractResume
-      # to be always return a Resume type
-      response = await b.ExtractResume(raw_resume)
-      return response
+      async def example(raw_resume: str) -> Resume: 
+        # BAML's internal parser guarantees ExtractResume
+        # to be always return a Resume type
+        response = await b.ExtractResume(raw_resume)
+        return response
 
-    async def example_stream(raw_resume: str) -> Resume:
-      stream = b.stream.ExtractResume(raw_resume)
-      async for msg in stream:
-        print(msg) # This will be a PartialResume type
-      
-      # This will be a Resume type
-      final = await stream.get_final_response()
+      async def example_stream(raw_resume: str) -> Resume:
+        stream = b.stream.ExtractResume(raw_resume)
+        async for msg in stream:
+          print(msg) # This will be a PartialResume type
+        
+        # This will be a Resume type
+        final = await stream.get_final_response()
 
-      return final
-    ```
-    </CodeBlocks>
-  
+        return final
+      ```
+      </Tab>
+      </Tabs>
 </Steps>
 
 
