@@ -174,6 +174,7 @@ export declare class LlmStreamCall {
   get selected(): boolean
   get usage(): Usage | null
   get timing(): StreamTiming
+  sseResponses(): Array<SSEResponse> | null
   toString(): string
 }
 export type LLMStreamCall = LlmStreamCall
@@ -184,19 +185,22 @@ export declare class RuntimeContextManager {
   contextDepth(): number
 }
 
+export declare class SseResponse {
+  get text(): string
+  json(): any | null
+}
+export type SSEResponse = SseResponse
+
 export declare class StreamTiming {
   toString(): string
   get startTimeUtcMs(): number
   get durationMs(): number | null
-  get timeToFirstParsedMs(): number | null
-  get timeToFirstTokenMs(): number | null
 }
 
 export declare class Timing {
   toString(): string
   get startTimeUtcMs(): number
   get durationMs(): number | null
-  get timeToFirstParsedMs(): number | null
 }
 
 export declare class TraceStats {

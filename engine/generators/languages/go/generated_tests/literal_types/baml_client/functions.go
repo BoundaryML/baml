@@ -55,7 +55,7 @@ func TestBooleanLiterals(ctx context.Context, input string, opts ...CallOptionFu
 		return types.BooleanLiterals{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.BooleanLiterals)
+	casted := (result.Data).(types.BooleanLiterals)
 
 	return casted, nil
 }
@@ -94,7 +94,7 @@ func TestComplexLiterals(ctx context.Context, input string, opts ...CallOptionFu
 		return types.ComplexLiterals{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.ComplexLiterals)
+	casted := (result.Data).(types.ComplexLiterals)
 
 	return casted, nil
 }
@@ -133,7 +133,7 @@ func TestIntegerLiterals(ctx context.Context, input string, opts ...CallOptionFu
 		return types.IntegerLiterals{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.IntegerLiterals)
+	casted := (result.Data).(types.IntegerLiterals)
 
 	return casted, nil
 }
@@ -172,7 +172,7 @@ func TestMixedLiterals(ctx context.Context, input string, opts ...CallOptionFunc
 		return types.MixedLiterals{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.MixedLiterals)
+	casted := (result.Data).(types.MixedLiterals)
 
 	return casted, nil
 }
@@ -211,7 +211,7 @@ func TestStringLiterals(ctx context.Context, input string, opts ...CallOptionFun
 		return types.StringLiterals{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.StringLiterals)
+	casted := (result.Data).(types.StringLiterals)
 
 	return casted, nil
 }

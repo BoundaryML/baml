@@ -28,17 +28,19 @@ type stream struct{}
 var Stream = &stream{}
 
 type StreamValue[TStream any, TFinal any] struct {
+	IsError   bool
+	Error     error
 	IsFinal   bool
 	as_final  *TFinal
 	as_stream *TStream
 }
 
-func (s *StreamValue[TStream, TFinal]) Final() TFinal {
-	return *s.as_final
+func (s *StreamValue[TStream, TFinal]) Final() *TFinal {
+	return s.as_final
 }
 
-func (s *StreamValue[TStream, TFinal]) Stream() TStream {
-	return *s.as_stream
+func (s *StreamValue[TStream, TFinal]) Stream() *TStream {
+	return s.as_stream
 }
 
 // / Streaming version of TestAllNull
@@ -88,21 +90,26 @@ func (*stream) TestAllNull(ctx context.Context, input string, opts ...CallOption
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.NullableTypes, types.NullableTypes]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.NullableTypes)
+					data := (result.Data).(types.NullableTypes)
 					channel <- StreamValue[stream_types.NullableTypes, types.NullableTypes]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.NullableTypes)
+					data := (result.StreamData).(stream_types.NullableTypes)
 					channel <- StreamValue[stream_types.NullableTypes, types.NullableTypes]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -161,21 +168,26 @@ func (*stream) TestAllOptionalOmitted(ctx context.Context, input string, opts ..
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.OptionalFields, types.OptionalFields]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.OptionalFields)
+					data := (result.Data).(types.OptionalFields)
 					channel <- StreamValue[stream_types.OptionalFields, types.OptionalFields]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.OptionalFields)
+					data := (result.StreamData).(stream_types.OptionalFields)
 					channel <- StreamValue[stream_types.OptionalFields, types.OptionalFields]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -234,21 +246,26 @@ func (*stream) TestMixedOptionalNullable(ctx context.Context, input string, opts
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.MixedOptionalNullable, types.MixedOptionalNullable]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.MixedOptionalNullable)
+					data := (result.Data).(types.MixedOptionalNullable)
 					channel <- StreamValue[stream_types.MixedOptionalNullable, types.MixedOptionalNullable]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.MixedOptionalNullable)
+					data := (result.StreamData).(stream_types.MixedOptionalNullable)
 					channel <- StreamValue[stream_types.MixedOptionalNullable, types.MixedOptionalNullable]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -307,21 +324,26 @@ func (*stream) TestNullableTypes(ctx context.Context, input string, opts ...Call
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.NullableTypes, types.NullableTypes]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.NullableTypes)
+					data := (result.Data).(types.NullableTypes)
 					channel <- StreamValue[stream_types.NullableTypes, types.NullableTypes]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.NullableTypes)
+					data := (result.StreamData).(stream_types.NullableTypes)
 					channel <- StreamValue[stream_types.NullableTypes, types.NullableTypes]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -380,21 +402,26 @@ func (*stream) TestOptionalFields(ctx context.Context, input string, opts ...Cal
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.OptionalFields, types.OptionalFields]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.OptionalFields)
+					data := (result.Data).(types.OptionalFields)
 					channel <- StreamValue[stream_types.OptionalFields, types.OptionalFields]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.OptionalFields)
+					data := (result.StreamData).(stream_types.OptionalFields)
 					channel <- StreamValue[stream_types.OptionalFields, types.OptionalFields]{
 						IsFinal:   false,
 						as_stream: &data,

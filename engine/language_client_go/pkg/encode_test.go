@@ -33,15 +33,32 @@ func TestEncodeFunctionArguments(t *testing.T) {
 		})
 	}
 
-	test_value := map[string]string{
-		"a": "b",
-		"c": "d",
-		"e": "f",
-	}
+	t.Run("EncodeMap", func(t *testing.T) {
+		test_value := map[string]string{
+			"a": "b",
+			"c": "d",
+			"e": "f",
+		}
 
-	encoded_value, err := encodeValue(test_value)
-	require.NoError(t, err)
+		encoded_value, err := encodeValue(test_value)
+		require.NoError(t, err)
 
-	decoded_value := Decode(encoded_value)
-	require.Equal(t, test_value, decoded_value)
+		decoded_value := Decode(encoded_value).Interface()
+		require.Equal(t, test_value, decoded_value)
+	})
+
+	t.Run("EncodeMapWithOptional", func(t *testing.T) {
+		foo, bar := "foo", "bar"
+		test_value := map[string]*string{
+			"a": &foo,
+			"b": &bar,
+			"c": nil,
+		}
+
+		encoded_value, err := encodeValue(test_value)
+		require.NoError(t, err)
+
+		decoded_value := Decode(encoded_value).Interface()
+		require.Equal(t, test_value, decoded_value)
+	})
 }

@@ -5,6 +5,12 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-build-vscode
   cancel-in-progress: true
 
+# Common environment variables
+env:
+  # Turbo remote caching
+  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+  TURBO_TEAM: gloo
+
 on:
   workflow_call:
     inputs:
@@ -42,10 +48,22 @@ jobs:
           - code-target: alpine-arm64
             rust-target: aarch64-unknown-linux-musl
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v3
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Tools
+        uses: ./.github/actions/setup-tools
+
+      - name: Setup Node.js
+        uses: ./.github/actions/setup-node
+
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
         with:
-          version: 9.12.0
+          enable-wasm: true
+
+      - name: Setup Go
+        uses: ./.github/actions/setup-go
 
       - name: Determine CLI Artifact Name
         id: cli_artifact
@@ -75,28 +93,6 @@ jobs:
           echo "Contents of cli-artifact-${{ matrix.code-target }} directory:"
           ls -R cli-artifact-${{ matrix.code-target }}
 
-      # Rust toolchain setup (only needed for WASM part)
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: stable
-          targets: wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: engine
-          # Key might need adjustment if WASM build differs per matrix run, but likely not
-          key: ubuntu-latest-rust-wasm-${{ hashFiles('**/Cargo.lock') }}
-      - uses: jetli/wasm-bindgen-action@v0.2.0
-        with:
-          version: "0.2.92"
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          cache: "pnpm"
-          node-version: 20
-          cache-dependency-path: |
-            typescript/**/pnpm-lock.yaml
-
       # This step extracts and copies ONLY the single downloaded binary for the current matrix target
       - name: Extract and copy binary for ${{ matrix.code-target }}
         shell: bash
@@ -105,11 +101,7 @@ jobs:
           TARGET="${{ matrix.rust-target }}"
           CODE_TARGET="${{ matrix.code-target }}"
           VERSION="${{ inputs.version }}" # Get version input
-          echo "Preparing server directory for target: $TARGET ($CODE_TARGET) version $VERSION"
-
-          # Setup server directories (relative to checkout root)
-          rm -rf typescript/vscode-ext/packages/vscode/server
-          mkdir -p typescript/vscode-ext/packages/vscode/server
+          echo "Preparing CLI binary for target: $TARGET ($CODE_TARGET) version $VERSION"
 
           # Determine expected binary name based on Rust target OS part
           binary_name="baml-cli"
@@ -156,45 +148,57 @@ jobs:
           binary_path=$(echo "$binary_path" | head -n 1)
           echo "Found binary at: $binary_path"
 
-          # Destination uses the Rust target triple convention
-          dest_dir="typescript/vscode-ext/packages/vscode/server/$TARGET"
-          dest_path="$dest_dir/$binary_name"
-          mkdir -p "$dest_dir"
+          # Copy to BOTH locations:
+          # 1. The @baml/cli package for workspace consistency
+          # 2. The vscode-ext dist folder for VSIX packaging
 
-          echo "Copying '$binary_path' to '$dest_path'"
-          cp "$binary_path" "$dest_path"
-          chmod +x "$dest_path"
+          # First, copy to @baml/cli package
+          cli_dest_dir="engine/cli/dist"
+          cli_dest_path="$cli_dest_dir/$binary_name"
+          mkdir -p "$cli_dest_dir"
+
+          echo "Copying '$binary_path' to '$cli_dest_path' (@baml/cli package)"
+          cp "$binary_path" "$cli_dest_path"
+          chmod +x "$cli_dest_path"
+
+          # Then, copy to vscode-ext dist for VSIX packaging
+          # This ensures the VSIX contains the platform-specific binary
+          vsce_dest_dir="typescript/apps/vscode-ext/dist/$TARGET"
+          vsce_dest_path="$vsce_dest_dir/$binary_name"
+          mkdir -p "$vsce_dest_dir"
+
+          echo "Copying '$binary_path' to '$vsce_dest_path' (for VSIX packaging)"
+          cp "$binary_path" "$vsce_dest_path"
+          chmod +x "$vsce_dest_path"
 
           rm -rf "$extract_dir"
 
-          echo "Verification: checking presence of $dest_path"
-          if [ ! -f "$dest_path" ]; then
-             echo "Error: Binary not found at destination $dest_path after copy!"
+          echo "Verification: checking presence of binaries"
+          if [ ! -f "$cli_dest_path" ]; then
+             echo "Error: Binary not found at @baml/cli destination $cli_dest_path after copy!"
              exit 1
           fi
-          echo "Binary copied successfully for $CODE_TARGET."
-          ls -l "$dest_path"
-
-      - name: Install Dependencies
-        # Install deps in the context of the specific extension package
-        run: pnpm install --frozen-lockfile
-        working-directory: typescript/vscode-ext/packages
+          if [ ! -f "$vsce_dest_path" ]; then
+             echo "Error: Binary not found at VSIX destination $vsce_dest_path after copy!"
+             exit 1
+          fi
+          echo "Binary copied successfully for $CODE_TARGET to both locations."
+          echo "@baml/cli location:"
+          ls -l "$cli_dest_path"
+          echo "VSIX packaging location:"
+          ls -l "$vsce_dest_path"
 
       - name: Build Typescript Project (Common Code & WASM)
-        # This might be redundant if it doesn't change per target,
-        # but safer to run it. Consider optimizing if slow.
-        # Run from root to build dependencies correctly.
-        run: pnpm run build
-        working-directory: typescript/
-
-      # For dev mode we generate a binary in this directory which we should clean out.
-      - name: Remove debug CLI builds
         run: |
-          rm -f typescript/vscode-ext/packages/vscode/server/baml-cli
-          rm -f typescript/vscode-ext/packages/vscode/server/baml-cli.exe
-
-      - name: Create dist directory
-        run: mkdir -p typescript/vscode-ext/packages/dist
+          if [[ "${{ inputs.is_release_build }}" == "true" ]]; then
+            echo "Running release build"
+            pnpm run release:vscode
+          else
+            echo "Running development build"
+            pnpm run build:vscode
+          fi
+        env:
+          TARGET: ${{ matrix.rust-target }}
 
       - name: Package VSCode Extension for ${{ matrix.code-target }}
         id: package
@@ -203,18 +207,18 @@ jobs:
           if [[ "${{ inputs.is_release_build }}" == "false" ]]; then
             PRE_RELEASE_FLAG="--pre-release"
           fi
-          OUTPUT_FILENAME="dist/baml-${{ matrix.code-target }}.vsix"
+          OUTPUT_FILENAME="baml-${{ matrix.code-target }}.vsix"
           echo "Packaging for target: ${{ matrix.code-target }}"
           # Run vsce from the directory containing the extension's package.json
           npx @vscode/vsce package $PRE_RELEASE_FLAG --target ${{ matrix.code-target }} -o $OUTPUT_FILENAME --no-dependencies
           echo "vsix_path=$OUTPUT_FILENAME" >> $GITHUB_OUTPUT
-        working-directory: typescript/vscode-ext/packages
+        working-directory: typescript/apps/vscode-ext
 
       - name: Upload VSIX artifact for ${{ matrix.code-target }}
         uses: actions/upload-artifact@v4
         with:
           name: baml-vscode-vsix-${{ matrix.code-target }}
-          path: typescript/vscode-ext/packages/${{ steps.package.outputs.vsix_path }}
+          path: typescript/apps/vscode-ext/${{ steps.package.outputs.vsix_path }}
           if-no-files-found: error
 
       # Build/Upload Playground only once

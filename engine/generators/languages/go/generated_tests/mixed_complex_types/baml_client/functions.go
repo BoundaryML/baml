@@ -55,7 +55,7 @@ func TestKitchenSink(ctx context.Context, input string, opts ...CallOptionFunc) 
 		return types.KitchenSink{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.KitchenSink)
+	casted := (result.Data).(types.KitchenSink)
 
 	return casted, nil
 }
@@ -94,7 +94,7 @@ func TestRecursiveComplexity(ctx context.Context, input string, opts ...CallOpti
 		return types.Node{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.Node)
+	casted := (result.Data).(types.Node)
 
 	return casted, nil
 }
@@ -133,7 +133,7 @@ func TestUltraComplex(ctx context.Context, input string, opts ...CallOptionFunc)
 		return types.UltraComplex{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.UltraComplex)
+	casted := (result.Data).(types.UltraComplex)
 
 	return casted, nil
 }

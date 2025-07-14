@@ -130,9 +130,29 @@ impl LanguageFeatures for GoLanguageFeatures {
             .collect::<Vec<_>>();
         go_type_aliases.sort_by(|a, b| a.name.cmp(&b.name));
 
+        let mut stream_type_aliases = type_aliases
+            .iter()
+            .map(|c| {
+                ir_to_go::type_aliases::ir_type_alias_to_go_stream(
+                    c.item,
+                    &pkg,
+                    invalid_cycles.get(&c.elem().name),
+                )
+            })
+            .collect::<Vec<_>>();
+        stream_type_aliases.sort_by(|a, b| a.name.cmp(&b.name));
+
         let _ = collector.add_file(
             "type_map.go",
-            render_type_map(&go_classes, &enums, &unions, go_mod_name)?,
+            render_type_map(
+                &go_classes,
+                &enums,
+                &unions,
+                &go_type_aliases,
+                &stream_type_aliases,
+                go_mod_name,
+                &pkg,
+            )?,
         );
 
         pkg.set("baml_client.types");
@@ -155,18 +175,6 @@ impl LanguageFeatures for GoLanguageFeatures {
             unions.dedup_by_key(|u| u.name.clone());
             unions
         };
-
-        let mut stream_type_aliases = type_aliases
-            .iter()
-            .map(|c| {
-                ir_to_go::type_aliases::ir_type_alias_to_go_stream(
-                    c.item,
-                    &pkg,
-                    invalid_cycles.get(&c.elem().name),
-                )
-            })
-            .collect::<Vec<_>>();
-        stream_type_aliases.sort_by(|a, b| a.name.cmp(&b.name));
 
         let go_classes = ir
             .walk_classes()

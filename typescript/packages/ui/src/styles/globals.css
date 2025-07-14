@@ -1,0 +1,543 @@
+@import "tailwindcss";
+@source "../../../../apps/**/*.{ts,tsx}";
+@source "../../../../packages/**/*.{ts,tsx}";
+@source "../../../../../integ-tests/**/*.{ts,tsx}";
+@source "../**/*.{ts,tsx}";
+
+@plugin "tailwindcss-animate";
+@plugin "@tailwindcss/typography";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --radius: 0.5rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.141 0.005 285.823);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.141 0.005 285.823);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.141 0.005 285.823);
+  --primary: oklch(0.606 0.25 292.717);
+  --primary-foreground: oklch(0.969 0.016 293.756);
+  --secondary: oklch(0.967 0.001 286.375);
+  --secondary-foreground: oklch(0.21 0.006 285.885);
+  --muted: oklch(0.967 0.001 286.375);
+  --muted-foreground: oklch(0.552 0.016 285.938);
+  --accent: oklch(0.967 0.001 286.375);
+  --accent-foreground: oklch(0.21 0.006 285.885);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.92 0.004 286.32);
+  --input: oklch(0.92 0.004 286.32);
+  --ring: oklch(0.606 0.25 292.717);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.141 0.005 285.823);
+  --sidebar-primary: oklch(0.606 0.25 292.717);
+  --sidebar-primary-foreground: oklch(0.969 0.016 293.756);
+  --sidebar-accent: oklch(0.967 0.001 286.375);
+  --sidebar-accent-foreground: oklch(0.21 0.006 285.885);
+  --sidebar-border: oklch(0.92 0.004 286.32);
+  --sidebar-ring: oklch(0.606 0.25 292.717);
+
+  /* Animation durations */
+  --animation-duration-fast: 0.15s;
+  --animation-duration-normal: 0.3s;
+  --animation-duration-slow: 0.5s;
+  --animation-duration-very-slow: 0.8s;
+}
+
+.dark {
+  --background: oklch(0.141 0.005 285.823);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.21 0.006 285.885);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.21 0.006 285.885);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.541 0.281 293.009);
+  --primary-foreground: oklch(0.969 0.016 293.756);
+  --secondary: oklch(0.274 0.006 286.033);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.274 0.006 286.033);
+  --muted-foreground: oklch(0.705 0.015 286.067);
+  --accent: oklch(0.274 0.006 286.033);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.541 0.281 293.009);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.21 0.006 285.885);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.541 0.281 293.009);
+  --sidebar-primary-foreground: oklch(0.969 0.016 293.756);
+  --sidebar-accent: oklch(0.274 0.006 286.033);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.541 0.281 293.009);
+}
+
+@theme inline {
+  --color-background: var(--vscode-editor-background, var(--background));
+  --color-foreground: var(--vscode-editor-foreground, var(--foreground));
+  --color-card: var(--vscode-panel-background, var(--card));
+  --color-card-foreground: var(
+    --vscode-panelTitle-activeForeground,
+    var(--card-foreground)
+  );
+  --color-popover: var(--vscode-editorWidget-background, var(--popover));
+  --color-popover-foreground: var(
+    --vscode-editorWidget-foreground,
+    var(--popover-foreground)
+  );
+  --color-primary: var(--vscode-button-background, var(--primary));
+  --color-primary-foreground: var(
+    --vscode-foreground,
+    var(--primary-foreground)
+  );
+  --color-secondary: var(--vscode-button-secondaryBackground, var(--secondary));
+  --color-secondary-foreground: var(
+    --vscode-button-secondaryForeground,
+    var(--secondary-foreground)
+  );
+  --color-muted: var(--vscode-dropdown-background, var(--muted));
+  --color-muted-foreground: var(
+    --vscode-descriptionForeground,
+    var(--muted-foreground)
+  );
+  --color-accent: var(--vscode-sideBar-background, var(--accent));
+  --color-accent-foreground: var(
+    --vscode-list-activeSelectionForeground,
+    var(--accent-foreground)
+  );
+  --color-destructive: var(--vscode-errorForeground, var(--destructive));
+  --color-destructive-foreground: var(
+    --vscode-button-foreground,
+    var(--destructive-foreground)
+  );
+  --color-border: var(--vscode-input-border, var(--border));
+  --color-input: var(--vscode-input-border, var(--input));
+  --color-ring: var(--vscode-focusBorder, var(--ring));
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --animate-accordion-down: accordion-down 0.2s ease-out;
+  --animate-accordion-up: accordion-up 0.2s ease-out;
+  --animate-slide-down: slide-down 300ms cubic-bezier(0.87, 0, 0.13, 1);
+  --animate-slide-up: slide-up 300ms cubic-bezier(0.87, 0, 0.13, 1);
+  --scaleIn: scaleIn 200ms ease;
+  --scaleOut: scaleOut 200ms ease;
+  --fadeIn: fadeIn 200ms ease;
+  --fadeOut: fadeOut 200ms ease;
+  --color-sidebar-ring: var(--vscode-focusBorder, var(--sidebar-ring));
+  --color-sidebar-border: var(--vscode-sideBar-border, var(--sidebar-border));
+  --color-sidebar-accent-foreground: var(
+    --vscode-list-hoverForeground,
+    var(--sidebar-accent-foreground)
+  );
+  --color-sidebar-accent: var(
+    --vscode-list-hoverBackground,
+    var(--sidebar-accent)
+  );
+  --color-sidebar-primary-foreground: var(
+    --vscode-sideBarSectionHeader-foreground,
+    var(--sidebar-primary-foreground)
+  );
+  --color-sidebar-primary: var(
+    --vscode-sideBarSectionHeader-background,
+    var(--sidebar-primary)
+  );
+  --color-sidebar-foreground: var(
+    --vscode-sideBar-foreground,
+    var(--sidebar-foreground)
+  );
+  --color-sidebar: var(--vscode-sideBar-background, var(--sidebar));
+
+  --color-chart-1: var(--vscode-charts-blue, var(--chart-1));
+  --color-chart-2: var(--vscode-charts-green, var(--chart-2));
+  --color-chart-3: var(--vscode-charts-gray, var(--chart-3));
+  --color-chart-4: var(--vscode-charts-yellow, var(--chart-4));
+  --color-chart-5: var(--vscode-charts-red, var(--chart-5));
+
+  @keyframes accordion-down {
+    from {
+      height: 0;
+    }
+    to {
+      height: var(--radix-accordion-content-height);
+    }
+  }
+
+  @keyframes accordion-up {
+    from {
+      height: var(--radix-accordion-content-height);
+    }
+    to {
+      height: 0;
+    }
+  }
+
+  @keyframes slide-down {
+    from {
+      height: 0;
+    }
+    to {
+      height: var(--radix-accordion-content-height);
+    }
+  }
+
+  @keyframes slide-up {
+    from {
+      height: var(--radix-accordion-content-height);
+    }
+    to {
+      height: 0;
+    }
+  }
+
+  @keyframes scaleIn {
+    from {
+      opacity: 0;
+      transform: rotateX(-30deg) scale(0.9);
+    }
+    to {
+      opacity: 1;
+      transform: rotateX(0deg) scale(1);
+    }
+  }
+
+  @keyframes scaleOut {
+    from {
+      opacity: 1;
+      transform: rotateX(0deg) scale(1);
+    }
+    to {
+      opacity: 0;
+      transform: rotateX(-10deg) scale(0.95);
+    }
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes fadeOut {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+    }
+  }
+}
+
+body {
+  padding: 0;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground p-0;
+  }
+
+  /* Add specific font settings for code elements */
+  code,
+  pre {
+    font-family: var(--vscode-editor-font-family);
+    font-feature-settings: var(--vscode-editor-font-features);
+    letter-spacing: var(--vscode-editor-letter-spacing);
+    font-size: var(--vscode-editor-font-size);
+    font-weight: var(--vscode-editor-font-weight);
+    line-height: var(--vscode-editor-line-height);
+  }
+}
+
+/* controls dropdown styling on rsjf */
+
+
+.field-array {
+  @apply w-full;
+}
+
+/* .checkbox {
+  @apply bg-vscode-checkbox-background text-vscode-checkbox-foreground flex flex-row items-center gap-x-1;
+} */
+
+
+/* .array-item-remove::after {
+  content: 'Remove';
+} */
+
+/* Standard ANSI colors */
+.ansi-black-fg {
+  color: var(--vscode-terminal-ansiBlack);
+}
+.ansi-red-fg {
+  color: var(--vscode-terminal-ansiRed);
+}
+.ansi-green-fg {
+  color: var(--vscode-terminal-ansiGreen);
+}
+.ansi-yellow-fg {
+  color: var(--vscode-terminal-ansiYellow);
+}
+.ansi-blue-fg {
+  color: var(--vscode-terminal-ansiBlue);
+}
+.ansi-magenta-fg {
+  color: var(--vscode-terminal-ansiMagenta);
+}
+.ansi-cyan-fg {
+  color: var(--vscode-terminal-ansiCyan);
+}
+.ansi-white-fg {
+  color: var(--vscode-terminal-ansiWhite);
+}
+
+.ansi-black-bg {
+  background-color: var(--vscode-terminal-ansiBlack);
+}
+.ansi-red-bg {
+  background-color: var(--vscode-terminal-ansiRed);
+}
+.ansi-green-bg {
+  background-color: var(--vscode-terminal-ansiGreen);
+}
+.ansi-yellow-bg {
+  background-color: var(--vscode-terminal-ansiYellow);
+}
+.ansi-blue-bg {
+  background-color: var(--vscode-terminal-ansiBlue);
+}
+.ansi-magenta-bg {
+  background-color: var(--vscode-terminal-ansiMagenta);
+}
+.ansi-cyan-bg {
+  background-color: var(--vscode-terminal-ansiCyan);
+}
+.ansi-white-bg {
+  background-color: var(--vscode-terminal-ansiWhite);
+}
+
+/* Bright ANSI colors */
+.ansi-bright-black-fg {
+  color: var(--vscode-terminal-ansiBrightBlack);
+}
+.ansi-bright-red-fg {
+  color: var(--vscode-terminal-ansiBrightRed);
+}
+.ansi-bright-green-fg {
+  color: var(--vscode-terminal-ansiBrightGreen);
+}
+.ansi-bright-yellow-fg {
+  color: var(--vscode-terminal-ansiBrightYellow);
+}
+.ansi-bright-blue-fg {
+  color: var(--vscode-terminal-ansiBrightBlue);
+}
+.ansi-bright-magenta-fg {
+  color: var(--vscode-terminal-ansiBrightMagenta);
+}
+.ansi-bright-cyan-fg {
+  color: var(--vscode-terminal-ansiBrightCyan);
+}
+.ansi-bright-white-fg {
+  color: var(--vscode-terminal-ansiBrightWhite);
+}
+
+.ansi-bright-black-bg {
+  background-color: var(--vscode-terminal-ansiBrightBlack);
+}
+.ansi-bright-red-bg {
+  background-color: var(--vscode-terminal-ansiBrightRed);
+}
+.ansi-bright-green-bg {
+  background-color: var(--vscode-terminal-ansiBrightGreen);
+}
+.ansi-bright-yellow-bg {
+  background-color: var(--vscode-terminal-ansiBrightYellow);
+}
+.ansi-bright-blue-bg {
+  background-color: var(--vscode-terminal-ansiBrightBlue);
+}
+.ansi-bright-magenta-bg {
+  background-color: var(--vscode-terminal-ansiBrightMagenta);
+}
+.ansi-bright-cyan-bg {
+  background-color: var(--vscode-terminal-ansiBrightCyan);
+}
+.ansi-bright-white-bg {
+  background-color: var(--vscode-terminal-ansiBrightWhite);
+}
+
+/* Dimmed ANSI colors using opacity */
+.ansi-dim-black {
+  color: var(--vscode-terminal-ansiBlack);
+  opacity: 0.3;
+}
+.ansi-dim-red {
+  color: var(--vscode-terminal-ansiRed);
+  opacity: 0.3;
+}
+.ansi-dim-green {
+  color: var(--vscode-terminal-ansiGreen);
+  opacity: 0.3;
+}
+.ansi-dim-yellow {
+  color: var(--vscode-terminal-ansiYellow);
+  opacity: 0.3;
+}
+.ansi-dim-blue {
+  color: var(--vscode-terminal-ansiBlue);
+  opacity: 0.3;
+}
+.ansi-dim-magenta {
+  color: var(--vscode-terminal-ansiMagenta);
+  opacity: 0.3;
+}
+.ansi-dim-cyan {
+  color: var(--vscode-terminal-ansiCyan);
+  opacity: 0.3;
+}
+.ansi-dim-white {
+  color: var(--vscode-terminal-ansiWhite);
+  opacity: 0.3;
+}
+
+.ansi-dim {
+  opacity: 0.4;
+}
+
+.ansi-dim-black-bg {
+  background-color: var(--vscode-terminal-ansiBlack);
+  opacity: 0.3;
+}
+.ansi-dim-red-bg {
+  background-color: var(--vscode-terminal-ansiRed);
+  opacity: 0.3;
+}
+.ansi-dim-green-bg {
+  background-color: var(--vscode-terminal-ansiGreen);
+  opacity: 0.3;
+}
+.ansi-dim-yellow-bg {
+  background-color: var(--vscode-terminal-ansiYellow);
+  opacity: 0.3;
+}
+.ansi-dim-blue-bg {
+  background-color: var(--vscode-terminal-ansiBlue);
+  opacity: 0.3;
+}
+.ansi-dim-magenta-bg {
+  background-color: var(--vscode-terminal-ansiMagenta);
+  opacity: 0.3;
+}
+.ansi-dim-cyan-bg {
+  background-color: var(--vscode-terminal-ansiCyan);
+  opacity: 0.3;
+}
+.ansi-dim-white-bg {
+  background-color: var(--vscode-terminal-ansiWhite);
+  opacity: 0.3;
+}
+
+/* Tree container styles */
+.tree-container {
+  @apply space-y-2;
+
+  .node {
+    @apply p-2.5;
+  }
+
+  .node-text {
+    @apply whitespace-nowrap overflow-hidden text-ellipsis text-base;
+  }
+
+  .arrow,
+  .icon {
+    @apply mr-2;
+  }
+}
+
+.node-container {
+  @apply py-2 px-4 text-sm;
+}
+
+.node-icon {
+  @apply mr-2;
+}
+
+.file-folder-icon {
+  @apply flex items-center;
+}
+
+.arrow {
+  @apply mr-2;
+}
+
+/* Widget positioning */
+#cw-widget-holder {
+  @apply left-0 ml-0;
+}
+
+button.woot-widget-bubble:nth-child(1) {
+  @apply scale-50 origin-bottom-left left-1 bottom-1 opacity-30;
+}
+
+button.woot-elements--right:nth-child(2) {
+  @apply scale-50 origin-bottom-left left-1 bottom-1;
+}
+
+/* .json-view {
+  color: var(--vscode-terminal-background);
+  --json-property: var(--vscode-terminal-ansiGreen);
+  --json-index: var(--vscode-terminal-ansiPurple);
+  --json-number: var(--vscode-terminal-ansiBlue);
+  --json-string: var(--vscode-terminal-ansiYellow);
+  --json-boolean: var(--vscode-terminal-ansiCyan);
+  --json-null: var(--vscode-terminal-ansiRed);
+} */
+
+.w-rjv-line {
+  @apply text-xs;
+}
+
+/* Full screen sheet */
+.fullScreenSheet {
+  @apply fixed inset-0 w-full h-full z-[9999] overflow-y-auto;
+}
+
+/* Text component */
+.text-component {
+  @apply flex flex-col gap-5 p-5;
+}
+
+.text-blob {
+  @apply text-lg p-5 bg-[#f0f0f0] rounded-lg;
+}
+
+/* input:focus { */
+  /* @apply outline-none; */
+/* } */

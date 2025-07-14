@@ -11,6 +11,7 @@
 # baml-cli is available with the baml package.
 
 import typing
+import typing_extensions
 
 from . import stream_types, types
 from .runtime import DoNotUseDirectlyCallManager, BamlCallOptions
@@ -51,6 +52,36 @@ class LlmResponseParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestPrimitiveTypes", llm_response=llm_response, mode="request")
         return typing.cast(types.PrimitiveTypes, result)
 
+    def TestTopLevelBool(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> bool:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelBool", llm_response=llm_response, mode="request")
+        return typing.cast(bool, result)
+
+    def TestTopLevelFloat(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> float:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelFloat", llm_response=llm_response, mode="request")
+        return typing.cast(float, result)
+
+    def TestTopLevelInt(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelInt", llm_response=llm_response, mode="request")
+        return typing.cast(int, result)
+
+    def TestTopLevelNull(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Any:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelNull", llm_response=llm_response, mode="request")
+        return typing.cast(typing.Any, result)
+
+    def TestTopLevelString(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelString", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
     
 
 class LlmStreamParser:
@@ -88,5 +119,35 @@ class LlmStreamParser:
     ) -> stream_types.PrimitiveTypes:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestPrimitiveTypes", llm_response=llm_response, mode="stream")
         return typing.cast(stream_types.PrimitiveTypes, result)
+
+    def TestTopLevelBool(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> bool:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelBool", llm_response=llm_response, mode="stream")
+        return typing.cast(bool, result)
+
+    def TestTopLevelFloat(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> float:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelFloat", llm_response=llm_response, mode="stream")
+        return typing.cast(float, result)
+
+    def TestTopLevelInt(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelInt", llm_response=llm_response, mode="stream")
+        return typing.cast(int, result)
+
+    def TestTopLevelNull(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Any:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelNull", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Any, result)
+
+    def TestTopLevelString(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelString", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
 
     

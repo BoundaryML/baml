@@ -35,11 +35,11 @@ func (u *Union2BoolOrFloat) Decode(holder *cffi.CFFIValueUnionVariant) {
 	switch variantName {
 	case "float":
 		u.variant = "Float"
-		value := baml.Decode(valueHolder).(float64)
+		value := baml.Decode(valueHolder).Interface().(float64)
 		u.variant_Float = &value
 	case "bool":
 		u.variant = "Bool"
-		value := baml.Decode(valueHolder).(bool)
+		value := baml.Decode(valueHolder).Interface().(bool)
 		u.variant_Bool = &value
 
 	default:
@@ -180,11 +180,11 @@ func (u *Union2BoolOrString) Decode(holder *cffi.CFFIValueUnionVariant) {
 	switch variantName {
 	case "string":
 		u.variant = "String"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_String = &value
 	case "bool":
 		u.variant = "Bool"
-		value := baml.Decode(valueHolder).(bool)
+		value := baml.Decode(valueHolder).Interface().(bool)
 		u.variant_Bool = &value
 
 	default:
@@ -325,11 +325,11 @@ func (u *Union2EarthlingOrMartian) Decode(holder *cffi.CFFIValueUnionVariant) {
 	switch variantName {
 	case "Martian":
 		u.variant = "Martian"
-		value := *baml.Decode(valueHolder).(*Martian)
+		value := baml.Decode(valueHolder).Interface().(Martian)
 		u.variant_Martian = &value
 	case "Earthling":
 		u.variant = "Earthling"
-		value := *baml.Decode(valueHolder).(*Earthling)
+		value := baml.Decode(valueHolder).Interface().(Earthling)
 		u.variant_Earthling = &value
 
 	default:
@@ -470,11 +470,11 @@ func (u *Union2EmailAddressOrPhoneNumber) Decode(holder *cffi.CFFIValueUnionVari
 	switch variantName {
 	case "PhoneNumber":
 		u.variant = "PhoneNumber"
-		value := *baml.Decode(valueHolder).(*PhoneNumber)
+		value := baml.Decode(valueHolder).Interface().(PhoneNumber)
 		u.variant_PhoneNumber = &value
 	case "EmailAddress":
 		u.variant = "EmailAddress"
-		value := *baml.Decode(valueHolder).(*EmailAddress)
+		value := baml.Decode(valueHolder).Interface().(EmailAddress)
 		u.variant_EmailAddress = &value
 
 	default:
@@ -615,11 +615,11 @@ func (u *Union2EventOrResume) Decode(holder *cffi.CFFIValueUnionVariant) {
 	switch variantName {
 	case "Resume":
 		u.variant = "Resume"
-		value := *baml.Decode(valueHolder).(*Resume)
+		value := baml.Decode(valueHolder).Interface().(Resume)
 		u.variant_Resume = &value
 	case "Event":
 		u.variant = "Event"
-		value := *baml.Decode(valueHolder).(*Event)
+		value := baml.Decode(valueHolder).Interface().(Event)
 		u.variant_Event = &value
 
 	default:
@@ -760,11 +760,11 @@ func (u *Union2FloatOrInt) Decode(holder *cffi.CFFIValueUnionVariant) {
 	switch variantName {
 	case "int":
 		u.variant = "Int"
-		value := baml.Decode(valueHolder).(int64)
+		value := baml.Decode(valueHolder).Interface().(int64)
 		u.variant_Int = &value
 	case "float":
 		u.variant = "Float"
-		value := baml.Decode(valueHolder).(float64)
+		value := baml.Decode(valueHolder).Interface().(float64)
 		u.variant_Float = &value
 
 	default:
@@ -905,11 +905,11 @@ func (u *Union2ImageOrString) Decode(holder *cffi.CFFIValueUnionVariant) {
 	switch variantName {
 	case "image":
 		u.variant = "Image"
-		value := baml.Decode(valueHolder).(any)
+		value := baml.Decode(valueHolder).Interface().(any)
 		u.variant_Image = &value
 	case "string":
 		u.variant = "String"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_String = &value
 
 	default:
@@ -1050,11 +1050,11 @@ func (u *Union2IntOrString) Decode(holder *cffi.CFFIValueUnionVariant) {
 	switch variantName {
 	case "string":
 		u.variant = "String"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_String = &value
 	case "int":
 		u.variant = "Int"
-		value := baml.Decode(valueHolder).(int64)
+		value := baml.Decode(valueHolder).Interface().(int64)
 		u.variant_Int = &value
 
 	default:
@@ -1195,11 +1195,11 @@ func (u *Union2JsonTemplateOrSimpleTag) Decode(holder *cffi.CFFIValueUnionVarian
 	switch variantName {
 	case "SimpleTag":
 		u.variant = "SimpleTag"
-		value := *baml.Decode(valueHolder).(*SimpleTag)
+		value := baml.Decode(valueHolder).Interface().(SimpleTag)
 		u.variant_SimpleTag = &value
 	case "JsonTemplate":
 		u.variant = "JsonTemplate"
-		value := baml.Decode(valueHolder).(JsonTemplate)
+		value := baml.Decode(valueHolder).Interface().(JsonTemplate)
 		u.variant_JsonTemplate = &value
 
 	default:
@@ -1340,11 +1340,11 @@ func (u *Union2KbarisaOrKox_burger) Decode(holder *cffi.CFFIValueUnionVariant) {
 	switch variantName {
 	case "string_barisa":
 		u.variant = "Kbarisa"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Kbarisa = &value
 	case "string_ox_burger":
 		u.variant = "Kox_burger"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Kox_burger = &value
 
 	default:
@@ -1493,11 +1493,11 @@ func (u *Union2KbreakfastOrKdinner) Decode(holder *cffi.CFFIValueUnionVariant) {
 	switch variantName {
 	case "string_breakfast":
 		u.variant = "Kbreakfast"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Kbreakfast = &value
 	case "string_dinner":
 		u.variant = "Kdinner"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Kdinner = &value
 
 	default:
@@ -1646,11 +1646,11 @@ func (u *Union2KcuriosityOrKpersonal_finance) Decode(holder *cffi.CFFIValueUnion
 	switch variantName {
 	case "string_curiosity":
 		u.variant = "Kcuriosity"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Kcuriosity = &value
 	case "string_personal_finance":
 		u.variant = "Kpersonal_finance"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Kpersonal_finance = &value
 
 	default:
@@ -1799,15 +1799,11 @@ func (u *Union2ListBoolOrListInt) Decode(holder *cffi.CFFIValueUnionVariant) {
 	switch variantName {
 	case "List__bool":
 		u.variant = "ListBool"
-		value := baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) bool {
-			return baml.Decode(inner).(bool)
-		})
+		value := baml.Decode(valueHolder).Interface().([]bool)
 		u.variant_ListBool = &value
 	case "List__int":
 		u.variant = "ListInt"
-		value := baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) int64 {
-			return baml.Decode(inner).(int64)
-		})
+		value := baml.Decode(valueHolder).Interface().([]int64)
 		u.variant_ListInt = &value
 
 	default:
@@ -1948,13 +1944,11 @@ func (u *Union2ListNestedOrString) Decode(holder *cffi.CFFIValueUnionVariant) {
 	switch variantName {
 	case "string":
 		u.variant = "String"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_String = &value
 	case "List__Nested":
 		u.variant = "ListNested"
-		value := baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) Nested {
-			return *baml.Decode(inner).(*Nested)
-		})
+		value := baml.Decode(valueHolder).Interface().([]Nested)
 		u.variant_ListNested = &value
 
 	default:
@@ -2095,11 +2089,11 @@ func (u *Union2LiteralClassOneOrLiteralClassTwo) Decode(holder *cffi.CFFIValueUn
 	switch variantName {
 	case "LiteralClassOne":
 		u.variant = "LiteralClassOne"
-		value := *baml.Decode(valueHolder).(*LiteralClassOne)
+		value := baml.Decode(valueHolder).Interface().(LiteralClassOne)
 		u.variant_LiteralClassOne = &value
 	case "LiteralClassTwo":
 		u.variant = "LiteralClassTwo"
-		value := *baml.Decode(valueHolder).(*LiteralClassTwo)
+		value := baml.Decode(valueHolder).Interface().(LiteralClassTwo)
 		u.variant_LiteralClassTwo = &value
 
 	default:
@@ -2240,13 +2234,11 @@ func (u *Union2MapStringKeyRecursiveUnionValueOrString) Decode(holder *cffi.CFFI
 	switch variantName {
 	case "string":
 		u.variant = "String"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_String = &value
 	case "Map__string_RecursiveUnion":
 		u.variant = "MapStringKeyRecursiveUnionValue"
-		value := baml.DecodeMap(valueHolder, func(inner *cffi.CFFIValueHolder) RecursiveUnion {
-			return baml.Decode(inner).(RecursiveUnion)
-		})
+		value := baml.Decode(valueHolder).Interface().(map[string]RecursiveUnion)
 		u.variant_MapStringKeyRecursiveUnionValue = &value
 
 	default:
@@ -2387,11 +2379,11 @@ func (u *Union2NestedOrString) Decode(holder *cffi.CFFIValueUnionVariant) {
 	switch variantName {
 	case "Nested":
 		u.variant = "Nested"
-		value := *baml.Decode(valueHolder).(*Nested)
+		value := baml.Decode(valueHolder).Interface().(Nested)
 		u.variant_Nested = &value
 	case "string":
 		u.variant = "String"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_String = &value
 
 	default:
@@ -2532,11 +2524,11 @@ func (u *Union2OriginalAOrOriginalB) Decode(holder *cffi.CFFIValueUnionVariant) 
 	switch variantName {
 	case "OriginalA":
 		u.variant = "OriginalA"
-		value := *baml.Decode(valueHolder).(*OriginalA)
+		value := baml.Decode(valueHolder).Interface().(OriginalA)
 		u.variant_OriginalA = &value
 	case "OriginalB":
 		u.variant = "OriginalB"
-		value := *baml.Decode(valueHolder).(*OriginalB)
+		value := baml.Decode(valueHolder).Interface().(OriginalB)
 		u.variant_OriginalB = &value
 
 	default:
@@ -2677,11 +2669,11 @@ func (u *Union2StringOrTag) Decode(holder *cffi.CFFIValueUnionVariant) {
 	switch variantName {
 	case "Tag":
 		u.variant = "Tag"
-		value := *baml.Decode(valueHolder).(*Tag)
+		value := baml.Decode(valueHolder).Interface().(Tag)
 		u.variant_Tag = &value
 	case "string":
 		u.variant = "String"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_String = &value
 
 	default:
@@ -2824,15 +2816,15 @@ func (u *Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject) Decode(holder *
 	switch variantName {
 	case "MemoryObject":
 		u.variant = "MemoryObject"
-		value := *baml.Decode(valueHolder).(*MemoryObject)
+		value := baml.Decode(valueHolder).Interface().(MemoryObject)
 		u.variant_MemoryObject = &value
 	case "ComplexMemoryObject":
 		u.variant = "ComplexMemoryObject"
-		value := *baml.Decode(valueHolder).(*ComplexMemoryObject)
+		value := baml.Decode(valueHolder).Interface().(ComplexMemoryObject)
 		u.variant_ComplexMemoryObject = &value
 	case "AnotherObject":
 		u.variant = "AnotherObject"
-		value := *baml.Decode(valueHolder).(*AnotherObject)
+		value := baml.Decode(valueHolder).Interface().(AnotherObject)
 		u.variant_AnotherObject = &value
 
 	default:
@@ -3023,15 +3015,15 @@ func (u *Union3BookOrderOrFlightConfirmationOrGroceryReceipt) Decode(holder *cff
 	switch variantName {
 	case "BookOrder":
 		u.variant = "BookOrder"
-		value := *baml.Decode(valueHolder).(*BookOrder)
+		value := baml.Decode(valueHolder).Interface().(BookOrder)
 		u.variant_BookOrder = &value
 	case "FlightConfirmation":
 		u.variant = "FlightConfirmation"
-		value := *baml.Decode(valueHolder).(*FlightConfirmation)
+		value := baml.Decode(valueHolder).Interface().(FlightConfirmation)
 		u.variant_FlightConfirmation = &value
 	case "GroceryReceipt":
 		u.variant = "GroceryReceipt"
-		value := *baml.Decode(valueHolder).(*GroceryReceipt)
+		value := baml.Decode(valueHolder).Interface().(GroceryReceipt)
 		u.variant_GroceryReceipt = &value
 
 	default:
@@ -3222,15 +3214,15 @@ func (u *Union3BoolKTrueOrIntK1OrKstring_output) Decode(holder *cffi.CFFIValueUn
 	switch variantName {
 	case "int_1":
 		u.variant = "IntK1"
-		value := baml.Decode(valueHolder).(int64)
+		value := baml.Decode(valueHolder).Interface().(int64)
 		u.variant_IntK1 = &value
 	case "bool_true":
 		u.variant = "BoolKTrue"
-		value := baml.Decode(valueHolder).(bool)
+		value := baml.Decode(valueHolder).Interface().(bool)
 		u.variant_BoolKTrue = &value
 	case "string_string_output":
 		u.variant = "Kstring_output"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Kstring_output = &value
 
 	default:
@@ -3433,15 +3425,15 @@ func (u *Union3FloatOrIntOrString) Decode(holder *cffi.CFFIValueUnionVariant) {
 	switch variantName {
 	case "string":
 		u.variant = "String"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_String = &value
 	case "int":
 		u.variant = "Int"
-		value := baml.Decode(valueHolder).(int64)
+		value := baml.Decode(valueHolder).Interface().(int64)
 		u.variant_Int = &value
 	case "float":
 		u.variant = "Float"
-		value := baml.Decode(valueHolder).(float64)
+		value := baml.Decode(valueHolder).Interface().(float64)
 		u.variant_Float = &value
 
 	default:
@@ -3634,19 +3626,19 @@ func (u *Union4BoolOrFloatOrIntOrString) Decode(holder *cffi.CFFIValueUnionVaria
 	switch variantName {
 	case "int":
 		u.variant = "Int"
-		value := baml.Decode(valueHolder).(int64)
+		value := baml.Decode(valueHolder).Interface().(int64)
 		u.variant_Int = &value
 	case "string":
 		u.variant = "String"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_String = &value
 	case "bool":
 		u.variant = "Bool"
-		value := baml.Decode(valueHolder).(bool)
+		value := baml.Decode(valueHolder).Interface().(bool)
 		u.variant_Bool = &value
 	case "float":
 		u.variant = "Float"
-		value := baml.Decode(valueHolder).(float64)
+		value := baml.Decode(valueHolder).Interface().(float64)
 		u.variant_Float = &value
 
 	default:
@@ -3891,19 +3883,19 @@ func (u *Union4KfourOrKoneOrKthreeOrKtwo) Decode(holder *cffi.CFFIValueUnionVari
 	switch variantName {
 	case "string_one":
 		u.variant = "Kone"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Kone = &value
 	case "string_two":
 		u.variant = "Ktwo"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Ktwo = &value
 	case "string_three":
 		u.variant = "Kthree"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Kthree = &value
 	case "string_four":
 		u.variant = "Kfour"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Kfour = &value
 
 	default:
@@ -4168,27 +4160,27 @@ func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) Decode(holder *c
 	switch variantName {
 	case "int":
 		u.variant = "Int"
-		value := baml.Decode(valueHolder).(int64)
+		value := baml.Decode(valueHolder).Interface().(int64)
 		u.variant_Int = &value
 	case "string":
 		u.variant = "String"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_String = &value
 	case "bool":
 		u.variant = "Bool"
-		value := baml.Decode(valueHolder).(bool)
+		value := baml.Decode(valueHolder).Interface().(bool)
 		u.variant_Bool = &value
 	case "float":
 		u.variant = "Float"
-		value := baml.Decode(valueHolder).(float64)
+		value := baml.Decode(valueHolder).Interface().(float64)
 		u.variant_Float = &value
 	case "JsonObject":
 		u.variant = "JsonObject"
-		value := baml.Decode(valueHolder).(JsonObject)
+		value := baml.Decode(valueHolder).Interface().(JsonObject)
 		u.variant_JsonObject = &value
 	case "JsonArray":
 		u.variant = "JsonArray"
-		value := baml.Decode(valueHolder).(JsonArray)
+		value := baml.Decode(valueHolder).Interface().(JsonArray)
 		u.variant_JsonArray = &value
 
 	default:
@@ -4553,33 +4545,27 @@ func (u *Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString
 	switch variantName {
 	case "int":
 		u.variant = "Int"
-		value := baml.Decode(valueHolder).(int64)
+		value := baml.Decode(valueHolder).Interface().(int64)
 		u.variant_Int = &value
 	case "string":
 		u.variant = "String"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_String = &value
 	case "bool":
 		u.variant = "Bool"
-		value := baml.Decode(valueHolder).(bool)
+		value := baml.Decode(valueHolder).Interface().(bool)
 		u.variant_Bool = &value
 	case "float":
 		u.variant = "Float"
-		value := baml.Decode(valueHolder).(float64)
+		value := baml.Decode(valueHolder).Interface().(float64)
 		u.variant_Float = &value
 	case "List__string":
 		u.variant = "ListString"
-		value := baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) string {
-			return baml.Decode(inner).(string)
-		})
+		value := baml.Decode(valueHolder).Interface().([]string)
 		u.variant_ListString = &value
 	case "Map__string_List__string":
 		u.variant = "MapStringKeyListStringValue"
-		value := baml.DecodeMap(valueHolder, func(inner *cffi.CFFIValueHolder) []string {
-			return baml.DecodeList(inner, func(inner *cffi.CFFIValueHolder) string {
-				return baml.Decode(inner).(string)
-			})
-		})
+		value := baml.Decode(valueHolder).Interface().(map[string][]string)
 		u.variant_MapStringKeyListStringValue = &value
 
 	default:

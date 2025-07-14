@@ -55,7 +55,7 @@ func TestEmptyArrays(ctx context.Context, input string, opts ...CallOptionFunc) 
 		return types.SimpleArrays{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.SimpleArrays)
+	casted := (result.Data).(types.SimpleArrays)
 
 	return casted, nil
 }
@@ -94,7 +94,7 @@ func TestLargeArrays(ctx context.Context, input string, opts ...CallOptionFunc) 
 		return types.SimpleArrays{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.SimpleArrays)
+	casted := (result.Data).(types.SimpleArrays)
 
 	return casted, nil
 }
@@ -133,7 +133,7 @@ func TestMixedArrays(ctx context.Context, input string, opts ...CallOptionFunc) 
 		return types.MixedArrays{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.MixedArrays)
+	casted := (result.Data).(types.MixedArrays)
 
 	return casted, nil
 }
@@ -172,7 +172,7 @@ func TestNestedArrays(ctx context.Context, input string, opts ...CallOptionFunc)
 		return types.NestedArrays{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.NestedArrays)
+	casted := (result.Data).(types.NestedArrays)
 
 	return casted, nil
 }
@@ -211,7 +211,7 @@ func TestObjectArrays(ctx context.Context, input string, opts ...CallOptionFunc)
 		return types.ObjectArrays{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.ObjectArrays)
+	casted := (result.Data).(types.ObjectArrays)
 
 	return casted, nil
 }
@@ -250,7 +250,436 @@ func TestSimpleArrays(ctx context.Context, input string, opts ...CallOptionFunc)
 		return types.SimpleArrays{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.SimpleArrays)
+	casted := (result.Data).(types.SimpleArrays)
+
+	return casted, nil
+}
+
+func TestTopLevel3DArray(ctx context.Context, input string, opts ...CallOptionFunc) ([][][]string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := baml.EncodeArgs(args)
+	if err != nil {
+		panic(err)
+	}
+
+	result, err := bamlRuntime.CallFunction(ctx, "TestTopLevel3DArray", encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	if result.Error != nil {
+		return nil, result.Error
+	}
+
+	casted := (result.Data).([][][]string)
+
+	return casted, nil
+}
+
+func TestTopLevelArrayOfMaps(ctx context.Context, input string, opts ...CallOptionFunc) ([]map[string]int64, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := baml.EncodeArgs(args)
+	if err != nil {
+		panic(err)
+	}
+
+	result, err := bamlRuntime.CallFunction(ctx, "TestTopLevelArrayOfMaps", encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	if result.Error != nil {
+		return nil, result.Error
+	}
+
+	casted := (result.Data).([]map[string]int64)
+
+	return casted, nil
+}
+
+func TestTopLevelBoolArray(ctx context.Context, input string, opts ...CallOptionFunc) ([]bool, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := baml.EncodeArgs(args)
+	if err != nil {
+		panic(err)
+	}
+
+	result, err := bamlRuntime.CallFunction(ctx, "TestTopLevelBoolArray", encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	if result.Error != nil {
+		return nil, result.Error
+	}
+
+	casted := (result.Data).([]bool)
+
+	return casted, nil
+}
+
+func TestTopLevelEmptyArray(ctx context.Context, input string, opts ...CallOptionFunc) ([]string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := baml.EncodeArgs(args)
+	if err != nil {
+		panic(err)
+	}
+
+	result, err := bamlRuntime.CallFunction(ctx, "TestTopLevelEmptyArray", encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	if result.Error != nil {
+		return nil, result.Error
+	}
+
+	casted := (result.Data).([]string)
+
+	return casted, nil
+}
+
+func TestTopLevelFloatArray(ctx context.Context, input string, opts ...CallOptionFunc) ([]float64, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := baml.EncodeArgs(args)
+	if err != nil {
+		panic(err)
+	}
+
+	result, err := bamlRuntime.CallFunction(ctx, "TestTopLevelFloatArray", encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	if result.Error != nil {
+		return nil, result.Error
+	}
+
+	casted := (result.Data).([]float64)
+
+	return casted, nil
+}
+
+func TestTopLevelIntArray(ctx context.Context, input string, opts ...CallOptionFunc) ([]int64, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := baml.EncodeArgs(args)
+	if err != nil {
+		panic(err)
+	}
+
+	result, err := bamlRuntime.CallFunction(ctx, "TestTopLevelIntArray", encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	if result.Error != nil {
+		return nil, result.Error
+	}
+
+	casted := (result.Data).([]int64)
+
+	return casted, nil
+}
+
+func TestTopLevelMixedArray(ctx context.Context, input string, opts ...CallOptionFunc) ([]types.Union3BoolOrIntOrString, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := baml.EncodeArgs(args)
+	if err != nil {
+		panic(err)
+	}
+
+	result, err := bamlRuntime.CallFunction(ctx, "TestTopLevelMixedArray", encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	if result.Error != nil {
+		return nil, result.Error
+	}
+
+	casted := (result.Data).([]types.Union3BoolOrIntOrString)
+
+	return casted, nil
+}
+
+func TestTopLevelNestedArray(ctx context.Context, input string, opts ...CallOptionFunc) ([][]int64, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := baml.EncodeArgs(args)
+	if err != nil {
+		panic(err)
+	}
+
+	result, err := bamlRuntime.CallFunction(ctx, "TestTopLevelNestedArray", encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	if result.Error != nil {
+		return nil, result.Error
+	}
+
+	casted := (result.Data).([][]int64)
+
+	return casted, nil
+}
+
+func TestTopLevelNullableArray(ctx context.Context, input string, opts ...CallOptionFunc) ([]*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := baml.EncodeArgs(args)
+	if err != nil {
+		panic(err)
+	}
+
+	result, err := bamlRuntime.CallFunction(ctx, "TestTopLevelNullableArray", encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	if result.Error != nil {
+		return nil, result.Error
+	}
+
+	casted := (result.Data).([]*string)
+
+	return casted, nil
+}
+
+func TestTopLevelObjectArray(ctx context.Context, input string, opts ...CallOptionFunc) ([]types.User, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := baml.EncodeArgs(args)
+	if err != nil {
+		panic(err)
+	}
+
+	result, err := bamlRuntime.CallFunction(ctx, "TestTopLevelObjectArray", encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	if result.Error != nil {
+		return nil, result.Error
+	}
+
+	casted := (result.Data).([]types.User)
+
+	return casted, nil
+}
+
+func TestTopLevelStringArray(ctx context.Context, input string, opts ...CallOptionFunc) ([]string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := baml.EncodeArgs(args)
+	if err != nil {
+		panic(err)
+	}
+
+	result, err := bamlRuntime.CallFunction(ctx, "TestTopLevelStringArray", encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	if result.Error != nil {
+		return nil, result.Error
+	}
+
+	casted := (result.Data).([]string)
 
 	return casted, nil
 }

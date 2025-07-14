@@ -4,8 +4,9 @@ use lsp_types::{
     notification::DidChangeTextDocument, DidChangeTextDocumentParams, PublishDiagnosticsParams,
 };
 
+#[cfg(feature = "playground-server")]
+use crate::playground::broadcast_project_update;
 use crate::{
-    playground::broadcast_project_update,
     server::{
         api::{
             diagnostics::publish_diagnostics,
@@ -65,6 +66,7 @@ impl SyncNotificationHandler for DidChangeTextDocumentHandler {
             .internal_error()?;
 
         // Broadcast update to playground clients
+        #[cfg(feature = "playground-server")]
         if let Some(state) = &session.playground_state {
             let project = project.lock().unwrap();
             let files_map: std::collections::HashMap<String, String> = project
@@ -87,9 +89,7 @@ impl SyncNotificationHandler for DidChangeTextDocumentHandler {
             let state = state.clone();
             if let Some(runtime) = &session.playground_runtime {
                 runtime.spawn(async move {
-                    let _ =
-                        crate::playground::broadcast_project_update(&state, &root_path, files_map)
-                            .await;
+                    let _ = broadcast_project_update(&state, &root_path, files_map).await;
                 });
             }
         }

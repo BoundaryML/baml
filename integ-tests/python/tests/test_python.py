@@ -45,7 +45,7 @@ def test_pickle():
 
 def test_baml_client_pickle_roundtrip():
     import pickle
-    from baml_client import b
+    from baml_client.async_client import b
     # Pickle and unpickle the b object
     pickled = pickle.dumps(b)
     b2 = pickle.loads(pickled)

@@ -1,0 +1,61 @@
+name: "Setup Python"
+description: "Setup Python with optional uv package manager"
+
+inputs:
+  python-version:
+    description: "Python version to install"
+    required: false
+    default: "3.13"
+  use-uv:
+    description: "Use uv package manager"
+    required: false
+    default: "true"
+  cache:
+    description: "Enable pip/uv caching"
+    required: false
+    default: "true"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+        # cache: ${{ inputs.cache == 'true' && 'pip' || '' }}
+
+    - name: Setup uv
+      if: inputs.use-uv == 'true'
+      uses: astral-sh/setup-uv@v5
+      # with:
+      # enable-cache: ${{ inputs.cache }}
+      # cache-dependency-glob: |
+      #   **/requirements*.txt
+      #   **/requirements*.in
+      #   **/constraints*.txt
+      #   **/constraints*.in
+      #   **/pyproject.toml
+      #   **/uv.lock
+      #   !**/node_modules/**
+
+    - name: Install Python project dependencies
+      if: inputs.use-uv == 'true'
+      shell: bash
+      run: |
+        # Install maturin as a global tool (needed for building Python language client)
+        echo "Installing maturin..."
+        uv tool install maturin
+
+        if [ -f "integ-tests/python/pyproject.toml" ]; then
+          echo "Installing Python dependencies from integ-tests/python..."
+          cd integ-tests/python
+          uv sync --dev
+
+          # Install ruff as a global tool so it's available in PATH
+          uv tool install ruff
+
+          cd - > /dev/null
+          echo "Python dependencies installed successfully"
+        else
+          echo "Warning: integ-tests/python/pyproject.toml not found"
+        fi

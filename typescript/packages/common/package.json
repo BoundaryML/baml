@@ -1,0 +1,31 @@
+{
+  "name": "@baml/common",
+  "version": "1.0.12",
+  "description": "",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "keywords": [],
+  "packageManager": "pnpm@9.12.0",
+  "author": "",
+  "license": "ISC",
+  "scripts": {
+    "prebuild": "git clean -xdf dist",
+    "dev": "tsc --watch",
+    "clean": "git clean -xdf .turbo node_modules dist",
+    "typecheck": "tsc --noEmit --emitDeclarationOnly false"
+  },
+  "files": ["dist/**"],
+  "devDependencies": {
+    "@types/node": "24.0.3",
+    "rimraf": "6.0.1",
+    "ts-node": "10.9.2",
+    "tsup": "8.5.0",
+    "typescript": "5.8.3"
+  },
+  "dependencies": {
+    "zod": "3.25.66"
+  }
+}

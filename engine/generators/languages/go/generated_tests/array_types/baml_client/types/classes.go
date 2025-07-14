@@ -41,19 +41,13 @@ func (c *ArrayWithConstraints) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "nonEmptyStrings":
-			c.NonEmptyStrings = baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) string {
-				return baml.Decode(inner).(string)
-			})
+			c.NonEmptyStrings = baml.Decode(valueHolder).Interface().([]string)
 
 		case "limitedInts":
-			c.LimitedInts = baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) int64 {
-				return baml.Decode(inner).(int64)
-			})
+			c.LimitedInts = baml.Decode(valueHolder).Interface().([]int64)
 
 		case "positiveFloats":
-			c.PositiveFloats = baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) float64 {
-				return baml.Decode(inner).(float64)
-			})
+			c.PositiveFloats = baml.Decode(valueHolder).Interface().([]float64)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -108,49 +102,19 @@ func (c *MixedArrays) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "primitiveArray":
-			c.PrimitiveArray = baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) Union4BoolOrFloatOrIntOrString {
-				return *baml.Decode(inner).(*Union4BoolOrFloatOrIntOrString)
-			})
+			c.PrimitiveArray = baml.Decode(valueHolder).Interface().([]Union4BoolOrFloatOrIntOrString)
 
 		case "nullableArray":
-			c.NullableArray = baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) *string {
-				return func(param *cffi.CFFIValueHolder) *string {
-					decoded := baml.Decode(param)
-					return func(result any) *string {
-						if result == nil {
-							return nil
-						}
-						casted := (result).(string)
-						return &casted
-					}(decoded)
-				}(inner)
-			})
+			c.NullableArray = baml.Decode(valueHolder).Interface().([]*string)
 
 		case "optionalItems":
-			c.OptionalItems = baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) *string {
-				return func(param *cffi.CFFIValueHolder) *string {
-					decoded := baml.Decode(param)
-					return func(result any) *string {
-						if result == nil {
-							return nil
-						}
-						casted := (result).(string)
-						return &casted
-					}(decoded)
-				}(inner)
-			})
+			c.OptionalItems = baml.Decode(valueHolder).Interface().([]*string)
 
 		case "arrayOfArrays":
-			c.ArrayOfArrays = baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) []string {
-				return baml.DecodeList(inner, func(inner *cffi.CFFIValueHolder) string {
-					return baml.Decode(inner).(string)
-				})
-			})
+			c.ArrayOfArrays = baml.Decode(valueHolder).Interface().([][]string)
 
 		case "complexMixed":
-			c.ComplexMixed = baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) Union3ProductOrTagOrUser {
-				return *baml.Decode(inner).(*Union3ProductOrTagOrUser)
-			})
+			c.ComplexMixed = baml.Decode(valueHolder).Interface().([]Union3ProductOrTagOrUser)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -207,27 +171,13 @@ func (c *NestedArrays) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "matrix":
-			c.Matrix = baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) []int64 {
-				return baml.DecodeList(inner, func(inner *cffi.CFFIValueHolder) int64 {
-					return baml.Decode(inner).(int64)
-				})
-			})
+			c.Matrix = baml.Decode(valueHolder).Interface().([][]int64)
 
 		case "stringMatrix":
-			c.StringMatrix = baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) []string {
-				return baml.DecodeList(inner, func(inner *cffi.CFFIValueHolder) string {
-					return baml.Decode(inner).(string)
-				})
-			})
+			c.StringMatrix = baml.Decode(valueHolder).Interface().([][]string)
 
 		case "threeDimensional":
-			c.ThreeDimensional = baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) [][]float64 {
-				return baml.DecodeList(inner, func(inner *cffi.CFFIValueHolder) []float64 {
-					return baml.DecodeList(inner, func(inner *cffi.CFFIValueHolder) float64 {
-						return baml.Decode(inner).(float64)
-					})
-				})
-			})
+			c.ThreeDimensional = baml.Decode(valueHolder).Interface().([][][]float64)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -280,19 +230,13 @@ func (c *ObjectArrays) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "users":
-			c.Users = baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) User {
-				return *baml.Decode(inner).(*User)
-			})
+			c.Users = baml.Decode(valueHolder).Interface().([]User)
 
 		case "products":
-			c.Products = baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) Product {
-				return *baml.Decode(inner).(*Product)
-			})
+			c.Products = baml.Decode(valueHolder).Interface().([]Product)
 
 		case "tags":
-			c.Tags = baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) Tag {
-				return *baml.Decode(inner).(*Tag)
-			})
+			c.Tags = baml.Decode(valueHolder).Interface().([]Tag)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -347,21 +291,19 @@ func (c *Product) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "id":
-			c.Id = baml.Decode(valueHolder).(int64)
+			c.Id = baml.Decode(valueHolder).Interface().(int64)
 
 		case "name":
-			c.Name = baml.Decode(valueHolder).(string)
+			c.Name = baml.Decode(valueHolder).Interface().(string)
 
 		case "price":
-			c.Price = baml.Decode(valueHolder).(float64)
+			c.Price = baml.Decode(valueHolder).Interface().(float64)
 
 		case "tags":
-			c.Tags = baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) string {
-				return baml.Decode(inner).(string)
-			})
+			c.Tags = baml.Decode(valueHolder).Interface().([]string)
 
 		case "inStock":
-			c.InStock = baml.Decode(valueHolder).(bool)
+			c.InStock = baml.Decode(valueHolder).Interface().(bool)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -419,24 +361,16 @@ func (c *SimpleArrays) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "strings":
-			c.Strings = baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) string {
-				return baml.Decode(inner).(string)
-			})
+			c.Strings = baml.Decode(valueHolder).Interface().([]string)
 
 		case "integers":
-			c.Integers = baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) int64 {
-				return baml.Decode(inner).(int64)
-			})
+			c.Integers = baml.Decode(valueHolder).Interface().([]int64)
 
 		case "floats":
-			c.Floats = baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) float64 {
-				return baml.Decode(inner).(float64)
-			})
+			c.Floats = baml.Decode(valueHolder).Interface().([]float64)
 
 		case "booleans":
-			c.Booleans = baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) bool {
-				return baml.Decode(inner).(bool)
-			})
+			c.Booleans = baml.Decode(valueHolder).Interface().([]bool)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -491,13 +425,13 @@ func (c *Tag) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "id":
-			c.Id = baml.Decode(valueHolder).(int64)
+			c.Id = baml.Decode(valueHolder).Interface().(int64)
 
 		case "name":
-			c.Name = baml.Decode(valueHolder).(string)
+			c.Name = baml.Decode(valueHolder).Interface().(string)
 
 		case "color":
-			c.Color = baml.Decode(valueHolder).(string)
+			c.Color = baml.Decode(valueHolder).Interface().(string)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -551,16 +485,16 @@ func (c *User) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "id":
-			c.Id = baml.Decode(valueHolder).(int64)
+			c.Id = baml.Decode(valueHolder).Interface().(int64)
 
 		case "name":
-			c.Name = baml.Decode(valueHolder).(string)
+			c.Name = baml.Decode(valueHolder).Interface().(string)
 
 		case "email":
-			c.Email = baml.Decode(valueHolder).(string)
+			c.Email = baml.Decode(valueHolder).Interface().(string)
 
 		case "isActive":
-			c.IsActive = baml.Decode(valueHolder).(bool)
+			c.IsActive = baml.Decode(valueHolder).Interface().(bool)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))

@@ -47,75 +47,31 @@ func (c *MixedPrimitives) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "name":
-			c.Name = func(param *cffi.CFFIValueHolder) *string {
-				decoded := baml.Decode(param)
-				return func(result any) *string {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(string)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Name = baml.Decode(valueHolder).Interface().(*string)
 
 		case "age":
-			c.Age = func(param *cffi.CFFIValueHolder) *int64 {
-				decoded := baml.Decode(param)
-				return func(result any) *int64 {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(int64)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Age = baml.Decode(valueHolder).Interface().(*int64)
 
 		case "height":
-			c.Height = func(param *cffi.CFFIValueHolder) *float64 {
-				decoded := baml.Decode(param)
-				return func(result any) *float64 {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(float64)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Height = baml.Decode(valueHolder).Interface().(*float64)
 
 		case "isActive":
-			c.IsActive = func(param *cffi.CFFIValueHolder) *bool {
-				decoded := baml.Decode(param)
-				return func(result any) *bool {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(bool)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.IsActive = baml.Decode(valueHolder).Interface().(*bool)
 
 		case "metadata":
-			c.Metadata = baml.Decode(valueHolder).(any)
+			c.Metadata = baml.Decode(valueHolder).Interface().(any)
 
 		case "tags":
-			c.Tags = baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) string {
-				return baml.Decode(inner).(string)
-			})
+			c.Tags = baml.Decode(valueHolder).Interface().([]string)
 
 		case "scores":
-			c.Scores = baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) int64 {
-				return baml.Decode(inner).(int64)
-			})
+			c.Scores = baml.Decode(valueHolder).Interface().([]int64)
 
 		case "measurements":
-			c.Measurements = baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) float64 {
-				return baml.Decode(inner).(float64)
-			})
+			c.Measurements = baml.Decode(valueHolder).Interface().([]float64)
 
 		case "flags":
-			c.Flags = baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) bool {
-				return baml.Decode(inner).(bool)
-			})
+			c.Flags = baml.Decode(valueHolder).Interface().([]bool)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -181,24 +137,16 @@ func (c *PrimitiveArrays) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "stringArray":
-			c.StringArray = baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) string {
-				return baml.Decode(inner).(string)
-			})
+			c.StringArray = baml.Decode(valueHolder).Interface().([]string)
 
 		case "intArray":
-			c.IntArray = baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) int64 {
-				return baml.Decode(inner).(int64)
-			})
+			c.IntArray = baml.Decode(valueHolder).Interface().([]int64)
 
 		case "floatArray":
-			c.FloatArray = baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) float64 {
-				return baml.Decode(inner).(float64)
-			})
+			c.FloatArray = baml.Decode(valueHolder).Interface().([]float64)
 
 		case "boolArray":
-			c.BoolArray = baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) bool {
-				return baml.Decode(inner).(bool)
-			})
+			c.BoolArray = baml.Decode(valueHolder).Interface().([]bool)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -254,24 +202,16 @@ func (c *PrimitiveMaps) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "stringMap":
-			c.StringMap = baml.DecodeMap(valueHolder, func(inner *cffi.CFFIValueHolder) string {
-				return baml.Decode(inner).(string)
-			})
+			c.StringMap = baml.Decode(valueHolder).Interface().(map[string]string)
 
 		case "intMap":
-			c.IntMap = baml.DecodeMap(valueHolder, func(inner *cffi.CFFIValueHolder) int64 {
-				return baml.Decode(inner).(int64)
-			})
+			c.IntMap = baml.Decode(valueHolder).Interface().(map[string]int64)
 
 		case "floatMap":
-			c.FloatMap = baml.DecodeMap(valueHolder, func(inner *cffi.CFFIValueHolder) float64 {
-				return baml.Decode(inner).(float64)
-			})
+			c.FloatMap = baml.Decode(valueHolder).Interface().(map[string]float64)
 
 		case "boolMap":
-			c.BoolMap = baml.DecodeMap(valueHolder, func(inner *cffi.CFFIValueHolder) bool {
-				return baml.Decode(inner).(bool)
-			})
+			c.BoolMap = baml.Decode(valueHolder).Interface().(map[string]bool)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -328,55 +268,19 @@ func (c *PrimitiveTypes) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "stringField":
-			c.StringField = func(param *cffi.CFFIValueHolder) *string {
-				decoded := baml.Decode(param)
-				return func(result any) *string {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(string)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.StringField = baml.Decode(valueHolder).Interface().(*string)
 
 		case "intField":
-			c.IntField = func(param *cffi.CFFIValueHolder) *int64 {
-				decoded := baml.Decode(param)
-				return func(result any) *int64 {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(int64)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.IntField = baml.Decode(valueHolder).Interface().(*int64)
 
 		case "floatField":
-			c.FloatField = func(param *cffi.CFFIValueHolder) *float64 {
-				decoded := baml.Decode(param)
-				return func(result any) *float64 {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(float64)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.FloatField = baml.Decode(valueHolder).Interface().(*float64)
 
 		case "boolField":
-			c.BoolField = func(param *cffi.CFFIValueHolder) *bool {
-				decoded := baml.Decode(param)
-				return func(result any) *bool {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(bool)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.BoolField = baml.Decode(valueHolder).Interface().(*bool)
 
 		case "nullField":
-			c.NullField = baml.Decode(valueHolder).(any)
+			c.NullField = baml.Decode(valueHolder).Interface().(any)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))

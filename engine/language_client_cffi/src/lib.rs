@@ -149,9 +149,14 @@ fn safe_trigger_callback(
 
                     meta.encode_to_c_buffer(runtime.inner.ir.as_ref())
                 } else {
-                    let meta = content.0.map_meta(|f| ctypes::EncodeMeta {
-                        field_type: f.3.to_streaming_type(runtime.inner.ir.as_ref()),
-                        checks: &f.1,
+                    let meta = content.0.map_meta(|f| {
+                        // Top level types in streaming always have `not_null` set to true.
+                        let mut result_type = f.3.clone();
+                        result_type.meta_mut().streaming_behavior.needed = true;
+                        ctypes::EncodeMeta {
+                            field_type: result_type.to_streaming_type(runtime.inner.ir.as_ref()),
+                            checks: &f.1,
+                        }
                     });
                     meta.encode_to_c_buffer(runtime.inner.ir.as_ref())
                 };

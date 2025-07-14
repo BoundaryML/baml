@@ -17,6 +17,9 @@ on:
       - protoc-fix
 env:
   MACOSX_DEPLOYMENT_TARGET: "10.13"
+  # Turbo remote caching
+  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+  TURBO_TEAM: gloo
 
 concurrency:
   # suffix is important to prevent a concurrency deadlock with the calling workflow
@@ -64,24 +67,19 @@ jobs:
       TARGET_DIR: ./engine/target
 
     steps:
-      - uses: actions/checkout@v4
-      # - name: Install packages (Ubuntu)
-      #   if: matrix._.os == 'ubuntu-latest'
-      #   shell: bash
-      #   run: |
-      #     ci/ubuntu-install-packages
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Setup Tools
+        uses: ./.github/actions/setup-tools
+
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
         with:
-          toolchain: stable
-          target: ${{ matrix._.target }}
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: engine
-          prefix-key: "v5-rust-${{ matrix._.target }}"
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.21"
+          targets: ${{ matrix._.target }}
+
+      - name: Setup Go
+        uses: ./.github/actions/setup-go
 
       - name: Install protoc-gen-go into .cargo/bin
         shell: bash
@@ -298,7 +296,7 @@ jobs:
           staging_dir="${{ steps.paths.outputs.archive_dir }}"
           archive_base="${{ steps.paths.outputs.archive_base }}"
           archive_file="${archive_base}.zip"
-          checksum_file="${archive_base}.zip.sha256"
+          checksum_file="${archive_file}.sha256"
 
           echo "Creating staging directory: $staging_dir"
           mkdir -p "$staging_dir"

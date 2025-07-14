@@ -55,7 +55,7 @@ func TestCircularReference(ctx context.Context, input string, opts ...CallOption
 		return types.CircularReference{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.CircularReference)
+	casted := (result.Data).(types.CircularReference)
 
 	return casted, nil
 }
@@ -94,7 +94,7 @@ func TestDeepRecursion(ctx context.Context, depth int64, opts ...CallOptionFunc)
 		return types.DeepRecursion{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.DeepRecursion)
+	casted := (result.Data).(types.DeepRecursion)
 
 	return casted, nil
 }
@@ -133,7 +133,7 @@ func TestEmptyCollections(ctx context.Context, input string, opts ...CallOptionF
 		return types.EmptyCollections{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.EmptyCollections)
+	casted := (result.Data).(types.EmptyCollections)
 
 	return casted, nil
 }
@@ -172,7 +172,7 @@ func TestLargeStructure(ctx context.Context, input string, opts ...CallOptionFun
 		return types.LargeStructure{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.LargeStructure)
+	casted := (result.Data).(types.LargeStructure)
 
 	return casted, nil
 }
@@ -211,7 +211,7 @@ func TestNumberEdgeCases(ctx context.Context, input string, opts ...CallOptionFu
 		return types.NumberEdgeCases{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.NumberEdgeCases)
+	casted := (result.Data).(types.NumberEdgeCases)
 
 	return casted, nil
 }
@@ -250,7 +250,7 @@ func TestSpecialCharacters(ctx context.Context, input string, opts ...CallOption
 		return types.SpecialCharacters{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.SpecialCharacters)
+	casted := (result.Data).(types.SpecialCharacters)
 
 	return casted, nil
 }

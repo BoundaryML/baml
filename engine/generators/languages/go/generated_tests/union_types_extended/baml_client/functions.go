@@ -55,7 +55,7 @@ func TestComplexUnions(ctx context.Context, input string, opts ...CallOptionFunc
 		return types.ComplexUnions{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.ComplexUnions)
+	casted := (result.Data).(types.ComplexUnions)
 
 	return casted, nil
 }
@@ -94,7 +94,7 @@ func TestDiscriminatedUnions(ctx context.Context, input string, opts ...CallOpti
 		return types.DiscriminatedUnions{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.DiscriminatedUnions)
+	casted := (result.Data).(types.DiscriminatedUnions)
 
 	return casted, nil
 }
@@ -133,7 +133,7 @@ func TestPrimitiveUnions(ctx context.Context, input string, opts ...CallOptionFu
 		return types.PrimitiveUnions{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.PrimitiveUnions)
+	casted := (result.Data).(types.PrimitiveUnions)
 
 	return casted, nil
 }
@@ -172,7 +172,7 @@ func TestUnionArrays(ctx context.Context, input string, opts ...CallOptionFunc) 
 		return types.UnionArrays{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.UnionArrays)
+	casted := (result.Data).(types.UnionArrays)
 
 	return casted, nil
 }

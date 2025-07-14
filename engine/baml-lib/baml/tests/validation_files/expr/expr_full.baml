@@ -70,36 +70,36 @@ test TestMakePoem() {
 }
 
 // warning: Workflow functions are experimental, and will break in the future.
-//   -->  expr/expr_full.baml:27
+//   -->  expr/expr_full.baml:26
 //    | 
-// 26 | 
-// 27 | function Pipeline() -> string {
-//    | 
-// warning: Workflow functions are experimental, and will break in the future.
-//   -->  expr/expr_full.baml:37
-//    | 
-// 36 | 
-// 37 | function Pyramid() -> string {
+// 25 | 
+// 26 | function Pipeline() -> string {
 //    | 
 // warning: Workflow functions are experimental, and will break in the future.
-//   -->  expr/expr_full.baml:41
+//   -->  expr/expr_full.baml:36
 //    | 
-// 40 | 
-// 41 | function OuterPyramid() -> string {
+// 35 | 
+// 36 | function Pyramid() -> string {
+//    | 
+// warning: Workflow functions are experimental, and will break in the future.
+//   -->  expr/expr_full.baml:40
+//    | 
+// 39 | 
+// 40 | function OuterPyramid() -> string {
 //    | 
 // warning: Variable assignment is experimental, and will break in the future.
-//   -->  expr/expr_full.baml:19
+//   -->  expr/expr_full.baml:18
 //    | 
-// 18 | 
-// 19 | let poem = MakePoem(10);
+// 17 | 
+// 18 | let poem = MakePoem(10);
 //    | 
 // warning: Variable assignment is experimental, and will break in the future.
-//   -->  expr/expr_full.baml:21
+//   -->  expr/expr_full.baml:20
 //    | 
-// 20 | 
-// 21 | let another = {
-// 22 |   let x = MakePoem(10);
-// 23 |   let y = MakePoem(5);
-// 24 |   CombinePoems(x,y)
-// 25 | };
+// 19 | 
+// 20 | let another = {
+// 21 |   let x = MakePoem(10);
+// 22 |   let y = MakePoem(5);
+// 23 |   CombinePoems(x,y)
+// 24 | };
 //    | 

@@ -12,4 +12,11 @@ describe("Vertex Provider", () => {
     const res = await b.TestVertexWithSystemInstructions();
     expect(res.length).toBeGreaterThan(0);
   });
+
+  // it("should support vertex with google/ prefix in model name", async () => {
+    // const res = await b.TestVertexWithGooglePrefix(
+    //   "a donkey. You must mention the word donkey.",
+    // );
+    // expect(res.toLowerCase()).toContain("donkey");
+  // });
 });

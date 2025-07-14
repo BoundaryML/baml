@@ -37,64 +37,92 @@ where
     ) -> CffiValueHolder;
 }
 
+fn maybe_wrap_union_impl<TypeLookups, T>(
+    value: &BamlValueWithMeta<Meta<'_, T>>,
+    holder: CffiValueHolder,
+    lookup: &TypeLookups,
+    get_target_type: impl Fn(&TypeGeneric<T>) -> TypeGeneric<T>,
+    get_namespace: impl Fn(&TypeGeneric<T>) -> CffiTypeNamespace,
+) -> CffiValueHolder
+where
+    TypeLookups: baml_types::baml_value::TypeLookups,
+    for<'a> BamlValueWithMeta<Meta<'a, T>>: HasType<T> + TypeQuery<T>,
+    T: std::hash::Hash + std::cmp::Eq,
+{
+    let target_type = &get_target_type(value.field_type());
+
+    if let baml_types::ir_type::TypeGeneric::Union(union_type_generic, _) = target_type {
+        let real_type = value.real_type(lookup);
+        if real_type.is_null() {
+            return holder;
+        }
+
+        let options = match union_type_generic.view() {
+            baml_types::ir_type::UnionTypeViewGeneric::Null
+            | baml_types::ir_type::UnionTypeViewGeneric::Optional(..) => return holder,
+            baml_types::ir_type::UnionTypeViewGeneric::OneOf(type_generics) => type_generics,
+            baml_types::ir_type::UnionTypeViewGeneric::OneOfOptional(type_generics) => {
+                type_generics
+            }
+        };
+
+        let value_type_index = options
+            .iter()
+            .position(|t| real_type == **t)
+            .expect("Failed to find target_type in options");
+
+        let variant_name = options[value_type_index].to_union_name();
+
+        let union_variant = CffiValueUnionVariant {
+            name: Some(create_cffi_type_name(
+                target_type.to_union_name().as_str(),
+                get_namespace(value.field_type()),
+            )),
+            variant_name,
+            field_types: options
+                .into_iter()
+                .map(|t| WithIr { value: t, lookup }.encode())
+                .collect(),
+            value_type_index: value_type_index as i32,
+            value: Some(Box::new(holder)),
+        };
+
+        CffiValueHolder {
+            r#type: Some(
+                WithIr {
+                    value: target_type,
+                    lookup,
+                }
+                .encode(),
+            ),
+            value: Some(cffi_value_holder::Value::UnionVariantValue(Box::new(
+                union_variant,
+            ))),
+        }
+    } else {
+        holder
+    }
+}
+
 impl<TypeLookups> MaybeWrapUnion<TypeLookups>
     for BamlValueWithMeta<Meta<'_, type_meta::NonStreaming>>
 where
     TypeLookups: baml_types::baml_value::TypeLookups,
 {
     fn maybe_wrap_union(&self, holder: CffiValueHolder, lookup: &TypeLookups) -> CffiValueHolder {
-        let target_type = match self.field_type() {
-            baml_types::ir_type::TypeGeneric::RecursiveTypeAlias { name, .. } => &lookup
-                .expand_recursive_type(name)
-                .unwrap_or_else(|_| panic!("Failed to expand recursive type alias: {name}"))
-                .to_non_streaming_type(lookup),
-            other => other,
-        };
-
-        if let baml_types::ir_type::TypeGeneric::Union(union_type_generic, _) = target_type {
-            let real_type = self.real_type(lookup);
-            if real_type.is_null() {
-                return holder;
-            }
-
-            let options = match union_type_generic.view() {
-                baml_types::ir_type::UnionTypeViewGeneric::Null
-                | baml_types::ir_type::UnionTypeViewGeneric::Optional(..) => return holder,
-                baml_types::ir_type::UnionTypeViewGeneric::OneOf(type_generics) => type_generics,
-                baml_types::ir_type::UnionTypeViewGeneric::OneOfOptional(type_generics) => {
-                    type_generics
-                }
-            };
-
-            let value_type_index = options
-                .iter()
-                .position(|t| real_type == **t)
-                .expect("Failed to find target_type in options");
-
-            let variant_name = options[value_type_index].to_union_name();
-
-            let union_variant = CffiValueUnionVariant {
-                name: Some(create_cffi_type_name(
-                    &target_type.to_union_name(),
-                    CffiTypeNamespace::Types,
-                )),
-                variant_name,
-                field_types: options
-                    .into_iter()
-                    .map(|t| WithIr { value: t, lookup }.encode())
-                    .collect(),
-                value_type_index: value_type_index as i32,
-                value: Some(Box::new(holder)),
-            };
-
-            CffiValueHolder {
-                value: Some(cffi_value_holder::Value::UnionVariantValue(Box::new(
-                    union_variant,
-                ))),
-            }
-        } else {
-            holder
-        }
+        maybe_wrap_union_impl(
+            self,
+            holder,
+            lookup,
+            |field_type| match field_type {
+                baml_types::ir_type::TypeGeneric::RecursiveTypeAlias { name, .. } => lookup
+                    .expand_recursive_type(name)
+                    .unwrap_or_else(|_| panic!("Failed to expand recursive type alias: {name}"))
+                    .to_non_streaming_type(lookup),
+                other => other.clone(),
+            },
+            |_| CffiTypeNamespace::Types,
+        )
     }
 
     fn maybe_wrap_stream_state(
@@ -111,73 +139,31 @@ where
     TypeLookups: baml_types::baml_value::TypeLookups,
 {
     fn maybe_wrap_union(&self, holder: CffiValueHolder, lookup: &TypeLookups) -> CffiValueHolder {
-        let target_type = match self.field_type() {
-            baml_types::ir_type::TypeGeneric::RecursiveTypeAlias { name, .. } => &lookup
-                .expand_recursive_type(name)
-                .unwrap_or_else(|_| panic!("Failed to expand recursive type alias: {name}"))
-                .to_streaming_type(lookup),
-            other => other,
-        };
-
-        if let baml_types::ir_type::TypeGeneric::Union(union_type_generic, _) = target_type {
-            let real_type = self.real_type(lookup);
-            if real_type.is_null() {
-                return holder;
-            }
-
-            let options = match union_type_generic.view() {
-                baml_types::ir_type::UnionTypeViewGeneric::Null
-                | baml_types::ir_type::UnionTypeViewGeneric::Optional(..) => return holder,
-                baml_types::ir_type::UnionTypeViewGeneric::OneOf(type_generics) => type_generics,
-                baml_types::ir_type::UnionTypeViewGeneric::OneOfOptional(type_generics) => {
-                    type_generics
-                }
-            };
-
-            let value_type_index = options
-                .iter()
-                .position(|t| real_type == **t)
-                .expect("Failed to find target_type in options");
-
-            let variant_name = options[value_type_index].to_union_name();
-
-            // TODO: Do we need to consider recursive type aliases here?
-            let variant_mode = match self.field_type() {
+        maybe_wrap_union_impl(
+            self,
+            holder,
+            lookup,
+            |field_type| match field_type {
+                baml_types::ir_type::TypeGeneric::RecursiveTypeAlias { name, .. } => lookup
+                    .expand_recursive_type(name)
+                    .unwrap_or_else(|_| panic!("Failed to expand recursive type alias: {name}"))
+                    .to_streaming_type(lookup),
+                other => other.clone(),
+            },
+            |field_type| match field_type {
                 TypeGeneric::Class { mode, .. } => match mode {
                     baml_types::StreamingMode::NonStreaming => CffiTypeNamespace::Types,
                     baml_types::StreamingMode::Streaming => CffiTypeNamespace::StreamTypes,
                 },
                 _ => CffiTypeNamespace::StreamTypes,
-            };
-
-            let union_variant = CffiValueUnionVariant {
-                name: Some(create_cffi_type_name(
-                    &target_type.to_union_name(),
-                    variant_mode,
-                )),
-                variant_name,
-                field_types: options
-                    .into_iter()
-                    .map(|t| WithIr { value: t, lookup }.encode())
-                    .collect(),
-                value_type_index: value_type_index as i32,
-                value: Some(Box::new(holder)),
-            };
-
-            CffiValueHolder {
-                value: Some(cffi_value_holder::Value::UnionVariantValue(Box::new(
-                    union_variant,
-                ))),
-            }
-        } else {
-            holder
-        }
+            },
+        )
     }
 
     fn maybe_wrap_stream_state(
         &self,
         holder: CffiValueHolder,
-        _lookup: &TypeLookups,
+        lookup: &TypeLookups,
     ) -> CffiValueHolder {
         if self.field_type().meta().streaming_behavior.state {
             let stream_state = CffiValueStreamingState {
@@ -185,6 +171,8 @@ where
                 state: CffiStreamState::Pending.into(),
             };
             CffiValueHolder {
+                // Not present for Streaming State
+                r#type: None,
                 value: Some(cffi_value_holder::Value::StreamingStateValue(Box::new(
                     stream_state,
                 ))),
@@ -208,7 +196,7 @@ where
         let WithIr { value, lookup } = self;
 
         let holder = {
-            let value = match value {
+            let encoded_value = match value {
                 BamlValueWithMeta::String(val, _) => Value::StringValue(val.clone()),
                 BamlValueWithMeta::Int(val, _) => Value::IntValue(*val),
                 BamlValueWithMeta::Float(val, _) => Value::FloatValue(*val),
@@ -305,7 +293,17 @@ where
                 }
                 BamlValueWithMeta::Null(_) => Value::NullValue(CffiValueNull {}),
             };
-            CffiValueHolder { value: Some(value) }
+            println!("encoded_value: {}", value.field_type());
+            CffiValueHolder {
+                r#type: Some(
+                    WithIr {
+                        value: value.field_type(),
+                        lookup,
+                    }
+                    .encode(),
+                ),
+                value: Some(encoded_value),
+            }
         };
 
         let meta = value.meta().checks;
@@ -318,6 +316,8 @@ where
             };
 
             CffiValueHolder {
+                // Checks don't have a type
+                r#type: None,
                 value: Some(Value::CheckedValue(Box::new(checked_value))),
             }
         } else {

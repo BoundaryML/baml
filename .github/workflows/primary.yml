@@ -11,7 +11,6 @@ on:
       - "typescript/**"
     branches:
       - canary
-      - greg/lsp
   # need to run this periodically on the default branch to populate the build cache
   schedule:
     # daily at 2am PST
@@ -29,212 +28,205 @@ permissions:
   pull-requests: read
   repository-projects: read
 
+# Common environment variables
+env:
+  # Turbo remote caching
+  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+  TURBO_TEAM: gloo
+
 jobs:
+  # Run all quality checks in parallel (lightweight setup)
   lint:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        check:
+          [typescript-lint, rust-format, rust-lint, rust-lint-wasm, python-lint]
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Tools
+        uses: ./.github/actions/setup-tools
+
+      # Setup Node.js for TypeScript lint
+      - name: Setup Node.js
+        if: matrix.check == 'typescript-lint'
+        uses: ./.github/actions/setup-node
+
+      # Setup Rust for Rust checks
+      - name: Setup Rust
+        if: contains(matrix.check, 'rust')
+        uses: ./.github/actions/setup-rust
         with:
-          version: 9.12.0
-          run_install: false
-      - uses: actions/setup-node@v4
+          enable-wasm: ${{ matrix.check == 'rust-lint-wasm' && 'true' || 'false' }}
+
+      # Install protoc-gen-go for rust-lint (needed by baml_cffi build.rs)
+      - name: Setup Go
+        if: matrix.check == 'rust-lint'
+        uses: ./.github/actions/setup-go
+
+      - name: Setup Python
+        if: matrix.check == 'python-lint'
+        uses: ./.github/actions/setup-python
         with:
-          node-version: 20
-          cache: pnpm
-          cache-dependency-path: |
-            typescript/**/pnpm-lock.yaml
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.24"
-      - name: Install protoc-gen-go
-        run: go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
-      - name: Install goimports
-        run: go install golang.org/x/tools/cmd/goimports@latest
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: stable
-      - name: Install Node
-        run: pnpm install --frozen-lockfile
-        working-directory: typescript
-      - name: Check TS Lint
-        run: pnpm biome ci . --organize-imports-enabled=false
-        working-directory: typescript
-      - name: Build web-panel for language server
-        run: bash ./scripts/build.sh
-        working-directory: engine/language_server
-      - name: Check Rust Formatter
-        # rustfmt can only run unstable features on stable toolchains if passed
-        # through CLI. We don't want to download 2 toolchains just for this.
-        run: cargo fmt --check -- --config imports_granularity="Crate" --config group_imports="StdExternalCrate"
+          cache: "false"
+
+      - name: Run TypeScript lint
+        if: matrix.check == 'typescript-lint'
+        run: pnpm format:ci
+
+      - name: Run Rust format check
+        if: matrix.check == 'rust-format'
+        run: |
+          # Ensure rustfmt is installed for the mise-managed toolchain
+          rustup component add rustfmt || true
+          cargo fmt --check
         working-directory: engine
-      - name: Check Rust Lint (Clippy)
+
+      - name: Run Rust lint (Clippy)
+        if: matrix.check == 'rust-lint'
         run: RUSTFLAGS="-A unused -D warnings" cargo clippy
         working-directory: engine
-      - name: Check Rust Lint WASM (Clippy)
+
+      - name: Run Rust lint WASM (Clippy)
+        if: matrix.check == 'rust-lint-wasm'
         run: RUSTFLAGS="-A unused -D warnings" cargo clippy --target wasm32-unknown-unknown
         working-directory: engine/baml-schema-wasm
-  test_node_generator:
+
+      - name: Run Python lint
+        if: matrix.check == 'python-lint'
+        run: |
+          cd integ-tests/python && uv run ruff check .
+
+  typecheck:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: jdx/mise-action@v2
-      - uses: actions/setup-go@v5
-      - name: Install protoc-gen-go
-        run: go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
-      - name: Install goimports
-        run: go install golang.org/x/tools/cmd/goimports@latest
-      - uses: actions/setup-node@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Tools
+        uses: ./.github/actions/setup-tools
+
+      # Setup Node.js for TypeScript lint
+      - name: Setup Node.js
+        uses: ./.github/actions/setup-node
+
+      # Setup Rust for Rust checks
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
         with:
-          node-version: 20
-          cache: pnpm
-          cache-dependency-path: |
-            engine/language_client_typescript/pnpm-lock.yaml
-            integ-tests/typescript/pnpm-lock.yaml
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: stable
-      - run: rustup target add wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: engine
-      - name: Install Node
-        run: pnpm install --frozen-lockfile
-        working-directory: engine/language_client_typescript
-      # This step is necessary to guarantee that the language server has a frontend to embed.
-      # Is also included in build and integ-tests steps.
-      - name: Build web-panel for language server
-        run: bash ./scripts/build.sh
-        working-directory: engine/language_server
-      # ------------------------------------------------------------
-      - name: Build Node
-        run: pnpm build:debug
-        working-directory: engine/language_client_typescript
-      - name: Install Node
-        run: pnpm install --frozen-lockfile
-        working-directory: integ-tests/typescript
-      - name: Test Node Generator
-        run: |
-          pnpm generate || (echo "::error:: merge canary and run codegen again" && exit 1)
-        working-directory: integ-tests/typescript
-      - name: Ensure No Changes
-        run: |
-          git diff --exit-code || (echo "::error:: merge canary and run codegen again" && exit 1)
-      - name: Test Node Generator (1 of 3)
-        run: |
-          pnpm generate || (echo "::error:: merge canary and run codegen again" && exit 1)
-        working-directory: integ-tests/typescript
-      - name: Ensure No Changes (1 of 3)
-        run: |
-          git diff --exit-code || (echo "::error:: merge canary and run codegen again" && exit 1)
-      - name: Test Node Generator (2 of 3)
-        run: |
-          pnpm generate || (echo "::error:: merge canary and run codegen again" && exit 1)
-        working-directory: integ-tests/typescript
-      - name: Ensure No Changes (2 of 3)
-        run: |
-          git diff --exit-code || (echo "::error:: merge canary and run codegen again" && exit 1)
-      - name: Test Node Generator (3 of 3)
-        run: |
-          pnpm generate || (echo "::error:: merge canary and run codegen again" && exit 1)
-        working-directory: integ-tests/typescript
-      - name: Ensure No Changes (3 of 3)
-        run: |
-          git diff --exit-code || (echo "::error:: merge canary and run codegen again" && exit 1)
+          enable-wasm: true
+
+      # Install protoc-gen-go
+      - name: Setup Go
+        uses: ./.github/actions/setup-go
+
+      - name: Run typecheck for typescript and rust
+        run: pnpm typecheck --force
+
   build-wasm:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: jdx/mise-action@v2
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Tools
+        uses: ./.github/actions/setup-tools
+
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
         with:
-          toolchain: stable
-      - run: rustup target add wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: engine
+          targets: wasm32-unknown-unknown
+          enable-wasm: true
+
       - name: Build rust for wasm32
         run: cargo build --target=wasm32-unknown-unknown
         working-directory: engine/baml-schema-wasm
-  build:
+
+  # Test node generator (only needs CLI)
+  test-generators:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: jdx/mise-action@v2
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Tools
+        uses: ./.github/actions/setup-tools
+
+      - name: Setup Node.js
+        uses: ./.github/actions/setup-node
+
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
         with:
-          toolchain: stable
-      - run: rustup target add wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: engine
-      - uses: actions/setup-go@v4
-        with:
-          go-version: "1.24"
-      - name: Install protoc-gen-go
-        run: go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
-      - name: Install goimports
-        run: go install golang.org/x/tools/cmd/goimports@latest
-      - uses: actions/setup-python@v4
-        with:
-          python-version: "3.13"
-      - name: Install ruff
-        run: pip install ruff
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "24.2.0"
-      - name: Install prettier
-        run: npm install -g prettier
-      - name: Install Biome
-        run: npm install -g @biomejs/biome
-      # Ruby is still a wip
-      # - uses: ruby/setup-ruby@v1
-      #   with:
-      #     ruby-version: '3.4.4'
-      #     bundler-cache: true
-      # - name: Install Ruby dependencies
-      #   run: |
-      #     gem install sorbet sorbet-runtime
-      #     bundle add tapioca --group "development, test" --require false
-      #     bundle install
-      # - name: Initialize Sorbet with Tapioca
-      #   env:
-      #     SRB_YES: "1"
-      #   run: bundle exec tapioca init
-      - name: Build web-panel for language server
-        run: bash ./scripts/build.sh
-        working-directory: engine/language_server
-      - name: Test Rust
-        # skip doctests & integration tests (the latter require OPENAI_API_KEY and ANTHROPIC_API_KEY to be set)
-        run: cargo test --lib
-        working-directory: engine
-  integ-tests:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: jdx/mise-action@v2
-      - uses: astral-sh/setup-uv@v5
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.21.x"
-      - name: Install protoc-gen-go
-        run: go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
-      - name: Install goimports
-        run: go install golang.org/x/tools/cmd/goimports@latest
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: stable
-      - run: rustup target add wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: engine
-      - name: Build web-panel for language server
-        run: bash ./scripts/build.sh
-        working-directory: engine/language_server
-      - name: run python tests
+          enable-wasm: true
+
+      - name: Setup Go
+        uses: ./.github/actions/setup-go
+
+      - name: Setup Python
+        uses: ./.github/actions/setup-python
+
+      - name: Build Node
+        run: pnpm build:debug
+        working-directory: engine/language_client_typescript
+
+      - name: Test Generators
         run: |
-          cd integ-tests/python
-          ./run_tests.sh
+          pnpm generate --force || (echo "::error:: merge canary and run codegen again" && exit 1)
+
+      - name: Ensure No Changes
+        run: |
+          git diff --exit-code || (echo "::error:: merge canary and run codegen again" && exit 1)
+
+  # Run tests in parallel (rebuild what's needed)
+  tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        test-suite: [rust-unit, python-integration]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Tools
+        uses: ./.github/actions/setup-tools
+
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+
+      - name: Setup Go
+        uses: ./.github/actions/setup-go
+
+      - name: Setup Node.js
+        if: matrix.test-suite == 'python-integration'
+        uses: ./.github/actions/setup-node
+
+      - name: Setup Python
+        uses: ./.github/actions/setup-python
+        with:
+          cache: "false"
+
+      - name: Setup Ruby
+        if: matrix.test-suite == 'rust-unit'
+        uses: ./.github/actions/setup-ruby
+
+      - name: Run Rust unit tests
+        if: matrix.test-suite == 'rust-unit'
+        run: |
+          # Find Ruby library path and add it to LD_LIBRARY_PATH
+          RUBY_LIB_PATH=$(ruby -e 'puts RbConfig::CONFIG["libdir"]')
+          export LD_LIBRARY_PATH="${RUBY_LIB_PATH}:${LD_LIBRARY_PATH}"
+          cargo test --lib
+        working-directory: engine
+
+      - name: Run Python integration tests
+        if: matrix.test-suite == 'python-integration'
+        run: |
+          cd integ-tests/python && ./run_tests.sh
+
+  # Build CLI for releases only
   build-cli:
     if: github.event_name == 'release'
     strategy:
@@ -249,14 +241,20 @@ jobs:
             target: x86_64-pc-windows-msvc
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Tools
+        uses: ./.github/actions/setup-tools
+
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
         with:
-          toolchain: stable
           targets: ${{ matrix.target }}
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: engine
+
+      - name: Setup Go
+        uses: ./.github/actions/setup-go
+
       - name: Build CLI
         run: cargo build --release --bin baml-cli --target ${{ matrix.target }}
         working-directory: engine

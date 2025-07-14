@@ -17,6 +17,12 @@ permissions:
   # for oidc
   id-token: write
 
+# Common environment variables
+env:
+  # Turbo remote caching
+  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+  TURBO_TEAM: gloo
+
 jobs:
   build-test:
     strategy:
@@ -61,22 +67,32 @@ jobs:
     # env:
     #   GOARCH: ${{ matrix._.goarch }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - uses: actions/cache@v4
         with:
           path: |
             ~/.ollama/models
           key: ollama-${{ matrix._.runs-on }}
-      - uses: Swatinem/rust-cache@v2
+
+      - name: Setup Node.js
+        uses: ./.github/actions/setup-node
+
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+
+      - name: Setup Go
+        uses: ./.github/actions/setup-go
+
+      - name: Setup Python
+        uses: ./.github/actions/setup-python
         with:
-          workspaces: engine
-          cache-on-failure: true
-      - uses: jdx/mise-action@v2
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-      - uses: astral-sh/setup-uv@v6
-      - name: Setup
+          cache: 'false'
+
+      - name: Platform-specific setup
         run: ${{ matrix._.setup }}
+
       - uses: infisical/secrets-action@v1.0.9
         with:
           method: oidc
@@ -84,15 +100,6 @@ jobs:
           identity-id: 5b66a909-d5b3-4835-b518-27abf4c9b97d
           env-slug: test
           project-slug: gloo-infra-9-fkp
-
-      - name: setup TS
-        run: pnpm install --frozen-lockfile
-        working-directory: engine/language_client_typescript
-      
-      # This step is necessary to guarantee that the language server has a frontend to embed.
-      - name: Build web-panel for language server
-        run: bash ./scripts/build.sh
-        working-directory: engine/language_server
 
       - name: Run all integ tests
         run: |

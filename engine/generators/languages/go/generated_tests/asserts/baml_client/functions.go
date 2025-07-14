@@ -55,7 +55,7 @@ func PersonTest(ctx context.Context, opts ...CallOptionFunc) (types.Person, erro
 		return types.Person{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.Person)
+	casted := (result.Data).(types.Person)
 
 	return casted, nil
 }

@@ -55,7 +55,7 @@ func ConsumeTestEnum(ctx context.Context, input types.TestEnum, opts ...CallOpti
 		return types.TestEnum(""), result.Error
 	}
 
-	casted := *(result.Data).(*types.TestEnum)
+	casted := (result.Data).(types.TestEnum)
 
 	return casted, nil
 }
@@ -94,7 +94,7 @@ func FnTestAliasedEnumOutput(ctx context.Context, input string, opts ...CallOpti
 		return types.TestEnum(""), result.Error
 	}
 
-	casted := *(result.Data).(*types.TestEnum)
+	casted := (result.Data).(types.TestEnum)
 
 	return casted, nil
 }

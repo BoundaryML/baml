@@ -55,7 +55,7 @@ func TestComplexNested(ctx context.Context, input string, opts ...CallOptionFunc
 		return types.ComplexNested{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.ComplexNested)
+	casted := (result.Data).(types.ComplexNested)
 
 	return casted, nil
 }
@@ -94,7 +94,7 @@ func TestDeeplyNested(ctx context.Context, input string, opts ...CallOptionFunc)
 		return types.DeeplyNested{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.DeeplyNested)
+	casted := (result.Data).(types.DeeplyNested)
 
 	return casted, nil
 }
@@ -133,7 +133,7 @@ func TestRecursiveStructure(ctx context.Context, input string, opts ...CallOptio
 		return types.RecursiveStructure{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.RecursiveStructure)
+	casted := (result.Data).(types.RecursiveStructure)
 
 	return casted, nil
 }
@@ -172,7 +172,7 @@ func TestSimpleNested(ctx context.Context, input string, opts ...CallOptionFunc)
 		return types.SimpleNested{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.SimpleNested)
+	casted := (result.Data).(types.SimpleNested)
 
 	return casted, nil
 }

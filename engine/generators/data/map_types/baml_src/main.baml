@@ -136,3 +136,111 @@ function TestLargeMaps(input: string) -> SimpleMaps {
     Input: {{ input }}
   "#
 }
+
+// Top-level map return type tests
+function TestTopLevelStringMap(input: string) -> map<string, string> {
+  client "openai/gpt-4o-mini"
+  prompt #"
+    Return a map with the following key-value pairs:
+    - "first": "Hello"
+    - "second": "World"
+    - "third": "BAML"
+    
+    Input: {{ input }}
+  "#
+}
+
+function TestTopLevelIntMap(input: string) -> map<string, int> {
+  client "openai/gpt-4o-mini"
+  prompt #"
+    Return a map with the following key-value pairs:
+    - "one": 1
+    - "two": 2
+    - "ten": 10
+    - "hundred": 100
+    
+    Input: {{ input }}
+  "#
+}
+
+function TestTopLevelFloatMap(input: string) -> map<string, float> {
+  client "openai/gpt-4o-mini"
+  prompt #"
+    Return a map with the following key-value pairs:
+    - "pi": 3.14159
+    - "e": 2.71828
+    - "golden": 1.61803
+    
+    Input: {{ input }}
+  "#
+}
+
+function TestTopLevelBoolMap(input: string) -> map<string, bool> {
+  client "openai/gpt-4o-mini"
+  prompt #"
+    Return a map with the following key-value pairs:
+    - "isActive": true
+    - "isDisabled": false
+    - "isEnabled": true
+    
+    Input: {{ input }}
+  "#
+}
+
+function TestTopLevelNestedMap(input: string) -> map<string, map<string, string>> {
+  client "openai/gpt-4o-mini"
+  prompt #"
+    Return a nested map with the following structure:
+    {
+      "users": {"alice": "admin", "bob": "user"},
+      "roles": {"admin": "full-access", "user": "read-only"}
+    }
+    
+    Input: {{ input }}
+  "#
+}
+
+function TestTopLevelMapOfArrays(input: string) -> map<string, int[]> {
+  client "openai/gpt-4o-mini"
+  prompt #"
+    Return a map where values are integer arrays:
+    - "evens": [2, 4, 6, 8]
+    - "odds": [1, 3, 5, 7]
+    - "primes": [2, 3, 5, 7, 11]
+    
+    Input: {{ input }}
+  "#
+}
+
+function TestTopLevelEmptyMap(input: string) -> map<string, string> {
+  client "openai/gpt-4o-mini"
+  prompt #"
+    Return an empty map: {}
+    
+    Input: {{ input }}
+  "#
+}
+
+function TestTopLevelMapWithNullable(input: string) -> map<string, string | null> {
+  client "openai/gpt-4o-mini"
+  prompt #"
+    Return a map with nullable values:
+    - "present": "value"
+    - "absent": null
+    - "another": "data"
+    
+    {{ ctx.output_format }}
+  "#
+}
+
+function TestTopLevelMapOfObjects(input: string) -> map<string, User> {
+  client "openai/gpt-4o-mini"
+  prompt #"
+    Return a map of User objects with keys "user1" and "user2".
+    Each user should have realistic data.
+    
+    {{ ctx.output_format }}
+    
+    Input: {{ input }}
+  "#
+}

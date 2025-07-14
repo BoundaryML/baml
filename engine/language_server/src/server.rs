@@ -40,6 +40,9 @@ mod schedule;
 
 pub(crate) use connection::ClientSender;
 
+#[cfg(not(feature = "playground-server"))]
+use crate::message::try_show_message;
+#[cfg(feature = "playground-server")]
 use crate::{
     message::try_show_message,
     playground::{PlaygroundServer, PlaygroundState},
@@ -169,11 +172,13 @@ impl Server {
         let notifier = client.notifier();
 
         // Playground state is initialized here, but server startup is now external
-        let playground_state = Arc::new(RwLock::new(PlaygroundState::new()));
-        session.playground_state = Some(playground_state.clone());
-        let session_arc = Arc::new(session.clone());
-        // Store the runtime in the session
-        session.playground_runtime = Some(rt);
+        #[cfg(feature = "playground-server")]
+        {
+            let playground_state = Arc::new(RwLock::new(PlaygroundState::new()));
+            session.playground_state = Some(playground_state.clone());
+            // Store the runtime in the session
+            session.playground_runtime = Some(rt);
+        }
         session.reload(Some(notifier))?;
 
         let server = Self {
@@ -182,6 +187,7 @@ impl Server {
             session,
             client_capabilities,
         };
+        #[cfg(feature = "playground-server")]
         server.start_playground_server();
         Ok(server)
     }
@@ -403,6 +409,7 @@ impl Server {
         }
     }
 
+    #[cfg(feature = "playground-server")]
     fn start_playground_server(&self) {
         if let (Some(playground_state), Some(rt)) = (
             self.session.playground_state.clone(),
@@ -422,10 +429,6 @@ impl Server {
                     if port_available {
                         // Port is available, start the server
                         let server = playground_server.clone();
-                        tracing::info!(
-                            "Hosted playground at http://localhost:{}...",
-                            playground_port
-                        );
 
                         // Send LSP notification about the port
                         let params = PortNotificationParams::new(playground_port);

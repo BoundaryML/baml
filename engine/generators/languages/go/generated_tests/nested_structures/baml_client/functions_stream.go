@@ -28,17 +28,19 @@ type stream struct{}
 var Stream = &stream{}
 
 type StreamValue[TStream any, TFinal any] struct {
+	IsError   bool
+	Error     error
 	IsFinal   bool
 	as_final  *TFinal
 	as_stream *TStream
 }
 
-func (s *StreamValue[TStream, TFinal]) Final() TFinal {
-	return *s.as_final
+func (s *StreamValue[TStream, TFinal]) Final() *TFinal {
+	return s.as_final
 }
 
-func (s *StreamValue[TStream, TFinal]) Stream() TStream {
-	return *s.as_stream
+func (s *StreamValue[TStream, TFinal]) Stream() *TStream {
+	return s.as_stream
 }
 
 // / Streaming version of TestComplexNested
@@ -88,21 +90,26 @@ func (*stream) TestComplexNested(ctx context.Context, input string, opts ...Call
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.ComplexNested, types.ComplexNested]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.ComplexNested)
+					data := (result.Data).(types.ComplexNested)
 					channel <- StreamValue[stream_types.ComplexNested, types.ComplexNested]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.ComplexNested)
+					data := (result.StreamData).(stream_types.ComplexNested)
 					channel <- StreamValue[stream_types.ComplexNested, types.ComplexNested]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -161,21 +168,26 @@ func (*stream) TestDeeplyNested(ctx context.Context, input string, opts ...CallO
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.DeeplyNested, types.DeeplyNested]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.DeeplyNested)
+					data := (result.Data).(types.DeeplyNested)
 					channel <- StreamValue[stream_types.DeeplyNested, types.DeeplyNested]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.DeeplyNested)
+					data := (result.StreamData).(stream_types.DeeplyNested)
 					channel <- StreamValue[stream_types.DeeplyNested, types.DeeplyNested]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -234,21 +246,26 @@ func (*stream) TestRecursiveStructure(ctx context.Context, input string, opts ..
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.RecursiveStructure, types.RecursiveStructure]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.RecursiveStructure)
+					data := (result.Data).(types.RecursiveStructure)
 					channel <- StreamValue[stream_types.RecursiveStructure, types.RecursiveStructure]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.RecursiveStructure)
+					data := (result.StreamData).(stream_types.RecursiveStructure)
 					channel <- StreamValue[stream_types.RecursiveStructure, types.RecursiveStructure]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -307,21 +324,26 @@ func (*stream) TestSimpleNested(ctx context.Context, input string, opts ...CallO
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.SimpleNested, types.SimpleNested]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.SimpleNested)
+					data := (result.Data).(types.SimpleNested)
 					channel <- StreamValue[stream_types.SimpleNested, types.SimpleNested]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.SimpleNested)
+					data := (result.StreamData).(stream_types.SimpleNested)
 					channel <- StreamValue[stream_types.SimpleNested, types.SimpleNested]{
 						IsFinal:   false,
 						as_stream: &data,
