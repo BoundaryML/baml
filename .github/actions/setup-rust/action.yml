@@ -34,6 +34,10 @@ inputs:
     description: "Cache even if the workflow fails"
     required: false
     default: "false"
+  enable-cache:
+    description: "Enable Rust cache"
+    required: false
+    default: "true"
 
 runs:
   using: "composite"
@@ -69,6 +73,7 @@ runs:
       shell: bash
 
     - name: Setup Rust cache
+      if: inputs.enable-cache == 'true'
       uses: Swatinem/rust-cache@v2
       with:
         workspaces: ${{ inputs.workspace }}

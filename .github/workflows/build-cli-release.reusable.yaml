@@ -77,6 +77,7 @@ jobs:
         uses: ./.github/actions/setup-rust
         with:
           targets: ${{ matrix._.target }}
+          enable-cache: false
 
       - name: Setup Go
         uses: ./.github/actions/setup-go
