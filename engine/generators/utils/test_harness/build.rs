@@ -39,7 +39,7 @@ fn main() {
     macro_code.push_str("    ($generator_type:ty) => {\n");
 
     for test_dir in &test_dirs {
-        let test_fn_name = format!("test_{test_dir}");
+        let test_fn_name = format!("test_{test_dir}_evaluate");
         macro_code.push_str("        #[test]\n");
         macro_code.push_str(&format!(
             "        fn {test_fn_name}() -> anyhow::Result<()> {{\n"

@@ -1,0 +1,47 @@
+{
+  "private": true,
+  "scripts": {
+    "clean": "git clean -xdf .turbo node_modules",
+    "clean:ws": "turbo clean",
+    "build": "turbo run build",
+    "build:playground": "turbo build --filter=@baml/playground",
+    "build:fiddle-web-app": "turbo build --filter=@baml/fiddle-web-app...",
+    "build:vscode": "turbo build --filter=baml-extension...",
+    "build:cli": "turbo build --filter=@baml/cli",
+    "release": "turbo run release",
+    "release:fiddle-web-app": "turbo release --filter=@baml/fiddle-web-app...",
+    "release:vscode": "turbo release --filter=baml-extension...",
+    "release:cli": "turbo release --filter=@baml/cli",
+    "dev": "turbo run dev",
+    "dev:vscode": "turbo run dev --filter=baml-extension...",
+    "dev:language-server": "turbo run dev --filter=@baml/language-server",
+    "dev:playground": "turbo run dev --filter=@baml/playground",
+    "generate": "turbo run generate --concurrency=1",
+    "typecheck": "turbo run typecheck",
+    "lint:ws": "pnpm dlx sherif@latest",
+    "postinstall.skip": "pnpm lint:ws",
+    "setup-dev": "./scripts/setup-dev.sh",
+    "format": "biome check",
+    "format:ci": "biome ci",
+    "format:fix": "biome check --write",
+    "docker-build": "bash build-docker.sh",
+    "test": "turbo run test",
+    "integ-test": "turbo run integ-test"
+  },
+  "devDependencies": {
+    "@infisical/cli": "0.41.89",
+    "@biomejs/biome": "1.9.4",
+    "@types/node": "24.0.3",
+    "turbo": "2.5.4",
+    "typescript": "5.8.3",
+    "vitest": "3.2.3",
+    "pnpm": "9.12.0"
+  },
+  "pnpm": {
+    "patchedDependencies": {
+      "vite-plugin-wasm@3.3.0": "patches/vscode-inline-wasm-as-base64.patch"
+    }
+  },
+  "packageManager": "pnpm@9.12.0",
+  "name": "@baml/root"
+}

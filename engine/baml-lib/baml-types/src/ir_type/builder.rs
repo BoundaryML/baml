@@ -8,6 +8,7 @@ impl<T: Default> TypeGeneric<T> {
     pub fn recursive_type_alias<U: AsRef<str>>(name: U) -> Self {
         TypeGeneric::RecursiveTypeAlias {
             name: name.as_ref().to_string(),
+            mode: StreamingMode::Streaming,
             meta: T::default(),
         }
     }

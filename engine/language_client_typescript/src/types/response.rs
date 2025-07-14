@@ -43,3 +43,22 @@ impl HTTPResponse {
         HTTPBody::from(self.inner.body.clone())
     }
 }
+
+crate::lang_wrapper!(
+    SSEResponse,
+    baml_types::tracing::events::SSEEvent,
+    clone_safe
+);
+
+#[napi]
+impl SSEResponse {
+    #[napi(getter)]
+    pub fn text(&self) -> String {
+        self.inner.data.clone()
+    }
+
+    #[napi]
+    pub fn json(&self) -> Option<serde_json::Value> {
+        serde_json::from_str(&self.inner.data).ok()
+    }
+}

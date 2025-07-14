@@ -19,9 +19,11 @@ pub use audio::BamlAudioPy;
 pub use function_result_stream::{FunctionResultStream, SyncFunctionResultStream};
 pub use function_results::FunctionResult;
 pub use image::BamlImagePy;
-pub use log_collector::{Collector, FunctionLog, LLMCall, Timing, Usage};
+pub use log_collector::{
+    Collector, FunctionLog, LLMCall, LLMStreamCall, StreamTiming, Timing, Usage,
+};
 pub use request::HTTPRequest;
-pub use response::HTTPResponse;
+pub use response::{HTTPResponse, SSEResponse};
 pub use runtime_ctx_manager::RuntimeContextManager;
 pub use span::BamlSpan;
 pub use type_builder::*;

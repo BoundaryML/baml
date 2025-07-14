@@ -180,6 +180,70 @@ describe("Collector Tests", () => {
     expect(Collector.__functionSpanCount()).toBeGreaterThan(0);
   });
 
+  it("should verify LLMStreamCall properties for streaming calls", async () => {
+    const collector = new Collector("openai-stream-chunks");
+
+    // Track chunks as they arrive
+    const chunksReceived: string[] = [];
+    const stream = b.stream.TestOpenAIGPT4oMini("Count from 1 to 5", { collector });
+
+    for await (const chunk of stream) {
+      chunksReceived.push(chunk);
+      console.log(`Received chunk: ${chunk}`);
+    }
+
+    // Get final response
+    const finalResponse = await stream.getFinalResponse();
+
+    // Verify we received multiple chunks
+    expect(chunksReceived.length).toBeGreaterThan(1);
+
+    // Verify final response is complete
+    expect(finalResponse.length).toBeGreaterThan(0);
+
+    // Verify collector captured the stream
+    const logs = collector.logs;
+    expect(logs.length).toBe(1);
+
+    const log = logs[0];
+    expect(log.functionName).toBe("TestOpenAIGPT4oMini");
+    expect(log.logType).toBe("stream");
+
+    // Verify timing for streaming
+    expect(log.timing.startTimeUtcMs).toBeGreaterThan(0);
+    expect(log.timing.durationMs).toBeGreaterThan(0);
+
+    // Verify usage is captured for streaming
+    expect(log.usage.inputTokens).toBeGreaterThan(0);
+    expect(log.usage.outputTokens).toBeGreaterThan(0);
+
+    // Verify call details
+    const call = log.calls[0];
+    // Check if it's an LLMStreamCall by checking for sseResponses method
+    expect('sseResponses' in call).toBe(true);
+    
+    expect(call.provider).toBe("openai");
+    expect(call.clientName).toBe("GPT4oMini");
+    
+    // Cast to any to access sseResponses since TypeScript doesn't know about the union type
+    const sseChunks = (call as any).sseResponses();
+    expect(sseChunks).not.toBeNull();
+    if (sseChunks) {
+      expect(sseChunks.length).toBeGreaterThanOrEqual(chunksReceived.length);
+      for (const chunk of sseChunks) {
+        console.log(`Chunk: ${JSON.stringify(chunk.json())}`);
+      }
+    }
+
+    // For streaming, http response should be null (as noted in existing test)
+    expect(call.httpResponse).toBeNull();
+
+    // But request should exist
+    expect(call.httpRequest).not.toBeNull();
+    const requestBody = call.httpRequest?.body.json();
+    expect(requestBody?.stream).toBe(true); // Verify streaming was requested
+  });
+
   it("should track cumulative usage across multiple calls", async () => {
     const collector = new Collector("my-collector");
 

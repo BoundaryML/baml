@@ -11,6 +11,7 @@ mod display;
 mod simplify;
 pub mod type_meta;
 mod union_type;
+pub use display::MetaSuffix;
 pub use union_type::UnionConstructor;
 
 // Types, depending on the context, have different metadata attached to them.
@@ -36,6 +37,7 @@ pub enum TypeGeneric<T> {
     Map(Box<TypeGeneric<T>>, Box<TypeGeneric<T>>, T),
     RecursiveTypeAlias {
         name: String,
+        mode: StreamingMode,
         meta: T,
     },
     Tuple(Vec<TypeGeneric<T>>, T),
@@ -356,6 +358,7 @@ impl<T> TypeGeneric<T> {
     pub fn find_if<'a>(
         &'a self,
         predicate: &impl Fn(&TypeGeneric<T>) -> bool,
+        ignore_map_keys: bool,
     ) -> Vec<&'a TypeGeneric<T>> {
         if predicate(self) {
             return vec![self];
@@ -367,27 +370,31 @@ impl<T> TypeGeneric<T> {
             | TypeGeneric::Literal(..)
             | TypeGeneric::Class { .. }
             | TypeGeneric::RecursiveTypeAlias { .. } => vec![],
-            TypeGeneric::List(inner, _) => inner.find_if(predicate),
-            TypeGeneric::Map(type_generic, type_generic1, _) => {
-                let mut res = type_generic.find_if(predicate);
-                res.extend(type_generic1.find_if(predicate));
+            TypeGeneric::List(inner, _) => inner.find_if(predicate, ignore_map_keys),
+            TypeGeneric::Map(key_type, value_type, _) => {
+                let mut res = value_type.find_if(predicate, ignore_map_keys);
+                if !ignore_map_keys {
+                    res.extend(key_type.find_if(predicate, ignore_map_keys));
+                }
                 res
             }
             TypeGeneric::Tuple(type_generics, _) => type_generics
                 .iter()
-                .flat_map(|t| t.find_if(predicate))
+                .flat_map(|t| t.find_if(predicate, ignore_map_keys))
                 .collect(),
             TypeGeneric::Union(union_type_generic, _) => union_type_generic
                 .iter_skip_null()
                 .iter()
-                .flat_map(|t| t.find_if(predicate))
+                .flat_map(|t| t.find_if(predicate, ignore_map_keys))
                 .collect(),
             TypeGeneric::Arrow(arrow_generic, _) => {
                 let res = arrow_generic
                     .param_types
                     .iter()
-                    .flat_map(|t| t.find_if(predicate));
-                let mut returned = arrow_generic.return_type.find_if(predicate);
+                    .flat_map(|t| t.find_if(predicate, ignore_map_keys));
+                let mut returned = arrow_generic
+                    .return_type
+                    .find_if(predicate, ignore_map_keys);
                 returned.extend(res);
                 returned
             }
@@ -471,10 +478,13 @@ impl<T> TypeGeneric<T> {
                 Box::new(field_type1.map_meta(f)),
                 f(type_metadata_ir),
             ),
-            TypeGeneric::RecursiveTypeAlias { meta, name } => TypeGeneric::RecursiveTypeAlias {
-                meta: f(meta),
-                name: name.clone(),
-            },
+            TypeGeneric::RecursiveTypeAlias { meta, name, mode } => {
+                TypeGeneric::RecursiveTypeAlias {
+                    meta: f(meta),
+                    mode: mode.clone(),
+                    name: name.clone(),
+                }
+            }
             TypeGeneric::Tuple(inner, type_metadata_ir) => TypeGeneric::Tuple(
                 inner.iter().map(|t| t.map_meta(f)).collect(),
                 f(type_metadata_ir),
@@ -1399,6 +1409,7 @@ mod tests {
                 UnionTypeGeneric::new_unsafe(vec![
                     TypeStreaming::RecursiveTypeAlias {
                         name: "MyAlias".to_string(),
+                        mode: StreamingMode::Streaming,
                         meta: Default::default(),
                     },
                     TypeStreaming::null(),

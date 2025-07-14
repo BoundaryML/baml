@@ -1,0 +1,13 @@
+{
+  "name": "@baml/integ-tests-python",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "generate": "baml-cli generate --from ../baml_src",
+    "format": "ruff format .",
+    "integ-tests": "./run_tests.sh"
+  },
+  "dependencies": {
+    "@boundaryml/baml": "workspace:*"
+  }
+}

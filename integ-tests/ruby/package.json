@@ -1,0 +1,10 @@
+{
+  "name": "@baml/integ-tests-ruby",
+  "version": "1.0.0",
+  "scripts": {
+    "generate": "baml-cli generate --from ../baml_src"
+  },
+  "dependencies": {
+    "@boundaryml/baml": "workspace:*"
+  }
+}

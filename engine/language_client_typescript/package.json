@@ -1,6 +1,6 @@
 {
   "name": "@boundaryml/baml",
-  "version": "0.200.0",
+  "version": "0.201.0",
   "description": "BAML typescript bindings (package.json)",
   "repository": {
     "type": "git",
@@ -63,7 +63,8 @@
   },
   "scripts": {
     "artifacts": "napi artifacts",
-    "build": "pnpm build:napi-release && pnpm build:ts_build",
+    "build": "pnpm build:napi-debug && pnpm build:ts_build && pnpm napi create-npm-dirs && pnpm artifacts",
+    "release": "pnpm build:napi-release && pnpm build:ts_build",
     "build:debug": "pnpm build:napi-debug && pnpm build:ts_build",
     "build:napi-release": "pnpm build:napi-debug --release",
     "build:napi-debug": "napi build --js ./native.js --dts ./native.d.ts --platform",
@@ -71,12 +72,10 @@
     "build:local": "pnpm build:debug && pnpm napi create-npm-dirs && pnpm artifacts",
     "build:napi-debug-local": "napi build -o ./artifacts --js ./native.js --dts ./native.d.ts --platform",
     "build:ts_build_local": "tsc ./typescript_src/*.ts --outDir ./artifacts --module nodenext --module nodenext --allowJs --declaration true --declarationMap true || true",
-    "format": "run-p format:biome format:rs format:toml",
-    "format:biome": "biome --write .",
-    "format:rs": "cargo fmt",
     "prepublishOnly": "napi prepublish --no-gh-release",
     "test": "jest --config jest.config.js",
-    "version": "napi version"
+    "version": "napi version",
+    "clean": "git clean -xdf .turbo node_modules target artifacts npm *.node"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.7.3",

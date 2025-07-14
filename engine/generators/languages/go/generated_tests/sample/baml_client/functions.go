@@ -55,7 +55,7 @@ func Bar(ctx context.Context, x int64, opts ...CallOptionFunc) (types.Union2Exam
 		return types.Union2ExampleOrExample2{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.Union2ExampleOrExample2)
+	casted := (result.Data).(types.Union2ExampleOrExample2)
 
 	return casted, nil
 }
@@ -94,7 +94,7 @@ func Foo(ctx context.Context, x int64, opts ...CallOptionFunc) (types.Union2Exam
 		return types.Union2ExampleOrExample2{}, result.Error
 	}
 
-	casted := *(result.Data).(*types.Union2ExampleOrExample2)
+	casted := (result.Data).(types.Union2ExampleOrExample2)
 
 	return casted, nil
 }

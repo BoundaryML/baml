@@ -1,0 +1,76 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Launch VS Code extension",
+      "type": "extensionHost",
+      "request": "launch",
+      "sourceMaps": true,
+      "cwd": "${workspaceFolder}/typescript/apps/vscode-ext",
+      "args": [
+        "--disable-extensions",
+        "--extensionDevelopmentPath=${workspaceFolder}/typescript/apps/vscode-ext"
+      ],
+      "outFiles": ["${workspaceFolder}/typescript/apps/vscode-ext/dist/**"],
+      "env": {
+        "VSCODE_DEBUG_MODE": "true"
+      }
+    },
+    {
+      "type": "node",
+      "request": "attach",
+      "name": "Attach to Server",
+      "port": 6009,
+      "restart": true,
+      "timeout": 10000,
+      "outFiles": [
+        "${workspaceFolder}/typescript/packages/language-server/dist/**/*.js"
+      ]
+    },
+    {
+      "name": "Run Language Server Tests",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceRoot}/typescript/packages/language-server/node_modules/mocha/bin/_mocha",
+      "stopOnEntry": false,
+      "args": [
+        "--timeout",
+        "999999",
+        "--colors",
+        "--ui",
+        "tdd",
+        "--useColors",
+        "true",
+        "./dist/src/__test__/**/*.test.js"
+      ],
+      "cwd": "${workspaceRoot}/packages/language-server",
+      "runtimeExecutable": null,
+      "runtimeArgs": [],
+      "env": {},
+      "outFiles": [
+        "${workspaceRoot}/typescript/packages/language-server/dist/src/__test__/**/*.js"
+      ],
+      "preLaunchTask": "npm: watch"
+    },
+    {
+      "name": "Run VS Code Tests",
+      "type": "extensionHost",
+      "request": "launch",
+      "runtimeExecutable": "${execPath}",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}/typescript/apps/vscode-ext",
+        "--extensionTestsPath=${workspaceFolder}/typescript/apps/vscode-ext/dist/__test__/index",
+        "${workspaceFolder}/typescript/apps/vscode-ext/fixtures"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/typescript/apps/vscode-ext/dist/__test__/**/*.js"
+      ]
+    }
+  ],
+  "compounds": [
+    {
+      "name": "VS Code + Language Server",
+      "configurations": ["Launch VS Code extension", "Attach to Server"]
+    }
+  ]
+}

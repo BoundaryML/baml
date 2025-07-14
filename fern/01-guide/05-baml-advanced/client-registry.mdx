@@ -20,6 +20,13 @@ async def run():
         "temperature": 0.7,
         "api_key": os.environ.get('OPENAI_API_KEY')
     })
+    
+    # Creates a client using the OpenAI Responses API
+    cr.add_llm_client(name='MyResponsesClient', provider='openai-responses', options={
+        "model": "gpt-4.1",
+        "api_key": os.environ.get('OPENAI_API_KEY')
+    })
+    
     # Sets MyAmazingClient as the primary client
     cr.set_primary('MyAmazingClient')
 
@@ -41,6 +48,13 @@ async function run() {
         temperature: 0.7,
         api_key: process.env.OPENAI_API_KEY
     })
+    
+    // Creates a client using the OpenAI Responses API
+    cr.addLlmClient('MyResponsesClient', 'openai-responses', {
+        model: "gpt-4.1",
+        api_key: process.env.OPENAI_API_KEY
+    })
+    
     // Sets MyAmazingClient as the primary client
     cr.setPrimary('MyAmazingClient')
 
@@ -65,6 +79,16 @@ def run
     {
       model: 'gpt-4o',
       temperature: 0.7,
+      api_key: ENV['OPENAI_API_KEY']
+    }
+  )
+
+  # Creates a client using the OpenAI Responses API
+  cr.add_llm_client(
+    'MyResponsesClient',
+    'openai-responses',
+    {
+      model: 'gpt-4.1',
       api_key: ENV['OPENAI_API_KEY']
     }
   )
@@ -99,6 +123,15 @@ Example request body:
                     "retry_policy": null,
                     "options": {
                         "model": "gpt-4o-mini",
+                        "api_key": "sk-..."
+                    }
+                },
+                {
+                    "name": "OpenAIResponses",
+                    "provider": "openai-responses",
+                    "retry_policy": null,
+                    "options": {
+                        "model": "gpt-4.1",
                         "api_key": "sk-..."
                     }
                 }

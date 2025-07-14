@@ -42,32 +42,10 @@ func (c *ClassWithBlockDone) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "i_16_digits":
-			c.I_16_digits = func(param *cffi.CFFIValueHolder) *int64 {
-				fmt.Printf("\n=== FIELD DECODE ===\n")
-				fmt.Printf("Expecting type: *int64\n")
-				fmt.Printf("===================\n")
-				decoded := baml.Decode(param)
-				return func(result any) *int64 {
-					if result == nil {
-						return nil
-					}
-					return (result).(*int64)
-				}(decoded)
-			}(valueHolder)
+			c.I_16_digits = baml.Decode(valueHolder).Interface().(*int64)
 
 		case "s_20_words":
-			c.S_20_words = func(param *cffi.CFFIValueHolder) *string {
-				fmt.Printf("\n=== FIELD DECODE ===\n")
-				fmt.Printf("Expecting type: *string\n")
-				fmt.Printf("===================\n")
-				decoded := baml.Decode(param)
-				return func(result any) *string {
-					if result == nil {
-						return nil
-					}
-					return (result).(*string)
-				}(decoded)
-			}(valueHolder)
+			c.S_20_words = baml.Decode(valueHolder).Interface().(*string)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -117,33 +95,11 @@ func (c *ClassWithoutDone) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "i_16_digits":
-			c.I_16_digits = func(param *cffi.CFFIValueHolder) *int64 {
-				fmt.Printf("\n=== FIELD DECODE ===\n")
-				fmt.Printf("Expecting type: *int64\n")
-				fmt.Printf("===================\n")
-				decoded := baml.Decode(param)
-				return func(result any) *int64 {
-					if result == nil {
-						return nil
-					}
-					return (result).(*int64)
-				}(decoded)
-			}(valueHolder)
+			c.I_16_digits = baml.Decode(valueHolder).Interface().(*int64)
 
 		case "s_20_words":
 			c.S_20_words = baml.DecodeStreamingState(valueHolder, func(inner *cffi.CFFIValueHolder) *string {
-				return func(param *cffi.CFFIValueHolder) *string {
-					fmt.Printf("\n=== FIELD DECODE ===\n")
-					fmt.Printf("Expecting type: *string\n")
-					fmt.Printf("===================\n")
-					decoded := baml.Decode(param)
-					return func(result any) *string {
-						if result == nil {
-							return nil
-						}
-						return (result).(*string)
-					}(decoded)
-				}(inner)
+				return baml.Decode(inner).Interface().(*string)
 			})
 
 		default:
@@ -200,85 +156,28 @@ func (c *SemanticContainer) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "sixteen_digit_number":
-			c.Sixteen_digit_number = func(param *cffi.CFFIValueHolder) *int64 {
-				fmt.Printf("\n=== FIELD DECODE ===\n")
-				fmt.Printf("Expecting type: *int64\n")
-				fmt.Printf("===================\n")
-				decoded := baml.Decode(param)
-				return func(result any) *int64 {
-					if result == nil {
-						return nil
-					}
-					return (result).(*int64)
-				}(decoded)
-			}(valueHolder)
+			c.Sixteen_digit_number = baml.Decode(valueHolder).Interface().(*int64)
 
 		case "string_with_twenty_words":
-			c.String_with_twenty_words = func(param *cffi.CFFIValueHolder) *string {
-				fmt.Printf("\n=== FIELD DECODE ===\n")
-				fmt.Printf("Expecting type: *string\n")
-				fmt.Printf("===================\n")
-				decoded := baml.Decode(param)
-				return func(result any) *string {
-					if result == nil {
-						return nil
-					}
-					return (result).(*string)
-				}(decoded)
-			}(valueHolder)
+			c.String_with_twenty_words = baml.Decode(valueHolder).Interface().(*string)
 
 		case "class_1":
-			c.Class_1 = func(param *cffi.CFFIValueHolder) *ClassWithoutDone {
-				fmt.Printf("\n=== FIELD DECODE ===\n")
-				fmt.Printf("Expecting type: *ClassWithoutDone\n")
-				fmt.Printf("===================\n")
-				decoded := baml.Decode(param)
-				return func(result any) *ClassWithoutDone {
-					if result == nil {
-						return nil
-					}
-					return (result).(*ClassWithoutDone)
-				}(decoded)
-			}(valueHolder)
+			c.Class_1 = baml.Decode(valueHolder).Interface().(*ClassWithoutDone)
 
 		case "class_2":
-			c.Class_2 = func(param *cffi.CFFIValueHolder) *types.ClassWithBlockDone {
-				fmt.Printf("\n=== FIELD DECODE ===\n")
-				fmt.Printf("Expecting type: *types.ClassWithBlockDone\n")
-				fmt.Printf("===================\n")
-				decoded := baml.Decode(param)
-				return func(result any) *types.ClassWithBlockDone {
-					if result == nil {
-						return nil
-					}
-					return (result).(*types.ClassWithBlockDone)
-				}(decoded)
-			}(valueHolder)
+			c.Class_2 = baml.Decode(valueHolder).Interface().(*types.ClassWithBlockDone)
 
 		case "class_done_needed":
-			c.Class_done_needed = *baml.Decode(valueHolder).(*types.ClassWithBlockDone)
+			c.Class_done_needed = baml.Decode(valueHolder).Interface().(types.ClassWithBlockDone)
 
 		case "class_needed":
-			c.Class_needed = *baml.Decode(valueHolder).(*ClassWithoutDone)
+			c.Class_needed = baml.Decode(valueHolder).Interface().(ClassWithoutDone)
 
 		case "three_small_things":
-			c.Three_small_things = baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) SmallThing {
-				return *baml.Decode(inner).(*SmallThing)
-			})
+			c.Three_small_things = baml.Decode(valueHolder).Interface().([]SmallThing)
 
 		case "final_string":
-			c.Final_string = func(param *cffi.CFFIValueHolder) *string {
-				fmt.Printf("\n=== FIELD DECODE ===\n")
-				fmt.Printf("Expecting type: *string\n")
-				fmt.Printf("===================\n")
-				decoded := baml.Decode(param)
-				return func(result any) *string {
-					if result == nil {
-						return nil
-					}
-					return (result).(*string)
-				}(decoded)
-			}(valueHolder)
+			c.Final_string = baml.Decode(valueHolder).Interface().(*string)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -340,21 +239,10 @@ func (c *SmallThing) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "i_16_digits":
-			c.I_16_digits = *baml.Decode(valueHolder).(*int64)
+			c.I_16_digits = baml.Decode(valueHolder).Interface().(int64)
 
 		case "i_8_digits":
-			c.I_8_digits = func(param *cffi.CFFIValueHolder) *int64 {
-				fmt.Printf("\n=== FIELD DECODE ===\n")
-				fmt.Printf("Expecting type: *int64\n")
-				fmt.Printf("===================\n")
-				decoded := baml.Decode(param)
-				return func(result any) *int64 {
-					if result == nil {
-						return nil
-					}
-					return (result).(*int64)
-				}(decoded)
-			}(valueHolder)
+			c.I_8_digits = baml.Decode(valueHolder).Interface().(*int64)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))

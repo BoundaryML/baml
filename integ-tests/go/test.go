@@ -17,7 +17,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println(*v2)
+	fmt.Println(v2)
 
 	usage, err := collector.Usage()
 	if err != nil {
@@ -38,9 +38,12 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println(*v2)
+	fmt.Println(v2)
 
-	stream := b.Stream.AaaSamOutputFormat(ctx, "pineapple")
+	stream, err := b.Stream.AaaSamOutputFormat(ctx, "pineapple")
+	if err != nil {
+		panic(err)
+	}
 	for chunk := range stream {
 		fmt.Println(chunk)
 	}

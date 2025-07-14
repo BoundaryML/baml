@@ -12,6 +12,9 @@ env:
   DEBUG: napi:*
   APP_NAME: baml
   MACOSX_DEPLOYMENT_TARGET: "10.13"
+  # Turbo remote caching
+  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+  TURBO_TEAM: gloo
 
 jobs:
   build:
@@ -80,45 +83,32 @@ jobs:
     env:
       ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      # Check GLIBC version for Linux targets
+      # Check GLIBC version for Linux targets (skip musl targets)
       - name: Check GLIBC version
-        if: contains(matrix._.target, 'linux')
+        if: contains(matrix._.target, 'linux') && !contains(matrix._.target, 'musl')
         run: |
           ldd --version
-          
-      # Install common toolchain dependencies
-      # NOTE: we can't use mise here because it doesn't support Windows
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9.12.0
-          run_install: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
-          cache-dependency-path: |
-            engine/language_client_typescript/pnpm-lock.yaml
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: stable
-          targets: ${{ matrix._.target }}
 
-      # Set up build cache and dependencies
-      - uses: Swatinem/rust-cache@v2
+      # Setup using standardized actions
+      - name: Setup Node.js
+        uses: ./.github/actions/setup-node
+
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
         with:
-          workspaces: engine
-          prefix-key: engine-${{ github.job }}-${{ matrix._.target }}-${{ matrix._.host }}
-          # shared-key: engine-${{ github.job }}-${{ matrix._.target }}
+          targets: ${{ matrix._.target }}
+          prefix-key: v5-rust-${{ matrix._.target }}
           cache-on-failure: true
 
-      - name: PNPM Install
-        run: pnpm install --frozen-lockfile
-        working-directory: engine/language_client_typescript
-        
+      - name: Setup Go
+        uses: ./.github/actions/setup-go
+
       # per-matrix-entry dependency setup
       - name: Build tools setup
+        if: matrix._.before
         run: ${{ matrix._.before }}
 
       # Build the NAPI library and bindings

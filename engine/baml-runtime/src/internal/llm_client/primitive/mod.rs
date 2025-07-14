@@ -123,6 +123,9 @@ impl TryFrom<(&ClientProperty, &RuntimeContext)> for LLMPrimitiveProvider {
                     OpenAIClientProviderVariant::Generic => {
                         OpenAIClient::dynamic_new_generic(value, ctx).map(Into::into)
                     }
+                    OpenAIClientProviderVariant::Responses => {
+                        OpenAIClient::dynamic_new_responses(value, ctx).map(Into::into)
+                    }
                 }
             }
             ClientProvider::Anthropic => AnthropicClient::dynamic_new(value, ctx).map(Into::into),
@@ -180,6 +183,9 @@ impl TryFrom<(&ClientWalker<'_>, &RuntimeContext)> for LLMPrimitiveProvider {
                     }
                     OpenAIClientProviderVariant::Generic => {
                         OpenAIClient::new_generic(client, ctx).map(Into::into)
+                    }
+                    OpenAIClientProviderVariant::Responses => {
+                        OpenAIClient::new_responses(client, ctx).map(Into::into)
                     }
                 }
             }

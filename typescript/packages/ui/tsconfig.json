@@ -1,0 +1,14 @@
+{
+  "extends": "@baml/tsconfig/react-library.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "node_modules/.cache/tsbuildinfo.json",
+    "baseUrl": ".",
+    "paths": {
+      "@baml/ui/*": ["src/*"]
+    },
+    "rootDir": ".",
+    "outDir": "dist"
+  },
+  "include": ["."],
+  "exclude": ["node_modules"]
+}

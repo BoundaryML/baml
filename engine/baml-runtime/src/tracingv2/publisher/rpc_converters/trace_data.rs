@@ -233,6 +233,21 @@ impl<'a> IntoRpcEvent<'a, baml_rpc::runtime_api::IntermediateData<'a>>
 }
 
 impl<'a> IntoRpcEvent<'a, baml_rpc::runtime_api::IntermediateData<'a>>
+    for baml_types::tracing::events::HTTPResponseStream
+{
+    fn to_rpc_event(
+        &'a self,
+        lookup: &(impl TypeLookup + ?Sized),
+    ) -> baml_rpc::runtime_api::IntermediateData<'a> {
+        baml_rpc::runtime_api::IntermediateData::RawLLMResponseStream {
+            event: baml_rpc::runtime_api::Event {
+                raw: Cow::Borrowed(&self.event.data),
+            },
+        }
+    }
+}
+
+impl<'a> IntoRpcEvent<'a, baml_rpc::runtime_api::IntermediateData<'a>>
     for baml_types::tracing::events::LoggedLLMResponse
 {
     fn to_rpc_event(

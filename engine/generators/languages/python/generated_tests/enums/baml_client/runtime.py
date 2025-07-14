@@ -101,7 +101,7 @@ class DoNotUseDirectlyCallManager:
             function_name,
             args,
             # ctx
-            __ctx__manager__.get(),
+            __ctx__manager__.clone_context(),
             # tb
             resolved_options.tb,
             # cr
@@ -139,7 +139,7 @@ class DoNotUseDirectlyCallManager:
         args: typing.Dict[str, typing.Any],
     ) -> typing.Tuple[baml_py.baml_py.RuntimeContextManager, baml_py.baml_py.FunctionResultStream]:
         resolved_options = self.__resolve()
-        ctx = __ctx__manager__.get()
+        ctx = __ctx__manager__.clone_context()
         result = __runtime__.stream_function(
             function_name,
             args,
@@ -198,7 +198,7 @@ class DoNotUseDirectlyCallManager:
             function_name,
             args,
             # ctx
-            __ctx__manager__.get(),
+            __ctx__manager__.clone_context(),
             # tb
             resolved_options.tb,
             # cr

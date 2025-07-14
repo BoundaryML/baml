@@ -327,14 +327,18 @@ fn main() -> std::io::Result<()> {
     println!("cargo:rustc-link-lib=dylib=ntdll");
 
     // The last component of the target triple
-    let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap();
-    let is_windows = target_os == "windows";
+    // let is_windows = target_os == "windows";
+    println!("HI!!!");
 
     // Re-run build.rs if these files change.
     println!("cargo:rerun-if-changed=types/cffi.fbs");
     println!("cargo:rerun-if-changed=types/cffi.proto");
     println!("cargo:rerun-if-changed=cbindgen.toml");
     println!("cargo:rerun-if-changed=src/lib.rs");
+    println!("cargo:rerun-if-changed=src/ctypes/baml_type_encode.rs");
+    println!("cargo:rerun-if-changed=src/ctypes/baml_value_encode.rs");
+    println!("cargo:rerun-if-changed=src/ctypes/baml_type_decode.rs");
+    println!("cargo:rerun-if-changed=build.rs");
 
     std::env::set_var(
         "PROTOC",

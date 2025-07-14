@@ -101,6 +101,176 @@ impl WithChat for OpenAIClient {
     }
 }
 
+/// Provider-specific strategies for handling different OpenAI-compatible APIs
+enum ProviderStrategy {
+    ResponsesApi,
+    StandardOpenAI { provider: String },
+}
+
+impl ProviderStrategy {
+    fn get_endpoint(&self, base_url: &str, is_completion: bool) -> String {
+        match self {
+            ProviderStrategy::ResponsesApi => format!("{base_url}/responses"),
+            ProviderStrategy::StandardOpenAI { .. } => {
+                if is_completion {
+                    format!("{base_url}/completions")
+                } else {
+                    format!("{base_url}/chat/completions")
+                }
+            }
+        }
+    }
+
+    fn build_body(
+        &self,
+        prompt: either::Either<&String, &[RenderedChatMessage]>,
+        properties: &BamlMap<String, serde_json::Value>,
+        chat_converter: &impl ToProviderMessageExt,
+    ) -> Result<serde_json::Value> {
+        match self {
+            ProviderStrategy::ResponsesApi => {
+                // Start with all properties passed through
+                let mut body = properties.clone();
+
+                // Convert prompt/messages to single input string
+                let input = match prompt {
+                    either::Either::Left(prompt) => prompt.clone(),
+                    either::Either::Right(messages) => {
+                        // Convert messages to a simple text representation
+                        messages
+                            .iter()
+                            .map(|msg| {
+                                let content_text = msg
+                                    .parts
+                                    .iter()
+                                    .filter_map(|part| match part {
+                                        ChatMessagePart::Text(text) => Some(text.as_str()),
+                                        _ => None,
+                                    })
+                                    .collect::<Vec<_>>()
+                                    .join(" ");
+                                format!("{}: {}", msg.role, content_text)
+                            })
+                            .collect::<Vec<_>>()
+                            .join("\n")
+                    }
+                };
+                body.insert("input".into(), json!(input));
+
+                Ok(json!(body))
+            }
+            ProviderStrategy::StandardOpenAI { .. } => {
+                let mut body = json!(properties);
+                let body_obj = body.as_object_mut().unwrap();
+
+                match prompt {
+                    either::Either::Left(prompt) => {
+                        body_obj.extend(convert_completion_prompt_to_body(prompt));
+                    }
+                    either::Either::Right(messages) => {
+                        body_obj.extend(chat_converter.chat_to_message(messages)?);
+                    }
+                }
+
+                Ok(body)
+            }
+        }
+    }
+
+    fn add_streaming_options(
+        &self,
+        body: &mut serde_json::Map<String, serde_json::Value>,
+        stream: bool,
+    ) {
+        if stream {
+            match self {
+                ProviderStrategy::ResponsesApi => {
+                    // Responses API supports streaming with the stream parameter
+                    body.insert("stream".into(), json!(true));
+                }
+                ProviderStrategy::StandardOpenAI { provider } => {
+                    body.insert("stream".into(), json!(true));
+                    if provider == "openai" {
+                        body.insert(
+                            "stream_options".into(),
+                            json!({
+                                "include_usage": true,
+                            }),
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    fn format_message_content(
+        &self,
+        content: &RenderedChatMessage,
+        parts_to_message: &dyn Fn(
+            &[ChatMessagePart],
+        )
+            -> Result<Vec<serde_json::Map<String, serde_json::Value>>>,
+    ) -> Result<serde_json::Value> {
+        match self {
+            ProviderStrategy::ResponsesApi => {
+                // For responses API, use standard formatting
+                Ok(json!(parts_to_message(&content.parts)?))
+            }
+            ProviderStrategy::StandardOpenAI { provider } => {
+                if provider == "openai-generic" {
+                    // Check if all parts are text
+                    let all_text = content
+                        .parts
+                        .iter()
+                        .all(|part| matches!(part, ChatMessagePart::Text(_)));
+                    if all_text {
+                        // Concatenate all text parts into a single string
+                        let combined_text = content
+                            .parts
+                            .iter()
+                            .map(|part| {
+                                if let ChatMessagePart::Text(text) = part {
+                                    Ok(text.clone())
+                                } else {
+                                    Err(anyhow::anyhow!("Non-text part encountered"))
+                                }
+                            })
+                            .collect::<Result<Vec<String>>>()?
+                            .join(" ");
+
+                        Ok(json!(combined_text))
+                    } else {
+                        // If there are media parts, use the existing structure
+                        Ok(json!(parts_to_message(&content.parts)?))
+                    }
+                } else {
+                    // For other providers, use the existing structure
+                    Ok(json!(parts_to_message(&content.parts)?))
+                }
+            }
+        }
+    }
+}
+
+impl OpenAIClient {
+    fn get_provider_strategy(&self) -> ProviderStrategy {
+        if self.provider.as_str() == "openai-responses" {
+            ProviderStrategy::ResponsesApi
+        } else {
+            ProviderStrategy::StandardOpenAI {
+                provider: self.provider.clone(),
+            }
+        }
+    }
+
+    fn get_response_type(&self) -> ResponseType {
+        match self.get_provider_strategy() {
+            ProviderStrategy::ResponsesApi => ResponseType::OpenAIResponses,
+            ProviderStrategy::StandardOpenAI { .. } => ResponseType::OpenAI,
+        }
+    }
+}
+
 impl RequestBuilder for OpenAIClient {
     fn http_client(&self) -> &reqwest::Client {
         &self.client
@@ -122,11 +292,11 @@ impl RequestBuilder for OpenAIClient {
             &self.properties.base_url
         };
 
-        let mut req = self.client.post(if prompt.is_left() {
-            format!("{destination_url}/completions")
-        } else {
-            format!("{destination_url}/chat/completions")
-        });
+        let strategy = self.get_provider_strategy();
+        let is_completion = prompt.is_left();
+        let endpoint = strategy.get_endpoint(destination_url, is_completion);
+
+        let mut req = self.client.post(endpoint);
 
         if !self.properties.query_params.is_empty() {
             req = req.query(&self.properties.query_params);
@@ -144,29 +314,10 @@ impl RequestBuilder for OpenAIClient {
             req = req.header("baml-original-url", self.properties.base_url.as_str());
         }
 
-        let mut body = json!(self.properties.properties);
-
+        let mut body = strategy.build_body(prompt, &self.properties.properties, self)?;
         let body_obj = body.as_object_mut().unwrap();
-        match prompt {
-            either::Either::Left(prompt) => {
-                body_obj.extend(convert_completion_prompt_to_body(prompt));
-            }
-            either::Either::Right(messages) => {
-                body_obj.extend(self.chat_to_message(messages)?);
-            }
-        }
 
-        if stream {
-            body_obj.insert("stream".into(), json!(true));
-            if self.provider == "openai" {
-                body_obj.insert(
-                    "stream_options".into(),
-                    json!({
-                        "include_usage": true,
-                    }),
-                );
-            }
-        }
+        strategy.add_streaming_options(body_obj, stream);
 
         Ok(req.json(&body))
     }
@@ -187,11 +338,12 @@ impl WithStreamChat for OpenAIClient {
             .get("model")
             .and_then(serde_json::Value::as_str)
             .map(str::to_string);
+        let response_type = self.get_response_type();
         crate::internal::llm_client::primitive::stream_request::make_stream_request(
             self,
             either::Either::Right(prompt),
             model_name,
-            ResponseType::OpenAI,
+            response_type,
             ctx,
         )
         .await
@@ -276,6 +428,14 @@ impl OpenAIClient {
         make_openai_client!(client, properties, "azure")
     }
 
+    pub fn new_responses(client: &ClientWalker, ctx: &RuntimeContext) -> Result<OpenAIClient> {
+        let mut properties =
+            properties::resolve_properties(&client.elem().provider, client.options(), ctx)?;
+        // Override response type for responses API
+        properties.client_response_type = internal_llm_client::ResponseType::OpenAIResponses;
+        make_openai_client!(client, properties, "openai-responses")
+    }
+
     pub fn dynamic_new(client: &ClientProperty, ctx: &RuntimeContext) -> Result<OpenAIClient> {
         let properties =
             properties::resolve_properties(&client.provider, &client.unresolved_options()?, ctx)?;
@@ -307,6 +467,17 @@ impl OpenAIClient {
         let properties =
             properties::resolve_properties(&client.provider, &client.unresolved_options()?, ctx)?;
         make_openai_client!(client, properties, "azure", dynamic)
+    }
+
+    pub fn dynamic_new_responses(
+        client: &ClientProperty,
+        ctx: &RuntimeContext,
+    ) -> Result<OpenAIClient> {
+        let mut properties =
+            properties::resolve_properties(&client.provider, &client.unresolved_options()?, ctx)?;
+        // Override response type for responses API
+        properties.client_response_type = internal_llm_client::ResponseType::OpenAIResponses;
+        make_openai_client!(client, properties, "openai-responses", dynamic)
     }
 }
 
@@ -404,42 +575,11 @@ impl ToProviderMessage for OpenAIClient {
     ) -> Result<serde_json::Map<String, serde_json::Value>> {
         let mut message = serde_json::Map::new();
         message.insert("role".into(), json!(content.role));
-        if self.provider == "openai-generic" {
-            // Check if all parts are text
-            let all_text = content
-                .parts
-                .iter()
-                .all(|part| matches!(part, ChatMessagePart::Text(_)));
-            if all_text {
-                // Concatenate all text parts into a single string
-                let combined_text = content
-                    .parts
-                    .iter()
-                    .map(|part| {
-                        if let ChatMessagePart::Text(text) = part {
-                            Ok(text.clone())
-                        } else {
-                            Err(anyhow::anyhow!("Non-text part encountered"))
-                        }
-                    })
-                    .collect::<Result<Vec<String>>>()?
-                    .join(" ");
 
-                message.insert("content".into(), json!(combined_text));
-            } else {
-                // If there are media parts, use the existing structure
-                message.insert(
-                    "content".into(),
-                    json!(self.parts_to_message(&content.parts)?),
-                );
-            }
-        } else {
-            // For other providers, use the existing structure
-            message.insert(
-                "content".into(),
-                json!(self.parts_to_message(&content.parts)?),
-            );
-        }
+        let strategy = self.get_provider_strategy();
+        let formatted_content =
+            strategy.format_message_content(content, &|parts| self.parts_to_message(parts))?;
+        message.insert("content".into(), formatted_content);
 
         Ok(message)
     }
@@ -479,4 +619,131 @@ fn convert_completion_prompt_to_body(prompt: &str) -> serde_json::Map<String, se
     let mut map = serde_json::Map::new();
     map.insert("prompt".into(), json!(prompt));
     map
+}
+
+#[cfg(test)]
+mod tests {
+    use indexmap::IndexMap;
+    use internal_baml_jinja::{ChatMessagePart, RenderedChatMessage};
+    use internal_llm_client::{RolesSelection, SupportedRequestModes};
+
+    use super::*;
+
+    #[test]
+    fn test_provider_strategy_selection() {
+        // Mock client with responses provider
+        let responses_client = OpenAIClient {
+            name: "test".to_string(),
+            provider: "openai-responses".to_string(),
+            retry_policy: None,
+            context: RenderContext_Client {
+                name: "test".to_string(),
+                provider: "openai-responses".to_string(),
+                default_role: "user".to_string(),
+                allowed_roles: vec!["user".to_string(), "assistant".to_string()],
+            },
+            features: ModelFeatures {
+                chat: true,
+                completion: false,
+                max_one_system_prompt: false,
+                resolve_audio_urls: ResolveMediaUrls::Always,
+                resolve_image_urls: ResolveMediaUrls::Never,
+                allowed_metadata: AllowedRoleMetadata::All,
+            },
+            properties: ResolvedOpenAI {
+                base_url: "https://api.openai.com/v1".to_string(),
+                api_key: None,
+                role_selection: RolesSelection::default(),
+                allowed_metadata: AllowedRoleMetadata::All,
+                supported_request_modes: SupportedRequestModes::default(),
+                headers: IndexMap::new(),
+                properties: BamlMap::new(),
+                query_params: IndexMap::new(),
+                proxy_url: None,
+                finish_reason_filter: FinishReasonFilter::All,
+                client_response_type: ResponseType::OpenAIResponses,
+            },
+            client: reqwest::Client::new(),
+        };
+
+        let strategy = responses_client.get_provider_strategy();
+
+        // Should select ResponsesApi strategy
+        match strategy {
+            ProviderStrategy::ResponsesApi => {
+                // Success!
+            }
+            _ => panic!("Expected ResponsesApi strategy for openai-responses provider"),
+        }
+    }
+
+    #[test]
+    fn test_standard_openai_strategy_selection() {
+        // Mock client with standard openai provider
+        let openai_client = OpenAIClient {
+            name: "test".to_string(),
+            provider: "openai".to_string(),
+            retry_policy: None,
+            context: RenderContext_Client {
+                name: "test".to_string(),
+                provider: "openai".to_string(),
+                default_role: "user".to_string(),
+                allowed_roles: vec!["user".to_string(), "assistant".to_string()],
+            },
+            features: ModelFeatures {
+                chat: true,
+                completion: false,
+                max_one_system_prompt: false,
+                resolve_audio_urls: ResolveMediaUrls::Always,
+                resolve_image_urls: ResolveMediaUrls::Never,
+                allowed_metadata: AllowedRoleMetadata::All,
+            },
+            properties: ResolvedOpenAI {
+                base_url: "https://api.openai.com/v1".to_string(),
+                api_key: None,
+                role_selection: RolesSelection::default(),
+                allowed_metadata: AllowedRoleMetadata::All,
+                supported_request_modes: SupportedRequestModes::default(),
+                headers: IndexMap::new(),
+                properties: BamlMap::new(),
+                query_params: IndexMap::new(),
+                proxy_url: None,
+                finish_reason_filter: FinishReasonFilter::All,
+                client_response_type: ResponseType::OpenAI,
+            },
+            client: reqwest::Client::new(),
+        };
+
+        let strategy = openai_client.get_provider_strategy();
+
+        // Should select StandardOpenAI strategy
+        match strategy {
+            ProviderStrategy::StandardOpenAI { provider } => {
+                assert_eq!(provider, "openai");
+            }
+            _ => panic!("Expected StandardOpenAI strategy for openai provider"),
+        }
+    }
+
+    #[test]
+    fn test_responses_api_endpoint_generation() {
+        let strategy = ProviderStrategy::ResponsesApi;
+        let endpoint = strategy.get_endpoint("https://api.openai.com/v1", false);
+        assert_eq!(endpoint, "https://api.openai.com/v1/responses");
+    }
+
+    #[test]
+    fn test_standard_openai_endpoint_generation() {
+        let strategy = ProviderStrategy::StandardOpenAI {
+            provider: "openai".to_string(),
+        };
+
+        // Test chat completions endpoint
+        let endpoint = strategy.get_endpoint("https://api.openai.com/v1", false);
+        assert_eq!(endpoint, "https://api.openai.com/v1/chat/completions");
+
+        // Test completions endpoint
+        let endpoint = strategy.get_endpoint("https://api.openai.com/v1", true);
+        assert_eq!(endpoint, "https://api.openai.com/v1/completions");
+    }
 }

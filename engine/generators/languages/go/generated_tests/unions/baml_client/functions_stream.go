@@ -27,17 +27,19 @@ type stream struct{}
 var Stream = &stream{}
 
 type StreamValue[TStream any, TFinal any] struct {
+	IsError   bool
+	Error     error
 	IsFinal   bool
 	as_final  *TFinal
 	as_stream *TStream
 }
 
-func (s *StreamValue[TStream, TFinal]) Final() TFinal {
-	return *s.as_final
+func (s *StreamValue[TStream, TFinal]) Final() *TFinal {
+	return s.as_final
 }
 
-func (s *StreamValue[TStream, TFinal]) Stream() TStream {
-	return *s.as_stream
+func (s *StreamValue[TStream, TFinal]) Stream() *TStream {
+	return s.as_stream
 }
 
 // / Streaming version of JsonInput
@@ -87,10 +89,15 @@ func (*stream) JsonInput(ctx context.Context, x []types.ExistingSystemComponent,
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[[]string, []string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}

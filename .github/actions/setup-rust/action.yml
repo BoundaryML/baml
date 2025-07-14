@@ -1,0 +1,91 @@
+name: "Setup Rust"
+description: "Setup Rust toolchain with caching and optional WASM support"
+
+inputs:
+  toolchain:
+    description: "Rust toolchain version"
+    required: false
+    default: "stable"
+  enable-wasm:
+    description: "Enable WASM support (adds wasm32-unknown-unknown target and wasm-pack)"
+    required: false
+    default: "false"
+  wasm-pack-version:
+    description: "wasm-pack version to install (only used when enable-wasm is true)"
+    required: false
+    default: "0.13.1"
+  enable-cross:
+    description: "Enable cross-rs for cross-compilation"
+    required: false
+    default: "true"
+  targets:
+    description: "Additional Rust targets to install (space-separated)"
+    required: false
+    default: ""
+  workspace:
+    description: "Workspace path for Rust cache"
+    required: false
+    default: "engine"
+  prefix-key:
+    description: "Cache key prefix for Rust cache"
+    required: false
+    default: ""
+  cache-on-failure:
+    description: "Cache even if the workflow fails"
+    required: false
+    default: "false"
+
+runs:
+  using: "composite"
+  steps:
+    # - name: Check for mise Rust installation
+    #   id: check-rust
+    #   run: |
+    #     if command -v rustc &> /dev/null; then
+    #       echo "rust-installed=true" >> $GITHUB_OUTPUT
+    #       echo "Rust is already installed by mise"
+    #       rustc --version
+    #     else
+    #       echo "rust-installed=false" >> $GITHUB_OUTPUT
+    #     fi
+    #   shell: bash
+
+    - name: Setup Rust toolchain
+      # if: steps.check-rust.outputs.rust-installed != 'true'
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        toolchain: ${{ inputs.toolchain }}
+        targets: ${{ inputs.targets }}
+        components: rustfmt
+
+    - name: Add additional targets
+      if: inputs.targets != ''
+      run: |
+        IFS=' ' read -ra TARGETS <<< "${{ inputs.targets }}"
+        for target in "${TARGETS[@]}"; do
+          echo "Installing target: $target"
+          rustup target add "$target"
+        done
+      shell: bash
+
+    - name: Setup Rust cache
+      uses: Swatinem/rust-cache@v2
+      with:
+        workspaces: ${{ inputs.workspace }}
+        prefix-key: ${{ inputs.prefix-key }}
+        cache-on-failure: ${{ inputs.cache-on-failure }}
+
+    - name: Add wasm32 target
+      if: inputs.enable-wasm == 'true'
+      run: rustup target add wasm32-unknown-unknown
+      shell: bash
+
+    - name: Install wasm-pack
+      if: inputs.enable-wasm == 'true'
+      run: cargo install wasm-pack --version ${{ inputs.wasm-pack-version }}
+      shell: bash
+
+    - name: Install cross-rs
+      if: inputs.enable-cross == 'true'
+      run: cargo install cross --git https://github.com/cross-rs/cross
+      shell: bash
