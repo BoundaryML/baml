@@ -18,26 +18,60 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@baml/ui/alert-dialog';
-import { AlertTriangle, Eye, EyeOff, Trash2 } from 'lucide-react';
+import { AlertTriangle, Eye, EyeOff, Trash2, Loader2 } from 'lucide-react';
 import { escapeValue, unescapeValue, REQUIRED_ENV_VAR_UNSET_WARNING } from './utils';
 import type { ApiKeyEntry } from './atoms';
 import { useSetAtom } from 'jotai';
-import { updateApiKeyAtom, deleteApiKeyAtom, apiKeyVisibilityAtom } from './atoms';
+import { updateApiKeyAtom, deleteApiKeyAtom, apiKeyVisibilityAtom, saveApiKeyChangesAtom } from './atoms';
+import { useDebounceCallback } from '@react-hook/debounce';
 
 interface ApiKeyListItemProps {
   apiKey: ApiKeyEntry;
 }
 
+/**
+ * API Key list item with auto-save functionality.
+ * Changes to the value field are automatically saved after 200ms of inactivity.
+ * Optimized for copy-paste workflows.
+ */
 export const ApiKeyListItem: React.FC<ApiKeyListItemProps> = ({
   apiKey,
 }) => {
   const updateApiKey = useSetAtom(updateApiKeyAtom);
   const deleteApiKey = useSetAtom(deleteApiKeyAtom);
   const setVisibility = useSetAtom(apiKeyVisibilityAtom);
+  const saveApiKeyChanges = useSetAtom(saveApiKeyChangesAtom);
 
-  const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    updateApiKey({ key: apiKey.key, value: unescapeValue(e.target.value) });
-  }, [apiKey.key, updateApiKey]);
+  // Track the input value locally for immediate UI updates
+  const [localValue, setLocalValue] = React.useState(escapeValue(apiKey.value || ''));
+  const [isSaving, setIsSaving] = React.useState(false);
+
+  // Debounced save function
+  const debouncedSave = useDebounceCallback(
+    async (value: string) => {
+      const unescapedValue = unescapeValue(value);
+      setIsSaving(true);
+      updateApiKey({ key: apiKey.key, value: unescapedValue });
+      // Auto-save after updating the API key
+      await saveApiKeyChanges();
+      setIsSaving(false);
+          },
+      200, // 200ms delay - optimized for copy-paste
+      false // don't call on leading edge
+  );
+
+  // Update local value when apiKey.value changes (e.g., from external updates)
+  React.useEffect(() => {
+    setLocalValue(escapeValue(apiKey.value || ''));
+  }, [apiKey.value]);
+
+    const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const newValue = e.target.value;
+    // Update local state immediately for responsive UI
+    setLocalValue(newValue);
+    // Trigger debounced save
+    debouncedSave(newValue);
+  }, [debouncedSave]);
 
   const toggleVisibility = useCallback((key: string) => {
     setVisibility((prev) => ({
@@ -71,7 +105,7 @@ export const ApiKeyListItem: React.FC<ApiKeyListItemProps> = ({
           <div className="relative flex-1">
             <Input
               type={apiKey.hidden ? 'password' : 'text'}
-              value={typeof apiKey.value === 'string' ? escapeValue(apiKey.value) : ''}
+              value={localValue}
               onChange={handleChange}
               className="h-8 text-sm font-mono placeholder:font-sans"
               placeholder=""
@@ -93,6 +127,11 @@ export const ApiKeyListItem: React.FC<ApiKeyListItemProps> = ({
               </div>
             )}
           </div>
+          {isSaving && (
+            <div className="flex items-center justify-center h-8 w-8">
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            </div>
+          )}
           <Button
             variant="ghost"
             size="sm"
