@@ -30,6 +30,17 @@ function PdfInputAnthropic(pdf: pdf) -> string{
     {{ pdf }}
   "#
 }
+
+function PdfInputVertex(pdf: pdf) -> string{
+  client Vertex
+  prompt #"
+    {{ _.role("user") }}
+
+    Describe the contents of this PDF document and what it is about in 5 words or less.
+    
+    {{ pdf }}
+  "#
+}
        
 test TestFilePdfInput{
   functions [PdfInput]
@@ -46,7 +57,16 @@ test TestFilePdfInputUrl{
   functions [PdfInput]
   args {
     pdf{ 
-      url "https://www.usenix.org/system/files/conference/nsdi13/nsdi13-final85.pdf"
+      url "https://arxiv.org/pdf/2305.08675"
+    }
+  }  
+}
+
+test TestFilePdfInputUrlVertex{
+  functions [PdfInputVertex]
+  args {
+    pdf{ 
+      url "https://arxiv.org/pdf/2305.08675"
     }
   }  
 }

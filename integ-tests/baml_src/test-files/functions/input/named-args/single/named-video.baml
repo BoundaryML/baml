@@ -3,7 +3,18 @@ function VideoInputGemini(vid: video) -> string{
   prompt #"
     {{ _.role("user") }}
 
-   Describe what happens in this video in 5 words or less.
+    Use 5 words to describe the video.
+    
+    {{ vid }}
+  "#   
+}  
+
+function VideoInputVertex(vid: video) -> string{
+  client Vertex
+  prompt #"
+    {{ _.role("user") }}
+
+    Use 5 words to describe the video.
     
     {{ vid }}
   "#   
@@ -30,6 +41,15 @@ test TestFileVideoInputWithMediaType{
 
 test TestFileVideoInputWithUrl{
   functions [VideoInputGemini]
+  args {
+    vid { 
+      url "https://youtu.be/dQw4w9WgXcQ?si=aQdfsK0DdcDtCCud"
+    }
+  }  
+}
+
+test TestFileVideoInputWithUrlVertex{
+  functions [VideoInputVertex]
   args {
     vid { 
       url "https://youtu.be/dQw4w9WgXcQ?si=aQdfsK0DdcDtCCud"

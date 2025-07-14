@@ -31,7 +31,8 @@ export const PromptStats: React.FC<{
 
     const urls: string[] = [];
     parts.forEach(part => {
-      if (part.is_image?.()) {
+      // Check for all media types
+      if (part.is_image?.() || part.is_audio?.() || part.is_pdf?.() || part.is_video?.()) {
         const media = part.as_media();
         if (media) {
           switch (media.type) {
@@ -48,30 +49,53 @@ export const PromptStats: React.FC<{
     return urls;
   }, [parts, wasm]);
 
-  // Calculate image tokens based on dimensions
-  const imageTokensInfo = useMemo(() => {
+  // Calculate media tokens - images use dimension-based calculation, others use default estimate
+  const mediaTokensInfo = useMemo(() => {
     let totalTokens = 0;
     let imageCount = 0;
+    let audioCount = 0;
+    let pdfCount = 0;
+    let videoCount = 0;
 
-    mediaUrls.forEach(url => {
-      const stats = imageStatsMap.get(url);
-      if (stats) {
-        // Use the same calculation as in webview-media
-        const tokens = Math.ceil((stats.width * stats.height) / 750);
-        totalTokens += tokens;
-        imageCount++;
-      } else {
-        // Default estimate if dimensions not yet loaded
-        totalTokens += 85;
-        imageCount++;
+    if (!parts || !wasm) return { totalTokens: 0, imageCount: 0, audioCount: 0, pdfCount: 0, videoCount: 0, totalMediaCount: 0 };
+
+    parts.forEach(part => {
+      if (part.is_image?.()) {
+        const media = part.as_media();
+        if (media) {
+          const url = media.content;
+          const stats = imageStatsMap.get(url);
+          if (stats) {
+            // Use the same calculation as in webview-media
+            const tokens = Math.ceil((stats.width * stats.height) / 750);
+            totalTokens += tokens;
+          } else {
+            // Default estimate if dimensions not yet loaded
+            totalTokens += 85;
+          }
+          imageCount++;
+        }
+      } else if (part.is_audio?.()) {
+        // Audio default token estimate
+        totalTokens += 50;
+        audioCount++;
+      } else if (part.is_pdf?.()) {
+        // PDF default token estimate (higher due to potential text content)
+        totalTokens += 200;
+        pdfCount++;
+      } else if (part.is_video?.()) {
+        // Video default token estimate (higher due to visual content)
+        totalTokens += 150;
+        videoCount++;
       }
     });
 
-    return { totalTokens, imageCount };
-  }, [mediaUrls, imageStatsMap]);
+    const totalMediaCount = imageCount + audioCount + pdfCount + videoCount;
+    return { totalTokens, imageCount, audioCount, pdfCount, videoCount, totalMediaCount };
+  }, [parts, wasm, imageStatsMap]);
 
   const textTokens = Math.ceil(text.length / 4);
-  const totalTokens = textTokens + imageTokensInfo.totalTokens;
+  const totalTokens = textTokens + mediaTokensInfo.totalTokens;
 
 
   return (
@@ -97,11 +121,11 @@ export const PromptStats: React.FC<{
             {numberFormatter.format(text.split('\n').length)}
           </span>
         </div>
-        {imageTokensInfo.imageCount > 0 && (
+        {mediaTokensInfo.totalMediaCount > 0 && (
           <div className="flex flex-col items-start min-w-[60px]">
-            <span className="text-muted-foreground/60">Images</span>
+            <span className="text-muted-foreground/60">Media</span>
             <span className="font-medium">
-              {numberFormatter.format(imageTokensInfo.imageCount)}
+              {numberFormatter.format(mediaTokensInfo.totalMediaCount)}
             </span>
           </div>
         )}
@@ -109,9 +133,9 @@ export const PromptStats: React.FC<{
           <span className="text-muted-foreground/60">Tokens (est.)</span>
           <span className="font-medium">
             {numberFormatter.format(totalTokens)}
-            {imageTokensInfo.imageCount > 0 && (
+            {mediaTokensInfo.totalMediaCount > 0 && (
               <span className="text-muted-foreground/80 ml-1 text-[10px]">
-                ({numberFormatter.format(textTokens)}+{numberFormatter.format(imageTokensInfo.totalTokens)})
+                ({numberFormatter.format(textTokens)}+{numberFormatter.format(mediaTokensInfo.totalTokens)})
               </span>
             )}
           </span>

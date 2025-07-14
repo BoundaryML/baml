@@ -6563,21 +6563,26 @@ func (*stream) PdfInput(ctx context.Context, pdf any, opts ...CallOptionFunc) (<
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -6636,21 +6641,26 @@ func (*stream) PdfInputAnthropic(ctx context.Context, pdf any, opts ...CallOptio
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -6709,21 +6719,26 @@ func (*stream) PdfInputOpenai(ctx context.Context, pdf any, prompt string, opts 
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -16142,21 +16157,26 @@ func (*stream) VideoInputGemini(ctx context.Context, vid any, opts ...CallOption
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,

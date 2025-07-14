@@ -156,8 +156,8 @@ impl VertexClient {
                 max_one_system_prompt: true,
                 resolve_audio_urls: ResolveMediaUrls::EnsureMime,
                 resolve_image_urls: ResolveMediaUrls::EnsureMime,
-                resolve_pdf_urls: ResolveMediaUrls::EnsureMime,
-                resolve_video_urls: ResolveMediaUrls::EnsureMime,
+                resolve_pdf_urls: ResolveMediaUrls::Never,
+                resolve_video_urls: ResolveMediaUrls::Never,
                 allowed_metadata: properties.allowed_metadata.clone(),
             },
             retry_policy: client.elem().retry_policy_id.as_ref().map(String::to_owned),
@@ -183,8 +183,8 @@ impl VertexClient {
                 max_one_system_prompt: true,
                 resolve_audio_urls: ResolveMediaUrls::EnsureMime,
                 resolve_image_urls: ResolveMediaUrls::EnsureMime,
-                resolve_pdf_urls: ResolveMediaUrls::EnsureMime,
-                resolve_video_urls: ResolveMediaUrls::EnsureMime,
+                resolve_pdf_urls: ResolveMediaUrls::Never,
+                resolve_video_urls: ResolveMediaUrls::Never,
                 allowed_metadata: properties.allowed_metadata.clone(),
             },
             retry_policy: client.retry_policy.clone(),
@@ -348,7 +348,7 @@ impl ToProviderMessage for VertexClient {
             BamlMediaContent::Url(data) => {
                 content.insert(
                     "fileData".into(),
-                    json!({"file_uri": data.url, "mime_type": media.mime_type}),
+                    json!({"fileUri": data.url, "mimeType": media.mime_type}),
                 );
                 Ok(content)
             }
@@ -357,7 +357,7 @@ impl ToProviderMessage for VertexClient {
                     "inlineData".into(),
                     json!({
                         "data": data.base64,
-                        "mime_type": media.mime_type_as_ok()?
+                        "mimeType": media.mime_type_as_ok()?
                     }),
                 );
                 Ok(content)

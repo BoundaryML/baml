@@ -3291,7 +3291,7 @@ func PdfInput(ctx context.Context, pdf any, opts ...CallOptionFunc) (string, err
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -3330,7 +3330,7 @@ func PdfInputAnthropic(ctx context.Context, pdf any, opts ...CallOptionFunc) (st
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -3369,7 +3369,7 @@ func PdfInputOpenai(ctx context.Context, pdf any, prompt string, opts ...CallOpt
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }
@@ -8088,7 +8088,7 @@ func VideoInputGemini(ctx context.Context, vid any, opts ...CallOptionFunc) (str
 		return "", result.Error
 	}
 
-	casted := *(result.Data).(*string)
+	casted := (result.Data).(string)
 
 	return casted, nil
 }

@@ -8,6 +8,7 @@ import { Loader } from './components';
 import { ErrorMessage } from './components';
 import { WithCopyButton } from './components';
 import { findMediaFile } from './media-utils';
+import { TruncatedString } from './TruncatedString';
 
 type CurlResult = string | undefined | Error;
 
@@ -60,9 +61,15 @@ export const PromptPreviewCurl = () => {
   }
   return (
     <WithCopyButton text={value}>
-      <pre className="w-full whitespace-pre-wrap break-all rounded-lg border bg-accent p-4 font-mono text-xs">
-        {value}
-      </pre>
+      <div className="w-full rounded-lg border bg-accent p-4 font-mono">
+        <TruncatedString 
+          text={value} 
+          maxLength={2000}
+          headLength={800}
+          tailLength={800}
+          showStats={false}
+        />
+      </div>
     </WithCopyButton>
   );
 };
