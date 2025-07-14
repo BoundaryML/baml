@@ -9,8 +9,12 @@ This guide provides detailed instructions for setting up your BAML development e
 git clone https://github.com/BoundaryML/baml.git
 cd baml
 
-# Run the setup script
-./scripts/setup-dev.sh
+mise trust
+pnpm setup-dev
+pnpm clean:ws
+pnpm install
+pnpm typecheck
+pnpm build
 
 # Start developing!
 pnpm dev

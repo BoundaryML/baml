@@ -19,13 +19,6 @@ if ! command -v mise &> /dev/null; then
     # Add mise to PATH for current session
     export PATH="$HOME/.local/bin:$PATH"
 
-    # Add mise activation to shell configs
-    echo 'eval "$(~/.local/bin/mise activate bash)"' >> ~/.bashrc
-    echo 'eval "$(~/.local/bin/mise activate zsh)"' >> ~/.zshrc 2>/dev/null || true
-
-    # Activate mise for current session
-    eval "$(~/.local/bin/mise activate bash)"
-
     echo -e "${GREEN}✅ mise installed successfully${NC}"
 else
     echo -e "${GREEN}✅ mise already installed${NC}"
@@ -80,6 +73,68 @@ if command -v pnpm &> /dev/null; then
     echo -e "${GREEN}✅ node dependencies installed${NC}"
 fi
 
+# Add mise activation commands to shell config files if not already present
+# Create activation snippet that checks for mise availability
+MISE_BASH_ACTIVATION='# mise activation
+if command -v mise &> /dev/null; then
+    eval "$(mise activate bash --shims)"
+    eval "$(mise activate bash)"
+elif [ -f ~/.local/bin/mise ]; then
+    export PATH="$HOME/.local/bin:$PATH"
+    eval "$(~/.local/bin/mise activate bash --shims)"
+    eval "$(~/.local/bin/mise activate bash)"
+fi'
+
+MISE_ZSH_ACTIVATION='# mise activation
+if command -v mise &> /dev/null; then
+    eval "$(mise activate zsh --shims)"
+    eval "$(mise activate zsh)"
+elif [ -f ~/.local/bin/mise ]; then
+    export PATH="$HOME/.local/bin:$PATH"
+    eval "$(~/.local/bin/mise activate zsh --shims)"
+    eval "$(~/.local/bin/mise activate zsh)"
+fi'
+
+# Check and add to .bashrc if not already present
+if [ -f ~/.bashrc ]; then
+    # Check if any mise activation exists
+    if ! grep -q 'mise activate' ~/.bashrc; then
+        echo "$MISE_BASH_ACTIVATION" >> ~/.bashrc
+        echo -e "${GREEN}✅ Added mise activation to ~/.bashrc${NC}"
+    fi
+fi
+
+# Check and add to .zshrc if not already present
+if [ -f ~/.zshrc ]; then
+    # Check if any mise activation exists
+    if ! grep -q 'mise activate' ~/.zshrc; then
+        echo "$MISE_ZSH_ACTIVATION" >> ~/.zshrc
+        echo -e "${GREEN}✅ Added mise activation to ~/.zshrc${NC}"
+    fi
+fi
+
+# For the current session, activate with shims if mise is available
+if command -v mise &> /dev/null; then
+    # Detect current shell and activate accordingly
+    if [ -n "$BASH_VERSION" ]; then
+        eval "$(mise activate bash --shims)"
+        eval "$(mise activate bash)"
+    elif [ -n "$ZSH_VERSION" ]; then
+        eval "$(mise activate zsh --shims)"
+        eval "$(mise activate zsh)"
+    fi
+elif [ -f ~/.local/bin/mise ]; then
+    # If mise is installed but not in PATH yet, use the full path
+    export PATH="$HOME/.local/bin:$PATH"
+    if [ -n "$BASH_VERSION" ]; then
+        eval "$(~/.local/bin/mise activate bash --shims)"
+        eval "$(~/.local/bin/mise activate bash)"
+    elif [ -n "$ZSH_VERSION" ]; then
+        eval "$(~/.local/bin/mise activate zsh --shims)"
+        eval "$(~/.local/bin/mise activate zsh)"
+    fi
+fi
+
 # Verify installations
 echo ""
 echo -e "${GREEN}🔍 Verifying installations:${NC}"
@@ -106,3 +161,6 @@ echo ""
 echo "For VSCode extension debugging:"
 echo "  1. Run 'pnpm dev:vscode'"
 echo "  2. Press F5 in VSCode to launch the extension host"
+
+echo ""
+echo -e "${YELLOW}⚠️  IMPORTANT: Please restart your shell or run 'source ~/.zshrc' or 'source ~/.bashrc' before continuing!${NC}"
