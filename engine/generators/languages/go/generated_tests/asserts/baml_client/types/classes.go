@@ -40,10 +40,10 @@ func (c *Person) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "name":
-			c.Name = *baml.Decode(valueHolder).(*string)
+			c.Name = baml.Decode(valueHolder).Interface().(string)
 
 		case "age":
-			c.Age = *baml.Decode(valueHolder).(*int64)
+			c.Age = baml.Decode(valueHolder).Interface().(int64)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))

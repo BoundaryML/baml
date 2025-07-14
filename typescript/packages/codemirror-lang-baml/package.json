@@ -1,0 +1,43 @@
+{
+  "name": "@baml/codemirror-lang-baml",
+  "version": "0.1.3",
+  "description": "BAML language support for CodeMirror",
+  "packageManager": "pnpm@9.12.0",
+  "scripts": {
+    "dev": "pnpm build:grammar && tsup --watch",
+    "test": "mocha test/test.js",
+    "prebuild": "rm -rf dist",
+    "build:grammar": "lezer-generator src/syntax.grammar -o src/syntax.grammar.js",
+    "build": "pnpm build:grammar && tsup",
+    "prerelease": "rm -rf dist",
+    "release": "pnpm build:grammar && tsup",
+    "prepare": "pnpm prebuild && pnpm build",
+    "clean": "git clean -xdf .turbo node_modules dist src/syntax.grammar.js",
+    "typecheck": "pnpm build && tsc --noEmit --emitDeclarationOnly false"
+  },
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "dependencies": {
+    "@codemirror/autocomplete": "6.18.6",
+    "@codemirror/language": "6.11.1",
+    "@codemirror/legacy-modes": "6.5.1",
+    "@lezer/common": "1.2.3",
+    "@lezer/highlight": "1.2.1",
+    "@lezer/lr": "1.4.2",
+    "@uiw/codemirror-theme-vscode": "4.23.13"
+  },
+  "devDependencies": {
+    "@lezer/generator": "1.7.3",
+    "mocha": "11.6.0",
+    "tslib": "^2.6.2",
+    "tsup": "8.5.0",
+    "typescript": "5.8.3"
+  },
+  "license": "MIT"
+}

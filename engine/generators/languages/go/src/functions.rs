@@ -1,7 +1,7 @@
 use askama::Template;
 
 use crate::{
-    generated_types::{ClassGo, EnumGo, UnionGo},
+    generated_types::{ClassGo, EnumGo, TypeAliasGo, UnionGo},
     package::CurrentRenderPackage,
     r#type::{SerializeType, TypeGo},
 };
@@ -92,17 +92,19 @@ pub fn render_functions(
 /// var Stream = &stream{}
 ///
 /// type StreamValue[TStream any, TFinal any] struct {
+///     IsError   bool
+///     Error     error
 ///     IsFinal   bool
 ///     as_final  *TFinal
 ///     as_stream *TStream
 /// }
 ///
-/// func (s *StreamValue[TStream, TFinal]) Final() TFinal {
-///     return *s.as_final
+/// func (s *StreamValue[TStream, TFinal]) Final() *TFinal {
+///     return s.as_final
 /// }
 ///
-/// func (s *StreamValue[TStream, TFinal]) Stream() TStream {
-///     return *s.as_stream
+/// func (s *StreamValue[TStream, TFinal]) Stream() *TStream {
+///     return s.as_stream
 /// }
 ///
 /// {% for function in functions %}
@@ -166,6 +168,12 @@ struct FunctionStreamTemplate<'a> {
 ///     "TYPES.{{ union_.cffi_name }}": reflect.TypeOf(types.{{ union_.name }}{}),
 ///     "STREAM_TYPES.{{ union_.cffi_name }}": reflect.TypeOf(stream_types.{{ union_.name }}{}),
 /// {% endfor %}
+/// {% for type_alias in type_aliases -%}
+///     "TYPES.{{ type_alias.name }}": reflect.TypeOf({{ type_alias.type_.construct_instance(pkg) }}),
+/// {% endfor %}
+/// {% for type_alias in stream_type_aliases -%}
+///     "STREAM_TYPES.{{ type_alias.name }}": reflect.TypeOf({{ type_alias.type_.construct_instance(pkg) }}),
+/// {% endfor %}
 /// }
 /// ```
 #[derive(askama::Template)]
@@ -174,20 +182,29 @@ struct TypeMap<'a> {
     classes: &'a [ClassGo<'a>],
     enums: &'a [EnumGo<'a>],
     unions: &'a [UnionGo<'a>],
+    type_aliases: &'a [TypeAliasGo<'a>],
+    stream_type_aliases: &'a [TypeAliasGo<'a>],
     go_mod_name: &'a str,
+    pkg: &'a CurrentRenderPackage,
 }
 
 pub fn render_type_map(
     classes: &[ClassGo],
     enums: &[EnumGo],
     unions: &[UnionGo],
+    type_aliases: &[TypeAliasGo],
+    stream_type_aliases: &[TypeAliasGo],
     go_mod_name: &str,
+    pkg: &CurrentRenderPackage,
 ) -> Result<String, askama::Error> {
     TypeMap {
         classes,
         enums,
         unions,
+        type_aliases,
+        stream_type_aliases,
         go_mod_name,
+        pkg,
     }
     .render()
 }

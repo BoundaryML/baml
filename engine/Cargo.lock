@@ -833,7 +833,7 @@ dependencies = [
 
 [[package]]
 name = "baml-cli"
-version = "0.200.0"
+version = "0.201.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -933,7 +933,7 @@ dependencies = [
 
 [[package]]
 name = "baml-derive"
-version = "0.200.0"
+version = "0.201.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -954,7 +954,7 @@ dependencies = [
 
 [[package]]
 name = "baml-lib"
-version = "0.200.0"
+version = "0.201.0"
 dependencies = [
  "base64 0.13.1",
  "dissimilar",
@@ -970,7 +970,7 @@ dependencies = [
 
 [[package]]
 name = "baml-log"
-version = "0.200.0"
+version = "0.201.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -984,7 +984,7 @@ dependencies = [
 
 [[package]]
 name = "baml-lsp-types"
-version = "0.200.0"
+version = "0.201.0"
 dependencies = [
  "anyhow",
  "baml-runtime",
@@ -1014,7 +1014,7 @@ dependencies = [
 
 [[package]]
 name = "baml-python-ffi"
-version = "0.200.0"
+version = "0.201.0"
 dependencies = [
  "anyhow",
  "baml-cli",
@@ -1091,7 +1091,7 @@ dependencies = [
 
 [[package]]
 name = "baml-runtime"
-version = "0.200.0"
+version = "0.201.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -1209,7 +1209,7 @@ dependencies = [
 
 [[package]]
 name = "baml-schema-build"
-version = "0.200.0"
+version = "0.201.0"
 dependencies = [
  "anyhow",
  "baml-ids",
@@ -1254,7 +1254,7 @@ dependencies = [
 
 [[package]]
 name = "baml-types"
-version = "0.200.0"
+version = "0.201.0"
 dependencies = [
  "anyhow",
  "baml-ids",
@@ -1279,7 +1279,7 @@ dependencies = [
 
 [[package]]
 name = "baml-typescript-ffi"
-version = "0.200.0"
+version = "0.201.0"
 dependencies = [
  "anyhow",
  "baml-cli",
@@ -1314,7 +1314,7 @@ dependencies = [
 
 [[package]]
 name = "baml_cffi"
-version = "0.200.0"
+version = "0.201.0"
 dependencies = [
  "anyhow",
  "baml-cli",
@@ -1429,7 +1429,7 @@ dependencies = [
 
 [[package]]
 name = "bstd"
-version = "0.200.0"
+version = "0.201.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -2168,7 +2168,7 @@ dependencies = [
 
 [[package]]
 name = "dir-writer"
-version = "0.200.0"
+version = "0.201.0"
 dependencies = [
  "anyhow",
  "baml-log",
@@ -2176,10 +2176,19 @@ dependencies = [
  "filetime",
  "indexmap 2.9.0",
  "internal-baml-core",
- "pathdiff 0.1.0",
+ "pathdiff 0.2.3",
  "serde_json",
  "sugar_path",
  "walkdir",
+]
+
+[[package]]
+name = "dirs"
+version = "5.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "44c45a9d03d6676652bcb5e724c7e988de1acad23a711b5217ab9cbecbec2225"
+dependencies = [
+ "dirs-sys 0.4.1",
 ]
 
 [[package]]
@@ -2188,7 +2197,7 @@ version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3e8aa94d75141228480295a7d0e7feb620b1a5ad9f12bc40be62411e38cce4e"
 dependencies = [
- "dirs-sys",
+ "dirs-sys 0.5.0",
 ]
 
 [[package]]
@@ -2199,6 +2208,18 @@ checksum = "b98cf8ebf19c3d1b223e151f99a4f9f0690dca41414773390fc824184ac833e1"
 dependencies = [
  "cfg-if",
  "dirs-sys-next",
+]
+
+[[package]]
+name = "dirs-sys"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "520f05a5cbd335fae5a99ff7a6ab8627577660ee5cfd6a94a6a929b52ff0321c"
+dependencies = [
+ "libc",
+ "option-ext",
+ "redox_users 0.4.6",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
@@ -2453,6 +2474,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d674e81391d1e1ab681a28d99df07927c6d4aa5b027d7da16ba32d1d21ecd99"
 
 [[package]]
+name = "flate2"
+version = "1.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4a3d7db9596fecd151c5f638c0ee5d5bd487b6e0ea232e5dc96d5250f6f94b1d"
+dependencies = [
+ "crc32fast",
+ "miniz_oxide",
+]
+
+[[package]]
 name = "fnv"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2632,7 +2663,7 @@ dependencies = [
 
 [[package]]
 name = "generators-go"
-version = "0.200.0"
+version = "0.201.0"
 dependencies = [
  "anyhow",
  "askama",
@@ -2646,7 +2677,7 @@ dependencies = [
 
 [[package]]
 name = "generators-lib"
-version = "0.200.0"
+version = "0.201.0"
 dependencies = [
  "anyhow",
  "baml-log",
@@ -2663,7 +2694,7 @@ dependencies = [
 
 [[package]]
 name = "generators-openapi"
-version = "0.200.0"
+version = "0.201.0"
 dependencies = [
  "anyhow",
  "askama",
@@ -2677,12 +2708,13 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
+ "tempfile",
  "test-harness",
 ]
 
 [[package]]
 name = "generators-python"
-version = "0.200.0"
+version = "0.201.0"
 dependencies = [
  "anyhow",
  "askama",
@@ -2696,7 +2728,7 @@ dependencies = [
 
 [[package]]
 name = "generators-ruby"
-version = "0.200.0"
+version = "0.201.0"
 dependencies = [
  "anyhow",
  "askama",
@@ -2710,7 +2742,7 @@ dependencies = [
 
 [[package]]
 name = "generators-typescript"
-version = "0.200.0"
+version = "0.201.0"
 dependencies = [
  "anyhow",
  "askama",
@@ -3438,7 +3470,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-ast"
-version = "0.200.0"
+version = "0.201.0"
 dependencies = [
  "anyhow",
  "baml-types",
@@ -3459,7 +3491,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-codegen"
-version = "0.200.0"
+version = "0.201.0"
 dependencies = [
  "anyhow",
  "askama",
@@ -3488,7 +3520,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-core"
-version = "0.200.0"
+version = "0.201.0"
 dependencies = [
  "anyhow",
  "baml-derive",
@@ -3528,7 +3560,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-diagnostics"
-version = "0.200.0"
+version = "0.201.0"
 dependencies = [
  "anyhow",
  "colored 2.2.0",
@@ -3541,7 +3573,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-jinja"
-version = "0.200.0"
+version = "0.201.0"
 dependencies = [
  "anyhow",
  "askama",
@@ -3562,7 +3594,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-jinja-types"
-version = "0.200.0"
+version = "0.201.0"
 dependencies = [
  "anyhow",
  "askama",
@@ -3581,7 +3613,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-parser-database"
-version = "0.200.0"
+version = "0.201.0"
 dependencies = [
  "anyhow",
  "baml-derive",
@@ -3607,7 +3639,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-prompt-parser"
-version = "0.200.0"
+version = "0.201.0"
 dependencies = [
  "internal-baml-ast",
  "internal-baml-diagnostics",
@@ -3619,7 +3651,7 @@ dependencies = [
 
 [[package]]
 name = "internal-llm-client"
-version = "0.200.0"
+version = "0.201.0"
 dependencies = [
  "anyhow",
  "aws-config",
@@ -3802,7 +3834,7 @@ checksum = "9dbbfed4e59ba9750e15ba154fdfd9329cee16ff3df539c2666b70f58cc32105"
 
 [[package]]
 name = "jsonish"
-version = "0.200.0"
+version = "0.201.0"
 dependencies = [
  "anyhow",
  "assert-json-diff",
@@ -3883,7 +3915,7 @@ dependencies = [
 
 [[package]]
 name = "language-server"
-version = "0.200.0"
+version = "0.201.0"
 dependencies = [
  "anyhow",
  "baml-log",
@@ -3893,7 +3925,9 @@ dependencies = [
  "colored 3.0.0",
  "crossbeam",
  "crossbeam-channel",
+ "dirs 5.0.1",
  "filetime",
+ "flate2",
  "futures-util",
  "ignore",
  "include_dir",
@@ -3914,15 +3948,18 @@ dependencies = [
  "path-absolutize",
  "pathdiff 0.2.3",
  "regex",
+ "reqwest",
  "rustc-hash 2.1.1",
  "schemars 0.8.22",
  "semver",
  "serde",
  "serde-wasm-bindgen 0.4.5",
  "serde_json",
+ "sha2",
  "shellexpand",
  "similar",
  "simple-logging",
+ "tar",
  "thiserror 2.0.12",
  "tokio",
  "tracing",
@@ -5476,6 +5513,7 @@ dependencies = [
  "base64 0.22.1",
  "bytes",
  "encoding_rs",
+ "futures-channel",
  "futures-core",
  "futures-util",
  "h2 0.4.10",
@@ -6191,7 +6229,7 @@ version = "3.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b1fdf65dd6331831494dd616b30351c38e96e45921a27745cf98490458b90bb"
 dependencies = [
- "dirs",
+ "dirs 6.0.0",
 ]
 
 [[package]]
@@ -6439,6 +6477,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "55937e1799185b12863d447f42597ed69d9928686b8d88a1df17376a097d8369"
 
 [[package]]
+name = "tar"
+version = "0.4.44"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1d863878d212c87a19c1a610eb53bb01fe12951c0501cf5a0d65f724914a667a"
+dependencies = [
+ "filetime",
+ "libc",
+ "xattr",
+]
+
+[[package]]
 name = "target-lexicon"
 version = "0.12.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6485,7 +6534,7 @@ checksum = "8f50febec83f5ee1df3015341d8bd429f2d1cc62bcba7ea2076759d315084683"
 
 [[package]]
 name = "test-harness"
-version = "0.200.0"
+version = "0.201.0"
 dependencies = [
  "anyhow",
  "baml-log",
@@ -8005,6 +8054,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ea2f10b9bb0928dfb1b42b65e1f9e36f7f54dbdf08457afefb38afcdec4fa2bb"
 
 [[package]]
+name = "xattr"
+version = "1.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "af3a19837351dc82ba89f8a125e22a3c475f05aba604acc023d62b2739ae2909"
+dependencies = [
+ "libc",
+ "rustix 1.0.7",
+]
+
+[[package]]
 name = "xmlparser"
 version = "0.13.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8042,7 +8101,7 @@ dependencies = [
 
 [[package]]
 name = "zed"
-version = "0.200.0"
+version = "0.201.0"
 dependencies = [
  "zed_extension_api",
 ]

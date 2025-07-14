@@ -55,12 +55,7 @@ func Foo(ctx context.Context, x int64, opts ...CallOptionFunc) (types.JSON, erro
 		return nil, result.Error
 	}
 
-	casted := func(result any) types.JSON {
-		if result == nil {
-			return nil
-		}
-		return (result).(types.JSON)
-	}(result.Data)
+	casted := (result.Data).(types.JSON)
 
 	return casted, nil
 }
@@ -99,12 +94,7 @@ func JsonInput(ctx context.Context, x types.JSON, opts ...CallOptionFunc) (types
 		return nil, result.Error
 	}
 
-	casted := func(result any) types.JSON {
-		if result == nil {
-			return nil
-		}
-		return (result).(types.JSON)
-	}(result.Data)
+	casted := (result.Data).(types.JSON)
 
 	return casted, nil
 }

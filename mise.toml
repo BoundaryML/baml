@@ -1,0 +1,31 @@
+# Mise configuration for BAML development environment
+
+[tools]
+# Core languages
+rust = "1.88.0"
+go = "1.23.11"
+python = "3.12"  # Will use uv for Python package management
+ruby = "3.2.2"
+node = "lts"     # For pnpm
+
+# Rust tools
+"cargo:wasm-pack" = "0.13.1"
+"cargo:cross" = "latest"
+
+# Go tools
+# "go:google.golang.org/protobuf/cmd/protoc-gen-go" = "v1.36.6"
+"aqua:protocolbuffers/protobuf-go/protoc-gen-go" = "v1.36.6"
+"go:golang.org/x/tools/cmd/goimports" = "latest"
+
+# Python tools
+"pipx:uv" = "latest"
+"pipx:ruff" = "latest"
+"pipx:maturin" = "latest"
+
+# Node tools
+"npm:pnpm" = "9.12.0"
+"npm:@infisical/cli" = "latest"
+
+[settings]
+experimental = true
+idiomatic_version_file_enable_tools = ["node", "python", "ruby", "go"]

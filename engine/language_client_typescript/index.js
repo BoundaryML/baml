@@ -14,14 +14,12 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
     for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.BamlCtxManager = exports.BamlStream = exports.HTTPRequest = exports.Usage = exports.FunctionLog = exports.Collector = exports.BamlLogEvent = exports.ClientRegistry = exports.invoke_runtime_cli = exports.Audio = exports.Image = exports.FunctionResultStream = exports.FunctionResult = exports.BamlRuntime = void 0;
+exports.BamlCtxManager = exports.BamlStream = exports.TraceStats = exports.Timing = exports.StreamTiming = exports.SSEResponse = exports.HTTPResponse = exports.HTTPRequest = exports.Usage = exports.FunctionLog = exports.Collector = exports.BamlLogEvent = exports.ClientRegistry = exports.invoke_runtime_cli = exports.Audio = exports.Image = exports.FunctionResultStream = exports.FunctionResult = exports.BamlRuntime = void 0;
 __exportStar(require("./safe_imports"), exports);
 __exportStar(require("./errors"), exports);
 __exportStar(require("./logging"), exports);
 // Detect if we're in a Node.js environment
-const isNode = typeof process !== 'undefined' &&
-    process.versions != null &&
-    process.versions.node != null;
+const isNode = typeof process !== 'undefined' && process.versions != null && process.versions.node != null;
 if (!isNode) {
     const browserError = (name) => {
         throw new Error(`Cannot import ${name} from '@boundaryml/baml' in browser environment. Please import from '@boundaryml/baml/browser' instead.`);
@@ -49,6 +47,11 @@ Object.defineProperty(exports, "Collector", { enumerable: true, get: function ()
 Object.defineProperty(exports, "FunctionLog", { enumerable: true, get: function () { return native_1.FunctionLog; } });
 Object.defineProperty(exports, "Usage", { enumerable: true, get: function () { return native_1.Usage; } });
 Object.defineProperty(exports, "HTTPRequest", { enumerable: true, get: function () { return native_1.HTTPRequest; } });
+Object.defineProperty(exports, "HTTPResponse", { enumerable: true, get: function () { return native_1.HTTPResponse; } });
+Object.defineProperty(exports, "SSEResponse", { enumerable: true, get: function () { return native_1.SSEResponse; } });
+Object.defineProperty(exports, "StreamTiming", { enumerable: true, get: function () { return native_1.StreamTiming; } });
+Object.defineProperty(exports, "Timing", { enumerable: true, get: function () { return native_1.Timing; } });
+Object.defineProperty(exports, "TraceStats", { enumerable: true, get: function () { return native_1.TraceStats; } });
 var stream_1 = require("./stream");
 Object.defineProperty(exports, "BamlStream", { enumerable: true, get: function () { return stream_1.BamlStream; } });
 var async_context_vars_1 = require("./async_context_vars");

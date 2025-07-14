@@ -52,7 +52,7 @@ type JsResult<T> = core::result::Result<T, JsError>;
 pub fn on_wasm_init() {
     cfg_if::cfg_if! {
         if #[cfg(debug_assertions)] {
-            const LOG_LEVEL: log::Level = log::Level::Debug;
+            const LOG_LEVEL: log::Level = log::Level::Info;
         } else {
             const LOG_LEVEL: log::Level = log::Level::Info;
         }

@@ -14,6 +14,26 @@ impl TypeWrapper {
     pub fn wrap_with_checked(self) -> TypeWrapper {
         TypeWrapper::Checked(Box::new(self))
     }
+
+    pub fn pop_optional(&mut self) -> &mut Self {
+        match self {
+            TypeWrapper::Optional(inner) => {
+                *self = std::mem::take(inner);
+                self
+            }
+            _ => self,
+        }
+    }
+
+    pub fn pop_checked(&mut self) -> &mut Self {
+        match self {
+            TypeWrapper::Checked(inner) => {
+                *self = std::mem::take(inner);
+                self
+            }
+            _ => self,
+        }
+    }
 }
 
 #[derive(Clone, PartialEq, Debug, Default)]
@@ -25,6 +45,10 @@ pub struct TypeMetaGo {
 impl TypeMetaGo {
     pub fn is_optional(&self) -> bool {
         matches!(self.type_wrapper, TypeWrapper::Optional(_))
+    }
+
+    pub fn is_checked(&self) -> bool {
+        matches!(self.type_wrapper, TypeWrapper::Checked(_))
     }
 
     pub fn make_checked(&mut self) -> &mut Self {
@@ -207,130 +231,50 @@ impl TypeGo {
         }
     }
 
-    fn cast_from_any_skip_optional(&self, param: &str, pkg: &CurrentRenderPackage) -> String {
-        format!("({param}).({})", self.serialize_type(pkg))
-            .trim()
-            .to_string()
-    }
-
-    fn cast_return_value(&self, pkg: &CurrentRenderPackage) -> String {
-        if self.meta().wrap_stream_state {
-            format!(
-                "{}{{Value: nil, State: StreamStatePending}}",
-                self.serialize_type(pkg)
-            )
+    pub fn construct_instance(&self, pkg: &CurrentRenderPackage) -> String {
+        let instance = match self {
+            TypeGo::String(val, _) => val.as_ref().map_or("\"\"".to_string(), |v| {
+                format!("\"{}\"", v.replace("\"", "\\\"")).to_string()
+            }),
+            TypeGo::Int(val, _) => val.map_or("int64(0)".to_string(), |v| format!("int64({v})")),
+            TypeGo::Float(_) => "float64(0.0)".to_string(),
+            TypeGo::Bool(val, _) => val.map_or("false".to_string(), |v| {
+                if v { "true" } else { "false" }.to_string()
+            }),
+            TypeGo::Media(..) | TypeGo::Class { .. } | TypeGo::Union { .. } => {
+                format!("{}{{}}", self.serialize_type(pkg))
+            }
+            TypeGo::Enum { .. } => {
+                format!("{}(\"\")", self.serialize_type(pkg))
+            }
+            TypeGo::TypeAlias { .. } => {
+                format!("{}{{}}", self.serialize_type(pkg))
+            }
+            TypeGo::List(inner, _) => format!("[]{}{{}}", inner.serialize_type(pkg)),
+            TypeGo::Map(key, value, _) => {
+                format!(
+                    "map[{}]{}{{}}",
+                    key.serialize_type(pkg),
+                    value.serialize_type(pkg)
+                )
+            }
+            TypeGo::Any { .. } => "any".to_string(),
+        };
+        if matches!(self.meta().type_wrapper, TypeWrapper::Optional(_)) {
+            let mut non_optional = self.clone();
+            non_optional.meta_mut().type_wrapper.pop_optional();
+            let base_type = non_optional.serialize_type(pkg);
+            format!("(*{base_type})(nil)")
         } else {
-            self.zero_value(pkg)
+            instance
         }
-    }
-
-    pub fn cast_from_any(&self, param: &str, pkg: &CurrentRenderPackage) -> String {
-        if self.meta().is_optional() {
-            format!(
-                r#"
-                func(result any) {t} {{
-                    if result == nil {{
-                        return {return_value}
-                    }}
-                    return {casted}
-                }}({param})
-            "#,
-                t = self.serialize_type(pkg),
-                casted = self.cast_from_any_skip_optional("result", pkg),
-                return_value = self.cast_return_value(pkg)
-            )
-        } else {
-            self.cast_from_any_skip_optional(param, pkg)
-        }
-        .trim()
-        .to_string()
     }
 
     pub fn cast_from_function(&self, param: &str, pkg: &CurrentRenderPackage) -> String {
-        match self {
-            TypeGo::List(..) | TypeGo::Map(..) => self.cast_from_any_skip_optional(param, pkg),
-            TypeGo::TypeAlias { name, .. } => {
-                let lookup = pkg.lookup();
-                match lookup.expand_recursive_type(name) {
-                    Ok(expansion) if expansion.is_optional() => format!(
-                        r#"
-                            func(result any) {t} {{
-                                if result == nil {{
-                                    return nil
-                                }}
-                                return (result).({t})
-                            }}({param})
-                        "#,
-                        t = self.serialize_type(pkg),
-                    )
-                    .trim()
-                    .to_string(),
-                    _ => format!("*({param}).(*{})", self.serialize_type(pkg)),
-                }
-            }
-            _ if self.meta().is_optional() => self.cast_from_any_skip_optional(param, pkg),
-            _ => format!("*({param}).(*{})", self.serialize_type(pkg)),
-        }
-    }
-
-    fn decode_from_any_skip_optional(&self, param: &str, pkg: &CurrentRenderPackage) -> String {
-        match self {
-            TypeGo::List(inner, meta) if !meta.is_optional() => format!(
-                "baml.DecodeList({param}, func(inner *cffi.CFFIValueHolder) {t} {{
-                return {casted}
-            }})",
-                t = inner.serialize_type(pkg),
-                casted = inner.decode_from_any("inner", pkg)
-            ),
-            TypeGo::Map(key, value, meta) if !meta.is_optional() => format!(
-                "baml.DecodeMap({param}, func(inner *cffi.CFFIValueHolder) {t} {{
-                return {casted}
-            }})",
-                t = value.serialize_type(pkg),
-                casted = value.decode_from_any("inner", pkg)
-            ),
-            TypeGo::TypeAlias { name, .. } => {
-                if pkg
-                    .lookup()
-                    .expand_recursive_type(name)
-                    .map(|e| e.is_optional())
-                    .unwrap_or(false)
-                {
-                    format!(
-                        r#"
-                    func(param *cffi.CFFIValueHolder) {name} {{
-                        decoded := baml.Decode(param)
-                        if decoded == nil {{
-                            return nil
-                        }}
-                        return decoded.({name})
-                    }}({param})
-                    "#,
-                        name = self.serialize_type(pkg)
-                    )
-                } else {
-                    format!("*baml.Decode({param}).(*{})", self.serialize_type(pkg))
-                }
-            }
-            _ if !self.meta().is_optional() => {
-                format!("*baml.Decode({param}).(*{})", self.serialize_type(pkg))
-            }
-            _ => format!("baml.Decode({param}).({})", self.serialize_type(pkg)),
-        }
-        .trim()
-        .to_string()
+        format!("({param}).({})", self.serialize_type(pkg))
     }
 
     pub fn decode_from_any(&self, param: &str, pkg: &CurrentRenderPackage) -> String {
-        self.decode_from_any_with_field(param, pkg, None)
-    }
-
-    pub fn decode_from_any_with_field(
-        &self,
-        param: &str,
-        pkg: &CurrentRenderPackage,
-        field_name: Option<&str>,
-    ) -> String {
         if self.meta().wrap_stream_state {
             let mut without_stream_state = self.clone();
             without_stream_state.meta_mut().wrap_stream_state = false;
@@ -341,29 +285,23 @@ impl TypeGo {
                 t = without_stream_state.serialize_type(pkg),
                 casted = without_stream_state.decode_from_any("inner", pkg)
             )
-        } else if self.meta().is_optional() {
-            let field_info = field_name
-                .map(|f| format!("Field: {f}\n"))
-                .unwrap_or_default();
+        } else if self.meta().is_checked() {
+            let mut without_checked = self.clone();
+            without_checked.meta_mut().type_wrapper.pop_checked();
+
             format!(
-                r#"
-                func(param *cffi.CFFIValueHolder) {t} {{
-                    fmt.Printf("\n=== FIELD DECODE ===\n")
-                    fmt.Printf("{field_info}Expecting type: {t}\n")
-                    fmt.Printf("===================\n")
-                    decoded := baml.Decode(param)
-                    return {casted}
-                }}({param})
-            "#,
-                t = self.serialize_type(pkg),
-                field_info = field_info,
-                casted = self.cast_from_any("decoded", pkg)
+                "baml.DecodeChecked({param}, func(inner *cffi.CFFIValueHolder) {t} {{
+                return {casted}
+            }})",
+                t = without_checked.serialize_type(pkg),
+                casted = without_checked.decode_from_any("inner", pkg)
             )
         } else {
-            self.decode_from_any_skip_optional(param, pkg)
+            format!(
+                "baml.Decode({param}).Interface().({})",
+                self.serialize_type(pkg)
+            )
         }
-        .trim()
-        .to_string()
     }
 
     pub fn meta(&self) -> &TypeMetaGo {

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{collections::HashMap, ops::Deref, sync::Arc, time::Duration};
 
 use anyhow::{Context, Result};
 use aws_config::{
@@ -22,7 +22,9 @@ use aws_smithy_runtime_api::{client::result::SdkError, http::Headers};
 use aws_smithy_types::{Blob, Document};
 use baml_ids::HttpRequestId;
 use baml_types::{
-    tracing::events::{HTTPBody, HTTPRequest, HTTPResponse, TraceData, TraceEvent},
+    tracing::events::{
+        HTTPBody, HTTPRequest, HTTPResponse, HTTPResponseStream, SSEEvent, TraceData, TraceEvent,
+    },
     ApiKeyWithProvenance, BamlMap, BamlMedia, BamlMediaContent, BamlMediaType,
 };
 use futures::stream;
@@ -684,6 +686,9 @@ impl WithStreamChat for AwsClient {
             }
         };
 
+        let call_id_stack = Arc::new(ctx.runtime_context().call_id_stack.clone());
+        let http_request_id = Arc::new(ctx.http_request_id().clone());
+
         let stream = stream::unfold(
             (
                 Some(LLMCompleteResponse {
@@ -705,11 +710,26 @@ impl WithStreamChat for AwsClient {
                 response,
             ),
             move |(initial_state, mut response)| {
+                let call_id_stack = call_id_stack.clone();
+                let http_request_id = http_request_id.clone();
                 async move {
                     let mut new_state = initial_state?;
                     match response.stream.recv().await {
                         Ok(Some(message)) => {
                             log::trace!("Received message: {message:#?}");
+                            {
+                                let trace_event = TraceEvent::new_raw_llm_response_stream(
+                                    call_id_stack.deref().clone(),
+                                    std::sync::Arc::new(HTTPResponseStream::new(
+                                        http_request_id.deref().clone(),
+                                        SSEEvent::new("".into(), "{}".into(), "".into()),
+                                    )),
+                                );
+                                BAML_TRACER
+                                    .lock()
+                                    .unwrap()
+                                    .put(std::sync::Arc::new(trace_event));
+                            }
                             match message {
                                 bedrock::types::ConverseStreamOutput::ContentBlockDelta(
                                     content_block_delta,

@@ -11,7 +11,10 @@ use napi::{
 use napi_derive::napi;
 use serde_json::Value as JsonValue;
 
-use super::{request::HTTPRequest, response::HTTPResponse};
+use super::{
+    request::HTTPRequest,
+    response::{HTTPResponse, SSEResponse},
+};
 
 crate::lang_wrapper!(
     Collector,
@@ -248,14 +251,11 @@ impl Timing {
     #[napi]
     pub fn to_string(&self) -> String {
         format!(
-            "Timing(start_time_utc_ms={}, duration_ms={}, time_to_first_parsed_ms={})",
+            "Timing(start_time_utc_ms={}, duration_ms={})",
             self.inner.start_time_utc_ms,
             self.inner
                 .duration_ms
                 .map_or("null".to_string(), |v| v.to_string()),
-            self.inner
-                .time_to_first_parsed_ms
-                .map_or("null".to_string(), |v| v.to_string())
         )
     }
 
@@ -267,11 +267,6 @@ impl Timing {
     #[napi(getter)]
     pub fn duration_ms(&self) -> Option<i64> {
         self.inner.duration_ms
-    }
-
-    #[napi(getter)]
-    pub fn time_to_first_parsed_ms(&self) -> Option<i64> {
-        self.inner.time_to_first_parsed_ms
     }
 }
 
@@ -285,16 +280,10 @@ impl StreamTiming {
     #[napi]
     pub fn to_string(&self) -> String {
         format!(
-            "StreamTiming(start_time_utc_ms={}, duration_ms={}, time_to_first_parsed_ms={}, time_to_first_token_ms={})",
+            "StreamTiming(start_time_utc_ms={}, duration_ms={})",
             self.inner.start_time_utc_ms,
             self.inner
                 .duration_ms
-                .map_or("null".to_string(), |v| v.to_string()),
-            self.inner
-                .time_to_first_parsed_ms
-                .map_or("null".to_string(), |v| v.to_string()),
-            self.inner
-                .time_to_first_token_ms
                 .map_or("null".to_string(), |v| v.to_string())
         )
     }
@@ -307,16 +296,6 @@ impl StreamTiming {
     #[napi(getter)]
     pub fn duration_ms(&self) -> Option<i64> {
         self.inner.duration_ms
-    }
-
-    #[napi(getter)]
-    pub fn time_to_first_parsed_ms(&self) -> Option<i64> {
-        self.inner.time_to_first_parsed_ms
-    }
-
-    #[napi(getter)]
-    pub fn time_to_first_token_ms(&self) -> Option<i64> {
-        self.inner.time_to_first_token_ms
     }
 }
 
@@ -477,6 +456,19 @@ impl LLMStreamCall {
         StreamTiming {
             inner: self.inner.timing.clone(),
         }
+    }
+
+    #[napi]
+    pub fn sse_responses(&self) -> Option<Vec<SSEResponse>> {
+        self.inner.sse_chunks.as_ref().map(|sse_chunks| {
+            sse_chunks
+                .event
+                .iter()
+                .map(|event| SSEResponse {
+                    inner: event.clone(),
+                })
+                .collect()
+        })
     }
 
     #[napi(js_name = "toString")]

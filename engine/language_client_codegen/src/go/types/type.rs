@@ -67,7 +67,9 @@ impl Package {
         if parts[0] != "baml_client" {
             panic!("Package must start with baml_client");
         }
-        Package { package_path: parts }
+        Package {
+            package_path: parts,
+        }
     }
 
     pub fn relative_from(&self, other: &Package) -> String {
@@ -155,18 +157,20 @@ impl SerializeType for TypeGo {
             TypeGo::Float(_) => "float".to_string(),
             TypeGo::Bool(_) => "bool".to_string(),
             TypeGo::Media(media, _) => media.serialize_type(pkg),
-            TypeGo::Class {
-                package, name, ..
-            } => format!("{}{}", package.relative_from(pkg), name),
-            TypeGo::Union {
-                package, name, ..
-            } => format!("{}{}", package.relative_from(pkg), name),
-            TypeGo::Enum {
-                package, name, ..
-            } => format!("{}{}", package.relative_from(pkg), name),
+            TypeGo::Class { package, name, .. } => {
+                format!("{}{}", package.relative_from(pkg), name)
+            }
+            TypeGo::Union { package, name, .. } => {
+                format!("{}{}", package.relative_from(pkg), name)
+            }
+            TypeGo::Enum { package, name, .. } => format!("{}{}", package.relative_from(pkg), name),
             TypeGo::List(inner, _) => format!("[]{}", inner.serialize_type(pkg)),
             TypeGo::Map(key, value, _) => {
-                format!("map[{}]{}", key.serialize_type(pkg), value.serialize_type(pkg))
+                format!(
+                    "map[{}]{}",
+                    key.serialize_type(pkg),
+                    value.serialize_type(pkg)
+                )
             }
             TypeGo::Tuple(types, _) => format!(
                 "({})",

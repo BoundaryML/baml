@@ -1,0 +1,215 @@
+{
+  "name": "baml-extension",
+  "displayName": "Baml",
+  "description": "BAML is a DSL for AI applications.",
+  "version": "0.201.0",
+  "publisher": "Boundary",
+  "packageManager": "pnpm@9.12.0",
+  "repository": "https://github.com/BoundaryML/baml",
+  "homepage": "https://www.boundaryml.com",
+  "type": "commonjs",
+  "icon": "baml-logo.png",
+  "engines": {
+    "vscode": ">=1.63.0"
+  },
+  "categories": ["Programming Languages", "Debuggers", "Testing", "Other"],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onStartupFinished",
+    "onLanguage:python",
+    "onLanguage:typescript",
+    "onLanguage:javascriptreact",
+    "onLanguage:typescriptreact"
+  ],
+  "contributes": {
+    "activationEvents": ["onLanguage:baml"],
+    "configuration": {
+      "type": "object",
+      "title": "Baml extension settings",
+      "properties": {
+        "baml.cliPath": {
+          "type": ["string", "null"],
+          "default": null,
+          "description": "Use the locally installed baml CLI instead of the one bundled with the extension. Helps keeps generated code more in sync.",
+          "scope": "machine-overridable"
+        },
+        "baml.generateCodeOnSave": {
+          "type": "string",
+          "default": "always",
+          "enum": ["never", "always"],
+          "description": "Generate code on save"
+        },
+        "baml.syncExtensionToGeneratorVersion": {
+          "type": "string",
+          "default": "auto",
+          "enum": ["auto", "never", "always"],
+          "description": "Sync the extension to the currently selected baml_src generator version (provided all your generators have the same version). This will automatically download the correct version of the baml-cli to generate the client code -- preventing issues with mismatched versions. Note that on some platforms, if you have this on `auto`, it may be disabled."
+        },
+        "baml.enablePlaygroundProxy": {
+          "type": "boolean",
+          "default": true,
+          "description": "BAML Extension starts a localhost proxy for the playground to send requests to fix any CORS issues with some LLM providers. Disable this if you're having issues communicating with any APIs via the playground"
+        },
+        "baml.fileWatcher": {
+          "scope": "window",
+          "type": "boolean",
+          "default": false,
+          "description": "Enable, when checked, the File Watcher functionality for Baml Client."
+        },
+        "baml.trace.server": {
+          "scope": "window",
+          "type": "string",
+          "enum": ["off", "messages", "verbose"],
+          "default": "off",
+          "description": "Setting for logging between the VS Code extension and the language server."
+        },
+        "baml.bamlPanelOpen": {
+          "type": "boolean",
+          "default": false,
+          "description": "Indicates whether the Baml playground panel is open or closed."
+        },
+        "baml.envVarFile": {
+          "type": "string",
+          "default": "",
+          "description": "Path to a .env file to load environment variables from (uses dotenv)."
+        },
+        "baml.envVarCommand": {
+          "type": "string",
+          "default": "",
+          "description": "Command to run to get environment variables."
+        }
+      }
+    },
+    "languages": [
+      {
+        "id": "baml",
+        "aliases": ["Baml", "baml"],
+        "extensions": [".baml"],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./baml-logo.png",
+          "dark": "./baml-logo.png"
+        }
+      },
+      {
+        "id": "baml-jinja",
+        "aliases": ["Jinja baml", "jinja baml"],
+        "extensions": [".baml.jinja", ".baml.jinja"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "baml",
+        "scopeName": "source.baml",
+        "path": "./syntaxes/baml.tmLanguage.json"
+      },
+      {
+        "language": "baml-jinja",
+        "scopeName": "source.baml-jinja",
+        "path": "./syntaxes/jinja.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "baml",
+        "path": "./snippets/basicSnippets.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "baml.restartLanguageServer",
+        "title": "Restart Language Server",
+        "category": "Baml"
+      },
+      {
+        "command": "baml.openBamlPanel",
+        "title": "Open Playground",
+        "category": "Baml"
+      },
+      {
+        "command": "baml.checkForUpdates",
+        "title": "Check Updates",
+        "category": "Baml"
+      },
+      {
+        "command": "baml.jumpToDefinition",
+        "title": "Jump to Definition",
+        "category": "Baml",
+        "enablement": "editorLangId == 'python'"
+      },
+      {
+        "command": "baml.selectTestCase",
+        "title": "Select Test Case",
+        "category": "Baml"
+      },
+      {
+        "command": "baml.setDefaultFormatter",
+        "title": "Set Default Formatter",
+        "category": "Baml"
+      }
+    ]
+  },
+  "scripts": {
+    "dev": "tsup --watch --sourcemap",
+    "build": "pnpm run typecheck && tsup",
+    "release": "pnpm run typecheck && tsup --minify",
+    "vscode:package": "vsce package --no-dependencies",
+    "vscode:publish": "vsce publish --no-dependencies",
+    "clean": "git clean -xdf baml-*.vsix .turbo dist out node_modules",
+    "typecheck": "tsc --noEmit --emitDeclarationOnly false",
+    "test:syntaxes": "vscode-tmgrammar-snap --config ../package.json all.test.baml",
+    "update-test:syntaxes": "pnpm test:syntaxes -- --updateSnapshot"
+  },
+  "dependencies": {
+    "@aws-sdk/credential-providers": "3.830.0",
+    "@baml/common": "workspace:*",
+    "@baml/cli": "workspace:*",
+    "@baml/ui": "workspace:*",
+    "@baml/playground": "workspace:*",
+    "@smithy/types": "4.3.1",
+    "adm-zip": "0.5.16",
+    "allotment": "1.20.4",
+    "axios": "1.10.0",
+    "cors": "2.8.5",
+    "dotenv": "16.5.0",
+    "express": "5.1.0",
+    "google-auth-library": "10.1.0",
+    "http-proxy-middleware": "3.0.5",
+    "jotai": "2.12.5",
+    "jotai-devtools": "0.12.0",
+    "lucide-react": "0.516.0",
+    "next-themes": "0.4.6",
+    "posthog-node": "5.1.1",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "semver": "7.7.2",
+    "tar": "7.4.3",
+    "typescript": "5.8.3",
+    "unique-names-generator": "4.7.1",
+    "uuid": "11.1.0",
+    "vscode-languageclient": "7.0.0",
+    "vscode-uri": "3.1.0",
+    "zod": "3.25.66"
+  },
+  "devDependencies": {
+    "@types/adm-zip": "0.5.7",
+    "@types/cors": "2.8.19",
+    "vscode-tmgrammar-test": "0.1.3",
+    "@types/express": "5.0.3",
+    "@types/node": "24.0.3",
+    "@types/react": "19.1.8",
+    "@types/react-dom": "19.1.6",
+    "@types/semver": "7.7.0",
+    "@types/tar": "6.1.13",
+    "@types/vscode": "1.63.0",
+    "@vscode/test-electron": "2.5.2",
+    "@vscode/vsce": "3.5.0",
+    "concurrently": "9.1.2",
+    "react-refresh": "0.17.0",
+    "rimraf": "6.0.1",
+    "tsup": "^8.0.0",
+    "vitest": "3.2.4"
+  },
+  "preview": false
+}

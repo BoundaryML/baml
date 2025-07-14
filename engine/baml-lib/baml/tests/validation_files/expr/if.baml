@@ -8,7 +8,7 @@ let z = if true {
 
 // warning: Variable assignment is experimental, and will break in the future.
 //   -->  expr/if.baml:1
-//    |
-//    |
+//    | 
+//    | 
 //  1 | let x = if true { 1 } else { 2 };
-//    |
+//    | 

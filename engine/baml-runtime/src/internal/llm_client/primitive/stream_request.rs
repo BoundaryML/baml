@@ -1,7 +1,10 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, ops::Deref};
 
 use anyhow::{Context, Result};
-use baml_types::BamlMap;
+use baml_types::{
+    tracing::events::{HTTPRequest, HTTPResponse, HTTPResponseStream, SSEEvent, TraceEvent},
+    BamlMap,
+};
 use eventsource_stream::Eventsource;
 use futures::{StreamExt, TryStreamExt};
 use internal_baml_jinja::RenderedChatMessage;
@@ -11,7 +14,7 @@ use serde::de::DeserializeOwned;
 use super::{
     anthropic::response_handler::scan_anthropic_response_stream,
     google::response_handler::scan_google_response_stream,
-    openai::response_handler::scan_openai_response_stream,
+    openai::response_handler::scan_openai_chat_completion_stream,
     request::{
         build_and_log_outbound_request, execute_request, make_request, to_prompt, EitherResponse,
         RequestBuilder, ResponseType,
@@ -23,6 +26,7 @@ use crate::{
         traits::{HttpContext, StreamResponse, WithClient},
         ErrorCode, LLMCompleteResponse, LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse,
     },
+    tracingv2::storage::storage::BAML_TRACER,
     RuntimeContext,
 };
 
@@ -58,13 +62,33 @@ pub async fn make_stream_request(
         Err(e) => return Err(e),
     };
 
+    let call_id_stack = runtime_context.runtime_context().call_id_stack.clone();
+    let http_request_id = std::sync::Arc::new(runtime_context.http_request_id().clone());
+
     let client_name = client.context().name.clone();
     let params = client.request_options().clone();
     let prompt = to_prompt(prompt);
     Ok(Box::pin(
         resp.bytes_stream()
             .eventsource()
-            .take_while(|event| {
+            .take_while(move |event| {
+                if let Ok(event) = event {
+                    let trace_event = TraceEvent::new_raw_llm_response_stream(
+                        call_id_stack.clone(),
+                        std::sync::Arc::new(HTTPResponseStream::new(
+                            http_request_id.deref().clone(),
+                            SSEEvent::new(
+                                event.event.clone(),
+                                event.data.clone(),
+                                event.id.clone(),
+                            ),
+                        )),
+                    );
+                    BAML_TRACER
+                        .lock()
+                        .unwrap()
+                        .put(std::sync::Arc::new(trace_event));
+                }
                 std::future::ready(event.as_ref().is_ok_and(|e| e.data != "[DONE]"))
             })
             .map(|event| -> Result<serde_json::Value> { Ok(serde_json::from_str(&event?.data)?) })
@@ -105,7 +129,7 @@ pub async fn make_stream_request(
                         }
                     };
                     let update = match response_type {
-                        ResponseType::OpenAI => scan_openai_response_stream(
+                        ResponseType::OpenAI => scan_openai_chat_completion_stream(
                             &client_name,
                             &params,
                             &prompt,
@@ -115,6 +139,18 @@ pub async fn make_stream_request(
                             accumulated,
                             event_body,
                         ),
+                        ResponseType::OpenAIResponses => {
+                            super::openai::response_handler::scan_openai_responses_stream(
+                                &client_name,
+                                &params,
+                                &prompt,
+                                &start_time_system,
+                                &start_time_instant,
+                                &model_name,
+                                accumulated,
+                                event_body,
+                            )
+                        }
                         ResponseType::Anthropic => scan_anthropic_response_stream(
                             &client_name,
                             &params,

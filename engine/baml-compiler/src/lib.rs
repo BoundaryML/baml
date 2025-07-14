@@ -35,7 +35,7 @@ struct Compiler<'g> {
     ///
     /// TODO: The `g` lifetime here doesn't need to be the same as the globals
     /// lifetime.
-    classes: &'g HashMap<String, HashMap<String, usize>>,
+    class_fields: &'g HashMap<String, HashMap<String, usize>>,
 
     /// Resolved local variables.
     ///
@@ -76,12 +76,12 @@ impl<'g> Compiler<'g> {
     /// Create a new compiler.
     pub fn new(
         globals: &'g HashMap<String, usize>,
-        classes: &'g HashMap<String, HashMap<String, usize>>,
+        class_fields: &'g HashMap<String, HashMap<String, usize>>,
         objects: &'g mut Vec<Object>,
     ) -> Self {
         Self {
             globals,
-            classes,
+            class_fields,
             objects,
             scope: 0,
             locals: HashMap::new(),
@@ -455,7 +455,7 @@ impl<'g> Compiler<'g> {
                         ClassConstructorField::Named(name, expr) => {
                             self.compile_expression(expr);
                             self.emit(Instruction::StoreField(
-                                self.classes[constructor.class_name.name()][name.name()],
+                                self.class_fields[constructor.class_name.name()][name.name()],
                             ));
                             defined_named_fields.insert(name.name());
                         }
@@ -466,7 +466,8 @@ impl<'g> Compiler<'g> {
                             let spread_local = self.locals.len() + 2;
                             self.emit(Instruction::LoadVar(spread_local - 1));
 
-                            for (field, index) in &self.classes[constructor.class_name.name()] {
+                            for (field, index) in &self.class_fields[constructor.class_name.name()]
+                            {
                                 if !defined_named_fields.contains(field.as_str()) {
                                     self.emit(Instruction::LoadVar(spread_local));
                                     self.emit(Instruction::LoadField(*index));
@@ -555,51 +556,63 @@ impl<'g> Compiler<'g> {
 pub fn compile(ast: ParserDatabase) -> anyhow::Result<(Vec<Object>, Vec<Value>)> {
     // eprintln!("{:#?}", ast.ast);
 
+    // Name -> Index
     let mut resolved_globals = HashMap::new();
-    let mut resolved_classes = HashMap::new();
+    // Class Name -> (Field Name -> Index)
+    let mut resolved_class_fields = HashMap::new();
 
-    // TODO: Probably we can use Top::Id to map these to VM globals.
-    for (i, function) in ast.walk_expr_fns().enumerate() {
-        resolved_globals.insert(function.name().to_string(), i);
-    }
+    // Name resolution phase.
+    for top in &ast.ast.tops {
+        match top {
+            ast::Top::Class(class) => {
+                // Resolve class name.
+                resolved_globals.insert(class.name.to_string(), resolved_globals.len());
 
-    // TODO: Loop over Tops, get rid of this walker nonsense.
-    for (i, class) in ast.walk_classes().enumerate() {
-        resolved_globals.insert(class.name().to_string(), resolved_globals.len() + i);
+                // Resolve class fields.
+                resolved_class_fields.insert(
+                    class.name().to_string(),
+                    class
+                        .fields
+                        .iter()
+                        .enumerate()
+                        .map(|(i, field)| (field.name().to_string(), i))
+                        .collect(),
+                );
+            }
 
-        // Resolve class fields.
-        let mut class_fields = HashMap::new();
-        for field in class.static_fields() {
-            class_fields.insert(field.name().to_string(), class_fields.len());
+            ast::Top::ExprFn(function) => {
+                resolved_globals.insert(function.name.to_string(), resolved_globals.len());
+            }
+
+            _ => todo!("name resolution: unhandled Top variant: {top:?}"),
         }
-
-        resolved_classes.insert(class.name().to_string(), class_fields);
     }
 
     let mut objects = Vec::with_capacity(resolved_globals.len());
     let mut globals = Vec::with_capacity(resolved_globals.len());
 
-    for function in ast.walk_expr_fns() {
-        let function = Compiler::new(&resolved_globals, &resolved_classes, &mut objects)
-            .compile(function.expr_fn())?;
+    // Compilation phase.
+    for top in &ast.ast.tops {
+        let object = match top {
+            ast::Top::Class(class) => Object::Class(Class {
+                name: class.name().to_string(),
+                field_names: class
+                    .fields
+                    .iter()
+                    .map(|field| field.name().to_string())
+                    .collect(),
+            }),
 
-        // Add the function to the globals and objects pools.
-        globals.push(Value::Object(objects.len()));
-        objects.push(Object::Function(function));
-    }
+            ast::Top::ExprFn(function) => Object::Function(
+                Compiler::new(&resolved_globals, &resolved_class_fields, &mut objects)
+                    .compile(function)?,
+            ),
 
-    for class in ast.walk_classes() {
-        let class = Class {
-            name: class.name().to_string(),
-            field_names: class
-                .static_fields()
-                .map(|field| field.name().to_string())
-                .collect(),
+            _ => todo!("compilation: unhandled Top variant: {top:?}"),
         };
 
-        // Add the class to the globals and objects pools.
         globals.push(Value::Object(objects.len()));
-        objects.push(Object::Class(class));
+        objects.push(object);
     }
 
     Ok((objects, globals))
@@ -759,7 +772,7 @@ mod tests {
             expected: vec![(
                 "main",
                 vec![
-                    Instruction::AllocInstance(1),
+                    Instruction::AllocInstance(0),
                     Instruction::LoadConst(0),
                     Instruction::StoreField(0),
                     Instruction::LoadConst(1),
@@ -793,12 +806,12 @@ mod tests {
             expected: vec![(
                 "main",
                 vec![
-                    Instruction::AllocInstance(2),
+                    Instruction::AllocInstance(0),
                     Instruction::LoadConst(0),
                     Instruction::StoreField(0),
                     Instruction::LoadConst(1),
                     Instruction::StoreField(1),
-                    Instruction::LoadGlobal(0),
+                    Instruction::LoadGlobal(1),
                     Instruction::Call(0),
                     Instruction::LoadVar(1),
                     Instruction::LoadVar(2),

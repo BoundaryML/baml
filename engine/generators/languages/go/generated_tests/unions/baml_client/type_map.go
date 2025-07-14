@@ -31,4 +31,16 @@ var typeMap = map[string]reflect.Type{
 	"STREAM_TYPES.Union__string_resource__string_service": reflect.TypeOf(stream_types.Union2KresourceOrKservice{}),
 	"TYPES.Union__Recursive1__int__string":                reflect.TypeOf(types.Union3IntOrRecursive1OrString{}),
 	"STREAM_TYPES.Union__Recursive1__int__string":         reflect.TypeOf(stream_types.Union3IntOrRecursive1OrString{}),
+
+	"TYPES.MyUnion":                 reflect.TypeOf((*types.Union3IntOrRecursive1OrString)(nil)),
+	"TYPES.Nonrecursive1":           reflect.TypeOf((*int64)(nil)),
+	"TYPES.Nonrecursive2":           reflect.TypeOf((*string)(nil)),
+	"TYPES.Recursive1":              reflect.TypeOf(types.Union2IntOrListRecursive1{}),
+	"TYPES.SystemComponentCategory": reflect.TypeOf(types.Union2KresourceOrKservice{}),
+
+	"STREAM_TYPES.MyUnion":                 reflect.TypeOf((*stream_types.Union3IntOrRecursive1OrString)(nil)),
+	"STREAM_TYPES.Nonrecursive1":           reflect.TypeOf((*int64)(nil)),
+	"STREAM_TYPES.Nonrecursive2":           reflect.TypeOf((*string)(nil)),
+	"STREAM_TYPES.Recursive1":              reflect.TypeOf((*stream_types.Union2IntOrListRecursive1)(nil)),
+	"STREAM_TYPES.SystemComponentCategory": reflect.TypeOf((*stream_types.Union2KresourceOrKservice)(nil)),
 }

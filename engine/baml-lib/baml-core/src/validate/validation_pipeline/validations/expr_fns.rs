@@ -99,25 +99,25 @@ pub(super) fn validate_expr_fns(ctx: &mut Context<'_>) {
 
 fn validate_stmt(ctx: &mut Context<'_>, stmt: &Stmt, scope: &HashSet<String>) {
     match stmt {
-        Stmt::Let(_identifier, expr, _span) => {
-            validate_expression(ctx, expr, scope);
+        Stmt::Let(stmt) => {
+            validate_expression(ctx, &stmt.expr, scope);
         }
-        Stmt::ForLoop(identifier, iterator, body, _span) => {
+        Stmt::ForLoop(stmt) => {
             // First validate the iterator expression
-            validate_expression(ctx, iterator, scope);
+            validate_expression(ctx, &stmt.iterator, scope);
 
             // Create a new scope that includes the loop variable
             let mut loop_scope = scope.clone();
-            loop_scope.insert(identifier.name().to_string());
+            loop_scope.insert(stmt.identifier.name().to_string());
 
             // Validate statements in the loop body
-            for stmt in &body.stmts {
+            for stmt in &stmt.body.stmts {
                 validate_stmt(ctx, stmt, &loop_scope);
                 loop_scope.insert(stmt.identifier().name().to_string());
             }
 
             // Validate the loop body expression
-            validate_expression(ctx, &body.expr, &loop_scope);
+            validate_expression(ctx, &stmt.body.expr, &loop_scope);
         }
     }
 }

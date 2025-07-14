@@ -60,40 +60,61 @@ impl RuntimeCli {
                 args.from = BamlRuntime::parse_baml_src_path(&args.from)?;
                 match args.run(defaults) {
                     Ok(()) => Ok(crate::ExitCode::Success),
-                    Err(_) => Ok(crate::ExitCode::Other),
+                    Err(e) => {
+                        eprintln!("Error: {e}");
+                        Ok(crate::ExitCode::Other)
+                    }
                 }
             }
             Commands::Init(args) => match args.run(defaults) {
                 Ok(()) => Ok(crate::ExitCode::Success),
-                Err(_) => Ok(crate::ExitCode::Other),
+                Err(e) => {
+                    eprintln!("Error: {e}");
+                    Ok(crate::ExitCode::Other)
+                }
             },
             Commands::Serve(args) => {
                 args.from = BamlRuntime::parse_baml_src_path(&args.from)?;
                 match args.run() {
                     Ok(()) => Ok(crate::ExitCode::Success),
-                    Err(_) => Ok(crate::ExitCode::Other),
+                    Err(e) => {
+                        eprintln!("Error: {e}");
+                        Ok(crate::ExitCode::Other)
+                    }
                 }
             }
             Commands::Dev(args) => {
                 args.from = BamlRuntime::parse_baml_src_path(&args.from)?;
                 match args.run(defaults) {
                     Ok(()) => Ok(crate::ExitCode::Success),
-                    Err(_) => Ok(crate::ExitCode::Other),
+                    Err(e) => {
+                        eprintln!("Error: {e}");
+                        Ok(crate::ExitCode::Other)
+                    }
                 }
             }
             Commands::Auth(args) => match t.block_on(async { args.run_async().await }) {
                 Ok(()) => Ok(crate::ExitCode::Success),
-                Err(_) => Ok(crate::ExitCode::Other),
+                Err(e) => {
+                    eprintln!("Error: {e}");
+                    Ok(crate::ExitCode::Other)
+                }
             },
             Commands::Login(args) => match t.block_on(async { args.run_async().await }) {
                 Ok(()) => Ok(crate::ExitCode::Success),
-                Err(_) => Ok(crate::ExitCode::Other),
+                Err(e) => {
+                    eprintln!("Error: {e}");
+                    Ok(crate::ExitCode::Other)
+                }
             },
             Commands::Deploy(args) => {
                 args.from = BamlRuntime::parse_baml_src_path(&args.from)?;
                 match t.block_on(async { args.run_async().await }) {
                     Ok(()) => Ok(crate::ExitCode::Success),
-                    Err(_) => Ok(crate::ExitCode::Other),
+                    Err(e) => {
+                        eprintln!("Error: {e}");
+                        Ok(crate::ExitCode::Other)
+                    }
                 }
             }
             Commands::Format(args) => {

@@ -28,17 +28,19 @@ type stream struct{}
 var Stream = &stream{}
 
 type StreamValue[TStream any, TFinal any] struct {
+	IsError   bool
+	Error     error
 	IsFinal   bool
 	as_final  *TFinal
 	as_stream *TStream
 }
 
-func (s *StreamValue[TStream, TFinal]) Final() TFinal {
-	return *s.as_final
+func (s *StreamValue[TStream, TFinal]) Final() *TFinal {
+	return s.as_final
 }
 
-func (s *StreamValue[TStream, TFinal]) Stream() TStream {
-	return *s.as_stream
+func (s *StreamValue[TStream, TFinal]) Stream() *TStream {
+	return s.as_stream
 }
 
 // / Streaming version of MakeClassWithBlockDone
@@ -88,21 +90,26 @@ func (*stream) MakeClassWithBlockDone(ctx context.Context, opts ...CallOptionFun
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[types.ClassWithBlockDone, types.ClassWithBlockDone]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.ClassWithBlockDone)
+					data := (result.Data).(types.ClassWithBlockDone)
 					channel <- StreamValue[types.ClassWithBlockDone, types.ClassWithBlockDone]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*types.ClassWithBlockDone)
+					data := (result.StreamData).(types.ClassWithBlockDone)
 					channel <- StreamValue[types.ClassWithBlockDone, types.ClassWithBlockDone]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -161,21 +168,26 @@ func (*stream) MakeClassWithExternalDone(ctx context.Context, opts ...CallOption
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[types.ClassWithoutDone, types.ClassWithoutDone]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.ClassWithoutDone)
+					data := (result.Data).(types.ClassWithoutDone)
 					channel <- StreamValue[types.ClassWithoutDone, types.ClassWithoutDone]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*types.ClassWithoutDone)
+					data := (result.StreamData).(types.ClassWithoutDone)
 					channel <- StreamValue[types.ClassWithoutDone, types.ClassWithoutDone]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -234,21 +246,26 @@ func (*stream) MakeSemanticContainer(ctx context.Context, opts ...CallOptionFunc
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.SemanticContainer, types.SemanticContainer]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.SemanticContainer)
+					data := (result.Data).(types.SemanticContainer)
 					channel <- StreamValue[stream_types.SemanticContainer, types.SemanticContainer]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.SemanticContainer)
+					data := (result.StreamData).(stream_types.SemanticContainer)
 					channel <- StreamValue[stream_types.SemanticContainer, types.SemanticContainer]{
 						IsFinal:   false,
 						as_stream: &data,

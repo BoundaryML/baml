@@ -15,6 +15,7 @@ package baml_client
 
 import (
 	"context"
+	"fmt"
 
 	"example.com/integ-tests/baml_client/stream_types"
 	"example.com/integ-tests/baml_client/types"
@@ -26,17 +27,19 @@ type stream struct{}
 var Stream = &stream{}
 
 type StreamValue[TStream any, TFinal any] struct {
+	IsError   bool
+	Error     error
 	IsFinal   bool
 	as_final  *TFinal
 	as_stream *TStream
 }
 
-func (s *StreamValue[TStream, TFinal]) Final() TFinal {
-	return *s.as_final
+func (s *StreamValue[TStream, TFinal]) Final() *TFinal {
+	return s.as_final
 }
 
-func (s *StreamValue[TStream, TFinal]) Stream() TStream {
-	return *s.as_stream
+func (s *StreamValue[TStream, TFinal]) Stream() *TStream {
+	return s.as_stream
 }
 
 // / Streaming version of AaaSamOutputFormat
@@ -86,21 +89,26 @@ func (*stream) AaaSamOutputFormat(ctx context.Context, recipe string, opts ...Ca
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.Recipe, types.Recipe]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.Recipe)
+					data := (result.Data).(types.Recipe)
 					channel <- StreamValue[stream_types.Recipe, types.Recipe]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.Recipe)
+					data := (result.StreamData).(stream_types.Recipe)
 					channel <- StreamValue[stream_types.Recipe, types.Recipe]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -159,21 +167,26 @@ func (*stream) AliasThatPointsToRecursiveType(ctx context.Context, data types.Li
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.LinkedListAliasNode, types.LinkedListAliasNode]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.LinkedListAliasNode)
+					data := (result.Data).(types.LinkedListAliasNode)
 					channel <- StreamValue[stream_types.LinkedListAliasNode, types.LinkedListAliasNode]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.LinkedListAliasNode)
+					data := (result.StreamData).(stream_types.LinkedListAliasNode)
 					channel <- StreamValue[stream_types.LinkedListAliasNode, types.LinkedListAliasNode]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -232,21 +245,26 @@ func (*stream) AliasWithMultipleAttrs(ctx context.Context, money int64, opts ...
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[types.Checked[int64], int64]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*int64)
+					data := (result.Data).(int64)
 					channel <- StreamValue[types.Checked[int64], int64]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*types.Checked[int64])
+					data := (result.StreamData).(types.Checked[int64])
 					channel <- StreamValue[types.Checked[int64], int64]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -305,21 +323,26 @@ func (*stream) AliasedInputClass(ctx context.Context, input types.InputClass, op
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -378,21 +401,26 @@ func (*stream) AliasedInputClass2(ctx context.Context, input types.InputClass, o
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -451,21 +479,26 @@ func (*stream) AliasedInputClassNested(ctx context.Context, input types.InputCla
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -524,21 +557,26 @@ func (*stream) AliasedInputEnum(ctx context.Context, input types.AliasedEnum, op
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -597,21 +635,26 @@ func (*stream) AliasedInputList(ctx context.Context, input []types.AliasedEnum, 
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -670,21 +713,26 @@ func (*stream) AllowedOptionals(ctx context.Context, optionals types.OptionalLis
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.OptionalListAndMap, types.OptionalListAndMap]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.OptionalListAndMap)
+					data := (result.Data).(types.OptionalListAndMap)
 					channel <- StreamValue[stream_types.OptionalListAndMap, types.OptionalListAndMap]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.OptionalListAndMap)
+					data := (result.StreamData).(stream_types.OptionalListAndMap)
 					channel <- StreamValue[stream_types.OptionalListAndMap, types.OptionalListAndMap]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -743,21 +791,26 @@ func (*stream) AssertFn(ctx context.Context, a int64, opts ...CallOptionFunc) (<
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[int64, int64]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*int64)
+					data := (result.Data).(int64)
 					channel <- StreamValue[int64, int64]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*int64)
+					data := (result.StreamData).(int64)
 					channel <- StreamValue[int64, int64]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -816,21 +869,26 @@ func (*stream) AudioInput(ctx context.Context, aud any, opts ...CallOptionFunc) 
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -889,21 +947,26 @@ func (*stream) AudioInputOpenai(ctx context.Context, aud any, prompt string, opt
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -962,21 +1025,26 @@ func (*stream) BuildLinkedList(ctx context.Context, input []int64, opts ...CallO
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.LinkedList, types.LinkedList]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.LinkedList)
+					data := (result.Data).(types.LinkedList)
 					channel <- StreamValue[stream_types.LinkedList, types.LinkedList]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.LinkedList)
+					data := (result.StreamData).(stream_types.LinkedList)
 					channel <- StreamValue[stream_types.LinkedList, types.LinkedList]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -1035,21 +1103,26 @@ func (*stream) BuildTree(ctx context.Context, input types.BinaryNode, opts ...Ca
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.Tree, types.Tree]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.Tree)
+					data := (result.Data).(types.Tree)
 					channel <- StreamValue[stream_types.Tree, types.Tree]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.Tree)
+					data := (result.StreamData).(stream_types.Tree)
 					channel <- StreamValue[stream_types.Tree, types.Tree]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -1108,21 +1181,26 @@ func (*stream) ClassThatPointsToRecursiveClassThroughAlias(ctx context.Context, 
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.ClassToRecAlias, types.ClassToRecAlias]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.ClassToRecAlias)
+					data := (result.Data).(types.ClassToRecAlias)
 					channel <- StreamValue[stream_types.ClassToRecAlias, types.ClassToRecAlias]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.ClassToRecAlias)
+					data := (result.StreamData).(stream_types.ClassToRecAlias)
 					channel <- StreamValue[stream_types.ClassToRecAlias, types.ClassToRecAlias]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -1181,21 +1259,26 @@ func (*stream) ClassifyDynEnumTwo(ctx context.Context, input string, opts ...Cal
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[types.DynEnumTwo, types.DynEnumTwo]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.DynEnumTwo)
+					data := (result.Data).(types.DynEnumTwo)
 					channel <- StreamValue[types.DynEnumTwo, types.DynEnumTwo]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*types.DynEnumTwo)
+					data := (result.StreamData).(types.DynEnumTwo)
 					channel <- StreamValue[types.DynEnumTwo, types.DynEnumTwo]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -1254,21 +1337,26 @@ func (*stream) ClassifyMessage(ctx context.Context, input string, opts ...CallOp
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[types.Category, types.Category]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.Category)
+					data := (result.Data).(types.Category)
 					channel <- StreamValue[types.Category, types.Category]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*types.Category)
+					data := (result.StreamData).(types.Category)
 					channel <- StreamValue[types.Category, types.Category]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -1327,21 +1415,26 @@ func (*stream) ClassifyMessage2(ctx context.Context, input string, opts ...CallO
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[types.Category, types.Category]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.Category)
+					data := (result.Data).(types.Category)
 					channel <- StreamValue[types.Category, types.Category]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*types.Category)
+					data := (result.StreamData).(types.Category)
 					channel <- StreamValue[types.Category, types.Category]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -1400,21 +1493,26 @@ func (*stream) ClassifyMessage3(ctx context.Context, input string, opts ...CallO
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[types.Category, types.Category]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.Category)
+					data := (result.Data).(types.Category)
 					channel <- StreamValue[types.Category, types.Category]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*types.Category)
+					data := (result.StreamData).(types.Category)
 					channel <- StreamValue[types.Category, types.Category]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -1473,21 +1571,26 @@ func (*stream) Completion(ctx context.Context, prefix string, suffix string, lan
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -1546,22 +1649,183 @@ func (*stream) CustomTask(ctx context.Context, input string, opts ...CallOptionF
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.Union3BookOrderOrFlightConfirmationOrGroceryReceipt, types.Union3BookOrderOrFlightConfirmationOrGroceryReceipt]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.Union3BookOrderOrFlightConfirmationOrGroceryReceipt)
+					data := (result.Data).(types.Union3BookOrderOrFlightConfirmationOrGroceryReceipt)
 					channel <- StreamValue[stream_types.Union3BookOrderOrFlightConfirmationOrGroceryReceipt, types.Union3BookOrderOrFlightConfirmationOrGroceryReceipt]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.Union3BookOrderOrFlightConfirmationOrGroceryReceipt)
+					data := (result.StreamData).(stream_types.Union3BookOrderOrFlightConfirmationOrGroceryReceipt)
 					channel <- StreamValue[stream_types.Union3BookOrderOrFlightConfirmationOrGroceryReceipt, types.Union3BookOrderOrFlightConfirmationOrGroceryReceipt]{
+						IsFinal:   false,
+						as_stream: &data,
+					}
+				}
+			}
+		}
+	}()
+	return channel, nil
+}
+
+// / Streaming version of DescribeAudio
+func (*stream) DescribeAudio(ctx context.Context, audio any, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"audio": audio},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := baml.EncodeArgs(args)
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: DescribeAudio: %w", err)
+		panic(wrapped_err)
+	}
+
+	internal_ctx := context.Background()
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "DescribeAudio", encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	channel := make(chan StreamValue[string, string])
+	go func() {
+		defer func() {
+			internal_ctx.Done()
+		}()
+		for {
+			select {
+			case <-ctx.Done():
+				close(channel)
+				return
+			case result, ok := <-internal_channel:
+				if !ok {
+					// channel closed for some reason
+					close(channel)
+					return
+				}
+				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
+					close(channel)
+					return
+				}
+				if result.HasData {
+					data := (result.Data).(string)
+					channel <- StreamValue[string, string]{
+						IsFinal:  true,
+						as_final: &data,
+					}
+				} else {
+					data := (result.StreamData).(string)
+					channel <- StreamValue[string, string]{
+						IsFinal:   false,
+						as_stream: &data,
+					}
+				}
+			}
+		}
+	}()
+	return channel, nil
+}
+
+// / Streaming version of DescribeAudio2
+func (*stream) DescribeAudio2(ctx context.Context, audio any, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"audio": audio},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := baml.EncodeArgs(args)
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: DescribeAudio2: %w", err)
+		panic(wrapped_err)
+	}
+
+	internal_ctx := context.Background()
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "DescribeAudio2", encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	channel := make(chan StreamValue[string, string])
+	go func() {
+		defer func() {
+			internal_ctx.Done()
+		}()
+		for {
+			select {
+			case <-ctx.Done():
+				close(channel)
+				return
+			case result, ok := <-internal_channel:
+				if !ok {
+					// channel closed for some reason
+					close(channel)
+					return
+				}
+				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
+					close(channel)
+					return
+				}
+				if result.HasData {
+					data := (result.Data).(string)
+					channel <- StreamValue[string, string]{
+						IsFinal:  true,
+						as_final: &data,
+					}
+				} else {
+					data := (result.StreamData).(string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -1619,21 +1883,26 @@ func (*stream) DescribeImage(ctx context.Context, img any, opts ...CallOptionFun
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -1692,21 +1961,26 @@ func (*stream) DescribeImage2(ctx context.Context, classWithImage types.ClassWit
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -1765,21 +2039,26 @@ func (*stream) DescribeImage3(ctx context.Context, classWithImage types.ClassWit
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -1838,21 +2117,26 @@ func (*stream) DescribeImage4(ctx context.Context, classWithImage types.ClassWit
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -1911,21 +2195,26 @@ func (*stream) DescribeMedia1599(ctx context.Context, img any, client_sector str
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -1984,21 +2273,26 @@ func (*stream) DifferentiateUnions(ctx context.Context, opts ...CallOptionFunc) 
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.Union2OriginalAOrOriginalB, types.Union2OriginalAOrOriginalB]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.Union2OriginalAOrOriginalB)
+					data := (result.Data).(types.Union2OriginalAOrOriginalB)
 					channel <- StreamValue[stream_types.Union2OriginalAOrOriginalB, types.Union2OriginalAOrOriginalB]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.Union2OriginalAOrOriginalB)
+					data := (result.StreamData).(stream_types.Union2OriginalAOrOriginalB)
 					channel <- StreamValue[stream_types.Union2OriginalAOrOriginalB, types.Union2OriginalAOrOriginalB]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -2057,21 +2351,26 @@ func (*stream) DummyOutputFunction(ctx context.Context, input string, opts ...Ca
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.DummyOutput, types.DummyOutput]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.DummyOutput)
+					data := (result.Data).(types.DummyOutput)
 					channel <- StreamValue[stream_types.DummyOutput, types.DummyOutput]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.DummyOutput)
+					data := (result.StreamData).(stream_types.DummyOutput)
 					channel <- StreamValue[stream_types.DummyOutput, types.DummyOutput]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -2130,21 +2429,26 @@ func (*stream) DynamicFunc(ctx context.Context, input types.DynamicClassOne, opt
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.DynamicClassTwo, types.DynamicClassTwo]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.DynamicClassTwo)
+					data := (result.Data).(types.DynamicClassTwo)
 					channel <- StreamValue[stream_types.DynamicClassTwo, types.DynamicClassTwo]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.DynamicClassTwo)
+					data := (result.StreamData).(stream_types.DynamicClassTwo)
 					channel <- StreamValue[stream_types.DynamicClassTwo, types.DynamicClassTwo]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -2203,21 +2507,26 @@ func (*stream) DynamicInputOutput(ctx context.Context, input types.DynInputOutpu
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.DynInputOutput, types.DynInputOutput]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.DynInputOutput)
+					data := (result.Data).(types.DynInputOutput)
 					channel <- StreamValue[stream_types.DynInputOutput, types.DynInputOutput]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.DynInputOutput)
+					data := (result.StreamData).(stream_types.DynInputOutput)
 					channel <- StreamValue[stream_types.DynInputOutput, types.DynInputOutput]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -2276,10 +2585,15 @@ func (*stream) DynamicListInputOutput(ctx context.Context, input []types.DynInpu
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[[]stream_types.DynInputOutput, []types.DynInputOutput]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
@@ -2349,21 +2663,26 @@ func (*stream) ExpectFailure(ctx context.Context, opts ...CallOptionFunc) (<-cha
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -2422,21 +2741,26 @@ func (*stream) ExtractContactInfo(ctx context.Context, document string, opts ...
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.ContactInfo, types.ContactInfo]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.ContactInfo)
+					data := (result.Data).(types.ContactInfo)
 					channel <- StreamValue[stream_types.ContactInfo, types.ContactInfo]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.ContactInfo)
+					data := (result.StreamData).(stream_types.ContactInfo)
 					channel <- StreamValue[stream_types.ContactInfo, types.ContactInfo]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -2495,21 +2819,26 @@ func (*stream) ExtractEntities(ctx context.Context, text string, opts ...CallOpt
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.DynamicSchema, types.DynamicSchema]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.DynamicSchema)
+					data := (result.Data).(types.DynamicSchema)
 					channel <- StreamValue[stream_types.DynamicSchema, types.DynamicSchema]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.DynamicSchema)
+					data := (result.StreamData).(stream_types.DynamicSchema)
 					channel <- StreamValue[stream_types.DynamicSchema, types.DynamicSchema]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -2568,10 +2897,15 @@ func (*stream) ExtractHobby(ctx context.Context, text string, opts ...CallOption
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[[]types.Hobby, []types.Hobby]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
@@ -2641,10 +2975,15 @@ func (*stream) ExtractNames(ctx context.Context, input string, opts ...CallOptio
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[[]string, []string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
@@ -2714,10 +3053,15 @@ func (*stream) ExtractPeople(ctx context.Context, text string, opts ...CallOptio
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[[]stream_types.Person, []types.Person]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
@@ -2787,21 +3131,26 @@ func (*stream) ExtractReceiptInfo(ctx context.Context, email string, reason type
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.ReceiptInfo, types.ReceiptInfo]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.ReceiptInfo)
+					data := (result.Data).(types.ReceiptInfo)
 					channel <- StreamValue[stream_types.ReceiptInfo, types.ReceiptInfo]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.ReceiptInfo)
+					data := (result.StreamData).(stream_types.ReceiptInfo)
 					channel <- StreamValue[stream_types.ReceiptInfo, types.ReceiptInfo]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -2860,21 +3209,26 @@ func (*stream) ExtractResume(ctx context.Context, resume string, img *any, opts 
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.Resume, types.Resume]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.Resume)
+					data := (result.Data).(types.Resume)
 					channel <- StreamValue[stream_types.Resume, types.Resume]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.Resume)
+					data := (result.StreamData).(stream_types.Resume)
 					channel <- StreamValue[stream_types.Resume, types.Resume]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -2933,21 +3287,26 @@ func (*stream) ExtractResume2(ctx context.Context, resume string, opts ...CallOp
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.Resume, types.Resume]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.Resume)
+					data := (result.Data).(types.Resume)
 					channel <- StreamValue[stream_types.Resume, types.Resume]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.Resume)
+					data := (result.StreamData).(stream_types.Resume)
 					channel <- StreamValue[stream_types.Resume, types.Resume]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -3006,10 +3365,15 @@ func (*stream) FnClassOptionalOutput(ctx context.Context, input string, opts ...
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[*stream_types.ClassOptionalOutput, *types.ClassOptionalOutput]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
@@ -3079,10 +3443,15 @@ func (*stream) FnClassOptionalOutput2(ctx context.Context, input string, opts ..
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[*stream_types.ClassOptionalOutput2, *types.ClassOptionalOutput2]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
@@ -3152,10 +3521,15 @@ func (*stream) FnEnumListOutput(ctx context.Context, input string, opts ...CallO
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[[]types.EnumOutput, []types.EnumOutput]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
@@ -3225,21 +3599,26 @@ func (*stream) FnEnumOutput(ctx context.Context, input string, opts ...CallOptio
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[types.EnumOutput, types.EnumOutput]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.EnumOutput)
+					data := (result.Data).(types.EnumOutput)
 					channel <- StreamValue[types.EnumOutput, types.EnumOutput]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*types.EnumOutput)
+					data := (result.StreamData).(types.EnumOutput)
 					channel <- StreamValue[types.EnumOutput, types.EnumOutput]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -3298,21 +3677,26 @@ func (*stream) FnLiteralClassInputOutput(ctx context.Context, input types.Litera
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.LiteralClassHello, types.LiteralClassHello]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.LiteralClassHello)
+					data := (result.Data).(types.LiteralClassHello)
 					channel <- StreamValue[stream_types.LiteralClassHello, types.LiteralClassHello]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.LiteralClassHello)
+					data := (result.StreamData).(stream_types.LiteralClassHello)
 					channel <- StreamValue[stream_types.LiteralClassHello, types.LiteralClassHello]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -3371,21 +3755,26 @@ func (*stream) FnLiteralUnionClassInputOutput(ctx context.Context, input types.U
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.Union2LiteralClassOneOrLiteralClassTwo, types.Union2LiteralClassOneOrLiteralClassTwo]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.Union2LiteralClassOneOrLiteralClassTwo)
+					data := (result.Data).(types.Union2LiteralClassOneOrLiteralClassTwo)
 					channel <- StreamValue[stream_types.Union2LiteralClassOneOrLiteralClassTwo, types.Union2LiteralClassOneOrLiteralClassTwo]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.Union2LiteralClassOneOrLiteralClassTwo)
+					data := (result.StreamData).(stream_types.Union2LiteralClassOneOrLiteralClassTwo)
 					channel <- StreamValue[stream_types.Union2LiteralClassOneOrLiteralClassTwo, types.Union2LiteralClassOneOrLiteralClassTwo]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -3444,21 +3833,26 @@ func (*stream) FnNamedArgsSingleStringOptional(ctx context.Context, myString *st
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -3517,21 +3911,26 @@ func (*stream) FnOutputBool(ctx context.Context, input string, opts ...CallOptio
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[bool, bool]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*bool)
+					data := (result.Data).(bool)
 					channel <- StreamValue[bool, bool]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*bool)
+					data := (result.StreamData).(bool)
 					channel <- StreamValue[bool, bool]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -3590,21 +3989,26 @@ func (*stream) FnOutputClass(ctx context.Context, input string, opts ...CallOpti
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.TestOutputClass, types.TestOutputClass]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.TestOutputClass)
+					data := (result.Data).(types.TestOutputClass)
 					channel <- StreamValue[stream_types.TestOutputClass, types.TestOutputClass]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.TestOutputClass)
+					data := (result.StreamData).(stream_types.TestOutputClass)
 					channel <- StreamValue[stream_types.TestOutputClass, types.TestOutputClass]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -3663,10 +4067,15 @@ func (*stream) FnOutputClassList(ctx context.Context, input string, opts ...Call
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[[]stream_types.TestOutputClass, []types.TestOutputClass]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
@@ -3736,21 +4145,26 @@ func (*stream) FnOutputClassNested(ctx context.Context, input string, opts ...Ca
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.TestClassNested, types.TestClassNested]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.TestClassNested)
+					data := (result.Data).(types.TestClassNested)
 					channel <- StreamValue[stream_types.TestClassNested, types.TestClassNested]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.TestClassNested)
+					data := (result.StreamData).(stream_types.TestClassNested)
 					channel <- StreamValue[stream_types.TestClassNested, types.TestClassNested]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -3809,21 +4223,26 @@ func (*stream) FnOutputClassWithEnum(ctx context.Context, input string, opts ...
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.TestClassWithEnum, types.TestClassWithEnum]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.TestClassWithEnum)
+					data := (result.Data).(types.TestClassWithEnum)
 					channel <- StreamValue[stream_types.TestClassWithEnum, types.TestClassWithEnum]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.TestClassWithEnum)
+					data := (result.StreamData).(stream_types.TestClassWithEnum)
 					channel <- StreamValue[stream_types.TestClassWithEnum, types.TestClassWithEnum]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -3882,21 +4301,26 @@ func (*stream) FnOutputInt(ctx context.Context, input string, opts ...CallOption
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[int64, int64]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*int64)
+					data := (result.Data).(int64)
 					channel <- StreamValue[int64, int64]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*int64)
+					data := (result.StreamData).(int64)
 					channel <- StreamValue[int64, int64]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -3955,21 +4379,26 @@ func (*stream) FnOutputLiteralBool(ctx context.Context, input string, opts ...Ca
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[bool, bool]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*bool)
+					data := (result.Data).(bool)
 					channel <- StreamValue[bool, bool]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*bool)
+					data := (result.StreamData).(bool)
 					channel <- StreamValue[bool, bool]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -4028,21 +4457,26 @@ func (*stream) FnOutputLiteralInt(ctx context.Context, input string, opts ...Cal
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[int64, int64]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*int64)
+					data := (result.Data).(int64)
 					channel <- StreamValue[int64, int64]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*int64)
+					data := (result.StreamData).(int64)
 					channel <- StreamValue[int64, int64]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -4101,21 +4535,26 @@ func (*stream) FnOutputLiteralString(ctx context.Context, input string, opts ...
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -4174,10 +4613,15 @@ func (*stream) FnOutputStringList(ctx context.Context, input string, opts ...Cal
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[[]string, []string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
@@ -4247,21 +4691,26 @@ func (*stream) FnTestAliasedEnumOutput(ctx context.Context, input string, opts .
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[types.TestEnum, types.TestEnum]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.TestEnum)
+					data := (result.Data).(types.TestEnum)
 					channel <- StreamValue[types.TestEnum, types.TestEnum]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*types.TestEnum)
+					data := (result.StreamData).(types.TestEnum)
 					channel <- StreamValue[types.TestEnum, types.TestEnum]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -4320,21 +4769,26 @@ func (*stream) FnTestClassAlias(ctx context.Context, input string, opts ...CallO
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.TestClassAlias, types.TestClassAlias]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.TestClassAlias)
+					data := (result.Data).(types.TestClassAlias)
 					channel <- StreamValue[stream_types.TestClassAlias, types.TestClassAlias]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.TestClassAlias)
+					data := (result.StreamData).(stream_types.TestClassAlias)
 					channel <- StreamValue[stream_types.TestClassAlias, types.TestClassAlias]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -4393,21 +4847,26 @@ func (*stream) FnTestNamedArgsSingleEnum(ctx context.Context, myArg types.NamedA
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -4466,21 +4925,26 @@ func (*stream) GetDataType(ctx context.Context, text string, opts ...CallOptionF
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.RaysData, types.RaysData]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.RaysData)
+					data := (result.Data).(types.RaysData)
 					channel <- StreamValue[stream_types.RaysData, types.RaysData]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.RaysData)
+					data := (result.StreamData).(stream_types.RaysData)
 					channel <- StreamValue[stream_types.RaysData, types.RaysData]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -4539,21 +5003,26 @@ func (*stream) GetOrderInfo(ctx context.Context, email types.Email, opts ...Call
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.OrderInfo, types.OrderInfo]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.OrderInfo)
+					data := (result.Data).(types.OrderInfo)
 					channel <- StreamValue[stream_types.OrderInfo, types.OrderInfo]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.OrderInfo)
+					data := (result.StreamData).(stream_types.OrderInfo)
 					channel <- StreamValue[stream_types.OrderInfo, types.OrderInfo]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -4612,21 +5081,26 @@ func (*stream) GetQuery(ctx context.Context, query string, opts ...CallOptionFun
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.SearchParams, types.SearchParams]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.SearchParams)
+					data := (result.Data).(types.SearchParams)
 					channel <- StreamValue[stream_types.SearchParams, types.SearchParams]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.SearchParams)
+					data := (result.StreamData).(stream_types.SearchParams)
 					channel <- StreamValue[stream_types.SearchParams, types.SearchParams]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -4685,10 +5159,15 @@ func (*stream) InOutEnumMapKey(ctx context.Context, i1 map[types.MapKey]string, 
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[map[types.MapKey]string, map[types.MapKey]string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
@@ -4758,10 +5237,15 @@ func (*stream) InOutLiteralStringUnionMapKey(ctx context.Context, i1 map[types.U
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[map[stream_types.Union4KfourOrKoneOrKthreeOrKtwo]string, map[types.Union4KfourOrKoneOrKthreeOrKtwo]string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
@@ -4831,10 +5315,15 @@ func (*stream) InOutSingleLiteralStringMapKey(ctx context.Context, m map[string]
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[map[string]string, map[string]string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
@@ -4904,21 +5393,26 @@ func (*stream) JsonTypeAliasCycle(ctx context.Context, input types.JsonValue, op
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.JsonValue, types.JsonValue]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.JsonValue)
+					data := (result.Data).(types.JsonValue)
 					channel <- StreamValue[stream_types.JsonValue, types.JsonValue]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.JsonValue)
+					data := (result.StreamData).(stream_types.JsonValue)
 					channel <- StreamValue[stream_types.JsonValue, types.JsonValue]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -4977,21 +5471,26 @@ func (*stream) LLMEcho(ctx context.Context, input string, opts ...CallOptionFunc
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -5050,21 +5549,26 @@ func (*stream) LiteralUnionsTest(ctx context.Context, input string, opts ...Call
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.Union3BoolKTrueOrIntK1OrKstring_output, types.Union3BoolKTrueOrIntK1OrKstring_output]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.Union3BoolKTrueOrIntK1OrKstring_output)
+					data := (result.Data).(types.Union3BoolKTrueOrIntK1OrKstring_output)
 					channel <- StreamValue[stream_types.Union3BoolKTrueOrIntK1OrKstring_output, types.Union3BoolKTrueOrIntK1OrKstring_output]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.Union3BoolKTrueOrIntK1OrKstring_output)
+					data := (result.StreamData).(stream_types.Union3BoolKTrueOrIntK1OrKstring_output)
 					channel <- StreamValue[stream_types.Union3BoolKTrueOrIntK1OrKstring_output, types.Union3BoolKTrueOrIntK1OrKstring_output]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -5123,21 +5627,26 @@ func (*stream) MakeBlockConstraint(ctx context.Context, opts ...CallOptionFunc) 
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[types.Checked[stream_types.BlockConstraint], types.Checked[types.BlockConstraint]]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.Checked[types.BlockConstraint])
+					data := (result.Data).(types.Checked[types.BlockConstraint])
 					channel <- StreamValue[types.Checked[stream_types.BlockConstraint], types.Checked[types.BlockConstraint]]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*types.Checked[stream_types.BlockConstraint])
+					data := (result.StreamData).(types.Checked[stream_types.BlockConstraint])
 					channel <- StreamValue[types.Checked[stream_types.BlockConstraint], types.Checked[types.BlockConstraint]]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -5196,21 +5705,26 @@ func (*stream) MakeClassWithBlockDone(ctx context.Context, opts ...CallOptionFun
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[types.ClassWithBlockDone, types.ClassWithBlockDone]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.ClassWithBlockDone)
+					data := (result.Data).(types.ClassWithBlockDone)
 					channel <- StreamValue[types.ClassWithBlockDone, types.ClassWithBlockDone]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*types.ClassWithBlockDone)
+					data := (result.StreamData).(types.ClassWithBlockDone)
 					channel <- StreamValue[types.ClassWithBlockDone, types.ClassWithBlockDone]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -5269,21 +5783,26 @@ func (*stream) MakeClassWithExternalDone(ctx context.Context, opts ...CallOption
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[types.ClassWithoutDone, types.ClassWithoutDone]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.ClassWithoutDone)
+					data := (result.Data).(types.ClassWithoutDone)
 					channel <- StreamValue[types.ClassWithoutDone, types.ClassWithoutDone]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*types.ClassWithoutDone)
+					data := (result.StreamData).(types.ClassWithoutDone)
 					channel <- StreamValue[types.ClassWithoutDone, types.ClassWithoutDone]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -5342,21 +5861,26 @@ func (*stream) MakeNestedBlockConstraint(ctx context.Context, opts ...CallOption
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.NestedBlockConstraint, types.NestedBlockConstraint]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.NestedBlockConstraint)
+					data := (result.Data).(types.NestedBlockConstraint)
 					channel <- StreamValue[stream_types.NestedBlockConstraint, types.NestedBlockConstraint]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.NestedBlockConstraint)
+					data := (result.StreamData).(stream_types.NestedBlockConstraint)
 					channel <- StreamValue[stream_types.NestedBlockConstraint, types.NestedBlockConstraint]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -5415,21 +5939,26 @@ func (*stream) MakeSemanticContainer(ctx context.Context, opts ...CallOptionFunc
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.SemanticContainer, types.SemanticContainer]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.SemanticContainer)
+					data := (result.Data).(types.SemanticContainer)
 					channel <- StreamValue[stream_types.SemanticContainer, types.SemanticContainer]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.SemanticContainer)
+					data := (result.StreamData).(stream_types.SemanticContainer)
 					channel <- StreamValue[stream_types.SemanticContainer, types.SemanticContainer]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -5488,10 +6017,15 @@ func (*stream) MapAlias(ctx context.Context, m map[string][]string, opts ...Call
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[map[string][]string, map[string][]string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
@@ -5561,21 +6095,26 @@ func (*stream) MergeAliasAttributes(ctx context.Context, money int64, opts ...Ca
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.MergeAttrs, types.MergeAttrs]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.MergeAttrs)
+					data := (result.Data).(types.MergeAttrs)
 					channel <- StreamValue[stream_types.MergeAttrs, types.MergeAttrs]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.MergeAttrs)
+					data := (result.StreamData).(stream_types.MergeAttrs)
 					channel <- StreamValue[stream_types.MergeAttrs, types.MergeAttrs]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -5634,21 +6173,26 @@ func (*stream) MyFunc(ctx context.Context, input string, opts ...CallOptionFunc)
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.DynamicOutput, types.DynamicOutput]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.DynamicOutput)
+					data := (result.Data).(types.DynamicOutput)
 					channel <- StreamValue[stream_types.DynamicOutput, types.DynamicOutput]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.DynamicOutput)
+					data := (result.StreamData).(stream_types.DynamicOutput)
 					channel <- StreamValue[stream_types.DynamicOutput, types.DynamicOutput]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -5707,21 +6251,26 @@ func (*stream) NestedAlias(ctx context.Context, c types.Union6BoolOrFloatOrIntOr
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString, types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString)
+					data := (result.Data).(types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString)
 					channel <- StreamValue[stream_types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString, types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString)
+					data := (result.StreamData).(stream_types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString)
 					channel <- StreamValue[stream_types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString, types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -5780,21 +6329,26 @@ func (*stream) NullLiteralClassHello(ctx context.Context, s string, opts ...Call
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.ClassForNullLiteral, types.ClassForNullLiteral]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.ClassForNullLiteral)
+					data := (result.Data).(types.ClassForNullLiteral)
 					channel <- StreamValue[stream_types.ClassForNullLiteral, types.ClassForNullLiteral]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.ClassForNullLiteral)
+					data := (result.StreamData).(stream_types.ClassForNullLiteral)
 					channel <- StreamValue[stream_types.ClassForNullLiteral, types.ClassForNullLiteral]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -5853,21 +6407,26 @@ func (*stream) OpenAIWithAnthropicResponseHello(ctx context.Context, s string, o
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -5926,10 +6485,15 @@ func (*stream) OptionalTest_Function(ctx context.Context, input string, opts ...
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[[]*stream_types.OptionalTest_ReturnType, []*types.OptionalTest_ReturnType]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
@@ -5999,21 +6563,26 @@ func (*stream) PredictAge(ctx context.Context, name string, opts ...CallOptionFu
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.FooAny, types.FooAny]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.FooAny)
+					data := (result.Data).(types.FooAny)
 					channel <- StreamValue[stream_types.FooAny, types.FooAny]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.FooAny)
+					data := (result.StreamData).(stream_types.FooAny)
 					channel <- StreamValue[stream_types.FooAny, types.FooAny]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -6072,21 +6641,26 @@ func (*stream) PredictAgeBare(ctx context.Context, inp string, opts ...CallOptio
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[types.Checked[int64], int64]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*int64)
+					data := (result.Data).(int64)
 					channel <- StreamValue[types.Checked[int64], int64]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*types.Checked[int64])
+					data := (result.StreamData).(types.Checked[int64])
 					channel <- StreamValue[types.Checked[int64], int64]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -6145,21 +6719,26 @@ func (*stream) PrimitiveAlias(ctx context.Context, p types.Union4BoolOrFloatOrIn
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.Union4BoolOrFloatOrIntOrString, types.Union4BoolOrFloatOrIntOrString]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.Union4BoolOrFloatOrIntOrString)
+					data := (result.Data).(types.Union4BoolOrFloatOrIntOrString)
 					channel <- StreamValue[stream_types.Union4BoolOrFloatOrIntOrString, types.Union4BoolOrFloatOrIntOrString]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.Union4BoolOrFloatOrIntOrString)
+					data := (result.StreamData).(stream_types.Union4BoolOrFloatOrIntOrString)
 					channel <- StreamValue[stream_types.Union4BoolOrFloatOrIntOrString, types.Union4BoolOrFloatOrIntOrString]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -6218,21 +6797,26 @@ func (*stream) PromptTestClaude(ctx context.Context, input string, opts ...CallO
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -6291,21 +6875,26 @@ func (*stream) PromptTestClaudeChat(ctx context.Context, input string, opts ...C
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -6364,21 +6953,26 @@ func (*stream) PromptTestClaudeChatNoSystem(ctx context.Context, input string, o
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -6437,21 +7031,26 @@ func (*stream) PromptTestOpenAI(ctx context.Context, input string, opts ...CallO
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -6510,21 +7109,26 @@ func (*stream) PromptTestOpenAIChat(ctx context.Context, input string, opts ...C
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -6583,21 +7187,26 @@ func (*stream) PromptTestOpenAIChatNoSystem(ctx context.Context, input string, o
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -6656,21 +7265,26 @@ func (*stream) PromptTestStreaming(ctx context.Context, input string, opts ...Ca
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -6729,21 +7343,26 @@ func (*stream) RecursiveAliasCycle(ctx context.Context, input types.RecAliasOne,
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.RecAliasOne, types.RecAliasOne]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.RecAliasOne)
+					data := (result.Data).(types.RecAliasOne)
 					channel <- StreamValue[stream_types.RecAliasOne, types.RecAliasOne]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.RecAliasOne)
+					data := (result.StreamData).(stream_types.RecAliasOne)
 					channel <- StreamValue[stream_types.RecAliasOne, types.RecAliasOne]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -6802,21 +7421,26 @@ func (*stream) RecursiveClassWithAliasIndirection(ctx context.Context, cls types
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.NodeWithAliasIndirection, types.NodeWithAliasIndirection]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.NodeWithAliasIndirection)
+					data := (result.Data).(types.NodeWithAliasIndirection)
 					channel <- StreamValue[stream_types.NodeWithAliasIndirection, types.NodeWithAliasIndirection]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.NodeWithAliasIndirection)
+					data := (result.StreamData).(stream_types.NodeWithAliasIndirection)
 					channel <- StreamValue[stream_types.NodeWithAliasIndirection, types.NodeWithAliasIndirection]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -6875,21 +7499,26 @@ func (*stream) RecursiveUnionTest(ctx context.Context, input types.RecursiveUnio
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.RecursiveUnion, types.RecursiveUnion]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.RecursiveUnion)
+					data := (result.Data).(types.RecursiveUnion)
 					channel <- StreamValue[stream_types.RecursiveUnion, types.RecursiveUnion]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.RecursiveUnion)
+					data := (result.StreamData).(stream_types.RecursiveUnion)
 					channel <- StreamValue[stream_types.RecursiveUnion, types.RecursiveUnion]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -6948,21 +7577,26 @@ func (*stream) ReturnAliasWithMergedAttributes(ctx context.Context, money int64,
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[types.Checked[int64], int64]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*int64)
+					data := (result.Data).(int64)
 					channel <- StreamValue[types.Checked[int64], int64]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*types.Checked[int64])
+					data := (result.StreamData).(types.Checked[int64])
 					channel <- StreamValue[types.Checked[int64], int64]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -7021,21 +7655,26 @@ func (*stream) ReturnFailingAssert(ctx context.Context, inp int64, opts ...CallO
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[int64, int64]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*int64)
+					data := (result.Data).(int64)
 					channel <- StreamValue[int64, int64]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*int64)
+					data := (result.StreamData).(int64)
 					channel <- StreamValue[int64, int64]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -7094,21 +7733,26 @@ func (*stream) ReturnJsonEntry(ctx context.Context, s string, opts ...CallOption
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.JsonTemplate, types.JsonTemplate]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.JsonTemplate)
+					data := (result.Data).(types.JsonTemplate)
 					channel <- StreamValue[stream_types.JsonTemplate, types.JsonTemplate]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.JsonTemplate)
+					data := (result.StreamData).(stream_types.JsonTemplate)
 					channel <- StreamValue[stream_types.JsonTemplate, types.JsonTemplate]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -7167,21 +7811,26 @@ func (*stream) ReturnMalformedConstraints(ctx context.Context, a int64, opts ...
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.MalformedConstraints, types.MalformedConstraints]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.MalformedConstraints)
+					data := (result.Data).(types.MalformedConstraints)
 					channel <- StreamValue[stream_types.MalformedConstraints, types.MalformedConstraints]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.MalformedConstraints)
+					data := (result.StreamData).(stream_types.MalformedConstraints)
 					channel <- StreamValue[stream_types.MalformedConstraints, types.MalformedConstraints]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -7240,21 +7889,26 @@ func (*stream) SchemaDescriptions(ctx context.Context, input string, opts ...Cal
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.Schema, types.Schema]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.Schema)
+					data := (result.Data).(types.Schema)
 					channel <- StreamValue[stream_types.Schema, types.Schema]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.Schema)
+					data := (result.StreamData).(stream_types.Schema)
 					channel <- StreamValue[stream_types.Schema, types.Schema]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -7313,21 +7967,26 @@ func (*stream) SimpleRecursiveListAlias(ctx context.Context, input types.Recursi
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.RecursiveListAlias, types.RecursiveListAlias]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.RecursiveListAlias)
+					data := (result.Data).(types.RecursiveListAlias)
 					channel <- StreamValue[stream_types.RecursiveListAlias, types.RecursiveListAlias]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.RecursiveListAlias)
+					data := (result.StreamData).(stream_types.RecursiveListAlias)
 					channel <- StreamValue[stream_types.RecursiveListAlias, types.RecursiveListAlias]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -7386,21 +8045,26 @@ func (*stream) SimpleRecursiveMapAlias(ctx context.Context, input types.Recursiv
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.RecursiveMapAlias, types.RecursiveMapAlias]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.RecursiveMapAlias)
+					data := (result.Data).(types.RecursiveMapAlias)
 					channel <- StreamValue[stream_types.RecursiveMapAlias, types.RecursiveMapAlias]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.RecursiveMapAlias)
+					data := (result.StreamData).(stream_types.RecursiveMapAlias)
 					channel <- StreamValue[stream_types.RecursiveMapAlias, types.RecursiveMapAlias]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -7459,21 +8123,26 @@ func (*stream) StreamBigNumbers(ctx context.Context, digits int64, opts ...CallO
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.BigNumbers, types.BigNumbers]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.BigNumbers)
+					data := (result.Data).(types.BigNumbers)
 					channel <- StreamValue[stream_types.BigNumbers, types.BigNumbers]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.BigNumbers)
+					data := (result.StreamData).(stream_types.BigNumbers)
 					channel <- StreamValue[stream_types.BigNumbers, types.BigNumbers]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -7532,21 +8201,26 @@ func (*stream) StreamFailingAssertion(ctx context.Context, theme string, length 
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.TwoStoriesOneTitle, types.TwoStoriesOneTitle]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.TwoStoriesOneTitle)
+					data := (result.Data).(types.TwoStoriesOneTitle)
 					channel <- StreamValue[stream_types.TwoStoriesOneTitle, types.TwoStoriesOneTitle]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.TwoStoriesOneTitle)
+					data := (result.StreamData).(stream_types.TwoStoriesOneTitle)
 					channel <- StreamValue[stream_types.TwoStoriesOneTitle, types.TwoStoriesOneTitle]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -7605,21 +8279,26 @@ func (*stream) StreamFailingCheck(ctx context.Context, theme string, length int6
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.TwoStoriesOneTitleCheck, types.TwoStoriesOneTitleCheck]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.TwoStoriesOneTitleCheck)
+					data := (result.Data).(types.TwoStoriesOneTitleCheck)
 					channel <- StreamValue[stream_types.TwoStoriesOneTitleCheck, types.TwoStoriesOneTitleCheck]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.TwoStoriesOneTitleCheck)
+					data := (result.StreamData).(stream_types.TwoStoriesOneTitleCheck)
 					channel <- StreamValue[stream_types.TwoStoriesOneTitleCheck, types.TwoStoriesOneTitleCheck]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -7678,21 +8357,26 @@ func (*stream) StreamOneBigNumber(ctx context.Context, digits int64, opts ...Cal
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[int64, int64]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*int64)
+					data := (result.Data).(int64)
 					channel <- StreamValue[int64, int64]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*int64)
+					data := (result.StreamData).(int64)
 					channel <- StreamValue[int64, int64]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -7751,10 +8435,15 @@ func (*stream) StreamUnionIntegers(ctx context.Context, digits int64, opts ...Ca
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[[]stream_types.Union2IntOrString, []types.Union2IntOrString]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
@@ -7824,21 +8513,26 @@ func (*stream) StreamingCompoundNumbers(ctx context.Context, digits int64, yappi
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.CompoundBigNumbers, types.CompoundBigNumbers]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.CompoundBigNumbers)
+					data := (result.Data).(types.CompoundBigNumbers)
 					channel <- StreamValue[stream_types.CompoundBigNumbers, types.CompoundBigNumbers]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.CompoundBigNumbers)
+					data := (result.StreamData).(stream_types.CompoundBigNumbers)
 					channel <- StreamValue[stream_types.CompoundBigNumbers, types.CompoundBigNumbers]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -7897,21 +8591,26 @@ func (*stream) StructureDocument1559(ctx context.Context, document_txt string, o
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.Document1559, types.Document1559]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.Document1559)
+					data := (result.Data).(types.Document1559)
 					channel <- StreamValue[stream_types.Document1559, types.Document1559]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.Document1559)
+					data := (result.StreamData).(stream_types.Document1559)
 					channel <- StreamValue[stream_types.Document1559, types.Document1559]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -7970,21 +8669,26 @@ func (*stream) TakeRecAliasDep(ctx context.Context, input types.RecursiveAliasDe
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.RecursiveAliasDependency, types.RecursiveAliasDependency]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.RecursiveAliasDependency)
+					data := (result.Data).(types.RecursiveAliasDependency)
 					channel <- StreamValue[stream_types.RecursiveAliasDependency, types.RecursiveAliasDependency]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.RecursiveAliasDependency)
+					data := (result.StreamData).(stream_types.RecursiveAliasDependency)
 					channel <- StreamValue[stream_types.RecursiveAliasDependency, types.RecursiveAliasDependency]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -8043,21 +8747,26 @@ func (*stream) TellStory(ctx context.Context, story string, opts ...CallOptionFu
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -8116,21 +8825,26 @@ func (*stream) TestAnthropic(ctx context.Context, input string, opts ...CallOpti
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -8189,21 +8903,26 @@ func (*stream) TestAnthropicShorthand(ctx context.Context, input string, opts ..
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -8262,21 +8981,26 @@ func (*stream) TestAws(ctx context.Context, input string, opts ...CallOptionFunc
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -8335,21 +9059,26 @@ func (*stream) TestAwsClaude37(ctx context.Context, input string, opts ...CallOp
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -8408,21 +9137,26 @@ func (*stream) TestAwsInferenceProfile(ctx context.Context, input string, opts .
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -8481,21 +9215,26 @@ func (*stream) TestAwsInvalidAccessKey(ctx context.Context, input string, opts .
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -8554,21 +9293,26 @@ func (*stream) TestAwsInvalidProfile(ctx context.Context, input string, opts ...
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -8627,21 +9371,26 @@ func (*stream) TestAwsInvalidRegion(ctx context.Context, input string, opts ...C
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -8700,21 +9449,26 @@ func (*stream) TestAwsInvalidSessionToken(ctx context.Context, input string, opt
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -8773,21 +9527,26 @@ func (*stream) TestAzure(ctx context.Context, input string, opts ...CallOptionFu
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -8846,21 +9605,26 @@ func (*stream) TestAzureFailure(ctx context.Context, input string, opts ...CallO
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -8919,21 +9683,26 @@ func (*stream) TestAzureO1NoMaxTokens(ctx context.Context, input string, opts ..
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -8992,21 +9761,26 @@ func (*stream) TestAzureO1WithMaxCompletionTokens(ctx context.Context, input str
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -9065,21 +9839,26 @@ func (*stream) TestAzureO1WithMaxTokens(ctx context.Context, input string, opts 
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -9138,21 +9917,26 @@ func (*stream) TestAzureO3NoMaxTokens(ctx context.Context, input string, opts ..
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -9211,21 +9995,26 @@ func (*stream) TestAzureO3WithMaxCompletionTokens(ctx context.Context, input str
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -9284,21 +10073,26 @@ func (*stream) TestAzureWithMaxTokens(ctx context.Context, input string, opts ..
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -9357,21 +10151,26 @@ func (*stream) TestCaching(ctx context.Context, input string, not_cached string,
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -9430,21 +10229,26 @@ func (*stream) TestFallbackClient(ctx context.Context, opts ...CallOptionFunc) (
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -9503,21 +10307,26 @@ func (*stream) TestFallbackStrategy(ctx context.Context, input string, opts ...C
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -9576,21 +10385,26 @@ func (*stream) TestFallbackToShorthand(ctx context.Context, input string, opts .
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -9649,21 +10463,26 @@ func (*stream) TestFnNamedArgsSingleBool(ctx context.Context, myBool bool, opts 
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -9722,21 +10541,26 @@ func (*stream) TestFnNamedArgsSingleClass(ctx context.Context, myArg types.Named
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -9795,21 +10619,26 @@ func (*stream) TestFnNamedArgsSingleEnumList(ctx context.Context, myArg []types.
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -9868,21 +10697,26 @@ func (*stream) TestFnNamedArgsSingleFloat(ctx context.Context, myFloat float64, 
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -9941,21 +10775,26 @@ func (*stream) TestFnNamedArgsSingleInt(ctx context.Context, myInt int64, opts .
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -10014,10 +10853,15 @@ func (*stream) TestFnNamedArgsSingleMapStringToClass(ctx context.Context, myMap 
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[map[string]stream_types.StringToClassEntry, map[string]types.StringToClassEntry]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
@@ -10087,10 +10931,15 @@ func (*stream) TestFnNamedArgsSingleMapStringToMap(ctx context.Context, myMap ma
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[map[string]map[string]string, map[string]map[string]string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
@@ -10160,10 +11009,15 @@ func (*stream) TestFnNamedArgsSingleMapStringToString(ctx context.Context, myMap
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[map[string]string, map[string]string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
@@ -10233,21 +11087,26 @@ func (*stream) TestFnNamedArgsSingleString(ctx context.Context, myString string,
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -10306,21 +11165,26 @@ func (*stream) TestFnNamedArgsSingleStringArray(ctx context.Context, myStringArr
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -10379,10 +11243,15 @@ func (*stream) TestFnNamedArgsSingleStringList(ctx context.Context, myArg []stri
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[[]string, []string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
@@ -10452,21 +11321,26 @@ func (*stream) TestGemini(ctx context.Context, input string, opts ...CallOptionF
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -10525,21 +11399,26 @@ func (*stream) TestGeminiOpenAiGeneric(ctx context.Context, opts ...CallOptionFu
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -10598,21 +11477,26 @@ func (*stream) TestGeminiSystem(ctx context.Context, input string, opts ...CallO
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -10671,21 +11555,26 @@ func (*stream) TestGeminiSystemAsChat(ctx context.Context, input string, opts ..
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -10744,21 +11633,26 @@ func (*stream) TestGroq(ctx context.Context, input string, opts ...CallOptionFun
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -10817,21 +11711,26 @@ func (*stream) TestImageInput(ctx context.Context, img any, opts ...CallOptionFu
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -10890,21 +11789,26 @@ func (*stream) TestImageInputAnthropic(ctx context.Context, img any, opts ...Cal
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -10963,21 +11867,26 @@ func (*stream) TestImageListInput(ctx context.Context, imgs []any, opts ...CallO
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -11036,21 +11945,26 @@ func (*stream) TestMemory(ctx context.Context, input string, opts ...CallOptionF
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.TestMemoryOutput, types.TestMemoryOutput]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.TestMemoryOutput)
+					data := (result.Data).(types.TestMemoryOutput)
 					channel <- StreamValue[stream_types.TestMemoryOutput, types.TestMemoryOutput]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.TestMemoryOutput)
+					data := (result.StreamData).(stream_types.TestMemoryOutput)
 					channel <- StreamValue[stream_types.TestMemoryOutput, types.TestMemoryOutput]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -11109,21 +12023,26 @@ func (*stream) TestMulticlassNamedArgs(ctx context.Context, myArg types.NamedArg
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -11182,21 +12101,26 @@ func (*stream) TestNamedArgsLiteralBool(ctx context.Context, myBool bool, opts .
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -11255,21 +12179,26 @@ func (*stream) TestNamedArgsLiteralInt(ctx context.Context, myInt int64, opts ..
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -11328,21 +12257,26 @@ func (*stream) TestNamedArgsLiteralString(ctx context.Context, myString string, 
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -11401,10 +12335,15 @@ func (*stream) TestOllama(ctx context.Context, input string, opts ...CallOptionF
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[*string, *string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
@@ -11474,21 +12413,26 @@ func (*stream) TestOllamaHaiku(ctx context.Context, input string, opts ...CallOp
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.Haiku, types.Haiku]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.Haiku)
+					data := (result.Data).(types.Haiku)
 					channel <- StreamValue[stream_types.Haiku, types.Haiku]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.Haiku)
+					data := (result.StreamData).(stream_types.Haiku)
 					channel <- StreamValue[stream_types.Haiku, types.Haiku]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -11547,21 +12491,26 @@ func (*stream) TestOpenAI(ctx context.Context, input string, opts ...CallOptionF
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -11620,21 +12569,26 @@ func (*stream) TestOpenAIDummyClient(ctx context.Context, input string, opts ...
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -11693,21 +12647,26 @@ func (*stream) TestOpenAIGPT4oMini(ctx context.Context, input string, opts ...Ca
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -11766,21 +12725,26 @@ func (*stream) TestOpenAIGPT4oMini2(ctx context.Context, input string, opts ...C
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -11839,21 +12803,26 @@ func (*stream) TestOpenAIGPT4oMini3(ctx context.Context, input string, opts ...C
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -11912,21 +12881,26 @@ func (*stream) TestOpenAILegacyProvider(ctx context.Context, input string, opts 
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -11985,21 +12959,26 @@ func (*stream) TestOpenAIO1NoMaxTokens(ctx context.Context, input string, opts .
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -12058,21 +13037,26 @@ func (*stream) TestOpenAIO1WithMaxCompletionTokens(ctx context.Context, input st
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -12131,21 +13115,1118 @@ func (*stream) TestOpenAIO1WithMaxTokens(ctx context.Context, input string, opts
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
+					channel <- StreamValue[string, string]{
+						IsFinal:   false,
+						as_stream: &data,
+					}
+				}
+			}
+		}
+	}()
+	return channel, nil
+}
+
+// / Streaming version of TestOpenAIProviderWithResponsesType
+func (*stream) TestOpenAIProviderWithResponsesType(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := baml.EncodeArgs(args)
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestOpenAIProviderWithResponsesType: %w", err)
+		panic(wrapped_err)
+	}
+
+	internal_ctx := context.Background()
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIProviderWithResponsesType", encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	channel := make(chan StreamValue[string, string])
+	go func() {
+		defer func() {
+			internal_ctx.Done()
+		}()
+		for {
+			select {
+			case <-ctx.Done():
+				close(channel)
+				return
+			case result, ok := <-internal_channel:
+				if !ok {
+					// channel closed for some reason
+					close(channel)
+					return
+				}
+				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
+					close(channel)
+					return
+				}
+				if result.HasData {
+					data := (result.Data).(string)
+					channel <- StreamValue[string, string]{
+						IsFinal:  true,
+						as_final: &data,
+					}
+				} else {
+					data := (result.StreamData).(string)
+					channel <- StreamValue[string, string]{
+						IsFinal:   false,
+						as_stream: &data,
+					}
+				}
+			}
+		}
+	}()
+	return channel, nil
+}
+
+// / Streaming version of TestOpenAIResponses
+func (*stream) TestOpenAIResponses(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := baml.EncodeArgs(args)
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestOpenAIResponses: %w", err)
+		panic(wrapped_err)
+	}
+
+	internal_ctx := context.Background()
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIResponses", encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	channel := make(chan StreamValue[string, string])
+	go func() {
+		defer func() {
+			internal_ctx.Done()
+		}()
+		for {
+			select {
+			case <-ctx.Done():
+				close(channel)
+				return
+			case result, ok := <-internal_channel:
+				if !ok {
+					// channel closed for some reason
+					close(channel)
+					return
+				}
+				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
+					close(channel)
+					return
+				}
+				if result.HasData {
+					data := (result.Data).(string)
+					channel <- StreamValue[string, string]{
+						IsFinal:  true,
+						as_final: &data,
+					}
+				} else {
+					data := (result.StreamData).(string)
+					channel <- StreamValue[string, string]{
+						IsFinal:   false,
+						as_stream: &data,
+					}
+				}
+			}
+		}
+	}()
+	return channel, nil
+}
+
+// / Streaming version of TestOpenAIResponsesAutoType
+func (*stream) TestOpenAIResponsesAutoType(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := baml.EncodeArgs(args)
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestOpenAIResponsesAutoType: %w", err)
+		panic(wrapped_err)
+	}
+
+	internal_ctx := context.Background()
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIResponsesAutoType", encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	channel := make(chan StreamValue[string, string])
+	go func() {
+		defer func() {
+			internal_ctx.Done()
+		}()
+		for {
+			select {
+			case <-ctx.Done():
+				close(channel)
+				return
+			case result, ok := <-internal_channel:
+				if !ok {
+					// channel closed for some reason
+					close(channel)
+					return
+				}
+				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
+					close(channel)
+					return
+				}
+				if result.HasData {
+					data := (result.Data).(string)
+					channel <- StreamValue[string, string]{
+						IsFinal:  true,
+						as_final: &data,
+					}
+				} else {
+					data := (result.StreamData).(string)
+					channel <- StreamValue[string, string]{
+						IsFinal:   false,
+						as_stream: &data,
+					}
+				}
+			}
+		}
+	}()
+	return channel, nil
+}
+
+// / Streaming version of TestOpenAIResponsesConversation
+func (*stream) TestOpenAIResponsesConversation(ctx context.Context, topic string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"topic": topic},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := baml.EncodeArgs(args)
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestOpenAIResponsesConversation: %w", err)
+		panic(wrapped_err)
+	}
+
+	internal_ctx := context.Background()
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIResponsesConversation", encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	channel := make(chan StreamValue[string, string])
+	go func() {
+		defer func() {
+			internal_ctx.Done()
+		}()
+		for {
+			select {
+			case <-ctx.Done():
+				close(channel)
+				return
+			case result, ok := <-internal_channel:
+				if !ok {
+					// channel closed for some reason
+					close(channel)
+					return
+				}
+				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
+					close(channel)
+					return
+				}
+				if result.HasData {
+					data := (result.Data).(string)
+					channel <- StreamValue[string, string]{
+						IsFinal:  true,
+						as_final: &data,
+					}
+				} else {
+					data := (result.StreamData).(string)
+					channel <- StreamValue[string, string]{
+						IsFinal:   false,
+						as_stream: &data,
+					}
+				}
+			}
+		}
+	}()
+	return channel, nil
+}
+
+// / Streaming version of TestOpenAIResponsesCustomURL
+func (*stream) TestOpenAIResponsesCustomURL(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := baml.EncodeArgs(args)
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestOpenAIResponsesCustomURL: %w", err)
+		panic(wrapped_err)
+	}
+
+	internal_ctx := context.Background()
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIResponsesCustomURL", encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	channel := make(chan StreamValue[string, string])
+	go func() {
+		defer func() {
+			internal_ctx.Done()
+		}()
+		for {
+			select {
+			case <-ctx.Done():
+				close(channel)
+				return
+			case result, ok := <-internal_channel:
+				if !ok {
+					// channel closed for some reason
+					close(channel)
+					return
+				}
+				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
+					close(channel)
+					return
+				}
+				if result.HasData {
+					data := (result.Data).(string)
+					channel <- StreamValue[string, string]{
+						IsFinal:  true,
+						as_final: &data,
+					}
+				} else {
+					data := (result.StreamData).(string)
+					channel <- StreamValue[string, string]{
+						IsFinal:   false,
+						as_stream: &data,
+					}
+				}
+			}
+		}
+	}()
+	return channel, nil
+}
+
+// / Streaming version of TestOpenAIResponsesDifferentModel
+func (*stream) TestOpenAIResponsesDifferentModel(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := baml.EncodeArgs(args)
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestOpenAIResponsesDifferentModel: %w", err)
+		panic(wrapped_err)
+	}
+
+	internal_ctx := context.Background()
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIResponsesDifferentModel", encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	channel := make(chan StreamValue[string, string])
+	go func() {
+		defer func() {
+			internal_ctx.Done()
+		}()
+		for {
+			select {
+			case <-ctx.Done():
+				close(channel)
+				return
+			case result, ok := <-internal_channel:
+				if !ok {
+					// channel closed for some reason
+					close(channel)
+					return
+				}
+				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
+					close(channel)
+					return
+				}
+				if result.HasData {
+					data := (result.Data).(string)
+					channel <- StreamValue[string, string]{
+						IsFinal:  true,
+						as_final: &data,
+					}
+				} else {
+					data := (result.StreamData).(string)
+					channel <- StreamValue[string, string]{
+						IsFinal:   false,
+						as_stream: &data,
+					}
+				}
+			}
+		}
+	}()
+	return channel, nil
+}
+
+// / Streaming version of TestOpenAIResponsesEndpoint
+func (*stream) TestOpenAIResponsesEndpoint(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := baml.EncodeArgs(args)
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestOpenAIResponsesEndpoint: %w", err)
+		panic(wrapped_err)
+	}
+
+	internal_ctx := context.Background()
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIResponsesEndpoint", encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	channel := make(chan StreamValue[string, string])
+	go func() {
+		defer func() {
+			internal_ctx.Done()
+		}()
+		for {
+			select {
+			case <-ctx.Done():
+				close(channel)
+				return
+			case result, ok := <-internal_channel:
+				if !ok {
+					// channel closed for some reason
+					close(channel)
+					return
+				}
+				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
+					close(channel)
+					return
+				}
+				if result.HasData {
+					data := (result.Data).(string)
+					channel <- StreamValue[string, string]{
+						IsFinal:  true,
+						as_final: &data,
+					}
+				} else {
+					data := (result.StreamData).(string)
+					channel <- StreamValue[string, string]{
+						IsFinal:   false,
+						as_stream: &data,
+					}
+				}
+			}
+		}
+	}()
+	return channel, nil
+}
+
+// / Streaming version of TestOpenAIResponsesExplicit
+func (*stream) TestOpenAIResponsesExplicit(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := baml.EncodeArgs(args)
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestOpenAIResponsesExplicit: %w", err)
+		panic(wrapped_err)
+	}
+
+	internal_ctx := context.Background()
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIResponsesExplicit", encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	channel := make(chan StreamValue[string, string])
+	go func() {
+		defer func() {
+			internal_ctx.Done()
+		}()
+		for {
+			select {
+			case <-ctx.Done():
+				close(channel)
+				return
+			case result, ok := <-internal_channel:
+				if !ok {
+					// channel closed for some reason
+					close(channel)
+					return
+				}
+				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
+					close(channel)
+					return
+				}
+				if result.HasData {
+					data := (result.Data).(string)
+					channel <- StreamValue[string, string]{
+						IsFinal:  true,
+						as_final: &data,
+					}
+				} else {
+					data := (result.StreamData).(string)
+					channel <- StreamValue[string, string]{
+						IsFinal:   false,
+						as_stream: &data,
+					}
+				}
+			}
+		}
+	}()
+	return channel, nil
+}
+
+// / Streaming version of TestOpenAIResponsesFunctionCall
+func (*stream) TestOpenAIResponsesFunctionCall(ctx context.Context, query string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"query": query},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := baml.EncodeArgs(args)
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestOpenAIResponsesFunctionCall: %w", err)
+		panic(wrapped_err)
+	}
+
+	internal_ctx := context.Background()
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIResponsesFunctionCall", encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	channel := make(chan StreamValue[string, string])
+	go func() {
+		defer func() {
+			internal_ctx.Done()
+		}()
+		for {
+			select {
+			case <-ctx.Done():
+				close(channel)
+				return
+			case result, ok := <-internal_channel:
+				if !ok {
+					// channel closed for some reason
+					close(channel)
+					return
+				}
+				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
+					close(channel)
+					return
+				}
+				if result.HasData {
+					data := (result.Data).(string)
+					channel <- StreamValue[string, string]{
+						IsFinal:  true,
+						as_final: &data,
+					}
+				} else {
+					data := (result.StreamData).(string)
+					channel <- StreamValue[string, string]{
+						IsFinal:   false,
+						as_stream: &data,
+					}
+				}
+			}
+		}
+	}()
+	return channel, nil
+}
+
+// / Streaming version of TestOpenAIResponsesImageInput
+func (*stream) TestOpenAIResponsesImageInput(ctx context.Context, image types.Union2ImageOrString, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"image": image},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := baml.EncodeArgs(args)
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestOpenAIResponsesImageInput: %w", err)
+		panic(wrapped_err)
+	}
+
+	internal_ctx := context.Background()
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIResponsesImageInput", encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	channel := make(chan StreamValue[string, string])
+	go func() {
+		defer func() {
+			internal_ctx.Done()
+		}()
+		for {
+			select {
+			case <-ctx.Done():
+				close(channel)
+				return
+			case result, ok := <-internal_channel:
+				if !ok {
+					// channel closed for some reason
+					close(channel)
+					return
+				}
+				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
+					close(channel)
+					return
+				}
+				if result.HasData {
+					data := (result.Data).(string)
+					channel <- StreamValue[string, string]{
+						IsFinal:  true,
+						as_final: &data,
+					}
+				} else {
+					data := (result.StreamData).(string)
+					channel <- StreamValue[string, string]{
+						IsFinal:   false,
+						as_stream: &data,
+					}
+				}
+			}
+		}
+	}()
+	return channel, nil
+}
+
+// / Streaming version of TestOpenAIResponsesReasoning
+func (*stream) TestOpenAIResponsesReasoning(ctx context.Context, problem string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"problem": problem},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := baml.EncodeArgs(args)
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestOpenAIResponsesReasoning: %w", err)
+		panic(wrapped_err)
+	}
+
+	internal_ctx := context.Background()
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIResponsesReasoning", encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	channel := make(chan StreamValue[string, string])
+	go func() {
+		defer func() {
+			internal_ctx.Done()
+		}()
+		for {
+			select {
+			case <-ctx.Done():
+				close(channel)
+				return
+			case result, ok := <-internal_channel:
+				if !ok {
+					// channel closed for some reason
+					close(channel)
+					return
+				}
+				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
+					close(channel)
+					return
+				}
+				if result.HasData {
+					data := (result.Data).(string)
+					channel <- StreamValue[string, string]{
+						IsFinal:  true,
+						as_final: &data,
+					}
+				} else {
+					data := (result.StreamData).(string)
+					channel <- StreamValue[string, string]{
+						IsFinal:   false,
+						as_stream: &data,
+					}
+				}
+			}
+		}
+	}()
+	return channel, nil
+}
+
+// / Streaming version of TestOpenAIResponsesShorthand
+func (*stream) TestOpenAIResponsesShorthand(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := baml.EncodeArgs(args)
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestOpenAIResponsesShorthand: %w", err)
+		panic(wrapped_err)
+	}
+
+	internal_ctx := context.Background()
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIResponsesShorthand", encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	channel := make(chan StreamValue[string, string])
+	go func() {
+		defer func() {
+			internal_ctx.Done()
+		}()
+		for {
+			select {
+			case <-ctx.Done():
+				close(channel)
+				return
+			case result, ok := <-internal_channel:
+				if !ok {
+					// channel closed for some reason
+					close(channel)
+					return
+				}
+				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
+					close(channel)
+					return
+				}
+				if result.HasData {
+					data := (result.Data).(string)
+					channel <- StreamValue[string, string]{
+						IsFinal:  true,
+						as_final: &data,
+					}
+				} else {
+					data := (result.StreamData).(string)
+					channel <- StreamValue[string, string]{
+						IsFinal:   false,
+						as_stream: &data,
+					}
+				}
+			}
+		}
+	}()
+	return channel, nil
+}
+
+// / Streaming version of TestOpenAIResponsesWebSearch
+func (*stream) TestOpenAIResponsesWebSearch(ctx context.Context, query string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"query": query},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := baml.EncodeArgs(args)
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestOpenAIResponsesWebSearch: %w", err)
+		panic(wrapped_err)
+	}
+
+	internal_ctx := context.Background()
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIResponsesWebSearch", encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	channel := make(chan StreamValue[string, string])
+	go func() {
+		defer func() {
+			internal_ctx.Done()
+		}()
+		for {
+			select {
+			case <-ctx.Done():
+				close(channel)
+				return
+			case result, ok := <-internal_channel:
+				if !ok {
+					// channel closed for some reason
+					close(channel)
+					return
+				}
+				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
+					close(channel)
+					return
+				}
+				if result.HasData {
+					data := (result.Data).(string)
+					channel <- StreamValue[string, string]{
+						IsFinal:  true,
+						as_final: &data,
+					}
+				} else {
+					data := (result.StreamData).(string)
+					channel <- StreamValue[string, string]{
+						IsFinal:   false,
+						as_stream: &data,
+					}
+				}
+			}
+		}
+	}()
+	return channel, nil
+}
+
+// / Streaming version of TestOpenAIResponsesWithOpenAIResponseType
+func (*stream) TestOpenAIResponsesWithOpenAIResponseType(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := baml.EncodeArgs(args)
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestOpenAIResponsesWithOpenAIResponseType: %w", err)
+		panic(wrapped_err)
+	}
+
+	internal_ctx := context.Background()
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIResponsesWithOpenAIResponseType", encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	channel := make(chan StreamValue[string, string])
+	go func() {
+		defer func() {
+			internal_ctx.Done()
+		}()
+		for {
+			select {
+			case <-ctx.Done():
+				close(channel)
+				return
+			case result, ok := <-internal_channel:
+				if !ok {
+					// channel closed for some reason
+					close(channel)
+					return
+				}
+				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
+					close(channel)
+					return
+				}
+				if result.HasData {
+					data := (result.Data).(string)
+					channel <- StreamValue[string, string]{
+						IsFinal:  true,
+						as_final: &data,
+					}
+				} else {
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -12204,21 +14285,26 @@ func (*stream) TestOpenAIShorthand(ctx context.Context, input string, opts ...Ca
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -12277,21 +14363,26 @@ func (*stream) TestOpenAIWithFinishReasonError(ctx context.Context, input string
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -12350,21 +14441,26 @@ func (*stream) TestOpenAIWithMaxTokens(ctx context.Context, input string, opts .
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -12423,21 +14519,26 @@ func (*stream) TestOpenAIWithNullMaxTokens(ctx context.Context, input string, op
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -12496,21 +14597,26 @@ func (*stream) TestOpenRouterMistralSmall3_1_24b(ctx context.Context, input stri
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -12569,21 +14675,26 @@ func (*stream) TestRetryConstant(ctx context.Context, opts ...CallOptionFunc) (<
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -12642,21 +14753,26 @@ func (*stream) TestRetryExponential(ctx context.Context, opts ...CallOptionFunc)
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -12715,21 +14831,26 @@ func (*stream) TestRoundRobinStrategy(ctx context.Context, input string, opts ..
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -12788,21 +14909,26 @@ func (*stream) TestSingleFallbackClient(ctx context.Context, opts ...CallOptionF
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -12861,21 +14987,26 @@ func (*stream) TestThinking(ctx context.Context, input string, opts ...CallOptio
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.CustomStory, types.CustomStory]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.CustomStory)
+					data := (result.Data).(types.CustomStory)
 					channel <- StreamValue[stream_types.CustomStory, types.CustomStory]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.CustomStory)
+					data := (result.StreamData).(stream_types.CustomStory)
 					channel <- StreamValue[stream_types.CustomStory, types.CustomStory]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -12934,21 +15065,26 @@ func (*stream) TestUniverseQuestion(ctx context.Context, question types.Universe
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.UniverseQuestion, types.UniverseQuestion]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.UniverseQuestion)
+					data := (result.Data).(types.UniverseQuestion)
 					channel <- StreamValue[stream_types.UniverseQuestion, types.UniverseQuestion]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.UniverseQuestion)
+					data := (result.StreamData).(stream_types.UniverseQuestion)
 					channel <- StreamValue[stream_types.UniverseQuestion, types.UniverseQuestion]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -13007,21 +15143,26 @@ func (*stream) TestVertex(ctx context.Context, input string, opts ...CallOptionF
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -13080,21 +15221,26 @@ func (*stream) TestVertexClaude(ctx context.Context, input string, opts ...CallO
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -13153,21 +15299,26 @@ func (*stream) TestVertexWithSystemInstructions(ctx context.Context, opts ...Cal
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*string)
+					data := (result.Data).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*string)
+					data := (result.StreamData).(string)
 					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -13226,21 +15377,26 @@ func (*stream) UnionTest_Function(ctx context.Context, input types.Union2BoolOrS
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.UnionTest_ReturnType, types.UnionTest_ReturnType]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.UnionTest_ReturnType)
+					data := (result.Data).(types.UnionTest_ReturnType)
 					channel <- StreamValue[stream_types.UnionTest_ReturnType, types.UnionTest_ReturnType]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.UnionTest_ReturnType)
+					data := (result.StreamData).(stream_types.UnionTest_ReturnType)
 					channel <- StreamValue[stream_types.UnionTest_ReturnType, types.UnionTest_ReturnType]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -13299,21 +15455,26 @@ func (*stream) UseBlockConstraint(ctx context.Context, inp types.BlockConstraint
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[int64, int64]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*int64)
+					data := (result.Data).(int64)
 					channel <- StreamValue[int64, int64]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*int64)
+					data := (result.StreamData).(int64)
 					channel <- StreamValue[int64, int64]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -13372,21 +15533,26 @@ func (*stream) UseMaintainFieldOrder(ctx context.Context, input types.MaintainFi
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.MaintainFieldOrder, types.MaintainFieldOrder]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.MaintainFieldOrder)
+					data := (result.Data).(types.MaintainFieldOrder)
 					channel <- StreamValue[stream_types.MaintainFieldOrder, types.MaintainFieldOrder]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.MaintainFieldOrder)
+					data := (result.StreamData).(stream_types.MaintainFieldOrder)
 					channel <- StreamValue[stream_types.MaintainFieldOrder, types.MaintainFieldOrder]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -13445,21 +15611,26 @@ func (*stream) UseMalformedConstraints(ctx context.Context, a types.MalformedCon
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[int64, int64]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*int64)
+					data := (result.Data).(int64)
 					channel <- StreamValue[int64, int64]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*int64)
+					data := (result.StreamData).(int64)
 					channel <- StreamValue[int64, int64]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -13518,22 +15689,183 @@ func (*stream) UseNestedBlockConstraint(ctx context.Context, inp types.NestedBlo
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[int64, int64]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*int64)
+					data := (result.Data).(int64)
 					channel <- StreamValue[int64, int64]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*int64)
+					data := (result.StreamData).(int64)
 					channel <- StreamValue[int64, int64]{
+						IsFinal:   false,
+						as_stream: &data,
+					}
+				}
+			}
+		}
+	}()
+	return channel, nil
+}
+
+// / Streaming version of ValidateBasicResponses
+func (*stream) ValidateBasicResponses(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := baml.EncodeArgs(args)
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: ValidateBasicResponses: %w", err)
+		panic(wrapped_err)
+	}
+
+	internal_ctx := context.Background()
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "ValidateBasicResponses", encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	channel := make(chan StreamValue[string, string])
+	go func() {
+		defer func() {
+			internal_ctx.Done()
+		}()
+		for {
+			select {
+			case <-ctx.Done():
+				close(channel)
+				return
+			case result, ok := <-internal_channel:
+				if !ok {
+					// channel closed for some reason
+					close(channel)
+					return
+				}
+				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
+					close(channel)
+					return
+				}
+				if result.HasData {
+					data := (result.Data).(string)
+					channel <- StreamValue[string, string]{
+						IsFinal:  true,
+						as_final: &data,
+					}
+				} else {
+					data := (result.StreamData).(string)
+					channel <- StreamValue[string, string]{
+						IsFinal:   false,
+						as_stream: &data,
+					}
+				}
+			}
+		}
+	}()
+	return channel, nil
+}
+
+// / Streaming version of ValidateResponseTypes
+func (*stream) ValidateResponseTypes(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := baml.EncodeArgs(args)
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: ValidateResponseTypes: %w", err)
+		panic(wrapped_err)
+	}
+
+	internal_ctx := context.Background()
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "ValidateResponseTypes", encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	channel := make(chan StreamValue[string, string])
+	go func() {
+		defer func() {
+			internal_ctx.Done()
+		}()
+		for {
+			select {
+			case <-ctx.Done():
+				close(channel)
+				return
+			case result, ok := <-internal_channel:
+				if !ok {
+					// channel closed for some reason
+					close(channel)
+					return
+				}
+				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
+					close(channel)
+					return
+				}
+				if result.HasData {
+					data := (result.Data).(string)
+					channel <- StreamValue[string, string]{
+						IsFinal:  true,
+						as_final: &data,
+					}
+				} else {
+					data := (result.StreamData).(string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}

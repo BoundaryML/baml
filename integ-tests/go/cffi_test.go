@@ -6,9 +6,7 @@ import (
 
 	b "example.com/integ-tests/baml_client/types"
 	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
-	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
 	"github.com/ghetzel/testify/require"
-	flatbuffers "github.com/google/flatbuffers/go"
 )
 
 func TestEncodeDecode(t *testing.T) {
@@ -66,10 +64,10 @@ func TestEncodeDecode(t *testing.T) {
 			Hair_color: &[]b.Color{b.ColorRED}[0],
 		}},
 		{&b.Recipe{
-			Recipe_type: *b.Union__string_breakfast__string_dinnerNewWithString_breakfast(&[]string{"breakfast"}[0]),
+			Recipe_type: b.Union2KbreakfastOrKdinner__NewKbreakfast(),
 			Ingredients: map[string]b.Quantity{
 				"a": {
-					Amount: *b.Union__int__floatNewWithInt(&[]int64{1}[0]),
+					Amount: b.Union2FloatOrInt__NewInt(1),
 				},
 			},
 		}},
@@ -80,21 +78,18 @@ func TestEncodeDecode(t *testing.T) {
 		// 		"key2": b.RecursiveUnion(*b.Union__string__Map__string_RecursiveUnionNewWithString(&[]string{"value3"}[0])),
 		// 	})),
 		// }))},
-		{map[string]b.Union__float__bool{
-			"a": *b.Union__float__boolNewWithBool(&[]bool{true}[0]),
-			"b": *b.Union__float__boolNewWithFloat(&[]float64{2.2}[0]),
+		{map[string]b.Union2BoolOrFloat{
+			"a": b.Union2BoolOrFloat__NewBool(true),
+			"b": b.Union2BoolOrFloat__NewFloat(2.2),
 		}},
 	}
 
 	for _, test := range tests {
 		t.Run(fmt.Sprintf("EncodeDecode %#v", test.input), func(t *testing.T) {
-			encoded, err := baml.EncodeRoot(test.input)
+			encoded, err := baml.BAMLTESTINGONLY_InternalEncode(test.input)
 			require.NoError(t, err)
 
-			holder := cffi.CFFIValueHolder{}
-			flatbuffers.GetRootAs(encoded, 0, &holder)
-			decoded := baml.Decode(&holder)
-
+			decoded := baml.Decode(encoded)
 			require.Equal(t, test.input, decoded)
 		})
 	}

@@ -35,11 +35,11 @@ func (u *Union2ExampleOrExample2) Decode(holder *cffi.CFFIValueUnionVariant) {
 	switch variantName {
 	case "Example":
 		u.variant = "Example"
-		value := *baml.Decode(valueHolder).(*Example)
+		value := baml.Decode(valueHolder).Interface().(Example)
 		u.variant_Example = &value
 	case "Example2":
 		u.variant = "Example2"
-		value := *baml.Decode(valueHolder).(*Example2)
+		value := baml.Decode(valueHolder).Interface().(Example2)
 		u.variant_Example2 = &value
 
 	default:
@@ -110,7 +110,16 @@ func (u *Union2ExampleOrExample2) UnmarshalJSON(data []byte) error {
 	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
+func Union2ExampleOrExample2__NewExample(v Example) Union2ExampleOrExample2 {
+
+	return Union2ExampleOrExample2{
+		variant:         "Example",
+		variant_Example: &v,
+	}
+}
+
 func (u *Union2ExampleOrExample2) SetExample(v Example) {
+
 	u.variant = "Example"
 	u.variant_Example = &v
 
@@ -122,14 +131,23 @@ func (u *Union2ExampleOrExample2) IsExample() bool {
 	return u.variant == "Example"
 }
 
-func (u *Union2ExampleOrExample2) Example() Example {
+func (u *Union2ExampleOrExample2) Example() *Example {
 	if u.variant != "Example" {
-		return Example{}
+		return nil
 	}
-	return *u.variant_Example
+	return u.variant_Example
+}
+
+func Union2ExampleOrExample2__NewExample2(v Example2) Union2ExampleOrExample2 {
+
+	return Union2ExampleOrExample2{
+		variant:          "Example2",
+		variant_Example2: &v,
+	}
 }
 
 func (u *Union2ExampleOrExample2) SetExample2(v Example2) {
+
 	u.variant = "Example2"
 	u.variant_Example2 = &v
 
@@ -141,9 +159,9 @@ func (u *Union2ExampleOrExample2) IsExample2() bool {
 	return u.variant == "Example2"
 }
 
-func (u *Union2ExampleOrExample2) Example2() Example2 {
+func (u *Union2ExampleOrExample2) Example2() *Example2 {
 	if u.variant != "Example2" {
-		return Example2{}
+		return nil
 	}
-	return *u.variant_Example2
+	return u.variant_Example2
 }

@@ -171,7 +171,7 @@ client<llm> GPT4 {
     model gpt-4
     api_key env.OPENAI_API_KEY
   }
-} 
+}
 
 client<llm> GPT4o {
   provider openai
@@ -180,7 +180,7 @@ client<llm> GPT4o {
     model gpt-4o
     api_key env.OPENAI_API_KEY
   }
-} 
+}
 
 retry_policy CustomRetry {
   max_retries 3

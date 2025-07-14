@@ -95,7 +95,10 @@ impl<L: TestLanguageFeatures> TestStructure<L> {
                 default_client_mode: baml_types::GeneratorDefaultClientMode::Async,
                 on_generate: match L::test_name() {
                     "go" => {
-                        vec!["gofmt -w . && goimports -w . && go mod tidy && go build".to_string()]
+                        vec![
+                            "gofmt -w . && goimports -w . && go mod tidy && go test -run NEVER_MATCH"
+                                .to_string(),
+                        ]
                     }
                     "python" => vec!["ruff check --fix".to_string()],
                     "typescript" => vec![],
@@ -162,7 +165,10 @@ impl<L: TestLanguageFeatures> TestStructure<L> {
             default_client_mode: baml_types::GeneratorDefaultClientMode::Async,
             on_generate: match L::test_name() {
                 "go" => {
-                    vec!["gofmt -w . && goimports -w . && go mod tidy && go build".to_string()]
+                    vec![
+                        "gofmt -w . && goimports -w . && go mod tidy && go test -run NEVER_MATCH"
+                            .to_string(),
+                    ]
                 }
                 "python" => vec!["ruff check --fix".to_string()],
                 "typescript" => vec![],
@@ -193,7 +199,9 @@ impl<L: TestLanguageFeatures> TestStructure<L> {
 
         if also_run_tests {
             if let baml_types::GeneratorOutputType::Go = args.client_type {
-                let mut cmd = Command::new(format!("./{}", &self.project_name));
+                // let mut cmd = Command::new(format!("./{}", self.project_name));
+                let mut cmd = Command::new("go");
+                cmd.args(vec!["test", "-v"]);
                 cmd.current_dir(&self.src_dir);
                 let dylib_path = get_cargo_root()?.join("target/debug/libbaml_cffi.dylib");
                 let so_path = get_cargo_root()?.join("target/debug/libbaml_cffi.so");

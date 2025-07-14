@@ -1,6 +1,6 @@
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { useMarkdown } from '@/lib/use-markdown';
-import { cn } from '@/lib/utils';
+import { Alert, AlertDescription } from '@baml/ui/alert';
+import { useMarkdown } from '~/lib/use-markdown';
+import { cn } from '@baml/ui/lib/utils';
 import yaml from 'js-yaml';
 import { ErrorBoundary } from 'react-error-boundary';
 

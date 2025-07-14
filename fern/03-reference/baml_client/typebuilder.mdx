@@ -26,8 +26,9 @@ function Categorize(text: string) -> Category {
 ```
 
 **Runtime Usage**
-<CodeBlocks>
-```python Python
+<Tabs>
+<Tab title="Python" language="python">
+```python
 from baml_client.type_builder import TypeBuilder
 from baml_client import b
 
@@ -42,7 +43,10 @@ tb.Category.add_value('YELLOW')
 result = b.Categorize("The sun is bright", {"tb": tb})
 # result can now be RED, BLUE, GREEN, or YELLOW
 ```
-```typescript TypeScript
+</Tab>
+
+<Tab title="TypeScript" language="typescript">
+```typescript
 import { TypeBuilder } from '../baml_client/type_builder'
 import { b } from '../baml_client'
 
@@ -57,7 +61,10 @@ tb.Category.addValue('YELLOW')
 const result = await b.Categorize("The sun is bright", { tb })
 // result can now be RED, BLUE, GREEN, or YELLOW
 ```
-```ruby Ruby
+</Tab>
+
+<Tab title="Ruby" language="ruby">
+```ruby
 require_relative 'baml_client/client'
 
 # Create a TypeBuilder instance
@@ -71,7 +78,8 @@ tb.Category.add_value('YELLOW')
 result = Baml::Client.categorize(text: "The sun is bright", baml_options: { tb: tb })
 # result can now be RED, BLUE, GREEN, or YELLOW
 ```
-</CodeBlocks>
+</Tab>
+</Tabs>
 
 ## Dynamic Types
 
@@ -93,23 +101,31 @@ class User {
 ```
 
 **Runtime Usage**
-<CodeBlocks>
-```python Python
+<Tabs>
+<Tab title="Python" language="python">
+```python
 tb = TypeBuilder()
 tb.User.add_property('email', tb.string())
 tb.User.add_property('address', tb.string())
 ```
-```typescript TypeScript
+</Tab>
+
+<Tab title="TypeScript" language="typescript">
+```typescript
 const tb = new TypeBuilder()
 tb.User.addProperty('email', tb.string())
 tb.User.addProperty('address', tb.string())
 ```
-```ruby Ruby
+</Tab>
+
+<Tab title="Ruby" language="ruby">
+```ruby
 tb = Baml::TypeBuilder.new
 tb.User.add_property('email', tb.string)
 tb.User.add_property('address', tb.string)
 ```
-</CodeBlocks>
+</Tab>
+</Tabs>
 </ParamField>
 
 <ParamField path="Enums" type="example">
@@ -122,31 +138,40 @@ enum Category {
 ```
 
 **Runtime Usage**
-<CodeBlocks>
-```python Python
+<Tabs>
+<Tab title="Python" language="python">
+```python
 tb = TypeBuilder()
 tb.Category.add_value('VALUE3')
 tb.Category.add_value('VALUE4')
 ```
-```typescript TypeScript
+</Tab>
+
+<Tab title="TypeScript" language="typescript">
+```typescript
 const tb = new TypeBuilder()
 tb.Category.addValue('VALUE3')
 tb.Category.addValue('VALUE4')
 ```
-```ruby Ruby
+</Tab>
+
+<Tab title="Ruby" language="ruby">
+```ruby
 tb = Baml::TypeBuilder.new
 tb.Category.add_value('VALUE3')
 tb.Category.add_value('VALUE4')
 ```
-</CodeBlocks>
+</Tab>
+</Tabs>
 </ParamField>
 
 ### Creating New Types
 
 You can also create entirely new types at runtime:
 
-<CodeBlocks>
-```python Python
+<Tabs>
+<Tab title="Python" language="python">
+```python
 tb = TypeBuilder()
 
 # Create a new enum
@@ -163,7 +188,10 @@ address.add_property("city", tb.string())
 tb.User.add_property("hobbies", hobbies.type().list())
 tb.User.add_property("address", address.type())
 ```
-```typescript TypeScript
+</Tab>
+
+<Tab title="TypeScript" language="typescript">
+```typescript
 const tb = new TypeBuilder()
 
 // Create a new enum
@@ -180,7 +208,10 @@ address.addProperty("city", tb.string())
 tb.User.addProperty("hobbies", hobbies.type().list())
 tb.User.addProperty("address", address.type())
 ```
-```ruby Ruby
+</Tab>
+
+<Tab title="Ruby" language="ruby">
+```ruby
 tb = Baml::TypeBuilder.new
 
 # Create a new enum
@@ -197,7 +228,8 @@ address.add_property("city", tb.string)
 tb.User.add_property("hobbies", hobbies.type.list)
 tb.User.add_property("address", address.type)
 ```
-</CodeBlocks>
+</Tab>
+</Tabs>
 
 ## Type Builders
 
@@ -289,8 +321,9 @@ tb.User.add_property("email", tb.string())
 
 You can add descriptions to properties and enum values to help guide the LLM:
 
-<CodeBlocks>
-```python Python
+<Tabs>
+<Tab title="Python" language="python">
+```python
 tb = TypeBuilder()
 
 # Add description to a property
@@ -301,7 +334,10 @@ tb.User.add_property("email", tb.string()) \
 tb.Category.add_value("URGENT") \
    .description("Needs immediate attention")
 ```
-```typescript TypeScript
+</Tab>
+
+<Tab title="TypeScript" language="typescript">
+```typescript
 const tb = new TypeBuilder()
 
 // Add description to a property
@@ -312,7 +348,10 @@ tb.User.addProperty("email", tb.string())
 tb.Category.addValue("URGENT")
    .description("Needs immediate attention")
 ```
-```ruby Ruby
+</Tab>
+
+<Tab title="Ruby" language="ruby">
+```ruby
 tb = Baml::TypeBuilder.new
 
 # Add description to a property
@@ -323,16 +362,17 @@ tb.User.add_property("email", tb.string)
 tb.Category.add_value("URGENT")
    .description("Needs immediate attention")
 ```
-</CodeBlocks>
+</Tab>
+</Tabs>
 
 ## Creating/modyfing dynamic types with the `add_baml` method
 
 The `TypeBuilder` has a higher level API for creating dynamic types at runtime.
 Here's an example:
 
-<CodeBlocks>
-
-```python Python
+<Tabs>
+<Tab title="Python" language="python">
+```python
 tb = TypeBuilder()
 tb.add_baml("""
   // Creates a new class Address that does not exist in the BAML source.
@@ -353,8 +393,10 @@ tb.add_baml("""
   }
 """)
 ```
+</Tab>
 
-```typescript TypeScript
+<Tab title="TypeScript" language="typescript">
+```typescript
 const tb = new TypeBuilder()
 tb.addBaml(`
   // Creates a new class Address that does not exist in the BAML source.
@@ -375,8 +417,10 @@ tb.addBaml(`
   }
 `)
 ```
+</Tab>
 
-```ruby Ruby
+<Tab title="Ruby" language="ruby">
+```ruby
 tb = Baml::TypeBuilder.new
 tb.add_baml("
   // Creates a new class Address that does not exist in the BAML source.
@@ -397,8 +441,8 @@ tb.add_baml("
   }
 ")
 ```
-
-</CodeBlocks>
+</Tab>
+</Tabs>
 
 ## Common Patterns
 

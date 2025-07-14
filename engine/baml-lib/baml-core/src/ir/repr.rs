@@ -9,7 +9,7 @@ use baml_types::{
     expr::{self, Builtin, Expr, ExprMetadata, Name, VarIndex},
     ir_type::{ArrowGeneric, TypeNonStreaming, TypeStreaming, UnionConstructor},
     type_meta, Arrow, BamlMap, BamlValueWithMeta, Constraint, ConstraintLevel, JinjaExpression,
-    Resolvable, StringOr, TypeIR, TypeValue, UnionType, UnresolvedValue,
+    Resolvable, StreamingMode, StringOr, TypeIR, TypeValue, UnionType, UnresolvedValue,
 };
 use either::Either;
 use indexmap::{IndexMap, IndexSet};
@@ -627,7 +627,7 @@ impl IntermediateRepr {
         let mut res = vec![];
         all_types.for_each(|t| {
             let found = t.to_non_streaming_type(self);
-            res.extend(found.find_if(&is_union).into_iter().cloned());
+            res.extend(found.find_if(&is_union, false).into_iter().cloned());
         });
 
         res.into_iter()
@@ -662,7 +662,7 @@ impl IntermediateRepr {
         let mut res = vec![];
         all_types.for_each(|t| {
             let found = t.to_streaming_type(self);
-            res.extend(found.find_if(&is_union).into_iter().cloned());
+            res.extend(found.find_if(&is_union, false).into_iter().cloned());
         });
 
         res.into_iter()
@@ -1588,6 +1588,7 @@ impl WithRepr<TypeIR> for ast::FieldType {
                             // TODO: use resolved in some way
                             TypeIR::RecursiveTypeAlias {
                                 name: alias_walker.name().to_string(),
+                                mode: StreamingMode::Streaming,
                                 meta: Default::default(),
                             }
                         } else {
@@ -3050,12 +3051,12 @@ mod tests {
             // Both fields should have consistent type resolution for Recursive1
             assert_eq!(
                 field1_type.to_string(),
-                "(Recursive1 | int @stream.done | string | null)", // Union3IntOrRecursive1OrString
+                "(Streaming.Recursive1 | int @stream.done | string | null)", // Union3IntOrRecursive1OrString
                 "field1 type resolution is inconsistent"
             );
             assert_eq!(
                 field2_type.to_string(),
-                "(Recursive1 | int @stream.done | string | null)", // Union3IntOrRecursive1OrString
+                "(Streaming.Recursive1 | int @stream.done | string | null)", // Union3IntOrRecursive1OrString
                 "field2 type resolution is inconsistent"
             );
         }
@@ -3089,12 +3090,12 @@ mod tests {
             // Both fields should have consistent type resolution for Recursive1
             assert_eq!(
                 field1_type.to_string(),
-                "(int @stream.done | Recursive1 @stream.not_null[] @stream.not_null | string | null)", // Union3IntOrRecursive1OrString
+                "(int @stream.done | Streaming.Recursive1 @stream.not_null[] @stream.not_null | string | null)", // Union3IntOrRecursive1OrString
                 "field1 type resolution is inconsistent"
             );
             assert_eq!(
                 field2_type.to_string(),
-                "(Recursive1 | int @stream.done | string | null)", // Union3IntOrRecursive1OrString
+                "(Streaming.Recursive1 | int @stream.done | string | null)", // Union3IntOrRecursive1OrString
                 "field2 type resolution is inconsistent"
             );
         }

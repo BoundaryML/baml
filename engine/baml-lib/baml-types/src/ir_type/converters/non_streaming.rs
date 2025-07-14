@@ -52,6 +52,7 @@ pub fn from_type_ir(r#type: &TypeIR, _lookup: &impl TypeLookups) -> TypeNonStrea
         ),
         TypeIR::RecursiveTypeAlias { name, .. } => TypeNonStreaming::RecursiveTypeAlias {
             name: name.clone(),
+            mode: StreamingMode::NonStreaming,
             meta: meta.clone(),
         },
         TypeIR::Tuple(field_types, _) => TypeNonStreaming::Tuple(

@@ -40,10 +40,10 @@ func (c *Example) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "a":
-			c.A = *baml.Decode(valueHolder).(*int64)
+			c.A = baml.Decode(valueHolder).Interface().(int64)
 
 		case "b":
-			c.B = *baml.Decode(valueHolder).(*string)
+			c.B = baml.Decode(valueHolder).Interface().(string)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -94,13 +94,13 @@ func (c *Example2) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "item":
-			c.Item = *baml.Decode(valueHolder).(*Example)
+			c.Item = baml.Decode(valueHolder).Interface().(Example)
 
 		case "element":
-			c.Element = *baml.Decode(valueHolder).(*string)
+			c.Element = baml.Decode(valueHolder).Interface().(string)
 
 		case "element2":
-			c.Element2 = *baml.Decode(valueHolder).(*string)
+			c.Element2 = baml.Decode(valueHolder).Interface().(string)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))

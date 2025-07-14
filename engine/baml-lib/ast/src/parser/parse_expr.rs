@@ -8,8 +8,8 @@ use super::{
 use crate::{
     assert_correct_parser,
     ast::{
-        self, expr::ExprFn, App, ArgumentsList, Expression, ExpressionBlock, Stmt,
-        TopLevelAssignment, *,
+        self, expr::ExprFn, App, ArgumentsList, Expression, ExpressionBlock, ForLoopStmt, LetStmt,
+        Stmt, TopLevelAssignment, *,
     },
     parser::{
         parse_arguments::parse_arguments_list, parse_expression::parse_expression,
@@ -71,7 +71,12 @@ pub fn parse_for_loop(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<
     let identifier = parse_identifier(tokens.next()?, diagnostics);
     let iterator = parse_expression(tokens.next()?, diagnostics)?;
     let body = parse_expr_block(tokens.next()?, diagnostics)?;
-    Some(Stmt::ForLoop(identifier, iterator, body, span))
+    Some(Stmt::ForLoop(ForLoopStmt {
+        identifier,
+        iterator,
+        body,
+        span,
+    }))
 }
 
 pub fn parse_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Stmt> {
@@ -102,7 +107,13 @@ pub fn parse_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
                     None
                 }
             };
-            maybe_body.map(|body| Stmt::Let(identifier, body, span.clone()))
+            maybe_body.map(|body| {
+                Stmt::Let(LetStmt {
+                    identifier,
+                    expr: body,
+                    span: span.clone(),
+                })
+            })
         }
         Rule::for_loop => parse_for_loop(stmt_token, diagnostics),
         _ => {

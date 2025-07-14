@@ -1,11 +1,11 @@
 'use client';
 
-import { NetworkTimeline } from '@/components/network-timeline';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useResponseCardConfigWithQueryParams } from '@/lib/store';
-import { cn } from '@/lib/utils';
+import { NetworkTimeline } from '~/components/network-timeline';
+import { Alert, AlertDescription } from '@baml/ui/alert';
+import { Badge } from '@baml/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@baml/ui/tabs';
+import { useResponseCardConfigWithQueryParams } from '~/lib/store';
+import { cn } from '@baml/ui/lib/utils';
 import * as React from 'react';
 import type {
   FunctionNames,
@@ -25,11 +25,9 @@ type ResponseCardProps<TFunctionName extends FunctionNames = FunctionNames> = {
   functionName?: FunctionNames; // Keep this optional since we don't use it anymore
 };
 
-export function ResponseCard<TFunctionName extends FunctionNames = FunctionNames>({
-  hookResult,
-  hasStarted,
-  functionName,
-}: ResponseCardProps<TFunctionName>) {
+export function ResponseCard<
+  TFunctionName extends FunctionNames = FunctionNames,
+>({ hookResult, hasStarted, functionName }: ResponseCardProps<TFunctionName>) {
   const {
     isLoading,
     error,

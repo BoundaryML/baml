@@ -1,43 +1,14 @@
 package main
 
 import (
-	b "classes/baml_client"
-	"context"
-	"encoding/json"
 	"fmt"
-
-	"classes/baml_client/types"
 )
 
 func main() {
-	cls := types.SimpleClass{}
-	cls.Digits = 10
-	cls.Words = "hello"
-
-	result, err := b.ConsumeSimpleClass(context.Background(), cls)
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println(result)
-
-	channel, err := b.Stream.MakeSimpleClass(context.Background())
-	if err != nil {
-		panic(err)
-	}
-	for result := range channel {
-		if result.IsFinal {
-			fmt.Println("final-----")
-			str, err := json.Marshal(result.Final())
-			if err != nil {
-				panic(err)
-			}
-			fmt.Println(string(str))
-		} else {
-			str, err := json.Marshal(result.Stream())
-			if err != nil {
-				panic(err)
-			}
-			fmt.Println(string(str))
-		}
-	}
+	fmt.Println("Classes tests are now available as Go tests.")
+	fmt.Println("Run 'go test' to run all tests, or 'go test -run TestConsumeSimpleClass' to run a specific test.")
+	fmt.Println("")
+	fmt.Println("Available tests:")
+	fmt.Println("  TestConsumeSimpleClass")
+	fmt.Println("  TestMakeSimpleClassStream")
 }

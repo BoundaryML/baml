@@ -33,7 +33,8 @@ mod settings;
 
 use tokio::sync::{broadcast, RwLock};
 
-use crate::playground::{broadcast_project_update, PlaygroundState};
+#[cfg(feature = "playground-server")]
+use crate::playground::PlaygroundState;
 
 /// The global state for the LSP
 #[derive(Debug)]
@@ -51,17 +52,22 @@ pub struct Session {
 
     pub baml_settings: BamlSettings,
 
+    #[cfg(feature = "playground-server")]
     pub playground_state: Option<Arc<RwLock<PlaygroundState>>>,
 
     /// Runtime for the playground server
+    #[cfg(feature = "playground-server")]
     pub playground_runtime: Option<tokio::runtime::Runtime>,
 }
 
 impl Drop for Session {
     fn drop(&mut self) {
-        // Shutdown the playground runtime if it exists
-        if let Some(runtime) = self.playground_runtime.take() {
-            runtime.shutdown_timeout(std::time::Duration::from_secs(1));
+        #[cfg(feature = "playground-server")]
+        {
+            // Shutdown the playground runtime if it exists
+            if let Some(runtime) = self.playground_runtime.take() {
+                runtime.shutdown_timeout(std::time::Duration::from_secs(1));
+            }
         }
     }
 }
@@ -74,7 +80,9 @@ impl Clone for Session {
             position_encoding: self.position_encoding,
             resolved_client_capabilities: self.resolved_client_capabilities.clone(),
             baml_settings: self.baml_settings.clone(),
+            #[cfg(feature = "playground-server")]
             playground_state: self.playground_state.clone(),
+            #[cfg(feature = "playground-server")]
             playground_runtime: None, // Don't clone the runtime
         }
     }
@@ -124,7 +132,9 @@ impl Session {
                 client_capabilities,
             )),
             baml_settings: BamlSettings::default(),
+            #[cfg(feature = "playground-server")]
             playground_state: None,
+            #[cfg(feature = "playground-server")]
             playground_runtime: None,
         })
     }
@@ -201,10 +211,20 @@ impl Session {
 
     pub fn reload(&mut self, notifier: Option<Notifier>) -> anyhow::Result<()> {
         tracing::info!("Reloading session");
-        let project_updates: Vec<HashMap<_, _>> = self
-            .baml_src_projects
-            .lock()
-            .unwrap()
+        let mut baml_src_projects = self.baml_src_projects.lock().unwrap();
+
+        // Drop moved "baml_src" directories, otherwise the project_updates
+        // code below will fail trying to read directories that no longer exist.
+        let removed_baml_src_dirs = baml_src_projects
+            .keys()
+            .filter(|project_root| !project_root.exists())
+            .cloned()
+            .collect::<Vec<_>>();
+        for baml_src_dir in &removed_baml_src_dirs {
+            baml_src_projects.remove(baml_src_dir);
+        }
+
+        let project_updates: Vec<HashMap<_, _>> = baml_src_projects
             .iter_mut()
             .map(|(_project_root, project)| {
                 let files_map = project
@@ -225,6 +245,10 @@ impl Session {
             })
             .collect::<anyhow::Result<Vec<_>>>()?;
         tracing::info!("Initial reload of {} files", project_updates.len());
+
+        // Guard no longer used. We can drop now instead of waiting for the end
+        // of scope.
+        drop(baml_src_projects);
 
         let files: Vec<(DocumentKey, String)> = project_updates
             .into_iter()
