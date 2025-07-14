@@ -12,7 +12,9 @@
 use std::collections::{HashMap, HashSet};
 
 use baml_vm::{Bytecode, Class, Function, FunctionKind, Instruction, Object, Value};
-use internal_baml_core::ast::{self, ClassConstructorField, Expression, ExpressionBlock, WithName};
+use internal_baml_core::ast::{
+    self, ClassConstructorField, Expression, ExpressionBlock, WithName, WithSpan,
+};
 use internal_baml_parser_database::ParserDatabase;
 
 /// Baml compiler.
@@ -70,6 +72,9 @@ struct Compiler<'g> {
     /// Stores heap-allocated objects that are created during compilation,
     /// such as string constants.
     objects: &'g mut Vec<Object>,
+
+    /// Current source line for debug info.
+    current_source_line: Option<usize>,
 }
 
 impl<'g> Compiler<'g> {
@@ -86,6 +91,7 @@ impl<'g> Compiler<'g> {
             scope: 0,
             locals: HashMap::new(),
             bytecode: Bytecode::new(),
+            current_source_line: None,
         }
     }
 
@@ -135,6 +141,7 @@ impl<'g> Compiler<'g> {
     /// the [`Self::compile_expression`] function.
     fn emit(&mut self, instruction: Instruction) -> usize {
         self.bytecode.instructions.push(instruction);
+        self.bytecode.source_lines.push(self.current_source_line);
         self.bytecode.instructions.len() - 1
     }
 
@@ -142,6 +149,12 @@ impl<'g> Compiler<'g> {
     fn add_constant(&mut self, value: Value) -> usize {
         self.bytecode.constants.push(value);
         self.bytecode.constants.len() - 1
+    }
+
+    /// Updates the current source line from a span.
+    fn set_source_line_from_span(&mut self, span: &ast::Span) {
+        let (start_line, _) = span.line_and_column();
+        self.current_source_line = Some(start_line.0);
     }
 
     /// Patches a jump instruction to point to the correct destination.
@@ -233,12 +246,14 @@ impl<'g> Compiler<'g> {
     fn compile_expression(&mut self, expression: &Expression) {
         match expression {
             // Constants.
-            Expression::BoolValue(bool, _span) => {
+            Expression::BoolValue(bool, span) => {
+                self.set_source_line_from_span(span);
                 let index = self.add_constant(Value::Bool(*bool));
                 self.emit(Instruction::LoadConst(index));
             }
 
-            Expression::NumericValue(num, _span) => {
+            Expression::NumericValue(num, span) => {
+                self.set_source_line_from_span(span);
                 let value = num
                     .parse::<i64>()
                     .map(Value::Int)
@@ -249,7 +264,8 @@ impl<'g> Compiler<'g> {
                 self.emit(Instruction::LoadConst(index));
             }
 
-            Expression::StringValue(string, _span) => {
+            Expression::StringValue(string, span) => {
+                self.set_source_line_from_span(span);
                 // Allocate the string in the objects pool
                 self.objects.push(Object::String(string.to_string()));
                 let object_index = self.objects.len() - 1;
@@ -263,6 +279,7 @@ impl<'g> Compiler<'g> {
 
             // Variables.
             Expression::Identifier(identifier) => {
+                self.set_source_line_from_span(identifier.span());
                 self.emit(Instruction::LoadVar(self.locals[identifier.name()]));
             }
 
@@ -272,6 +289,7 @@ impl<'g> Compiler<'g> {
                     self.compile_expression(expression);
                 }
 
+                self.set_source_line_from_span(span);
                 self.emit(Instruction::AllocArray(expressions.len()));
             }
 
@@ -379,6 +397,7 @@ impl<'g> Compiler<'g> {
             //
             // TODO: Explain what's going on with the spread operator.
             Expression::ClassConstructor(constructor, span) => {
+                self.set_source_line_from_span(span);
                 self.emit(Instruction::AllocInstance(
                     self.globals[constructor.class_name.name()],
                 ));
@@ -418,6 +437,7 @@ impl<'g> Compiler<'g> {
             Expression::Lambda(arguments_list, expression_block, span) => todo!(),
 
             Expression::App(app) => {
+                self.set_source_line_from_span(app.name.span());
                 // Push the function onto the stack.
                 self.emit(Instruction::LoadGlobal(self.globals[app.name.name()]));
 
@@ -432,10 +452,14 @@ impl<'g> Compiler<'g> {
 
             Expression::JinjaExpressionValue(jinja_expression, span) => todo!(),
 
-            Expression::ExprBlock(block, span) => self.compile_expression_block(block),
+            Expression::ExprBlock(block, span) => {
+                self.set_source_line_from_span(span);
+                self.compile_expression_block(block);
+            }
 
             // Branching.
-            Expression::If(condition, r#if, r#else, _span) => {
+            Expression::If(condition, r#if, r#else, span) => {
+                self.set_source_line_from_span(span);
                 // First, compile the condition. This will leave the end result
                 // of the condition on top of the stack.
                 self.compile_expression(condition);

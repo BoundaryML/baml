@@ -180,6 +180,12 @@ pub struct Bytecode {
 
     /// Constant pool.
     pub constants: Vec<Value>,
+
+    /// Source line mapping.
+    ///
+    /// Maps instruction indices to their source line numbers.
+    /// Each element corresponds to an instruction at the same index.
+    pub source_lines: Vec<Option<usize>>,
 }
 
 impl Bytecode {
@@ -187,6 +193,7 @@ impl Bytecode {
         Self {
             instructions: Vec::new(),
             constants: Vec::new(),
+            source_lines: Vec::new(),
         }
     }
 }

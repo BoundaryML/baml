@@ -147,20 +147,21 @@ const COLUMN_MARGIN: usize = 3;
 
 /// Print the bytecode of a function in a readable table format.
 ///
-/// Format is [IP, INSTRUCTION, METADATA]. Something like this:
+/// Format is [LINE, IP, INSTRUCTION, METADATA]. Something like this:
 ///
 /// ```text
-/// 0   LOAD_VAR 1        (b)
-/// 1   JUMP_IF_FALSE 4   (to 5)
-/// 2   POP
-/// 3   LOAD_CONST 0      (1)
-/// 4   JUMP 3            (to 7)
-/// 5   POP
-/// 6   LOAD_CONST 1      (2)
-/// 7   RETURN
+/// 1   0   LOAD_VAR 1        (b)
+///     1   JUMP_IF_FALSE 4   (to 5)
+///     2   POP
+/// 2   3   LOAD_CONST 0      (1)
+/// 4   4   JUMP 3            (to 7)
+///     5   POP
+/// 7   6   LOAD_CONST 1      (2)
+///     7   RETURN
 /// ```
-///
 /// Basically tries to mimic CPython's bytecode disassembly function.
+/// Line numbers are shown in the first column, with subsequent instructions
+/// from the same line having an empty first column.
 ///
 /// Takes care of calculating how many whitespaces we need to make the table
 /// symmetric and returns the entire table.
@@ -174,21 +175,41 @@ pub fn display_bytecode(
         return String::new();
     }
 
-    // Row contents. [String, String, String]
+    // Row contents. [String, String, String, String]
     let mut rows = Vec::new();
-    // Char count of the strings above. [usize, usize, usize]
+    // Char count of the strings above. [usize, usize, usize, usize]
     let mut chars_count = Vec::new();
-    // Max width of each column. [usize, usize, usize]
-    let mut widths = [0; 3];
+    // Max width of each column. [usize, usize, usize, usize]
+    let mut widths = [0; 4];
+
+    // Track the last line number we printed
+    let mut last_line: Option<usize> = None;
 
     // Populate all the rows.
     for instruction_ptr in 0..function.bytecode.instructions.len() {
         let (instruction, metadata) =
             display_instruction(instruction_ptr as isize, function, stack, objects, globals);
 
-        // Table format is [IP, INSTR, META].
-        let row = [instruction_ptr.to_string(), instruction, metadata];
-        let mut char_count = [0, 0, 0];
+        // Get the source line for this instruction
+        let source_line = function
+            .bytecode
+            .source_lines
+            .get(instruction_ptr)
+            .and_then(|&line| line);
+
+        // decide whether to show the line number
+        // since a single line could emit multiple instructions
+        let line_str = match source_line {
+            Some(line) if last_line != Some(line) => {
+                last_line = Some(line);
+                line.to_string()
+            }
+            _ => String::new(),
+        };
+
+        // Table format is [LINE, IP, INSTR, META].
+        let row = [line_str, instruction_ptr.to_string(), instruction, metadata];
+        let mut char_count = [0, 0, 0, 0];
 
         // Now calculate the max width of each column.
         for (i, col) in row.iter().enumerate() {
@@ -212,7 +233,7 @@ pub fn display_bytecode(
         for (i, col) in row.iter().enumerate() {
             let mut width = widths[i];
 
-            // First two rows have a margin. Last row doesn't need anything.
+            // First three columns have a margin. Last column doesn't need anything.
             if i < row.len() - 1 {
                 width += COLUMN_MARGIN;
             } else {
