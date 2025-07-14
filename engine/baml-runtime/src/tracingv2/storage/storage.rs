@@ -654,6 +654,14 @@ impl Collector {
         }
     }
 
+    pub fn clear(&self) {
+        let mut guard = self.tracked_ids.lock().unwrap();
+        for fid in guard.iter() {
+            BAML_TRACER.lock().unwrap().dec_ref(fid);
+        }
+        guard.clear();
+    }
+
     pub fn function_logs(&self) -> Vec<FunctionLog> {
         let guard = self.tracked_ids.lock().unwrap();
         guard

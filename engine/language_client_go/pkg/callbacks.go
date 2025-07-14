@@ -12,6 +12,7 @@ import (
 	"sync"
 	"unsafe"
 
+	"github.com/boundaryml/baml/engine/language_client_go/baml_go/serde"
 	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
 	"google.golang.org/protobuf/proto"
 )
@@ -44,6 +45,8 @@ type CallbackData struct {
 	channel chan ResultCallback
 	ctx     context.Context
 }
+
+type TypeMap = serde.TypeMap
 
 // Map to store callbacks by ID
 var (
@@ -103,7 +106,7 @@ func trigger_callback(id C.uint32_t, isDone C.int, content *C.int8_t, length C.i
 			return
 		}
 
-		decoded_data := Decode(&content_holder).Interface()
+		decoded_data := serde.Decode(&content_holder, typeMap).Interface()
 
 		var res ResultCallback
 		if isDone == 1 {

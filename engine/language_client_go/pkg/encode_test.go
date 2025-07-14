@@ -4,31 +4,28 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/boundaryml/baml/engine/language_client_go/baml_go/serde"
 	"github.com/ghetzel/testify/require"
 )
 
 func TestEncodeFunctionArguments(t *testing.T) {
+	client := NewClientRegistry()
+	client.AddLlmClient("a", "b", map[string]any{"a": "b", "c": 1, "d": 2.2, "e": true})
+	client.SetPrimaryClient("a")
+
 	tests := []BamlFunctionArguments{
 		{
 			Kwargs: map[string]any{"a": "b", "c": 1, "d": 2.2, "e": true},
 		},
 		{
-			Kwargs: map[string]any{"a": "b", "c": 1, "d": 2.2, "e": true},
-			ClientRegistry: &ClientRegistry{
-				primary: &[]string{"a"}[0],
-				clients: clientRegistryMap{
-					"a": clientProperty{
-						provider: "b",
-						options:  map[string]any{"a": "b", "c": 1, "d": 2.2, "e": true},
-					},
-				},
-			},
+			Kwargs:         map[string]any{"a": "b", "c": 1, "d": 2.2, "e": true},
+			ClientRegistry: client,
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(fmt.Sprintf("EncodeFunctionArguments(%v)", test), func(t *testing.T) {
-			_, err := EncodeArgs(test)
+			_, err := test.Encode()
 			require.NoError(t, err)
 		})
 	}
@@ -40,10 +37,10 @@ func TestEncodeFunctionArguments(t *testing.T) {
 			"e": "f",
 		}
 
-		encoded_value, err := encodeValue(test_value)
+		encoded_value, err := serde.BAMLTESTINGONLY_InternalEncode(test_value)
 		require.NoError(t, err)
 
-		decoded_value := Decode(encoded_value).Interface()
+		decoded_value := serde.Decode(encoded_value, nil).Interface()
 		require.Equal(t, test_value, decoded_value)
 	})
 
@@ -55,10 +52,10 @@ func TestEncodeFunctionArguments(t *testing.T) {
 			"c": nil,
 		}
 
-		encoded_value, err := encodeValue(test_value)
+		encoded_value, err := serde.BAMLTESTINGONLY_InternalEncode(test_value)
 		require.NoError(t, err)
 
-		decoded_value := Decode(encoded_value).Interface()
+		decoded_value := serde.Decode(encoded_value, nil).Interface()
 		require.Equal(t, test_value, decoded_value)
 	})
 }

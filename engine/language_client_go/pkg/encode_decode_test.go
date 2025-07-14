@@ -6,19 +6,27 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/boundaryml/baml/engine/language_client_go/baml_go/serde"
 	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
 	"github.com/ghetzel/testify/assert"
 	"github.com/ghetzel/testify/require"
 )
 
+var test_type_map TypeMap
+
+func set_test_type_map(type_map TypeMap) {
+	// Set the type map for testing
+	test_type_map = type_map
+}
+
 // Helper function for round-trip testing
 func testRoundTrip(t *testing.T, name string, value interface{}, expected interface{}) {
 	t.Helper()
 	t.Run(name, func(t *testing.T) {
-		encoded, err := encodeValue(value)
+		encoded, err := serde.BAMLTESTINGONLY_InternalEncode(value)
 		require.NoError(t, err, "encoding should not fail")
 
-		decoded := Decode(encoded).Interface()
+		decoded := serde.Decode(encoded, test_type_map).Interface()
 		if expected != nil {
 			assert.Equal(t, expected, decoded, "decoded value should match expected")
 		} else {
@@ -414,10 +422,10 @@ func (t TestClass) Encode() (*cffi.CFFIValueHolder, error) {
 		"age":  t.Age,
 		"tags": t.Tags,
 	}
-	return EncodeClass(t.BamlEncodeName, fields, nil)
+	return serde.EncodeClass(t.BamlEncodeName, fields, nil)
 }
 
-func (t *TestClass) Decode(holder *cffi.CFFIValueClass) {
+func (t *TestClass) Decode(holder *cffi.CFFIValueClass, typeMap TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))
@@ -427,7 +435,7 @@ func (t *TestClass) Decode(holder *cffi.CFFIValueClass) {
 	}
 
 	for _, field := range holder.Fields {
-		value := Decode(field.Value).Interface()
+		value := serde.Decode(field.Value, typeMap).Interface()
 		switch field.Key {
 		case "name":
 			t.Name = value.(string)
@@ -461,7 +469,7 @@ func (e TestEnum) BamlEncodeName() *cffi.CFFITypeName {
 }
 
 func (e TestEnum) Encode() (*cffi.CFFIValueHolder, error) {
-	return EncodeEnum(e.BamlEncodeName, string(e), false)
+	return serde.EncodeEnum(e.BamlEncodeName, string(e), false)
 }
 
 func (e *TestEnum) Decode(holder *cffi.CFFIValueEnum) {
@@ -493,10 +501,10 @@ func (u TestUnion) BamlEncodeName() *cffi.CFFITypeName {
 }
 
 func (u TestUnion) Encode() (*cffi.CFFIValueHolder, error) {
-	return EncodeUnion(u.BamlEncodeName, u.VariantName, u.Value)
+	return serde.EncodeUnion(u.BamlEncodeName, u.VariantName, u.Value)
 }
 
-func (u *TestUnion) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *TestUnion) Decode(holder *cffi.CFFIValueUnionVariant, typeMap TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_TYPES, got %s", typeName.Namespace.String()))
@@ -506,7 +514,7 @@ func (u *TestUnion) Decode(holder *cffi.CFFIValueUnionVariant) {
 	}
 
 	u.VariantName = holder.VariantName
-	u.Value = Decode(holder.Value).Interface()
+	u.Value = serde.Decode(holder.Value, typeMap).Interface()
 }
 
 // TestClassDeserializer implements BamlClassDeserializer
@@ -516,15 +524,15 @@ type TestClassDeserializer struct {
 	Tags []string
 }
 
-func (t *TestClassDeserializer) Decode(holder *cffi.CFFIValueClass) {
+func (t *TestClassDeserializer) Decode(holder *cffi.CFFIValueClass, typeMap TypeMap) {
 	for _, field := range holder.Fields {
 		switch field.Key {
 		case "name":
-			t.Name = Decode(field.Value).Interface().(string)
+			t.Name = serde.Decode(field.Value, typeMap).Interface().(string)
 		case "age":
-			t.Age = Decode(field.Value).Interface().(int64)
+			t.Age = serde.Decode(field.Value, typeMap).Interface().(int64)
 		case "tags":
-			t.Tags = Decode(field.Value).Interface().([]string)
+			t.Tags = serde.Decode(field.Value, typeMap).Interface().([]string)
 		default:
 			panic(fmt.Sprintf("unknown field: %s", field.Key))
 		}
@@ -537,11 +545,14 @@ func TestCustomStructs(t *testing.T) {
 		"TYPES.TestEnum":  reflect.TypeOf(TestEnum("")),
 		"TYPES.TestUnion": reflect.TypeOf(TestUnion{}),
 	}
-	SetTypeMap(type_map)
+	// set type_map for all tests here
+	set_test_type_map(type_map)
 
 	t.Cleanup(func() {
-		SetTypeMap(TypeMap{})
+		// Reset type map after tests
+		set_test_type_map(nil)
 	})
+
 	t.Run("CustomClass", func(t *testing.T) {
 		// Test custom class round-trip
 		testClass := TestClass{
@@ -792,7 +803,7 @@ func TestCustomStructs(t *testing.T) {
 			return &cffi.CFFITypeName{Name: "DynamicTestClass"}
 		}
 
-		encoded, err := EncodeClass(nameEncoder, staticFields, &dynamicFields)
+		encoded, err := serde.EncodeClass(nameEncoder, staticFields, &dynamicFields)
 		require.NoError(t, err, "encoding class with dynamic fields should not fail")
 
 		assert.NotNil(t, encoded)
@@ -804,8 +815,8 @@ func TestCustomStructs(t *testing.T) {
 		assert.Len(t, classValue.ClassValue.DynamicFields, 5) // dynamic fields
 
 		// Test decoding with DynamicClass
-		decoded := &DynamicClass{}
-		decoded.Decode(classValue.ClassValue)
+		decoded := &serde.DynamicClass{}
+		decoded.Decode(classValue.ClassValue, type_map)
 
 		assert.Equal(t, "DynamicTestClass", decoded.Name)
 
@@ -843,19 +854,19 @@ func TestEncodeDecodeErrors(t *testing.T) {
 			Field string
 		}
 
-		_, err := encodeValue(CustomStruct{Field: "test"})
+		_, err := serde.BAMLTESTINGONLY_InternalEncode(CustomStruct{Field: "test"})
 		assert.Error(t, err, "should error on unsupported struct type")
 
-		_, err = encodeValue(make(chan int))
+		_, err = serde.BAMLTESTINGONLY_InternalEncode(make(chan int))
 		assert.Error(t, err, "should error on channel type")
 
-		_, err = encodeValue(func() {})
+		_, err = serde.BAMLTESTINGONLY_InternalEncode(func() {})
 		assert.Error(t, err, "should error on function type")
 	})
 
 	t.Run("NonStringMapKeys", func(t *testing.T) {
 		// Maps with non-string keys should fail
-		_, err := encodeValue(map[int]string{1: "one", 2: "two"})
+		_, err := serde.BAMLTESTINGONLY_InternalEncode(map[int]string{1: "one", 2: "two"})
 		assert.Error(t, err, "should error on non-string map keys")
 	})
 }

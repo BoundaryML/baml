@@ -30,6 +30,14 @@ pub enum BamlValue {
     Null,
 }
 
+impl TryFrom<serde_json::Value> for BamlValue {
+    type Error = anyhow::Error;
+
+    fn try_from(value: serde_json::Value) -> Result<Self, Self::Error> {
+        Ok(serde_json::from_value(value)?)
+    }
+}
+
 impl serde::Serialize for BamlValue {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         match self {
