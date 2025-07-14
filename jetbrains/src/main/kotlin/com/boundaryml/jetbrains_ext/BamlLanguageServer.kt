@@ -9,7 +9,6 @@ import java.nio.file.Path
 class BamlLanguageServer(private val project: Project) : OSProcessStreamConnectionProvider() {
 
     init {
-        // val commandLine = GeneralCommandLine(Path.of(System.getProperty("user.home"), ".baml/jetbrains", "baml-cli-0.89.0-aarch64-apple-darwin", "baml-cli").toString(), "lsp")
         // UNCOMMENT FOR DEBUGGING LOCALLY
 //        val commandLine = GeneralCommandLine(
 //            Path.of(System.getProperty("user.home"),

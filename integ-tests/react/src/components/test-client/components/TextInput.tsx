@@ -1,5 +1,5 @@
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@baml/ui/input';
+import { Textarea } from '@baml/ui/textarea';
 import type React from 'react';
 
 interface TextInputProps {

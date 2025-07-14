@@ -1,12 +1,12 @@
 'use client';
 
-import { Button } from '@/components/ui/button';
 import {
   exampleParser,
   getHookConfig,
   getInputConfigs,
   useResponseCardConfigWithQueryParams,
-} from '@/lib/store';
+} from '~/lib/store';
+import { Button } from '@baml/ui/button';
 import { Loader2 } from 'lucide-react';
 import { useQueryState } from 'nuqs';
 import * as React from 'react';

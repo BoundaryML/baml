@@ -29,7 +29,8 @@ function WriteAPoemAbout(input: string) -> string {
 After running `baml-cli generate` you can directly call these functions from
 your code. Here's an example using the async client:
 
-<CodeBlocks>
+<Tabs>
+<Tab title="Python" language="python">
 ```python
 from baml_client.async_client import b
 
@@ -38,7 +39,9 @@ async def example():
     story = await b.TellMeAStory()
     poem = await b.WriteAPoemAbout("Roses")
 ```
+</Tab>
 
+<Tab title="TypeScript" language="typescript">
 ```typescript
 import { b } from '../baml_client/async_client'
 
@@ -48,7 +51,9 @@ async function example() {
     const poem = await b.WriteAPoemAbout("Roses")
 }
 ```
+</Tab>
 
+<Tab title="Ruby" language="ruby">
 ```ruby
 # Ruby doesn't have an async client.
 require 'baml_client/client'
@@ -59,12 +64,14 @@ def example
   poem = b.WriteAPoemAbout("Roses")
 end
 ```
-</CodeBlocks>
+</Tab>
+</Tabs>
 
 The sync client is exactly the same but it doesn't need an async runtime,
 instead it just blocks.
 
-<CodeBlocks>
+<Tabs>
+<Tab title="Python" language="python">
 ```python
 from baml_client.sync_client import b
 
@@ -73,7 +80,9 @@ def example():
     story = b.TellMeAStory()
     poem = b.WriteAPoemAbout("Roses")
 ```
+</Tab>
 
+<Tab title="TypeScript" language="typescript">
 ```typescript
 import { b } from '../baml_client/sync_client'
 
@@ -83,7 +92,9 @@ function example() {
     const poem = b.WriteAPoemAbout("Roses")
 }
 ```
+</Tab>
 
+<Tab title="Ruby" language="ruby">
 ```ruby
 require 'baml_client/client'
 
@@ -95,7 +106,8 @@ def example
   poem = b.WriteAPoemAbout("Roses")
 end
 ```
-</CodeBlocks>
+</Tab>
+</Tabs>
 
 ## Call Patterns
 
@@ -106,7 +118,8 @@ functions in a different manner.
 
 The `.stream` object is used to stream the response from a function.
 
-<CodeBlocks>
+<Tabs>
+<Tab title="Python" language="python">
 ```python
 from baml_client.async_client import b
 
@@ -118,7 +131,9 @@ async def example():
 
     print(await stream.get_final_response())
 ```
+</Tab>
 
+<Tab title="TypeScript" language="typescript">
 ```typescript
 import { b } from '../baml_client/async_client'
 
@@ -132,7 +147,9 @@ async function example() {
     console.log(await stream.getFinalResponse())
 }
 ```
+</Tab>
 
+<Tab title="Ruby" language="ruby">
 ```ruby
 require 'baml_client/client'
 
@@ -148,7 +165,8 @@ def example
   puts stream.get_final_response
 end
 ```
-</CodeBlocks>
+</Tab>
+</Tabs>
 
 ### `.request`
 
@@ -161,7 +179,8 @@ However, the async client still returns an awaitable object because we might
 need to resolve media types like images and convert them to base64 or the
 required format in order to send them to the LLM.
 
-<CodeBlocks>
+<Tabs>
+<Tab title="Python" language="python">
 ```python
 from baml_client.async_client import b
 
@@ -171,7 +190,9 @@ async def example():
     print(request.headers)
     print(request.body.json())
 ```
+</Tab>
 
+<Tab title="TypeScript" language="typescript">
 ```typescript
 import { b } from '../baml_client/async_client'
 
@@ -182,7 +203,9 @@ async function example() {
     console.log(request.body.json())
 }
 ```
+</Tab>
 
+<Tab title="Ruby" language="ruby">
 ```ruby
 require 'baml_client/client'
 
@@ -195,7 +218,8 @@ def example
   puts request.body.json
 end
 ```
-</CodeBlocks>
+</Tab>
+</Tabs>
 
 ### `.stream_request`
 
@@ -205,7 +229,8 @@ end
 
 Same as [`.request`](#request) but sets the streaming options to `true`.
 
-<CodeBlocks>
+<Tabs>
+<Tab title="Python" language="python">
 ```python
 from baml_client.async_client import b
 
@@ -215,7 +240,9 @@ async def example():
     print(request.headers)
     print(request.body.json())
 ```
+</Tab>
 
+<Tab title="TypeScript" language="typescript">
 ```typescript
 import { b } from '../baml_client/async_client'
 
@@ -226,7 +253,9 @@ async function example() {
     console.log(request.body.json())
 }
 ```
+</Tab>
 
+<Tab title="Ruby" language="ruby">
 ```ruby
 require 'baml_client/client'
 
@@ -239,7 +268,8 @@ def example
   puts request.body.json
 end
 ```
-</CodeBlocks>
+</Tab>
+</Tabs>
 
 ### `.parse`
 
@@ -250,7 +280,8 @@ end
 The `.parse` object is used to parse the response returned by the LLM after
 the function call. Can be used in combination with [`.request`](#request).
 
-<CodeBlocks>
+<Tabs>
+<Tab title="Python" language="python">
 ```python
 import requests
 # requests is not async so for simplicity we'll use the sync client.
@@ -269,7 +300,9 @@ def example():
     # Fully parsed response.
     print(parsed)
 ```
+</Tab>
 
+<Tab title="TypeScript" language="typescript">
 ```typescript
 import { b } from '../baml_client/async_client'
 
@@ -294,7 +327,9 @@ async function example() {
     console.log(parsed)
 }
 ```
+</Tab>
 
+<Tab title="Ruby" language="ruby">
 ```ruby
 require 'net/http'
 require 'uri'
@@ -330,7 +365,8 @@ def run
   puts parsed
 end
 ```
-</CodeBlocks>
+</Tab>
+</Tabs>
 
 ### `.parse_stream`
 
@@ -341,7 +377,8 @@ end
 Same as [`.parse`](#parse) but for streaming responses. Can be used in
 combination with [`.stream_request`](#stream_request).
 
-<CodeBlocks>
+<Tabs>
+<Tab title="Python" language="python">
 ```python
 from openai import AsyncOpenAI
 from baml_client.async_client import b
@@ -358,7 +395,9 @@ async def example():
       llm_response.append(chunk.choices[0].delta.content)
       print(b.parse_stream.TellMeAStory("".join(llm_response)))
 ```
+</Tab>
 
+<Tab title="TypeScript" language="typescript">
 ```typescript
 import OpenAI from 'openai'
 import { b } from '../baml_client/async_client'
@@ -378,4 +417,5 @@ async function example() {
     }
 }
 ```
-</CodeBlocks>
+</Tab>
+</Tabs>

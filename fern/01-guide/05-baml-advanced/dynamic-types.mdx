@@ -129,9 +129,9 @@ function DynamicUserCreator(user_info: string) -> User {
 
 We can then modify the `User` schema at runtime. Since we marked `User` with `@@dynamic`, it'll be available as a property of `TypeBuilder`.
 
-<CodeBlocks>
-
-```python Python
+<Tabs>
+<Tab title="Python" language="python">
+```python
 from baml_client.type_builder import TypeBuilder
 from baml_client import b
 
@@ -142,10 +142,11 @@ async def run():
   res = await b.DynamicUserCreator("some user info", { "tb": tb })
   # Now res can have email and address fields
   print(res)
-
 ```
+</Tab>
 
-```typescript TypeScript
+<Tab title="TypeScript" language="typescript">
+```typescript
 import TypeBuilder from '../baml_client/type_builder'
 import {
   b
@@ -160,8 +161,10 @@ async function run() {
   console.log(res)
 }
 ```
+</Tab>
 
-```ruby Ruby
+<Tab title="Ruby" language="ruby">
+```ruby
 require_relative 'baml_client/client'
 
 def run
@@ -169,12 +172,13 @@ def run
   tb.User.add_property('email', tb.string)
   tb.User.add_property('address', tb.string).description("The user's address")
 
-  res = Baml.Client.dynamic_user_creator(input: "some user info", baml_options: {tb: tb})
+  res = Baml::Client.dynamic_user_creator(input: "some user info", baml_options: { tb: tb })
   # Now res can have email and address fields
   puts res
 end
 ```
-</CodeBlocks>
+</Tab>
+</Tabs>
 
 
 ### Add existing BAML types to a property (e.g. you want to add a subset of tools)
@@ -258,73 +262,77 @@ The previous examples showed how to modify existing types. Here we create a new 
 
 Note that you must attach the new types to the existing Return Type of your BAML function(in this case it's `User`).
 
-<CodeBlocks>
+<Tabs>
+  <Tab title="Python" language="python">
+    ```python Python
+    from baml_client.type_builder import TypeBuilder
+    from baml_client.async_client import b
 
-```python Python
-from baml_client.type_builder import TypeBuilder
-from baml_client.async_client import b
+    async def run():
+      tb = TypeBuilder()
+      hobbies_enum = tb.add_enum("Hobbies")
+      hobbies_enum.add_value("Soccer")
+      hobbies_enum.add_value("Reading")
 
-async def run():
-  tb = TypeBuilder()
-  hobbies_enum = tb.add_enum("Hobbies")
-  hobbies_enum.add_value("Soccer")
-  hobbies_enum.add_value("Reading")
+      address_class = tb.add_class("Address")
+      address_class.add_property("street", tb.string()).description("The user's street address")
 
-  address_class = tb.add_class("Address")
-  address_class.add_property("street", tb.string()).description("The user's street address")
+      tb.User.add_property("hobby", hobbies_enum.type().optional())
+      tb.User.add_property("address", address_class.type().optional())
+      res = await b.DynamicUserCreator("some user info", {"tb": tb})
+      # Now res might have the hobby property, which can be Soccer or Reading
+      print(res)
 
-  tb.User.add_property("hobby", hobbies_enum.type().optional())
-  tb.User.add_property("address", address_class.type().optional())
-  res = await b.DynamicUserCreator("some user info", {"tb": tb})
-  # Now res might have the hobby property, which can be Soccer or Reading
-  print(res)
+    ```
+  </Tab>
 
-```
+  <Tab title="TypeScript" language="typescript">
+    ```typescript TypeScript
+    import TypeBuilder from '../baml_client/type_builder'
+    import { b } from '../baml_client'
 
-```typescript TypeScript
-import TypeBuilder from '../baml_client/type_builder'
-import { b } from '../baml_client'
+    async function run() {
+      const tb = new TypeBuilder()
+      const hobbiesEnum = tb.addEnum('Hobbies')
+      hobbiesEnum.addValue('Soccer')
+      hobbiesEnum.addValue('Reading')
 
-async function run() {
-  const tb = new TypeBuilder()
-  const hobbiesEnum = tb.addEnum('Hobbies')
-  hobbiesEnum.addValue('Soccer')
-  hobbiesEnum.addValue('Reading')
-
-  const addressClass = tb.addClass('Address')
-  addressClass.addProperty('street', tb.string()).description("The user's street address")
+      const addressClass = tb.addClass('Address')
+      addressClass.addProperty('street', tb.string()).description("The user's street address")
 
 
-  tb.User.addProperty('hobby', hobbiesEnum.type().optional())
-  tb.User.addProperty('address', addressClass.type())
-  const res = await b.DynamicUserCreator("some user info", { tb: tb })
-  // Now res might have the hobby property, which can be Soccer or Reading
-  console.log(res)
-}
-```
+      tb.User.addProperty('hobby', hobbiesEnum.type().optional())
+      tb.User.addProperty('address', addressClass.type())
+      const res = await b.DynamicUserCreator("some user info", { tb: tb })
+      # Now res might have the hobby property, which can be Soccer or Reading
+      console.log(res)
+    }
+    ```
+  </Tab>
 
-```ruby Ruby
-require_relative 'baml_client/client'
+  <Tab title="Ruby" language="ruby">
+    ```ruby Ruby
+    require_relative 'baml_client/client'
 
-def run
-  tb = Baml::TypeBuilder.new
-  hobbies_enum = tb.add_enum('Hobbies')
-  hobbies_enum.add_value('Soccer')
-  hobbies_enum.add_value('Reading')
+    def run
+      tb = Baml::TypeBuilder.new
+      hobbies_enum = tb.add_enum('Hobbies')
+      hobbies_enum.add_value('Soccer')
+      hobbies_enum.add_value('Reading')
 
-  address_class = tb.add_class('Address')
-  address_class.add_property('street', tb.string)
+      address_class = tb.add_class('Address')
+      address_class.add_property('street', tb.string)
 
-  tb.User.add_property('hobby', hobbies_enum.type.optional)
-  tb.User.add_property('address', address_class.type.optional)
+      tb.User.add_property('hobby', hobbies_enum.type.optional)
+      tb.User.add_property('address', address_class.type.optional)
 
-  res = Baml::Client.dynamic_user_creator(input: "some user info", baml_options: { tb: tb })
-  # Now res might have the hobby property, which can be Soccer or Reading
-  puts res
-end
-```
-</CodeBlocks>
-
+      res = Baml::Client.dynamic_user_creator(input: "some user info", baml_options: { tb: tb })
+      # Now res might have the hobby property, which can be Soccer or Reading
+      puts res
+    end
+    ```
+  </Tab>
+</Tabs>
 
 
 TypeBuilder provides methods for building different kinds of types:
@@ -348,24 +356,28 @@ TypeBuilder provides methods for building different kinds of types:
 
 ### Adding descriptions to dynamic types
 
-<CodeBlocks>
-
-```python Python
+<Tabs>
+<Tab title="Python" language="python">
+```python
 tb = TypeBuilder()
 tb.User.add_property("email", tb.string()).description("The user's email")
 ```
+</Tab>
 
-```typescript TypeScript
+<Tab title="TypeScript" language="typescript">
+```typescript
 const tb = new TypeBuilder()
 tb.User.addProperty("email", tb.string()).description("The user's email")
 ```
+</Tab>
 
-```ruby Ruby
+<Tab title="Ruby" language="ruby">
+```ruby
 tb = Baml::TypeBuilder.new
 tb.User.add_property("email", tb.string).description("The user's email")
 ```
-
-</CodeBlocks>
+</Tab>
+</Tabs>
 
 
 ### Creating dynamic classes and enums at runtime with BAML syntax

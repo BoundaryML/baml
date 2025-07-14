@@ -1,0 +1,63 @@
+name: "Setup Go"
+description: "Setup Go with optional protoc-gen-go"
+
+inputs:
+  go-version:
+    description: "Go version to install"
+    required: false
+    default: "1.23.11"
+  install-protoc-gen-go:
+    description: "Install protoc-gen-go"
+    required: false
+    default: "true"
+  cache:
+    description: "Enable Go module caching"
+    required: false
+    default: "true"
+  install-goimports:
+    description: "Install goimports"
+    required: false
+    default: "true"
+  architecture:
+    description: "Target architecture for Go (e.g., x64, x86, arm64)"
+    required: false
+    default: ""
+  target-os:
+    description: "Target OS for cross-compilation (e.g., linux, darwin, windows)"
+    required: false
+    default: ""
+  target-arch:
+    description: "Target architecture for cross-compilation (e.g., amd64, arm64, 386)"
+    required: false
+    default: ""
+
+runs:
+  using: "composite"
+  steps:
+    - name: Setup Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ inputs.go-version }}
+        cache: ${{ inputs.cache }}
+        architecture: ${{ inputs.architecture }}
+
+    - name: Set cross-compilation targets
+      if: inputs.target-os != '' || inputs.target-arch != ''
+      run: |
+        if [ "${{ inputs.target-os }}" != "" ]; then
+          echo "GOOS=${{ inputs.target-os }}" >> $GITHUB_ENV
+        fi
+        if [ "${{ inputs.target-arch }}" != "" ]; then
+          echo "GOARCH=${{ inputs.target-arch }}" >> $GITHUB_ENV
+        fi
+      shell: bash
+
+    - name: Install protoc-gen-go
+      if: inputs.install-protoc-gen-go == 'true'
+      run: go install github.com/golang/protobuf/protoc-gen-go@latest
+      shell: bash
+
+    - name: Install goimports
+      if: inputs.install-goimports == 'true'
+      run: go install golang.org/x/tools/cmd/goimports@latest
+      shell: bash

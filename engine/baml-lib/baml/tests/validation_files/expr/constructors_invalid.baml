@@ -24,7 +24,7 @@ fn Foo() -> Bar {
 //  5 | 
 //  6 | fn Foo() -> Bar {
 //    | 
-// error: Error validating: Bar.a expected type int, but found string
+// error: Error validating: Bar.a expected type int @stream.done, but found string
 //   -->  expr/constructors_invalid.baml:7
 //    | 
 //  6 | fn Foo() -> Bar {
@@ -48,7 +48,7 @@ fn Foo() -> Bar {
 //  8 |   let req_bad = std::Request { 
 //  9 |     base_url: 10,
 //    | 
-// error: Error validating: std::Request.query_params expected type map<string, string>, but found map<string, (int | null)>
+// error: Error validating: std::Request.query_params expected type map<string, string>, but found map<string, int>
 //   -->  expr/constructors_invalid.baml:11
 //    | 
 // 10 |     headers: {},

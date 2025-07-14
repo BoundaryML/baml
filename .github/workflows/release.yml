@@ -28,6 +28,12 @@ permissions:
   contents: read
   id-token: write
 
+# Common environment variables
+env:
+  # Turbo remote caching
+  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+  TURBO_TEAM: gloo
+
 jobs:
   determine-version:
     runs-on: ubuntu-latest
@@ -156,48 +162,30 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9.12.0
-          package_json_file: engine/language_client_typescript/package.json
-          run_install: false
+      - name: Setup Tools
+        uses: ./.github/actions/setup-tools
 
-      - name: Setup node
-        uses: actions/setup-node@v4
+      - name: Setup Node.js
+        uses: ./.github/actions/setup-node
         with:
-          node-version: 20
-          cache: pnpm
-          cache-dependency-path: engine/language_client_typescript/pnpm-lock.yaml
-          # This is load-bearing: it writes NODE_AUTH_TOKEN to .npmrc, which is what
-          # npm publish relies on.
-          # See https://github.com/npm/cli/issues/6184#issuecomment-1544496444
           registry-url: "https://registry.npmjs.org"
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Install dependencies
-        run: pnpm install
-        working-directory: engine/language_client_typescript
+          npm-token: ${{ secrets.NPM_TOKEN }}
 
       - uses: actions/download-artifact@v4
         with:
           pattern: bindings-*
           path: engine/language_client_typescript/artifacts
 
-      - name: create npm dirs
-        run: pnpm napi create-npm-dirs
-        working-directory: engine/language_client_typescript
+      - name: Create npm directories
+        run: pnpm --filter=@baml/language-client-typescript napi create-npm-dirs
 
       - name: Move artifacts
-        run: pnpm artifacts
-        working-directory: engine/language_client_typescript
+        run: pnpm --filter=@baml/language-client-typescript artifacts
 
-      - name: Publish
+      - name: Publish to NPM
         # This reads the credential from .npmrc, which is written by the setup-node step.
         # It does not use the NODE_AUTH_TOKEN environment variable.
-        run: npm publish --access public
-        working-directory: engine/language_client_typescript
+        run: pnpm --filter=@baml/language-client-typescript publish --access public
 
   # publish-to-rubygems:
   #   environment: release
@@ -230,86 +218,81 @@ jobs:
 
   publish-to-open-vsx:
     environment: release
-    needs: [determine-version, all-builds] # Also need determine-version for the condition
+    needs: [determine-version, all-builds]
     runs-on: ubuntu-latest
-    # Updated condition to use the output from determine-version
     if: ${{ (needs.determine-version.outputs.is_release_tag == 'true') || inputs.force_publish_vscode }}
     steps:
-      # No checkout needed if only publishing downloaded artifacts
-      # Setup Node/PNPM/Mise only if needed to run the ovsx CLI tool
-      - uses: pnpm/action-setup@v3
-        with:
-          version: 9.12.0
+      - uses: actions/checkout@v4
+
+      - name: Setup Tools
+        uses: ./.github/actions/setup-tools
+
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: ./.github/actions/setup-node
         with:
-          node-version: 20
+          install_dependencies: false
+          npm-token: ${{ secrets.NPM_TOKEN }}
       - name: Download VSIX artifacts
         uses: actions/download-artifact@v4
         with:
-          # Use pattern matching to get all target-specific VSIXs
           pattern: baml-vscode-vsix-*
-          path: vsix-artifacts # Download to a dedicated directory
-          merge-multiple: true # Combine artifacts from the matrix runs
+          path: vsix-artifacts
+          merge-multiple: true
+
       - name: List downloaded VSIXs
         run: ls -l vsix-artifacts/
-      - name: Publish to open-vsx
-        run: |
-          # Use npx to run the globally available or project-local ovsx tool
-          # Publish all downloaded VSIXs using a glob pattern
-          npx ovsx publish --packagePath ./vsix-artifacts/*.vsix
+
+      - name: Publish to Open VSX
+        run: npx ovsx publish --packagePath ./vsix-artifacts/*.vsix
         env:
           OVSX_PAT: ${{ secrets.OVSX_PAT }}
 
   publish-to-vscode-marketplace:
     environment: release
-    needs: [determine-version, all-builds] # Also need determine-version for the condition
+    needs: [determine-version, all-builds]
     runs-on: ubuntu-latest
-    # Updated condition to use the output from determine-version and check for tag/force
-    # if: ${{ (startsWith(github.ref, 'refs/tags/') && needs.determine-version.outputs.is_release_tag == 'true') || inputs.force_publish_vscode }}
+    if: ${{ (needs.determine-version.outputs.is_release_tag == 'true') || inputs.force_publish_vscode }}
     steps:
-      # No checkout needed if only publishing downloaded artifacts
-      # Setup Node/PNPM/Mise only if needed to run the vsce CLI tool
-      - uses: pnpm/action-setup@v3
-        with:
-          version: 9.12.0
+      - uses: actions/checkout@v4
+
+      - name: Setup Tools
+        uses: ./.github/actions/setup-tools
+
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: ./.github/actions/setup-node
         with:
-          node-version: 20
+          install_dependencies: false
+          npm-token: ${{ secrets.NPM_TOKEN }}
       - name: Download VSIX artifacts
         uses: actions/download-artifact@v4
         with:
-          # Use pattern matching to get all target-specific VSIXs
           pattern: baml-vscode-vsix-*
-          path: vsix-artifacts # Download to a dedicated directory
-          merge-multiple: true # Combine artifacts from the matrix runs
+          path: vsix-artifacts
+          merge-multiple: true
+
       - name: List downloaded VSIXs
-        run: ls -al vsix-artifacts/
+        run: ls -la vsix-artifacts/
+
       - name: Publish to VSCode Marketplace
-        run: |
-          # Use npx to run the vsce tool
-          # Publish all downloaded VSIXs using a glob pattern
-          npx @vscode/vsce publish --packagePath ./vsix-artifacts/*.vsix
+        run: npx @vscode/vsce publish --packagePath ./vsix-artifacts/*.vsix
         env:
           VSCE_PAT: ${{ secrets.VSCODE_PAT }}
 
   publish-to-jetbrains-marketplace:
     environment: release
-    needs: [determine-version, all-builds] # Also need determine-version for the condition
+    needs: [determine-version, all-builds]
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./jetbrains
+    if: ${{ needs.determine-version.outputs.is_release_tag == 'true' }}
     steps:
       # We need checkout, java, and gradle because there's no CLI for publishing
       # to JetBrains Marketplace, just a gradle task in the project.
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 23
-      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Setup Tools
+        uses: ./.github/actions/setup-tools
+
+      - name: Setup Java
+        uses: ./.github/actions/setup-java
 
       - name: Download extension zips
         uses: actions/download-artifact@v4
@@ -319,11 +302,10 @@ jobs:
           merge-multiple: true
 
       - name: List downloaded extension zips
-        run: ls -al ./jetbrains/build/distributions/
+        run: ls -la ./jetbrains/build/distributions/
 
       - name: Publish to JetBrains Marketplace
-        working-directory: ./jetbrains
-        run: ./gradlew publishPlugin
+        run: cd ./jetbrains && ./gradlew publishPlugin
         env:
           INTELLIJ_PLATFORM_PUBLISH_TOKEN: ${{ secrets.SAM_INTELLIJ_PLATFORM_PUBLISH_TOKEN }}
 
@@ -331,78 +313,53 @@ jobs:
     environment: release
     permissions:
       contents: write
-    # Depend on all builds AND the version determination
     needs: [all-builds, determine-version]
-    # Run regardless of tag or branch, flags will handle draft/prerelease state
-    # if: ${{ startsWith(github.ref, 'refs/tags/') }} # Removed condition
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4 # Checkout needed for CHANGELOG.md
 
-      # Download all CLI artifacts produced by the build-cli job
+      # Download all CLI artifacts
       - name: Download all baml-cli artifacts
         uses: actions/download-artifact@v4
         with:
-          # Match artifacts starting with 'baml-cli-'
           pattern: baml-cli-*
-          # Download into this directory
           path: cli-artifacts
-          merge-multiple: true # Merge artifacts from different OS/arch into the path
+          merge-multiple: true
 
-      # Download all CFFI library artifacts produced by the build-cli job
       - name: Download all libbaml-cffi artifacts
         uses: actions/download-artifact@v4
         with:
-          # Match artifacts starting with 'libbaml-cffi-'
           pattern: libbaml-cffi-*
-          # Download into a separate directory
           path: cffi-artifacts
-          merge-multiple: true # Merge artifacts from different OS into the path
+          merge-multiple: true
 
-      - name: List downloaded CLI artifacts
+      - name: List downloaded artifacts
         run: |
-          echo "Downloaded CLI artifacts:"
+          echo "CLI artifacts:"
           ls -R cli-artifacts/
-
-      # Add step to list downloaded CFFI artifacts for verification
-      - name: List downloaded CFFI artifacts
-        run: |
-          echo "Downloaded CFFI artifacts:"
+          echo "\nCFFI artifacts:"
           ls -R cffi-artifacts/
 
-      # Always create the changelog file, it will be empty for non-releases
-      - name: Initialize Changelog File
-        run: touch CHANGELOG.txt
-
-      # Get changelog only if it's a proper release tag
-      - name: Populate Changelog File for Release
-        # Condition updated to use output from determine-version
-        # if: needs.determine-version.outputs.is_release_tag == 'true'
+      # Prepare changelog
+      - name: Prepare changelog
         run: |
-          # Extract the latest changelog section using awk and write it to CHANGELOG.txt
-          # This assumes the latest release is at the top and starts with ## [version]
-          awk '/^## \[/{if (p) exit; if ($2 == "[${{ needs.determine-version.outputs.version_string }}]") p=1} p' CHANGELOG.md | sed '1d' > CHANGELOG.txt # Skip the header line itself
-
-      - name: List CHANGELOG.txt
-        run: ls -l CHANGELOG.txt
+          touch CHANGELOG.txt
+          if [[ "${{ needs.determine-version.outputs.is_release_tag }}" == "true" ]]; then
+            # Extract the latest changelog section
+            awk '/^## \[/{if (p) exit; if ($2 == "[${{ needs.determine-version.outputs.version_string }}]") p=1} p' CHANGELOG.md | sed '1d' > CHANGELOG.txt
+          fi
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          # Use version string from determine-version job
           name: ${{ needs.determine-version.outputs.version_string }}
           tag_name: ${{ needs.determine-version.outputs.version_string }}
-          # Use the generated CHANGELOG.txt file path for the body
           body_path: CHANGELOG.txt
-          # Set draft and prerelease based on whether it's a release tag
           draft: ${{ needs.determine-version.outputs.is_release_tag == 'false' }}
           prerelease: ${{ needs.determine-version.outputs.is_release_tag == 'false' }}
-          # Upload all files from the cli-artifacts and cffi-artifacts directories
           files: |
             cli-artifacts/**/*
             cffi-artifacts/**/*
           fail_on_unmatched_files: true
-          # Use default GITHUB_TOKEN
           token: ${{ secrets.GITHUB_TOKEN }}
-          # Do not auto-generate release notes, rely on changelog or empty body
           generate_release_notes: false
