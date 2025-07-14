@@ -5,7 +5,7 @@ import subprocess
 
 def get_repo_root() -> str:
     """Get the git repository root directory."""
-    result = subprocess.run(['git', 'rev-parse', '--show-toplevel'], 
+    result = subprocess.run(['git', 'rev-parse', '--show-toplevel'],
                           capture_output=True, text=True, check=True)
     return result.stdout.strip()
 

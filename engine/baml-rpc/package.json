@@ -7,9 +7,10 @@
     "./*": "./bindings/*.ts"
   },
   "scripts": {
-    "build": "tsc",
-    "typecheck": "tsc --noEmit --emitDeclarationOnly false",
-    "clean": "git clean -fdf dist .turbo node_modules"
+    "build": "cargo test export_bindings && tsc",
+    "release": "cargo test export_bindings && tsc",
+    "typecheck": "cargo test export_bindings && tsc --noEmit --emitDeclarationOnly false",
+    "clean": "git clean -xdf .turbo node_modules target"
   },
   "devDependencies": {
     "typescript": "5.8.3"

@@ -1,5 +1,5 @@
 // Immediately execute function
-(function() {
+(() => {
   // Only create chat bubble if window width > 700px
   if (window.innerWidth <= 700) {
     console.log('Window width <= 700px, not showing chat bubble');
@@ -22,11 +22,11 @@
   chatBubble.style.display = 'flex';
   chatBubble.style.alignItems = 'center';
   chatBubble.style.justifyContent = 'center';
-  
+
   // Add magical neon border with animation
   chatBubble.style.border = '2px solid transparent';
   chatBubble.style.backgroundClip = 'padding-box';
-  
+
   // Create a pseudo-element for the animated border
   const borderAnimation = document.createElement('div');
   borderAnimation.style.position = 'absolute';
@@ -36,12 +36,13 @@
   borderAnimation.style.bottom = '-4px';
   borderAnimation.style.borderRadius = '50%';
   borderAnimation.style.zIndex = '-1';
-  borderAnimation.style.background = 'linear-gradient(45deg, #ff00cc, #6025d1, #00ccff, #6025d1)';
+  borderAnimation.style.background =
+    'linear-gradient(45deg, #ff00cc, #6025d1, #00ccff, #6025d1)';
   borderAnimation.style.backgroundSize = '200% 200%';
   borderAnimation.style.filter = 'blur(2px)';
   borderAnimation.style.opacity = '0.7';
   borderAnimation.style.transition = 'opacity 0.3s ease';
-  
+
   // Add animation using CSS keyframes
   const style = document.createElement('style');
   style.textContent = `
@@ -52,17 +53,15 @@
     }
   `;
   document.head.appendChild(style);
-  
+
   borderAnimation.style.animation = 'magicBorder 20s ease infinite';
   chatBubble.appendChild(borderAnimation);
-  
+
   // Add chat icon
   const chatIcon = document.createElement('div');
   chatIcon.innerHTML = `
   <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-bot"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg>
   `;
-
-
 
   chatBubble.appendChild(chatIcon);
 
@@ -81,7 +80,7 @@
   tooltip.style.visibility = 'hidden';
   tooltip.style.transition = 'opacity 0.3s, visibility 0.3s';
   chatBubble.appendChild(tooltip);
-  
+
   // Create sparkle container
   const sparkleContainer = document.createElement('div');
   sparkleContainer.style.position = 'absolute';
@@ -93,7 +92,7 @@
   sparkleContainer.style.opacity = '0';
   sparkleContainer.style.transition = 'opacity 0.3s';
   chatBubble.appendChild(sparkleContainer);
-  
+
   // Function to create a sparkle
   function createSparkle() {
     const sparkle = document.createElement('div');
@@ -103,72 +102,75 @@
     sparkle.style.borderRadius = '30%';
     sparkle.style.backgroundColor = '#ffffff';
     sparkle.style.boxShadow = '0 0 5px 1px rgba(255, 255, 255, 0.8)';
-    
+
     // Random position
-    sparkle.style.left = Math.random() * 100 + '%';
-    sparkle.style.top = Math.random() * 100 + '%';
-    
+    sparkle.style.left = `${Math.random() * 100}%`;
+    sparkle.style.top = `${Math.random() * 100}%`;
+
     // Animation
-    sparkle.animate([
-      { transform: 'scale(0)', opacity: 0 },
-      { transform: 'scale(1)', opacity: 1 },
-      { transform: 'scale(0)', opacity: 0 }
-    ], {
-      duration: 1200 + Math.random() * 800,
-      easing: 'ease-out'
-    });
-    
+    sparkle.animate(
+      [
+        { transform: 'scale(0)', opacity: 0 },
+        { transform: 'scale(1)', opacity: 1 },
+        { transform: 'scale(0)', opacity: 0 },
+      ],
+      {
+        duration: 1200 + Math.random() * 800,
+        easing: 'ease-out',
+      },
+    );
+
     sparkleContainer.appendChild(sparkle);
-    
+
     // Remove after animation
     setTimeout(() => {
       sparkle.remove();
     }, 1000);
   }
-  
+
   // Sparkle interval reference
   let sparkleInterval;
-  
+
   // Add hover effects
-  chatBubble.addEventListener('mouseover', function() {
+  chatBubble.addEventListener('mouseover', () => {
     chatBubble.style.backgroundColor = '#6025d1';
     chatBubble.style.transform = 'scale(1.05)';
     tooltip.style.opacity = '1';
     tooltip.style.visibility = 'visible';
-    
+
     // Enhance the magical border on hover
     borderAnimation.style.opacity = '1';
     borderAnimation.style.filter = 'blur(4px)';
-    
+
     // Show sparkle container
     sparkleContainer.style.opacity = '1';
-    
+
     // Create sparkles periodically
     sparkleInterval = setInterval(createSparkle, 300);
   });
-  
-  chatBubble.addEventListener('mouseout', function() {
+
+  chatBubble.addEventListener('mouseout', () => {
     chatBubble.style.backgroundColor = '#6025d1';
     chatBubble.style.transform = 'scale(1)';
     tooltip.style.opacity = '0';
     tooltip.style.visibility = 'hidden';
-    
+
     // Reduce the magical border effect when not hovering
     borderAnimation.style.opacity = '0.7';
     borderAnimation.style.filter = 'blur(5px)';
-    
+
     // Hide sparkle container
     sparkleContainer.style.opacity = '0';
-    
+
     // Stop creating new sparkles
     clearInterval(sparkleInterval);
   });
-  
+
   // Add click event
-  chatBubble.addEventListener('click', function() {
-    window.open('https://boundaryml.com/chat', '_blank', "noopener,noreferrer");
+  chatBubble.addEventListener('click', () => {
+    window.open('https://boundaryml.com/chat', '_blank', 'noopener,noreferrer');
   });
-  
+
   // Function to append to body when it's available
   function appendToBody() {
     if (document.body) {
@@ -179,12 +181,12 @@
       setTimeout(appendToBody, 50);
     }
   }
-  
+
   // Start the process
   appendToBody();
-  
+
   // Also listen for window resize to hide/show based on width
-  window.addEventListener('resize', function() {
+  window.addEventListener('resize', () => {
     if (window.innerWidth <= 700) {
       chatBubble.style.display = 'none';
     } else {
