@@ -339,6 +339,10 @@ fn build_function_log(
                     usage: Some(local_usage),
                     selected: call_acc.llm_response.is_some(),
                 },
+                timing: StreamTiming {
+                    start_time_utc_ms: start_t,
+                    duration_ms: Some(partial_duration),
+                },
                 sse_chunks,
             }));
         }
@@ -603,6 +607,7 @@ pub struct LLMCall {
 #[derive(Debug, Default, Clone, Serialize)]
 pub struct LLMStreamCall {
     pub llm_call: LLMCall,
+    pub timing: StreamTiming,
     pub sse_chunks: Option<Arc<LLMHTTPStreamResponse>>,
 }
 

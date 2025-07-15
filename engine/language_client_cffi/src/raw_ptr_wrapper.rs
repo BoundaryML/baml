@@ -537,7 +537,7 @@ impl CallMethod for LLMStreamCallWrapper {
                 self.llm_call.selected,
             ))),
             "timing" => Ok(BamlObjectResponseSuccess::new_object(
-                self.llm_call.timing.clone().into(),
+                self.timing.clone().into(),
             )),
             "usage" => {
                 if let Some(usage) = self.llm_call.usage.clone() {
