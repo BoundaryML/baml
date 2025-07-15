@@ -63,6 +63,7 @@ test TestFileVideoInputWithUrlVertex{
   args {
     vid { 
       url "https://youtu.be/dQw4w9WgXcQ?si=aQdfsK0DdcDtCCud"
+      media_type "video/mp4"
     }
   }  
 }
