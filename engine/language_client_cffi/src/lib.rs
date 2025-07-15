@@ -384,7 +384,7 @@ fn call_object_constructor_impl(
         }
     };
     baml_log::trace!("{}::new({:?})", object_type.as_str_name(), kwargs);
-    RawPtrType::new(object_type, &kwargs)
+    RawPtrType::new_from(object_type, &kwargs)
 }
 
 #[no_mangle]

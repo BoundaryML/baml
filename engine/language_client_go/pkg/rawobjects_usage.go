@@ -1,29 +1,30 @@
-package raw_objects
+package baml
 
 import (
 	"fmt"
 
+	"github.com/boundaryml/baml/engine/language_client_go/baml_go/raw_objects"
 	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
 )
 
 type usage struct {
-	*rawObject
+	*raw_objects.RawObject
 }
 
 func newUsage(ptr int64) Usage {
-	return &usage{&rawObject{ptr: ptr}}
+	return &usage{raw_objects.FromPointer(ptr)}
 }
 
-func (u *usage) objectType() cffi.CFFIObjectType {
+func (u *usage) ObjectType() cffi.CFFIObjectType {
 	return cffi.CFFIObjectType_OBJECT_USAGE
 }
 
 func (u *usage) pointer() int64 {
-	return u.rawObject.pointer()
+	return u.RawObject.Pointer()
 }
 
 func (u *usage) InputTokens() (int64, error) {
-	result, err := callMethod(u, "input_tokens", nil)
+	result, err := raw_objects.CallMethod(u, "input_tokens", nil)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get input tokens: %w", err)
 	}
@@ -37,7 +38,7 @@ func (u *usage) InputTokens() (int64, error) {
 }
 
 func (u *usage) OutputTokens() (int64, error) {
-	result, err := callMethod(u, "output_tokens", nil)
+	result, err := raw_objects.CallMethod(u, "output_tokens", nil)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get output tokens: %w", err)
 	}

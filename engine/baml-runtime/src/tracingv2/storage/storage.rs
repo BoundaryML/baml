@@ -327,16 +327,18 @@ fn build_function_log(
 
             // Streaming call
             calls.push(LLMCallKind::Stream(LLMStreamCall {
-                client_name: client,
-                provider,
-                timing: StreamTiming {
-                    start_time_utc_ms: start_t,
-                    duration_ms: Some(partial_duration),
+                llm_call: LLMCall {
+                    client_name: client,
+                    provider,
+                    timing: Timing {
+                        start_time_utc_ms: start_t,
+                        duration_ms: Some(partial_duration),
+                    },
+                    request: call_acc.http_request.clone(),
+                    response: call_acc.http_response.clone(),
+                    usage: Some(local_usage),
+                    selected: call_acc.llm_response.is_some(),
                 },
-                request: call_acc.http_request.clone(),
-                response: call_acc.http_response.clone(),
-                usage: Some(local_usage),
-                selected: call_acc.llm_response.is_some(),
                 sse_chunks,
             }));
         }
@@ -568,7 +570,7 @@ impl LLMCallKind {
     pub fn selected(&self) -> bool {
         match self {
             LLMCallKind::Basic(c) => c.selected,
-            LLMCallKind::Stream(c) => c.selected,
+            LLMCallKind::Stream(c) => c.llm_call.selected,
         }
     }
 
@@ -600,13 +602,7 @@ pub struct LLMCall {
 
 #[derive(Debug, Default, Clone, Serialize)]
 pub struct LLMStreamCall {
-    pub client_name: String,
-    pub provider: String,
-    pub timing: StreamTiming,
-    pub request: Option<Arc<HTTPRequest>>,
-    pub response: Option<Arc<HTTPResponse>>,
-    pub usage: Option<Usage>,
-    pub selected: bool,
+    pub llm_call: LLMCall,
     pub sse_chunks: Option<Arc<LLMHTTPStreamResponse>>,
 }
 
@@ -654,12 +650,14 @@ impl Collector {
         }
     }
 
-    pub fn clear(&self) {
+    pub fn clear(&self) -> usize {
         let mut guard = self.tracked_ids.lock().unwrap();
         for fid in guard.iter() {
             BAML_TRACER.lock().unwrap().dec_ref(fid);
         }
+        let len = guard.len();
         guard.clear();
+        len
     }
 
     pub fn function_logs(&self) -> Vec<FunctionLog> {

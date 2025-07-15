@@ -1,9 +1,7 @@
 use baml_types::BamlValue;
 
 use crate::{
-    baml::cffi::{
-        CffiMapEntry, CffiObjectResponse, CffiObjectResponseError, CffiObjectResponseSuccess,
-    },
+    baml::cffi::{CffiObjectResponse, CffiObjectResponseError, CffiObjectResponseSuccess},
     ctypes::utils::{Encode, WithIr},
     raw_ptr_wrapper::RawPtrType,
 };
@@ -50,10 +48,7 @@ where
                         }
                         BamlObjectResponseSuccess::Objects(objects) => {
                             cResult::Objects(crate::baml::cffi::MultipleRawObjectResponse {
-                                objects: objects
-                                    .into_iter()
-                                    .map(|ptr| ptr.clone().encode())
-                                    .collect(),
+                                objects: objects.iter().map(|ptr| ptr.clone().encode()).collect(),
                             })
                         }
                         BamlObjectResponseSuccess::Value(value) => cResult::Value(

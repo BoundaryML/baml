@@ -1,29 +1,30 @@
-package raw_objects
+package baml
 
 import (
 	"fmt"
 
+	"github.com/boundaryml/baml/engine/language_client_go/baml_go/raw_objects"
 	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
 )
 
 type httpBody struct {
-	*rawObject
+	*raw_objects.RawObject
 }
 
 func newHTTPBody(ptr int64) HTTPBody {
-	return &httpBody{&rawObject{ptr: ptr}}
+	return &httpBody{raw_objects.FromPointer(ptr)}
 }
 
-func (h *httpBody) objectType() cffi.CFFIObjectType {
+func (h *httpBody) ObjectType() cffi.CFFIObjectType {
 	return cffi.CFFIObjectType_OBJECT_HTTP_BODY
 }
 
 func (h *httpBody) pointer() int64 {
-	return h.rawObject.pointer()
+	return h.RawObject.Pointer()
 }
 
 func (h *httpBody) Text() (string, error) {
-	result, err := callMethod(h, "text", nil)
+	result, err := raw_objects.CallMethod(h, "text", nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to get text: %w", err)
 	}
@@ -37,7 +38,7 @@ func (h *httpBody) Text() (string, error) {
 }
 
 func (h *httpBody) JSON() (any, error) {
-	result, err := callMethod(h, "json", nil)
+	result, err := raw_objects.CallMethod(h, "json", nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get JSON: %w", err)
 	}

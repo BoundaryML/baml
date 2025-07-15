@@ -28,4 +28,4 @@ node = "lts"     # For pnpm
 
 [settings]
 experimental = true
-idiomatic_version_file_enable_tools = ["node", "python", "ruby", "go"]
+# idiomatic_version_file_enable_tools = ["node", "python", "ruby", "go"]

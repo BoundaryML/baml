@@ -1,29 +1,30 @@
-package raw_objects
+package baml
 
 import (
 	"fmt"
 
+	"github.com/boundaryml/baml/engine/language_client_go/baml_go/raw_objects"
 	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
 )
 
 type timing struct {
-	*rawObject
+	*raw_objects.RawObject
 }
 
 func newTiming(ptr int64) Timing {
-	return &timing{&rawObject{ptr: ptr}}
+	return &timing{raw_objects.FromPointer(ptr)}
 }
 
-func (t *timing) objectType() cffi.CFFIObjectType {
+func (t *timing) ObjectType() cffi.CFFIObjectType {
 	return cffi.CFFIObjectType_OBJECT_TIMING
 }
 
 func (t *timing) pointer() int64 {
-	return t.rawObject.pointer()
+	return t.RawObject.Pointer()
 }
 
 func (t *timing) StartTimeUTCMs() (int64, error) {
-	result, err := callMethod(t, "start_time_utc_ms", nil)
+	result, err := raw_objects.CallMethod(t, "start_time_utc_ms", nil)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get start time: %w", err)
 	}
@@ -37,7 +38,7 @@ func (t *timing) StartTimeUTCMs() (int64, error) {
 }
 
 func (t *timing) DurationMs() (*int64, error) {
-	result, err := callMethod(t, "duration_ms", nil)
+	result, err := raw_objects.CallMethod(t, "duration_ms", nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get duration: %w", err)
 	}

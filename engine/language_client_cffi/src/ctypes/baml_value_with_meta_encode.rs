@@ -4,7 +4,10 @@ use baml_types::{
 
 use crate::{
     baml::cffi::*,
-    ctypes::utils::{Encode, WithIr},
+    ctypes::{
+        baml_type_encode::UnionAllowance,
+        utils::{Encode, WithIr},
+    },
 };
 
 fn create_cffi_type_name(name: &str, namespace: CffiTypeNamespace) -> CffiTypeName {
@@ -81,7 +84,13 @@ where
             variant_name,
             field_types: options
                 .into_iter()
-                .map(|t| WithIr { value: t, lookup }.encode())
+                .map(|t| {
+                    WithIr {
+                        value: &(t, UnionAllowance::Allow),
+                        lookup,
+                    }
+                    .encode()
+                })
                 .collect(),
             value_type_index: value_type_index as i32,
             value: Some(Box::new(holder)),
@@ -90,7 +99,7 @@ where
         CffiValueHolder {
             r#type: Some(
                 WithIr {
-                    value: target_type,
+                    value: &(target_type, UnionAllowance::Allow),
                     lookup,
                 }
                 .encode(),
@@ -216,14 +225,14 @@ where
                             .collect(),
                         key_type: Some(
                             WithIr {
-                                value: key_type.as_ref(),
+                                value: &(key_type.as_ref(), UnionAllowance::Allow),
                                 lookup,
                             }
                             .encode(),
                         ),
                         value_type: Some(
                             WithIr {
-                                value: value_type.as_ref(),
+                                value: &(value_type.as_ref(), UnionAllowance::Allow),
                                 lookup,
                             }
                             .encode(),
@@ -237,7 +246,7 @@ where
                     };
 
                     let value_type = WithIr {
-                        value: value_type.as_ref(),
+                        value: &(value_type.as_ref(), UnionAllowance::Allow),
                         lookup,
                     }
                     .encode();
@@ -296,7 +305,7 @@ where
             CffiValueHolder {
                 r#type: Some(
                     WithIr {
-                        value: value.field_type(),
+                        value: &(value.field_type(), UnionAllowance::Allow),
                         lookup,
                     }
                     .encode(),

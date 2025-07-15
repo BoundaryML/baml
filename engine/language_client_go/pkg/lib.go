@@ -3,7 +3,6 @@ package baml
 import (
 	"reflect"
 
-	"github.com/boundaryml/baml/engine/language_client_go/baml_go/raw_objects"
 	"github.com/boundaryml/baml/engine/language_client_go/baml_go/serde"
 	"github.com/boundaryml/baml/engine/language_client_go/baml_go/shared"
 	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
@@ -28,9 +27,6 @@ func Decode(holder *cffi.CFFIValueHolder) reflect.Value {
 func DecodeStreamingState[T any](holder *cffi.CFFIValueHolder, decodeFunc func(inner *cffi.CFFIValueHolder) T) shared.StreamState[T] {
 	return serde.DecodeStreamingState(holder, decodeFunc)
 }
-
-type BamlFunctionArguments = raw_objects.BamlFunctionArguments
-type ClientRegistry = raw_objects.ClientRegistry
 
 type TypeMap = serde.TypeMap
 type Checked[T any] = shared.Checked[T]

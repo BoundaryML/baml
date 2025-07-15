@@ -1,8 +1,9 @@
-package raw_objects
+package baml
 
 import (
 	"fmt"
 
+	"github.com/boundaryml/baml/engine/language_client_go/baml_go/raw_objects"
 	"github.com/boundaryml/baml/engine/language_client_go/baml_go/serde"
 	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
 	"google.golang.org/protobuf/proto"
@@ -51,7 +52,7 @@ func (args *BamlFunctionArguments) encode() (*cffi.CFFIFunctionArguments, error)
 			if collector == nil {
 				return nil, fmt.Errorf("nil collector found in collectors")
 			}
-			encodedCollector := encodeRawObject(collector)
+			encodedCollector := raw_objects.EncodeRawObject(collector)
 			if err != nil {
 				return nil, fmt.Errorf("encoding collector: %w", err)
 			}

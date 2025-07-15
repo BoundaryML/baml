@@ -11,7 +11,7 @@ import (
 
 // debugLog prints debug information if BAML_INTERNAL_LOG=trace is set
 func debugLog(format string, args ...interface{}) {
-	if os.Getenv("BAML_INTERNAL_LOG") == "trace" {
+	if os.Getenv("BAML_INTERNAL_LOG_GO") == "trace" {
 		fmt.Printf(format, args...)
 		if format[len(format)-1] != '\n' {
 			fmt.Println()
@@ -81,7 +81,12 @@ func decodeListValue(valueList *cffi.CFFIValueList, typeMap TypeMap) reflect.Val
 	goElementType := convertFieldTypeToGoType(elementType, typeMap)
 
 	length := len(valueList.Values)
-	values := reflect.MakeSlice(reflect.SliceOf(goElementType), length, length)
+	debugLog("goElementType: %v\n", goElementType)
+	debugLog("length: %v\n", length)
+	sliceOf := reflect.SliceOf(goElementType)
+	debugLog("sliceOf: %v\n", sliceOf)
+	values := reflect.MakeSlice(sliceOf, length, length)
+	debugLog("values: %v\n", values)
 
 	for i, v := range valueList.Values {
 		decodedValue := Decode(v, typeMap)
@@ -95,10 +100,14 @@ func decodeMapValue(valueMap *cffi.CFFIValueMap, typeMap TypeMap) reflect.Value 
 	if valueMap == nil {
 		panic("decodeMapValue: valueMap is nil")
 	}
+	debugLog("decodeMapValue: valueMap=%+v\n", valueMap)
 	keyType := valueMap.KeyType
 	valueType := valueMap.ValueType
 	goKeyType := convertFieldTypeToGoType(keyType, typeMap)
 	goValueType := convertFieldTypeToGoType(valueType, typeMap)
+
+	debugLog("goKeyType: %v\n", goKeyType)
+	debugLog("goValueType: %v\n", goValueType)
 
 	values := reflect.MakeMap(reflect.MapOf(goKeyType, goValueType))
 
@@ -328,10 +337,6 @@ func convertFieldTypeToGoType(fieldType *cffi.CFFIFieldTypeHolder, typeMap TypeM
 		return reflect.MapOf(convertFieldTypeToGoType(mapType.Key, typeMap), convertFieldTypeToGoType(mapType.Value, typeMap))
 	}
 
-	if _, ok := type_.(*cffi.CFFIFieldTypeHolder_NullType); ok {
-		return reflect.TypeOf(nil)
-	}
-
 	if typeAlias, ok := type_.(*cffi.CFFIFieldTypeHolder_TypeAliasType); ok {
 		name := typeAlias.TypeAliasType.Name.Name
 		namespace := typeAlias.TypeAliasType.Name.Namespace.String()
@@ -342,8 +347,15 @@ func convertFieldTypeToGoType(fieldType *cffi.CFFIFieldTypeHolder, typeMap TypeM
 		return goType
 	}
 
+	// any is weird in go, (alias for interface{})
+	if _, ok := type_.(*cffi.CFFIFieldTypeHolder_NullType); ok {
+		if _, ok := typeMap["INTERNAL.nil"]; ok {
+			return reflect.TypeOf((*interface{})(nil)).Elem()
+		}
+		return reflect.TypeOf((*interface{})(nil))
+	}
 	if _, ok := type_.(*cffi.CFFIFieldTypeHolder_AnyType); ok {
-		return reflect.TypeOf([]any{}).Elem()
+		return reflect.TypeOf((*interface{})(nil)).Elem()
 	}
 
 	panic("error decoding value, unknown field type: " + fmt.Sprintf("%+v", fieldType))
@@ -407,9 +419,6 @@ func Decode(holder *cffi.CFFIValueHolder, typeMap TypeMap) reflect.Value {
 
 	if _, ok := value.(*cffi.CFFIValueHolder_NullValue); ok {
 		retType := convertFieldTypeToGoType(holder.Type, typeMap)
-		if retType == reflect.TypeOf(nil) {
-			return reflect.Zero(reflect.TypeOf((*interface{})(nil)))
-		}
 		// return as the null value of the type.
 		return reflect.Zero(retType)
 	}

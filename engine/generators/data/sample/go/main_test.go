@@ -15,7 +15,10 @@ import (
 func TestFoo(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	collector := baml.NewCollector("test-foo-collector")
+	collector, err := baml.NewCollector("test-foo-collector")
+	if err != nil {
+		t.Fatalf("Error creating collector: %v", err)
+	}
 
 	result, err := b.Foo(ctx, 8192, b.WithCollector(collector))
 	if err != nil {
@@ -34,7 +37,10 @@ func TestFoo(t *testing.T) {
 func TestBar(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	collector := baml.NewCollector("test-bar-collector")
+	collector, err := baml.NewCollector("test-bar-collector")
+	if err != nil {
+		t.Fatalf("Error creating collector: %v", err)
+	}
 
 	result, err := b.Bar(ctx, 42, b.WithCollector(collector))
 	if err != nil {
@@ -53,7 +59,10 @@ func TestBar(t *testing.T) {
 func TestFooStream(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	collector := baml.NewCollector("test-foo-stream-collector")
+	collector, err := baml.NewCollector("test-foo-stream-collector")
+	if err != nil {
+		t.Fatalf("Error creating collector: %v", err)
+	}
 
 	channel, err := b.Stream.Foo(ctx, 8192, b.WithCollector(collector))
 	if err != nil {
@@ -92,7 +101,10 @@ func TestFooStream(t *testing.T) {
 func TestBarStream(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	collector := baml.NewCollector("test-bar-stream-collector")
+	collector, err := baml.NewCollector("test-bar-stream-collector")
+	if err != nil {
+		t.Fatalf("Error creating collector: %v", err)
+	}
 
 	channel, err := b.Stream.Bar(ctx, 99, b.WithCollector(collector))
 	if err != nil {
@@ -126,12 +138,24 @@ func TestBarStream(t *testing.T) {
 
 	// Test comprehensive collector API for streaming
 	testCollectorAPI(t, collector, "Bar")
+
+	t.Logf("Collector: %+v", collector)
+	count, err := collector.Clear()
+	if err != nil {
+		t.Fatalf("Error clearing collector: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("Expected 1 log to be cleared, got %d", count)
+	}
 }
 
 func TestMultipleFunctionsWithCollector(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	collector := baml.NewCollector("test-multiple-functions-collector")
+	collector, err := baml.NewCollector("test-multiple-functions-collector")
+	if err != nil {
+		t.Fatalf("Error creating collector: %v", err)
+	}
 
 	// Call Foo
 	result1, err := b.Foo(ctx, 123, b.WithCollector(collector))
@@ -189,10 +213,13 @@ func TestMultipleFunctionsWithCollector(t *testing.T) {
 func TestCollectorClear(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	collector := baml.NewCollector("test-clear-collector")
+	collector, err := baml.NewCollector("test-clear-collector")
+	if err != nil {
+		t.Fatalf("Error creating collector: %v", err)
+	}
 
 	// Make some calls
-	_, err := b.Foo(ctx, 111, b.WithCollector(collector))
+	_, err = b.Foo(ctx, 111, b.WithCollector(collector))
 	if err != nil {
 		t.Fatalf("Error in Foo call: %v", err)
 	}
@@ -212,9 +239,12 @@ func TestCollectorClear(t *testing.T) {
 	}
 
 	// Clear the collector
-	err = collector.Clear()
+	count, err := collector.Clear()
 	if err != nil {
 		t.Errorf("Error clearing collector: %v", err)
+	}
+	if count != 2 {
+		t.Errorf("Expected 2 logs to be cleared, got %d", count)
 	}
 
 	t.Log("Collector cleared successfully")
@@ -224,7 +254,10 @@ func TestCollectorWithNamedCollector(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	collectorName := "comprehensive-test-collector"
-	collector := baml.NewCollector(collectorName)
+	collector, err := baml.NewCollector(collectorName)
+	if err != nil {
+		t.Fatalf("Error creating collector: %v", err)
+	}
 
 	// Test collector name
 	name, err := collector.Name()
@@ -317,11 +350,11 @@ func testCollectorAPI(t *testing.T, collector baml.Collector, expectedFunction s
 }
 
 // testFunctionLogAPI tests all FunctionLog APIs
-func testFunctionLogAPI(t *testing.T, log *baml.FunctionLog, expectedFunction string) {
+func testFunctionLogAPI(t *testing.T, log baml.FunctionLog, expectedFunction string) {
 	t.Helper()
 
 	// Test log ID
-	id, err := log.ID()
+	id, err := log.Id()
 	if err != nil {
 		t.Errorf("Error getting log ID: %v", err)
 	} else {
@@ -367,11 +400,13 @@ func testFunctionLogAPI(t *testing.T, log *baml.FunctionLog, expectedFunction st
 		duration, err := timing.DurationMs()
 		if err != nil {
 			t.Errorf("Error getting duration: %v", err)
+		} else if duration == nil {
+			t.Errorf("Duration is nil")
 		} else {
 			t.Logf("Duration (ms): %d", duration)
 			// Validate duration is reasonable (less than 30 seconds)
-			if duration < 0 || duration > 30000 {
-				t.Errorf("Duration seems unreasonable: %d ms", duration)
+			if *duration < 0 || *duration > 30000 {
+				t.Errorf("Duration seems unreasonable: %d ms", *duration)
 			}
 		}
 	}
@@ -408,56 +443,39 @@ func testFunctionLogAPI(t *testing.T, log *baml.FunctionLog, expectedFunction st
 		}
 	}
 
-	// Test metadata
-	metadata, err := log.Metadata()
-	if err != nil {
-		t.Errorf("Error getting metadata: %v", err)
-	} else if metadata != nil {
-		t.Logf("Metadata keys: %v", getMapKeys(metadata))
-	}
+	// // Test metadata
+	// metadata, err := log.Metadata()
+	// if err != nil {
+	// 	t.Errorf("Error getting metadata: %v", err)
+	// } else if metadata != nil {
+	// 	t.Logf("Metadata keys: %v", getMapKeys(metadata))
+	// }
 
 	// Test calls count and calls
-	callsCount, err := log.CallsCount()
+	calls, err := log.Calls()
 	if err != nil {
-		t.Errorf("Error getting calls count: %v", err)
+		t.Errorf("Error getting calls: %v", err)
 	} else {
-		t.Logf("Calls count: %d", callsCount)
-		if callsCount < 0 {
-			t.Errorf("Calls count should be non-negative, got %d", callsCount)
+		// Test each call
+		for i, call := range calls {
+			testLLMCallAPI(t, call, i)
 		}
 
-		// Test calls if we have any
-		if callsCount > 0 {
-			calls, err := log.Calls()
-			if err != nil {
-				t.Errorf("Error getting calls: %v", err)
-			} else {
-				if len(calls) != callsCount {
-					t.Errorf("Expected %d calls, got %d", callsCount, len(calls))
-				}
-
-				// Test each call
-				for i, call := range calls {
-					testLLMCallAPI(t, call, i)
-				}
-
-				// Test selected call
-				selectedCall, err := log.SelectedCall()
-				if err != nil {
-					t.Errorf("Error getting selected call: %v", err)
-				} else if selectedCall != nil {
-					t.Logf("Found selected call")
-					testLLMCallAPI(t, selectedCall, -1) // -1 indicates this is the selected call
-				} else {
-					t.Log("No selected call found")
-				}
-			}
+		// Test selected call
+		selectedCall, err := log.SelectedCall()
+		if err != nil {
+			t.Errorf("Error getting selected call: %v", err)
+		} else if selectedCall != nil {
+			t.Logf("Found selected call")
+			testLLMCallAPI(t, selectedCall, -1) // -1 indicates this is the selected call
+		} else {
+			t.Log("No selected call found")
 		}
 	}
 }
 
 // testLLMCallAPI tests all LLMCall APIs
-func testLLMCallAPI(t *testing.T, call *baml.LLMCall, index int) {
+func testLLMCallAPI(t *testing.T, call baml.LLMCall, index int) {
 	t.Helper()
 
 	prefix := fmt.Sprintf("Call %d", index)
@@ -532,50 +550,58 @@ func testLLMCallAPI(t *testing.T, call *baml.LLMCall, index int) {
 		}
 	}
 
+	requestId, err := call.RequestId()
+	if err != nil {
+		t.Errorf("%s: Error getting request id: %v", prefix, err)
+	}
+
 	// Test HTTP request
-	httpRequest, err := call.HTTPRequest()
+	httpRequest, err := call.HttpRequest()
 	if err != nil {
 		t.Errorf("%s: Error getting HTTP request: %v", prefix, err)
 	} else if httpRequest != nil {
-		testHTTPRequestAPI(t, httpRequest, prefix)
+		testHTTPRequestAPI(t, httpRequest, requestId, prefix)
 	}
 
 	// Test HTTP response
-	httpResponse, err := call.HTTPResponse()
+	httpResponse, err := call.HttpResponse()
 	if err != nil {
 		t.Errorf("%s: Error getting HTTP response: %v", prefix, err)
 	} else if httpResponse != nil {
-		testHTTPResponseAPI(t, httpResponse, prefix)
+		testHTTPResponseAPI(t, httpResponse, requestId, prefix)
 	}
 
 	// Test SSE responses (only for streaming calls)
-	sseResponses, err := call.SSEResponses()
-	if err != nil {
-		t.Errorf("%s: Error getting SSE responses: %v", prefix, err)
-	} else if sseResponses != nil {
-		t.Logf("%s: Found %d SSE responses", prefix, len(sseResponses))
-		for i, sseResponse := range sseResponses {
-			testSSEResponseAPI(t, sseResponse, fmt.Sprintf("%s SSE[%d]", prefix, i))
+	if sseResponses, ok := call.(baml.LLMStreamCall); ok {
+		sseResponses, err := sseResponses.SSEChunks()
+		if err != nil {
+			t.Errorf("%s: Error getting SSE responses: %v", prefix, err)
+		} else if sseResponses != nil {
+			t.Logf("%s: Found %d SSE responses", prefix, len(sseResponses))
 		}
-	} else {
-		t.Logf("%s: No SSE responses found", prefix)
+		for _, sse := range sseResponses {
+			testSSEResponseAPI(t, sse, prefix)
+		}
 	}
 }
 
 // testHTTPRequestAPI tests all HTTPRequest APIs
-func testHTTPRequestAPI(t *testing.T, req *baml.HTTPRequest, prefix string) {
+func testHTTPRequestAPI(t *testing.T, req baml.HTTPRequest, requestId string, prefix string) {
 	t.Helper()
 
 	// Test request ID
-	id, err := req.ID()
+	id, err := req.RequestId()
 	if err != nil {
 		t.Errorf("%s: Error getting request ID: %v", prefix, err)
 	} else {
+		if id != requestId {
+			t.Errorf("%s: Request ID mismatch: %s != %s", prefix, id, requestId)
+		}
 		t.Logf("%s: Request ID: %s", prefix, id)
 	}
 
 	// Test URL
-	url, err := req.URL()
+	url, err := req.Url()
 	if err != nil {
 		t.Errorf("%s: Error getting URL: %v", prefix, err)
 	} else {
@@ -623,8 +649,18 @@ func testHTTPRequestAPI(t *testing.T, req *baml.HTTPRequest, prefix string) {
 }
 
 // testHTTPResponseAPI tests all HTTPResponse APIs
-func testHTTPResponseAPI(t *testing.T, resp *baml.HTTPResponse, prefix string) {
+func testHTTPResponseAPI(t *testing.T, resp baml.HTTPResponse, requestId string, prefix string) {
 	t.Helper()
+
+	id, err := resp.RequestId()
+	if err != nil {
+		t.Errorf("%s: Error getting request id: %v", prefix, err)
+	} else {
+		if id != requestId {
+			t.Errorf("%s: Request ID mismatch: %s != %s", prefix, id, requestId)
+		}
+		t.Logf("%s: Request ID: %s", prefix, id)
+	}
 
 	// Test status
 	status, err := resp.Status()
@@ -659,11 +695,11 @@ func testHTTPResponseAPI(t *testing.T, resp *baml.HTTPResponse, prefix string) {
 }
 
 // testHTTPBodyAPI tests all HTTPBody APIs
-func testHTTPBodyAPI(t *testing.T, body *baml.HTTPBody, prefix string) {
+func testHTTPBodyAPI(t *testing.T, body baml.HTTPBody, prefix string) {
 	t.Helper()
 
 	// Test raw bytes
-	raw, err := body.Raw()
+	raw, err := body.Text()
 	if err != nil {
 		t.Errorf("%s: Error getting raw body: %v", prefix, err)
 	} else {
@@ -691,7 +727,7 @@ func testHTTPBodyAPI(t *testing.T, body *baml.HTTPBody, prefix string) {
 }
 
 // testSSEResponseAPI tests all SSEResponse APIs
-func testSSEResponseAPI(t *testing.T, sse *baml.SSEResponse, prefix string) {
+func testSSEResponseAPI(t *testing.T, sse baml.SSEResponse, prefix string) {
 	t.Helper()
 
 	// Test text

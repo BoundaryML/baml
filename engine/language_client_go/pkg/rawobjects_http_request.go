@@ -1,29 +1,44 @@
-package raw_objects
+package baml
 
 import (
 	"fmt"
 
+	"github.com/boundaryml/baml/engine/language_client_go/baml_go/raw_objects"
 	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
 )
 
 type httpRequest struct {
-	*rawObject
+	*raw_objects.RawObject
 }
 
-func newHttpRequest(ptr int64) HttpRequest {
-	return &httpRequest{&rawObject{ptr: ptr}}
+func newHttpRequest(ptr int64) HTTPRequest {
+	return &httpRequest{raw_objects.FromPointer(ptr)}
 }
 
-func (h *httpRequest) objectType() cffi.CFFIObjectType {
+func (h *httpRequest) ObjectType() cffi.CFFIObjectType {
 	return cffi.CFFIObjectType_OBJECT_HTTP_REQUEST
 }
 
 func (h *httpRequest) pointer() int64 {
-	return h.rawObject.pointer()
+	return h.RawObject.Pointer()
 }
 
-func (h *httpRequest) URL() (string, error) {
-	result, err := callMethod(h, "url", nil)
+func (h *httpRequest) RequestId() (string, error) {
+	result, err := raw_objects.CallMethod(h, "id", nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to get ID: %w", err)
+	}
+
+	id, ok := result.(string)
+	if !ok {
+		return "", fmt.Errorf("unexpected type for ID: %T", result)
+	}
+
+	return id, nil
+}
+
+func (h *httpRequest) Url() (string, error) {
+	result, err := raw_objects.CallMethod(h, "url", nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to get URL: %w", err)
 	}
@@ -37,7 +52,7 @@ func (h *httpRequest) URL() (string, error) {
 }
 
 func (h *httpRequest) Method() (string, error) {
-	result, err := callMethod(h, "method", nil)
+	result, err := raw_objects.CallMethod(h, "method", nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to get method: %w", err)
 	}
@@ -51,7 +66,7 @@ func (h *httpRequest) Method() (string, error) {
 }
 
 func (h *httpRequest) Headers() (map[string]string, error) {
-	result, err := callMethod(h, "headers", nil)
+	result, err := raw_objects.CallMethod(h, "headers", nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get headers: %w", err)
 	}
@@ -65,7 +80,7 @@ func (h *httpRequest) Headers() (map[string]string, error) {
 }
 
 func (h *httpRequest) Body() (HTTPBody, error) {
-	result, err := callMethod(h, "body", nil)
+	result, err := raw_objects.CallMethod(h, "body", nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get body: %w", err)
 	}

@@ -29,7 +29,7 @@ type Union2IntOrString struct {
 	variant_Int *int64
 }
 
-func (u *Union2IntOrString) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union2IntOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
@@ -174,7 +174,7 @@ type Union2ProductOrUser struct {
 	variant_Product *Product
 }
 
-func (u *Union2ProductOrUser) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union2ProductOrUser) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {

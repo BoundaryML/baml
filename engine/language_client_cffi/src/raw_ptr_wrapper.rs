@@ -4,7 +4,7 @@ use std::{
 };
 
 use baml_runtime::tracingv2::storage::storage::{
-    Collector, FunctionLog, LLMCall, LLMCallKind, LLMStreamCall, StreamTiming, Timing, Usage,
+    Collector, FunctionLog, LLMCall, LLMStreamCall, StreamTiming, Timing, Usage,
 };
 use baml_types::{
     tracing::events::{HTTPBody, HTTPRequest, HTTPResponse, SSEEvent},
@@ -115,8 +115,7 @@ pub enum RawPtrType {
 }
 
 impl RawPtrType {
-    #[warn(clippy::new_ret_no_self)]
-    pub fn new(
+    pub fn new_from(
         object: cffi::CffiObjectType,
         kwargs: &baml_types::BamlMap<String, baml_types::BamlValue>,
     ) -> BamlObjectResponse {
@@ -249,7 +248,7 @@ impl CallMethod for CollectorWrapper {
         kwargs: &baml_types::BamlMap<String, baml_types::BamlValue>,
     ) -> BamlObjectResponse {
         match method_name {
-            "destroy" => {
+            "~destructor" => {
                 self.clone().destroy();
                 Ok(BamlObjectResponseSuccess::new_value(BamlValue::Null))
             }
@@ -274,12 +273,10 @@ impl CallMethod for CollectorWrapper {
                 None => Ok(BamlObjectResponseSuccess::new_value(BamlValue::Null)),
             },
             "clear" => {
-                // For now, we'll implement a simple clear by creating a new collector
-                // In a real implementation, we'd need to untrack all function IDs
-                // Since there's no built-in clear, we'll just return success
-                // The actual clearing would need to be implemented in the storage layer
-                self.clear();
-                Ok(BamlObjectResponseSuccess::new_value(BamlValue::Null))
+                let count = self.clear();
+                Ok(BamlObjectResponseSuccess::new_value(BamlValue::Int(
+                    count as i64,
+                )))
             }
             "id" => {
                 let _function_id = kwargs
@@ -292,7 +289,7 @@ impl CallMethod for CollectorWrapper {
                 Ok(BamlObjectResponseSuccess::new_value(BamlValue::Null))
             }
             _ => Err(format!(
-                "Failed to call function: {} on object type: Collector",
+                "Failed to call function: \"{}\" on object type: Collector",
                 method_name
             )),
         }
@@ -306,7 +303,7 @@ impl CallMethod for UsageWrapper {
         _kwargs: &baml_types::BamlMap<String, baml_types::BamlValue>,
     ) -> BamlObjectResponse {
         match method_name {
-            "destroy" => {
+            "~destructor" => {
                 self.clone().destroy();
                 Ok(BamlObjectResponseSuccess::new_value(BamlValue::Null))
             }
@@ -317,7 +314,7 @@ impl CallMethod for UsageWrapper {
                 self.output_tokens.unwrap_or_default() as i64,
             ))),
             _ => Err(format!(
-                "Failed to call function: {} on object type: Usage",
+                "Failed to call function: \"{}\" on object type: Usage",
                 method_name
             )),
         }
@@ -331,7 +328,7 @@ impl CallMethod for FunctionLogWrapper {
         kwargs: &baml_types::BamlMap<String, baml_types::BamlValue>,
     ) -> BamlObjectResponse {
         match method_name {
-            "destroy" => {
+            "~destructor" => {
                 self.clone().destroy();
                 Ok(BamlObjectResponseSuccess::new_value(BamlValue::Null))
             }
@@ -380,8 +377,12 @@ impl CallMethod for FunctionLogWrapper {
                     calls
                         .into_iter()
                         .map(|call| match call {
-                            LLMCallKind::Basic(call) => call.into(),
-                            LLMCallKind::Stream(llmstream_call) => llmstream_call.into(),
+                            baml_runtime::tracingv2::storage::storage::LLMCallKind::Basic(call) => {
+                                call.into()
+                            }
+                            baml_runtime::tracingv2::storage::storage::LLMCallKind::Stream(
+                                llmstream_call,
+                            ) => llmstream_call.into(),
                         })
                         .collect(),
                 ))
@@ -414,7 +415,7 @@ impl CallMethod for FunctionLogWrapper {
                             }
                         }
                         baml_runtime::tracingv2::storage::storage::LLMCallKind::Stream(c) => {
-                            if c.selected {
+                            if c.llm_call.selected {
                                 return Ok(BamlObjectResponseSuccess::new_object(c.into()));
                             }
                         }
@@ -425,7 +426,7 @@ impl CallMethod for FunctionLogWrapper {
                 Ok(BamlObjectResponseSuccess::new_value(BamlValue::Null))
             }
             _ => Err(format!(
-                "Failed to call function: {} on object type: FunctionLog",
+                "Failed to call function: \"{}\" on object type: FunctionLog",
                 method_name
             )),
         }
@@ -439,18 +440,18 @@ impl CallMethod for TimingWrapper {
         kwargs: &baml_types::BamlMap<String, baml_types::BamlValue>,
     ) -> BamlObjectResponse {
         match method_name {
-            "destroy" => {
+            "~destructor" => {
                 self.clone().destroy();
                 Ok(BamlObjectResponseSuccess::new_value(BamlValue::Null))
             }
             "start_time_utc_ms" => Ok(BamlObjectResponseSuccess::new_value(BamlValue::Int(
-                self.start_time_utc_ms as i64,
+                self.start_time_utc_ms,
             ))),
             "duration_ms" => Ok(BamlObjectResponseSuccess::new_value(BamlValue::Int(
-                self.duration_ms.unwrap_or_default() as i64,
+                self.duration_ms.unwrap_or_default(),
             ))),
             _ => Err(format!(
-                "Failed to call function: {} on object type: Timing",
+                "Failed to call function: \"{}\" on object type: Timing",
                 method_name
             )),
         }
@@ -464,18 +465,18 @@ impl CallMethod for StreamTimingWrapper {
         kwargs: &baml_types::BamlMap<String, baml_types::BamlValue>,
     ) -> BamlObjectResponse {
         match method_name {
-            "destroy" => {
+            "~destructor" => {
                 self.clone().destroy();
                 Ok(BamlObjectResponseSuccess::new_value(BamlValue::Null))
             }
             "start_time_utc_ms" => Ok(BamlObjectResponseSuccess::new_value(BamlValue::Int(
-                self.start_time_utc_ms as i64,
+                self.start_time_utc_ms,
             ))),
             "duration_ms" => Ok(BamlObjectResponseSuccess::new_value(BamlValue::Int(
-                self.duration_ms.unwrap_or_default() as i64,
+                self.duration_ms.unwrap_or_default(),
             ))),
             _ => Err(format!(
-                "Failed to call function: {} on object type: StreamTiming",
+                "Failed to call function: \"{}\" on object type: StreamTiming",
                 method_name
             )),
         }
@@ -489,7 +490,7 @@ impl CallMethod for LLMCallWrapper {
         _kwargs: &baml_types::BamlMap<String, baml_types::BamlValue>,
     ) -> BamlObjectResponse {
         match method_name {
-            "destroy" => {
+            "~destructor" => {
                 self.clone().destroy();
                 Ok(BamlObjectResponseSuccess::new_value(BamlValue::Null))
             }
@@ -536,7 +537,7 @@ impl CallMethod for LLMCallWrapper {
                 }
             }
             _ => Err(format!(
-                "Failed to call function: {} on object type: LLMCallKind",
+                "Failed to call function: \"{}\" on object type: LLMCall",
                 method_name
             )),
         }
@@ -550,45 +551,45 @@ impl CallMethod for LLMStreamCallWrapper {
         kwargs: &baml_types::BamlMap<String, baml_types::BamlValue>,
     ) -> BamlObjectResponse {
         match method_name {
-            "destroy" => {
+            "~destructor" => {
                 self.clone().destroy();
                 Ok(BamlObjectResponseSuccess::new_value(BamlValue::Null))
             }
             "client_name" => Ok(BamlObjectResponseSuccess::new_value(BamlValue::String(
-                self.client_name.clone(),
+                self.llm_call.client_name.clone(),
             ))),
             "provider" => Ok(BamlObjectResponseSuccess::new_value(BamlValue::String(
-                self.provider.clone(),
+                self.llm_call.provider.clone(),
             ))),
             "selected" => Ok(BamlObjectResponseSuccess::new_value(BamlValue::Bool(
-                self.selected,
+                self.llm_call.selected,
             ))),
             "timing" => Ok(BamlObjectResponseSuccess::new_object(
-                self.timing.clone().into(),
+                self.llm_call.timing.clone().into(),
             )),
             "usage" => {
-                if let Some(usage) = self.usage.clone() {
+                if let Some(usage) = self.llm_call.usage.clone() {
                     Ok(BamlObjectResponseSuccess::new_object(usage.into()))
                 } else {
                     Ok(BamlObjectResponseSuccess::new_value(BamlValue::Null))
                 }
             }
             "http_request" => {
-                if let Some(request) = self.request.clone() {
+                if let Some(request) = self.llm_call.request.clone() {
                     Ok(BamlObjectResponseSuccess::new_object(request.into()))
                 } else {
                     Ok(BamlObjectResponseSuccess::new_value(BamlValue::Null))
                 }
             }
             "http_response" => {
-                if let Some(response) = self.response.clone() {
+                if let Some(response) = self.llm_call.response.clone() {
                     Ok(BamlObjectResponseSuccess::new_object(response.into()))
                 } else {
                     Ok(BamlObjectResponseSuccess::new_value(BamlValue::Null))
                 }
             }
             "http_request_id" => {
-                if let Some(req) = self.request.as_ref() {
+                if let Some(req) = self.llm_call.request.as_ref() {
                     Ok(BamlObjectResponseSuccess::new_value(BamlValue::String(
                         req.id().to_string(),
                     )))
@@ -610,7 +611,7 @@ impl CallMethod for LLMStreamCallWrapper {
                 }
             }
             _ => Err(format!(
-                "Failed to call function: {} on object type: LLMCallKind",
+                "Failed to call function: \"{}\" on object type: LLMStreamCall",
                 method_name
             )),
         }
@@ -624,7 +625,7 @@ impl CallMethod for HTTPRequestWrapper {
         kwargs: &baml_types::BamlMap<String, baml_types::BamlValue>,
     ) -> BamlObjectResponse {
         match method_name {
-            "destroy" => {
+            "~destructor" => {
                 self.clone().destroy();
                 Ok(BamlObjectResponseSuccess::new_value(BamlValue::Null))
             }
@@ -651,7 +652,7 @@ impl CallMethod for HTTPRequestWrapper {
                 self.body().clone().into(),
             )),
             _ => Err(format!(
-                "Failed to call function: {} on object type: HTTPRequest",
+                "Failed to call function: \"{}\" on object type: HTTPRequest",
                 method_name
             )),
         }
@@ -665,9 +666,13 @@ impl CallMethod for HTTPResponseWrapper {
         kwargs: &baml_types::BamlMap<String, baml_types::BamlValue>,
     ) -> BamlObjectResponse {
         match method_name {
-            "destroy" => {
+            "~destructor" => {
                 self.clone().destroy();
                 Ok(BamlObjectResponseSuccess::new_value(BamlValue::Null))
+            }
+            "id" => {
+                let id = self.inner.request_id.to_string();
+                Ok(BamlObjectResponseSuccess::new_value(BamlValue::String(id)))
             }
             "status" => Ok(BamlObjectResponseSuccess::new_value(BamlValue::Int(
                 self.status as i64,
@@ -688,7 +693,7 @@ impl CallMethod for HTTPResponseWrapper {
                 self.body.clone().into(),
             )),
             _ => Err(format!(
-                "Failed to call function: {} on object type: HTTPResponse",
+                "Failed to call function: \"{}\" on object type: HTTPResponse",
                 method_name
             )),
         }
@@ -702,7 +707,7 @@ impl CallMethod for HTTPBodyWrapper {
         kwargs: &baml_types::BamlMap<String, baml_types::BamlValue>,
     ) -> BamlObjectResponse {
         match method_name {
-            "destroy" => {
+            "~destructor" => {
                 self.clone().destroy();
                 Ok(BamlObjectResponseSuccess::new_value(BamlValue::Null))
             }
@@ -719,7 +724,7 @@ impl CallMethod for HTTPBodyWrapper {
                 Err(_) => Ok(BamlObjectResponseSuccess::new_value(BamlValue::Null)),
             },
             _ => Err(format!(
-                "Failed to call function: {} on object type: HTTPBody",
+                "Failed to call function: \"{}\" on object type: HTTPBody",
                 method_name
             )),
         }
@@ -733,7 +738,7 @@ impl CallMethod for SSEEventWrapper {
         kwargs: &baml_types::BamlMap<String, baml_types::BamlValue>,
     ) -> BamlObjectResponse {
         match method_name {
-            "destroy" => {
+            "~destructor" => {
                 self.clone().destroy();
                 Ok(BamlObjectResponseSuccess::new_value(BamlValue::Null))
             }
@@ -745,7 +750,7 @@ impl CallMethod for SSEEventWrapper {
                 Err(_) => Ok(BamlObjectResponseSuccess::new_value(BamlValue::Null)),
             },
             _ => Err(format!(
-                "Failed to call function: {} on object type: SSEEvent",
+                "Failed to call function: \"{}\" on object type: SSEEvent",
                 method_name
             )),
         }

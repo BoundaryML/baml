@@ -1,4 +1,4 @@
-package raw_objects
+package baml
 
 import (
 	"fmt"

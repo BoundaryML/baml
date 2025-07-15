@@ -2,6 +2,7 @@ package raw_objects
 
 import (
 	"fmt"
+	"reflect"
 	"runtime"
 	"unsafe"
 
@@ -20,22 +21,36 @@ import (
 */
 import "C"
 
-type rawPointer interface {
-	objectType() cffi.CFFIObjectType
+var _decodeRawObjectImpl func(cRaw *cffi.CFFIRawObject) (RawPointer, error)
+
+func SetDecodeRawObjectImpl(impl func(cRaw *cffi.CFFIRawObject) (RawPointer, error)) {
+	_decodeRawObjectImpl = impl
+}
+
+type RawPointer interface {
+	ObjectType() cffi.CFFIObjectType
 	pointer() int64
 }
 
-type rawObject struct {
+type RawObject struct {
 	ptr int64     // pointer to the raw object in C
 	_   [0]func() // prevents copying
 }
 
-func (r *rawObject) pointer() int64 {
+func (r *RawObject) Pointer() int64 {
+	return r.pointer()
+}
+
+func (r *RawObject) pointer() int64 {
 	return r.ptr
 }
 
+func FromPointer(ptr int64) *RawObject {
+	return &RawObject{ptr: ptr}
+}
+
 // newRawObject creates a new refcounted rawObject
-func newRawObject(objectType cffi.CFFIObjectType, kwargs []*cffi.CFFIMapEntry) (any, error) {
+func NewRawObject(objectType cffi.CFFIObjectType, kwargs []*cffi.CFFIMapEntry) (any, error) {
 	args := cffi.CFFIObjectConstructorArgs{
 		Type:   objectType,
 		Kwargs: kwargs,
@@ -72,21 +87,26 @@ func newRawObject(objectType cffi.CFFIObjectType, kwargs []*cffi.CFFIMapEntry) (
 	return parsed, nil
 }
 
-func destructor(object rawPointer) error {
-	result, err := callMethod(object, "destructor", nil)
+func destructor(object RawPointer) error {
+	result, err := CallMethod(object, "~destructor", nil)
 
 	if err != nil {
 		return fmt.Errorf("failed to call destructor: %w", err)
 	}
 
-	if result != nil {
+	casted, ok := result.(*any)
+	if !ok {
 		return fmt.Errorf("destructor returned unexpected result: %v", result)
+	}
+
+	if casted != nil {
+		return fmt.Errorf("destructor returned unexpected result: %v", casted)
 	}
 
 	return nil
 }
 
-func callMethod(object rawPointer, method_name string, kwargs map[string]any) (any, error) {
+func CallMethod(object RawPointer, method_name string, kwargs map[string]any) (any, error) {
 	cffi_kwargs, err := serde.EncodeMapEntries(kwargs, "function arguments")
 	if err != nil {
 		return nil, fmt.Errorf("encoding method arguments: %w", err)
@@ -94,7 +114,7 @@ func callMethod(object rawPointer, method_name string, kwargs map[string]any) (a
 
 	args := cffi.CFFIObjectMethodArguments{
 		Kwargs:     cffi_kwargs,
-		Object:     encodeRawObject(object),
+		Object:     EncodeRawObject(object),
 		MethodName: method_name,
 	}
 
@@ -145,7 +165,7 @@ func decodeObjectResponse(response *cffi.CFFIObjectResponse) (any, error) {
 			return decodeRawObject(object)
 		case *cffi.CFFIObjectResponseSuccess_Objects:
 			objects := success.GetObjects()
-			parsed := make([]rawPointer, len(objects.Objects))
+			parsed := make([]RawPointer, len(objects.Objects))
 			for i, obj := range objects.Objects {
 				decoded, err := decodeRawObject(obj)
 				if err != nil {
@@ -156,7 +176,9 @@ func decodeObjectResponse(response *cffi.CFFIObjectResponse) (any, error) {
 			return parsed, nil
 		case *cffi.CFFIObjectResponseSuccess_Value:
 			value := success.GetValue()
-			return serde.Decode(value, nil).Interface(), nil
+			return serde.Decode(value, serde.TypeMap{
+				"INTERNAL.nil": reflect.TypeOf((*interface{})(nil)).Elem(),
+			}).Interface(), nil
 		default:
 			panic("unexpected cffi.isCFFIObjectResponseSuccess_Result")
 		}
@@ -165,13 +187,17 @@ func decodeObjectResponse(response *cffi.CFFIObjectResponse) (any, error) {
 	}
 }
 
-func decodeRawObject(cRaw *cffi.CFFIRawObject) (rawPointer, error) {
-	raw, err := decodeRawObjectImpl(cRaw)
+func decodeRawObject(cRaw *cffi.CFFIRawObject) (RawPointer, error) {
+	if _decodeRawObjectImpl == nil {
+		return nil, fmt.Errorf("decodeRawObjectImpl is not set. Please call SetDecodeRawObjectImpl() before using this function")
+	}
+
+	raw, err := _decodeRawObjectImpl(cRaw)
 	if err != nil {
 		return nil, err
 	}
 	// on finalization, we need to call the destructor
-	runtime.SetFinalizer(raw, func(r rawPointer) {
+	runtime.SetFinalizer(raw, func(r RawPointer) {
 		if err := destructor(r); err != nil {
 			fmt.Printf("Error during finalization of raw object: %v\n", err)
 		}
@@ -180,45 +206,12 @@ func decodeRawObject(cRaw *cffi.CFFIRawObject) (rawPointer, error) {
 	return raw, nil
 }
 
-func decodeRawObjectImpl(cRaw *cffi.CFFIRawObject) (rawPointer, error) {
-	if cRaw == nil {
-		return nil, fmt.Errorf("nil raw object")
-	}
-
-	switch obj := cRaw.Object.(type) {
-	case *cffi.CFFIRawObject_Collector:
-		return newCollector(obj.Collector.Pointer), nil
-	case *cffi.CFFIRawObject_FunctionLog:
-		return newFunctionLog(obj.FunctionLog.Pointer), nil
-	case *cffi.CFFIRawObject_HttpBody:
-		return newHTTPBody(obj.HttpBody.Pointer), nil
-	case *cffi.CFFIRawObject_HttpRequest:
-		return newHttpRequest(obj.HttpRequest.Pointer), nil
-	case *cffi.CFFIRawObject_HttpResponse:
-		return newHttpResponse(obj.HttpResponse.Pointer), nil
-	case *cffi.CFFIRawObject_LlmCall:
-		return newLLMCall(obj.LlmCall.Pointer), nil
-	case *cffi.CFFIRawObject_LlmStreamCall:
-		return newLLMStreamCall(obj.LlmStreamCall.Pointer), nil
-	case *cffi.CFFIRawObject_SseResponse:
-		return newSSEResponse(obj.SseResponse.Pointer), nil
-	case *cffi.CFFIRawObject_StreamTiming:
-		return newStreamTiming(obj.StreamTiming.Pointer), nil
-	case *cffi.CFFIRawObject_Timing:
-		return newTiming(obj.Timing.Pointer), nil
-	case *cffi.CFFIRawObject_Usage:
-		return newUsage(obj.Usage.Pointer), nil
-	default:
-		return nil, fmt.Errorf("unexpected raw object type")
-	}
-}
-
-func encodeRawObject(object rawPointer) *cffi.CFFIRawObject {
+func EncodeRawObject(object RawPointer) *cffi.CFFIRawObject {
 	pointer := &cffi.CFFIPointerType{
 		Pointer: object.pointer(),
 	}
 
-	switch object.objectType() {
+	switch object.ObjectType() {
 	case cffi.CFFIObjectType_OBJECT_COLLECTOR:
 		return &cffi.CFFIRawObject{
 			Object: &cffi.CFFIRawObject_Collector{

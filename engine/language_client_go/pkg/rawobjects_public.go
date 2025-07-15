@@ -1,7 +1,9 @@
-package raw_objects
+package baml
+
+import "github.com/boundaryml/baml/engine/language_client_go/baml_go/raw_objects"
 
 type Collector interface {
-	rawPointer
+	raw_objects.RawPointer
 	// Usage gathers the Usage object but keeps the underlying C collector alive
 	// until the Usage is done.
 	Usage() (Usage, error)
@@ -14,11 +16,11 @@ type Collector interface {
 	// ID looks up a function log by ID
 	Id(functionId string) (FunctionLog, error)
 	// Clear removes all logs and frees memory
-	Clear() error
+	Clear() (int64, error)
 }
 
 type Usage interface {
-	rawPointer
+	raw_objects.RawPointer
 	// InputTokens returns the number of input tokens
 	InputTokens() (int64, error)
 	// OutputTokens returns the number of output tokens
@@ -26,9 +28,9 @@ type Usage interface {
 }
 
 type FunctionLog interface {
-	rawPointer
+	raw_objects.RawPointer
 	// ID returns the function log ID
-	ID() (string, error)
+	Id() (string, error)
 	// FunctionName returns the function name
 	FunctionName() (string, error)
 	// LogType returns the log type
@@ -48,7 +50,7 @@ type FunctionLog interface {
 }
 
 type Timing interface {
-	rawPointer
+	raw_objects.RawPointer
 	// StartTimeUTCMs returns the start time in milliseconds since epoch
 	StartTimeUTCMs() (int64, error)
 	// DurationMs returns the duration in milliseconds (nullable)
@@ -60,15 +62,17 @@ type StreamTiming interface {
 }
 
 type LLMCall interface {
-	rawPointer
+	raw_objects.RawPointer
+	// ID returns the request ID: Not the same as the function log ID
+	RequestId() (string, error)
 	// ClientName returns the name of the client used
 	ClientName() (string, error)
 	// Provider returns the provider of the client
 	Provider() (string, error)
 	// HttpRequest returns the raw HTTP request
-	HttpRequest() (HttpRequest, error)
+	HttpRequest() (HTTPRequest, error)
 	// HttpResponse returns the raw HTTP response (nullable for streaming)
-	HttpResponse() (HttpResponse, error)
+	HttpResponse() (HTTPResponse, error)
 	// Usage returns the usage information (nullable)
 	Usage() (Usage, error)
 	// Selected returns whether this call was selected for parsing
@@ -83,10 +87,12 @@ type LLMStreamCall interface {
 	SSEChunks() ([]SSEResponse, error)
 }
 
-type HttpRequest interface {
-	rawPointer
+type HTTPRequest interface {
+	raw_objects.RawPointer
+	// ID returns the request ID
+	RequestId() (string, error)
 	// URL returns the request URL
-	URL() (string, error)
+	Url() (string, error)
 	// Method returns the HTTP method
 	Method() (string, error)
 	// Headers returns the request headers
@@ -95,10 +101,12 @@ type HttpRequest interface {
 	Body() (HTTPBody, error)
 }
 
-type HttpResponse interface {
-	rawPointer
+type HTTPResponse interface {
+	raw_objects.RawPointer
+	// ID returns the request ID
+	RequestId() (string, error)
 	// Status returns the HTTP status code
-	Status() (int, error)
+	Status() (int64, error)
 	// Headers returns the response headers
 	Headers() (map[string]string, error)
 	// Body returns the response body
@@ -106,7 +114,7 @@ type HttpResponse interface {
 }
 
 type HTTPBody interface {
-	rawPointer
+	raw_objects.RawPointer
 	// Text returns the body as a string
 	Text() (string, error)
 	// JSON returns the body as a JSON object
@@ -114,7 +122,7 @@ type HTTPBody interface {
 }
 
 type SSEResponse interface {
-	rawPointer
+	raw_objects.RawPointer
 	// Text returns the body as a string
 	Text() (string, error)
 	// JSON returns the body as a JSON object (nullable)

@@ -460,6 +460,10 @@ impl HTTPResponse {
         }
     }
 
+    pub fn id(&self) -> &HttpRequestId {
+        &self.request_id
+    }
+
     pub fn headers(&self) -> Option<&HashMap<String, String>> {
         self.headers.as_ref()
     }

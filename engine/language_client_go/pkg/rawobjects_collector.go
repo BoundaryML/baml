@@ -1,14 +1,15 @@
-package raw_objects
+package baml
 
 import (
 	"fmt"
 
+	"github.com/boundaryml/baml/engine/language_client_go/baml_go/raw_objects"
 	"github.com/boundaryml/baml/engine/language_client_go/baml_go/serde"
 	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
 )
 
 type collector struct {
-	*rawObject
+	*raw_objects.RawObject
 }
 
 func NewCollector(name string) (Collector, error) {
@@ -19,7 +20,7 @@ func NewCollector(name string) (Collector, error) {
 		return nil, fmt.Errorf("failed to encode kwargs: %w", err)
 	}
 
-	ptr, err := newRawObject(cffi.CFFIObjectType_OBJECT_COLLECTOR, kwargs)
+	ptr, err := raw_objects.NewRawObject(cffi.CFFIObjectType_OBJECT_COLLECTOR, kwargs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create collector: %w", err)
 	}
@@ -33,19 +34,19 @@ func NewCollector(name string) (Collector, error) {
 }
 
 func newCollector(ptr int64) Collector {
-	return &collector{&rawObject{ptr: ptr}}
+	return &collector{raw_objects.FromPointer(ptr)}
 }
 
-func (c *collector) objectType() cffi.CFFIObjectType {
+func (c *collector) ObjectType() cffi.CFFIObjectType {
 	return cffi.CFFIObjectType_OBJECT_COLLECTOR
 }
 
 func (c *collector) pointer() int64 {
-	return c.rawObject.pointer()
+	return c.RawObject.Pointer()
 }
 
 func (c *collector) Usage() (Usage, error) {
-	result, err := callMethod(c, "usage", nil)
+	result, err := raw_objects.CallMethod(c, "usage", nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get usage: %w", err)
 	}
@@ -59,7 +60,7 @@ func (c *collector) Usage() (Usage, error) {
 }
 
 func (c *collector) Name() (string, error) {
-	result, err := callMethod(c, "name", nil)
+	result, err := raw_objects.CallMethod(c, "name", nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to get name: %w", err)
 	}
@@ -73,12 +74,12 @@ func (c *collector) Name() (string, error) {
 }
 
 func (c *collector) Logs() ([]FunctionLog, error) {
-	result, err := callMethod(c, "logs", nil)
+	result, err := raw_objects.CallMethod(c, "logs", nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get logs: %w", err)
 	}
 
-	logs, ok := result.([]rawPointer)
+	logs, ok := result.([]raw_objects.RawPointer)
 	if !ok {
 		return nil, fmt.Errorf("unexpected type for logs: %T", result)
 	}
@@ -96,7 +97,7 @@ func (c *collector) Logs() ([]FunctionLog, error) {
 }
 
 func (c *collector) Last() (FunctionLog, error) {
-	result, err := callMethod(c, "last", nil)
+	result, err := raw_objects.CallMethod(c, "last", nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get last log: %w", err)
 	}
@@ -114,7 +115,7 @@ func (c *collector) Last() (FunctionLog, error) {
 }
 
 func (c *collector) Id(functionId string) (FunctionLog, error) {
-	result, err := callMethod(c, "id", map[string]any{
+	result, err := raw_objects.CallMethod(c, "id", map[string]any{
 		"id": functionId,
 	})
 	if err != nil {
@@ -129,11 +130,16 @@ func (c *collector) Id(functionId string) (FunctionLog, error) {
 	return log, nil
 }
 
-func (c *collector) Clear() error {
-	_, err := callMethod(c, "clear", nil)
+func (c *collector) Clear() (int64, error) {
+	result, err := raw_objects.CallMethod(c, "clear", nil)
 	if err != nil {
-		return fmt.Errorf("failed to clear: %w", err)
+		return 0, fmt.Errorf("failed to clear: %w", err)
 	}
 
-	return nil
+	count, ok := result.(int64)
+	if !ok {
+		return 0, fmt.Errorf("unexpected type for clear result: %T", result)
+	}
+
+	return count, nil
 }

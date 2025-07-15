@@ -29,7 +29,7 @@ type Union2IntOrListRecursive1 struct {
 	variant_ListRecursive1 *[]Recursive1
 }
 
-func (u *Union2IntOrListRecursive1) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union2IntOrListRecursive1) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
@@ -176,7 +176,7 @@ type Union3IntOrRecursive1OrString struct {
 	variant_String *string
 }
 
-func (u *Union3IntOrRecursive1OrString) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union3IntOrRecursive1OrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
@@ -379,7 +379,7 @@ type Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString struct {
 	variant_ListJSON *[]JSON
 }
 
-func (u *Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
