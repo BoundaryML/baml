@@ -170,6 +170,8 @@ where
             RenderedPrompt::Chat(chat) => match process_media_urls(
                 self.model_features().resolve_audio_urls,
                 self.model_features().resolve_image_urls,
+                self.model_features().resolve_pdf_urls,
+                self.model_features().resolve_video_urls,
                 true,
                 None,
                 ctx.runtime_context(),
@@ -238,6 +240,8 @@ where
                 let chat = process_media_urls(
                     features.resolve_audio_urls,
                     features.resolve_image_urls,
+                    features.resolve_pdf_urls,
+                    features.resolve_video_urls,
                     true,
                     None,
                     ctx,
@@ -296,6 +300,8 @@ where
         let chat_messages: Vec<RenderedChatMessage> = process_media_urls(
             self.model_features().resolve_audio_urls,
             self.model_features().resolve_image_urls,
+            self.model_features().resolve_pdf_urls,
+            self.model_features().resolve_video_urls,
             true,
             Some(render_settings),
             ctx,
@@ -374,6 +380,8 @@ where
                 match process_media_urls(
                     self.model_features().resolve_audio_urls,
                     self.model_features().resolve_image_urls,
+                    self.model_features().resolve_pdf_urls,
+                    self.model_features().resolve_video_urls,
                     true,
                     None,
                     ctx.runtime_context(),
@@ -420,6 +428,8 @@ where
 async fn process_media_urls(
     resolve_audio_urls: ResolveMediaUrls,
     resolve_image_urls: ResolveMediaUrls,
+    resolve_pdf_urls: ResolveMediaUrls,
+    resolve_video_urls: ResolveMediaUrls,
     resolve_files: bool,
     render_settings: Option<RenderCurlSettings>,
     ctx: &RuntimeContext,
@@ -442,6 +452,8 @@ async fn process_media_urls(
                 let resolve_mode = match part.media_type {
                     BamlMediaType::Audio => resolve_audio_urls,
                     BamlMediaType::Image => resolve_image_urls,
+                    BamlMediaType::Pdf => resolve_pdf_urls,
+                    BamlMediaType::Video => resolve_video_urls,
                 };
                 let media = process_media(resolve_mode, resolve_files, render_settings, ctx, part)
                     .await
@@ -503,7 +515,12 @@ async fn process_media(
                                 .strip_prefix("file://")
                                 .unwrap_or(media_path.as_str())
                         ),
-                        Some(format!("{}/{}", part.media_type, ext)),
+                        // necessary due to media type is used in the pdf mime type
+                        Some(if part.media_type == BamlMediaType::Pdf {
+                            "application/pdf".to_string()
+                        } else {
+                            format!("{}/{}", part.media_type, ext)
+                        }),
                     ));
                 }
             }
@@ -520,7 +537,11 @@ async fn process_media(
 
             if mime_type.is_none() {
                 if let Some(ext) = media_file.extension() {
-                    mime_type = Some(format!("{}/{}", part.media_type, ext));
+                    mime_type = Some(if part.media_type == BamlMediaType::Pdf {
+                        "application/pdf".to_string()
+                    } else {
+                        format!("{}/{}", part.media_type, ext)
+                    });
                 }
             }
 
@@ -583,6 +604,41 @@ async fn process_media(
 
             let (base64, inferred_mime_type) =
                 to_base64_with_inferred_mime_type(ctx, media_url).await?;
+
+            // Validate MIME type – if the user has explicitly set one, or if the
+            // media type implies a canonical MIME (e.g. PDFs), ensure the fetched
+            // content matches what was requested.
+
+            let expected_mime_type: Option<String> = if let Some(mt) = &part.mime_type {
+                if !mt.is_empty() {
+                    Some(mt.clone())
+                } else {
+                    None
+                }
+            } else {
+                match part.media_type {
+                    BamlMediaType::Pdf => Some("application/pdf".to_string()),
+                    _ => None,
+                }
+            };
+
+            if let Some(expected) = &expected_mime_type {
+                // we accept subtype matches (e.g. image/jpeg starts_with image/)
+                let mismatch = if expected.contains('/') {
+                    &inferred_mime_type != expected
+                } else {
+                    !inferred_mime_type.starts_with(expected)
+                };
+
+                if mismatch {
+                    anyhow::bail!(
+                        "Requested media of MIME type '{}' but fetched '{}' from URL {}. Please ensure the URL points to the correct file or update the mime_type in BAML.",
+                        expected,
+                        inferred_mime_type,
+                        media_url.url
+                    );
+                }
+            }
 
             Ok(BamlMedia::base64(
                 part.media_type,

@@ -327,6 +327,8 @@ impl From<&BamlMediaType> for MediaTypeGo {
         match baml_media_type {
             BamlMediaType::Image => MediaTypeGo::Image,
             BamlMediaType::Audio => MediaTypeGo::Audio,
+            BamlMediaType::Pdf => MediaTypeGo::Pdf,
+            BamlMediaType::Video => MediaTypeGo::Video,
         }
     }
 }

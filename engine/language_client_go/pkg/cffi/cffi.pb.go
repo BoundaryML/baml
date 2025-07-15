@@ -7,11 +7,12 @@
 package cffi
 
 import (
-	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
-	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
+
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
+	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
 
 const (
@@ -77,6 +78,8 @@ type MediaTypeEnum int32
 const (
 	MediaTypeEnum_IMAGE MediaTypeEnum = 0
 	MediaTypeEnum_AUDIO MediaTypeEnum = 1
+	MediaTypeEnum_PDF   MediaTypeEnum = 2
+	MediaTypeEnum_VIDEO MediaTypeEnum = 3
 )
 
 // Enum value maps for MediaTypeEnum.
@@ -84,10 +87,14 @@ var (
 	MediaTypeEnum_name = map[int32]string{
 		0: "IMAGE",
 		1: "AUDIO",
+		2: "PDF",
+		3: "VIDEO",
 	}
 	MediaTypeEnum_value = map[string]int32{
 		"IMAGE": 0,
 		"AUDIO": 1,
+		"PDF":   2,
+		"VIDEO": 3,
 	}
 )
 
@@ -3970,10 +3977,12 @@ const file_types_cffi_proto_rawDesc = "" +
 	"\x11CFFITypeNamespace\x12\f\n" +
 	"\bINTERNAL\x10\x00\x12\t\n" +
 	"\x05TYPES\x10\x01\x12\x10\n" +
-	"\fSTREAM_TYPES\x10\x02*%\n" +
+	"\fSTREAM_TYPES\x10\x02*9\n" +
 	"\rMediaTypeEnum\x12\t\n" +
 	"\x05IMAGE\x10\x00\x12\t\n" +
-	"\x05AUDIO\x10\x01*\xa9\x02\n" +
+	"\x05AUDIO\x10\x01\x12\a\n" +
+	"\x03PDF\x10\x02\x12\t\n" +
+	"\x05VIDEO\x10\x03*\xa9\x02\n" +
 	"\x0eCFFIObjectType\x12\x16\n" +
 	"\x12OBJECT_UNSPECIFIED\x10\x00\x12\x14\n" +
 	"\x10OBJECT_COLLECTOR\x10\x01\x12\x17\n" +

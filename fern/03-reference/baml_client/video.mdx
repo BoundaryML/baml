@@ -1,0 +1,146 @@
+---
+title: Video
+description: Learn how to handle video inputs in BAML functions
+---
+
+Video values to BAML functions can be created in client libraries. This document explains how to use these functions both at compile time and runtime to handle video data. For more details, refer to [video types](/ref/baml/types#video).
+
+<Info>
+  When you create a `Video` using `from_url` or `fromUrl`, the URL is passed directly to the model without any intermediate fetching. If the model cannot access external media, it will fail on such inputs. In these cases, convert the video to Base64 before passing it to the model.
+</Info>
+
+## Usage Examples
+
+<CodeBlocks>
+```python
+from baml_py import Video
+from baml_client import b
+
+async def test_video_input():
+    # Create a Video object from a URL
+    video = Video.from_url("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+    res = await b.TestVideoInput(video=video)
+
+    # Create a Video object from Base64 data
+    video_b64 = "AAAAGGZ0eXBpc29t..."
+    video = Video.from_base64("video/mp4", video_b64)
+    res = await b.TestVideoInput(video=video)
+```
+
+```typescript
+import { b } from '../baml_client'
+import { Video } from "@boundaryml/baml"
+
+// Create a Video object from a URL
+let res = await b.TestVideoInput(
+    Video.fromUrl('https://www.youtube.com/watch?v=dQw4w9WgXcQ')
+)
+
+// Create a Video object from Base64 data
+const video_b64 = "AAAAGGZ0eXBpc29t..."
+res = await b.TestVideoInput(
+    Video.fromBase64('video/mp4', video_b64)
+)
+
+// Browser-specific methods
+const fileVideo = await Video.fromFile(file)
+const blobVideo = await Video.fromBlob(blob, 'video/mp4')
+const fetchedVideo = await Video.fromUrlAsync('https://www.youtube.com/watch?v=dQw4w9WgXcQ')
+```
+
+```tsx
+import { useTestVideoInput } from '../baml_client/react/hooks'
+import { Video } from "../baml_client/react/media"
+
+export function TestVideoInput() {
+    const { mutate } = useTestVideoInput()
+
+    const handleClick = async () => {
+        const video = await Video.fromUrl('https://www.youtube.com/watch?v=dQw4w9WgXcQ')
+        mutate(video)
+    }
+
+    return (
+      <div>
+          <button onClick={handleClick}>
+              Test Video Input
+          </button>
+      </div>
+    )
+}
+```
+
+```ruby
+# Ruby implementation is in development.
+```
+</CodeBlocks>
+
+## Static Methods
+
+<ParamField
+  path="fromUrl"
+  type="(url: string, mediaType?: string) => Video"
+>
+  Creates a Video object from a URL. Optionally specify the media type, otherwise it will be inferred from the URL.
+</ParamField>
+
+<ParamField
+  path="fromBase64"
+  type="(mediaType: string, base64: string) => Video"
+>
+  Creates a Video object using Base64 encoded data along with the given MIME type.
+</ParamField>
+
+<ParamField
+  path="fromFile"
+  type="(file: File) => Promise<Video>"
+>
+  <Info>Only available in browser environments. @boundaryml/baml/browser</Info>
+  Creates a Video object from a File object. Available in browser environments only.
+</ParamField>
+
+<ParamField
+  path="fromBlob"
+  type="(blob: Blob, mediaType?: string) => Promise<Video>"
+>
+  <Info>Only available in browser environments. @boundaryml/baml/browser</Info>
+  Creates a Video object from a Blob object. Available in browser environments only.
+</ParamField>
+
+<ParamField
+  path="fromUrlToBase64"
+  type="(url: string) => Promise<Video>"
+>
+  <Info>Only available in browser environments.</Info>
+  Creates a Video object by fetching from a URL. Available in browser environments only.
+</ParamField>
+
+## Instance Methods
+
+<ParamField
+  path="isUrl"
+  type="() => boolean"
+>
+  Check if the video is stored as a URL.
+</ParamField>
+
+<ParamField
+  path="asUrl"
+  type="() => string"
+>
+  Get the URL of the video if it's stored as a URL. Throws an Error if the video is not stored as a URL.
+</ParamField>
+
+<ParamField
+  path="asBase64"
+  type="() => [string, string]"
+>
+  Get the base64 data and media type if the video is stored as base64. Returns [base64Data, mediaType]. Throws an Error if the video is not stored as base64.
+</ParamField>
+
+<ParamField
+  path="toJSON"
+  type="() => { url: string } | { base64: string; media_type: string }"
+>
+  Convert the video to a JSON representation. Returns either a URL object or a base64 object with media type.
+</ParamField> 

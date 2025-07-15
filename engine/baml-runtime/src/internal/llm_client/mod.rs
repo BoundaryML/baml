@@ -109,6 +109,10 @@ pub struct ModelFeatures {
     pub resolve_audio_urls: ResolveMediaUrls,
     /// Controls how image URLs are resolved for this model/provider
     pub resolve_image_urls: ResolveMediaUrls,
+    /// Controls how Pdf URLs are resolved for this model/provider
+    pub resolve_pdf_urls: ResolveMediaUrls,
+    /// Controls how video URLs are resolved for this model/provider
+    pub resolve_video_urls: ResolveMediaUrls,
     pub allowed_metadata: AllowedRoleMetadata,
 }
 

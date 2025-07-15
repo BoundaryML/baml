@@ -4,7 +4,7 @@ use napi::{
     NapiRaw,
 };
 
-use crate::types::{audio::BamlAudio, image::BamlImage};
+use crate::types::{audio::BamlAudio, image::BamlImage, pdf::BamlPdf, video::BamlVideo};
 
 struct SerializationError {
     position: Vec<String>,
@@ -189,6 +189,10 @@ pub fn jsunknown_to_baml_value(
                 BamlValue::Media(img.inner.clone())
             } else if let Ok(audio) = env.get_value_external::<BamlAudio>(&external) {
                 BamlValue::Media(audio.inner.clone())
+            } else if let Ok(pdf) = env.get_value_external::<BamlPdf>(&external) {
+                BamlValue::Media(pdf.inner.clone())
+            } else if let Ok(video) = env.get_value_external::<BamlVideo>(&external) {
+                BamlValue::Media(video.inner.clone())
             } else {
                 if skip_unsupported {
                     return Ok(None);

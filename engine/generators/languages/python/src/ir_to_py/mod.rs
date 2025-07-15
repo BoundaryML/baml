@@ -304,6 +304,8 @@ impl From<&BamlMediaType> for MediaTypePy {
         match baml_media_type {
             BamlMediaType::Image => MediaTypePy::Image,
             BamlMediaType::Audio => MediaTypePy::Audio,
+            BamlMediaType::Pdf => MediaTypePy::Pdf,
+            BamlMediaType::Video => MediaTypePy::Video,
         }
     }
 }

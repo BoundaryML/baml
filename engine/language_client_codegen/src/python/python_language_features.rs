@@ -1,5 +1,6 @@
-use crate::dir_writer::LanguageFeatures;
 use baml_types::{BamlMediaType, TypeValue};
+
+use crate::dir_writer::LanguageFeatures;
 
 #[derive(Default)]
 pub(super) struct PythonLanguageFeatures {}
@@ -38,6 +39,8 @@ impl ToPython for TypeValue {
             TypeValue::Null => "None",
             TypeValue::Media(BamlMediaType::Image) => "baml_py.Image",
             TypeValue::Media(BamlMediaType::Audio) => "baml_py.Audio",
+            TypeValue::Media(BamlMediaType::Pdf) => "baml_py.Pdf",
+            TypeValue::Media(BamlMediaType::Video) => "baml_py.Video",
         }
         .to_string()
     }

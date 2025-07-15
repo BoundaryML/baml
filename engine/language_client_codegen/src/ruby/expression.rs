@@ -52,6 +52,8 @@ impl ToRuby for TypeValue {
             TypeValue::Null => "null",
             TypeValue::Media(BamlMediaType::Image) => "Image",
             TypeValue::Media(BamlMediaType::Audio) => "Audio",
+            TypeValue::Media(BamlMediaType::Pdf) => "Pdf",
+            TypeValue::Media(BamlMediaType::Video) => "Video",
         }
         .to_string()
     }

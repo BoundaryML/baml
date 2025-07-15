@@ -4,7 +4,7 @@ slug: /guide/baml-basics/multi-modal
 
 ## Multi-modal input
 
-You can use `audio` or `image` input types in BAML prompts. Just create an input argument of that type and render it in the prompt.
+You can use `audio`, `image`, `pdf`, or `video` input types in BAML prompts. Just create an input argument of that type and render it in the prompt.
 
 Switch from "Prompt Review" to "Raw cURL" in the playground to see how BAML translates multi-modal input into the LLM Request body.
 
@@ -133,6 +133,90 @@ import { Audio } from "@boundaryml/baml"
   const audio_base64 = ".."
   let res = await b.TestAudioInput(
     Audio.fromBase64('audio/ogg', audio_base64),
+  )
+  
+```
+
+```ruby Ruby (beta)
+we're working on it!
+```
+</CodeBlocks>
+
+### Pdf
+Calling functions that have `pdf` types. See [pdf types](/ref/baml/types#pdf)
+
+> **⚠️ Warning** Pdf inputs must be provided as Base64 data (e.g. `Pdf.from_base64`). URL-based Pdf inputs are not currently supported. Additionally, Pdf inputs are only supported by models that explicitly allow document (Pdf) modalities, such as Gemini 2.x Flash/Pro or VertexAI Gemini. Make sure the `client` you select advertises Pdf support, otherwise your request will fail.
+
+<CodeBlocks>
+```python Python
+from baml_py import Pdf
+from baml_client import b
+
+async def run():
+  # Base64 data
+  b64 = "JVBERi0K...."
+  res = await b.TestPdfInput(
+    pdf=Pdf.from_base64("application/pdf", b64)
+  )
+```
+
+```typescript TypeScript
+import { b } from '../baml_client'
+import { Pdf } from "@boundaryml/baml"
+...
+
+  // Base64
+  const pdf_base64 = ".."
+  let res = await b.TestPdfInput(
+    Pdf.fromBase64('application/pdf', pdf_base64),
+  )
+  
+```
+
+```ruby Ruby (beta)
+we're working on it!
+```
+</CodeBlocks>
+
+### Video
+Calling functions that have `video` types. See [video types](/ref/baml/types#video)
+
+> **⚠️ Warning** Video inputs require a model that supports video understanding (for example Gemini 2.x Flash/Pro). If your chosen model does not list video support your function call will return an error. *When you supply a Video as a URL the URL is forwarded unchanged to the model; if the model cannot fetch remote content you must instead pass the bytes via `Video.from_base64`.*
+
+<CodeBlocks>
+```python Python
+from baml_py import Video
+from baml_client import b
+
+async def run():
+  # from URL
+  res = await b.TestVideoInput(
+      video=Video.from_url(
+          "https://example.com/sample.mp4"
+      )
+  )
+
+  # Base64
+  b64 = "AAAAGGZ0eXBpc29t...."
+  res = await b.TestVideoInput(
+    video=Video.from_base64("video/mp4", b64)
+  )
+```
+
+```typescript TypeScript
+import { b } from '../baml_client'
+import { Video } from "@boundaryml/baml"
+...
+
+  // URL
+  let res = await b.TestVideoInput(
+    Video.fromUrl('https://example.com/sample.mp4'),
+  )
+
+  // Base64
+  const video_base64 = ".."
+  let res = await b.TestVideoInput(
+    Video.fromBase64('video/mp4', video_base64),
   )
   
 ```

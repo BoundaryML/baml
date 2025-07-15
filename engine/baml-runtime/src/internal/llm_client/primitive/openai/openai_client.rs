@@ -367,6 +367,8 @@ macro_rules! make_openai_client {
                 max_one_system_prompt: false,
                 resolve_audio_urls: ResolveMediaUrls::Always,
                 resolve_image_urls: ResolveMediaUrls::Never,
+                resolve_pdf_urls: ResolveMediaUrls::Always,
+                resolve_video_urls: ResolveMediaUrls::Never,
                 allowed_metadata: $properties.allowed_metadata.clone(),
             },
             properties: $properties,
@@ -390,6 +392,8 @@ macro_rules! make_openai_client {
                 max_one_system_prompt: false,
                 resolve_audio_urls: ResolveMediaUrls::Always,
                 resolve_image_urls: ResolveMediaUrls::Never,
+                resolve_pdf_urls: ResolveMediaUrls::Always,
+                resolve_video_urls: ResolveMediaUrls::Never,
                 allowed_metadata: $properties.allowed_metadata.clone(),
             },
             properties: $properties,
@@ -543,7 +547,6 @@ impl ToProviderMessage for OpenAIClient {
                                 mime_type_str
                             ),
                         };
-
                         content.insert(
                             payload_key.into(),
                             json!({
@@ -564,6 +567,43 @@ impl ToProviderMessage for OpenAIClient {
                         );
                     }
                 }
+            }
+            BamlMediaType::Pdf => {
+                let type_value = "file";
+                let payload_key = "file";
+                content.insert("type".into(), json!(type_value));
+
+                match &media.content {
+                    BamlMediaContent::Url(url_content) => {
+                        // For URLs, we need to resolve them to base64 first
+                        anyhow::bail!(
+                            "BAML internal error (openai): Pdf URL are not supported by OpenAI use base64."
+                        );
+                    }
+                    BamlMediaContent::Base64(b64_media) => {
+                        content.insert(
+                            payload_key.into(),
+                            json!({
+                                "filename": "document.pdf",
+                                "file_data": format!("data:{};base64,{}", media.mime_type_as_ok()?, b64_media.base64)
+                            }),
+                        );
+                    }
+                    BamlMediaContent::File(media_file) => {
+                        // For files, we need to resolve them to base64 first
+                        anyhow::bail!(
+                            "BAML internal error (openai): Pdf file should have been resolved to base64 before this stage."
+                        );
+                    }
+                }
+            }
+            BamlMediaType::Video => {
+                // OpenAI video is only supported on the Realtime API (/v1/realtime), not on chat completions
+                anyhow::bail!(
+                    "Video input is only supported on OpenAI's Realtime API (/v1/realtime), not on chat completions. \
+                    Consider extracting frames from the video as images instead. \
+                    See: https://platform.openai.com/docs/guides/realtime"
+                );
             }
         }
         Ok(content)
@@ -648,6 +688,8 @@ mod tests {
                 max_one_system_prompt: false,
                 resolve_audio_urls: ResolveMediaUrls::Always,
                 resolve_image_urls: ResolveMediaUrls::Never,
+                resolve_pdf_urls: ResolveMediaUrls::Never,
+                resolve_video_urls: ResolveMediaUrls::Never,
                 allowed_metadata: AllowedRoleMetadata::All,
             },
             properties: ResolvedOpenAI {
@@ -696,6 +738,8 @@ mod tests {
                 max_one_system_prompt: false,
                 resolve_audio_urls: ResolveMediaUrls::Always,
                 resolve_image_urls: ResolveMediaUrls::Never,
+                resolve_pdf_urls: ResolveMediaUrls::Never,
+                resolve_video_urls: ResolveMediaUrls::Never,
                 allowed_metadata: AllowedRoleMetadata::All,
             },
             properties: ResolvedOpenAI {

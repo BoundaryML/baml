@@ -18,6 +18,16 @@ export declare class BamlImage {
   toJSON(): any
 }
 
+export declare class BamlPdf {
+  static fromUrl(url: string, mediaType?: string | undefined | null): BamlPdf
+  static fromBase64(mediaType: string, base64: string): BamlPdf
+  get url(): string | null
+  asUrl(): string
+  isUrl(): boolean
+  asBase64(): [string, string]
+  toJSON(): any
+}
+
 export declare class BamlRuntime {
   static fromDirectory(directory: string, envVars: Record<string, string>): BamlRuntime
   static fromFiles(rootPath: string, files: Record<string, string>, envVars: Record<string, string | undefined | null>): BamlRuntime
@@ -38,6 +48,16 @@ export declare class BamlRuntime {
 export declare class BamlSpan {
   static new(runtime: BamlRuntime, functionName: string, args: any, ctx: RuntimeContextManager, envVars: any): BamlSpan
   finish(result: any, ctx: RuntimeContextManager, envVars: any): any
+}
+
+export declare class BamlVideo {
+  static fromUrl(url: string, mediaType?: string | undefined | null): BamlVideo
+  static fromBase64(mediaType: string, base64: string): BamlVideo
+  get url(): string | null
+  asUrl(): string
+  isUrl(): boolean
+  asBase64(): [string, string]
+  toJSON(): any
 }
 
 export declare class ClassBuilder {

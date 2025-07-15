@@ -20,6 +20,7 @@ import * as React from 'react';
 
 import { Button } from '@baml/ui/button';
 import { cn } from '@baml/ui/lib/utils';
+import { TruncatedString } from '../../TruncatedString';
 import type {
   WasmFunctionResponse,
   WasmTestResponse,
@@ -133,9 +134,13 @@ const ResponseContent = ({
         />
       )}
       {responseViewType === 'raw' && (
-        <pre className="font-sans text-xs whitespace-pre-wrap break-words">
-          {getTestStateResponse(state)?.llm_response()?.content}
-        </pre>
+        <TruncatedString
+          text={getTestStateResponse(state)?.llm_response()?.content || ''}
+          maxLength={1500}
+          headLength={600}
+          tailLength={600}
+          className='font-sans text-xs'
+        />
       )}
     </div>
   );
@@ -322,56 +327,40 @@ export const TabularView: React.FC<TabularViewProps> = ({ currentRun }) => {
                   </div>
                 </TableCell>
                 {config.showInputs && (
-                  <TableCell className="py-1 whitespace-pre-wrap break-words">
+                  <TableCell className="py-1">
                     <ErrorBoundary
                       fallbackRender={() => <div>Error rendering input</div>}
                     >
-                      <div className="max-h-[400px] overflow-auto text-xs">
-                        {test.input?.reduce(
-                          (
-                            acc: Record<string, any>,
-                            input: { name?: string; value: any },
-                          ) => {
-                            let value = input.value;
-                            if (typeof value === 'string') {
-                              try {
-                                value = JSON.parse(value);
-                              } catch {
-                                // Keep original string if not valid JSON
+                      <TruncatedString
+                        text={JSON.stringify(
+                          test.input?.reduce(
+                            (
+                              acc: Record<string, any>,
+                              input: { name?: string; value: any },
+                            ) => {
+                              let value = input.value;
+                              if (typeof value === 'string') {
+                                try {
+                                  value = JSON.parse(value);
+                                } catch {
+                                  // Keep original string if not valid JSON
+                                }
                               }
-                            }
-                            if (input.name) {
-                              acc[input.name] = value;
-                            }
-                            return acc;
-                          },
-                          {},
-                        ) &&
-                          JSON.stringify(
-                            test.input?.reduce(
-                              (
-                                acc: Record<string, any>,
-                                input: { name?: string; value: any },
-                              ) => {
-                                let value = input.value;
-                                if (typeof value === 'string') {
-                                  try {
-                                    value = JSON.parse(value);
-                                  } catch {
-                                    // Keep original string if not valid JSON
-                                  }
-                                }
-                                if (input.name) {
-                                  acc[input.name] = value;
-                                }
-                                return acc;
-                              },
-                              {},
-                            ),
-                            null,
-                            2,
-                          )}
-                      </div>
+                              if (input.name) {
+                                acc[input.name] = value;
+                              }
+                              return acc;
+                            },
+                            {},
+                          ) || {},
+                          null,
+                          2,
+                        )}
+                        maxLength={800}
+                        headLength={300}
+                        tailLength={300}
+                        className="max-h-[400px] text-xs"
+                      />
                     </ErrorBoundary>
                   </TableCell>
                 )}

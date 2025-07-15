@@ -71,3 +71,67 @@ impl CloneAsBamlValue for Audio {
         BamlValue::Media(self.inner.clone())
     }
 }
+
+#[magnus::wrap(class = "Baml::Ffi::Pdf", free_immediately, size)]
+pub(crate) struct Pdf {
+    pub(crate) inner: BamlMedia,
+}
+
+impl Pdf {
+    pub fn from_url(url: String, media_type: Option<String>) -> Self {
+        Self {
+            inner: BamlMedia::url(BamlMediaType::Pdf, url, media_type),
+        }
+    }
+    pub fn from_base64(media_type: String, base64: String) -> Self {
+        Self {
+            inner: BamlMedia::base64(BamlMediaType::Pdf, base64, Some(media_type)),
+        }
+    }
+
+    pub fn define_in_ruby(module: &RModule) -> Result<()> {
+        let cls = module.define_class("Pdf", class::object())?;
+        cls.define_singleton_method("from_url", function!(Pdf::from_url, 2))?;
+        cls.define_singleton_method("from_base64", function!(Pdf::from_base64, 2))?;
+
+        Ok(())
+    }
+}
+
+impl CloneAsBamlValue for Pdf {
+    fn clone_as_baml_value(&self) -> BamlValue {
+        BamlValue::Media(self.inner.clone())
+    }
+}
+
+#[magnus::wrap(class = "Baml::Ffi::Video", free_immediately, size)]
+pub(crate) struct Video {
+    pub(crate) inner: BamlMedia,
+}
+
+impl Video {
+    pub fn from_url(url: String, media_type: Option<String>) -> Self {
+        Self {
+            inner: BamlMedia::url(BamlMediaType::Video, url, media_type),
+        }
+    }
+    pub fn from_base64(media_type: String, base64: String) -> Self {
+        Self {
+            inner: BamlMedia::base64(BamlMediaType::Video, base64, Some(media_type)),
+        }
+    }
+
+    pub fn define_in_ruby(module: &RModule) -> Result<()> {
+        let cls = module.define_class("Video", class::object())?;
+        cls.define_singleton_method("from_url", function!(Video::from_url, 2))?;
+        cls.define_singleton_method("from_base64", function!(Video::from_base64, 2))?;
+
+        Ok(())
+    }
+}
+
+impl CloneAsBamlValue for Video {
+    fn clone_as_baml_value(&self) -> BamlValue {
+        BamlValue::Media(self.inner.clone())
+    }
+}

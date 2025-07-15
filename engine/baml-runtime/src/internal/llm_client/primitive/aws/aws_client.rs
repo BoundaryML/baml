@@ -262,6 +262,8 @@ impl AwsClient {
                 max_one_system_prompt: true,
                 resolve_audio_urls: ResolveMediaUrls::Always,
                 resolve_image_urls: ResolveMediaUrls::Always,
+                resolve_pdf_urls: ResolveMediaUrls::Always,
+                resolve_video_urls: ResolveMediaUrls::Never,
                 allowed_metadata: properties.allowed_role_metadata.clone(),
             },
             retry_policy: client.retry_policy.as_ref().map(String::to_owned),
@@ -286,6 +288,8 @@ impl AwsClient {
                 max_one_system_prompt: true,
                 resolve_audio_urls: ResolveMediaUrls::Always,
                 resolve_image_urls: ResolveMediaUrls::Always,
+                resolve_pdf_urls: ResolveMediaUrls::Always,
+                resolve_video_urls: ResolveMediaUrls::Never,
                 allowed_metadata: properties.allowed_role_metadata.clone(),
             },
             retry_policy: client.elem().retry_policy_id.as_ref().map(String::to_owned),
@@ -812,41 +816,121 @@ impl AwsClient {
         &self,
         media: &baml_types::BamlMedia,
     ) -> Result<bedrock::types::ContentBlock> {
-        if media.media_type != BamlMediaType::Image {
-            anyhow::bail!(
-                "AWS supports images, but does not support this media type: {:#?}",
-                media
-            )
-        }
-        match &media.content {
-            BamlMediaContent::File(_) => {
-                anyhow::bail!(
-                    "BAML internal error (AWSBedrock): file should have been resolved to base64"
-                )
-            }
-            BamlMediaContent::Url(_) => {
-                anyhow::bail!(
-                    "BAML internal error (AWSBedrock): media URL should have been resolved to base64"
-                )
-            }
-            BamlMediaContent::Base64(b64_media) => Ok(bedrock::types::ContentBlock::Image(
-                bedrock::types::ImageBlock::builder()
-                    .set_format(Some(bedrock::types::ImageFormat::from(
-                        {
-                            let mime_type = media.mime_type_as_ok()?;
-                            match mime_type.strip_prefix("image/") {
-                                Some(s) => s.to_string(),
-                                None => mime_type,
+        match media.media_type {
+            BamlMediaType::Image => match &media.content {
+                BamlMediaContent::File(_) => {
+                    anyhow::bail!(
+                            "BAML internal error (AWSBedrock): file should have been resolved to base64"
+                        )
+                }
+                BamlMediaContent::Url(_) => {
+                    anyhow::bail!(
+                            "BAML internal error (AWSBedrock): media URL should have been resolved to base64"
+                        )
+                }
+                BamlMediaContent::Base64(b64_media) => Ok(bedrock::types::ContentBlock::Image(
+                    bedrock::types::ImageBlock::builder()
+                        .set_format(Some(bedrock::types::ImageFormat::from(
+                            {
+                                let mime_type = media.mime_type_as_ok()?;
+                                match mime_type.strip_prefix("image/") {
+                                    Some(s) => s.to_string(),
+                                    None => mime_type,
+                                }
                             }
-                        }
-                        .as_str(),
-                    )))
-                    .set_source(Some(bedrock::types::ImageSource::Bytes(Blob::new(
-                        aws_smithy_types::base64::decode(b64_media.base64.clone())?,
-                    ))))
-                    .build()
-                    .context("Failed to build image block")?,
-            )),
+                            .as_str(),
+                        )))
+                        .set_source(Some(bedrock::types::ImageSource::Bytes(Blob::new(
+                            aws_smithy_types::base64::decode(b64_media.base64.clone())?,
+                        ))))
+                        .build()
+                        .context("Failed to build image block")?,
+                )),
+            },
+            BamlMediaType::Pdf => {
+                match &media.content {
+                    BamlMediaContent::File(_) => {
+                        anyhow::bail!(
+                            "BAML internal error (AWSBedrock): Pdf file should have been resolved to base64"
+                        )
+                    }
+                    BamlMediaContent::Url(url_media) => {
+                        // AWS Bedrock supports Pdf as document type via URL
+                        Ok(bedrock::types::ContentBlock::Document(
+                            bedrock::types::DocumentBlock::builder()
+                                .set_format(Some(bedrock::types::DocumentFormat::Pdf))
+                                .set_name(Some("document.pdf".to_string())) // Default name for URL-based Pdfs
+                                .set_source(Some(bedrock::types::DocumentSource::Bytes(Blob::new(
+                                    url_media.url.as_bytes().to_vec(),
+                                ))))
+                                .build()
+                                .context("Failed to build Pdf document block")?,
+                        ))
+                    }
+                    BamlMediaContent::Base64(b64_media) => {
+                        // AWS Bedrock supports Pdf as document type via Base64
+                        Ok(bedrock::types::ContentBlock::Document(
+                            bedrock::types::DocumentBlock::builder()
+                                .set_format(Some(bedrock::types::DocumentFormat::Pdf))
+                                .set_name(Some("document.pdf".to_string())) // Default name for Base64 Pdfs
+                                .set_source(Some(bedrock::types::DocumentSource::Bytes(Blob::new(
+                                    aws_smithy_types::base64::decode(b64_media.base64.clone())?,
+                                ))))
+                                .build()
+                                .context("Failed to build Pdf document block")?,
+                        ))
+                    }
+                }
+            }
+            BamlMediaType::Video => {
+                match &media.content {
+                    BamlMediaContent::File(_) => {
+                        anyhow::bail!(
+                            "BAML internal error (AWSBedrock): video file should have been resolved to base64"
+                        )
+                    }
+                    BamlMediaContent::Url(_) => {
+                        anyhow::bail!(
+                            "BAML internal error (AWSBedrock): video URL should have been resolved to base64"
+                        )
+                    }
+                    BamlMediaContent::Base64(b64_media) => {
+                        // AWS Bedrock supports video for Nova models with specific format
+                        let mime_type = media.mime_type_as_ok()?;
+                        let format = match mime_type.as_str() {
+                            "video/mp4" => bedrock::types::VideoFormat::Mp4,
+                            "video/mpeg" => bedrock::types::VideoFormat::Mpeg,
+                            "video/mov" => bedrock::types::VideoFormat::Mov,
+                            // "video/avi" => bedrock::types::VideoFormat::Avi,
+                            "video/x-flv" => bedrock::types::VideoFormat::Flv,
+                            "video/mkv" => bedrock::types::VideoFormat::Mkv,
+                            "video/webm" => bedrock::types::VideoFormat::Webm,
+                            _ => {
+                                anyhow::bail!(
+                                    "AWS Bedrock video format not supported: {}. Supported formats: mp4, mpeg, mov, flv, mkv, webm",
+                                    mime_type
+                                );
+                            }
+                        };
+
+                        Ok(bedrock::types::ContentBlock::Video(
+                            bedrock::types::VideoBlock::builder()
+                                .set_format(Some(format))
+                                .set_source(Some(bedrock::types::VideoSource::Bytes(Blob::new(
+                                    aws_smithy_types::base64::decode(b64_media.base64.clone())?,
+                                ))))
+                                .build()
+                                .context("Failed to build video block")?,
+                        ))
+                    }
+                }
+            }
+            BamlMediaType::Audio => {
+                anyhow::bail!(
+                    "AWS Bedrock does not support audio media type: {:#?}",
+                    media
+                )
+            }
         }
     }
 

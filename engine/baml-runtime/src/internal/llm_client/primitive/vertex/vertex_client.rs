@@ -156,6 +156,8 @@ impl VertexClient {
                 max_one_system_prompt: true,
                 resolve_audio_urls: ResolveMediaUrls::EnsureMime,
                 resolve_image_urls: ResolveMediaUrls::EnsureMime,
+                resolve_pdf_urls: ResolveMediaUrls::Never,
+                resolve_video_urls: ResolveMediaUrls::Never,
                 allowed_metadata: properties.allowed_metadata.clone(),
             },
             retry_policy: client.elem().retry_policy_id.as_ref().map(String::to_owned),
@@ -181,6 +183,8 @@ impl VertexClient {
                 max_one_system_prompt: true,
                 resolve_audio_urls: ResolveMediaUrls::EnsureMime,
                 resolve_image_urls: ResolveMediaUrls::EnsureMime,
+                resolve_pdf_urls: ResolveMediaUrls::Never,
+                resolve_video_urls: ResolveMediaUrls::Never,
                 allowed_metadata: properties.allowed_metadata.clone(),
             },
             retry_policy: client.retry_policy.clone(),
@@ -342,9 +346,22 @@ impl ToProviderMessage for VertexClient {
                 "BAML internal error (Vertex): file should have been resolved to base64"
             ),
             BamlMediaContent::Url(data) => {
+                let mime_type = match &media.mime_type {
+                    Some(mime) if !mime.is_empty() => mime.clone(),
+                    _ => {
+                        // Provide default mime types when none specified
+                        match media.media_type {
+                            baml_types::BamlMediaType::Video => "video/mp4".to_string(),
+                            _ => media.mime_type_as_ok()?,
+                        }
+                    }
+                };
                 content.insert(
                     "fileData".into(),
-                    json!({"file_uri": data.url, "mime_type": media.mime_type}),
+                    json!({
+                        "fileUri": data.url,
+                        "mimeType": mime_type
+                    }),
                 );
                 Ok(content)
             }
@@ -353,7 +370,7 @@ impl ToProviderMessage for VertexClient {
                     "inlineData".into(),
                     json!({
                         "data": data.base64,
-                        "mime_type": media.mime_type_as_ok()?
+                        "mimeType": media.mime_type_as_ok()?
                     }),
                 );
                 Ok(content)

@@ -147,6 +147,8 @@ impl AnthropicClient {
                 max_one_system_prompt: true,
                 resolve_audio_urls: ResolveMediaUrls::Never,
                 resolve_image_urls: ResolveMediaUrls::Never,
+                resolve_pdf_urls: ResolveMediaUrls::Always,
+                resolve_video_urls: ResolveMediaUrls::Never,
                 allowed_metadata: properties.allowed_metadata.clone(),
             },
             retry_policy: client.retry_policy.clone(),
@@ -171,6 +173,8 @@ impl AnthropicClient {
                 max_one_system_prompt: true,
                 resolve_audio_urls: ResolveMediaUrls::Never,
                 resolve_image_urls: ResolveMediaUrls::Never,
+                resolve_pdf_urls: ResolveMediaUrls::Always,
+                resolve_video_urls: ResolveMediaUrls::Never,
                 allowed_metadata: properties.allowed_metadata.clone(),
             },
             retry_policy: client.elem().retry_policy_id.as_ref().map(String::from),
@@ -201,6 +205,8 @@ impl AnthropicClient {
                 max_one_system_prompt: true,
                 resolve_audio_urls: ResolveMediaUrls::Never,
                 resolve_image_urls: ResolveMediaUrls::Never,
+                resolve_pdf_urls: ResolveMediaUrls::Always,
+                resolve_video_urls: ResolveMediaUrls::Never,
                 allowed_metadata: AllowedRoleMetadata::None,
             },
             client: create_client()?,
@@ -306,30 +312,64 @@ impl ToProviderMessage for AnthropicClient {
         mut content: serde_json::Map<String, serde_json::Value>,
         media: &baml_types::BamlMedia,
     ) -> Result<serde_json::Map<String, serde_json::Value>> {
-        let resolve_mode = match media.media_type {
-            baml_types::BamlMediaType::Audio => self.features.resolve_audio_urls,
-            baml_types::BamlMediaType::Image => self.features.resolve_image_urls,
-        };
-        match &media.content {
-            BamlMediaContent::Base64(data) => {
-                content.insert("type".into(), media.media_type.to_string().into());
-                let mut source = serde_json::Map::new();
-                source.insert("type".into(), "base64".into());
-                source.insert("media_type".into(), media.mime_type_as_ok()?.into());
-                source.insert("data".into(), data.base64.clone().into());
-                content.insert("source".into(), source.into());
+        match media.media_type {
+            baml_types::BamlMediaType::Audio | baml_types::BamlMediaType::Image => {
+                // Standard handling for audio and images
+                match &media.content {
+                    BamlMediaContent::Base64(data) => {
+                        content.insert("type".into(), media.media_type.to_string().into());
+                        let mut source = serde_json::Map::new();
+                        source.insert("type".into(), "base64".into());
+                        source.insert("media_type".into(), media.mime_type_as_ok()?.into());
+                        source.insert("data".into(), data.base64.clone().into());
+                        content.insert("source".into(), source.into());
+                    }
+                    BamlMediaContent::File(_) => {
+                        anyhow::bail!(
+                            "BAML internal error (Anthropic): file should have been resolved to base64"
+                        )
+                    }
+                    BamlMediaContent::Url(url) => {
+                        content.insert("type".into(), media.media_type.to_string().into());
+                        let mut source = serde_json::Map::new();
+                        source.insert("type".into(), "url".into());
+                        source.insert("url".into(), url.url.clone().into());
+                        content.insert("source".into(), source.into());
+                    }
+                }
             }
-            BamlMediaContent::File(_) => {
+            baml_types::BamlMediaType::Pdf => {
+                // Anthropic supports Pdf inline as Base64 or URL (max 32 MB, 100 pages)
+                match &media.content {
+                    BamlMediaContent::Base64(data) => {
+                        content.insert("type".into(), "document".into());
+                        let mut source = serde_json::Map::new();
+                        source.insert("type".into(), "base64".into());
+                        source.insert("media_type".into(), media.mime_type_as_ok()?.into());
+                        source.insert("data".into(), data.base64.clone().into());
+                        content.insert("source".into(), source.into());
+                    }
+                    BamlMediaContent::Url(url) => {
+                        content.insert("type".into(), "document".into());
+                        let mut source = serde_json::Map::new();
+                        source.insert("type".into(), "url".into());
+                        source.insert("url".into(), url.url.clone().into());
+                        content.insert("source".into(), source.into());
+                    }
+                    BamlMediaContent::File(_) => {
+                        anyhow::bail!(
+                            "BAML internal error (Anthropic): file should have been resolved to base64"
+                        )
+                    }
+                }
+            }
+            baml_types::BamlMediaType::Video => {
+                // Anthropic does not support video yet
                 anyhow::bail!(
-                    "BAML internal error (Anthropic): file should have been resolved to base64"
-                )
-            }
-            BamlMediaContent::Url(url) => {
-                content.insert("type".into(), media.media_type.to_string().into());
-                let mut source = serde_json::Map::new();
-                source.insert("type".into(), "url".into());
-                source.insert("url".into(), url.url.clone().into());
-                content.insert("source".into(), source.into());
+                    "Video input is not yet supported by Anthropic Claude models. \
+                    Consider extracting frames from the video as images instead. \
+                    See: https://docs.anthropic.com/en/docs/vision"
+                );
             }
         }
         Ok(content)

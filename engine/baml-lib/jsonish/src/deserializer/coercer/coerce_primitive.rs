@@ -39,6 +39,8 @@ impl TypeCoercer for TypeValue {
             TypeValue::Null => coerce_null(ctx, target, value),
             TypeValue::Media(BamlMediaType::Image) => Err(ctx.error_image_not_supported()),
             TypeValue::Media(BamlMediaType::Audio) => Err(ctx.error_audio_not_supported()),
+            TypeValue::Media(BamlMediaType::Pdf) => Err(ctx.error_pdf_not_supported()),
+            TypeValue::Media(BamlMediaType::Video) => Err(ctx.error_video_not_supported()),
         }
     }
 }

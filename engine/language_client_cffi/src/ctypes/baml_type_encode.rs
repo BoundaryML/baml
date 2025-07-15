@@ -218,6 +218,8 @@ impl Encode<CffiFieldTypeMedia> for &baml_types::BamlMediaType {
             media: match self {
                 baml_types::BamlMediaType::Image => MediaTypeEnum::Image,
                 baml_types::BamlMediaType::Audio => MediaTypeEnum::Audio,
+                baml_types::BamlMediaType::Pdf => MediaTypeEnum::Pdf,
+                baml_types::BamlMediaType::Video => MediaTypeEnum::Video,
             }
             .into(),
         }
