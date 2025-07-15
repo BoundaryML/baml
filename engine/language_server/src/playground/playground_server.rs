@@ -8,6 +8,7 @@ use tokio::sync::RwLock;
 use crate::playground::definitions::PlaygroundState;
 use crate::{
     playground::playground_server_helpers::{create_server_routes, get_playground_dist},
+    playground::proxy::ProxyServer,
     session::Session,
 };
 
@@ -65,14 +66,26 @@ impl PlaygroundServer {
 
         let dist_dir = Some(local_dist);
 
-        tracing::info!(
-            "Hosted playground with integrated proxy at http://localhost:{}...",
-            port
-        );
-
         let routes = create_server_routes(self.state, self.session, dist_dir);
 
+        // Start the proxy server on a different port
+        let proxy_port = port + 1; // Use playground port + 1 for proxy
+        let proxy_server = ProxyServer::new(proxy_port);
+
+        // Spawn the proxy server in a separate task
+        let proxy_handle = tokio::spawn(async move {
+            if let Err(e) = proxy_server.start().await {
+                tracing::error!("Proxy server failed: {}", e);
+            }
+        });
+
+        // Start the main playground server
+        tracing::info!("Starting main playground server on port {}", port);
+        tracing::info!("Starting proxy server on port {}", proxy_port);
         warp::serve(routes).try_bind(([127, 0, 0, 1], port)).await;
+
+        // If we get here, the main server has stopped
+        tracing::info!("Main playground server stopped");
 
         Ok(())
     }

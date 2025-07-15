@@ -22,7 +22,6 @@ use warp::{http, http::Response, ws::Message, Filter, Rejection, Reply};
 use crate::{
     playground::definitions::{FrontendMessage, PlaygroundState},
     playground::playground_server_rpc::handle_rpc_websocket,
-    playground::proxy::{proxy_cors_route, proxy_route},
     session::Session,
 };
 
@@ -157,10 +156,6 @@ pub fn create_server_routes(
             })
         });
 
-    // Proxy routes - handle CORS preflight and proxy requests
-    let proxy_cors = proxy_cors_route();
-    let proxy_route = proxy_route();
-
     // Static file serving for user files (e.g., images, data)
     let static_files = warp::path("static").and(warp::fs::dir("."));
 
@@ -202,8 +197,6 @@ pub fn create_server_routes(
 
     ws_route
         .or(rpc_route)
-        .or(proxy_cors)
-        .or(proxy_route)
         .or(static_files)
         .or(spa)
         .with(warp::log("playground-server"))
