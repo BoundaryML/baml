@@ -23,7 +23,7 @@ func {{ fn.name }}(ctx context.Context{% for (name, go_type) in fn.args -%}
         args.Collectors = callOpts.collectors
     }
 
-    encoded, err := baml.EncodeArgs(args)
+    encoded, err := args.Encode()
     if err != nil {
         panic(err)
     }

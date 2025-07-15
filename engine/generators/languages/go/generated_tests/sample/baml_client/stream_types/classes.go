@@ -25,7 +25,7 @@ type Example struct {
 	B *string `json:"b"`
 }
 
-func (c *Example) Decode(holder *cffi.CFFIValueClass) {
+func (c *Example) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))
@@ -79,7 +79,7 @@ type Example2 struct {
 	Element2 *string  `json:"element2"`
 }
 
-func (c *Example2) Decode(holder *cffi.CFFIValueClass) {
+func (c *Example2) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))

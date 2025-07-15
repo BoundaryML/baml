@@ -21,6 +21,10 @@ type ClientRegistry struct {
 }
 
 func (c ClientRegistry) AddLlmClient(name string, provider string, options map[string]any) {
+	if c.clients == nil {
+		c.clients = make(clientRegistryMap)
+	}
+
 	c.clients[name] = clientProperty{
 		provider: provider,
 		options:  options,

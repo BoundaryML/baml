@@ -46,16 +46,14 @@ type CallbackData struct {
 	ctx     context.Context
 }
 
-type TypeMap = serde.TypeMap
-
 // Map to store callbacks by ID
 var (
 	dynamicCallbacks = make(map[uint32]CallbackData)
 	callbackMutex    sync.RWMutex
-	typeMap          TypeMap
+	typeMap          serde.TypeMap
 )
 
-func SetTypeMap(t TypeMap) {
+func SetTypeMap(t serde.TypeMap) {
 	typeMap = t
 }
 

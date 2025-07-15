@@ -5,6 +5,7 @@ import (
 
 	"github.com/boundaryml/baml/engine/language_client_go/baml_go/serde"
 	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
+	"google.golang.org/protobuf/proto"
 )
 
 type BamlFunctionArguments struct {
@@ -14,7 +15,15 @@ type BamlFunctionArguments struct {
 	Collectors     []Collector
 }
 
-func (args *BamlFunctionArguments) Encode() (*cffi.CFFIFunctionArguments, error) {
+func (args *BamlFunctionArguments) Encode() ([]byte, error) {
+	encoded, err := args.encode()
+	if err != nil {
+		return nil, err
+	}
+	return proto.Marshal(encoded)
+}
+
+func (args *BamlFunctionArguments) encode() (*cffi.CFFIFunctionArguments, error) {
 	kwargs, err := serde.EncodeMapEntries(args.Kwargs, "function arguments")
 	if err != nil {
 		return nil, fmt.Errorf("encoding function arguments: %w", err)

@@ -25,7 +25,7 @@ type ClassWithBlockDone struct {
 	S_20_words  string `json:"s_20_words"`
 }
 
-func (c *ClassWithBlockDone) Decode(holder *cffi.CFFIValueClass) {
+func (c *ClassWithBlockDone) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_TYPES, got %s", string(typeName.Namespace.String())))
@@ -78,7 +78,7 @@ type ClassWithoutDone struct {
 	S_20_words  string `json:"s_20_words"`
 }
 
-func (c *ClassWithoutDone) Decode(holder *cffi.CFFIValueClass) {
+func (c *ClassWithoutDone) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_TYPES, got %s", string(typeName.Namespace.String())))
@@ -137,7 +137,7 @@ type SemanticContainer struct {
 	Final_string             string             `json:"final_string"`
 }
 
-func (c *SemanticContainer) Decode(holder *cffi.CFFIValueClass) {
+func (c *SemanticContainer) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_TYPES, got %s", string(typeName.Namespace.String())))
@@ -220,7 +220,7 @@ type SmallThing struct {
 	I_8_digits  int64 `json:"i_8_digits"`
 }
 
-func (c *SmallThing) Decode(holder *cffi.CFFIValueClass) {
+func (c *SmallThing) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_TYPES, got %s", string(typeName.Namespace.String())))

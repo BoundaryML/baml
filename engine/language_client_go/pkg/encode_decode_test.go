@@ -412,7 +412,8 @@ func (t TestClass) BamlTypeName() string {
 
 func (t TestClass) BamlEncodeName() *cffi.CFFITypeName {
 	return &cffi.CFFITypeName{
-		Name: t.BamlTypeName(),
+		Name:      t.BamlTypeName(),
+		Namespace: cffi.CFFITypeNamespace_TYPES,
 	}
 }
 
@@ -428,7 +429,7 @@ func (t TestClass) Encode() (*cffi.CFFIValueHolder, error) {
 func (t *TestClass) Decode(holder *cffi.CFFIValueClass, typeMap TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_TYPES {
-		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))
+		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_TYPES, got %s", string(typeName.Namespace.String())))
 	}
 	if typeName.Name != "TestClass" {
 		panic(fmt.Sprintf("expected TestClass, got %s", typeName.Name))
@@ -464,7 +465,8 @@ func (e TestEnum) BamlTypeName() string {
 
 func (e TestEnum) BamlEncodeName() *cffi.CFFITypeName {
 	return &cffi.CFFITypeName{
-		Name: e.BamlTypeName(),
+		Name:      e.BamlTypeName(),
+		Namespace: cffi.CFFITypeNamespace_TYPES,
 	}
 }
 
@@ -472,7 +474,7 @@ func (e TestEnum) Encode() (*cffi.CFFIValueHolder, error) {
 	return serde.EncodeEnum(e.BamlEncodeName, string(e), false)
 }
 
-func (e *TestEnum) Decode(holder *cffi.CFFIValueEnum) {
+func (e *TestEnum) Decode(holder *cffi.CFFIValueEnum, typeMap TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_TYPES, got %s", typeName.Namespace.String()))
@@ -496,7 +498,8 @@ func (u TestUnion) BamlTypeName() string {
 
 func (u TestUnion) BamlEncodeName() *cffi.CFFITypeName {
 	return &cffi.CFFITypeName{
-		Name: u.BamlTypeName(),
+		Name:      u.BamlTypeName(),
+		Namespace: cffi.CFFITypeNamespace_TYPES,
 	}
 }
 
@@ -800,7 +803,7 @@ func TestCustomStructs(t *testing.T) {
 		}
 
 		nameEncoder := func() *cffi.CFFITypeName {
-			return &cffi.CFFITypeName{Name: "DynamicTestClass"}
+			return &cffi.CFFITypeName{Name: "DynamicTestClass", Namespace: cffi.CFFITypeNamespace_TYPES}
 		}
 
 		encoded, err := serde.EncodeClass(nameEncoder, staticFields, &dynamicFields)

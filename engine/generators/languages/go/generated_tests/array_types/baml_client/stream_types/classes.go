@@ -26,7 +26,7 @@ type ArrayWithConstraints struct {
 	PositiveFloats  []float64 `json:"positiveFloats"`
 }
 
-func (c *ArrayWithConstraints) Decode(holder *cffi.CFFIValueClass) {
+func (c *ArrayWithConstraints) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))
@@ -87,7 +87,7 @@ type MixedArrays struct {
 	ComplexMixed   []Union3ProductOrTagOrUser       `json:"complexMixed"`
 }
 
-func (c *MixedArrays) Decode(holder *cffi.CFFIValueClass) {
+func (c *MixedArrays) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))
@@ -156,7 +156,7 @@ type NestedArrays struct {
 	ThreeDimensional [][][]float64 `json:"threeDimensional"`
 }
 
-func (c *NestedArrays) Decode(holder *cffi.CFFIValueClass) {
+func (c *NestedArrays) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))
@@ -215,7 +215,7 @@ type ObjectArrays struct {
 	Tags     []Tag     `json:"tags"`
 }
 
-func (c *ObjectArrays) Decode(holder *cffi.CFFIValueClass) {
+func (c *ObjectArrays) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))
@@ -276,7 +276,7 @@ type Product struct {
 	InStock *bool    `json:"inStock"`
 }
 
-func (c *Product) Decode(holder *cffi.CFFIValueClass) {
+func (c *Product) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))
@@ -346,7 +346,7 @@ type SimpleArrays struct {
 	Booleans []bool    `json:"booleans"`
 }
 
-func (c *SimpleArrays) Decode(holder *cffi.CFFIValueClass) {
+func (c *SimpleArrays) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))
@@ -410,7 +410,7 @@ type Tag struct {
 	Color *string `json:"color"`
 }
 
-func (c *Tag) Decode(holder *cffi.CFFIValueClass) {
+func (c *Tag) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))
@@ -470,7 +470,7 @@ type User struct {
 	IsActive *bool   `json:"isActive"`
 }
 
-func (c *User) Decode(holder *cffi.CFFIValueClass) {
+func (c *User) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))

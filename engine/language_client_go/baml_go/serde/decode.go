@@ -449,3 +449,14 @@ func Decode(holder *cffi.CFFIValueHolder, typeMap TypeMap) reflect.Value {
 
 	panic("error decoding value: " + holder.String())
 }
+
+func DecodeStreamingState[T any](holder *cffi.CFFIValueHolder, decodeFunc func(inner *cffi.CFFIValueHolder) T) shared.StreamState[T] {
+	value := holder.Value
+	if streamingVal, ok := value.(*cffi.CFFIValueHolder_StreamingStateValue); ok {
+		return shared.StreamState[T]{
+			Value: decodeFunc(streamingVal.StreamingStateValue.Value),
+			State: decodeStreamStateType(streamingVal.StreamingStateValue.State),
+		}
+	}
+	panic("error decoding streaming state: " + holder.String())
+}

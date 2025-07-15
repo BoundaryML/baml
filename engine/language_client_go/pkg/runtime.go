@@ -18,15 +18,11 @@ import (
 	"unsafe"
 
 	"github.com/boundaryml/baml/engine/language_client_go/baml_go"
-	"github.com/boundaryml/baml/engine/language_client_go/baml_go/raw_objects"
 )
 
 type BamlRuntime struct {
 	runtime unsafe.Pointer
 }
-
-type BamlFunctionArguments = raw_objects.BamlFunctionArguments
-type ClientRegistry = raw_objects.ClientRegistry
 
 func NewClientRegistry() *ClientRegistry {
 	return &ClientRegistry{}
