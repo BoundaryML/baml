@@ -114,7 +114,7 @@ export const userApiKeysAtom = atom(
       envKeyValues
         .map(([k, v]) => [k, v])
         .filter(([k]) => k !== 'BOUNDARY_PROXY_URL'),
-    );
+    ) as Record<string, string>;
     console.log('userApiKeysAtom getter:', { envKeyValues, result });
     return result;
   },
@@ -170,7 +170,15 @@ export const apiKeysAtom = atom(
     }
 
     const { proxyEnabled, proxyUrl } = get(proxyUrlAtom);
-    const userEnvVars = get(userApiKeysAtom);
+    const userEnvVarsUnescaped = get(userApiKeysAtom);
+
+    // escape env vars that may have \n,\t in them
+    // we don't replace \" because its a bit trickier, but if users report bugs, we should fix this.
+    const userEnvVars = Object.fromEntries(
+      Object.entries(userEnvVarsUnescaped).map(([key, value]) => [key, value.replaceAll('\n', '\\n').replaceAll('\t', '\\t')]),
+    );
+
+    console.log('userEnvVars', userEnvVars);
 
     if (!proxyEnabled) {
       // if proxy is not enabled, just return user vars without BOUNDARY_PROXY_URL

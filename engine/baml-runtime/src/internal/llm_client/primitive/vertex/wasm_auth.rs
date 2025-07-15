@@ -54,7 +54,9 @@ impl VertexAuth {
     pub async fn token(&self, scopes: &[&str]) -> Result<Arc<Token>> {
         match &self.0 {
             Some(service_account) => {
-                let token = service_account.get_oauth2_token().await?;
+                let token = service_account.get_oauth2_token().await.context(
+                    "Failed to get OAuth2 token from provided service account credentials",
+                )?;
                 Ok(Arc::new(token))
             }
             None => {
