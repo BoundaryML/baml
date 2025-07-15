@@ -72,7 +72,7 @@ func (*stream) ConsumeTestEnum(ctx context.Context, input types.TestEnum, opts .
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "ConsumeTestEnum", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "ConsumeTestEnum", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -150,7 +150,7 @@ func (*stream) FnTestAliasedEnumOutput(ctx context.Context, input string, opts .
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "FnTestAliasedEnumOutput", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "FnTestAliasedEnumOutput", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}

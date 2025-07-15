@@ -97,7 +97,14 @@ impl FunctionResultStream {
             let res = inner
                 .lock()
                 .await
-                .run(on_event, &ctx_mng, tb.as_ref(), cb.as_ref(), env_vars)
+                .run(
+                    None::<fn()>,
+                    on_event,
+                    &ctx_mng,
+                    tb.as_ref(),
+                    cb.as_ref(),
+                    env_vars,
+                )
                 .await;
             res.0.map(FunctionResult::from).map_err(from_anyhow_error)
         };

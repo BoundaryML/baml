@@ -73,7 +73,7 @@ func (*stream) TestAllNull(ctx context.Context, input string, opts ...CallOption
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestAllNull", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestAllNull", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -151,7 +151,7 @@ func (*stream) TestAllOptionalOmitted(ctx context.Context, input string, opts ..
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestAllOptionalOmitted", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestAllOptionalOmitted", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -229,7 +229,7 @@ func (*stream) TestMixedOptionalNullable(ctx context.Context, input string, opts
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestMixedOptionalNullable", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestMixedOptionalNullable", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -307,7 +307,7 @@ func (*stream) TestNullableTypes(ctx context.Context, input string, opts ...Call
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestNullableTypes", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestNullableTypes", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -385,7 +385,7 @@ func (*stream) TestOptionalFields(ctx context.Context, input string, opts ...Cal
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOptionalFields", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOptionalFields", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}

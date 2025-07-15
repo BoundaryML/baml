@@ -73,7 +73,7 @@ func (*stream) TestCircularReference(ctx context.Context, input string, opts ...
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestCircularReference", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestCircularReference", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -151,7 +151,7 @@ func (*stream) TestDeepRecursion(ctx context.Context, depth int64, opts ...CallO
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestDeepRecursion", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestDeepRecursion", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -229,7 +229,7 @@ func (*stream) TestEmptyCollections(ctx context.Context, input string, opts ...C
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestEmptyCollections", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestEmptyCollections", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -307,7 +307,7 @@ func (*stream) TestLargeStructure(ctx context.Context, input string, opts ...Cal
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestLargeStructure", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestLargeStructure", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -385,7 +385,7 @@ func (*stream) TestNumberEdgeCases(ctx context.Context, input string, opts ...Ca
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestNumberEdgeCases", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestNumberEdgeCases", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -463,7 +463,7 @@ func (*stream) TestSpecialCharacters(ctx context.Context, input string, opts ...
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestSpecialCharacters", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestSpecialCharacters", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}

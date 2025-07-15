@@ -248,7 +248,6 @@ fn build_function_log(
                 let entry = calls_map.entry(rid.clone()).or_default();
 
                 // find or insert the event
-
                 match &mut entry.http_response_stream {
                     Some(stream) => {
                         stream.lock().unwrap().push(http_res_stream.clone());
@@ -370,7 +369,8 @@ fn build_function_log(
     };
 
     let new_arc = Arc::new(Mutex::new(function_log_inner));
-    {
+    // only cache if we we've finished the function
+    if function_end_time.is_some() {
         // Insert into the cache
         let mut lock = storage.function_inners.lock().unwrap();
         lock.insert(function_id.clone(), new_arc.clone());

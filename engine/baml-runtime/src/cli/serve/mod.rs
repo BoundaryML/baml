@@ -448,6 +448,7 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
                 Ok(mut result_stream) => {
                     let (result, _trace_id) = result_stream
                         .run(
+                            None::<fn()>,
                             Some(move |result| {
                                 // If the receiver is closed (either because it called close or it was dropped),
                                 // we can't really do anything

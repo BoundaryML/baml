@@ -6,6 +6,7 @@ package baml
 
 extern void trigger_callback(uint32_t id, int is_done, const int8_t *content, int length);
 extern void error_callback(uint32_t id, int is_done, const int8_t *content, int length);
+extern void on_tick_callback(uint32_t id);
 */
 import "C"
 
@@ -42,7 +43,7 @@ func InvokeRuntimeCli(args []string) int {
 }
 
 func init() {
-	if err := baml_go.RegisterCallbacks(C.trigger_callback, C.error_callback); err != nil {
+	if err := baml_go.RegisterCallbacks(C.trigger_callback, C.error_callback, C.on_tick_callback); err != nil {
 		panic(err)
 	}
 }
@@ -75,8 +76,8 @@ func CreateRuntime(
 	return BamlRuntime{runtime: runtime}, nil
 }
 
-func (r *BamlRuntime) CallFunction(ctx context.Context, functionName string, encoded_args []byte) (*ResultCallback, error) {
-	callback_id, callback := create_unique_id(ctx)
+func (r *BamlRuntime) CallFunction(ctx context.Context, functionName string, encoded_args []byte, onTick OnTickCallbackData) (*ResultCallback, error) {
+	callback_id, callback := create_unique_id(ctx, onTick)
 	return_channel := make(chan ResultCallback)
 	go func() {
 		for {
@@ -112,8 +113,8 @@ func (r *BamlRuntime) CallFunction(ctx context.Context, functionName string, enc
 	}
 }
 
-func (r *BamlRuntime) CallFunctionStream(ctx context.Context, functionName string, encoded_args []byte) (<-chan ResultCallback, error) {
-	callback_id, callback := create_unique_id(ctx)
+func (r *BamlRuntime) CallFunctionStream(ctx context.Context, functionName string, encoded_args []byte, onTick OnTickCallbackData) (<-chan ResultCallback, error) {
+	callback_id, callback := create_unique_id(ctx, onTick)
 
 	result, err := baml_go.CallFunctionStreamFromC(r.runtime, functionName, encoded_args, callback_id)
 	if err != nil {

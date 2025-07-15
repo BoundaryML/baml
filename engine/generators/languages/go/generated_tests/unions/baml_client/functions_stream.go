@@ -72,7 +72,7 @@ func (*stream) JsonInput(ctx context.Context, x []types.ExistingSystemComponent,
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "JsonInput", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "JsonInput", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
