@@ -73,7 +73,7 @@ func (*stream) Bar(ctx context.Context, x int64, opts ...CallOptionFunc) (<-chan
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "Bar", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "Bar", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -151,7 +151,7 @@ func (*stream) Foo(ctx context.Context, x int64, opts ...CallOptionFunc) (<-chan
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "Foo", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "Foo", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}

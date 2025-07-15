@@ -11,7 +11,7 @@ import (
 
 // debugLog prints debug information if BAML_INTERNAL_LOG=trace is set
 func debugLog(format string, args ...interface{}) {
-	if os.Getenv("BAML_INTERNAL_LOG_GO") == "trace" {
+	if os.Getenv("BAML_INTERNAL_LOG") == "trace" {
 		fmt.Printf(format, args...)
 		if format[len(format)-1] != '\n' {
 			fmt.Println()

@@ -128,3 +128,9 @@ type SSEResponse interface {
 	// JSON returns the body as a JSON object (nullable)
 	JSON() (any, error)
 }
+
+type TickReason string
+
+const (
+	TickReason_Unknown TickReason = "Unknown"
+)

@@ -44,6 +44,12 @@ type ResultCallback struct {
 type CallbackData struct {
 	channel chan ResultCallback
 	ctx     context.Context
+	onTick  OnTickCallbackData
+}
+
+type OnTickCallbackData interface {
+	Collector() Collector
+	OnTick() TickCallback
 }
 
 // Map to store callbacks by ID
@@ -55,6 +61,25 @@ var (
 
 func SetTypeMap(t serde.TypeMap) {
 	typeMap = t
+}
+
+//export on_tick_callback
+func on_tick_callback(id C.uint32_t) {
+	callbackMutex.RLock()
+	id_uint := uint32(id)
+	callback, exists := dynamicCallbacks[id_uint]
+	callbackMutex.RUnlock()
+
+	if exists {
+		data := callback.onTick
+		if data != nil {
+			last, err := data.Collector().Last()
+			if err != nil {
+				return
+			}
+			data.OnTick()(callback.ctx, TickReason_Unknown, last)
+		}
+	}
 }
 
 //export error_callback
@@ -133,13 +158,13 @@ func trigger_callback(id C.uint32_t, isDone C.int, content *C.int8_t, length C.i
 	}
 }
 
-func create_unique_id(ctx context.Context) (uint32, chan ResultCallback) {
+func create_unique_id(ctx context.Context, onTick OnTickCallbackData) (uint32, chan ResultCallback) {
 	callbackMutex.Lock()
 	defer callbackMutex.Unlock()
 	id := uint32(rand.Intn(1000000))
 	for _, exists := dynamicCallbacks[id]; exists; {
 		id = uint32(rand.Intn(1000000))
 	}
-	dynamicCallbacks[id] = CallbackData{channel: make(chan ResultCallback), ctx: ctx}
+	dynamicCallbacks[id] = CallbackData{channel: make(chan ResultCallback), ctx: ctx, onTick: onTick}
 	return id, dynamicCallbacks[id].channel
 }

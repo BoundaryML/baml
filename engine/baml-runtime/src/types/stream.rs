@@ -63,8 +63,9 @@ first.scope.clone();
 
 impl FunctionResultStream {
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn run_sync<F>(
+    pub fn run_sync<F, G>(
         &mut self,
+        on_tick: Option<G>,
         on_event: Option<F>,
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
@@ -73,14 +74,16 @@ impl FunctionResultStream {
     ) -> (Result<FunctionResult>, baml_ids::FunctionCallId)
     where
         F: Fn(FunctionResult),
+        G: Fn(),
     {
         let rt = self.tokio_runtime.clone();
-        let fut = self.run(on_event, ctx, tb, cb, env_vars);
+        let fut = self.run(on_tick, on_event, ctx, tb, cb, env_vars);
         rt.block_on(fut)
     }
 
-    pub async fn run<F>(
+    pub async fn run<F, G>(
         &mut self,
+        on_tick: Option<G>,
         on_event: Option<F>,
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
@@ -89,6 +92,7 @@ impl FunctionResultStream {
     ) -> (Result<FunctionResult>, baml_ids::FunctionCallId)
     where
         F: Fn(FunctionResult),
+        G: Fn(),
     {
         let mut local_orchestrator = Vec::new();
         std::mem::swap(&mut local_orchestrator, &mut self.orchestrator);
@@ -114,6 +118,7 @@ impl FunctionResultStream {
                         &rctx,
                         &self.renderer,
                         &baml_types::BamlValue::Map(self.prepared_func.value.clone()),
+                        on_tick,
                         |content| self.renderer.parse(self.ir.as_ref(), &rctx, content, true),
                         |content| self.renderer.parse(self.ir.as_ref(), &rctx, content, false),
                         on_event,

@@ -28,7 +28,7 @@ func {{ fn.name }}(ctx context.Context{% for (name, go_type) in fn.args -%}
         panic(err)
     }
 
-    result, err := bamlRuntime.CallFunction(ctx, "{{ fn.name }}", encoded)
+    result, err := bamlRuntime.CallFunction(ctx, "{{ fn.name }}", encoded, callOpts.onTick)
     if err != nil {
         return {{ fn.return_type.zero_value(pkg) }}, err
     }

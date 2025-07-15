@@ -46,7 +46,7 @@ func Bar(ctx context.Context, x int64, opts ...CallOptionFunc) (types.Union2Exam
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "Bar", encoded)
+	result, err := bamlRuntime.CallFunction(ctx, "Bar", encoded, callOpts.onTick)
 	if err != nil {
 		return types.Union2ExampleOrExample2{}, err
 	}
@@ -85,7 +85,7 @@ func Foo(ctx context.Context, x int64, opts ...CallOptionFunc) (types.Union2Exam
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "Foo", encoded)
+	result, err := bamlRuntime.CallFunction(ctx, "Foo", encoded, callOpts.onTick)
 	if err != nil {
 		return types.Union2ExampleOrExample2{}, err
 	}

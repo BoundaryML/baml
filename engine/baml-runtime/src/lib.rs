@@ -514,7 +514,14 @@ impl BamlRuntime {
                 vec![],
             )?;
             let (response_res, call_uuid) = stream
-                .run(on_event, ctx, type_builder.as_ref(), None, env_vars.clone())
+                .run(
+                    None::<fn()>,
+                    on_event,
+                    ctx,
+                    type_builder.as_ref(),
+                    None,
+                    env_vars.clone(),
+                )
                 .await;
             let res = response_res?;
             let (_, llm_resp, val) = res

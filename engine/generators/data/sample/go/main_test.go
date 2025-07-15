@@ -10,7 +10,74 @@ import (
 	"testing"
 
 	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
+	"github.com/tidwall/gjson"
 )
+
+func TestOnTick(t *testing.T) {
+	ctx := context.Background()
+
+	var lastThinking string
+	onTick := func(ctx context.Context, reason baml.TickReason, log baml.FunctionLog) baml.FunctionSignal {
+		calls, err := log.Calls()
+		if err != nil {
+			fmt.Println("Error getting selected call: ", err)
+			return nil
+		}
+
+		if len(calls) == 0 {
+			fmt.Println("No calls found")
+			return nil
+		}
+
+		selectedCall := calls[len(calls)-1]
+
+		if as_stream, ok := selectedCall.(baml.LLMStreamCall); ok {
+			stream, err := as_stream.SSEChunks()
+			if err != nil {
+				fmt.Println("Error getting stream: ", err)
+				return nil
+			}
+			fmt.Println("Tick: ", len(stream), " chunks")
+			accumulated := ""
+			for _, chunk := range stream {
+				text, err := chunk.Text()
+				if err != nil {
+					// this is an openai stream
+				} else {
+					if content := gjson.Get(text, "delta.thinking"); content.Exists() {
+						accumulated += content.String()
+					}
+				}
+			}
+			fmt.Println("Accumulated: ", accumulated)
+			lastThinking = accumulated
+			fmt.Println("--------------------------------")
+		} else {
+			fmt.Println("Response is not a stream: ", selectedCall)
+		}
+
+		return nil
+	}
+
+	result, err := b.Stream.Foo(ctx, 8192, b.WithExperimentalOnTick(onTick))
+	if err != nil {
+		t.Fatalf("Error in Foo: %v", err)
+	}
+	for result := range result {
+		if result.IsError {
+			t.Fatalf("Error in Foo: %v", result.Error)
+		} else if result.IsFinal {
+			final := result.Final()
+			fmt.Println("final", final)
+		} else {
+			fmt.Printf("Stream: %+v\n", result.Stream())
+		}
+	}
+
+	if lastThinking == "" {
+		t.Errorf("Expected thinking, got %s", lastThinking)
+	}
+}
 
 func TestFoo(t *testing.T) {
 	t.Parallel()

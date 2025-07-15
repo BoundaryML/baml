@@ -20,7 +20,7 @@ void SetInvokeRuntimeCliFn(void *fn);
 int WrapInvokeRuntimeCli(const char *const *args);
 
 void SetRegisterCallbacksFn(void *fn);
-void WrapRegisterCallbacks(CallbackFn callback_fn, CallbackFn error_callback_fn);
+void WrapRegisterCallbacks(CallbackFn callback_fn, CallbackFn error_callback_fn, OnTickCallbackFn on_tick_callback_fn);
 
 void SetCallFunctionFromCFn(void *fn);
 const void *WrapCallFunctionFromC(const void *runtime, const char *function_name, const char *encoded_args, uintptr_t length, uint32_t id);

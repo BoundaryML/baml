@@ -28,14 +28,12 @@ func getEnvVars(overrides map[string]string) map[string]string {
 		key, value, _ := strings.Cut(env_var, "=")
 		env[key] = value
 	}
-	if overrides != nil {
-		// Since go uses empty strings as zero values for string and not a `null` value, we unset env vars that are empty.
-		for key, value := range overrides {
-			if value != "" {
-				env[key] = value
-			} else {
-				delete(env, key)
-			}
+	// Since go uses empty strings as zero values for string and not a `null` value, we unset env vars that are empty.
+	for key, value := range overrides {
+		if value != "" {
+			env[key] = value
+		} else {
+			delete(env, key)
 		}
 	}
 	return env
@@ -54,6 +52,7 @@ type callOption struct {
 	clientRegistry *baml.ClientRegistry
 	env            map[string]string
 	collectors     []baml.Collector
+	onTick         []baml.TickCallback
 }
 
 type CallOptionFunc func(*callOption)
@@ -79,6 +78,15 @@ func WithCollector(collector baml.Collector) CallOptionFunc {
 			o.collectors = []baml.Collector{}
 		}
 		o.collectors = append(o.collectors, collector)
+	}
+}
+
+func WithOnTick(onTick baml.TickCallback) CallOptionFunc {
+	return func(o *callOption) {
+		if o.onTick == nil {
+			o.onTick = []baml.TickCallback{}
+		}
+		o.onTick = append(o.onTick, onTick)
 	}
 }
 

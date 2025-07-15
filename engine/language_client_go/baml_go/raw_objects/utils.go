@@ -94,15 +94,9 @@ func destructor(object RawPointer) error {
 		return fmt.Errorf("failed to call destructor: %w", err)
 	}
 
-	casted, ok := result.(*any)
-	if !ok {
+	if result != nil {
 		return fmt.Errorf("destructor returned unexpected result: %v", result)
 	}
-
-	if casted != nil {
-		return fmt.Errorf("destructor returned unexpected result: %v", casted)
-	}
-
 	return nil
 }
 
@@ -199,7 +193,7 @@ func decodeRawObject(cRaw *cffi.CFFIRawObject) (RawPointer, error) {
 	// on finalization, we need to call the destructor
 	runtime.SetFinalizer(raw, func(r RawPointer) {
 		if err := destructor(r); err != nil {
-			fmt.Printf("Error during finalization of raw object: %v\n", err)
+			fmt.Printf("Error during finalization of raw object (%s): %v\n", r.ObjectType(), err)
 		}
 	})
 
