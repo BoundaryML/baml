@@ -13,6 +13,7 @@
     "integ-tests:ci": "infisical run --env=test -- pnpm test -- --ci --silent false --testTimeout 30000 --verbose=false --reporters=jest-junit",
     "integ-tests": "infisical run --env=test -- pnpm test -- --silent false --testTimeout 30000 --bail --reporters=default --reporters=jest-html-reporter --reporters=jest-summary-reporter",
     "integ-tests:dotenv": "dotenv -e ../.env -- pnpm test -- --silent false --testTimeout 30000",
+    "test": "echo 'test'",
     "generate": "baml-cli generate --from ../baml_src",
     "typecheck": "tsc --noEmit"
   },

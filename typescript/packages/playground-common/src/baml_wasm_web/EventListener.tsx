@@ -128,7 +128,7 @@ export const EventListener: React.FC = () => {
   const wasm = useAtomValue(wasmAtom)
   useEffect(() => {
     if (wasm) {
-      console.log('wasm ready!')
+      console.debug('wasm ready!')
       try {
         vscode.markInitialized()
       } catch (e) {
@@ -158,11 +158,11 @@ export const EventListener: React.FC = () => {
     const ws = new WebSocket(`${scheme}://${window.location.host}/ws`)
 
     ws.onopen = () => {
-      console.log('WebSocket Opened')
+      console.debug('WebSocket Opened')
       setIsConnected(true)
     }
     ws.onmessage = (e) => {
-      console.log('Websocket recieved message!')
+      console.debug('Websocket recieved message!')
       try {
         const payload = JSON.parse(e.data)
         window.postMessage(payload, '*')
@@ -171,7 +171,7 @@ export const EventListener: React.FC = () => {
       }
     }
     ws.onclose = () => {
-      console.log('WebSocket Closed')
+      console.debug('WebSocket Closed')
       setIsConnected(false)
     }
     ws.onerror = () => {
@@ -182,10 +182,10 @@ export const EventListener: React.FC = () => {
     return () => ws.close()
   }, [setIsConnected, isVSCodeWebview])
 
-  console.log('Websocket execution finished');
+  console.debug('Websocket execution finished');
 
   useEffect(() => {
-    console.log('adding event listener');
+    console.debug('adding event listener');
     const fn = (
       event: MessageEvent<
         | {
@@ -252,12 +252,12 @@ export const EventListener: React.FC = () => {
       >,
     ) => {
       const { command, content } = event.data;
-      console.log('command', command);
+      console.debug('command', command);
 
       switch (command) {
         case 'add_project':
           if (content?.root_path) {
-            console.log('add_project', content.root_path);
+            console.debug('add_project', content.root_path);
             debouncedSetFiles(
               Object.fromEntries(
                 Object.entries(content.files).map(([name, content]) => [
@@ -270,7 +270,7 @@ export const EventListener: React.FC = () => {
           break;
 
         case 'set_flashing_regions':
-          console.log('DEBUG set_flashing_regions', content);
+          console.debug('DEBUG set_flashing_regions', content);
           setFlashRanges(
             content.spans.map((span) => ({
               filePath: span.file_path,
@@ -283,7 +283,7 @@ export const EventListener: React.FC = () => {
           break;
 
         case 'select_function':
-          console.log('select_function', content);
+          console.debug('select_function', content);
           setSelectedFunction(content.function_name);
           break;
         case 'update_cursor':
@@ -292,11 +292,11 @@ export const EventListener: React.FC = () => {
           }
           break;
         case 'baml_settings_updated':
-          console.log('baml_settings_updated', content);
+          console.debug('baml_settings_updated', content);
           setBamlConfig(content);
           break;
         case 'baml_cli_version':
-          console.log('baml_cli_version', content);
+          console.debug('baml_cli_version', content);
           setBamlCliVersion(content);
           break;
 

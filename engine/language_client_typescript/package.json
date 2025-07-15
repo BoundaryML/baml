@@ -75,7 +75,9 @@
     "prepublishOnly": "napi prepublish --no-gh-release",
     "test": "jest --config jest.config.js",
     "version": "napi version",
-    "clean": "git clean -xdf .turbo node_modules target artifacts npm *.node"
+    "clean": "git clean -xdf .turbo node_modules target artifacts npm *.node",
+    "dev.skip": "cargo watch -x 'build' -s 'pnpm build:napi-debug && pnpm build:ts_build'",
+    "dev": "pnpm run build"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.7.3",
