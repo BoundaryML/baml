@@ -1004,8 +1004,6 @@ impl BamlRuntime {
         args: &generators_lib::GeneratorArgs,
     ) -> Result<internal_baml_codegen::GenerateOutput> {
         generators_lib::generate_sdk(self.inner.ir.clone(), args)?;
-
-        todo!()
     }
 }
 
