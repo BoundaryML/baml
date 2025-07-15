@@ -22,6 +22,8 @@
 //!
 //! ```
 
+use std::io::IsTerminal;
+
 use colored::*;
 
 use crate::{Function, Instruction, Object, Value};
@@ -253,6 +255,9 @@ pub fn display_bytecode(
 
     let mut table = String::new();
 
+    // Check if stdout is a TTY to determine whether to use colors
+    let use_colors = std::io::stdout().is_terminal();
+
     // Print the table.
     for ((row, char_count), color) in rows.iter().zip(chars_count).zip(row_colors) {
         for (i, col) in row.iter().enumerate() {
@@ -265,13 +270,17 @@ pub fn display_bytecode(
                 width = 0;
             }
 
-            // Apply color based on column
-            let colored_text = match i {
-                0 => col.bright_black().to_string(),      // Line numbers in gray
-                1 => col.white().to_string(),             // IP in white
-                2 => col.color(color).bold().to_string(), // Instruction with type-based color
-                3 => col.bright_cyan().to_string(),       // Metadata in cyan
-                _ => col.to_string(),
+            // Apply color based on column, only if output is to a TTY
+            let colored_text = if use_colors {
+                match i {
+                    0 => col.bright_black().to_string(),      // Line numbers in gray
+                    1 => col.white().to_string(),             // IP in white
+                    2 => col.color(color).bold().to_string(), // Instruction with type-based color
+                    3 => col.bright_cyan().to_string(),       // Metadata in cyan
+                    _ => col.to_string(),
+                }
+            } else {
+                col.to_string() // No colors when not writing to TTY
             };
 
             // For colored strings, we need to use the actual character count
