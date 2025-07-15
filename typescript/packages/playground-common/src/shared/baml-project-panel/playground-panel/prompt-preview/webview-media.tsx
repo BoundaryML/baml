@@ -3,7 +3,7 @@ import type { WasmChatMessagePartMedia } from '@gloo-ai/baml-schema-wasm-web';
 /* eslint-disable @typescript-eslint/require-await */
 import { useAtomValue, useSetAtom } from 'jotai';
 import { ExternalLinkIcon, ImageIcon, Music, FileText, Video } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import useSWR from 'swr';
 import { wasmAtom } from '../../atoms';
 import { showTokensAtom } from './render-text';
@@ -13,6 +13,50 @@ interface WebviewMediaProps {
   bamlMediaType: 'image' | 'audio' | 'pdf' | 'video';
   media: WasmChatMessagePartMedia;
 }
+
+// Helper function to convert base64 data URL to blob URL for better performance
+const createBlobUrlFromBase64 = (base64DataUrl: string): string => {
+  try {
+    // Extract the base64 data and mime type
+    const [header, data] = base64DataUrl.split(',');
+    if (!header || !data) return base64DataUrl;
+    
+    const mimeMatch = header.match(/data:([^;]+)/);
+    const mimeType = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
+    
+    // Convert base64 to blob
+    const byteCharacters = atob(data);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    const blob = new Blob([byteArray], { type: mimeType });
+    
+    // Create and return blob URL
+    return URL.createObjectURL(blob);
+  } catch (error) {
+    console.warn('Failed to create blob URL from base64:', error);
+    return base64DataUrl; // Fallback to original
+  }
+};
+
+// Helper function to get user-friendly display text for media URLs
+const getDisplayUrl = (url: string, mediaType: string): string => {
+  if (url.startsWith('data:')) {
+    const sizeMatch = url.match(/^data:[^;]+;base64,(.+)$/);
+    if (sizeMatch && sizeMatch[1]) {
+      const base64Length = sizeMatch[1].length;
+      const sizeInBytes = base64Length * 0.75;
+      const sizeFormatted = sizeInBytes > 1048576 
+        ? `${(sizeInBytes / 1048576).toFixed(2)} MB` 
+        : `${(sizeInBytes / 1024).toFixed(2)} KB`;
+      return `Base64 ${mediaType} (${sizeFormatted})`;
+    }
+    return `Base64 ${mediaType}`;
+  }
+  return url;
+};
 
 export const WebviewMedia: React.FC<WebviewMediaProps> = ({
   bamlMediaType,
@@ -26,6 +70,10 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
     height: number;
     size: string;
   }>();
+  
+  // Track blob URLs for cleanup
+  const blobUrlRef = useRef<string | null>(null);
+  const [optimizedMediaUrl, setOptimizedMediaUrl] = useState<string | null>(null);
 
   const {
     data: mediaUrl,
@@ -50,6 +98,42 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
       }
     },
   );
+
+  // Create optimized URL when mediaUrl changes
+  useEffect(() => {
+    if (!mediaUrl) {
+      setOptimizedMediaUrl(null);
+      return;
+    }
+
+    // Clean up previous blob URL
+    if (blobUrlRef.current) {
+      URL.revokeObjectURL(blobUrlRef.current);
+      blobUrlRef.current = null;
+    }
+
+    // For base64 media (images, audio, and PDFs), create blob URL for better performance
+    if (mediaUrl.startsWith('data:') && (bamlMediaType === 'image' || bamlMediaType === 'audio' || bamlMediaType === 'pdf')) {
+      const blobUrl = createBlobUrlFromBase64(mediaUrl);
+      if (blobUrl !== mediaUrl) {
+        blobUrlRef.current = blobUrl;
+        setOptimizedMediaUrl(blobUrl);
+      } else {
+        setOptimizedMediaUrl(mediaUrl);
+      }
+    } else {
+      setOptimizedMediaUrl(mediaUrl);
+    }
+  }, [mediaUrl, bamlMediaType]);
+
+  // Cleanup blob URLs on unmount
+  useEffect(() => {
+    return () => {
+      if (blobUrlRef.current) {
+        URL.revokeObjectURL(blobUrlRef.current);
+      }
+    };
+  }, []);
 
   if (error) {
     return (
@@ -87,7 +171,7 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
     const stats = { width: naturalWidth, height: naturalHeight, size };
     setImageStats(stats);
 
-    // Store in shared atom
+    // Store in shared atom using original mediaUrl as key for consistency
     if (mediaUrl) {
       setImageStatsMap((prev) => {
         const newMap = new Map(prev);
@@ -102,7 +186,7 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
       case 'image':
         return (
           <img
-            src={mediaUrl}
+            src={optimizedMediaUrl || ''}
             // biome-ignore lint/a11y/noRedundantAlt: not correct
             alt={'Image Not Found'}
             className="max-h-[400px] max-w-[400px] rounded-b-lg object-contain"
@@ -113,12 +197,12 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
         return (
           // biome-ignore lint/a11y/useMediaCaption: not correct
           <audio controls className="p-2 w-full">
-            <source src={mediaUrl} />
+            <source src={optimizedMediaUrl || ''} />
             Your browser does not support the audio element.
           </audio>
         );
       case 'pdf':
-        return renderPdfContent(mediaUrl || '');
+        return renderPdfContent(optimizedMediaUrl || mediaUrl || '');
       case 'video':
         return renderVideoContent(mediaUrl || '');
       default:
@@ -255,17 +339,34 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
       );
     }
 
-    // Normalize the URL - handle base64 content that might not be in data URL format
-    let normalizedUrl = url;
-    
-    // If it's raw base64 content (not a data URL), convert it to a proper data URL
-    if (!url.startsWith('http') && !url.startsWith('data:') && !url.startsWith('file:')) {
-      // Assume it's base64 content
-      normalizedUrl = `data:application/pdf;base64,${url}`;
+    // For blob URLs or data URLs, use direct embed which works better in same-origin context
+    if (url.startsWith('blob:') || url.startsWith('data:')) {
+      return (
+        <div className="w-full max-w-[600px] space-y-2">
+          <div className="h-[500px] border rounded-lg overflow-hidden bg-white">
+            <embed
+              src={url}
+              type="application/pdf"
+              width="100%"
+              height="100%"
+              className="w-full h-full"
+              title="PDF Document"
+            />
+          </div>
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            {url.startsWith('data:') && (
+              <span className="text-green-600">✓ Base64 content loaded</span>
+            )}
+            {url.startsWith('blob:') && (
+              <span className="text-green-600">✓ Blob content loaded</span>
+            )}
+          </div>
+        </div>
+      );
     }
 
-    // Use PDF.js web viewer for all PDF content (handles base64 and URLs properly)
-    const pdfViewerUrl = `https://mozilla.github.io/pdf.js/web/viewer.html?file=${encodeURIComponent(normalizedUrl)}`;
+    // For HTTP URLs, use PDF.js viewer
+    const pdfViewerUrl = `https://mozilla.github.io/pdf.js/web/viewer.html?file=${encodeURIComponent(url)}`;
 
     return (
       <div className="w-full max-w-[600px] space-y-2">
@@ -278,16 +379,12 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
             title="PDF Viewer (PDF.js)"
             sandbox="allow-scripts allow-same-origin"
             onError={() => {
-              // If PDF.js fails, we could fall back to a basic embed, but PDF.js is very reliable
               console.warn('PDF.js viewer failed to load');
             }}
           />
         </div>
         <div className="flex items-center justify-between text-xs text-muted-foreground">
-          {/* <span>Powered by PDF.js</span> */}
-          {normalizedUrl.startsWith('data:') && (
-            <span className="text-green-600">✓ Base64 content loaded</span>
-          )}
+          <span className="text-blue-600">✓ External PDF loaded</span>
         </div>
       </div>
     );
@@ -305,7 +402,7 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
             className="flex gap-1 items-center transition-colors hover:text-primary text-xs"
           >
             <ExternalLinkIcon className="w-3 h-3" />
-            <span className="max-w-[150px] truncate">{mediaUrl}</span>
+            <span className="max-w-[150px] truncate">{getDisplayUrl(mediaUrl, bamlMediaType)}</span>
           </a>
         )}
       </div>
