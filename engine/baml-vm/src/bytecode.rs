@@ -185,7 +185,7 @@ pub struct Bytecode {
     ///
     /// Maps instruction indices to their source line numbers.
     /// Each element corresponds to an instruction at the same index.
-    pub source_lines: Vec<Option<usize>>,
+    pub source_lines: Vec<usize>,
 }
 
 impl Bytecode {

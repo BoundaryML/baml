@@ -183,7 +183,7 @@ pub fn display_bytecode(
     let mut widths = [0; 4];
 
     // Track the last line number we printed
-    let mut last_line: Option<usize> = None;
+    let mut last_line: usize = 0;
 
     // Populate all the rows.
     for instruction_ptr in 0..function.bytecode.instructions.len() {
@@ -195,13 +195,13 @@ pub fn display_bytecode(
             .bytecode
             .source_lines
             .get(instruction_ptr)
-            .and_then(|&line| line);
+            .map(|&line| line);
 
         // decide whether to show the line number
         // since a single line could emit multiple instructions
         let line_str = match source_line {
-            Some(line) if last_line != Some(line) => {
-                last_line = Some(line);
+            Some(line) if last_line != line => {
+                last_line = line;
                 line.to_string()
             }
             _ => String::new(),
