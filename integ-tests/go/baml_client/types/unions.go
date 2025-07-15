@@ -29,7 +29,7 @@ type Union2BoolOrFloat struct {
 	variant_Bool *bool
 }
 
-func (u *Union2BoolOrFloat) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union2BoolOrFloat) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
@@ -174,7 +174,7 @@ type Union2BoolOrString struct {
 	variant_Bool *bool
 }
 
-func (u *Union2BoolOrString) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union2BoolOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
@@ -319,7 +319,7 @@ type Union2EarthlingOrMartian struct {
 	variant_Earthling *Earthling
 }
 
-func (u *Union2EarthlingOrMartian) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union2EarthlingOrMartian) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
@@ -464,7 +464,7 @@ type Union2EmailAddressOrPhoneNumber struct {
 	variant_EmailAddress *EmailAddress
 }
 
-func (u *Union2EmailAddressOrPhoneNumber) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union2EmailAddressOrPhoneNumber) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
@@ -609,7 +609,7 @@ type Union2EventOrResume struct {
 	variant_Event *Event
 }
 
-func (u *Union2EventOrResume) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union2EventOrResume) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
@@ -754,7 +754,7 @@ type Union2FloatOrInt struct {
 	variant_Float *float64
 }
 
-func (u *Union2FloatOrInt) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union2FloatOrInt) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
@@ -899,7 +899,7 @@ type Union2ImageOrString struct {
 	variant_String *string
 }
 
-func (u *Union2ImageOrString) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union2ImageOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
@@ -1044,7 +1044,7 @@ type Union2IntOrString struct {
 	variant_Int *int64
 }
 
-func (u *Union2IntOrString) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union2IntOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
@@ -1189,7 +1189,7 @@ type Union2JsonTemplateOrSimpleTag struct {
 	variant_JsonTemplate *JsonTemplate
 }
 
-func (u *Union2JsonTemplateOrSimpleTag) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union2JsonTemplateOrSimpleTag) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
@@ -1334,7 +1334,7 @@ type Union2KbarisaOrKox_burger struct {
 	variant_Kox_burger *string
 }
 
-func (u *Union2KbarisaOrKox_burger) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union2KbarisaOrKox_burger) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
@@ -1487,7 +1487,7 @@ type Union2KbreakfastOrKdinner struct {
 	variant_Kdinner *string
 }
 
-func (u *Union2KbreakfastOrKdinner) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union2KbreakfastOrKdinner) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
@@ -1640,7 +1640,7 @@ type Union2KcuriosityOrKpersonal_finance struct {
 	variant_Kpersonal_finance *string
 }
 
-func (u *Union2KcuriosityOrKpersonal_finance) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union2KcuriosityOrKpersonal_finance) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
@@ -1793,7 +1793,7 @@ type Union2ListBoolOrListInt struct {
 	variant_ListInt *[]int64
 }
 
-func (u *Union2ListBoolOrListInt) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union2ListBoolOrListInt) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
@@ -1938,7 +1938,7 @@ type Union2ListNestedOrString struct {
 	variant_ListNested *[]Nested
 }
 
-func (u *Union2ListNestedOrString) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union2ListNestedOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
@@ -2083,7 +2083,7 @@ type Union2LiteralClassOneOrLiteralClassTwo struct {
 	variant_LiteralClassTwo *LiteralClassTwo
 }
 
-func (u *Union2LiteralClassOneOrLiteralClassTwo) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union2LiteralClassOneOrLiteralClassTwo) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
@@ -2228,7 +2228,7 @@ type Union2MapStringKeyRecursiveUnionValueOrString struct {
 	variant_MapStringKeyRecursiveUnionValue *map[string]RecursiveUnion
 }
 
-func (u *Union2MapStringKeyRecursiveUnionValueOrString) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union2MapStringKeyRecursiveUnionValueOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
@@ -2373,7 +2373,7 @@ type Union2NestedOrString struct {
 	variant_String *string
 }
 
-func (u *Union2NestedOrString) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union2NestedOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
@@ -2518,7 +2518,7 @@ type Union2OriginalAOrOriginalB struct {
 	variant_OriginalB *OriginalB
 }
 
-func (u *Union2OriginalAOrOriginalB) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union2OriginalAOrOriginalB) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
@@ -2663,7 +2663,7 @@ type Union2StringOrTag struct {
 	variant_String *string
 }
 
-func (u *Union2StringOrTag) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union2StringOrTag) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
@@ -2810,7 +2810,7 @@ type Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject struct {
 	variant_AnotherObject *AnotherObject
 }
 
-func (u *Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
@@ -3009,7 +3009,7 @@ type Union3BookOrderOrFlightConfirmationOrGroceryReceipt struct {
 	variant_GroceryReceipt *GroceryReceipt
 }
 
-func (u *Union3BookOrderOrFlightConfirmationOrGroceryReceipt) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union3BookOrderOrFlightConfirmationOrGroceryReceipt) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
@@ -3208,7 +3208,7 @@ type Union3BoolKTrueOrIntK1OrKstring_output struct {
 	variant_Kstring_output *string
 }
 
-func (u *Union3BoolKTrueOrIntK1OrKstring_output) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union3BoolKTrueOrIntK1OrKstring_output) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
@@ -3419,7 +3419,7 @@ type Union3FloatOrIntOrString struct {
 	variant_Float *float64
 }
 
-func (u *Union3FloatOrIntOrString) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union3FloatOrIntOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
@@ -3620,7 +3620,7 @@ type Union4BoolOrFloatOrIntOrString struct {
 	variant_Float *float64
 }
 
-func (u *Union4BoolOrFloatOrIntOrString) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union4BoolOrFloatOrIntOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
@@ -3877,7 +3877,7 @@ type Union4KfourOrKoneOrKthreeOrKtwo struct {
 	variant_Kfour *string
 }
 
-func (u *Union4KfourOrKoneOrKthreeOrKtwo) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union4KfourOrKoneOrKthreeOrKtwo) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
@@ -4154,7 +4154,7 @@ type Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString struct {
 	variant_JsonArray *JsonArray
 }
 
-func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
@@ -4539,7 +4539,7 @@ type Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString str
 	variant_MapStringKeyListStringValue *map[string][]string
 }
 
-func (u *Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
