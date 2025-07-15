@@ -181,35 +181,13 @@ impl RawPtrType {
             RawPtrType::SSEEvent(_) => "SSEEvent",
         }
     }
-
-    pub fn call_constructor(
-        object_type: crate::baml::cffi::CffiObjectType,
-        kwargs: &baml_types::BamlMap<String, baml_types::BamlValue>,
-    ) -> BamlObjectResponse {
-        use crate::baml::cffi::CffiObjectType;
-        match object_type {
-            CffiObjectType::ObjectCollector => {
-                let name = kwargs
-                    .get("name")
-                    .and_then(|n| n.as_str())
-                    .map(|n| n.to_string());
-                Ok(BamlObjectResponseSuccess::new_object(
-                    RawPtrType::Collector(CollectorWrapper::from_object(Collector::new(name))),
-                ))
-            }
-            other => Err(format!(
-                "Cannot call constructor on {}",
-                other.as_str_name()
-            )),
-        }
-    }
 }
 
 pub trait CallMethod {
     fn call_method(
         &self,
         method_name: &str,
-        kwargs: &baml_types::BamlMap<String, baml_types::BamlValue>,
+        _kwargs: &baml_types::BamlMap<String, baml_types::BamlValue>,
     ) -> BamlObjectResponse;
 }
 
@@ -282,15 +260,14 @@ impl CallMethod for CollectorWrapper {
                 let _function_id = kwargs
                     .get("function_id")
                     .and_then(|v| v.as_str().map(|s| s.to_string()))
-                    .ok_or_else(|| format!("id lookup requires function_id parameter"))?;
+                    .ok_or_else(|| "id lookup requires function_id parameter".to_string())?;
 
                 // Parse the function_id string to FunctionCallId
                 // For now, we'll just return null as we need to handle FunctionCallId parsing
                 Ok(BamlObjectResponseSuccess::new_value(BamlValue::Null))
             }
             _ => Err(format!(
-                "Failed to call function: \"{}\" on object type: Collector",
-                method_name
+                "Failed to call function: \"{method_name}\" on object type: Collector"
             )),
         }
     }
@@ -308,14 +285,13 @@ impl CallMethod for UsageWrapper {
                 Ok(BamlObjectResponseSuccess::new_value(BamlValue::Null))
             }
             "input_tokens" => Ok(BamlObjectResponseSuccess::new_value(BamlValue::Int(
-                self.input_tokens.unwrap_or_default() as i64,
+                self.input_tokens.unwrap_or_default(),
             ))),
             "output_tokens" => Ok(BamlObjectResponseSuccess::new_value(BamlValue::Int(
-                self.output_tokens.unwrap_or_default() as i64,
+                self.output_tokens.unwrap_or_default(),
             ))),
             _ => Err(format!(
-                "Failed to call function: \"{}\" on object type: Usage",
-                method_name
+                "Failed to call function: \"{method_name}\" on object type: Usage"
             )),
         }
     }
@@ -325,7 +301,7 @@ impl CallMethod for FunctionLogWrapper {
     fn call_method(
         &self,
         method_name: &str,
-        kwargs: &baml_types::BamlMap<String, baml_types::BamlValue>,
+        _kwargs: &baml_types::BamlMap<String, baml_types::BamlValue>,
     ) -> BamlObjectResponse {
         match method_name {
             "~destructor" => {
@@ -426,8 +402,7 @@ impl CallMethod for FunctionLogWrapper {
                 Ok(BamlObjectResponseSuccess::new_value(BamlValue::Null))
             }
             _ => Err(format!(
-                "Failed to call function: \"{}\" on object type: FunctionLog",
-                method_name
+                "Failed to call function: \"{method_name}\" on object type: FunctionLog"
             )),
         }
     }
@@ -437,7 +412,7 @@ impl CallMethod for TimingWrapper {
     fn call_method(
         &self,
         method_name: &str,
-        kwargs: &baml_types::BamlMap<String, baml_types::BamlValue>,
+        _kwargs: &baml_types::BamlMap<String, baml_types::BamlValue>,
     ) -> BamlObjectResponse {
         match method_name {
             "~destructor" => {
@@ -451,8 +426,7 @@ impl CallMethod for TimingWrapper {
                 self.duration_ms.unwrap_or_default(),
             ))),
             _ => Err(format!(
-                "Failed to call function: \"{}\" on object type: Timing",
-                method_name
+                "Failed to call function: \"{method_name}\" on object type: Timing"
             )),
         }
     }
@@ -462,7 +436,7 @@ impl CallMethod for StreamTimingWrapper {
     fn call_method(
         &self,
         method_name: &str,
-        kwargs: &baml_types::BamlMap<String, baml_types::BamlValue>,
+        _kwargs: &baml_types::BamlMap<String, baml_types::BamlValue>,
     ) -> BamlObjectResponse {
         match method_name {
             "~destructor" => {
@@ -476,8 +450,7 @@ impl CallMethod for StreamTimingWrapper {
                 self.duration_ms.unwrap_or_default(),
             ))),
             _ => Err(format!(
-                "Failed to call function: \"{}\" on object type: StreamTiming",
-                method_name
+                "Failed to call function: \"{method_name}\" on object type: StreamTiming"
             )),
         }
     }
@@ -537,8 +510,7 @@ impl CallMethod for LLMCallWrapper {
                 }
             }
             _ => Err(format!(
-                "Failed to call function: \"{}\" on object type: LLMCall",
-                method_name
+                "Failed to call function: \"{method_name}\" on object type: LLMCall"
             )),
         }
     }
@@ -548,7 +520,7 @@ impl CallMethod for LLMStreamCallWrapper {
     fn call_method(
         &self,
         method_name: &str,
-        kwargs: &baml_types::BamlMap<String, baml_types::BamlValue>,
+        _kwargs: &baml_types::BamlMap<String, baml_types::BamlValue>,
     ) -> BamlObjectResponse {
         match method_name {
             "~destructor" => {
@@ -611,8 +583,7 @@ impl CallMethod for LLMStreamCallWrapper {
                 }
             }
             _ => Err(format!(
-                "Failed to call function: \"{}\" on object type: LLMStreamCall",
-                method_name
+                "Failed to call function: \"{method_name}\" on object type: LLMStreamCall"
             )),
         }
     }
@@ -622,7 +593,7 @@ impl CallMethod for HTTPRequestWrapper {
     fn call_method(
         &self,
         method_name: &str,
-        kwargs: &baml_types::BamlMap<String, baml_types::BamlValue>,
+        _kwargs: &baml_types::BamlMap<String, baml_types::BamlValue>,
     ) -> BamlObjectResponse {
         match method_name {
             "~destructor" => {
@@ -652,8 +623,7 @@ impl CallMethod for HTTPRequestWrapper {
                 self.body().clone().into(),
             )),
             _ => Err(format!(
-                "Failed to call function: \"{}\" on object type: HTTPRequest",
-                method_name
+                "Failed to call function: \"{method_name}\" on object type: HTTPRequest"
             )),
         }
     }
@@ -663,7 +633,7 @@ impl CallMethod for HTTPResponseWrapper {
     fn call_method(
         &self,
         method_name: &str,
-        kwargs: &baml_types::BamlMap<String, baml_types::BamlValue>,
+        _kwargs: &baml_types::BamlMap<String, baml_types::BamlValue>,
     ) -> BamlObjectResponse {
         match method_name {
             "~destructor" => {
@@ -693,8 +663,7 @@ impl CallMethod for HTTPResponseWrapper {
                 self.body.clone().into(),
             )),
             _ => Err(format!(
-                "Failed to call function: \"{}\" on object type: HTTPResponse",
-                method_name
+                "Failed to call function: \"{method_name}\" on object type: HTTPResponse"
             )),
         }
     }
@@ -704,7 +673,7 @@ impl CallMethod for HTTPBodyWrapper {
     fn call_method(
         &self,
         method_name: &str,
-        kwargs: &baml_types::BamlMap<String, baml_types::BamlValue>,
+        _kwargs: &baml_types::BamlMap<String, baml_types::BamlValue>,
     ) -> BamlObjectResponse {
         match method_name {
             "~destructor" => {
@@ -724,8 +693,7 @@ impl CallMethod for HTTPBodyWrapper {
                 Err(_) => Ok(BamlObjectResponseSuccess::new_value(BamlValue::Null)),
             },
             _ => Err(format!(
-                "Failed to call function: \"{}\" on object type: HTTPBody",
-                method_name
+                "Failed to call function: \"{method_name}\" on object type: HTTPBody"
             )),
         }
     }
@@ -735,7 +703,7 @@ impl CallMethod for SSEEventWrapper {
     fn call_method(
         &self,
         method_name: &str,
-        kwargs: &baml_types::BamlMap<String, baml_types::BamlValue>,
+        _kwargs: &baml_types::BamlMap<String, baml_types::BamlValue>,
     ) -> BamlObjectResponse {
         match method_name {
             "~destructor" => {
@@ -750,8 +718,7 @@ impl CallMethod for SSEEventWrapper {
                 Err(_) => Ok(BamlObjectResponseSuccess::new_value(BamlValue::Null)),
             },
             _ => Err(format!(
-                "Failed to call function: \"{}\" on object type: SSEEvent",
-                method_name
+                "Failed to call function: \"{method_name}\" on object type: SSEEvent"
             )),
         }
     }

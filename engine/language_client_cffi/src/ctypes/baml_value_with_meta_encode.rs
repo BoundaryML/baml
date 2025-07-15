@@ -172,7 +172,7 @@ where
     fn maybe_wrap_stream_state(
         &self,
         holder: CffiValueHolder,
-        lookup: &TypeLookups,
+        _lookup: &TypeLookups,
     ) -> CffiValueHolder {
         if self.field_type().meta().streaming_behavior.state {
             let stream_state = CffiValueStreamingState {
