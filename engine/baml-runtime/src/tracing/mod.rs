@@ -1108,7 +1108,6 @@ impl From<&internal_baml_jinja::ChatMessagePart> for ContentPart {
             internal_baml_jinja::ChatMessagePart::Text(t) => ContentPart::Text(t.clone()),
             internal_baml_jinja::ChatMessagePart::Media(media) => {
                 match (media.media_type, &media.content) {
-                    
                     // File
                     (BamlMediaType::Image, baml_types::BamlMediaContent::File(data)) => {
                         ContentPart::FileImage(

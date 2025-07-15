@@ -333,7 +333,7 @@ impl ToProviderMessage for GoogleAIClient {
                 }
                 content.insert("file_data".into(), file_data);
                 Ok(content)
-            },
+            }
             BamlMediaContent::File(_) => anyhow::bail!(
                 "BAML internal error (google-ai): file should have been resolved to base64"
             ),

@@ -567,7 +567,6 @@ async fn process_media(
             ))
         }
         BamlMediaContent::Url(media_url) => {
-
             // URLs may have an attached mime-type or not
             // URLs can be converted to either a url with mime-type or base64 with mime-type
 

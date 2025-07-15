@@ -817,38 +817,36 @@ impl AwsClient {
         media: &baml_types::BamlMedia,
     ) -> Result<bedrock::types::ContentBlock> {
         match media.media_type {
-            BamlMediaType::Image => {
-                match &media.content {
-                    BamlMediaContent::File(_) => {
-                        anyhow::bail!(
+            BamlMediaType::Image => match &media.content {
+                BamlMediaContent::File(_) => {
+                    anyhow::bail!(
                             "BAML internal error (AWSBedrock): file should have been resolved to base64"
                         )
-                    }
-                    BamlMediaContent::Url(_) => {
-                        anyhow::bail!(
+                }
+                BamlMediaContent::Url(_) => {
+                    anyhow::bail!(
                             "BAML internal error (AWSBedrock): media URL should have been resolved to base64"
                         )
-                    }
-                    BamlMediaContent::Base64(b64_media) => Ok(bedrock::types::ContentBlock::Image(
-                        bedrock::types::ImageBlock::builder()
-                            .set_format(Some(bedrock::types::ImageFormat::from(
-                                {
-                                    let mime_type = media.mime_type_as_ok()?;
-                                    match mime_type.strip_prefix("image/") {
-                                        Some(s) => s.to_string(),
-                                        None => mime_type,
-                                    }
-                                }
-                                .as_str(),
-                            )))
-                            .set_source(Some(bedrock::types::ImageSource::Bytes(Blob::new(
-                                aws_smithy_types::base64::decode(b64_media.base64.clone())?,
-                            ))))
-                            .build()
-                            .context("Failed to build image block")?,
-                    )),
                 }
-            }
+                BamlMediaContent::Base64(b64_media) => Ok(bedrock::types::ContentBlock::Image(
+                    bedrock::types::ImageBlock::builder()
+                        .set_format(Some(bedrock::types::ImageFormat::from(
+                            {
+                                let mime_type = media.mime_type_as_ok()?;
+                                match mime_type.strip_prefix("image/") {
+                                    Some(s) => s.to_string(),
+                                    None => mime_type,
+                                }
+                            }
+                            .as_str(),
+                        )))
+                        .set_source(Some(bedrock::types::ImageSource::Bytes(Blob::new(
+                            aws_smithy_types::base64::decode(b64_media.base64.clone())?,
+                        ))))
+                        .build()
+                        .context("Failed to build image block")?,
+                )),
+            },
             BamlMediaType::Pdf => {
                 match &media.content {
                     BamlMediaContent::File(_) => {
@@ -863,7 +861,7 @@ impl AwsClient {
                                 .set_format(Some(bedrock::types::DocumentFormat::Pdf))
                                 .set_name(Some("document.pdf".to_string())) // Default name for URL-based Pdfs
                                 .set_source(Some(bedrock::types::DocumentSource::Bytes(Blob::new(
-                                    url_media.url.as_bytes().to_vec()
+                                    url_media.url.as_bytes().to_vec(),
                                 ))))
                                 .build()
                                 .context("Failed to build Pdf document block")?,
@@ -914,7 +912,7 @@ impl AwsClient {
                                 );
                             }
                         };
-                        
+
                         Ok(bedrock::types::ContentBlock::Video(
                             bedrock::types::VideoBlock::builder()
                                 .set_format(Some(format))
