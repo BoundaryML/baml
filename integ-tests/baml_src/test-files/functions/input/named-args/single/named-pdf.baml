@@ -3,7 +3,7 @@ function PdfInput(pdf: pdf) -> string{
   prompt #"
     {{ _.role("user") }}
 
-   Describe the contents of this PDF document and what it is about in 5 words or less.
+   Describe the contents of this PDF document and what it is about in 15 words or less.
     
     {{ pdf }}
   "#   
@@ -14,7 +14,7 @@ function PdfInputOpenai(pdf: pdf, prompt: string) -> string{
   prompt #"
     {{ _.role("user") }}
 
-   {{ prompt }}
+   State the key idea of the research paper in 10 words or less.
     
     {{ pdf }}
   "#   
@@ -57,7 +57,7 @@ test TestFilePdfInputUrl{
   functions [PdfInput]
   args {
     pdf{ 
-      url "https://arxiv.org/pdf/2305.08675"
+      url "https://www.usenix.org/system/files/conference/nsdi13/nsdi13-final85.pdf"
     }
   }  
 }
