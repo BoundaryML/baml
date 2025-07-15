@@ -15,6 +15,7 @@ package baml_client
 
 import (
 	"context"
+	"fmt"
 
 	"enums/baml_client/types"
 
@@ -46,18 +47,37 @@ func ConsumeTestEnum(ctx context.Context, input types.TestEnum, opts ...CallOpti
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "ConsumeTestEnum", encoded)
-	if err != nil {
-		return types.TestEnum(""), err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "ConsumeTestEnum", encoded, callOpts.onTick)
+		if err != nil {
+			return types.TestEnum(""), err
+		}
+
+		if result.Error != nil {
+			return types.TestEnum(""), result.Error
+		}
+
+		casted := (result.Data).(types.TestEnum)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "ConsumeTestEnum", encoded, callOpts.onTick)
+		if err != nil {
+			return types.TestEnum(""), err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.TestEnum(""), result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.TestEnum), nil
+			}
+		}
+
+		return types.TestEnum(""), fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.TestEnum(""), result.Error
-	}
-
-	casted := (result.Data).(types.TestEnum)
-
-	return casted, nil
 }
 
 func FnTestAliasedEnumOutput(ctx context.Context, input string, opts ...CallOptionFunc) (types.TestEnum, error) {
@@ -85,16 +105,35 @@ func FnTestAliasedEnumOutput(ctx context.Context, input string, opts ...CallOpti
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "FnTestAliasedEnumOutput", encoded)
-	if err != nil {
-		return types.TestEnum(""), err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "FnTestAliasedEnumOutput", encoded, callOpts.onTick)
+		if err != nil {
+			return types.TestEnum(""), err
+		}
+
+		if result.Error != nil {
+			return types.TestEnum(""), result.Error
+		}
+
+		casted := (result.Data).(types.TestEnum)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "FnTestAliasedEnumOutput", encoded, callOpts.onTick)
+		if err != nil {
+			return types.TestEnum(""), err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.TestEnum(""), result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.TestEnum), nil
+			}
+		}
+
+		return types.TestEnum(""), fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.TestEnum(""), result.Error
-	}
-
-	casted := (result.Data).(types.TestEnum)
-
-	return casted, nil
 }

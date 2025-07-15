@@ -13,11 +13,11 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-func TestOnTick(t *testing.T) {
-	ctx := context.Background()
-
+func getOnTick() (baml.TickCallback, *string, *int) {
 	var lastThinking string
+	var tickCount int
 	onTick := func(ctx context.Context, reason baml.TickReason, log baml.FunctionLog) baml.FunctionSignal {
+		tickCount++
 		calls, err := log.Calls()
 		if err != nil {
 			fmt.Println("Error getting selected call: ", err)
@@ -59,6 +59,33 @@ func TestOnTick(t *testing.T) {
 		return nil
 	}
 
+	return onTick, &lastThinking, &tickCount
+}
+
+func TestOnTickRequest(t *testing.T) {
+	ctx := context.Background()
+
+	onTick, lastThinking, tickCount := getOnTick()
+
+	_, err := b.Foo(ctx, 8192, b.WithExperimentalOnTick(onTick))
+	if err != nil {
+		t.Fatalf("Error in Foo: %v", err)
+	}
+
+	if *tickCount < 10 {
+		t.Errorf("Expected more than 10 ticks, got %d", *tickCount)
+	}
+
+	if *lastThinking == "" {
+		t.Errorf("Expected thinking, got %s", *lastThinking)
+	}
+}
+
+func TestOnTickStream(t *testing.T) {
+	ctx := context.Background()
+
+	onTick, lastThinking, tickCount := getOnTick()
+
 	result, err := b.Stream.Foo(ctx, 8192, b.WithExperimentalOnTick(onTick))
 	if err != nil {
 		t.Fatalf("Error in Foo: %v", err)
@@ -74,8 +101,12 @@ func TestOnTick(t *testing.T) {
 		}
 	}
 
-	if lastThinking == "" {
-		t.Errorf("Expected thinking, got %s", lastThinking)
+	if *tickCount < 10 {
+		t.Errorf("Expected more than 10 ticks, got %d", *tickCount)
+	}
+
+	if *lastThinking == "" {
+		t.Errorf("Expected thinking, got %s", *lastThinking)
 	}
 }
 

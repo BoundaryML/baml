@@ -15,6 +15,7 @@ package baml_client
 
 import (
 	"context"
+	"fmt"
 
 	"optional_nullable/baml_client/types"
 
@@ -46,18 +47,37 @@ func TestAllNull(ctx context.Context, input string, opts ...CallOptionFunc) (typ
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestAllNull", encoded)
-	if err != nil {
-		return types.NullableTypes{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestAllNull", encoded, callOpts.onTick)
+		if err != nil {
+			return types.NullableTypes{}, err
+		}
+
+		if result.Error != nil {
+			return types.NullableTypes{}, result.Error
+		}
+
+		casted := (result.Data).(types.NullableTypes)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestAllNull", encoded, callOpts.onTick)
+		if err != nil {
+			return types.NullableTypes{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.NullableTypes{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.NullableTypes), nil
+			}
+		}
+
+		return types.NullableTypes{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.NullableTypes{}, result.Error
-	}
-
-	casted := (result.Data).(types.NullableTypes)
-
-	return casted, nil
 }
 
 func TestAllOptionalOmitted(ctx context.Context, input string, opts ...CallOptionFunc) (types.OptionalFields, error) {
@@ -85,18 +105,37 @@ func TestAllOptionalOmitted(ctx context.Context, input string, opts ...CallOptio
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestAllOptionalOmitted", encoded)
-	if err != nil {
-		return types.OptionalFields{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestAllOptionalOmitted", encoded, callOpts.onTick)
+		if err != nil {
+			return types.OptionalFields{}, err
+		}
+
+		if result.Error != nil {
+			return types.OptionalFields{}, result.Error
+		}
+
+		casted := (result.Data).(types.OptionalFields)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestAllOptionalOmitted", encoded, callOpts.onTick)
+		if err != nil {
+			return types.OptionalFields{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.OptionalFields{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.OptionalFields), nil
+			}
+		}
+
+		return types.OptionalFields{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.OptionalFields{}, result.Error
-	}
-
-	casted := (result.Data).(types.OptionalFields)
-
-	return casted, nil
 }
 
 func TestMixedOptionalNullable(ctx context.Context, input string, opts ...CallOptionFunc) (types.MixedOptionalNullable, error) {
@@ -124,18 +163,37 @@ func TestMixedOptionalNullable(ctx context.Context, input string, opts ...CallOp
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestMixedOptionalNullable", encoded)
-	if err != nil {
-		return types.MixedOptionalNullable{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestMixedOptionalNullable", encoded, callOpts.onTick)
+		if err != nil {
+			return types.MixedOptionalNullable{}, err
+		}
+
+		if result.Error != nil {
+			return types.MixedOptionalNullable{}, result.Error
+		}
+
+		casted := (result.Data).(types.MixedOptionalNullable)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestMixedOptionalNullable", encoded, callOpts.onTick)
+		if err != nil {
+			return types.MixedOptionalNullable{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.MixedOptionalNullable{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.MixedOptionalNullable), nil
+			}
+		}
+
+		return types.MixedOptionalNullable{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.MixedOptionalNullable{}, result.Error
-	}
-
-	casted := (result.Data).(types.MixedOptionalNullable)
-
-	return casted, nil
 }
 
 func TestNullableTypes(ctx context.Context, input string, opts ...CallOptionFunc) (types.NullableTypes, error) {
@@ -163,18 +221,37 @@ func TestNullableTypes(ctx context.Context, input string, opts ...CallOptionFunc
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestNullableTypes", encoded)
-	if err != nil {
-		return types.NullableTypes{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestNullableTypes", encoded, callOpts.onTick)
+		if err != nil {
+			return types.NullableTypes{}, err
+		}
+
+		if result.Error != nil {
+			return types.NullableTypes{}, result.Error
+		}
+
+		casted := (result.Data).(types.NullableTypes)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestNullableTypes", encoded, callOpts.onTick)
+		if err != nil {
+			return types.NullableTypes{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.NullableTypes{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.NullableTypes), nil
+			}
+		}
+
+		return types.NullableTypes{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.NullableTypes{}, result.Error
-	}
-
-	casted := (result.Data).(types.NullableTypes)
-
-	return casted, nil
 }
 
 func TestOptionalFields(ctx context.Context, input string, opts ...CallOptionFunc) (types.OptionalFields, error) {
@@ -202,16 +279,35 @@ func TestOptionalFields(ctx context.Context, input string, opts ...CallOptionFun
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOptionalFields", encoded)
-	if err != nil {
-		return types.OptionalFields{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestOptionalFields", encoded, callOpts.onTick)
+		if err != nil {
+			return types.OptionalFields{}, err
+		}
+
+		if result.Error != nil {
+			return types.OptionalFields{}, result.Error
+		}
+
+		casted := (result.Data).(types.OptionalFields)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestOptionalFields", encoded, callOpts.onTick)
+		if err != nil {
+			return types.OptionalFields{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.OptionalFields{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.OptionalFields), nil
+			}
+		}
+
+		return types.OptionalFields{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.OptionalFields{}, result.Error
-	}
-
-	casted := (result.Data).(types.OptionalFields)
-
-	return casted, nil
 }

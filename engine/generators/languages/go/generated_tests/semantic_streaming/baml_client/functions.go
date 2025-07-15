@@ -15,6 +15,7 @@ package baml_client
 
 import (
 	"context"
+	"fmt"
 
 	"semantic_streaming/baml_client/types"
 
@@ -46,18 +47,37 @@ func MakeClassWithBlockDone(ctx context.Context, opts ...CallOptionFunc) (types.
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "MakeClassWithBlockDone", encoded)
-	if err != nil {
-		return types.ClassWithBlockDone{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "MakeClassWithBlockDone", encoded, callOpts.onTick)
+		if err != nil {
+			return types.ClassWithBlockDone{}, err
+		}
+
+		if result.Error != nil {
+			return types.ClassWithBlockDone{}, result.Error
+		}
+
+		casted := (result.Data).(types.ClassWithBlockDone)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "MakeClassWithBlockDone", encoded, callOpts.onTick)
+		if err != nil {
+			return types.ClassWithBlockDone{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.ClassWithBlockDone{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.ClassWithBlockDone), nil
+			}
+		}
+
+		return types.ClassWithBlockDone{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.ClassWithBlockDone{}, result.Error
-	}
-
-	casted := (result.Data).(types.ClassWithBlockDone)
-
-	return casted, nil
 }
 
 func MakeClassWithExternalDone(ctx context.Context, opts ...CallOptionFunc) (types.ClassWithoutDone, error) {
@@ -85,18 +105,37 @@ func MakeClassWithExternalDone(ctx context.Context, opts ...CallOptionFunc) (typ
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "MakeClassWithExternalDone", encoded)
-	if err != nil {
-		return types.ClassWithoutDone{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "MakeClassWithExternalDone", encoded, callOpts.onTick)
+		if err != nil {
+			return types.ClassWithoutDone{}, err
+		}
+
+		if result.Error != nil {
+			return types.ClassWithoutDone{}, result.Error
+		}
+
+		casted := (result.Data).(types.ClassWithoutDone)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "MakeClassWithExternalDone", encoded, callOpts.onTick)
+		if err != nil {
+			return types.ClassWithoutDone{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.ClassWithoutDone{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.ClassWithoutDone), nil
+			}
+		}
+
+		return types.ClassWithoutDone{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.ClassWithoutDone{}, result.Error
-	}
-
-	casted := (result.Data).(types.ClassWithoutDone)
-
-	return casted, nil
 }
 
 func MakeSemanticContainer(ctx context.Context, opts ...CallOptionFunc) (types.SemanticContainer, error) {
@@ -124,16 +163,35 @@ func MakeSemanticContainer(ctx context.Context, opts ...CallOptionFunc) (types.S
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "MakeSemanticContainer", encoded)
-	if err != nil {
-		return types.SemanticContainer{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "MakeSemanticContainer", encoded, callOpts.onTick)
+		if err != nil {
+			return types.SemanticContainer{}, err
+		}
+
+		if result.Error != nil {
+			return types.SemanticContainer{}, result.Error
+		}
+
+		casted := (result.Data).(types.SemanticContainer)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "MakeSemanticContainer", encoded, callOpts.onTick)
+		if err != nil {
+			return types.SemanticContainer{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.SemanticContainer{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.SemanticContainer), nil
+			}
+		}
+
+		return types.SemanticContainer{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.SemanticContainer{}, result.Error
-	}
-
-	casted := (result.Data).(types.SemanticContainer)
-
-	return casted, nil
 }

@@ -52,7 +52,7 @@ type callOption struct {
 	clientRegistry *baml.ClientRegistry
 	env            map[string]string
 	collectors     []baml.Collector
-	onTick         []baml.TickCallback
+	onTick         baml.OnTickCallbackData
 }
 
 type CallOptionFunc func(*callOption)
@@ -81,12 +81,33 @@ func WithCollector(collector baml.Collector) CallOptionFunc {
 	}
 }
 
-func WithOnTick(onTick baml.TickCallback) CallOptionFunc {
+type onTickCallbackData struct {
+	collector baml.Collector
+	onTick    baml.TickCallback
+}
+
+func (o *onTickCallbackData) Collector() baml.Collector {
+	return o.collector
+}
+
+func (o *onTickCallbackData) OnTick() baml.TickCallback {
+	return o.onTick
+}
+
+func WithExperimentalOnTick(onTick baml.TickCallback) CallOptionFunc {
 	return func(o *callOption) {
-		if o.onTick == nil {
-			o.onTick = []baml.TickCallback{}
+		collector, err := baml.NewCollector("on-tick-collector")
+		if err != nil {
+			panic(err)
 		}
-		o.onTick = append(o.onTick, onTick)
+		if o.collectors == nil {
+			o.collectors = []baml.Collector{}
+		}
+		o.collectors = append(o.collectors, collector)
+		o.onTick = &onTickCallbackData{
+			collector: collector,
+			onTick:    onTick,
+		}
 	}
 }
 

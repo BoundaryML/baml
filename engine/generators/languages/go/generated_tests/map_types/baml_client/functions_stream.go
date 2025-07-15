@@ -73,7 +73,7 @@ func (*stream) TestComplexMaps(ctx context.Context, input string, opts ...CallOp
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestComplexMaps", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestComplexMaps", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -151,7 +151,7 @@ func (*stream) TestEdgeCaseMaps(ctx context.Context, input string, opts ...CallO
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestEdgeCaseMaps", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestEdgeCaseMaps", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -229,7 +229,7 @@ func (*stream) TestLargeMaps(ctx context.Context, input string, opts ...CallOpti
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestLargeMaps", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestLargeMaps", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -307,7 +307,7 @@ func (*stream) TestNestedMaps(ctx context.Context, input string, opts ...CallOpt
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestNestedMaps", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestNestedMaps", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -385,7 +385,7 @@ func (*stream) TestSimpleMaps(ctx context.Context, input string, opts ...CallOpt
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestSimpleMaps", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestSimpleMaps", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -463,7 +463,7 @@ func (*stream) TestTopLevelBoolMap(ctx context.Context, input string, opts ...Ca
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestTopLevelBoolMap", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestTopLevelBoolMap", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -541,7 +541,7 @@ func (*stream) TestTopLevelEmptyMap(ctx context.Context, input string, opts ...C
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestTopLevelEmptyMap", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestTopLevelEmptyMap", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -619,7 +619,7 @@ func (*stream) TestTopLevelFloatMap(ctx context.Context, input string, opts ...C
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestTopLevelFloatMap", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestTopLevelFloatMap", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -697,7 +697,7 @@ func (*stream) TestTopLevelIntMap(ctx context.Context, input string, opts ...Cal
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestTopLevelIntMap", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestTopLevelIntMap", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -775,7 +775,7 @@ func (*stream) TestTopLevelMapOfArrays(ctx context.Context, input string, opts .
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestTopLevelMapOfArrays", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestTopLevelMapOfArrays", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -853,7 +853,7 @@ func (*stream) TestTopLevelMapOfObjects(ctx context.Context, input string, opts 
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestTopLevelMapOfObjects", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestTopLevelMapOfObjects", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -931,7 +931,7 @@ func (*stream) TestTopLevelMapWithNullable(ctx context.Context, input string, op
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestTopLevelMapWithNullable", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestTopLevelMapWithNullable", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -1009,7 +1009,7 @@ func (*stream) TestTopLevelNestedMap(ctx context.Context, input string, opts ...
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestTopLevelNestedMap", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestTopLevelNestedMap", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -1087,7 +1087,7 @@ func (*stream) TestTopLevelStringMap(ctx context.Context, input string, opts ...
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestTopLevelStringMap", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestTopLevelStringMap", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
