@@ -11,9 +11,9 @@ crate-type = ["cdylib"]
 
 [features]
 # This enables the debug mode by default
-# default = ["debug"]
+default = ["debug"]
 # Use this for releases
-default = []
+# default = []
 debug = []
 
 [dependencies]

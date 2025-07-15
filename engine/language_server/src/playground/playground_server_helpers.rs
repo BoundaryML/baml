@@ -13,13 +13,16 @@ use futures_util::{SinkExt, StreamExt};
 use include_dir::{include_dir, Dir};
 use mime_guess::from_path;
 use reqwest::Client;
+use serde_json::Value;
 use sha2::{Digest, Sha256};
 use tar::Archive;
 use tokio::{fs as async_fs, sync::RwLock};
-use warp::{http::Response, ws::Message, Filter};
+use warp::{http, http::Response, ws::Message, Filter, Rejection, Reply};
 
 use crate::{
     playground::definitions::{FrontendMessage, PlaygroundState},
+    playground::playground_server_rpc::handle_rpc_websocket,
+    playground::proxy::{proxy_cors_route, proxy_route},
     session::Session,
 };
 
@@ -81,6 +84,8 @@ pub async fn start_client_connection(
         let buffered_events = st.drain_event_buffer();
         for event in buffered_events.clone() {
             let _ = ws_tx.send(Message::text(event)).await;
+            // Add configurable delay between buffered events
+            tokio::time::sleep(tokio::time::Duration::from_millis(400)).await;
         }
         tracing::info!("Sent {} buffered events", buffered_events.len());
         st.mark_first_client_connected();
@@ -128,15 +133,36 @@ pub fn create_server_routes(
     dist_dir: Option<std::path::PathBuf>,
 ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
     // WebSocket handler with error handling
+    let ws_state = state.clone();
+    let ws_session = session.clone();
     let ws_route = warp::path("ws")
         .and(warp::ws())
         .map(move |ws: warp::ws::Ws| {
-            let state = state.clone();
-            let session = session.clone();
+            let state = ws_state.clone();
+            let session = ws_session.clone();
             ws.on_upgrade(move |socket| async move {
                 start_client_connection(socket, state, session).await;
             })
         });
+
+    tracing::info!("Setting up RPC websocket...");
+    // RPC WebSocket handler
+    let rpc_session = session.clone();
+    let rpc_route = warp::path("rpc")
+        .and(warp::ws())
+        .map(move |ws: warp::ws::Ws| {
+            let session = rpc_session.clone();
+            ws.on_upgrade(move |socket| async move {
+                handle_rpc_websocket(socket, session).await;
+            })
+        });
+
+    // Proxy routes - handle CORS preflight and proxy requests
+    let proxy_cors = proxy_cors_route();
+    let proxy_route = proxy_route();
+
+    // Static file serving for user files (e.g., images, data)
+    let static_files = warp::path("static").and(warp::fs::dir("."));
 
     // Static file serving - either real files or error page
     let spa = warp::path::full()
@@ -174,7 +200,13 @@ pub fn create_server_routes(
             }
         });
 
-    ws_route.or(spa).with(warp::log("playground-server"))
+    ws_route
+        .or(rpc_route)
+        .or(proxy_cors)
+        .or(proxy_route)
+        .or(static_files)
+        .or(spa)
+        .with(warp::log("playground-server"))
 }
 
 /// Creates a nice HTML error page when playground assets are not available

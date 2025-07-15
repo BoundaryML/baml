@@ -3900,6 +3900,8 @@ dependencies = [
  "baml-lsp-types",
  "baml-runtime",
  "baml-types",
+ "base64 0.21.7",
+ "bytes",
  "colored 3.0.0",
  "crossbeam",
  "crossbeam-channel",
