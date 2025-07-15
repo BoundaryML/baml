@@ -86,6 +86,16 @@ impl<L: TestLanguageFeatures> TestStructure<L> {
         let generate_files = |baml_files: &BTreeMap<PathBuf, String>| -> Result<_, anyhow::Error> {
             let client_type = baml_types::GeneratorOutputType::from_str(L::name())?;
 
+            let cargo_target_dir = {
+                let dylib_path = get_cargo_root()?.join("target/debug/libbaml_cffi.dylib");
+                let so_path = get_cargo_root()?.join("target/debug/libbaml_cffi.so");
+                if dylib_path.exists() {
+                    dylib_path
+                } else {
+                    so_path
+                }
+            };
+
             let args = GeneratorArgs {
                 output_dir_relative_to_baml_src: self.src_dir.join("baml_client"),
                 baml_src_dir: self.src_dir.join("baml_src"),
@@ -96,8 +106,11 @@ impl<L: TestLanguageFeatures> TestStructure<L> {
                 on_generate: match L::test_name() {
                     "go" => {
                         vec![
-                            "gofmt -w . && goimports -w . && go mod tidy && go test -run NEVER_MATCH"
-                                .to_string(),
+                            format!(
+                                "gofmt -w . && goimports -w . && go mod tidy && BAML_LIBRARY_PATH={} go test -run NEVER_MATCH",
+                                cargo_target_dir.display()
+                            )
+                            .to_string(),
                         ]
                     }
                     "python" => vec!["ruff check --fix".to_string()],
@@ -156,6 +169,15 @@ impl<L: TestLanguageFeatures> TestStructure<L> {
 
         let client_type = baml_types::GeneratorOutputType::from_str(L::name())?;
 
+        let cargo_target_dir = {
+            let dylib_path = get_cargo_root()?.join("target/debug/libbaml_cffi.dylib");
+            let so_path = get_cargo_root()?.join("target/debug/libbaml_cffi.so");
+            if dylib_path.exists() {
+                dylib_path
+            } else {
+                so_path
+            }
+        };
         let args = GeneratorArgs {
             output_dir_relative_to_baml_src: self.src_dir.join("baml_client"),
             baml_src_dir: self.src_dir.join("baml_src"),
@@ -166,7 +188,10 @@ impl<L: TestLanguageFeatures> TestStructure<L> {
             on_generate: match L::test_name() {
                 "go" => {
                     vec![
-                        "gofmt -w . && goimports -w . && go mod tidy && go test -run NEVER_MATCH"
+                        format!(
+                            "gofmt -w . && goimports -w . && go mod tidy && BAML_LIBRARY_PATH={} go test -run NEVER_MATCH",
+                            cargo_target_dir.display()
+                        )
                             .to_string(),
                     ]
                 }
