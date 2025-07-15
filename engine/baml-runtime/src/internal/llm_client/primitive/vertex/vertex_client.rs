@@ -346,9 +346,22 @@ impl ToProviderMessage for VertexClient {
                 "BAML internal error (Vertex): file should have been resolved to base64"
             ),
             BamlMediaContent::Url(data) => {
+                let mime_type = match &media.mime_type {
+                    Some(mime) if !mime.is_empty() => mime.clone(),
+                    _ => {
+                        // Provide default mime types when none specified
+                        match media.media_type {
+                            baml_types::BamlMediaType::Video => "video/mp4".to_string(),
+                            _ => media.mime_type_as_ok()?,
+                        }
+                    }
+                };
                 content.insert(
                     "fileData".into(),
-                    json!({"fileUri": data.url, "mimeType": media.mime_type}),
+                    json!({
+                        "fileUri": data.url,
+                        "mimeType": mime_type
+                    }),
                 );
                 Ok(content)
             }
