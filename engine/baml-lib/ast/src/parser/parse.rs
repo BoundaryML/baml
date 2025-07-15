@@ -446,7 +446,7 @@ mod tests {
                 dbg!(&x);
                 dbg!(&x.stmt);
                 assert_eq!(x.stmt.identifier().name(), "x");
-                match &x.stmt.body() {
+                match &x.stmt.expr() {
                     Expression::ExprBlock(ExpressionBlock { stmts, expr }, _) => {
                         assert_eq!(stmts.len(), 1);
                         assert_eq!(stmts[0].identifier().name(), "y");

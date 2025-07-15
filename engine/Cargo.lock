@@ -922,7 +922,7 @@ dependencies = [
 
 [[package]]
 name = "baml-compiler"
-version = "0.200.0"
+version = "0.201.0"
 dependencies = [
  "anyhow",
  "baml-vm",
@@ -1303,7 +1303,7 @@ dependencies = [
 
 [[package]]
 name = "baml-vm"
-version = "0.200.0"
+version = "0.201.0"
 dependencies = [
  "anyhow",
  "baml-compiler",

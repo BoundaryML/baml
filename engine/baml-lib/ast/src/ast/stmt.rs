@@ -4,17 +4,43 @@ use super::{Expression, ExpressionBlock, Identifier, Span};
 
 #[derive(Debug, Clone)]
 pub struct LetStmt {
-    pub identifier: Identifier,
-    pub expr: Expression,
-    pub span: Span,
+    identifier: Identifier,
+    expr: Expression,
+    span: Span,
+}
+
+impl LetStmt {
+    pub fn new(identifier: Identifier, expr: Expression, span: Span) -> Self {
+        Self {
+            identifier,
+            expr,
+            span,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
 pub struct ForLoopStmt {
-    pub identifier: Identifier,
-    pub iterator: Expression,
-    pub body: ExpressionBlock,
-    pub span: Span,
+    identifier: Identifier,
+    iterator: Expression,
+    body: ExpressionBlock,
+    span: Span,
+}
+
+impl ForLoopStmt {
+    pub fn new(
+        identifier: Identifier,
+        iterator: Expression,
+        body: ExpressionBlock,
+        span: Span,
+    ) -> Self {
+        Self {
+            identifier,
+            iterator,
+            body,
+            span,
+        }
+    }
 }
 
 // Stmt(statements) perform actions and not often return values.
@@ -69,10 +95,31 @@ impl Stmt {
         }
     }
 
-    pub fn body(&self) -> &Expression {
+    pub fn body(&self) -> &ExpressionBlock {
+        match self {
+            Stmt::Let(_) => panic!("Let statement does not have a body"),
+            Stmt::ForLoop(stmt) => &stmt.body,
+        }
+    }
+
+    pub fn expr(&self) -> &Expression {
         match self {
             Stmt::Let(stmt) => &stmt.expr,
             Stmt::ForLoop(stmt) => &stmt.body.expr,
+        }
+    }
+
+    pub fn iterator(&self) -> &Expression {
+        match self {
+            Stmt::Let(_) => panic!("Let statement does not have an iterator"),
+            Stmt::ForLoop(stmt) => &stmt.iterator,
+        }
+    }
+
+    pub fn statements(&self) -> &Vec<Stmt> {
+        match self {
+            Stmt::Let(_) => panic!("Let statement does not have statements"),
+            Stmt::ForLoop(stmt) => &stmt.body.stmts,
         }
     }
 }

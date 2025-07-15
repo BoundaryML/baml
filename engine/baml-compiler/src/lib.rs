@@ -186,26 +186,26 @@ impl<'g> Compiler<'g> {
         // Compile statements and resolve locals.
         for statement in &block.stmts {
             match statement {
-                ast::Stmt::Let(identifier, expr, _span) => {
+                ast::Stmt::Let(_) => {
                     // Compile the assignment expression.
-                    self.compile_expression(expr);
+                    self.compile_expression(statement.expr());
 
                     // Resolve the index of the local variable at runtime.
                     self.locals
-                        .insert(identifier.to_string(), self.locals.len() + 1);
+                        .insert(statement.identifier().to_string(), self.locals.len() + 1);
 
                     // We'll remove scoped locals so that outer local indexes are not
                     // affected.
-                    scope_locals.insert(identifier.name());
+                    scope_locals.insert(statement.identifier().name());
 
                     // We don't need to emit Instruction::StoreVar because when the
                     // expression is executed and leaves the value on top of the stack,
                     // that index in the stack will be the index of the local variable.
                     // It's already "stored".
                 }
-                ast::Stmt::ForLoop(identifier, iterator, body, _span) => {
+                ast::Stmt::ForLoop(_) => {
                     // Compile the iterator expression (array) - leaves array on stack
-                    self.compile_expression(iterator);
+                    self.compile_expression(statement.iterator());
 
                     // Create iterator from array - replaces array with iterator on stack
                     self.emit(Instruction::CreateIterator);
@@ -229,10 +229,10 @@ impl<'g> Compiler<'g> {
                     let last_local_index = self.locals.values().max().copied().unwrap_or(0);
                     let item_local = last_local_index + 2;
                     self.locals
-                        .insert(identifier.name().to_string(), item_local);
+                        .insert(statement.identifier().name().to_string(), item_local);
 
                     // Compile the loop body (nested expression block)
-                    self.compile_expression_block(body);
+                    self.compile_expression_block(statement.body());
 
                     // Pop the body result
                     self.emit(Instruction::Pop);
@@ -255,14 +255,14 @@ impl<'g> Compiler<'g> {
                     self.emit(Instruction::Pop); // Pop iterator
 
                     // Remove the loop variable from locals since it's no longer in scope
-                    self.locals.remove(identifier.name());
+                    self.locals.remove(statement.identifier().name());
 
                     // Push null as the for loop result
                     let null_index = self.add_constant(Value::Null);
                     self.emit(Instruction::LoadConst(null_index));
 
                     // Track this as a local so it gets cleaned up in EndBlock
-                    scope_locals.insert(identifier.name());
+                    scope_locals.insert(statement.identifier().name());
                 }
             }
         }

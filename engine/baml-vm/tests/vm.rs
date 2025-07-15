@@ -253,7 +253,27 @@ fn for_loop_simple() -> anyhow::Result<()> {
         source: "
             fn main() -> int {
                 let yyyyyyyy = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-                for (i in yyyyyyyy) { i };
+                for (i in yyyyyyyy) { i + 1 };
+                42
+            }
+        ",
+        function: "main",
+        expected: Value::Int(42),
+    })
+}
+
+#[test]
+fn nested_for_loop() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: "
+            fn main() -> int {
+                let yyyyyyyy = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+                for (i in yyyyyyyy) {
+                    for (j in yyyyyyyy) {
+                        j
+                    };
+                    i
+                };
                 42
             }
         ",

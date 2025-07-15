@@ -180,7 +180,7 @@ impl WithRepr<TopLevelAssignment> for TopLevelAssignmentWalker<'_> {
             .identifier()
             .name()
             .to_string();
-        let expr = self.top_level_assignment().stmt.body().repr(db)?;
+        let expr = self.top_level_assignment().stmt.expr().repr(db)?;
         Ok(TopLevelAssignment {
             name: Node {
                 elem: name,
@@ -315,7 +315,7 @@ fn convert_function_body(
         stmts.reverse();
         let expr = stmts
             .iter()
-            .fold(fn_body, |acc, stmt| match stmt.body().repr(db) {
+            .fold(fn_body, |acc, stmt| match stmt.expr().repr(db) {
                 Ok(stmt_expr) => Expr::Let(
                     stmt.identifier().name().to_string(),
                     Arc::new(stmt_expr),
