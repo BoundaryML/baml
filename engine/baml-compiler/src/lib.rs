@@ -245,7 +245,7 @@ impl<'g> Compiler<'g> {
                         .insert(statement.identifier().name().to_string(), item_local);
 
                     // Compile the loop body (nested expression block)
-                    self.compile_expression_block(statement.body());
+                    self.compile_expression_block(&stmt.body);
 
                     // Pop the body result
                     self.emit(Instruction::Pop);
