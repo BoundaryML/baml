@@ -61,7 +61,16 @@ pub fn parse_top_level_assignment(
     assert_correct_parser!(token, Rule::top_level_assignment);
     let mut tokens = token.into_inner();
     let stmt = parse_statement(tokens.next()?, diagnostics)?;
-    Some(TopLevelAssignment { stmt })
+
+    let Stmt::Let(let_stmt) = stmt else {
+        diagnostics.push_error(DatamodelError::new_static(
+            "for loops are not allowed at top level, only let statements are allowed",
+            stmt.span().clone(),
+        ));
+        return None;
+    };
+
+    Some(TopLevelAssignment { stmt: let_stmt })
 }
 
 pub fn parse_for_loop(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Stmt> {

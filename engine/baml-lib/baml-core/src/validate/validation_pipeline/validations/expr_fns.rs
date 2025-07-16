@@ -89,11 +89,8 @@ pub(super) fn validate_expr_fns(ctx: &mut Context<'_>) {
             "Variable assignment is experimental, and will break in the future.".to_string(),
             toplevel_assignment.expr().span().clone(),
         ));
-        validate_stmt(
-            ctx,
-            &toplevel_assignment.top_level_assignment().stmt,
-            &scope,
-        );
+
+        validate_expression(ctx, toplevel_assignment.expr(), &scope);
     }
 }
 
