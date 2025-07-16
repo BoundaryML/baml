@@ -129,10 +129,12 @@ pub fn parse_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
     match maybe_semicolon {
         Some(p) if p.as_str() == ";" => {}
         _ => {
-            diagnostics.push_error(DatamodelError::new_static(
-                "Statement must end with a semicolon.",
-                span.clone(),
-            ));
+            if matches!(stmt, Some(Stmt::Let(_))) {
+                diagnostics.push_error(DatamodelError::new_static(
+                    "Statement must end with a semicolon.",
+                    span.clone(),
+                ));
+            }
         }
     }
 
