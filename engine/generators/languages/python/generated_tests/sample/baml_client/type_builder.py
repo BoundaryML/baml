@@ -55,7 +55,7 @@ class ExampleAst:
     def __init__(self, tb: type_builder.TypeBuilder):
         _tb = tb._tb # type: ignore (we know how to use this private attribute)
         self._bldr = _tb.class_("Example")
-        self._properties: typing.Set[str] = set([  "a",  "b",  ])
+        self._properties: typing.Set[str] = set([  "type",  "a",  "b",  ])
         self._props = ExampleProperties(self._bldr, self._properties)
 
     def type(self) -> baml_py.FieldType:
@@ -84,6 +84,10 @@ class ExampleProperties:
     
     
     @property
+    def type(self) -> type_builder.ClassPropertyViewer:
+        return type_builder.ClassPropertyViewer(self.__bldr.property("type"))
+    
+    @property
     def a(self) -> type_builder.ClassPropertyViewer:
         return type_builder.ClassPropertyViewer(self.__bldr.property("a"))
     
@@ -98,7 +102,7 @@ class Example2Ast:
     def __init__(self, tb: type_builder.TypeBuilder):
         _tb = tb._tb # type: ignore (we know how to use this private attribute)
         self._bldr = _tb.class_("Example2")
-        self._properties: typing.Set[str] = set([  "item",  "element",  "element2",  ])
+        self._properties: typing.Set[str] = set([  "type",  "item",  "element",  "element2",  ])
         self._props = Example2Properties(self._bldr, self._properties)
 
     def type(self) -> baml_py.FieldType:
@@ -125,6 +129,10 @@ class Example2Properties:
         self.__properties = properties # type: ignore (we know how to use this private attribute) # noqa: F821
 
     
+    
+    @property
+    def type(self) -> type_builder.ClassPropertyViewer:
+        return type_builder.ClassPropertyViewer(self.__bldr.property("type"))
     
     @property
     def item(self) -> type_builder.ClassPropertyViewer:

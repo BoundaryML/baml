@@ -27,10 +27,12 @@ class StreamState(BaseModel, typing.Generic[StreamStateValueT]):
 # #########################################################################
 
 class Example(BaseModel):
+    type: str
     a: typing.Optional[int] = None
     b: typing.Optional[str] = None
 
 class Example2(BaseModel):
+    type: str
     item: typing.Optional["Example"] = None
     element: typing.Optional[str] = None
     element2: typing.Optional[str] = None
