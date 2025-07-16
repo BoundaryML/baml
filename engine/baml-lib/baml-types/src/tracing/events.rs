@@ -439,7 +439,7 @@ pub struct ClientDetails {
     pub options: IndexMap<String, serde_json::Value>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct HTTPResponse {
     // since LLM requests could be made in parallel, we need to match the response to the request
     pub request_id: HttpRequestId,
@@ -447,9 +447,9 @@ pub struct HTTPResponse {
     #[serde(serialize_with = "serialize_redacted_optional_headers")]
     #[serde(deserialize_with = "deserialize_optional_headers")]
     headers: Option<HashMap<String, String>>,
-    pub body: HTTPBody,
+    pub body: Arc<HTTPBody>,
 
-    pub client_details: ClientDetails,
+    pub client_details: Arc<ClientDetails>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -470,8 +470,8 @@ impl HTTPResponse {
             request_id,
             status,
             headers,
-            body,
-            client_details,
+            body: Arc::new(body),
+            client_details: Arc::new(client_details),
         }
     }
 
