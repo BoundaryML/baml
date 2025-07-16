@@ -91,6 +91,10 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageInputValue, setPageInputValue] = useState<string>('1');
   
+  // Refs for scrolling to pages
+  const pdfContainerRef = useRef<HTMLDivElement>(null);
+  const pageRefs = useRef<{ [key: number]: HTMLDivElement | null }>({});
+  
   // Copy status state
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copying' | 'success' | 'error'>('idle');
 
@@ -154,6 +158,48 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
       setPageInputValue('1');
     }
   }, [optimizedMediaUrl, mediaUrl, bamlMediaType]);
+
+  // Intersection observer to track visible pages
+  useEffect(() => {
+    if (!numPages || numPages <= 1) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        // Find the page that's most visible
+        let mostVisiblePage = 1;
+        let maxIntersectionRatio = 0;
+
+        entries.forEach((entry) => {
+          if (entry.isIntersecting && entry.intersectionRatio > maxIntersectionRatio) {
+            const pageNumber = parseInt(entry.target.getAttribute('data-page-number') || '1', 10);
+            maxIntersectionRatio = entry.intersectionRatio;
+            mostVisiblePage = pageNumber;
+          }
+        });
+
+        if (mostVisiblePage !== currentPage) {
+          setCurrentPage(mostVisiblePage);
+          setPageInputValue(mostVisiblePage.toString());
+        }
+      },
+      {
+        root: pdfContainerRef.current,
+        rootMargin: '-10% 0px -10% 0px', // Only trigger when page is well into view
+        threshold: [0.1, 0.5, 0.9], // Multiple thresholds for better detection
+      }
+    );
+
+    // Observe all page elements
+    Object.values(pageRefs.current).forEach((pageElement) => {
+      if (pageElement) {
+        observer.observe(pageElement);
+      }
+    });
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [numPages, currentPage]);
 
   // Cleanup blob URLs on unmount
   useEffect(() => {
@@ -431,12 +477,14 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
           ) : (
             <>
               {/* PDF Content */}
-              <div className="h-full overflow-auto">
+              <div ref={pdfContainerRef} className="h-full overflow-auto">
                 <Document
                   file={url}
                   onLoadSuccess={(pdf: any) => {
                     setNumPages(pdf.numPages);
                     setPdfError(null);
+                    // Clear existing refs
+                    pageRefs.current = {};
                   }}
                   onLoadError={(error: any) => {
                     setPdfError(error.message || 'Failed to load PDF');
@@ -449,22 +497,29 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
                       </div>
                     </div>
                   }
-                  className="flex flex-col items-center p-2"
+                  className="flex flex-col items-center space-y-4 p-2"
                 >
-                  {numPages && (
-                    <div className="relative shadow-sm rounded overflow-hidden bg-white max-w-full">
+                  {numPages && Array.from({ length: numPages }, (_, index) => (
+                    <div
+                      key={index + 1}
+                      ref={(el) => {
+                        pageRefs.current[index + 1] = el;
+                      }}
+                      data-page-number={index + 1}
+                      className="relative shadow-sm rounded overflow-hidden bg-white max-w-full"
+                    >
                       <Page
-                        pageNumber={currentPage}
+                        pageNumber={index + 1}
                         scale={0.8}
                         renderTextLayer={true}
                         renderAnnotationLayer={true}
                         className="border border-[var(--vscode-panel-border)] max-w-full"
                       />
                       <div className="absolute top-1 right-1 bg-[var(--vscode-editor-background)] text-[var(--vscode-foreground)] text-xs px-1.5 py-0.5 rounded border border-[var(--vscode-panel-border)]">
-                        {currentPage}
+                        {index + 1}
                       </div>
                     </div>
-                  )}
+                  ))}
                 </Document>
               </div>
               
@@ -560,6 +615,17 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
     if (numPages && newPage >= 1 && newPage <= numPages) {
       setCurrentPage(newPage);
       setPageInputValue(newPage.toString());
+      
+      // Scroll to the specific page within the PDF container only
+      const pageElement = pageRefs.current[newPage];
+      const container = pdfContainerRef.current;
+      if (pageElement && container) {
+        const containerRect = container.getBoundingClientRect();
+        const pageRect = pageElement.getBoundingClientRect();
+        const scrollTop = container.scrollTop + (pageRect.top - containerRect.top) - (containerRect.height / 2) + (pageRect.height / 2);
+        
+        container.scrollTop = scrollTop;
+      }
     }
   };
 
@@ -571,6 +637,17 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
     const pageNum = parseInt(pageInputValue, 10);
     if (numPages && pageNum >= 1 && pageNum <= numPages) {
       setCurrentPage(pageNum);
+      
+      // Scroll to the specific page within the PDF container only
+      const pageElement = pageRefs.current[pageNum];
+      const container = pdfContainerRef.current;
+      if (pageElement && container) {
+        const containerRect = container.getBoundingClientRect();
+        const pageRect = pageElement.getBoundingClientRect();
+        const scrollTop = container.scrollTop + (pageRect.top - containerRect.top) - (containerRect.height / 2) + (pageRect.height / 2);
+        
+        container.scrollTop = scrollTop;
+      }
     } else {
       // Reset to current page if invalid
       setPageInputValue(currentPage.toString());
