@@ -323,15 +323,6 @@ mod protoc_lang_out {
 }
 
 fn main() -> std::io::Result<()> {
-    #[cfg(target_os = "windows")]
-    println!("cargo:rustc-link-lib=dylib=ntdll");
-
-    // Pass the usual link flags so Rust consumers could link if they want.
-    // println!("cargo:rustc-link-lib=dylib=baml_cffi");
-
-    // macOS loader‐path so the .dylib can live next to your binary, not in /usr/local/lib.
-    println!("cargo:rustc-link-arg-cdylib=-Wl,-install_name,@rpath/libbaml_cffi.dylib");
-
     // Re-run build.rs if these files change.
     println!("cargo:rerun-if-changed=types/cffi.proto");
     println!("cargo:rerun-if-changed=cbindgen.toml");
