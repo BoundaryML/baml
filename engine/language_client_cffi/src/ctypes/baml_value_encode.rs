@@ -152,6 +152,8 @@ impl ToTypeIR for BamlValue {
             BamlValue::Media(baml_media) => match baml_media.media_type {
                 BamlMediaType::Image => TypeIR::image(),
                 BamlMediaType::Audio => TypeIR::audio(),
+                BamlMediaType::Pdf => TypeIR::pdf(),
+                BamlMediaType::Video => TypeIR::video(),
             },
             BamlValue::Enum(name, _) => TypeIR::r#enum(name),
             BamlValue::Class(name, _) => TypeIR::class(name),
