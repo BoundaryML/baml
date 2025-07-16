@@ -2,7 +2,10 @@ use std::borrow::Cow;
 
 use anyhow::Result;
 use baml_rpc::RpcClientDetails;
-use baml_types::{tracing::events::{FunctionType, redact_headers}, type_meta, HasType};
+use baml_types::{
+    tracing::events::{redact_headers, FunctionType},
+    type_meta, HasType,
+};
 
 use super::{IntoRpcEvent, TypeLookup};
 

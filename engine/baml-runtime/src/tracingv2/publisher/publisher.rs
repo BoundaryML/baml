@@ -566,7 +566,7 @@ impl TracePublisher {
                 Ok(())
             }
             Err(e) => {
-                log::info!("Failed to upload batch of {} events: {}", batch.len(), e);
+                log::info!("Failed to upload batch of {} events: {:?}", batch.len(), e);
                 // If batch size is at or below minimum, give up
                 if batch.len() <= min_batch_size {
                     log::info!(
