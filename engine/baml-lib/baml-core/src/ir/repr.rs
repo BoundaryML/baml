@@ -315,7 +315,7 @@ fn convert_function_body(
         stmts.reverse();
         let expr = stmts
             .iter()
-            .fold(fn_body, |acc, stmt| match stmt.expr().repr(db) {
+            .fold(fn_body, |acc, stmt| match stmt.body().repr(db) {
                 Ok(stmt_expr) => Expr::Let(
                     stmt.identifier().name().to_string(),
                     Arc::new(stmt_expr),

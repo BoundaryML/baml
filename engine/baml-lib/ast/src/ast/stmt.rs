@@ -9,16 +9,6 @@ pub struct LetStmt {
     pub span: Span,
 }
 
-impl LetStmt {
-    pub fn new(identifier: Identifier, expr: Expression, span: Span) -> Self {
-        Self {
-            identifier,
-            expr,
-            span,
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct ForLoopStmt {
     pub identifier: Identifier,
@@ -79,7 +69,7 @@ impl Stmt {
         }
     }
 
-    pub fn expr(&self) -> &Expression {
+    pub fn body(&self) -> &Expression {
         match self {
             Stmt::Let(stmt) => &stmt.expr,
             Stmt::ForLoop(stmt) => &stmt.body.expr,

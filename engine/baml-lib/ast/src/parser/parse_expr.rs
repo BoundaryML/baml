@@ -84,7 +84,7 @@ pub fn parse_for_loop(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<
         identifier,
         iterator,
         body,
-        span: span.clone(),
+        span,
     }))
 }
 
@@ -116,7 +116,13 @@ pub fn parse_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
                     None
                 }
             };
-            maybe_body.map(|body| Stmt::Let(LetStmt::new(identifier, body, span.clone())))
+            maybe_body.map(|body| {
+                Stmt::Let(LetStmt {
+                    identifier,
+                    expr: body,
+                    span: span.clone(),
+                })
+            })
         }
         Rule::for_loop => parse_for_loop(stmt_token, diagnostics),
         _ => {
