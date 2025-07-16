@@ -323,6 +323,7 @@ mod protoc_lang_out {
 }
 
 fn main() -> std::io::Result<()> {
+    println!("running build for baml_cffi");
     // Re-run build.rs if these files change.
     println!("cargo:rerun-if-changed=types/cffi.proto");
     println!("cargo:rerun-if-changed=cbindgen.toml");
