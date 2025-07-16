@@ -4,7 +4,7 @@
 //! why they're not placed in the source vm module.
 
 use baml_compiler::ast;
-use baml_vm::{Frame, Object, Value, Vm};
+use baml_vm::{Bytecode, Frame, Function, FunctionKind, Instruction, Object, Value, Vm};
 
 /// Helper struct for testing VM execution.
 struct Program {
@@ -62,6 +62,70 @@ fn assert_vm_executes_with_inspection(
 
     // Run custom inspection
     inspect(&vm)?;
+
+    Ok(())
+}
+
+/// Helper struct for testing VM execution with direct bytecode.
+struct BytecodeProgram {
+    arity: usize,
+    instructions: Vec<Instruction>,
+    constants: Vec<Value>,
+    expected: Value,
+}
+
+/// Helper function for VM execution with direct bytecode.
+fn assert_vm_executes_bytecode(input: BytecodeProgram) -> anyhow::Result<()> {
+    assert_vm_executes_bytecode_with_inspection(input, |_vm, _result| Ok(()))
+}
+
+/// Helper function for VM execution with direct bytecode and custom inspection.
+fn assert_vm_executes_bytecode_with_inspection(
+    input: BytecodeProgram,
+    inspect: impl FnOnce(&Vm, Value) -> anyhow::Result<()>,
+) -> anyhow::Result<()> {
+    // Create function from bytecode
+    let function = Function {
+        name: "test_fn".to_string(),
+        arity: input.arity,
+        bytecode: Bytecode {
+            source_lines: vec![1; input.instructions.len()],
+            instructions: input.instructions,
+            constants: input.constants,
+        },
+        kind: FunctionKind::Exec,
+        local_var_names: {
+            let mut names = Vec::with_capacity(input.arity + 1);
+            names.push("<fn test_fn>".to_string());
+            names.resize_with(names.capacity(), String::new);
+            names
+        },
+    };
+
+    let objects = vec![Object::Function(function)];
+    let globals = vec![Value::Object(0)];
+
+    // Create and run the VM
+    let mut vm = Vm {
+        frames: vec![Frame {
+            function: 0,
+            instruction_ptr: 0,
+            locals_offset: 0,
+        }],
+        stack: vec![Value::Object(0)],
+        objects,
+        globals,
+    };
+
+    let result = vm.exec()?;
+
+    assert_eq!(
+        result, input.expected,
+        "VM execution result mismatch for bytecode test",
+    );
+
+    // Run custom inspection
+    inspect(&vm, result)?;
 
     Ok(())
 }
@@ -252,8 +316,8 @@ fn for_loop_simple() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: "
             fn main() -> int {
-                let yyyyyyyy = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-                for (i in yyyyyyyy) { i + 1 };
+                let list = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+                for (i in list) { i + 1 }
                 42
             }
         ",
@@ -267,13 +331,11 @@ fn nested_for_loop() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: "
             fn main() -> int {
-                let yyyyyyyy = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-                for (i in yyyyyyyy) {
-                    for (j in yyyyyyyy) {
-                        j
-                    };
+                let list = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+                for (i in list) {
+                    for (j in list) { j }
                     i
-                };
+                }
                 42
             }
         ",
@@ -292,8 +354,8 @@ fn for_loop_with_expressions() -> anyhow::Result<()> {
             }
 
             fn main() -> int {
-                let yyyyyyyy = [three(1), three(2), three(3)];
-                for (i in yyyyyyyy) { i };
+                let list = [three(1), three(2), three(3)];
+                for (i in list) { i }
                 42
             }
         ",
@@ -378,5 +440,57 @@ fn block_expr() -> anyhow::Result<()> {
         ",
         function: "main",
         expected: Value::Int(1),
+    })
+}
+
+#[test]
+fn create_iterator_instruction() -> anyhow::Result<()> {
+    assert_vm_executes_bytecode_with_inspection(
+        BytecodeProgram {
+            arity: 0,
+            constants: vec![Value::Int(1), Value::Int(2), Value::Int(3)],
+            instructions: vec![
+                Instruction::LoadConst(0),   // Load 1
+                Instruction::LoadConst(1),   // Load 2
+                Instruction::LoadConst(2),   // Load 3
+                Instruction::AllocArray(3),  // Create array [1, 2, 3]
+                Instruction::CreateIterator, // Create iterator
+                Instruction::Return,         // Return the iterator object
+            ],
+            expected: Value::Object(2), // Should return iterator object at index 2
+        },
+        |vm, result| {
+            let Value::Object(index) = result else {
+                panic!("expected Object, got {result:?}");
+            };
+
+            let Object::Iterator { iterable, index } = &vm.objects[index] else {
+                panic!("expected Iterator, got {:?}", vm.objects[index]);
+            };
+
+            assert_eq!(*index, 0); // Should start at index 0
+            assert_eq!(*iterable, 1); // Array should be at index 1 (after function at index 0)
+
+            Ok(())
+        },
+    )
+}
+
+#[test]
+fn iter_next_instruction() -> anyhow::Result<()> {
+    assert_vm_executes_bytecode(BytecodeProgram {
+        arity: 0,
+        constants: vec![Value::Int(10), Value::Int(20), Value::Int(30)],
+        instructions: vec![
+            Instruction::LoadConst(0),   // Load 10
+            Instruction::LoadConst(1),   // Load 20
+            Instruction::LoadConst(2),   // Load 30
+            Instruction::AllocArray(3),  // Create array [10, 20, 30]
+            Instruction::CreateIterator, // Create iterator
+            Instruction::IterNext,       // Get first element
+            Instruction::Pop,            // Remove has_next boolean
+            Instruction::Return,         // Return the element
+        ],
+        expected: Value::Int(10), // Should return first element
     })
 }

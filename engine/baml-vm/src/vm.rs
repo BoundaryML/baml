@@ -115,8 +115,8 @@ pub enum Object {
     /// List of values.
     Array(Vec<Value>),
 
-    /// Iterator over an array.
-    Iterator { array: usize, index: usize },
+    /// Iterator over an array (array for now).
+    Iterator { iterable: usize, index: usize },
 }
 
 impl Object {
@@ -141,8 +141,8 @@ impl std::fmt::Display for Object {
             Object::Instance(instance) => instance.fmt(f),
             Object::String(string) => string.fmt(f),
             Object::Array(array) => std::fmt::Debug::fmt(array, f),
-            Object::Iterator { array, index } => {
-                write!(f, "<iterator array={} index={}>", array, index)
+            Object::Iterator { iterable, index } => {
+                write!(f, "<iterator iterable={iterable} index={index}>")
             }
         }
     }
@@ -756,7 +756,7 @@ impl Vm {
 
                     // Create the iterator
                     self.objects.push(Object::Iterator {
-                        array: array_index,
+                        iterable: array_index,
                         index: 0,
                     });
 
@@ -774,7 +774,10 @@ impl Vm {
                     };
 
                     let (array_index, current_index) = match &self.objects[iterator_index] {
-                        Object::Iterator { array, index } => (*array, *index),
+                        Object::Iterator {
+                            iterable: array,
+                            index,
+                        } => (*array, *index),
                         _ => {
                             return Err(VmError::from(InternalError::TypeError {
                                 expected: Type::Object,
@@ -785,10 +788,10 @@ impl Vm {
 
                     // Get the element from the array
                     let (element, has_next) = match &self.objects[array_index] {
-                        Object::Array(array_data) => {
-                            if current_index < array_data.len() {
-                                let element = array_data[current_index];
-                                let has_next = (current_index + 1) < array_data.len();
+                        Object::Array(array) => {
+                            if current_index < array.len() {
+                                let element = array[current_index];
+                                let has_next = (current_index + 1) < array.len();
                                 (element, has_next)
                             } else {
                                 (Value::Null, false)

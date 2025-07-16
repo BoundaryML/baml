@@ -175,7 +175,7 @@ fn instruction_color(instruction: &Instruction) -> Color {
         }
 
         // Branch instructions.
-        Instruction::Jump(_) | Instruction::JumpIfFalse(_) => Color::Yellow,
+        Instruction::Jump(_) | Instruction::JumpIfFalse(_) | Instruction::IterNext => Color::Yellow,
 
         // Call instructions.
         Instruction::Call(_) => Color::Magenta,
@@ -184,7 +184,9 @@ fn instruction_color(instruction: &Instruction) -> Color {
         Instruction::Return => Color::Red,
 
         // Alloc instructions.
-        Instruction::AllocInstance(_) | Instruction::AllocArray(_) => Color::Cyan,
+        Instruction::AllocInstance(_)
+        | Instruction::AllocArray(_)
+        | Instruction::CreateIterator => Color::Cyan,
 
         // Pop from stack instructions.
         Instruction::Pop | Instruction::EndBlock(_) => Color::BrightBlack,
