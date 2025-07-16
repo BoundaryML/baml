@@ -1307,6 +1307,7 @@ version = "0.201.0"
 dependencies = [
  "anyhow",
  "baml-compiler",
+ "colored 2.2.0",
  "internal-baml-core",
  "internal-baml-diagnostics",
  "internal-baml-parser-database",

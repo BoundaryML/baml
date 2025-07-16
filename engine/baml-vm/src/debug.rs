@@ -22,6 +22,10 @@
 //!
 //! ```
 
+use std::io::IsTerminal;
+
+use colored::{Color, Colorize};
+
 use crate::{Function, Instruction, Object, Value};
 
 /// Context aware instruction display.
@@ -156,22 +160,80 @@ pub fn display_value(value: &Value, objects: &[Object]) -> String {
 /// See [`display_bytecode`] for more information.
 const COLUMN_MARGIN: usize = 3;
 
+/// Get color for instruction based on its type
+fn instruction_color(instruction: &Instruction) -> Color {
+    match instruction {
+        // Load instructions.
+        Instruction::LoadConst(_)
+        | Instruction::LoadVar(_)
+        | Instruction::LoadGlobal(_)
+        | Instruction::LoadField(_) => Color::Blue,
+
+        // Store instructions.
+        Instruction::StoreVar(_) | Instruction::StoreGlobal(_) | Instruction::StoreField(_) => {
+            Color::Green
+        }
+
+        // Branch instructions.
+        Instruction::Jump(_) | Instruction::JumpIfFalse(_) => Color::Yellow,
+
+        // Call instructions.
+        Instruction::Call(_) => Color::Magenta,
+
+        // Return instructions.
+        Instruction::Return => Color::Red,
+
+        // Alloc instructions.
+        Instruction::AllocInstance(_) | Instruction::AllocArray(_) => Color::Cyan,
+
+        // Pop from stack instructions.
+        Instruction::Pop | Instruction::EndBlock(_) => Color::BrightBlack,
+    }
+}
+
+struct Col {
+    text: String,
+    char_count: usize,
+    color: Color,
+}
+
+impl From<String> for Col {
+    fn from(text: String) -> Self {
+        Self {
+            char_count: text.chars().count(),
+            color: Color::White,
+            text,
+        }
+    }
+}
+
+impl Col {
+    fn with_color(mut self, color: Color) -> Self {
+        self.color = color;
+        self
+    }
+}
+
 /// Print the bytecode of a function in a readable table format.
 ///
-/// Format is [IP, INSTRUCTION, METADATA]. Something like this:
+/// Format is [SOURCE LINE, IP, INSTRUCTION, METADATA]. Something like this:
 ///
 /// ```text
-/// 0   LOAD_VAR 1        (b)
-/// 1   JUMP_IF_FALSE 4   (to 5)
-/// 2   POP
-/// 3   LOAD_CONST 0      (1)
-/// 4   JUMP 3            (to 7)
-/// 5   POP
-/// 6   LOAD_CONST 1      (2)
-/// 7   RETURN
-/// ```
+/// 1   0   LOAD_VAR 1        (b)
+///     1   JUMP_IF_FALSE 4   (to 5)
+///     2   POP
 ///
+/// 2   3   LOAD_CONST 0      (1)
+///
+/// 4   4   JUMP 3            (to 7)
+///     5   POP
+///
+/// 7   6   LOAD_CONST 1      (2)
+///     7   RETURN
+/// ```
 /// Basically tries to mimic CPython's bytecode disassembly function.
+/// Line numbers are shown in the first column, with subsequent instructions
+/// from the same line having an empty first column.
 ///
 /// Takes care of calculating how many whitespaces we need to make the table
 /// symmetric and returns the entire table.
@@ -185,55 +247,95 @@ pub fn display_bytecode(
         return String::new();
     }
 
-    // Row contents. [String, String, String]
-    let mut rows = Vec::new();
-    // Char count of the strings above. [usize, usize, usize]
-    let mut chars_count = Vec::new();
-    // Max width of each column. [usize, usize, usize]
-    let mut widths = [0; 3];
+    // Row contents.
+    let mut rows = Vec::<[Col; 4]>::new();
+
+    // Max width of each column.
+    let mut widths = [0; 4];
+
+    // Track the last line number we printed
+    let mut last_line: usize = 0;
 
     // Populate all the rows.
     for instruction_ptr in 0..function.bytecode.instructions.len() {
         let (instruction, metadata) =
             display_instruction(instruction_ptr as isize, function, stack, objects, globals);
 
-        // Table format is [IP, INSTR, META].
-        let row = [instruction_ptr.to_string(), instruction, metadata];
-        let mut char_count = [0, 0, 0];
+        // decide whether to show the line number
+        // since a single line could emit multiple instructions
+        let source_line = match function.bytecode.source_lines.get(instruction_ptr) {
+            Some(line) if last_line != *line => {
+                last_line = *line;
+                line.to_string()
+            }
+            _ => String::new(),
+        };
+
+        let instruction_color = instruction_color(&function.bytecode.instructions[instruction_ptr]);
+
+        // Table format is [LINE, IP, INSTR, META].
+        let row = [
+            Col::from(source_line),
+            Col::from(instruction_ptr.to_string()),
+            Col::from(instruction).with_color(instruction_color),
+            Col::from(metadata),
+        ];
 
         // Now calculate the max width of each column.
         for (i, col) in row.iter().enumerate() {
-            let width = col.chars().count();
-
-            char_count[i] = width;
-
-            if width > widths[i] {
-                widths[i] = width;
+            if col.char_count > widths[i] {
+                widths[i] = col.char_count;
             }
         }
 
         rows.push(row);
-        chars_count.push(char_count);
     }
 
     let mut table = String::new();
 
-    // Print the table.
-    for (row, char_count) in rows.iter().zip(chars_count) {
-        for (i, col) in row.iter().enumerate() {
-            let mut width = widths[i];
+    // Check if stdout is a TTY to determine whether to use colors.
+    // TODO: Create struct Dissassembler and pass this as parameter.
+    // This function returns a string, it doesn't directly print anything.
+    let use_colors = std::io::stdout().is_terminal();
 
-            // First two rows have a margin. Last row doesn't need anything.
-            if i < row.len() - 1 {
+    // Print the table.
+    for (i, row) in rows.iter().enumerate() {
+        // Separate bytecode instructions by source line numbers. This checks
+        // that the source line has changed compared to the previous
+        // instruction.
+        if i > 0 && !rows[i][0].text.is_empty() && rows[i - 1][0].text != rows[i][0].text {
+            table.push('\n');
+        }
+
+        // Build the row.
+        for (j, col) in row.iter().enumerate() {
+            let mut width = widths[j];
+
+            // First three columns have a margin. Last column doesn't need anything.
+            if j < row.len() - 1 {
                 width += COLUMN_MARGIN;
             } else {
                 width = 0;
             }
 
-            // Trick to avoid allocating unnecessary strings with format!().
-            // Just use the table buffer directly.
-            table.push_str(col);
-            for _ in char_count[i]..width {
+            let mut colored_text = col.text.normal();
+
+            // Apply color based on column, only if output is to a TTY
+            if use_colors {
+                colored_text = match j {
+                    0 => col.text.bright_black(),          // Line numbers in gray
+                    1 => col.text.white(),                 // IP in white
+                    2 => col.text.color(col.color).bold(), // Instruction with type-based color
+                    3 => col.text.bright_cyan(),           // Metadata in cyan
+                    _ => col.text.normal(),
+                }
+            }
+
+            // For colored strings, we need to use the actual character count
+            // not the length with ANSI codes. Also, `to_string` has to be
+            // called here so that ANSI codes are inserted.
+            table.push_str(&colored_text.to_string());
+            for _ in col.char_count..width {
                 table.push(' ');
             }
         }

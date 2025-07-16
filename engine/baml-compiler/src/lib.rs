@@ -12,7 +12,9 @@
 use std::collections::{HashMap, HashSet};
 
 use baml_vm::{Bytecode, Class, Function, FunctionKind, Instruction, Object, Value};
-use internal_baml_core::ast::{self, ClassConstructorField, Expression, ExpressionBlock, WithName};
+use internal_baml_core::ast::{
+    self, ClassConstructorField, Expression, ExpressionBlock, WithName, WithSpan,
+};
 use internal_baml_parser_database::ParserDatabase;
 
 /// Baml compiler.
@@ -70,6 +72,9 @@ struct Compiler<'g> {
     /// Stores heap-allocated objects that are created during compilation,
     /// such as string constants.
     objects: &'g mut Vec<Object>,
+
+    /// Current source line for debug info.
+    current_source_line: usize,
 }
 
 impl<'g> Compiler<'g> {
@@ -86,6 +91,7 @@ impl<'g> Compiler<'g> {
             scope: 0,
             locals: HashMap::new(),
             bytecode: Bytecode::new(),
+            current_source_line: 0,
         }
     }
 
@@ -135,6 +141,7 @@ impl<'g> Compiler<'g> {
     /// the [`Self::compile_expression`] function.
     fn emit(&mut self, instruction: Instruction) -> usize {
         self.bytecode.instructions.push(instruction);
+        self.bytecode.source_lines.push(self.current_source_line);
         self.bytecode.instructions.len() - 1
     }
 
@@ -142,6 +149,12 @@ impl<'g> Compiler<'g> {
     fn add_constant(&mut self, value: Value) -> usize {
         self.bytecode.constants.push(value);
         self.bytecode.constants.len() - 1
+    }
+
+    /// Updates the current source line from a span.
+    fn set_source_line_from_span(&mut self, span: &ast::Span) {
+        let (start_line, _) = span.line_and_column();
+        self.current_source_line = start_line.0;
     }
 
     /// Patches a jump instruction to point to the correct destination.
@@ -296,14 +309,16 @@ impl<'g> Compiler<'g> {
     /// We should not create `emit_some_crazy_stuff` functions unless they can
     /// be reused many times.
     fn compile_expression(&mut self, expression: &Expression) {
+        self.set_source_line_from_span(expression.span());
+
         match expression {
             // Constants.
-            Expression::BoolValue(bool, _span) => {
+            Expression::BoolValue(bool, _) => {
                 let index = self.add_constant(Value::Bool(*bool));
                 self.emit(Instruction::LoadConst(index));
             }
 
-            Expression::NumericValue(num, _span) => {
+            Expression::NumericValue(num, _) => {
                 let value = num
                     .parse::<i64>()
                     .map(Value::Int)
@@ -314,7 +329,7 @@ impl<'g> Compiler<'g> {
                 self.emit(Instruction::LoadConst(index));
             }
 
-            Expression::StringValue(string, _span) => {
+            Expression::StringValue(string, _) => {
                 // Allocate the string in the objects pool
                 self.objects.push(Object::String(string.to_string()));
                 let object_index = self.objects.len() - 1;
@@ -332,7 +347,7 @@ impl<'g> Compiler<'g> {
             }
 
             // Compound objects.
-            Expression::Array(expressions, span) => {
+            Expression::Array(expressions, _) => {
                 for expression in expressions {
                     self.compile_expression(expression);
                 }
@@ -340,7 +355,7 @@ impl<'g> Compiler<'g> {
                 self.emit(Instruction::AllocArray(expressions.len()));
             }
 
-            Expression::Map(items, span) => todo!(),
+            Expression::Map(items, _) => todo!(),
 
             // Some notes on how class constructors work.
             //
@@ -443,7 +458,7 @@ impl<'g> Compiler<'g> {
             // constructors in the AST as already desugared assignments.
             //
             // TODO: Explain what's going on with the spread operator.
-            Expression::ClassConstructor(constructor, span) => {
+            Expression::ClassConstructor(constructor, _) => {
                 self.emit(Instruction::AllocInstance(
                     self.globals[constructor.class_name.name()],
                 ));
@@ -480,7 +495,7 @@ impl<'g> Compiler<'g> {
             }
 
             // Functions.
-            Expression::Lambda(arguments_list, expression_block, span) => todo!(),
+            Expression::Lambda(arguments_list, expression_block, _) => todo!(),
 
             Expression::App(app) => {
                 // Push the function onto the stack.
@@ -495,12 +510,14 @@ impl<'g> Compiler<'g> {
                 self.emit(Instruction::Call(app.args.len()));
             }
 
-            Expression::JinjaExpressionValue(jinja_expression, span) => todo!(),
+            Expression::JinjaExpressionValue(jinja_expression, _) => todo!(),
 
-            Expression::ExprBlock(block, span) => self.compile_expression_block(block),
+            Expression::ExprBlock(block, _) => {
+                self.compile_expression_block(block);
+            }
 
             // Branching.
-            Expression::If(condition, r#if, r#else, _span) => {
+            Expression::If(condition, r#if, r#else, _) => {
                 // First, compile the condition. This will leave the end result
                 // of the condition on top of the stack.
                 self.compile_expression(condition);
@@ -939,6 +956,14 @@ mod tests {
         })
     }
 
+    // TODO: Given the way local variables are handled, the debugger can't
+    // correctly print the names of nested variables inside block expressions.
+    // In this example here, LoadVar(1) corresponds to "b" while the nested
+    // block is executing and after that LoadVar(1) corresponds to "a". But
+    // the debugger always prints "a". Desugaring this to temporary variables
+    // might help, but since we found a way to avoid temporary variables for
+    // block expressions, we should find a way to correctly determine the
+    // names of the variables according to their stack semantics.
     #[test]
     fn block_expr() -> anyhow::Result<()> {
         assert_compiles(Program {

@@ -6,6 +6,9 @@ authors.workspace = true
 description = "BAML Virtual Machine"
 license-file.workspace = true
 
+[dependencies]
+colored = "2.1.0"
+
 [lints.clippy]
 new_without_default = "allow"
 
