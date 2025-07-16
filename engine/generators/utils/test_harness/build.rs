@@ -1,8 +1,29 @@
-use std::{env, fs, path::Path};
+use std::{
+    env, fs,
+    path::{Path, PathBuf},
+};
 
 fn main() {
     let out_dir = env::var_os("OUT_DIR").unwrap();
     let dest_path = Path::new(&out_dir).join("generated_macro.rs");
+
+    // let producer_out = PathBuf::from(env::var("DEP_BAML_CFFI_OUT_DIR").unwrap());
+
+    // // 3. Figure out the filename for this platform
+    // let dylib_name = if cfg!(target_os = "macos") {
+    //     "libbaml_cffi.dylib"
+    // } else if cfg!(target_os = "windows") {
+    //     "baml_cffi.dll"
+    // } else {
+    //     "libbaml_cffi.so"
+    // };
+
+    // let dylib_path = producer_out.join(dylib_name);
+
+    // let dest = Path::new(&out_dir).join(dylib_name);
+
+    // fs::create_dir_all(dest.parent().unwrap()).unwrap();
+    // fs::copy(&dylib_path, &dest).unwrap();
 
     // Get the cargo root directory (3 levels up from the test_harness crate)
     let cargo_manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();

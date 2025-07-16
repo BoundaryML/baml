@@ -20,6 +20,19 @@ fn get_cargo_root() -> Result<PathBuf, anyhow::Error> {
     Ok(PathBuf::from(cargo_root).join("../../..").canonicalize()?)
 }
 
+fn get_dylib_path() -> Result<PathBuf, anyhow::Error> {
+    let dylib_path = get_cargo_root()?
+        .join("target/debug")
+        .join(if cfg!(target_os = "macos") {
+            "libbaml_cffi.dylib"
+        } else if cfg!(target_os = "windows") {
+            "baml_cffi.dll"
+        } else {
+            "libbaml_cffi.so"
+        });
+    Ok(dylib_path)
+}
+
 impl<L: TestLanguageFeatures> Drop for TestStructure<L> {
     fn drop(&mut self) {
         // delete src_dir if it exists
@@ -86,16 +99,6 @@ impl<L: TestLanguageFeatures> TestStructure<L> {
         let generate_files = |baml_files: &BTreeMap<PathBuf, String>| -> Result<_, anyhow::Error> {
             let client_type = baml_types::GeneratorOutputType::from_str(L::name())?;
 
-            let cargo_target_dir = {
-                let dylib_path = get_cargo_root()?.join("target/debug/libbaml_cffi.dylib");
-                let so_path = get_cargo_root()?.join("target/debug/libbaml_cffi.so");
-                if dylib_path.exists() {
-                    dylib_path
-                } else {
-                    so_path
-                }
-            };
-
             let args = GeneratorArgs {
                 output_dir_relative_to_baml_src: self.src_dir.join("baml_client"),
                 baml_src_dir: self.src_dir.join("baml_src"),
@@ -108,7 +111,7 @@ impl<L: TestLanguageFeatures> TestStructure<L> {
                         vec![
                             format!(
                                 "gofmt -w . && goimports -w . && go mod tidy && BAML_LIBRARY_PATH={} go test -run NEVER_MATCH",
-                                cargo_target_dir.display()
+                                get_dylib_path()?.display()
                             )
                             .to_string(),
                         ]
@@ -169,15 +172,6 @@ impl<L: TestLanguageFeatures> TestStructure<L> {
 
         let client_type = baml_types::GeneratorOutputType::from_str(L::name())?;
 
-        let cargo_target_dir = {
-            let dylib_path = get_cargo_root()?.join("target/debug/libbaml_cffi.dylib");
-            let so_path = get_cargo_root()?.join("target/debug/libbaml_cffi.so");
-            if dylib_path.exists() {
-                dylib_path
-            } else {
-                so_path
-            }
-        };
         let args = GeneratorArgs {
             output_dir_relative_to_baml_src: self.src_dir.join("baml_client"),
             baml_src_dir: self.src_dir.join("baml_src"),
@@ -190,7 +184,7 @@ impl<L: TestLanguageFeatures> TestStructure<L> {
                     vec![
                         format!(
                             "gofmt -w . && goimports -w . && go mod tidy && BAML_LIBRARY_PATH={} go test -run NEVER_MATCH",
-                            cargo_target_dir.display()
+                            get_dylib_path()?.display()
                         )
                             .to_string(),
                     ]

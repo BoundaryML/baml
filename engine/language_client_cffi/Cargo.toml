@@ -5,10 +5,10 @@ version.workspace = true
 authors.workspace = true
 description.workspace = true
 license-file.workspace = true
+links = "baml_cffi"
 
 [lib]
 # If you only wanted dynamic library, you'd use only "cdylib".
-# If you only wanted static library, you'd use only "staticlib".
 # This demo shows both. See https://doc.rust-lang.org/reference/linkage.html
 # for more information.
 crate-type = ["cdylib", "staticlib"]
