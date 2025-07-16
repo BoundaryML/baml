@@ -251,6 +251,7 @@ impl<'a> IntoRpcEvent<'a, baml_rpc::runtime_api::IntermediateData<'a>>
         lookup: &(impl TypeLookup + ?Sized),
     ) -> baml_rpc::runtime_api::IntermediateData<'a> {
         baml_rpc::runtime_api::IntermediateData::RawLLMResponseStream {
+            http_request_id: self.request_id.to_string(),
             event: baml_rpc::runtime_api::Event {
                 raw: Cow::Borrowed(&self.event.data),
             },

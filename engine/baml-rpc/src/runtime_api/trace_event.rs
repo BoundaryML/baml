@@ -130,6 +130,7 @@ pub enum IntermediateData<'a> {
         client_details: RpcClientDetails,
     },
     RawLLMResponseStream {
+        http_request_id: String,
         event: Event<'a>,
     },
     LLMResponse {
