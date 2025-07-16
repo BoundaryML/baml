@@ -2,7 +2,7 @@ use std::borrow::Cow;
 
 use anyhow::Result;
 use baml_rpc::RpcClientDetails;
-use baml_types::{tracing::events::FunctionType, type_meta, HasType};
+use baml_types::{tracing::events::{FunctionType, redact_headers}, type_meta, HasType};
 
 use super::{IntoRpcEvent, TypeLookup};
 
@@ -213,7 +213,7 @@ impl<'a> IntoRpcEvent<'a, baml_rpc::runtime_api::IntermediateData<'a>>
             http_request_id: self.id.to_string(),
             url: self.url().to_string(),
             method: self.method().to_string(),
-            headers: self.headers().clone(),
+            headers: redact_headers(self.headers().clone()),
             body: self.body().to_rpc_event(lookup),
         }
     }
@@ -229,7 +229,7 @@ impl<'a> IntoRpcEvent<'a, baml_rpc::runtime_api::IntermediateData<'a>>
         baml_rpc::runtime_api::IntermediateData::RawLLMResponse {
             http_request_id: self.request_id.to_string(),
             status: self.status,
-            headers: self.headers().cloned(),
+            headers: self.headers().cloned().map(redact_headers),
             body: self.body.to_rpc_event(lookup),
             client_details: RpcClientDetails {
                 name: self.client_details.name.clone(),
