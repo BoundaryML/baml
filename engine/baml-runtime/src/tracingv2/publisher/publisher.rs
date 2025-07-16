@@ -466,7 +466,7 @@ impl TracePublisher {
         // Calculate hash of the entire BAML source
         let baml_src_hash = ast.baml_src_hash().unwrap_or_default();
 
-        tracing::info!(
+        tracing::debug!(
             "Checking if BAML source upload is needed (hash: {})",
             baml_src_hash
         );
@@ -482,14 +482,14 @@ impl TracePublisher {
                 return Err(e.into());
             }
         };
-        tracing::info!("check_response={:?}", check_response);
+        tracing::debug!("check_response={:?}", check_response);
 
         if !check_response.should_upload {
-            tracing::info!("BAML source already uploaded, skipping");
+            tracing::debug!("BAML source already uploaded, skipping");
             return Ok(());
         }
 
-        tracing::info!("Uploading BAML source");
+        tracing::debug!("Uploading BAML source");
 
         let upload_url = check_response
             .upload_url
@@ -524,7 +524,7 @@ impl TracePublisher {
             .await
             .context("Failed to upload BAML source to S3")?;
 
-        tracing::info!("Successfully uploaded BAML source");
+        tracing::debug!("Successfully uploaded BAML source");
         Ok(())
     }
 
