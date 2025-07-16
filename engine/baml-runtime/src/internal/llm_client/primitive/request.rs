@@ -371,7 +371,7 @@ pub(crate) enum EitherResponse {
     Consumed(LoggedHttpResponse),
 }
 
-pub async fn make_request2(
+pub async fn make_request(
     client: &(impl WithClient + RequestBuilder),
     prompt: either::Either<&String, &[RenderedChatMessage]>,
     stream: bool,
@@ -405,7 +405,7 @@ pub async fn make_parsed_request(
     runtime_context: &impl HttpContext,
 ) -> LLMResponse {
     let (response, system_now, instant_now) =
-        match make_request2(client, prompt, stream, runtime_context).await {
+        match make_request(client, prompt, stream, runtime_context).await {
             Ok((response, system_now, instant_now)) => (response, system_now, instant_now),
             Err(e) => return e,
         };

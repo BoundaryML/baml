@@ -36,8 +36,10 @@ mod integration_tests {
         }"#;
 
         // All three should be able to parse the same response
-        let _openai: openai::ChatCompletionResponse = serde_json::from_str(openai_response).unwrap();
+        let _openai: openai::ChatCompletionResponse =
+            serde_json::from_str(openai_response).unwrap();
         let _azure: azure::ChatCompletionResponse = serde_json::from_str(openai_response).unwrap();
-        let _generic: openai_generic::ChatCompletionResponse = serde_json::from_str(openai_response).unwrap();
+        let _generic: openai_generic::ChatCompletionResponse =
+            serde_json::from_str(openai_response).unwrap();
     }
 }

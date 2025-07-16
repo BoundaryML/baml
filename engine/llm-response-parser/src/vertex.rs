@@ -293,12 +293,15 @@ mod tests {
 
         let response: VertexResponse = serde_json::from_str(json).unwrap();
         assert_eq!(response.candidates.len(), 1);
-        assert_eq!(response.candidates[0].finish_reason, Some("STOP".to_string()));
-        
+        assert_eq!(
+            response.candidates[0].finish_reason,
+            Some("STOP".to_string())
+        );
+
         let content = response.candidates[0].content.as_ref().unwrap();
         assert_eq!(content.role, Some("model".to_string()));
         assert!(content.parts[0].text.contains("Donkey Kong"));
-        
+
         let usage = response.usage_metadata.as_ref().unwrap();
         assert_eq!(usage.prompt_token_count, Some(11));
         assert_eq!(usage.candidates_token_count, Some(433));
@@ -308,7 +311,10 @@ mod tests {
         let safety_ratings = response.candidates[0].safety_ratings.as_ref().unwrap();
         assert_eq!(safety_ratings.len(), 4);
         assert_eq!(safety_ratings[0].category, Some(HarmCategory::HateSpeech));
-        assert_eq!(safety_ratings[0].probability, Some(HarmProbability::Negligible));
+        assert_eq!(
+            safety_ratings[0].probability,
+            Some(HarmProbability::Negligible)
+        );
     }
 
     #[test]

@@ -39,7 +39,10 @@ mod tests {
         }"#;
 
         let response: ChatCompletionResponse = serde_json::from_str(json).unwrap();
-        assert_eq!(response.id, Some("chatcmpl-8nYnfSWFRBq8d9Qxk1XyMWCkGjzYG".to_string()));
+        assert_eq!(
+            response.id,
+            Some("chatcmpl-8nYnfSWFRBq8d9Qxk1XyMWCkGjzYG".to_string())
+        );
         assert_eq!(response.model, "gpt-35-turbo"); // Azure uses different model names
         assert_eq!(response.choices.len(), 1);
         assert_eq!(
@@ -68,7 +71,10 @@ mod tests {
         let response: ChatCompletionResponseDelta = serde_json::from_str(json).unwrap();
         assert_eq!(response.id, Some("chatcmpl-123".to_string()));
         assert_eq!(response.model, "gpt-35-turbo");
-        assert_eq!(response.choices[0].delta.role, Some(ChatCompletionMessageRole::Assistant));
+        assert_eq!(
+            response.choices[0].delta.role,
+            Some(ChatCompletionMessageRole::Assistant)
+        );
     }
 
     #[test]

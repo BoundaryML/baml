@@ -292,13 +292,16 @@ mod tests {
 
         let response: GoogleResponse = serde_json::from_str(json).unwrap();
         assert_eq!(response.candidates.len(), 1);
-        assert_eq!(response.candidates[0].finish_reason, Some("STOP".to_string()));
-        
+        assert_eq!(
+            response.candidates[0].finish_reason,
+            Some("STOP".to_string())
+        );
+
         let content = response.candidates[0].content.as_ref().unwrap();
         assert_eq!(content.role, Some("model".to_string()));
         assert_eq!(content.parts.len(), 1);
         assert!(content.parts[0].text.contains("Dark fizz, cherry bright"));
-        
+
         assert_eq!(response.usage_metadata.prompt_token_count, Some(8));
         assert_eq!(response.usage_metadata.candidates_token_count, Some(21));
         assert_eq!(response.usage_metadata.total_token_count, Some(29));
@@ -324,7 +327,10 @@ mod tests {
         }"#;
 
         let response: GoogleResponse = serde_json::from_str(json).unwrap();
-        assert_eq!(response.candidates[0].content.as_ref().unwrap().parts[0].text, "I see an image");
+        assert_eq!(
+            response.candidates[0].content.as_ref().unwrap().parts[0].text,
+            "I see an image"
+        );
     }
 
     #[test]
@@ -339,7 +345,10 @@ mod tests {
 
         let response: GoogleErrorResponse = serde_json::from_str(json).unwrap();
         assert_eq!(response.error.code, 400);
-        assert_eq!(response.error.message, "API key not valid. Please pass a valid API key.");
+        assert_eq!(
+            response.error.message,
+            "API key not valid. Please pass a valid API key."
+        );
         assert_eq!(response.error.status, Some("INVALID_ARGUMENT".to_string()));
     }
 
@@ -375,7 +384,7 @@ mod tests {
         let response: GoogleResponse = serde_json::from_str(json).unwrap();
         let part = &response.candidates[0].content.as_ref().unwrap().parts[0];
         assert!(part.function_call.is_some());
-        
+
         let func_call = part.function_call.as_ref().unwrap();
         assert_eq!(func_call.name, "get_weather");
     }

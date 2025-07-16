@@ -37,7 +37,10 @@ mod tests {
         }"#;
 
         let response: ChatCompletionResponse = serde_json::from_str(json).unwrap();
-        assert_eq!(response.id, Some("cmpl-5e1a8d84-a0b1-4c23-9d67-8a0f3d1f5c2b".to_string()));
+        assert_eq!(
+            response.id,
+            Some("cmpl-5e1a8d84-a0b1-4c23-9d67-8a0f3d1f5c2b".to_string())
+        );
         assert_eq!(response.model, "llama2:latest");
         assert_eq!(response.choices.len(), 1);
         assert_eq!(
@@ -73,8 +76,14 @@ mod tests {
 
         let response: ChatCompletionResponse = serde_json::from_str(json).unwrap();
         assert_eq!(response.model, "llama2-70b-4096");
-        assert_eq!(response.system_fingerprint, Some("fp_groq_12345".to_string()));
-        assert_eq!(response.choices[0].message.content, Some("Hello from Groq!".to_string()));
+        assert_eq!(
+            response.system_fingerprint,
+            Some("fp_groq_12345".to_string())
+        );
+        assert_eq!(
+            response.choices[0].message.content,
+            Some("Hello from Groq!".to_string())
+        );
     }
 
     #[test]
@@ -98,7 +107,10 @@ mod tests {
         assert_eq!(response.id, Some("chatcmpl-generic".to_string()));
         // Test float to u32 conversion
         assert_eq!(response.created, Some(1677652288));
-        assert_eq!(response.choices[0].delta.content, Some("Streaming ".to_string()));
+        assert_eq!(
+            response.choices[0].delta.content,
+            Some("Streaming ".to_string())
+        );
     }
 
     #[test]
@@ -120,6 +132,9 @@ mod tests {
         assert!(response.created.is_none());
         assert!(response.usage.is_none());
         assert_eq!(response.model, "basic-model");
-        assert_eq!(response.choices[0].message.content, Some("Minimal response".to_string()));
+        assert_eq!(
+            response.choices[0].message.content,
+            Some("Minimal response".to_string())
+        );
     }
 }
