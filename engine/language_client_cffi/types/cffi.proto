@@ -14,10 +14,11 @@ message CFFIValueHolder {
   // require we decode this.
   //
   // Required for BAML -> CFFI
-  // But not for CFFI -> BAML (BAML always does type validation again at boundaries)
+  // But not for CFFI -> BAML (BAML always does type validation again at
+  // boundaries)
   oneof value {
     CFFIValueNull null_value = 2;
-    string string_value = 3;  
+    string string_value = 3;
     int64 int_value = 4;
     double float_value = 5;
     bool bool_value = 6;
@@ -35,8 +36,9 @@ message CFFIValueHolder {
 }
 
 enum CFFITypeNamespace {
-  TYPES = 0;
-  STREAM_TYPES = 1;
+  INTERNAL = 0;
+  TYPES = 1;
+  STREAM_TYPES = 2;
 }
 
 // wrapper for the name of a type
@@ -46,7 +48,7 @@ message CFFITypeName {
   string name = 2;
 }
 
-message CFFIValueNull { }
+message CFFIValueNull {}
 
 // Each variant as a message.
 message CFFIValueList {
@@ -83,9 +85,7 @@ message CFFIValueMedia {
   CFFIMediaValue media_value = 2;
 }
 
-message CFFIValueTuple {
-  repeated CFFIValueHolder values = 1;
-}
+message CFFIValueTuple { repeated CFFIValueHolder values = 1; }
 
 // For the Rust variant `Union(Vec<CFFIFieldType>, Box<CFFIValue>)`
 message CFFIValueUnionVariant {
@@ -110,19 +110,15 @@ message CFFIValueChecked {
 enum MediaTypeEnum {
   IMAGE = 0;
   AUDIO = 1;
+  PDF = 2;
+  VIDEO = 3;
 }
 
-message CFFIMediaContentUrl {
-  string url = 1;
-}
+message CFFIMediaContentUrl { string url = 1; }
 
-message CFFIMediaContentBase64 {
-  string data = 1;
-}
+message CFFIMediaContentBase64 { string data = 1; }
 
-message CFFIMediaContentFile {
-  string path = 1;
-}
+message CFFIMediaContentFile { string path = 1; }
 
 message CFFIMediaValue {
   oneof content {
@@ -157,28 +153,24 @@ message CFFIFieldTypeHolder {
     CFFIFieldTypeOptional optional_type = 15;
     CFFIFieldTypeChecked checked_type = 16;
     CFFIFieldTypeStreamState stream_state_type = 17;
+    CFFIFieldTypeAny any_type = 18;
   }
 }
 
 // Simple marker messages for primitive types.
-message CFFIFieldTypeString { }
-message CFFIFieldTypeInt { }
-message CFFIFieldTypeFloat { }
-message CFFIFieldTypeBool { }
-message CFFIFieldTypeNull { }
+message CFFIFieldTypeString {}
+message CFFIFieldTypeInt {}
+message CFFIFieldTypeFloat {}
+message CFFIFieldTypeBool {}
+message CFFIFieldTypeNull {}
+message CFFIFieldTypeAny {}
 
 // Literal: wraps a literal oneof.
-message CFFILiteralString {
-  string value = 1;
-}
+message CFFILiteralString { string value = 1; }
 
-message CFFILiteralInt {
-  int64 value = 1;
-}
+message CFFILiteralInt { int64 value = 1; }
 
-message CFFILiteralBool {
-  bool value = 1;
-}
+message CFFILiteralBool { bool value = 1; }
 
 message CFFIFieldTypeLiteral {
   oneof literal {
@@ -189,52 +181,36 @@ message CFFIFieldTypeLiteral {
 }
 
 // For Media, reuse the CFFIMediaType message.
-message CFFIFieldTypeMedia {
-  MediaTypeEnum media = 1;
-}
+message CFFIFieldTypeMedia { MediaTypeEnum media = 1; }
 
-message CFFIFieldTypeEnum {
-  string name = 1;
-}
+message CFFIFieldTypeEnum { string name = 1; }
 
-message CFFIFieldTypeClass {
-  CFFITypeName name = 1;
-}
+message CFFIFieldTypeClass { CFFITypeName name = 1; }
 
-message CFFIFieldTypeTypeAlias {
-  CFFITypeName name = 1;
-}
+message CFFIFieldTypeTypeAlias { CFFITypeName name = 1; }
 
-message CFFIFieldTypeList {
-  CFFIFieldTypeHolder element = 1;
-}
+message CFFIFieldTypeList { CFFIFieldTypeHolder element = 1; }
 
 message CFFIFieldTypeMap {
   CFFIFieldTypeHolder key = 1;
   CFFIFieldTypeHolder value = 2;
 }
 
-message CFFIFieldTypeTuple {
-  repeated CFFIFieldTypeHolder elements = 1;
-}
+message CFFIFieldTypeTuple { repeated CFFIFieldTypeHolder elements = 1; }
 
 message CFFIFieldTypeUnionVariant {
   CFFITypeName name = 1;
   repeated CFFIFieldTypeHolder options = 2;
 }
 
-message CFFIFieldTypeOptional {
-  CFFIFieldTypeHolder value = 1;
-}
+message CFFIFieldTypeOptional { CFFIFieldTypeHolder value = 1; }
 
 message CFFIFieldTypeChecked {
   CFFIFieldTypeHolder value = 1;
   repeated CFFICheckType checks = 2;
 }
 
-message CFFIFieldTypeStreamState {
-  CFFIFieldTypeHolder value = 1;
-}
+message CFFIFieldTypeStreamState { CFFIFieldTypeHolder value = 1; }
 
 message CFFIEnvVar {
   string key = 1;
@@ -245,12 +221,75 @@ message CFFIFunctionArguments {
   repeated CFFIMapEntry kwargs = 1;
   CFFIClientRegistry client_registry = 2;
   repeated CFFIEnvVar env = 3;
-  repeated CFFICollector collectors = 4;
+  // collectors only
+  repeated CFFIRawObject collectors = 4;
 }
 
-// Collectors are just pointers
-message CFFICollector {
-  int64 pointer = 1;
+message CFFIObjectMethodArguments {
+  CFFIRawObject object = 1;
+  string method_name = 2;
+  repeated CFFIMapEntry kwargs = 3;
+}
+
+message CFFIObjectConstructorArgs {
+  CFFIObjectType type = 1;
+  repeated CFFIMapEntry kwargs = 2;
+}
+
+// only one of these will be set
+// proto doesn't allow oneofs with repeated fields
+message CFFIObjectResponseSuccess {
+  oneof result {
+    CFFIRawObject object = 1;
+    MultipleRawObjectResponse objects = 2;
+    CFFIValueHolder value = 3;
+  }
+}
+
+message MultipleRawObjectResponse { repeated CFFIRawObject objects = 1; }
+
+message CFFIObjectResponseError { string error = 1; }
+
+message CFFIObjectResponse {
+  oneof response {
+    CFFIObjectResponseSuccess success = 1;
+    CFFIObjectResponseError error = 2;
+  }
+}
+
+// Enum for all possible object types
+message CFFIPointerType { int64 pointer = 1; }
+
+enum CFFIObjectType {
+  OBJECT_UNSPECIFIED = 0;
+  OBJECT_COLLECTOR = 1;
+  OBJECT_FUNCTION_LOG = 2;
+  OBJECT_USAGE = 3;
+  OBJECT_TIMING = 4;
+  OBJECT_STREAM_TIMING = 5;
+  OBJECT_LLM_CALL = 6;
+  OBJECT_LLM_STREAM_CALL = 7;
+  OBJECT_HTTP_REQUEST = 8;
+  OBJECT_HTTP_RESPONSE = 9;
+  OBJECT_HTTP_BODY = 10;
+  OBJECT_SSE_RESPONSE = 11;
+}
+
+// Raw object with type information
+message CFFIRawObject {
+  oneof object {
+    CFFIPointerType collector = 1;
+    CFFIPointerType function_log = 2;
+    CFFIPointerType usage = 3;
+    CFFIPointerType timing = 4;
+    CFFIPointerType stream_timing = 5;
+    CFFIPointerType llm_call = 6;
+    CFFIPointerType llm_stream_call = 7;
+    CFFIPointerType http_request = 8;
+    CFFIPointerType http_response = 9;
+    CFFIPointerType http_body = 10;
+    CFFIPointerType sse_response = 11;
+  }
 }
 
 message CFFIClientRegistry {

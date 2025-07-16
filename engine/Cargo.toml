@@ -20,7 +20,7 @@ members = [
   "generators/utils/*",
   "generators/languages/*",
   "sandbox",
-  "zed",
+  "zed", "llm-response-parser",
 ]
 default-members = [
   "baml-compiler",

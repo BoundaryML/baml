@@ -20,6 +20,19 @@ fn get_cargo_root() -> Result<PathBuf, anyhow::Error> {
     Ok(PathBuf::from(cargo_root).join("../../..").canonicalize()?)
 }
 
+fn get_dylib_path() -> Result<PathBuf, anyhow::Error> {
+    let dylib_path = get_cargo_root()?
+        .join("target/debug")
+        .join(if cfg!(target_os = "macos") {
+            "libbaml_cffi.dylib"
+        } else if cfg!(target_os = "windows") {
+            "baml_cffi.dll"
+        } else {
+            "libbaml_cffi.so"
+        });
+    Ok(dylib_path)
+}
+
 impl<L: TestLanguageFeatures> Drop for TestStructure<L> {
     fn drop(&mut self) {
         // delete src_dir if it exists
@@ -96,8 +109,11 @@ impl<L: TestLanguageFeatures> TestStructure<L> {
                 on_generate: match L::test_name() {
                     "go" => {
                         vec![
-                            "gofmt -w . && goimports -w . && go mod tidy && go test -run NEVER_MATCH"
-                                .to_string(),
+                            format!(
+                                "gofmt -w . && goimports -w . && go mod tidy && BAML_LIBRARY_PATH={} go test -run NEVER_MATCH",
+                                get_dylib_path()?.display()
+                            )
+                            .to_string(),
                         ]
                     }
                     "python" => vec!["ruff check --fix".to_string()],
@@ -166,7 +182,10 @@ impl<L: TestLanguageFeatures> TestStructure<L> {
             on_generate: match L::test_name() {
                 "go" => {
                     vec![
-                        "gofmt -w . && goimports -w . && go mod tidy && go test -run NEVER_MATCH"
+                        format!(
+                            "gofmt -w . && goimports -w . && go mod tidy && BAML_LIBRARY_PATH={} go test -run NEVER_MATCH",
+                            get_dylib_path()?.display()
+                        )
                             .to_string(),
                     ]
                 }

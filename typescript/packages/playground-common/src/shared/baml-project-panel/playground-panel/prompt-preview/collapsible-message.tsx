@@ -38,15 +38,21 @@ export const CollapsibleMessage: React.FC<CollapsibleMessageProps> = ({
 
     let hasImage = false;
     let hasAudio = false;
+    let hasPdf = false;
+    let hasVideo = false;
 
     for (const p of part.parts) {
       if (p.is_image?.()) hasImage = true;
       if (p.is_audio?.()) hasAudio = true;
+      if (p.is_pdf?.()) hasPdf = true;
+      if (p.is_video?.()) hasVideo = true;
     }
 
     const indicators: string[] = [];
     if (hasImage) indicators.push('[image]');
     if (hasAudio) indicators.push('[audio]');
+    if (hasPdf) indicators.push('[pdf]');
+    if (hasVideo) indicators.push('[video]');
 
     return indicators.length > 0 ? indicators.join(' ') : '';
   };

@@ -12,6 +12,7 @@ import (
 	"sync"
 	"unsafe"
 
+	"github.com/boundaryml/baml/engine/language_client_go/baml_go/serde"
 	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
 	"google.golang.org/protobuf/proto"
 )
@@ -49,10 +50,10 @@ type CallbackData struct {
 var (
 	dynamicCallbacks = make(map[uint32]CallbackData)
 	callbackMutex    sync.RWMutex
-	typeMap          TypeMap
+	typeMap          serde.TypeMap
 )
 
-func SetTypeMap(t TypeMap) {
+func SetTypeMap(t serde.TypeMap) {
 	typeMap = t
 }
 
@@ -103,7 +104,7 @@ func trigger_callback(id C.uint32_t, isDone C.int, content *C.int8_t, length C.i
 			return
 		}
 
-		decoded_data := Decode(&content_holder).Interface()
+		decoded_data := serde.Decode(&content_holder, typeMap).Interface()
 
 		var res ResultCallback
 		if isDone == 1 {

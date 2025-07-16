@@ -44,5 +44,13 @@ export const RenderPart: React.FC<{
     return <WebviewMedia bamlMediaType="audio" media={media} />;
   }
 
+  if (part.is_pdf()) {
+    return <WebviewMedia bamlMediaType="pdf" media={media} />;
+  }
+
+  if (part.is_video()) {
+    return <WebviewMedia bamlMediaType="video" media={media} />;
+  }
+
   return null;
 };

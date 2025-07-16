@@ -362,6 +362,8 @@ fn init(ruby: &Ruby) -> Result<()> {
     types::client_registry::ClientRegistry::define_in_ruby(&module)?;
     types::media::Audio::define_in_ruby(&module)?;
     types::media::Image::define_in_ruby(&module)?;
+    types::media::Pdf::define_in_ruby(&module)?;
+    types::media::Video::define_in_ruby(&module)?;
 
     // Register the new log collector classes
     types::log_collector::define_all_in_ruby(&module)?;

@@ -323,15 +323,8 @@ mod protoc_lang_out {
 }
 
 fn main() -> std::io::Result<()> {
-    #[cfg(target_os = "windows")]
-    println!("cargo:rustc-link-lib=dylib=ntdll");
-
-    // The last component of the target triple
-    // let is_windows = target_os == "windows";
-    println!("HI!!!");
-
+    println!("running build for baml_cffi");
     // Re-run build.rs if these files change.
-    println!("cargo:rerun-if-changed=types/cffi.fbs");
     println!("cargo:rerun-if-changed=types/cffi.proto");
     println!("cargo:rerun-if-changed=cbindgen.toml");
     println!("cargo:rerun-if-changed=src/lib.rs");

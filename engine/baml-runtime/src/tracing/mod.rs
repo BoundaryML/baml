@@ -1108,6 +1108,7 @@ impl From<&internal_baml_jinja::ChatMessagePart> for ContentPart {
             internal_baml_jinja::ChatMessagePart::Text(t) => ContentPart::Text(t.clone()),
             internal_baml_jinja::ChatMessagePart::Media(media) => {
                 match (media.media_type, &media.content) {
+                    // File
                     (BamlMediaType::Image, baml_types::BamlMediaContent::File(data)) => {
                         ContentPart::FileImage(
                             data.span_path.to_string_lossy().into_owned(),
@@ -1120,17 +1121,45 @@ impl From<&internal_baml_jinja::ChatMessagePart> for ContentPart {
                             data.relpath.to_string_lossy().into_owned(),
                         )
                     }
+                    (BamlMediaType::Pdf, baml_types::BamlMediaContent::File(data)) => {
+                        ContentPart::FilePdf(
+                            data.span_path.to_string_lossy().into_owned(),
+                            data.relpath.to_string_lossy().into_owned(),
+                        )
+                    }
+                    (BamlMediaType::Video, baml_types::BamlMediaContent::File(data)) => {
+                        ContentPart::FileVideo(
+                            data.span_path.to_string_lossy().into_owned(),
+                            data.relpath.to_string_lossy().into_owned(),
+                        )
+                    }
+
+                    // Base64
                     (BamlMediaType::Image, baml_types::BamlMediaContent::Base64(data)) => {
                         ContentPart::B64Image(data.base64.clone())
                     }
                     (BamlMediaType::Audio, baml_types::BamlMediaContent::Base64(data)) => {
                         ContentPart::B64Audio(data.base64.clone())
                     }
+                    (BamlMediaType::Pdf, baml_types::BamlMediaContent::Base64(data)) => {
+                        ContentPart::B64Pdf(data.base64.clone())
+                    }
+                    (BamlMediaType::Video, baml_types::BamlMediaContent::Base64(data)) => {
+                        ContentPart::B64Video(data.base64.clone())
+                    }
+
+                    // Url
                     (BamlMediaType::Image, baml_types::BamlMediaContent::Url(data)) => {
                         ContentPart::UrlImage(data.url.clone())
                     }
                     (BamlMediaType::Audio, baml_types::BamlMediaContent::Url(data)) => {
                         ContentPart::UrlAudio(data.url.clone())
+                    }
+                    (BamlMediaType::Pdf, baml_types::BamlMediaContent::Url(data)) => {
+                        ContentPart::UrlPdf(data.url.clone())
+                    }
+                    (BamlMediaType::Video, baml_types::BamlMediaContent::Url(data)) => {
+                        ContentPart::UrlVideo(data.url.clone())
                     }
                 }
             }

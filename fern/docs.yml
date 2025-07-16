@@ -491,7 +491,7 @@ navigation:
       #     - page: Reflex + Receipt Parsing
       #       icon: fa-regular fa-receipt
       #       path: 01-guide/introduction.mdx
-      #     - page: Parsing PDFs
+      #     - page: Parsing Pdfs
       #       icon: fa-regular fa-file-pdf
       #       path: 01-guide/introduction.mdx
       #     - page: Web scraping with Selenium
@@ -509,7 +509,7 @@ navigation:
       #     - page: React + Express + ChatBot
       #       icon: fa-regular fa-comments
       #       path: 01-guide/introduction.mdx
-      #     - page: NextJS parsing PDFs
+      #     - page: NextJS parsing Pdfs
       #       icon: fa-regular fa-file-pdf
       #       path: 01-guide/introduction.mdx
       #     - page: Web scraping with Playwright
@@ -682,6 +682,12 @@ navigation:
           - page: Audio
             slug: audio
             path: 03-reference/baml_client/audio.mdx
+          - page: Pdf
+            slug: pdf
+            path: 03-reference/baml_client/pdf.mdx
+          - page: Video
+            slug: video
+            path: 03-reference/baml_client/video.mdx
           - section: Errors
             contents:
               - page: Overview

@@ -1,7 +1,11 @@
 use std::borrow::Cow;
 
 use anyhow::Result;
-use baml_types::{tracing::events::FunctionType, type_meta, HasType};
+use baml_rpc::RpcClientDetails;
+use baml_types::{
+    tracing::events::{redact_headers, FunctionType},
+    type_meta, HasType,
+};
 
 use super::{IntoRpcEvent, TypeLookup};
 
@@ -209,9 +213,10 @@ impl<'a> IntoRpcEvent<'a, baml_rpc::runtime_api::IntermediateData<'a>>
         lookup: &(impl TypeLookup + ?Sized),
     ) -> baml_rpc::runtime_api::IntermediateData<'a> {
         baml_rpc::runtime_api::IntermediateData::RawLLMRequest {
+            http_request_id: self.id.to_string(),
             url: self.url().to_string(),
             method: self.method().to_string(),
-            headers: self.headers().clone(),
+            headers: redact_headers(self.headers().clone()),
             body: self.body().to_rpc_event(lookup),
         }
     }
@@ -225,9 +230,15 @@ impl<'a> IntoRpcEvent<'a, baml_rpc::runtime_api::IntermediateData<'a>>
         lookup: &(impl TypeLookup + ?Sized),
     ) -> baml_rpc::runtime_api::IntermediateData<'a> {
         baml_rpc::runtime_api::IntermediateData::RawLLMResponse {
+            http_request_id: self.request_id.to_string(),
             status: self.status,
-            headers: self.headers().cloned(),
+            headers: self.headers().cloned().map(redact_headers),
             body: self.body.to_rpc_event(lookup),
+            client_details: RpcClientDetails {
+                name: self.client_details.name.clone(),
+                provider: self.client_details.provider.clone(),
+                options: self.client_details.options.clone(),
+            },
         }
     }
 }
@@ -240,6 +251,7 @@ impl<'a> IntoRpcEvent<'a, baml_rpc::runtime_api::IntermediateData<'a>>
         lookup: &(impl TypeLookup + ?Sized),
     ) -> baml_rpc::runtime_api::IntermediateData<'a> {
         baml_rpc::runtime_api::IntermediateData::RawLLMResponseStream {
+            http_request_id: self.request_id.to_string(),
             event: baml_rpc::runtime_api::Event {
                 raw: Cow::Borrowed(&self.event.data),
             },

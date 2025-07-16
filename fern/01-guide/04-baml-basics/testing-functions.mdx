@@ -297,6 +297,210 @@ If `base64` is a data URL, this field will be ignored.
 </Tab>
 </Tabs>
 
+<br />
+## Test Pdf Inputs in the Playground
+
+For a function that takes a Pdf as input, like so:
+
+```baml
+function MyFunction(myPdf: pdf) -> string {
+  client GPT4o
+  prompt #"
+    Summarize this Pdf: {{myPdf}}
+  "#
+}
+```
+
+You can define test cases using Pdf files, URLs, or base64 strings.
+
+<Tabs>
+
+<Tab title="File">
+
+<Warning>
+  Committing a lot of Pdf files into your repository can make it slow to clone
+and pull your repository. If you expect to commit >500MiB of Pdfs, please
+  read [GitHub's size limit documentation][github-large-files] and consider
+  setting up [large file storage][github-lfs].
+</Warning>
+
+```baml
+test Test1 {
+  functions [MyFunction]
+  args {
+    myPdf {
+      file "../path/to/document.pdf"
+    }
+  }
+}
+```
+
+<ParamField path="file" type="string" required="true">
+  The path to the Pdf file, relative to the directory containing the current BAML file.
+
+Pdf files must be somewhere in `baml_src/`.
+
+</ParamField>
+
+<ParamField path="media_type" type="string">
+  The mime-type of the Pdf. If not set, and the provider expects a mime-type
+  to be provided, BAML will try to infer it based on first, the file extension,
+  and second, the contents of the file.
+</ParamField>
+
+</Tab>
+
+<Tab title="URL">
+```baml
+test Test1 {
+  functions [MyFunction]
+  args {
+    myPdf {
+      url "https...."
+    }
+  }
+}
+```
+
+<ParamField path="url" type="string" required="true">
+  The publicly accessible URL from which the Pdf may be downloaded.
+</ParamField>
+
+<ParamField path="media_type" type="string">
+  The mime-type of the Pdf. If not set, and the provider expects a mime-type
+  to be provided, BAML will try to infer it based on the contents of the file.
+</ParamField>
+
+</Tab>
+
+<Tab title="Base64">
+```baml
+test Test1 {
+  args {
+    myPdf {
+      base64 "base64string"
+      media_type "application/pdf"
+    }
+  }
+}
+```
+
+<ParamField path="base64" type="string" required="true">
+  The base64-encoded Pdf data.
+</ParamField>
+
+<ParamField path="media_type" type="string">
+  The mime-type of the Pdf. If not set, and the provider expects a mime-type
+  to be provided, BAML will try to infer it based on the contents of the file.
+
+If `base64` is a data URL, this field will be ignored.
+
+</ParamField>
+</Tab>
+</Tabs>
+
+<br />
+## Test Video Inputs in the Playground
+
+For a function that takes a video as input, like so:
+
+```baml
+function MyFunction(myVideo: video) -> string {
+  client GPT4o
+  prompt #"
+    Describe this video: {{myVideo}}
+  "#
+}
+```
+
+You can define test cases using video files, URLs, or base64 strings.
+
+<Tabs>
+
+<Tab title="File">
+
+<Warning>
+  Committing large video files into your repository can make it slow to clone
+  and pull your repository. If you expect to commit >500MiB of videos, please
+  read [GitHub's size limit documentation][github-large-files] and consider
+  setting up [large file storage][github-lfs].
+</Warning>
+
+```baml
+test Test1 {
+  functions [MyFunction]
+  args {
+    myVideo {
+      file "../path/to/video.mp4"
+    }
+  }
+}
+```
+
+<ParamField path="file" type="string" required="true">
+  The path to the video file, relative to the directory containing the current BAML file.
+
+Video files must be somewhere in `baml_src/`.
+
+</ParamField>
+
+<ParamField path="media_type" type="string">
+  The mime-type of the video. If not set, and the provider expects a mime-type
+  to be provided, BAML will try to infer it based on first, the file extension,
+  and second, the contents of the file.
+</ParamField>
+
+</Tab>
+
+<Tab title="URL">
+```baml
+test Test1 {
+  functions [MyFunction]
+  args {
+    myVideo {
+      url "https...."
+    }
+  }
+}
+```
+
+<ParamField path="url" type="string" required="true">
+  The publicly accessible URL from which the video may be downloaded.
+</ParamField>
+
+<ParamField path="media_type" type="string">
+  The mime-type of the video. If not set, and the provider expects a mime-type
+  to be provided, BAML will try to infer it based on the contents of the file.
+</ParamField>
+
+</Tab>
+
+<Tab title="Base64">
+```baml
+test Test1 {
+  args {
+    myVideo {
+      base64 "base64string"
+      media_type "video/mp4"
+    }
+  }
+}
+```
+
+<ParamField path="base64" type="string" required="true">
+  The base64-encoded video data.
+</ParamField>
+
+<ParamField path="media_type" type="string">
+  The mime-type of the video. If not set, and the provider expects a mime-type
+  to be provided, BAML will try to infer it based on the contents of the file.
+
+If `base64` is a data URL, this field will be ignored.
+
+</ParamField>
+</Tab>
+</Tabs>
+
 ## Assertions
 
 Test blocks in BAML code may contain checks and asserts. These attributes

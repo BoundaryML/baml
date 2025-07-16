@@ -1,19 +1,17 @@
-package baml
+package serde
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"reflect"
 
+	"github.com/boundaryml/baml/engine/language_client_go/baml_go/shared"
 	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
 )
 
-type TypeMap map[string]reflect.Type
-
 // debugLog prints debug information if BAML_INTERNAL_LOG=trace is set
 func debugLog(format string, args ...interface{}) {
-	if os.Getenv("BAML_INTERNAL_LOG") == "trace" {
+	if os.Getenv("BAML_INTERNAL_LOG_GO") == "trace" {
 		fmt.Printf(format, args...)
 		if format[len(format)-1] != '\n' {
 			fmt.Println()
@@ -22,15 +20,15 @@ func debugLog(format string, args ...interface{}) {
 }
 
 type BamlClassDeserializer interface {
-	Decode(holder *cffi.CFFIValueClass)
+	Decode(holder *cffi.CFFIValueClass, typeMap TypeMap)
 }
 
 type BamlEnumDeserializer interface {
-	Decode(holder *cffi.CFFIValueEnum)
+	Decode(holder *cffi.CFFIValueEnum, typeMap TypeMap)
 }
 
 type BamlUnionDeserializer interface {
-	Decode(holder *cffi.CFFIValueUnionVariant)
+	Decode(holder *cffi.CFFIValueUnionVariant, typeMap TypeMap)
 }
 
 type DynamicClass struct {
@@ -38,7 +36,7 @@ type DynamicClass struct {
 	Fields map[string]any
 }
 
-func (d *DynamicClass) Decode(holder *cffi.CFFIValueClass) {
+func (d *DynamicClass) Decode(holder *cffi.CFFIValueClass, typeMap TypeMap) {
 	typeName := holder.Name
 	if typeName == nil {
 		panic(fmt.Sprintf("DynamicClass.Decode: typeName is nil, holder=%+v", holder))
@@ -56,7 +54,7 @@ func (d *DynamicClass) Decode(holder *cffi.CFFIValueClass) {
 		}
 		key := field.Key
 		valueHolder := field.Value
-		d.Fields[key] = Decode(valueHolder).Interface()
+		d.Fields[key] = Decode(valueHolder, typeMap).Interface()
 	}
 }
 
@@ -73,84 +71,68 @@ func (d *DynamicEnum) Decode(holder *cffi.CFFIValueEnum) {
 	d.Value = string(holder.Value)
 }
 
-func decodeListValue(valueList *cffi.CFFIValueList) reflect.Value {
+func decodeListValue(valueList *cffi.CFFIValueList, typeMap TypeMap) reflect.Value {
 	debugLog("decodeListValue: valueList=%+v\n", valueList)
 	if valueList == nil {
 		panic("decodeListValue: valueList is nil")
 	}
 
 	elementType := valueList.ValueType
-	goElementType := convertFieldTypeToGoType(elementType)
-
-	// // check if goValueType is a pointer
-	// isValueTypePtr := goElementType.Kind() == reflect.Ptr
-
-	// // is union, enum, or class (i.e. implements BamlClassDeserializer, BamlEnumDeserializer, BamlUnionDeserializer)
-	// isValueTypeUnion := elementType.GetUnionVariantType() != nil
-	// isValueTypeEnum := elementType.GetEnumType() != nil
-	// isValueTypeClass := elementType.GetClassType() != nil
-	// isValueCustomType := isValueTypeUnion || isValueTypeEnum || isValueTypeClass
-	// castToPointer := (isValueTypePtr && !isValueCustomType)
+	goElementType := convertFieldTypeToGoType(elementType, typeMap)
 
 	length := len(valueList.Values)
-	values := reflect.MakeSlice(reflect.SliceOf(goElementType), length, length)
+	debugLog("goElementType: %v\n", goElementType)
+	debugLog("length: %v\n", length)
+	sliceOf := reflect.SliceOf(goElementType)
+	debugLog("sliceOf: %v\n", sliceOf)
+	values := reflect.MakeSlice(sliceOf, length, length)
+	debugLog("values: %v\n", values)
 
 	for i, v := range valueList.Values {
-		decodedValue := Decode(v)
+		decodedValue := Decode(v, typeMap)
 		values.Index(i).Set(decodedValue)
 	}
 
 	return values
 }
 
-func decodeMapValue(valueMap *cffi.CFFIValueMap) reflect.Value {
+func decodeMapValue(valueMap *cffi.CFFIValueMap, typeMap TypeMap) reflect.Value {
 	if valueMap == nil {
 		panic("decodeMapValue: valueMap is nil")
 	}
+	debugLog("decodeMapValue: valueMap=%+v\n", valueMap)
 	keyType := valueMap.KeyType
 	valueType := valueMap.ValueType
-	goKeyType := convertFieldTypeToGoType(keyType)
-	goValueType := convertFieldTypeToGoType(valueType)
+	goKeyType := convertFieldTypeToGoType(keyType, typeMap)
+	goValueType := convertFieldTypeToGoType(valueType, typeMap)
 
-	// // check if goValueType is a pointer
-	// isValueTypePtr := goValueType.Kind() == reflect.Ptr
-
-	// // is union, enum, or class (i.e. implements BamlClassDeserializer, BamlEnumDeserializer, BamlUnionDeserializer)
-	// isValueTypeUnion := valueType.GetUnionVariantType() != nil
-	// isValueTypeEnum := valueType.GetEnumType() != nil
-	// isValueTypeClass := valueType.GetClassType() != nil
-	// isValueCustomType := isValueTypeUnion || isValueTypeEnum || isValueTypeClass
-	// castToPointer := (isValueTypePtr && !isValueCustomType)
-	// debugLog("castToPointer %v\nisValueTypePtr %v\nisValueCustomType %v\ngoValueType %v\ngoKeyType %v\n", castToPointer, isValueTypePtr, isValueCustomType, goValueType, goKeyType)
+	debugLog("goKeyType: %v\n", goKeyType)
+	debugLog("goValueType: %v\n", goValueType)
 
 	values := reflect.MakeMap(reflect.MapOf(goKeyType, goValueType))
 
 	for _, entry := range valueMap.Entries {
 		key := entry.Key
 		value := entry.Value
-		decodedValue := Decode(value)
+		decodedValue := Decode(value, typeMap)
 		debugLog("key: %v, decodedValue: %v\n", key, decodedValue)
 		values.SetMapIndex(reflect.ValueOf(key), decodedValue)
 	}
 	return values
 }
 
-func decodeStreamingStateValue(valueStreamingState *cffi.CFFIValueStreamingState) StreamState[any] {
+func decodeStreamingStateValue(valueStreamingState *cffi.CFFIValueStreamingState, typeMap TypeMap) shared.StreamState[any] {
 	if valueStreamingState == nil {
 		panic("error decoding value")
 	}
 	value := valueStreamingState.Value
-	return StreamState[any]{
-		Value: Decode(value).Interface(),
+	return shared.StreamState[any]{
+		Value: Decode(value, typeMap).Interface(),
 		State: decodeStreamStateType(valueStreamingState.State),
 	}
 }
 
-type BamlDecoder interface {
-	BamlDecode(decodedMap map[string]any)
-}
-
-func decodeClassValue(valueClass *cffi.CFFIValueClass) reflect.Value {
+func decodeClassValue(valueClass *cffi.CFFIValueClass, typeMap TypeMap) reflect.Value {
 	if valueClass == nil {
 		panic("decodeClassValue: valueClass is nil")
 	}
@@ -164,17 +146,17 @@ func decodeClassValue(valueClass *cffi.CFFIValueClass) reflect.Value {
 		dynamicClass := DynamicClass{
 			Name: className,
 		}
-		dynamicClass.Decode(valueClass)
+		dynamicClass.Decode(valueClass, typeMap)
 		return reflect.ValueOf(dynamicClass)
 	}
 
 	cls := reflect.New(found)
 	as_interface := cls.Interface().(BamlClassDeserializer)
-	as_interface.Decode(valueClass)
+	as_interface.Decode(valueClass, typeMap)
 	return cls.Elem()
 }
 
-func decodeEnumValue(valueEnum *cffi.CFFIValueEnum) reflect.Value {
+func decodeEnumValue(valueEnum *cffi.CFFIValueEnum, typeMap TypeMap) reflect.Value {
 	if valueEnum == nil {
 		panic("decodeEnumValue: valueEnum is nil")
 	}
@@ -189,11 +171,11 @@ func decodeEnumValue(valueEnum *cffi.CFFIValueEnum) reflect.Value {
 	}
 	enum := reflect.New(found)
 	as_interface := enum.Interface().(BamlEnumDeserializer)
-	as_interface.Decode(valueEnum)
+	as_interface.Decode(valueEnum, typeMap)
 	return enum.Elem()
 }
 
-func decodeUnionValue(valueUnion *cffi.CFFIValueUnionVariant) reflect.Value {
+func decodeUnionValue(valueUnion *cffi.CFFIValueUnionVariant, typeMap TypeMap) reflect.Value {
 	if valueUnion == nil {
 		panic("decodeUnionValue: valueUnion is nil")
 	}
@@ -222,7 +204,7 @@ func decodeUnionValue(valueUnion *cffi.CFFIValueUnionVariant) reflect.Value {
 	// These shouldn't be looked up as union types
 	if isOptionalPattern {
 		value := valueUnion.Value
-		return Decode(value)
+		return Decode(value, typeMap)
 	}
 
 	found, ok := typeMap[namespace+"."+unionName]
@@ -231,120 +213,51 @@ func decodeUnionValue(valueUnion *cffi.CFFIValueUnionVariant) reflect.Value {
 		// decode the value as the value and drop
 		// union type information
 		value := valueUnion.Value
-		return Decode(value)
+		return Decode(value, typeMap)
 	}
 
 	union := reflect.New(found)
 	as_interface := union.Interface().(BamlUnionDeserializer)
-	as_interface.Decode(valueUnion)
+	as_interface.Decode(valueUnion, typeMap)
 	return union.Elem()
 
 }
 
-// Check corresponds to the Python Check model.
-type Check struct {
-	Name       string `json:"name"`
-	Expression string `json:"expression"`
-	Status     string `json:"status"`
-}
-
-// Checked is a generic struct that contains a value of any type T and a map of checks,
-// where the key type CN has an underlying type string.
-type Checked[T any] struct {
-	Value  T                `json:"value"`
-	Checks map[string]Check `json:"checks"`
-}
-
-func decodeCheckedValue[T any](valueChecked *cffi.CFFIValueChecked) Checked[T] {
+func decodeCheckedValue[T any](valueChecked *cffi.CFFIValueChecked, typeMap TypeMap) shared.Checked[T] {
 	if valueChecked == nil {
 		panic("decodeCheckedValue: valueChecked is nil")
 	}
 
 	value := valueChecked.Value
-	checks := make(map[string]Check, len(valueChecked.Checks))
+	checks := make(map[string]shared.Check, len(valueChecked.Checks))
 	for _, check := range valueChecked.Checks {
-		checks[string(check.Name)] = Check{
+		checks[string(check.Name)] = shared.Check{
 			Name:       string(check.Name),
 			Expression: string(check.Expression),
 			Status:     string(check.Status),
 		}
 	}
 
-	return Checked[T]{
-		Value:  Decode(value).Interface().(T),
+	return shared.Checked[T]{
+		Value:  Decode(value, typeMap).Interface().(T),
 		Checks: checks,
 	}
 }
 
-type StreamStateType string
-
-const (
-	StreamStatePending    StreamStateType = "Pending"
-	StreamStateIncomplete StreamStateType = "Incomplete"
-	StreamStateComplete   StreamStateType = "Complete"
-)
-
-// Values returns all allowed values for the AliasedEnum type.
-func (StreamStateType) Values() []StreamStateType {
-	return []StreamStateType{
-		StreamStatePending,
-		StreamStateIncomplete,
-		StreamStateComplete,
-	}
-}
-
-// IsValid checks whether the given AliasedEnum value is valid.
-func (e StreamStateType) IsValid() bool {
-
-	for _, v := range e.Values() {
-		if e == v {
-			return true
-		}
-	}
-	return false
-
-}
-
-// MarshalJSON customizes JSON marshaling for AliasedEnum.
-func (e StreamStateType) MarshalJSON() ([]byte, error) {
-	if !e.IsValid() {
-		return nil, fmt.Errorf("invalid StreamStateType: %q", e)
-	}
-	return json.Marshal(string(e))
-}
-
-// UnmarshalJSON customizes JSON unmarshaling for AliasedEnum.
-func (e *StreamStateType) UnmarshalJSON(data []byte) error {
-	var s string
-	if err := json.Unmarshal(data, &s); err != nil {
-		return err
-	}
-	*e = StreamStateType(s)
-	if !e.IsValid() {
-		return fmt.Errorf("invalid StreamStateType: %q", s)
-	}
-	return nil
-}
-
-type StreamState[T any] struct {
-	Value T               `json:"value"`
-	State StreamStateType `json:"state"`
-}
-
-func decodeStreamStateType(state cffi.CFFIStreamState) StreamStateType {
+func decodeStreamStateType(state cffi.CFFIStreamState) shared.StreamStateType {
 	switch state {
 	case cffi.CFFIStreamState_PENDING:
-		return StreamStatePending
+		return shared.StreamStatePending
 	case cffi.CFFIStreamState_STARTED:
-		return StreamStateIncomplete
+		return shared.StreamStateIncomplete
 	case cffi.CFFIStreamState_DONE:
-		return StreamStateComplete
+		return shared.StreamStateComplete
 	default:
 		panic("unexpected stream state")
 	}
 }
 
-func convertFieldTypeToGoType(fieldType *cffi.CFFIFieldTypeHolder) reflect.Type {
+func convertFieldTypeToGoType(fieldType *cffi.CFFIFieldTypeHolder, typeMap TypeMap) reflect.Type {
 	if fieldType == nil {
 		panic("error decoding value")
 	}
@@ -400,32 +313,28 @@ func convertFieldTypeToGoType(fieldType *cffi.CFFIFieldTypeHolder) reflect.Type 
 
 	if optional, ok := type_.(*cffi.CFFIFieldTypeHolder_OptionalType); ok {
 		optionalType := optional.OptionalType
-		goType := convertFieldTypeToGoType(optionalType.Value)
+		goType := convertFieldTypeToGoType(optionalType.Value, typeMap)
 		return reflect.PointerTo(goType)
 	}
 
 	if checked, ok := type_.(*cffi.CFFIFieldTypeHolder_CheckedType); ok {
 		checkedType := checked.CheckedType
-		return convertFieldTypeToGoType(checkedType.Value)
+		return convertFieldTypeToGoType(checkedType.Value, typeMap)
 	}
 
 	if streamState, ok := type_.(*cffi.CFFIFieldTypeHolder_StreamStateType); ok {
 		streamStateType := streamState.StreamStateType
-		return convertFieldTypeToGoType(streamStateType.Value)
+		return convertFieldTypeToGoType(streamStateType.Value, typeMap)
 	}
 
 	if list, ok := type_.(*cffi.CFFIFieldTypeHolder_ListType); ok {
 		listType := list.ListType
-		return reflect.SliceOf(convertFieldTypeToGoType(listType.Element))
+		return reflect.SliceOf(convertFieldTypeToGoType(listType.Element, typeMap))
 	}
 
 	if map_, ok := type_.(*cffi.CFFIFieldTypeHolder_MapType); ok {
 		mapType := map_.MapType
-		return reflect.MapOf(convertFieldTypeToGoType(mapType.Key), convertFieldTypeToGoType(mapType.Value))
-	}
-
-	if _, ok := type_.(*cffi.CFFIFieldTypeHolder_NullType); ok {
-		return reflect.TypeOf(nil)
+		return reflect.MapOf(convertFieldTypeToGoType(mapType.Key, typeMap), convertFieldTypeToGoType(mapType.Value, typeMap))
 	}
 
 	if typeAlias, ok := type_.(*cffi.CFFIFieldTypeHolder_TypeAliasType); ok {
@@ -436,6 +345,17 @@ func convertFieldTypeToGoType(fieldType *cffi.CFFIFieldTypeHolder) reflect.Type 
 			panic("error decoding value, type alias not found: " + namespace + "." + name)
 		}
 		return goType
+	}
+
+	// any is weird in go, (alias for interface{})
+	if _, ok := type_.(*cffi.CFFIFieldTypeHolder_NullType); ok {
+		if _, ok := typeMap["INTERNAL.nil"]; ok {
+			return reflect.TypeOf((*interface{})(nil)).Elem()
+		}
+		return reflect.TypeOf((*interface{})(nil))
+	}
+	if _, ok := type_.(*cffi.CFFIFieldTypeHolder_AnyType); ok {
+		return reflect.TypeOf((*interface{})(nil)).Elem()
 	}
 
 	panic("error decoding value, unknown field type: " + fmt.Sprintf("%+v", fieldType))
@@ -473,7 +393,7 @@ func maybeDecodePrimitive(holder *cffi.CFFIValueHolder) (*reflect.Value, bool) {
 
 // Used when we have a nil value but its of unknown type
 
-func maybeOptional(value reflect.Value, targetType *cffi.CFFIFieldTypeHolder, isUnion bool) reflect.Value {
+func maybeOptional(value reflect.Value, targetType *cffi.CFFIFieldTypeHolder, isUnion bool, typeMap TypeMap) reflect.Value {
 	// debugLog("decoding value: %v\n", targetType)
 	if optional, ok := targetType.Type.(*cffi.CFFIFieldTypeHolder_OptionalType); ok {
 		optionalType := optional.OptionalType
@@ -484,7 +404,7 @@ func maybeOptional(value reflect.Value, targetType *cffi.CFFIFieldTypeHolder, is
 				return ptr
 			}
 		} else {
-			goType := convertFieldTypeToGoType(optionalType.Value)
+			goType := convertFieldTypeToGoType(optionalType.Value, typeMap)
 			ptr := reflect.New(goType)
 			ptr.Elem().Set(value)
 			return ptr
@@ -494,98 +414,58 @@ func maybeOptional(value reflect.Value, targetType *cffi.CFFIFieldTypeHolder, is
 	return value
 }
 
-func Decode(holder *cffi.CFFIValueHolder) reflect.Value {
+func Decode(holder *cffi.CFFIValueHolder, typeMap TypeMap) reflect.Value {
 	value := holder.Value
 
 	if _, ok := value.(*cffi.CFFIValueHolder_NullValue); ok {
-		retType := convertFieldTypeToGoType(holder.Type)
-		if retType == reflect.TypeOf(nil) {
-			return reflect.Zero(reflect.TypeOf((*interface{})(nil)))
-		}
+		retType := convertFieldTypeToGoType(holder.Type, typeMap)
 		// return as the null value of the type.
 		return reflect.Zero(retType)
 	}
 
 	if primitiveValue, found := maybeDecodePrimitive(holder); found {
-		return maybeOptional(*primitiveValue, holder.Type, false)
+		return maybeOptional(*primitiveValue, holder.Type, false, typeMap)
 	}
 
 	if listVal, ok := value.(*cffi.CFFIValueHolder_ListValue); ok {
-		return maybeOptional(decodeListValue(listVal.ListValue), holder.Type, false)
+		return maybeOptional(decodeListValue(listVal.ListValue, typeMap), holder.Type, false, typeMap)
 	}
 
 	if mapVal, ok := value.(*cffi.CFFIValueHolder_MapValue); ok {
-		return maybeOptional(decodeMapValue(mapVal.MapValue), holder.Type, false)
+		return maybeOptional(decodeMapValue(mapVal.MapValue, typeMap), holder.Type, false, typeMap)
 	}
 
 	if classVal, ok := value.(*cffi.CFFIValueHolder_ClassValue); ok {
-		return maybeOptional(decodeClassValue(classVal.ClassValue), holder.Type, false)
+		return maybeOptional(decodeClassValue(classVal.ClassValue, typeMap), holder.Type, false, typeMap)
 	}
 
 	if enumVal, ok := value.(*cffi.CFFIValueHolder_EnumValue); ok {
-		return maybeOptional(decodeEnumValue(enumVal.EnumValue), holder.Type, false)
+		return maybeOptional(decodeEnumValue(enumVal.EnumValue, typeMap), holder.Type, false, typeMap)
 	}
 
 	if unionVal, ok := value.(*cffi.CFFIValueHolder_UnionVariantValue); ok {
-		decoded := decodeUnionValue(unionVal.UnionVariantValue)
-		return maybeOptional(decoded, holder.Type, true)
+		decoded := decodeUnionValue(unionVal.UnionVariantValue, typeMap)
+		return maybeOptional(decoded, holder.Type, true, typeMap)
 	}
 
 	if checkedVal, ok := value.(*cffi.CFFIValueHolder_CheckedValue); ok {
-		return maybeOptional(reflect.ValueOf(decodeCheckedValue[any](checkedVal.CheckedValue)).Elem(), holder.Type, false)
+		return maybeOptional(reflect.ValueOf(decodeCheckedValue[any](checkedVal.CheckedValue, typeMap)).Elem(), holder.Type, false, typeMap)
 	}
 
 	if streamingVal, ok := value.(*cffi.CFFIValueHolder_StreamingStateValue); ok {
-		return reflect.ValueOf(decodeStreamingStateValue(streamingVal.StreamingStateValue)).Elem()
+		return reflect.ValueOf(decodeStreamingStateValue(streamingVal.StreamingStateValue, typeMap)).Elem()
 	}
 
 	panic("error decoding value: " + holder.String())
 }
 
-func DecodeOptional[T any](valueHolder *cffi.CFFIValueHolder, decodeFunc func(*cffi.CFFIValueHolder) T) *T {
-	value := Decode(valueHolder)
-	return value.Interface().(*T)
-}
-
-func DecodeList[T any](valueHolder *cffi.CFFIValueHolder, decodeFunc func(*cffi.CFFIValueHolder) T) []T {
-	list := valueHolder.GetListValue()
-	if list == nil {
-		panic("error decoding value, expected list")
-	}
-
-	values := make([]T, len(list.Values))
-	for i, v := range list.Values {
-		values[i] = decodeFunc(v)
-	}
-	return values
-}
-
-func DecodeMap[T any](valueHolder *cffi.CFFIValueHolder, decodeFunc func(*cffi.CFFIValueHolder) T) map[string]T {
-	map_ := valueHolder.GetMapValue()
-	if map_ == nil {
-		panic("error decoding value, expected map")
-	}
-
-	values := make(map[string]T)
-	for _, entry := range map_.Entries {
-		key := entry.Key
-		value := entry.Value
-		values[key] = decodeFunc(value)
-	}
-	return values
-}
-
-func DecodeStreamingState[T any](valueHolder *cffi.CFFIValueHolder, decodeFunc func(*cffi.CFFIValueHolder) T) StreamState[T] {
-	streamingState := valueHolder.GetStreamingStateValue()
-	if streamingState == nil {
-		// This happens due ot partialization of types sometimes.
-		return StreamState[T]{
-			State: StreamStatePending,
+func DecodeStreamingState[T any](holder *cffi.CFFIValueHolder, decodeFunc func(inner *cffi.CFFIValueHolder) T) shared.StreamState[T] {
+	value := holder.Value
+	if streamingVal, ok := value.(*cffi.CFFIValueHolder_StreamingStateValue); ok {
+		return shared.StreamState[T]{
+			Value: decodeFunc(streamingVal.StreamingStateValue.Value),
+			State: decodeStreamStateType(streamingVal.StreamingStateValue.State),
 		}
 	}
-
-	return StreamState[T]{
-		Value: decodeFunc(streamingState.Value),
-		State: decodeStreamStateType(streamingState.State),
-	}
+	panic("error decoding streaming state: " + holder.String())
 }

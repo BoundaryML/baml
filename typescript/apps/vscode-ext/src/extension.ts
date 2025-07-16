@@ -67,8 +67,16 @@ export function activate(context: vscode.ExtensionContext) {
       pathRewrite: (path, req) => {
         console.log('[PROXY] pathRewrite input:', path)
 
+        // If the request clearly targets a static image asset (e.g. ".png", ".jpg" …)
+        // and it’s a simple GET, we blank the path so the webview loads it from
+        // its own origin.  The previous implementation treated ANY dotted suffix
+        // as an “image”, which broke legitimate paths like “/pdf/2305.08675”.
+
         // If the path looks like an image (xyz.png …) and it's a GET → blank it.
-        if (/\.[a-z0-9]+$/i.test(path) && req.method === 'GET') {
+        // if (/\.[a-z0-9]+$/i.test(path) && req.method === 'GET') {
+
+        const imageExtPattern = /\.(png|jpe?g|gif|bmp|webp|svg)$/i
+        if (imageExtPattern.test(path) && req.method === 'GET') {
           console.log('[PROXY] Image request detected, clearing path:', path)
           return ''
         }

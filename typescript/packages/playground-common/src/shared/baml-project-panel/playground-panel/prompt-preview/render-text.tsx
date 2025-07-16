@@ -6,6 +6,7 @@ import React from 'react';
 import { displaySettingsAtom } from '../preview-toolbar';
 import { getHighlightedParts } from './highlight-utils';
 import { TokenEncoderCache } from './render-tokens';
+import { TruncatedString } from './TruncatedString';
 
 export const showTokensAtom = atom(
   (get) => get(displaySettingsAtom).showTokens,

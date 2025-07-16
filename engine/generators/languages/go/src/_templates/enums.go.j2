@@ -61,7 +61,7 @@ func (e *{{ name }}) UnmarshalJSON(data []byte) error {
     return nil
 }
 
-func (e *{{ name }}) Decode(holder *cffi.CFFIValueEnum) {
+func (e *{{ name }}) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
     name := holder.Name
     if name.Name != "{{ name }}" && name.Namespace != {{ pkg.namespace() }} {
         panic(fmt.Sprintf("expected {{ pkg.name() }}.{{ name }}, got %s.%s", string(name.Namespace.String()), string(name.Name)))

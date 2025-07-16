@@ -2668,7 +2668,6 @@ dependencies = [
  "anyhow",
  "askama",
  "baml-types",
- "baml_cffi",
  "dir-writer",
  "internal-baml-core",
  "prettydiff",
@@ -2699,7 +2698,6 @@ dependencies = [
  "anyhow",
  "askama",
  "baml-types",
- "baml_cffi",
  "dir-writer",
  "index-map",
  "indexmap 2.9.0",
@@ -2719,7 +2717,6 @@ dependencies = [
  "anyhow",
  "askama",
  "baml-types",
- "baml_cffi",
  "dir-writer",
  "internal-baml-core",
  "prettydiff",
@@ -2733,7 +2730,6 @@ dependencies = [
  "anyhow",
  "askama",
  "baml-types",
- "baml_cffi",
  "dir-writer",
  "internal-baml-core",
  "prettydiff",
@@ -2747,7 +2743,6 @@ dependencies = [
  "anyhow",
  "askama",
  "baml-types",
- "baml_cffi",
  "dir-writer",
  "indexmap 2.9.0",
  "internal-baml-core",
@@ -4032,6 +4027,15 @@ name = "litemap"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "241eaef5fd12c88705a01fc1066c48c4b36e0dd4377dcdc7ec3942cea7a69956"
+
+[[package]]
+name = "llm-response-parser"
+version = "0.201.0"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "lock_api"
@@ -6539,6 +6543,7 @@ dependencies = [
  "anyhow",
  "baml-log",
  "baml-types",
+ "baml_cffi",
  "cfg-if",
  "dir-writer",
  "filetime",

@@ -1,10 +1,14 @@
 mod baml_type_encode;
 mod baml_value_decode;
 mod baml_value_encode;
+mod baml_value_with_meta_encode;
 
 mod function_args_decode;
+pub mod object_args_decode;
+pub mod object_response_encode;
+mod raw_object_encode_decode;
 mod utils;
 
-pub(crate) use baml_value_encode::Meta as EncodeMeta;
+pub(crate) use baml_value_with_meta_encode::Meta as EncodeMeta;
 pub use function_args_decode::BamlFunctionArguments;
 pub use utils::{DecodeFromBuffer, EncodeToBuffer};

@@ -16,6 +16,11 @@ typedef void (*CallbackFn)(uint32_t call_id,
                            const int8_t *content,
                            uintptr_t length);
 
+typedef struct Buffer {
+  const int8_t *ptr;
+  size_t len;
+} Buffer;
+
 const char *version(void);
 
 const void *create_baml_runtime(const char *root_path,
@@ -48,6 +53,8 @@ const void *call_function_stream_from_c(const void *runtime,
                                         uintptr_t length,
                                         uint32_t id);
 
-const void *call_collector_function(const void *object,
-                                    const char *object_type,
-                                    const char *function_name);
+struct Buffer call_object_constructor(const char *encoded_args, uintptr_t length);
+
+void free_buffer(struct Buffer buf);
+
+struct Buffer call_object_method(const char *encoded_args, uintptr_t length);

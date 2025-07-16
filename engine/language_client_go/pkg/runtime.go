@@ -24,42 +24,8 @@ type BamlRuntime struct {
 	runtime unsafe.Pointer
 }
 
-type BamlFunctionArguments struct {
-	Kwargs         map[string]any
-	ClientRegistry *ClientRegistry
-	Env            map[string]string
-	Collectors     []Collector
-}
-
-type ClientRegistry struct {
-	primary *string
-	clients clientRegistryMap
-}
-
-type clientProperty struct {
-	provider    string
-	retryPolicy *string
-	options     map[string]any
-}
-
-type clientRegistryMap map[string]clientProperty
-
 func NewClientRegistry() *ClientRegistry {
-	return &ClientRegistry{
-		primary: nil,
-		clients: clientRegistryMap{},
-	}
-}
-
-func (c *ClientRegistry) AddLlmClient(name string, provider string, options map[string]any) {
-	c.clients[name] = clientProperty{
-		provider: provider,
-		options:  options,
-	}
-}
-
-func (c *ClientRegistry) SetPrimaryClient(name string) {
-	c.primary = &name
+	return &ClientRegistry{}
 }
 
 var instance *BamlRuntime

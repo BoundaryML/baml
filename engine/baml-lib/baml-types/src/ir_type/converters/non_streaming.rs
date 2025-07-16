@@ -1,7 +1,7 @@
 use crate::{
     baml_value::TypeLookups,
     ir_type::{ArrowGeneric, TypeNonStreaming, UnionTypeGeneric},
-    type_meta, BamlMediaType, StreamingMode, TypeIR, TypeValue,
+    type_meta, StreamingMode, TypeIR, TypeValue,
 };
 
 pub fn from_type_ir(r#type: &TypeIR, _lookup: &impl TypeLookups) -> TypeNonStreaming {
@@ -21,8 +21,8 @@ pub fn from_type_ir(r#type: &TypeIR, _lookup: &impl TypeLookups) -> TypeNonStrea
             TypeValue::Float => TypeNonStreaming::Primitive(TypeValue::Float, meta),
             TypeValue::Bool => TypeNonStreaming::Primitive(TypeValue::Bool, meta),
             TypeValue::String => TypeNonStreaming::Primitive(TypeValue::String, meta),
-            TypeValue::Media(_) => {
-                TypeNonStreaming::Primitive(TypeValue::Media(BamlMediaType::Image), meta)
+            TypeValue::Media(media_type) => {
+                TypeNonStreaming::Primitive(TypeValue::Media(*media_type), meta)
             }
         },
         TypeIR::Enum { name, dynamic, .. } => TypeNonStreaming::Enum {

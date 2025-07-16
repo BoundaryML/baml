@@ -1,8 +1,9 @@
-use baml_types::{BamlMediaType, FieldType, LiteralValue, TypeValue, ir_type::UnionTypeViewGeneric};
-
-use crate::field_type_attributes;
+use baml_types::{
+    ir_type::UnionTypeViewGeneric, BamlMediaType, FieldType, LiteralValue, TypeValue,
+};
 
 use super::ruby_language_features::ToRuby;
+use crate::field_type_attributes;
 
 impl ToRuby for FieldType {
     fn to_ruby(&self) -> String {
@@ -37,15 +38,31 @@ impl ToRuby for FieldType {
                 // TODO: Create Baml::Types::Image
                 TypeValue::Media(BamlMediaType::Image) => "Baml::Image",
                 TypeValue::Media(BamlMediaType::Audio) => "Baml::Audio",
+                TypeValue::Media(BamlMediaType::Pdf) => "Baml::Pdf",
+                TypeValue::Media(BamlMediaType::Video) => "Baml::Video",
             }),
-            FieldType::Union(inner, _) => {
-                match inner.view() {
-                    UnionTypeViewGeneric::Null => "NilClass".to_string(),
-                    UnionTypeViewGeneric::Optional(field_type) => format!("T.nilable({})", field_type.to_ruby()),
-                    UnionTypeViewGeneric::OneOf(field_types) => format!("T.any({})", field_types.iter().map(|t| t.to_ruby()).collect::<Vec<_>>().join(", ")),
-                    UnionTypeViewGeneric::OneOfOptional(field_types) => format!("T.nilable(T.any({}))", field_types.iter().map(|t| t.to_ruby()).collect::<Vec<_>>().join(", ")),
+            FieldType::Union(inner, _) => match inner.view() {
+                UnionTypeViewGeneric::Null => "NilClass".to_string(),
+                UnionTypeViewGeneric::Optional(field_type) => {
+                    format!("T.nilable({})", field_type.to_ruby())
                 }
-            }
+                UnionTypeViewGeneric::OneOf(field_types) => format!(
+                    "T.any({})",
+                    field_types
+                        .iter()
+                        .map(|t| t.to_ruby())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ),
+                UnionTypeViewGeneric::OneOfOptional(field_types) => format!(
+                    "T.nilable(T.any({}))",
+                    field_types
+                        .iter()
+                        .map(|t| t.to_ruby())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ),
+            },
             FieldType::Tuple(inner, _) => format!(
                 // https://sorbet.org/docs/tuples
                 "[{}]",
@@ -55,7 +72,9 @@ impl ToRuby for FieldType {
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
-            FieldType::Arrow(_, _) => todo!("Arrow types should not be used in generated type definitions"),
+            FieldType::Arrow(_, _) => {
+                todo!("Arrow types should not be used in generated type definitions")
+            }
         };
         let repr = match field_type_attributes(self) {
             Some(_) => {

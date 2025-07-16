@@ -1,0 +1,108 @@
+---
+title: Pdf
+description: Learn how to handle Pdf inputs in BAML functions
+---
+
+Pdf values to BAML functions can be created in client libraries. This document explains how to use these functions both at compile time and runtime to handle Pdf data. For more details, refer to [pdf types](/ref/baml/types#pdf).
+
+<Warning>
+  `Pdf` instances must be created from Base64 or local file data; URLs are not supported.
+</Warning>
+
+## Usage Examples
+
+<CodeBlocks>
+```python
+from baml_py import Pdf
+from baml_client import b
+
+async def test_pdf_input():
+    # Create a Pdf object from Base64 data
+    pdf_b64 = "JVBERi0K..."
+    pdf = Pdf.from_base64("application/pdf", pdf_b64)
+    res = await b.TestPdfInput(pdf=pdf)
+```
+
+```typescript
+import { b } from '../baml_client'
+import { Pdf } from "@boundaryml/baml"
+
+// Create a Pdf object from Base64 data
+const pdf_b64 = "JVBERi0K..."
+const res = await b.TestPdfInput(
+  Pdf.fromBase64('application/pdf', pdf_b64)
+)
+
+// Browser-specific helpers
+const filePdf = await Pdf.fromFile(file)
+const blobPdf = await Pdf.fromBlob(blob, 'application/pdf')
+```
+
+```tsx
+import { useTestPdfInput } from '../baml_client/react/hooks'
+import { Pdf } from "../baml_client/react/media"
+
+export function TestPdfInput() {
+    const { mutate } = useTestPdfInput()
+
+    const handleClick = async () => {
+        const pdf_b64 = "JVBERi0K..."
+        const pdf = Pdf.fromBase64('application/pdf', pdf_b64)
+        mutate(pdf)
+    }
+
+    return (
+      <div>
+          <button onClick={handleClick}>
+              Test Pdf Input
+          </button>
+      </div>
+    )
+}
+```
+
+```ruby
+# Ruby implementation is in development.
+```
+</CodeBlocks>
+
+## Static Methods
+
+<ParamField
+  path="fromBase64"
+  type="(mediaType: string, base64: string) => Pdf"
+>
+  Creates a Pdf object using Base64 encoded data along with the given MIME type.
+</ParamField>
+
+<ParamField
+  path="fromFile"
+  type="(file: File) => Promise<Pdf>"
+>
+  <Info>Only available in browser environments. @boundaryml/baml/browser</Info>
+  Creates a Pdf object from a File object. Available in browser environments only.
+</ParamField>
+
+{/* <ParamField
+  path="fromBlob"
+  type="(blob: Blob, mediaType?: string) => Promise<Pdf>"
+>
+  <Info>Only available in browser environments. @boundaryml/baml/browser</Info>
+  Creates a Pdf object from a Blob object. Available in browser environments only.
+</ParamField> */}
+
+## Instance Methods
+
+<ParamField
+  path="asBase64"
+  type="() => [string, string]"
+>
+  Get the base64 data and media type if the Pdf is stored as base64. Returns [base64Data, mediaType]. Throws an Error if the Pdf is not stored as base64.
+</ParamField>
+
+<ParamField
+  path="toJSON"
+  type="() => { base64: string; media_type: string }"
+>
+  Convert the Pdf to a JSON representation. Returns a base64 object with media type.
+</ParamField> 

@@ -85,6 +85,8 @@ impl std::str::FromStr for TypeValue {
             "null" => TypeValue::Null,
             "image" => TypeValue::Media(BamlMediaType::Image),
             "audio" => TypeValue::Media(BamlMediaType::Audio),
+            "pdf" => TypeValue::Media(BamlMediaType::Pdf),
+            "video" => TypeValue::Media(BamlMediaType::Video),
             _ => return Err(()),
         })
     }
@@ -100,6 +102,8 @@ impl std::fmt::Display for TypeValue {
             TypeValue::Null => write!(f, "null"),
             TypeValue::Media(BamlMediaType::Image) => write!(f, "image"),
             TypeValue::Media(BamlMediaType::Audio) => write!(f, "audio"),
+            TypeValue::Media(BamlMediaType::Pdf) => write!(f, "pdf"),
+            TypeValue::Media(BamlMediaType::Video) => write!(f, "video"),
         }
     }
 }

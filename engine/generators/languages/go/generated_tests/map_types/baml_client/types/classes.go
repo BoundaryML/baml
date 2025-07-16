@@ -28,7 +28,7 @@ type ComplexMaps struct {
 	MapArray   []map[string]string          `json:"mapArray"`
 }
 
-func (c *ComplexMaps) Decode(holder *cffi.CFFIValueClass) {
+func (c *ComplexMaps) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_TYPES, got %s", string(typeName.Namespace.String())))
@@ -97,7 +97,7 @@ type Config struct {
 	Debug bool   `json:"debug"`
 }
 
-func (c *Config) Decode(holder *cffi.CFFIValueClass) {
+func (c *Config) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_TYPES, got %s", string(typeName.Namespace.String())))
@@ -157,7 +157,7 @@ type EdgeCaseMaps struct {
 	UnionValues    map[string]Union3BoolOrIntOrString `json:"unionValues"`
 }
 
-func (c *EdgeCaseMaps) Decode(holder *cffi.CFFIValueClass) {
+func (c *EdgeCaseMaps) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_TYPES, got %s", string(typeName.Namespace.String())))
@@ -222,7 +222,7 @@ type MixedKeyMaps struct {
 	LiteralMap   map[string]Config `json:"literalMap"`
 }
 
-func (c *MixedKeyMaps) Decode(holder *cffi.CFFIValueClass) {
+func (c *MixedKeyMaps) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_TYPES, got %s", string(typeName.Namespace.String())))
@@ -288,7 +288,7 @@ type NestedMaps struct {
 	MapOfMaps      map[string]map[string]float64         `json:"mapOfMaps"`
 }
 
-func (c *NestedMaps) Decode(holder *cffi.CFFIValueClass) {
+func (c *NestedMaps) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_TYPES, got %s", string(typeName.Namespace.String())))
@@ -358,7 +358,7 @@ type Product struct {
 	Tags  []string `json:"tags"`
 }
 
-func (c *Product) Decode(holder *cffi.CFFIValueClass) {
+func (c *Product) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_TYPES, got %s", string(typeName.Namespace.String())))
@@ -424,7 +424,7 @@ type SimpleMaps struct {
 	IntToString    map[string]string  `json:"intToString"`
 }
 
-func (c *SimpleMaps) Decode(holder *cffi.CFFIValueClass) {
+func (c *SimpleMaps) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_TYPES, got %s", string(typeName.Namespace.String())))
@@ -494,7 +494,7 @@ type User struct {
 	Active bool   `json:"active"`
 }
 
-func (c *User) Decode(holder *cffi.CFFIValueClass) {
+func (c *User) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_TYPES, got %s", string(typeName.Namespace.String())))

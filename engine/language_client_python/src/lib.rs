@@ -60,6 +60,8 @@ fn baml_py(m: Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<types::SyncFunctionResultStream>()?;
     m.add_class::<types::BamlImagePy>()?;
     m.add_class::<types::BamlAudioPy>()?;
+    m.add_class::<types::BamlPdfPy>()?;
+    m.add_class::<types::BamlVideoPy>()?;
     m.add_class::<types::RuntimeContextManager>()?;
     m.add_class::<types::BamlSpan>()?;
     m.add_class::<types::TypeBuilder>()?;
