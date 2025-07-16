@@ -311,9 +311,19 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({ url }) => {
       <div className="h-[70vh] relative bg-[var(--vscode-editor-background)] border border-[var(--vscode-panel-border)] rounded overflow-hidden">
         {pdfError ? (
           <div className="flex items-center justify-center h-full text-[var(--vscode-charts-red)]">
-            <div className="text-center space-y-2">
-              <FileText className="w-8 h-8 mx-auto" />
-              <p className="text-sm">Error loading PDF: {pdfError}</p>
+            <div className="text-center space-y-3 max-w-md px-4">
+              <FileText className="w-12 h-12 mx-auto" />
+              <div className="space-y-2">
+                <p className="text-sm font-medium">PDF Loading Error</p>
+                <p className="text-xs text-[var(--vscode-description-foreground)] leading-relaxed">
+                  {pdfError}
+                </p>
+                {!url.startsWith('blob:') && !url.startsWith('data:') && (
+                  <p className="text-xs text-[var(--vscode-description-foreground)] leading-relaxed">
+                    Note that certain URLs may not be accessible to BAML.
+                  </p>
+                )}
+              </div>
             </div>
           </div>
         ) : (
@@ -362,7 +372,10 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({ url }) => {
                     }
                   }}
                   onLoadError={(error: any) => {
-                    setPdfError(error.message || 'Failed to load PDF');
+                    const errorMessage = url.startsWith('blob:') || url.startsWith('data:') 
+                      ? 'Failed to load PDF file'
+                      : `Cannot download PDF from the given URL: ${url}`;
+                    setPdfError(errorMessage);
                   }}
                   loading={
                     <div className="flex items-center justify-center h-full min-h-[200px]">
