@@ -139,6 +139,22 @@ impl ParsingContext<'_> {
         }
     }
 
+    pub(crate) fn error_pdf_not_supported(&self) -> ParsingError {
+        ParsingError {
+            reason: "Pdf type is not supported here".to_string(),
+            scope: self.scope.clone(),
+            causes: vec![],
+        }
+    }
+
+    pub(crate) fn error_video_not_supported(&self) -> ParsingError {
+        ParsingError {
+            reason: "Video type is not supported here".to_string(),
+            scope: self.scope.clone(),
+            causes: vec![],
+        }
+    }
+
     pub(crate) fn error_map_must_have_supported_key(&self, key_type: &TypeIR) -> ParsingError {
         ParsingError {
             reason: format!(

@@ -64,7 +64,7 @@ func (*stream) TestComplexUnions(ctx context.Context, input string, opts ...Call
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -73,7 +73,7 @@ func (*stream) TestComplexUnions(ctx context.Context, input string, opts ...Call
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestComplexUnions", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestComplexUnions", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -142,7 +142,7 @@ func (*stream) TestDiscriminatedUnions(ctx context.Context, input string, opts .
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -151,7 +151,7 @@ func (*stream) TestDiscriminatedUnions(ctx context.Context, input string, opts .
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestDiscriminatedUnions", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestDiscriminatedUnions", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -220,7 +220,7 @@ func (*stream) TestPrimitiveUnions(ctx context.Context, input string, opts ...Ca
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -229,7 +229,7 @@ func (*stream) TestPrimitiveUnions(ctx context.Context, input string, opts ...Ca
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestPrimitiveUnions", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestPrimitiveUnions", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -298,7 +298,7 @@ func (*stream) TestUnionArrays(ctx context.Context, input string, opts ...CallOp
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -307,7 +307,7 @@ func (*stream) TestUnionArrays(ctx context.Context, input string, opts ...CallOp
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestUnionArrays", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestUnionArrays", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}

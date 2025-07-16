@@ -19,5 +19,3 @@ regex.workspace = true
 [dev-dependencies]
 prettydiff = "0.8.0"
 test-harness = { path = "../../utils/test_harness" }
-# for running tests
-baml_cffi = { path = "../../../language_client_cffi" }

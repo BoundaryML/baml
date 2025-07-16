@@ -64,7 +64,7 @@ func (*stream) TestAllNull(ctx context.Context, input string, opts ...CallOption
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -73,7 +73,7 @@ func (*stream) TestAllNull(ctx context.Context, input string, opts ...CallOption
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestAllNull", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestAllNull", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -142,7 +142,7 @@ func (*stream) TestAllOptionalOmitted(ctx context.Context, input string, opts ..
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -151,7 +151,7 @@ func (*stream) TestAllOptionalOmitted(ctx context.Context, input string, opts ..
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestAllOptionalOmitted", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestAllOptionalOmitted", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -220,7 +220,7 @@ func (*stream) TestMixedOptionalNullable(ctx context.Context, input string, opts
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -229,7 +229,7 @@ func (*stream) TestMixedOptionalNullable(ctx context.Context, input string, opts
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestMixedOptionalNullable", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestMixedOptionalNullable", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -298,7 +298,7 @@ func (*stream) TestNullableTypes(ctx context.Context, input string, opts ...Call
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -307,7 +307,7 @@ func (*stream) TestNullableTypes(ctx context.Context, input string, opts ...Call
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestNullableTypes", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestNullableTypes", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -376,7 +376,7 @@ func (*stream) TestOptionalFields(ctx context.Context, input string, opts ...Cal
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -385,7 +385,7 @@ func (*stream) TestOptionalFields(ctx context.Context, input string, opts ...Cal
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOptionalFields", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOptionalFields", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}

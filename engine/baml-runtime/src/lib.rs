@@ -514,7 +514,14 @@ impl BamlRuntime {
                 vec![],
             )?;
             let (response_res, call_uuid) = stream
-                .run(on_event, ctx, type_builder.as_ref(), None, env_vars.clone())
+                .run(
+                    None::<fn()>,
+                    on_event,
+                    ctx,
+                    type_builder.as_ref(),
+                    None,
+                    env_vars.clone(),
+                )
                 .await;
             let res = response_res?;
             let (_, llm_resp, val) = res
@@ -1003,9 +1010,13 @@ impl BamlRuntime {
         client_type: &GeneratorOutputType,
         args: &generators_lib::GeneratorArgs,
     ) -> Result<internal_baml_codegen::GenerateOutput> {
-        generators_lib::generate_sdk(self.inner.ir.clone(), args)?;
-
-        todo!()
+        let files = generators_lib::generate_sdk(self.inner.ir.clone(), args)?;
+        Ok(internal_baml_codegen::GenerateOutput {
+            client_type: *client_type,
+            output_dir_shorthand: args.output_dir().to_path_buf(),
+            output_dir_full: args.output_dir().to_path_buf(),
+            files,
+        })
     }
 }
 

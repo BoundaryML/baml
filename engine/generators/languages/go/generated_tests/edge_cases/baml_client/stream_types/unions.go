@@ -31,7 +31,7 @@ type Union3BoolOrIntOrString struct {
 	variant_Bool *bool
 }
 
-func (u *Union3BoolOrIntOrString) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union3BoolOrIntOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {

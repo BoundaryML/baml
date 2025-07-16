@@ -216,7 +216,7 @@ impl FunctionLog {
                 }
             }
             baml_runtime::tracingv2::storage::storage::LLMCallKind::Stream(inner) => {
-                if inner.selected {
+                if inner.llm_call.selected {
                     Some(
                         baml_runtime::tracingv2::storage::storage::LLMCallKind::Stream(
                             inner.clone(),
@@ -418,6 +418,7 @@ impl LLMStreamCall {
     #[napi(getter)]
     pub fn http_request(&self) -> Option<HTTPRequest> {
         self.inner
+            .llm_call
             .request
             .clone()
             .map(|req| HTTPRequest { inner: req })
@@ -426,6 +427,7 @@ impl LLMStreamCall {
     #[napi(getter)]
     pub fn http_response(&self) -> Option<HTTPResponse> {
         self.inner
+            .llm_call
             .response
             .clone()
             .map(|resp| HTTPResponse { inner: resp })
@@ -433,22 +435,26 @@ impl LLMStreamCall {
 
     #[napi(getter)]
     pub fn provider(&self) -> String {
-        self.inner.provider.clone()
+        self.inner.llm_call.provider.clone()
     }
 
     #[napi(getter)]
     pub fn client_name(&self) -> String {
-        self.inner.client_name.clone()
+        self.inner.llm_call.client_name.clone()
     }
 
     #[napi(getter)]
     pub fn selected(&self) -> bool {
-        self.inner.selected
+        self.inner.llm_call.selected
     }
 
     #[napi(getter)]
     pub fn usage(&self) -> Option<Usage> {
-        self.inner.usage.clone().map(|u| Usage { inner: u })
+        self.inner
+            .llm_call
+            .usage
+            .clone()
+            .map(|u| Usage { inner: u })
     }
 
     #[napi(getter)]

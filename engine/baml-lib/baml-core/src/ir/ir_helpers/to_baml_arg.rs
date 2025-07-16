@@ -94,6 +94,12 @@ impl ArgCoercer {
                 (TypeValue::Media(BamlMediaType::Audio), BamlValue::Media(v)) => {
                     Ok(BamlValueWithMeta::Media(v.clone(), TypeIR::audio()))
                 }
+                (TypeValue::Media(BamlMediaType::Pdf), BamlValue::Media(v)) => {
+                    Ok(BamlValueWithMeta::Media(v.clone(), TypeIR::pdf()))
+                }
+                (TypeValue::Media(BamlMediaType::Video), BamlValue::Media(v)) => {
+                    Ok(BamlValueWithMeta::Media(v.clone(), TypeIR::video()))
+                }
                 (TypeValue::Media(media_type), BamlValue::Map(kv)) => {
                     let mime_type = match kv.get("media_type") {
                         None => None,

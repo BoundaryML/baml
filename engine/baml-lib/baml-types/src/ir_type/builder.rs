@@ -74,6 +74,14 @@ impl<T: Default> TypeGeneric<T> {
         TypeGeneric::Primitive(TypeValue::Media(BamlMediaType::Audio), T::default())
     }
 
+    pub fn pdf() -> Self {
+        TypeGeneric::Primitive(TypeValue::Media(BamlMediaType::Pdf), T::default())
+    }
+
+    pub fn video() -> Self {
+        TypeGeneric::Primitive(TypeValue::Media(BamlMediaType::Video), T::default())
+    }
+
     pub fn r#enum(name: &str) -> Self {
         TypeGeneric::Enum {
             name: name.to_string(),

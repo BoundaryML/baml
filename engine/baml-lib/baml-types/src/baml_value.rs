@@ -30,6 +30,14 @@ pub enum BamlValue {
     Null,
 }
 
+impl TryFrom<serde_json::Value> for BamlValue {
+    type Error = anyhow::Error;
+
+    fn try_from(value: serde_json::Value) -> Result<Self, Self::Error> {
+        Ok(serde_json::from_value(value)?)
+    }
+}
+
 impl serde::Serialize for BamlValue {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         match self {
@@ -85,6 +93,8 @@ impl BamlValue {
             BamlValue::Media(m) => match m.media_type {
                 BamlMediaType::Image => "image",
                 BamlMediaType::Audio => "audio",
+                BamlMediaType::Pdf => "pdf",
+                BamlMediaType::Video => "video",
             }
             .into(),
             BamlValue::Enum(e, _) => format!("enum {e}"),
@@ -847,6 +857,8 @@ impl<T> BamlValueWithMeta<T> {
                 T::from(match m.media_type {
                     BamlMediaType::Image => TypeIR::image(),
                     BamlMediaType::Audio => TypeIR::audio(),
+                    BamlMediaType::Pdf => TypeIR::pdf(),
+                    BamlMediaType::Video => TypeIR::video(),
                 }),
             ),
             BamlValue::Enum(n, v) => Enum(n.clone(), v.clone(), T::from(TypeIR::r#enum(n))),

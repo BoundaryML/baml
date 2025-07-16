@@ -330,6 +330,32 @@ paths:
                 - $ref: '#/components/schemas/FlightConfirmation'
                 - $ref: '#/components/schemas/GroceryReceipt'
       operationId: CustomTask
+  /call/DescribeAudio:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/DescribeAudio'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: DescribeAudioResponse
+                type: string
+      operationId: DescribeAudio
+  /call/DescribeAudio2:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/DescribeAudio2'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: DescribeAudio2Response
+                type: string
+      operationId: DescribeAudio2
   /call/DescribeImage:
     post:
       requestBody:
@@ -1195,6 +1221,58 @@ paths:
                 items:
                   $ref: '#/components/schemas/OptionalTest_ReturnType'
       operationId: OptionalTest_Function
+  /call/PdfInput:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/PdfInput'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: PdfInputResponse
+                type: string
+      operationId: PdfInput
+  /call/PdfInputAnthropic:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/PdfInputAnthropic'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: PdfInputAnthropicResponse
+                type: string
+      operationId: PdfInputAnthropic
+  /call/PdfInputOpenai:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/PdfInputOpenai'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: PdfInputOpenaiResponse
+                type: string
+      operationId: PdfInputOpenai
+  /call/PdfInputVertex:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/PdfInputVertex'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: PdfInputVertexResponse
+                type: string
+      operationId: PdfInputVertex
   /call/PredictAge:
     post:
       requestBody:
@@ -2807,6 +2885,32 @@ paths:
                 title: ValidateResponseTypesResponse
                 type: string
       operationId: ValidateResponseTypes
+  /call/VideoInputGemini:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/VideoInputGemini'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: VideoInputGeminiResponse
+                type: string
+      operationId: VideoInputGemini
+  /call/VideoInputVertex:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/VideoInputVertex'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: VideoInputVertexResponse
+                type: string
+      operationId: VideoInputVertex
 components:
   requestBodies:
     AaaSamOutputFormat:
@@ -2986,7 +3090,7 @@ components:
             type: object
             properties:
               aud:
-                $ref: '#/components/schemas/BamlImage'
+                $ref: '#/components/schemas/BamlAudio'
               __baml_options__:
                 nullable: true
                 $ref: '#/components/schemas/BamlOptions'
@@ -3002,7 +3106,7 @@ components:
             type: object
             properties:
               aud:
-                $ref: '#/components/schemas/BamlImage'
+                $ref: '#/components/schemas/BamlAudio'
               prompt:
                 type: string
               __baml_options__:
@@ -3163,6 +3267,38 @@ components:
                 $ref: '#/components/schemas/BamlOptions'
             required:
             - input
+            additionalProperties: false
+    DescribeAudio:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: DescribeAudioRequest
+            type: object
+            properties:
+              audio:
+                $ref: '#/components/schemas/BamlAudio'
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - audio
+            additionalProperties: false
+    DescribeAudio2:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: DescribeAudio2Request
+            type: object
+            properties:
+              audio:
+                $ref: '#/components/schemas/BamlAudio'
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - audio
             additionalProperties: false
     DescribeImage:
       required: true
@@ -4169,6 +4305,73 @@ components:
                 $ref: '#/components/schemas/BamlOptions'
             required:
             - input
+            additionalProperties: false
+    PdfInput:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: PdfInputRequest
+            type: object
+            properties:
+              pdf:
+                $ref: '#/components/schemas/BamlPdf'
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - pdf
+            additionalProperties: false
+    PdfInputAnthropic:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: PdfInputAnthropicRequest
+            type: object
+            properties:
+              pdf:
+                $ref: '#/components/schemas/BamlPdf'
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - pdf
+            additionalProperties: false
+    PdfInputOpenai:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: PdfInputOpenaiRequest
+            type: object
+            properties:
+              pdf:
+                $ref: '#/components/schemas/BamlPdf'
+              prompt:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - pdf
+            - prompt
+            additionalProperties: false
+    PdfInputVertex:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: PdfInputVertexRequest
+            type: object
+            properties:
+              pdf:
+                $ref: '#/components/schemas/BamlPdf'
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - pdf
             additionalProperties: false
     PredictAge:
       required: true
@@ -6117,6 +6320,38 @@ components:
                 $ref: '#/components/schemas/BamlOptions'
             required:
             - input
+            additionalProperties: false
+    VideoInputGemini:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: VideoInputGeminiRequest
+            type: object
+            properties:
+              vid:
+                $ref: '#/components/schemas/BamlVideo'
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - vid
+            additionalProperties: false
+    VideoInputVertex:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: VideoInputVertexRequest
+            type: object
+            properties:
+              vid:
+                $ref: '#/components/schemas/BamlVideo'
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - vid
             additionalProperties: false
   schemas:
     BamlImage:

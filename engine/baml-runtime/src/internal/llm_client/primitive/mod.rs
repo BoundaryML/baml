@@ -356,6 +356,7 @@ impl LLMPrimitiveProvider {
 #[cfg(test)]
 mod tests {
     use anyhow::Result;
+    use indexmap::IndexMap;
 
     use super::request::RequestBuilder;
     use crate::internal::llm_client::traits::WithClient;
@@ -375,6 +376,8 @@ mod tests {
                     max_one_system_prompt: false,
                     resolve_audio_urls: crate::internal::llm_client::ResolveMediaUrls::Always,
                     resolve_image_urls: crate::internal::llm_client::ResolveMediaUrls::Always,
+                    resolve_pdf_urls: crate::internal::llm_client::ResolveMediaUrls::Always,
+                    resolve_video_urls: crate::internal::llm_client::ResolveMediaUrls::Always,
                     allowed_metadata: crate::internal::llm_client::AllowedRoleMetadata::All,
                 },
                 context: internal_baml_jinja::RenderContext_Client {
@@ -382,6 +385,7 @@ mod tests {
                     provider: "mock".to_string(),
                     default_role: "user".to_string(),
                     allowed_roles: vec![],
+                    options: IndexMap::new(),
                 },
                 request_options: baml_types::BamlMap::new(),
             }

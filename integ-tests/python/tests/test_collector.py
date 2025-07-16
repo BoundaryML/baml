@@ -164,7 +164,7 @@ async def test_collector_async_stream_success():
     log = collector.last
     assert log is not None
     assert log.function_name == "TestOpenAIGPT4oMini"
-    assert log.log_type == "call"
+    assert log.log_type == "stream"
 
     function_logs = collector.logs
     assert len(function_logs) == 1
@@ -172,7 +172,7 @@ async def test_collector_async_stream_success():
     log = collector.last
     assert log is not None
     assert log.function_name == "TestOpenAIGPT4oMini"
-    assert log.log_type == "call"
+    assert log.log_type == "stream"
 
     # Verify timing fields
     assert log.timing.start_time_utc_ms > 0
@@ -941,7 +941,7 @@ async def test_collector_openai_multiple_concurrent_streams():
     # Verify each log is properly formed
     for i, log in enumerate(logs):
         assert log.function_name == "TestOpenAIGPT4oMini"
-        assert log.log_type == "call"
+        assert log.log_type == "stream"
         assert log.timing.duration_ms is not None and log.timing.duration_ms > 0
         assert log.usage.input_tokens is not None and log.usage.input_tokens > 0
         assert log.usage.output_tokens is not None and log.usage.output_tokens > 0

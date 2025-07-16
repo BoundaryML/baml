@@ -15,6 +15,7 @@ package baml_client
 
 import (
 	"context"
+	"fmt"
 
 	"mixed_complex_types/baml_client/types"
 
@@ -41,23 +42,42 @@ func TestKitchenSink(ctx context.Context, input string, opts ...CallOptionFunc) 
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestKitchenSink", encoded)
-	if err != nil {
-		return types.KitchenSink{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestKitchenSink", encoded, callOpts.onTick)
+		if err != nil {
+			return types.KitchenSink{}, err
+		}
+
+		if result.Error != nil {
+			return types.KitchenSink{}, result.Error
+		}
+
+		casted := (result.Data).(types.KitchenSink)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestKitchenSink", encoded, callOpts.onTick)
+		if err != nil {
+			return types.KitchenSink{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.KitchenSink{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.KitchenSink), nil
+			}
+		}
+
+		return types.KitchenSink{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.KitchenSink{}, result.Error
-	}
-
-	casted := (result.Data).(types.KitchenSink)
-
-	return casted, nil
 }
 
 func TestRecursiveComplexity(ctx context.Context, input string, opts ...CallOptionFunc) (types.Node, error) {
@@ -80,23 +100,42 @@ func TestRecursiveComplexity(ctx context.Context, input string, opts ...CallOpti
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestRecursiveComplexity", encoded)
-	if err != nil {
-		return types.Node{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestRecursiveComplexity", encoded, callOpts.onTick)
+		if err != nil {
+			return types.Node{}, err
+		}
+
+		if result.Error != nil {
+			return types.Node{}, result.Error
+		}
+
+		casted := (result.Data).(types.Node)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestRecursiveComplexity", encoded, callOpts.onTick)
+		if err != nil {
+			return types.Node{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.Node{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.Node), nil
+			}
+		}
+
+		return types.Node{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.Node{}, result.Error
-	}
-
-	casted := (result.Data).(types.Node)
-
-	return casted, nil
 }
 
 func TestUltraComplex(ctx context.Context, input string, opts ...CallOptionFunc) (types.UltraComplex, error) {
@@ -119,21 +158,40 @@ func TestUltraComplex(ctx context.Context, input string, opts ...CallOptionFunc)
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestUltraComplex", encoded)
-	if err != nil {
-		return types.UltraComplex{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestUltraComplex", encoded, callOpts.onTick)
+		if err != nil {
+			return types.UltraComplex{}, err
+		}
+
+		if result.Error != nil {
+			return types.UltraComplex{}, result.Error
+		}
+
+		casted := (result.Data).(types.UltraComplex)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestUltraComplex", encoded, callOpts.onTick)
+		if err != nil {
+			return types.UltraComplex{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.UltraComplex{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.UltraComplex), nil
+			}
+		}
+
+		return types.UltraComplex{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.UltraComplex{}, result.Error
-	}
-
-	casted := (result.Data).(types.UltraComplex)
-
-	return casted, nil
 }

@@ -24,19 +24,22 @@ const (
 type CFFITypeNamespace int32
 
 const (
-	CFFITypeNamespace_TYPES        CFFITypeNamespace = 0
-	CFFITypeNamespace_STREAM_TYPES CFFITypeNamespace = 1
+	CFFITypeNamespace_INTERNAL     CFFITypeNamespace = 0
+	CFFITypeNamespace_TYPES        CFFITypeNamespace = 1
+	CFFITypeNamespace_STREAM_TYPES CFFITypeNamespace = 2
 )
 
 // Enum value maps for CFFITypeNamespace.
 var (
 	CFFITypeNamespace_name = map[int32]string{
-		0: "TYPES",
-		1: "STREAM_TYPES",
+		0: "INTERNAL",
+		1: "TYPES",
+		2: "STREAM_TYPES",
 	}
 	CFFITypeNamespace_value = map[string]int32{
-		"TYPES":        0,
-		"STREAM_TYPES": 1,
+		"INTERNAL":     0,
+		"TYPES":        1,
+		"STREAM_TYPES": 2,
 	}
 )
 
@@ -74,6 +77,8 @@ type MediaTypeEnum int32
 const (
 	MediaTypeEnum_IMAGE MediaTypeEnum = 0
 	MediaTypeEnum_AUDIO MediaTypeEnum = 1
+	MediaTypeEnum_PDF   MediaTypeEnum = 2
+	MediaTypeEnum_VIDEO MediaTypeEnum = 3
 )
 
 // Enum value maps for MediaTypeEnum.
@@ -81,10 +86,14 @@ var (
 	MediaTypeEnum_name = map[int32]string{
 		0: "IMAGE",
 		1: "AUDIO",
+		2: "PDF",
+		3: "VIDEO",
 	}
 	MediaTypeEnum_value = map[string]int32{
 		"IMAGE": 0,
 		"AUDIO": 1,
+		"PDF":   2,
+		"VIDEO": 3,
 	}
 )
 
@@ -113,6 +122,82 @@ func (x MediaTypeEnum) Number() protoreflect.EnumNumber {
 // Deprecated: Use MediaTypeEnum.Descriptor instead.
 func (MediaTypeEnum) EnumDescriptor() ([]byte, []int) {
 	return file_types_cffi_proto_rawDescGZIP(), []int{1}
+}
+
+type CFFIObjectType int32
+
+const (
+	CFFIObjectType_OBJECT_UNSPECIFIED     CFFIObjectType = 0
+	CFFIObjectType_OBJECT_COLLECTOR       CFFIObjectType = 1
+	CFFIObjectType_OBJECT_FUNCTION_LOG    CFFIObjectType = 2
+	CFFIObjectType_OBJECT_USAGE           CFFIObjectType = 3
+	CFFIObjectType_OBJECT_TIMING          CFFIObjectType = 4
+	CFFIObjectType_OBJECT_STREAM_TIMING   CFFIObjectType = 5
+	CFFIObjectType_OBJECT_LLM_CALL        CFFIObjectType = 6
+	CFFIObjectType_OBJECT_LLM_STREAM_CALL CFFIObjectType = 7
+	CFFIObjectType_OBJECT_HTTP_REQUEST    CFFIObjectType = 8
+	CFFIObjectType_OBJECT_HTTP_RESPONSE   CFFIObjectType = 9
+	CFFIObjectType_OBJECT_HTTP_BODY       CFFIObjectType = 10
+	CFFIObjectType_OBJECT_SSE_RESPONSE    CFFIObjectType = 11
+)
+
+// Enum value maps for CFFIObjectType.
+var (
+	CFFIObjectType_name = map[int32]string{
+		0:  "OBJECT_UNSPECIFIED",
+		1:  "OBJECT_COLLECTOR",
+		2:  "OBJECT_FUNCTION_LOG",
+		3:  "OBJECT_USAGE",
+		4:  "OBJECT_TIMING",
+		5:  "OBJECT_STREAM_TIMING",
+		6:  "OBJECT_LLM_CALL",
+		7:  "OBJECT_LLM_STREAM_CALL",
+		8:  "OBJECT_HTTP_REQUEST",
+		9:  "OBJECT_HTTP_RESPONSE",
+		10: "OBJECT_HTTP_BODY",
+		11: "OBJECT_SSE_RESPONSE",
+	}
+	CFFIObjectType_value = map[string]int32{
+		"OBJECT_UNSPECIFIED":     0,
+		"OBJECT_COLLECTOR":       1,
+		"OBJECT_FUNCTION_LOG":    2,
+		"OBJECT_USAGE":           3,
+		"OBJECT_TIMING":          4,
+		"OBJECT_STREAM_TIMING":   5,
+		"OBJECT_LLM_CALL":        6,
+		"OBJECT_LLM_STREAM_CALL": 7,
+		"OBJECT_HTTP_REQUEST":    8,
+		"OBJECT_HTTP_RESPONSE":   9,
+		"OBJECT_HTTP_BODY":       10,
+		"OBJECT_SSE_RESPONSE":    11,
+	}
+)
+
+func (x CFFIObjectType) Enum() *CFFIObjectType {
+	p := new(CFFIObjectType)
+	*p = x
+	return p
+}
+
+func (x CFFIObjectType) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (CFFIObjectType) Descriptor() protoreflect.EnumDescriptor {
+	return file_types_cffi_proto_enumTypes[2].Descriptor()
+}
+
+func (CFFIObjectType) Type() protoreflect.EnumType {
+	return &file_types_cffi_proto_enumTypes[2]
+}
+
+func (x CFFIObjectType) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use CFFIObjectType.Descriptor instead.
+func (CFFIObjectType) EnumDescriptor() ([]byte, []int) {
+	return file_types_cffi_proto_rawDescGZIP(), []int{2}
 }
 
 type CFFIStreamState int32
@@ -148,11 +233,11 @@ func (x CFFIStreamState) String() string {
 }
 
 func (CFFIStreamState) Descriptor() protoreflect.EnumDescriptor {
-	return file_types_cffi_proto_enumTypes[2].Descriptor()
+	return file_types_cffi_proto_enumTypes[3].Descriptor()
 }
 
 func (CFFIStreamState) Type() protoreflect.EnumType {
-	return &file_types_cffi_proto_enumTypes[2]
+	return &file_types_cffi_proto_enumTypes[3]
 }
 
 func (x CFFIStreamState) Number() protoreflect.EnumNumber {
@@ -161,7 +246,7 @@ func (x CFFIStreamState) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use CFFIStreamState.Descriptor instead.
 func (CFFIStreamState) EnumDescriptor() ([]byte, []int) {
-	return file_types_cffi_proto_rawDescGZIP(), []int{2}
+	return file_types_cffi_proto_rawDescGZIP(), []int{3}
 }
 
 // The wrapper message for CFFIValue.
@@ -172,7 +257,8 @@ type CFFIValueHolder struct {
 	// require we decode this.
 	//
 	// Required for BAML -> CFFI
-	// But not for CFFI -> BAML (BAML always does type validation again at boundaries)
+	// But not for CFFI -> BAML (BAML always does type validation again at
+	// boundaries)
 	//
 	// Types that are valid to be assigned to Value:
 	//
@@ -498,7 +584,7 @@ func (x *CFFITypeName) GetNamespace() CFFITypeNamespace {
 	if x != nil {
 		return x.Namespace
 	}
-	return CFFITypeNamespace_TYPES
+	return CFFITypeNamespace_INTERNAL
 }
 
 func (x *CFFITypeName) GetName() string {
@@ -1315,6 +1401,7 @@ type CFFIFieldTypeHolder struct {
 	//	*CFFIFieldTypeHolder_OptionalType
 	//	*CFFIFieldTypeHolder_CheckedType
 	//	*CFFIFieldTypeHolder_StreamStateType
+	//	*CFFIFieldTypeHolder_AnyType
 	Type          isCFFIFieldTypeHolder_Type `protobuf_oneof:"type"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1510,6 +1597,15 @@ func (x *CFFIFieldTypeHolder) GetStreamStateType() *CFFIFieldTypeStreamState {
 	return nil
 }
 
+func (x *CFFIFieldTypeHolder) GetAnyType() *CFFIFieldTypeAny {
+	if x != nil {
+		if x, ok := x.Type.(*CFFIFieldTypeHolder_AnyType); ok {
+			return x.AnyType
+		}
+	}
+	return nil
+}
+
 type isCFFIFieldTypeHolder_Type interface {
 	isCFFIFieldTypeHolder_Type()
 }
@@ -1582,6 +1678,10 @@ type CFFIFieldTypeHolder_StreamStateType struct {
 	StreamStateType *CFFIFieldTypeStreamState `protobuf:"bytes,17,opt,name=stream_state_type,json=streamStateType,proto3,oneof"`
 }
 
+type CFFIFieldTypeHolder_AnyType struct {
+	AnyType *CFFIFieldTypeAny `protobuf:"bytes,18,opt,name=any_type,json=anyType,proto3,oneof"`
+}
+
 func (*CFFIFieldTypeHolder_StringType) isCFFIFieldTypeHolder_Type() {}
 
 func (*CFFIFieldTypeHolder_IntType) isCFFIFieldTypeHolder_Type() {}
@@ -1615,6 +1715,8 @@ func (*CFFIFieldTypeHolder_OptionalType) isCFFIFieldTypeHolder_Type() {}
 func (*CFFIFieldTypeHolder_CheckedType) isCFFIFieldTypeHolder_Type() {}
 
 func (*CFFIFieldTypeHolder_StreamStateType) isCFFIFieldTypeHolder_Type() {}
+
+func (*CFFIFieldTypeHolder_AnyType) isCFFIFieldTypeHolder_Type() {}
 
 // Simple marker messages for primitive types.
 type CFFIFieldTypeString struct {
@@ -1797,6 +1899,42 @@ func (*CFFIFieldTypeNull) Descriptor() ([]byte, []int) {
 	return file_types_cffi_proto_rawDescGZIP(), []int{21}
 }
 
+type CFFIFieldTypeAny struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CFFIFieldTypeAny) Reset() {
+	*x = CFFIFieldTypeAny{}
+	mi := &file_types_cffi_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CFFIFieldTypeAny) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CFFIFieldTypeAny) ProtoMessage() {}
+
+func (x *CFFIFieldTypeAny) ProtoReflect() protoreflect.Message {
+	mi := &file_types_cffi_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CFFIFieldTypeAny.ProtoReflect.Descriptor instead.
+func (*CFFIFieldTypeAny) Descriptor() ([]byte, []int) {
+	return file_types_cffi_proto_rawDescGZIP(), []int{22}
+}
+
 // Literal: wraps a literal oneof.
 type CFFILiteralString struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -1807,7 +1945,7 @@ type CFFILiteralString struct {
 
 func (x *CFFILiteralString) Reset() {
 	*x = CFFILiteralString{}
-	mi := &file_types_cffi_proto_msgTypes[22]
+	mi := &file_types_cffi_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1819,7 +1957,7 @@ func (x *CFFILiteralString) String() string {
 func (*CFFILiteralString) ProtoMessage() {}
 
 func (x *CFFILiteralString) ProtoReflect() protoreflect.Message {
-	mi := &file_types_cffi_proto_msgTypes[22]
+	mi := &file_types_cffi_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1832,7 +1970,7 @@ func (x *CFFILiteralString) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CFFILiteralString.ProtoReflect.Descriptor instead.
 func (*CFFILiteralString) Descriptor() ([]byte, []int) {
-	return file_types_cffi_proto_rawDescGZIP(), []int{22}
+	return file_types_cffi_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *CFFILiteralString) GetValue() string {
@@ -1851,7 +1989,7 @@ type CFFILiteralInt struct {
 
 func (x *CFFILiteralInt) Reset() {
 	*x = CFFILiteralInt{}
-	mi := &file_types_cffi_proto_msgTypes[23]
+	mi := &file_types_cffi_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1863,7 +2001,7 @@ func (x *CFFILiteralInt) String() string {
 func (*CFFILiteralInt) ProtoMessage() {}
 
 func (x *CFFILiteralInt) ProtoReflect() protoreflect.Message {
-	mi := &file_types_cffi_proto_msgTypes[23]
+	mi := &file_types_cffi_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1876,7 +2014,7 @@ func (x *CFFILiteralInt) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CFFILiteralInt.ProtoReflect.Descriptor instead.
 func (*CFFILiteralInt) Descriptor() ([]byte, []int) {
-	return file_types_cffi_proto_rawDescGZIP(), []int{23}
+	return file_types_cffi_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *CFFILiteralInt) GetValue() int64 {
@@ -1895,7 +2033,7 @@ type CFFILiteralBool struct {
 
 func (x *CFFILiteralBool) Reset() {
 	*x = CFFILiteralBool{}
-	mi := &file_types_cffi_proto_msgTypes[24]
+	mi := &file_types_cffi_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1907,7 +2045,7 @@ func (x *CFFILiteralBool) String() string {
 func (*CFFILiteralBool) ProtoMessage() {}
 
 func (x *CFFILiteralBool) ProtoReflect() protoreflect.Message {
-	mi := &file_types_cffi_proto_msgTypes[24]
+	mi := &file_types_cffi_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1920,7 +2058,7 @@ func (x *CFFILiteralBool) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CFFILiteralBool.ProtoReflect.Descriptor instead.
 func (*CFFILiteralBool) Descriptor() ([]byte, []int) {
-	return file_types_cffi_proto_rawDescGZIP(), []int{24}
+	return file_types_cffi_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *CFFILiteralBool) GetValue() bool {
@@ -1944,7 +2082,7 @@ type CFFIFieldTypeLiteral struct {
 
 func (x *CFFIFieldTypeLiteral) Reset() {
 	*x = CFFIFieldTypeLiteral{}
-	mi := &file_types_cffi_proto_msgTypes[25]
+	mi := &file_types_cffi_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1956,7 +2094,7 @@ func (x *CFFIFieldTypeLiteral) String() string {
 func (*CFFIFieldTypeLiteral) ProtoMessage() {}
 
 func (x *CFFIFieldTypeLiteral) ProtoReflect() protoreflect.Message {
-	mi := &file_types_cffi_proto_msgTypes[25]
+	mi := &file_types_cffi_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1969,7 +2107,7 @@ func (x *CFFIFieldTypeLiteral) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CFFIFieldTypeLiteral.ProtoReflect.Descriptor instead.
 func (*CFFIFieldTypeLiteral) Descriptor() ([]byte, []int) {
-	return file_types_cffi_proto_rawDescGZIP(), []int{25}
+	return file_types_cffi_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *CFFIFieldTypeLiteral) GetLiteral() isCFFIFieldTypeLiteral_Literal {
@@ -2038,7 +2176,7 @@ type CFFIFieldTypeMedia struct {
 
 func (x *CFFIFieldTypeMedia) Reset() {
 	*x = CFFIFieldTypeMedia{}
-	mi := &file_types_cffi_proto_msgTypes[26]
+	mi := &file_types_cffi_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2050,7 +2188,7 @@ func (x *CFFIFieldTypeMedia) String() string {
 func (*CFFIFieldTypeMedia) ProtoMessage() {}
 
 func (x *CFFIFieldTypeMedia) ProtoReflect() protoreflect.Message {
-	mi := &file_types_cffi_proto_msgTypes[26]
+	mi := &file_types_cffi_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2063,7 +2201,7 @@ func (x *CFFIFieldTypeMedia) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CFFIFieldTypeMedia.ProtoReflect.Descriptor instead.
 func (*CFFIFieldTypeMedia) Descriptor() ([]byte, []int) {
-	return file_types_cffi_proto_rawDescGZIP(), []int{26}
+	return file_types_cffi_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *CFFIFieldTypeMedia) GetMedia() MediaTypeEnum {
@@ -2082,7 +2220,7 @@ type CFFIFieldTypeEnum struct {
 
 func (x *CFFIFieldTypeEnum) Reset() {
 	*x = CFFIFieldTypeEnum{}
-	mi := &file_types_cffi_proto_msgTypes[27]
+	mi := &file_types_cffi_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2094,7 +2232,7 @@ func (x *CFFIFieldTypeEnum) String() string {
 func (*CFFIFieldTypeEnum) ProtoMessage() {}
 
 func (x *CFFIFieldTypeEnum) ProtoReflect() protoreflect.Message {
-	mi := &file_types_cffi_proto_msgTypes[27]
+	mi := &file_types_cffi_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2107,7 +2245,7 @@ func (x *CFFIFieldTypeEnum) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CFFIFieldTypeEnum.ProtoReflect.Descriptor instead.
 func (*CFFIFieldTypeEnum) Descriptor() ([]byte, []int) {
-	return file_types_cffi_proto_rawDescGZIP(), []int{27}
+	return file_types_cffi_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *CFFIFieldTypeEnum) GetName() string {
@@ -2126,7 +2264,7 @@ type CFFIFieldTypeClass struct {
 
 func (x *CFFIFieldTypeClass) Reset() {
 	*x = CFFIFieldTypeClass{}
-	mi := &file_types_cffi_proto_msgTypes[28]
+	mi := &file_types_cffi_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2138,7 +2276,7 @@ func (x *CFFIFieldTypeClass) String() string {
 func (*CFFIFieldTypeClass) ProtoMessage() {}
 
 func (x *CFFIFieldTypeClass) ProtoReflect() protoreflect.Message {
-	mi := &file_types_cffi_proto_msgTypes[28]
+	mi := &file_types_cffi_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2151,7 +2289,7 @@ func (x *CFFIFieldTypeClass) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CFFIFieldTypeClass.ProtoReflect.Descriptor instead.
 func (*CFFIFieldTypeClass) Descriptor() ([]byte, []int) {
-	return file_types_cffi_proto_rawDescGZIP(), []int{28}
+	return file_types_cffi_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *CFFIFieldTypeClass) GetName() *CFFITypeName {
@@ -2170,7 +2308,7 @@ type CFFIFieldTypeTypeAlias struct {
 
 func (x *CFFIFieldTypeTypeAlias) Reset() {
 	*x = CFFIFieldTypeTypeAlias{}
-	mi := &file_types_cffi_proto_msgTypes[29]
+	mi := &file_types_cffi_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2182,7 +2320,7 @@ func (x *CFFIFieldTypeTypeAlias) String() string {
 func (*CFFIFieldTypeTypeAlias) ProtoMessage() {}
 
 func (x *CFFIFieldTypeTypeAlias) ProtoReflect() protoreflect.Message {
-	mi := &file_types_cffi_proto_msgTypes[29]
+	mi := &file_types_cffi_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2195,7 +2333,7 @@ func (x *CFFIFieldTypeTypeAlias) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CFFIFieldTypeTypeAlias.ProtoReflect.Descriptor instead.
 func (*CFFIFieldTypeTypeAlias) Descriptor() ([]byte, []int) {
-	return file_types_cffi_proto_rawDescGZIP(), []int{29}
+	return file_types_cffi_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *CFFIFieldTypeTypeAlias) GetName() *CFFITypeName {
@@ -2214,7 +2352,7 @@ type CFFIFieldTypeList struct {
 
 func (x *CFFIFieldTypeList) Reset() {
 	*x = CFFIFieldTypeList{}
-	mi := &file_types_cffi_proto_msgTypes[30]
+	mi := &file_types_cffi_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2226,7 +2364,7 @@ func (x *CFFIFieldTypeList) String() string {
 func (*CFFIFieldTypeList) ProtoMessage() {}
 
 func (x *CFFIFieldTypeList) ProtoReflect() protoreflect.Message {
-	mi := &file_types_cffi_proto_msgTypes[30]
+	mi := &file_types_cffi_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2239,7 +2377,7 @@ func (x *CFFIFieldTypeList) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CFFIFieldTypeList.ProtoReflect.Descriptor instead.
 func (*CFFIFieldTypeList) Descriptor() ([]byte, []int) {
-	return file_types_cffi_proto_rawDescGZIP(), []int{30}
+	return file_types_cffi_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *CFFIFieldTypeList) GetElement() *CFFIFieldTypeHolder {
@@ -2259,7 +2397,7 @@ type CFFIFieldTypeMap struct {
 
 func (x *CFFIFieldTypeMap) Reset() {
 	*x = CFFIFieldTypeMap{}
-	mi := &file_types_cffi_proto_msgTypes[31]
+	mi := &file_types_cffi_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2271,7 +2409,7 @@ func (x *CFFIFieldTypeMap) String() string {
 func (*CFFIFieldTypeMap) ProtoMessage() {}
 
 func (x *CFFIFieldTypeMap) ProtoReflect() protoreflect.Message {
-	mi := &file_types_cffi_proto_msgTypes[31]
+	mi := &file_types_cffi_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2284,7 +2422,7 @@ func (x *CFFIFieldTypeMap) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CFFIFieldTypeMap.ProtoReflect.Descriptor instead.
 func (*CFFIFieldTypeMap) Descriptor() ([]byte, []int) {
-	return file_types_cffi_proto_rawDescGZIP(), []int{31}
+	return file_types_cffi_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *CFFIFieldTypeMap) GetKey() *CFFIFieldTypeHolder {
@@ -2310,7 +2448,7 @@ type CFFIFieldTypeTuple struct {
 
 func (x *CFFIFieldTypeTuple) Reset() {
 	*x = CFFIFieldTypeTuple{}
-	mi := &file_types_cffi_proto_msgTypes[32]
+	mi := &file_types_cffi_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2322,7 +2460,7 @@ func (x *CFFIFieldTypeTuple) String() string {
 func (*CFFIFieldTypeTuple) ProtoMessage() {}
 
 func (x *CFFIFieldTypeTuple) ProtoReflect() protoreflect.Message {
-	mi := &file_types_cffi_proto_msgTypes[32]
+	mi := &file_types_cffi_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2335,7 +2473,7 @@ func (x *CFFIFieldTypeTuple) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CFFIFieldTypeTuple.ProtoReflect.Descriptor instead.
 func (*CFFIFieldTypeTuple) Descriptor() ([]byte, []int) {
-	return file_types_cffi_proto_rawDescGZIP(), []int{32}
+	return file_types_cffi_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *CFFIFieldTypeTuple) GetElements() []*CFFIFieldTypeHolder {
@@ -2355,7 +2493,7 @@ type CFFIFieldTypeUnionVariant struct {
 
 func (x *CFFIFieldTypeUnionVariant) Reset() {
 	*x = CFFIFieldTypeUnionVariant{}
-	mi := &file_types_cffi_proto_msgTypes[33]
+	mi := &file_types_cffi_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2367,7 +2505,7 @@ func (x *CFFIFieldTypeUnionVariant) String() string {
 func (*CFFIFieldTypeUnionVariant) ProtoMessage() {}
 
 func (x *CFFIFieldTypeUnionVariant) ProtoReflect() protoreflect.Message {
-	mi := &file_types_cffi_proto_msgTypes[33]
+	mi := &file_types_cffi_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2380,7 +2518,7 @@ func (x *CFFIFieldTypeUnionVariant) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CFFIFieldTypeUnionVariant.ProtoReflect.Descriptor instead.
 func (*CFFIFieldTypeUnionVariant) Descriptor() ([]byte, []int) {
-	return file_types_cffi_proto_rawDescGZIP(), []int{33}
+	return file_types_cffi_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *CFFIFieldTypeUnionVariant) GetName() *CFFITypeName {
@@ -2406,7 +2544,7 @@ type CFFIFieldTypeOptional struct {
 
 func (x *CFFIFieldTypeOptional) Reset() {
 	*x = CFFIFieldTypeOptional{}
-	mi := &file_types_cffi_proto_msgTypes[34]
+	mi := &file_types_cffi_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2418,7 +2556,7 @@ func (x *CFFIFieldTypeOptional) String() string {
 func (*CFFIFieldTypeOptional) ProtoMessage() {}
 
 func (x *CFFIFieldTypeOptional) ProtoReflect() protoreflect.Message {
-	mi := &file_types_cffi_proto_msgTypes[34]
+	mi := &file_types_cffi_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2431,7 +2569,7 @@ func (x *CFFIFieldTypeOptional) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CFFIFieldTypeOptional.ProtoReflect.Descriptor instead.
 func (*CFFIFieldTypeOptional) Descriptor() ([]byte, []int) {
-	return file_types_cffi_proto_rawDescGZIP(), []int{34}
+	return file_types_cffi_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *CFFIFieldTypeOptional) GetValue() *CFFIFieldTypeHolder {
@@ -2451,7 +2589,7 @@ type CFFIFieldTypeChecked struct {
 
 func (x *CFFIFieldTypeChecked) Reset() {
 	*x = CFFIFieldTypeChecked{}
-	mi := &file_types_cffi_proto_msgTypes[35]
+	mi := &file_types_cffi_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2463,7 +2601,7 @@ func (x *CFFIFieldTypeChecked) String() string {
 func (*CFFIFieldTypeChecked) ProtoMessage() {}
 
 func (x *CFFIFieldTypeChecked) ProtoReflect() protoreflect.Message {
-	mi := &file_types_cffi_proto_msgTypes[35]
+	mi := &file_types_cffi_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2476,7 +2614,7 @@ func (x *CFFIFieldTypeChecked) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CFFIFieldTypeChecked.ProtoReflect.Descriptor instead.
 func (*CFFIFieldTypeChecked) Descriptor() ([]byte, []int) {
-	return file_types_cffi_proto_rawDescGZIP(), []int{35}
+	return file_types_cffi_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *CFFIFieldTypeChecked) GetValue() *CFFIFieldTypeHolder {
@@ -2502,7 +2640,7 @@ type CFFIFieldTypeStreamState struct {
 
 func (x *CFFIFieldTypeStreamState) Reset() {
 	*x = CFFIFieldTypeStreamState{}
-	mi := &file_types_cffi_proto_msgTypes[36]
+	mi := &file_types_cffi_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2514,7 +2652,7 @@ func (x *CFFIFieldTypeStreamState) String() string {
 func (*CFFIFieldTypeStreamState) ProtoMessage() {}
 
 func (x *CFFIFieldTypeStreamState) ProtoReflect() protoreflect.Message {
-	mi := &file_types_cffi_proto_msgTypes[36]
+	mi := &file_types_cffi_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2527,7 +2665,7 @@ func (x *CFFIFieldTypeStreamState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CFFIFieldTypeStreamState.ProtoReflect.Descriptor instead.
 func (*CFFIFieldTypeStreamState) Descriptor() ([]byte, []int) {
-	return file_types_cffi_proto_rawDescGZIP(), []int{36}
+	return file_types_cffi_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *CFFIFieldTypeStreamState) GetValue() *CFFIFieldTypeHolder {
@@ -2547,7 +2685,7 @@ type CFFIEnvVar struct {
 
 func (x *CFFIEnvVar) Reset() {
 	*x = CFFIEnvVar{}
-	mi := &file_types_cffi_proto_msgTypes[37]
+	mi := &file_types_cffi_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2559,7 +2697,7 @@ func (x *CFFIEnvVar) String() string {
 func (*CFFIEnvVar) ProtoMessage() {}
 
 func (x *CFFIEnvVar) ProtoReflect() protoreflect.Message {
-	mi := &file_types_cffi_proto_msgTypes[37]
+	mi := &file_types_cffi_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2572,7 +2710,7 @@ func (x *CFFIEnvVar) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CFFIEnvVar.ProtoReflect.Descriptor instead.
 func (*CFFIEnvVar) Descriptor() ([]byte, []int) {
-	return file_types_cffi_proto_rawDescGZIP(), []int{37}
+	return file_types_cffi_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *CFFIEnvVar) GetKey() string {
@@ -2594,14 +2732,15 @@ type CFFIFunctionArguments struct {
 	Kwargs         []*CFFIMapEntry        `protobuf:"bytes,1,rep,name=kwargs,proto3" json:"kwargs,omitempty"`
 	ClientRegistry *CFFIClientRegistry    `protobuf:"bytes,2,opt,name=client_registry,json=clientRegistry,proto3" json:"client_registry,omitempty"`
 	Env            []*CFFIEnvVar          `protobuf:"bytes,3,rep,name=env,proto3" json:"env,omitempty"`
-	Collectors     []*CFFICollector       `protobuf:"bytes,4,rep,name=collectors,proto3" json:"collectors,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// collectors only
+	Collectors    []*CFFIRawObject `protobuf:"bytes,4,rep,name=collectors,proto3" json:"collectors,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *CFFIFunctionArguments) Reset() {
 	*x = CFFIFunctionArguments{}
-	mi := &file_types_cffi_proto_msgTypes[38]
+	mi := &file_types_cffi_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2613,7 +2752,7 @@ func (x *CFFIFunctionArguments) String() string {
 func (*CFFIFunctionArguments) ProtoMessage() {}
 
 func (x *CFFIFunctionArguments) ProtoReflect() protoreflect.Message {
-	mi := &file_types_cffi_proto_msgTypes[38]
+	mi := &file_types_cffi_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2626,7 +2765,7 @@ func (x *CFFIFunctionArguments) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CFFIFunctionArguments.ProtoReflect.Descriptor instead.
 func (*CFFIFunctionArguments) Descriptor() ([]byte, []int) {
-	return file_types_cffi_proto_rawDescGZIP(), []int{38}
+	return file_types_cffi_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *CFFIFunctionArguments) GetKwargs() []*CFFIMapEntry {
@@ -2650,36 +2789,37 @@ func (x *CFFIFunctionArguments) GetEnv() []*CFFIEnvVar {
 	return nil
 }
 
-func (x *CFFIFunctionArguments) GetCollectors() []*CFFICollector {
+func (x *CFFIFunctionArguments) GetCollectors() []*CFFIRawObject {
 	if x != nil {
 		return x.Collectors
 	}
 	return nil
 }
 
-// Collectors are just pointers
-type CFFICollector struct {
+type CFFIObjectMethodArguments struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Pointer       int64                  `protobuf:"varint,1,opt,name=pointer,proto3" json:"pointer,omitempty"`
+	Object        *CFFIRawObject         `protobuf:"bytes,1,opt,name=object,proto3" json:"object,omitempty"`
+	MethodName    string                 `protobuf:"bytes,2,opt,name=method_name,json=methodName,proto3" json:"method_name,omitempty"`
+	Kwargs        []*CFFIMapEntry        `protobuf:"bytes,3,rep,name=kwargs,proto3" json:"kwargs,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *CFFICollector) Reset() {
-	*x = CFFICollector{}
-	mi := &file_types_cffi_proto_msgTypes[39]
+func (x *CFFIObjectMethodArguments) Reset() {
+	*x = CFFIObjectMethodArguments{}
+	mi := &file_types_cffi_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *CFFICollector) String() string {
+func (x *CFFIObjectMethodArguments) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*CFFICollector) ProtoMessage() {}
+func (*CFFIObjectMethodArguments) ProtoMessage() {}
 
-func (x *CFFICollector) ProtoReflect() protoreflect.Message {
-	mi := &file_types_cffi_proto_msgTypes[39]
+func (x *CFFIObjectMethodArguments) ProtoReflect() protoreflect.Message {
+	mi := &file_types_cffi_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2690,17 +2830,625 @@ func (x *CFFICollector) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use CFFICollector.ProtoReflect.Descriptor instead.
-func (*CFFICollector) Descriptor() ([]byte, []int) {
-	return file_types_cffi_proto_rawDescGZIP(), []int{39}
+// Deprecated: Use CFFIObjectMethodArguments.ProtoReflect.Descriptor instead.
+func (*CFFIObjectMethodArguments) Descriptor() ([]byte, []int) {
+	return file_types_cffi_proto_rawDescGZIP(), []int{40}
 }
 
-func (x *CFFICollector) GetPointer() int64 {
+func (x *CFFIObjectMethodArguments) GetObject() *CFFIRawObject {
+	if x != nil {
+		return x.Object
+	}
+	return nil
+}
+
+func (x *CFFIObjectMethodArguments) GetMethodName() string {
+	if x != nil {
+		return x.MethodName
+	}
+	return ""
+}
+
+func (x *CFFIObjectMethodArguments) GetKwargs() []*CFFIMapEntry {
+	if x != nil {
+		return x.Kwargs
+	}
+	return nil
+}
+
+type CFFIObjectConstructorArgs struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Type          CFFIObjectType         `protobuf:"varint,1,opt,name=type,proto3,enum=baml.cffi.CFFIObjectType" json:"type,omitempty"`
+	Kwargs        []*CFFIMapEntry        `protobuf:"bytes,2,rep,name=kwargs,proto3" json:"kwargs,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CFFIObjectConstructorArgs) Reset() {
+	*x = CFFIObjectConstructorArgs{}
+	mi := &file_types_cffi_proto_msgTypes[41]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CFFIObjectConstructorArgs) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CFFIObjectConstructorArgs) ProtoMessage() {}
+
+func (x *CFFIObjectConstructorArgs) ProtoReflect() protoreflect.Message {
+	mi := &file_types_cffi_proto_msgTypes[41]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CFFIObjectConstructorArgs.ProtoReflect.Descriptor instead.
+func (*CFFIObjectConstructorArgs) Descriptor() ([]byte, []int) {
+	return file_types_cffi_proto_rawDescGZIP(), []int{41}
+}
+
+func (x *CFFIObjectConstructorArgs) GetType() CFFIObjectType {
+	if x != nil {
+		return x.Type
+	}
+	return CFFIObjectType_OBJECT_UNSPECIFIED
+}
+
+func (x *CFFIObjectConstructorArgs) GetKwargs() []*CFFIMapEntry {
+	if x != nil {
+		return x.Kwargs
+	}
+	return nil
+}
+
+// only one of these will be set
+// proto doesn't allow oneofs with repeated fields
+type CFFIObjectResponseSuccess struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to Result:
+	//
+	//	*CFFIObjectResponseSuccess_Object
+	//	*CFFIObjectResponseSuccess_Objects
+	//	*CFFIObjectResponseSuccess_Value
+	Result        isCFFIObjectResponseSuccess_Result `protobuf_oneof:"result"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CFFIObjectResponseSuccess) Reset() {
+	*x = CFFIObjectResponseSuccess{}
+	mi := &file_types_cffi_proto_msgTypes[42]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CFFIObjectResponseSuccess) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CFFIObjectResponseSuccess) ProtoMessage() {}
+
+func (x *CFFIObjectResponseSuccess) ProtoReflect() protoreflect.Message {
+	mi := &file_types_cffi_proto_msgTypes[42]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CFFIObjectResponseSuccess.ProtoReflect.Descriptor instead.
+func (*CFFIObjectResponseSuccess) Descriptor() ([]byte, []int) {
+	return file_types_cffi_proto_rawDescGZIP(), []int{42}
+}
+
+func (x *CFFIObjectResponseSuccess) GetResult() isCFFIObjectResponseSuccess_Result {
+	if x != nil {
+		return x.Result
+	}
+	return nil
+}
+
+func (x *CFFIObjectResponseSuccess) GetObject() *CFFIRawObject {
+	if x != nil {
+		if x, ok := x.Result.(*CFFIObjectResponseSuccess_Object); ok {
+			return x.Object
+		}
+	}
+	return nil
+}
+
+func (x *CFFIObjectResponseSuccess) GetObjects() *MultipleRawObjectResponse {
+	if x != nil {
+		if x, ok := x.Result.(*CFFIObjectResponseSuccess_Objects); ok {
+			return x.Objects
+		}
+	}
+	return nil
+}
+
+func (x *CFFIObjectResponseSuccess) GetValue() *CFFIValueHolder {
+	if x != nil {
+		if x, ok := x.Result.(*CFFIObjectResponseSuccess_Value); ok {
+			return x.Value
+		}
+	}
+	return nil
+}
+
+type isCFFIObjectResponseSuccess_Result interface {
+	isCFFIObjectResponseSuccess_Result()
+}
+
+type CFFIObjectResponseSuccess_Object struct {
+	Object *CFFIRawObject `protobuf:"bytes,1,opt,name=object,proto3,oneof"`
+}
+
+type CFFIObjectResponseSuccess_Objects struct {
+	Objects *MultipleRawObjectResponse `protobuf:"bytes,2,opt,name=objects,proto3,oneof"`
+}
+
+type CFFIObjectResponseSuccess_Value struct {
+	Value *CFFIValueHolder `protobuf:"bytes,3,opt,name=value,proto3,oneof"`
+}
+
+func (*CFFIObjectResponseSuccess_Object) isCFFIObjectResponseSuccess_Result() {}
+
+func (*CFFIObjectResponseSuccess_Objects) isCFFIObjectResponseSuccess_Result() {}
+
+func (*CFFIObjectResponseSuccess_Value) isCFFIObjectResponseSuccess_Result() {}
+
+type MultipleRawObjectResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Objects       []*CFFIRawObject       `protobuf:"bytes,1,rep,name=objects,proto3" json:"objects,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MultipleRawObjectResponse) Reset() {
+	*x = MultipleRawObjectResponse{}
+	mi := &file_types_cffi_proto_msgTypes[43]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MultipleRawObjectResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MultipleRawObjectResponse) ProtoMessage() {}
+
+func (x *MultipleRawObjectResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_types_cffi_proto_msgTypes[43]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MultipleRawObjectResponse.ProtoReflect.Descriptor instead.
+func (*MultipleRawObjectResponse) Descriptor() ([]byte, []int) {
+	return file_types_cffi_proto_rawDescGZIP(), []int{43}
+}
+
+func (x *MultipleRawObjectResponse) GetObjects() []*CFFIRawObject {
+	if x != nil {
+		return x.Objects
+	}
+	return nil
+}
+
+type CFFIObjectResponseError struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Error         string                 `protobuf:"bytes,1,opt,name=error,proto3" json:"error,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CFFIObjectResponseError) Reset() {
+	*x = CFFIObjectResponseError{}
+	mi := &file_types_cffi_proto_msgTypes[44]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CFFIObjectResponseError) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CFFIObjectResponseError) ProtoMessage() {}
+
+func (x *CFFIObjectResponseError) ProtoReflect() protoreflect.Message {
+	mi := &file_types_cffi_proto_msgTypes[44]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CFFIObjectResponseError.ProtoReflect.Descriptor instead.
+func (*CFFIObjectResponseError) Descriptor() ([]byte, []int) {
+	return file_types_cffi_proto_rawDescGZIP(), []int{44}
+}
+
+func (x *CFFIObjectResponseError) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
+type CFFIObjectResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to Response:
+	//
+	//	*CFFIObjectResponse_Success
+	//	*CFFIObjectResponse_Error
+	Response      isCFFIObjectResponse_Response `protobuf_oneof:"response"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CFFIObjectResponse) Reset() {
+	*x = CFFIObjectResponse{}
+	mi := &file_types_cffi_proto_msgTypes[45]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CFFIObjectResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CFFIObjectResponse) ProtoMessage() {}
+
+func (x *CFFIObjectResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_types_cffi_proto_msgTypes[45]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CFFIObjectResponse.ProtoReflect.Descriptor instead.
+func (*CFFIObjectResponse) Descriptor() ([]byte, []int) {
+	return file_types_cffi_proto_rawDescGZIP(), []int{45}
+}
+
+func (x *CFFIObjectResponse) GetResponse() isCFFIObjectResponse_Response {
+	if x != nil {
+		return x.Response
+	}
+	return nil
+}
+
+func (x *CFFIObjectResponse) GetSuccess() *CFFIObjectResponseSuccess {
+	if x != nil {
+		if x, ok := x.Response.(*CFFIObjectResponse_Success); ok {
+			return x.Success
+		}
+	}
+	return nil
+}
+
+func (x *CFFIObjectResponse) GetError() *CFFIObjectResponseError {
+	if x != nil {
+		if x, ok := x.Response.(*CFFIObjectResponse_Error); ok {
+			return x.Error
+		}
+	}
+	return nil
+}
+
+type isCFFIObjectResponse_Response interface {
+	isCFFIObjectResponse_Response()
+}
+
+type CFFIObjectResponse_Success struct {
+	Success *CFFIObjectResponseSuccess `protobuf:"bytes,1,opt,name=success,proto3,oneof"`
+}
+
+type CFFIObjectResponse_Error struct {
+	Error *CFFIObjectResponseError `protobuf:"bytes,2,opt,name=error,proto3,oneof"`
+}
+
+func (*CFFIObjectResponse_Success) isCFFIObjectResponse_Response() {}
+
+func (*CFFIObjectResponse_Error) isCFFIObjectResponse_Response() {}
+
+// Enum for all possible object types
+type CFFIPointerType struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Pointer       int64                  `protobuf:"varint,1,opt,name=pointer,proto3" json:"pointer,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CFFIPointerType) Reset() {
+	*x = CFFIPointerType{}
+	mi := &file_types_cffi_proto_msgTypes[46]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CFFIPointerType) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CFFIPointerType) ProtoMessage() {}
+
+func (x *CFFIPointerType) ProtoReflect() protoreflect.Message {
+	mi := &file_types_cffi_proto_msgTypes[46]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CFFIPointerType.ProtoReflect.Descriptor instead.
+func (*CFFIPointerType) Descriptor() ([]byte, []int) {
+	return file_types_cffi_proto_rawDescGZIP(), []int{46}
+}
+
+func (x *CFFIPointerType) GetPointer() int64 {
 	if x != nil {
 		return x.Pointer
 	}
 	return 0
 }
+
+// Raw object with type information
+type CFFIRawObject struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to Object:
+	//
+	//	*CFFIRawObject_Collector
+	//	*CFFIRawObject_FunctionLog
+	//	*CFFIRawObject_Usage
+	//	*CFFIRawObject_Timing
+	//	*CFFIRawObject_StreamTiming
+	//	*CFFIRawObject_LlmCall
+	//	*CFFIRawObject_LlmStreamCall
+	//	*CFFIRawObject_HttpRequest
+	//	*CFFIRawObject_HttpResponse
+	//	*CFFIRawObject_HttpBody
+	//	*CFFIRawObject_SseResponse
+	Object        isCFFIRawObject_Object `protobuf_oneof:"object"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CFFIRawObject) Reset() {
+	*x = CFFIRawObject{}
+	mi := &file_types_cffi_proto_msgTypes[47]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CFFIRawObject) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CFFIRawObject) ProtoMessage() {}
+
+func (x *CFFIRawObject) ProtoReflect() protoreflect.Message {
+	mi := &file_types_cffi_proto_msgTypes[47]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CFFIRawObject.ProtoReflect.Descriptor instead.
+func (*CFFIRawObject) Descriptor() ([]byte, []int) {
+	return file_types_cffi_proto_rawDescGZIP(), []int{47}
+}
+
+func (x *CFFIRawObject) GetObject() isCFFIRawObject_Object {
+	if x != nil {
+		return x.Object
+	}
+	return nil
+}
+
+func (x *CFFIRawObject) GetCollector() *CFFIPointerType {
+	if x != nil {
+		if x, ok := x.Object.(*CFFIRawObject_Collector); ok {
+			return x.Collector
+		}
+	}
+	return nil
+}
+
+func (x *CFFIRawObject) GetFunctionLog() *CFFIPointerType {
+	if x != nil {
+		if x, ok := x.Object.(*CFFIRawObject_FunctionLog); ok {
+			return x.FunctionLog
+		}
+	}
+	return nil
+}
+
+func (x *CFFIRawObject) GetUsage() *CFFIPointerType {
+	if x != nil {
+		if x, ok := x.Object.(*CFFIRawObject_Usage); ok {
+			return x.Usage
+		}
+	}
+	return nil
+}
+
+func (x *CFFIRawObject) GetTiming() *CFFIPointerType {
+	if x != nil {
+		if x, ok := x.Object.(*CFFIRawObject_Timing); ok {
+			return x.Timing
+		}
+	}
+	return nil
+}
+
+func (x *CFFIRawObject) GetStreamTiming() *CFFIPointerType {
+	if x != nil {
+		if x, ok := x.Object.(*CFFIRawObject_StreamTiming); ok {
+			return x.StreamTiming
+		}
+	}
+	return nil
+}
+
+func (x *CFFIRawObject) GetLlmCall() *CFFIPointerType {
+	if x != nil {
+		if x, ok := x.Object.(*CFFIRawObject_LlmCall); ok {
+			return x.LlmCall
+		}
+	}
+	return nil
+}
+
+func (x *CFFIRawObject) GetLlmStreamCall() *CFFIPointerType {
+	if x != nil {
+		if x, ok := x.Object.(*CFFIRawObject_LlmStreamCall); ok {
+			return x.LlmStreamCall
+		}
+	}
+	return nil
+}
+
+func (x *CFFIRawObject) GetHttpRequest() *CFFIPointerType {
+	if x != nil {
+		if x, ok := x.Object.(*CFFIRawObject_HttpRequest); ok {
+			return x.HttpRequest
+		}
+	}
+	return nil
+}
+
+func (x *CFFIRawObject) GetHttpResponse() *CFFIPointerType {
+	if x != nil {
+		if x, ok := x.Object.(*CFFIRawObject_HttpResponse); ok {
+			return x.HttpResponse
+		}
+	}
+	return nil
+}
+
+func (x *CFFIRawObject) GetHttpBody() *CFFIPointerType {
+	if x != nil {
+		if x, ok := x.Object.(*CFFIRawObject_HttpBody); ok {
+			return x.HttpBody
+		}
+	}
+	return nil
+}
+
+func (x *CFFIRawObject) GetSseResponse() *CFFIPointerType {
+	if x != nil {
+		if x, ok := x.Object.(*CFFIRawObject_SseResponse); ok {
+			return x.SseResponse
+		}
+	}
+	return nil
+}
+
+type isCFFIRawObject_Object interface {
+	isCFFIRawObject_Object()
+}
+
+type CFFIRawObject_Collector struct {
+	Collector *CFFIPointerType `protobuf:"bytes,1,opt,name=collector,proto3,oneof"`
+}
+
+type CFFIRawObject_FunctionLog struct {
+	FunctionLog *CFFIPointerType `protobuf:"bytes,2,opt,name=function_log,json=functionLog,proto3,oneof"`
+}
+
+type CFFIRawObject_Usage struct {
+	Usage *CFFIPointerType `protobuf:"bytes,3,opt,name=usage,proto3,oneof"`
+}
+
+type CFFIRawObject_Timing struct {
+	Timing *CFFIPointerType `protobuf:"bytes,4,opt,name=timing,proto3,oneof"`
+}
+
+type CFFIRawObject_StreamTiming struct {
+	StreamTiming *CFFIPointerType `protobuf:"bytes,5,opt,name=stream_timing,json=streamTiming,proto3,oneof"`
+}
+
+type CFFIRawObject_LlmCall struct {
+	LlmCall *CFFIPointerType `protobuf:"bytes,6,opt,name=llm_call,json=llmCall,proto3,oneof"`
+}
+
+type CFFIRawObject_LlmStreamCall struct {
+	LlmStreamCall *CFFIPointerType `protobuf:"bytes,7,opt,name=llm_stream_call,json=llmStreamCall,proto3,oneof"`
+}
+
+type CFFIRawObject_HttpRequest struct {
+	HttpRequest *CFFIPointerType `protobuf:"bytes,8,opt,name=http_request,json=httpRequest,proto3,oneof"`
+}
+
+type CFFIRawObject_HttpResponse struct {
+	HttpResponse *CFFIPointerType `protobuf:"bytes,9,opt,name=http_response,json=httpResponse,proto3,oneof"`
+}
+
+type CFFIRawObject_HttpBody struct {
+	HttpBody *CFFIPointerType `protobuf:"bytes,10,opt,name=http_body,json=httpBody,proto3,oneof"`
+}
+
+type CFFIRawObject_SseResponse struct {
+	SseResponse *CFFIPointerType `protobuf:"bytes,11,opt,name=sse_response,json=sseResponse,proto3,oneof"`
+}
+
+func (*CFFIRawObject_Collector) isCFFIRawObject_Object() {}
+
+func (*CFFIRawObject_FunctionLog) isCFFIRawObject_Object() {}
+
+func (*CFFIRawObject_Usage) isCFFIRawObject_Object() {}
+
+func (*CFFIRawObject_Timing) isCFFIRawObject_Object() {}
+
+func (*CFFIRawObject_StreamTiming) isCFFIRawObject_Object() {}
+
+func (*CFFIRawObject_LlmCall) isCFFIRawObject_Object() {}
+
+func (*CFFIRawObject_LlmStreamCall) isCFFIRawObject_Object() {}
+
+func (*CFFIRawObject_HttpRequest) isCFFIRawObject_Object() {}
+
+func (*CFFIRawObject_HttpResponse) isCFFIRawObject_Object() {}
+
+func (*CFFIRawObject_HttpBody) isCFFIRawObject_Object() {}
+
+func (*CFFIRawObject_SseResponse) isCFFIRawObject_Object() {}
 
 type CFFIClientRegistry struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -2712,7 +3460,7 @@ type CFFIClientRegistry struct {
 
 func (x *CFFIClientRegistry) Reset() {
 	*x = CFFIClientRegistry{}
-	mi := &file_types_cffi_proto_msgTypes[40]
+	mi := &file_types_cffi_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2724,7 +3472,7 @@ func (x *CFFIClientRegistry) String() string {
 func (*CFFIClientRegistry) ProtoMessage() {}
 
 func (x *CFFIClientRegistry) ProtoReflect() protoreflect.Message {
-	mi := &file_types_cffi_proto_msgTypes[40]
+	mi := &file_types_cffi_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2737,7 +3485,7 @@ func (x *CFFIClientRegistry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CFFIClientRegistry.ProtoReflect.Descriptor instead.
 func (*CFFIClientRegistry) Descriptor() ([]byte, []int) {
-	return file_types_cffi_proto_rawDescGZIP(), []int{40}
+	return file_types_cffi_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *CFFIClientRegistry) GetPrimary() string {
@@ -2766,7 +3514,7 @@ type CFFIClientProperty struct {
 
 func (x *CFFIClientProperty) Reset() {
 	*x = CFFIClientProperty{}
-	mi := &file_types_cffi_proto_msgTypes[41]
+	mi := &file_types_cffi_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2778,7 +3526,7 @@ func (x *CFFIClientProperty) String() string {
 func (*CFFIClientProperty) ProtoMessage() {}
 
 func (x *CFFIClientProperty) ProtoReflect() protoreflect.Message {
-	mi := &file_types_cffi_proto_msgTypes[41]
+	mi := &file_types_cffi_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2791,7 +3539,7 @@ func (x *CFFIClientProperty) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CFFIClientProperty.ProtoReflect.Descriptor instead.
 func (*CFFIClientProperty) Descriptor() ([]byte, []int) {
-	return file_types_cffi_proto_rawDescGZIP(), []int{41}
+	return file_types_cffi_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *CFFIClientProperty) GetName() string {
@@ -2832,7 +3580,7 @@ type CFFICheckType struct {
 
 func (x *CFFICheckType) Reset() {
 	*x = CFFICheckType{}
-	mi := &file_types_cffi_proto_msgTypes[42]
+	mi := &file_types_cffi_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2844,7 +3592,7 @@ func (x *CFFICheckType) String() string {
 func (*CFFICheckType) ProtoMessage() {}
 
 func (x *CFFICheckType) ProtoReflect() protoreflect.Message {
-	mi := &file_types_cffi_proto_msgTypes[42]
+	mi := &file_types_cffi_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2857,7 +3605,7 @@ func (x *CFFICheckType) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CFFICheckType.ProtoReflect.Descriptor instead.
 func (*CFFICheckType) Descriptor() ([]byte, []int) {
-	return file_types_cffi_proto_rawDescGZIP(), []int{42}
+	return file_types_cffi_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *CFFICheckType) GetName() string {
@@ -2886,7 +3634,7 @@ type CFFICheckValue struct {
 
 func (x *CFFICheckValue) Reset() {
 	*x = CFFICheckValue{}
-	mi := &file_types_cffi_proto_msgTypes[43]
+	mi := &file_types_cffi_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2898,7 +3646,7 @@ func (x *CFFICheckValue) String() string {
 func (*CFFICheckValue) ProtoMessage() {}
 
 func (x *CFFICheckValue) ProtoReflect() protoreflect.Message {
-	mi := &file_types_cffi_proto_msgTypes[43]
+	mi := &file_types_cffi_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2911,7 +3659,7 @@ func (x *CFFICheckValue) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CFFICheckValue.ProtoReflect.Descriptor instead.
 func (*CFFICheckValue) Descriptor() ([]byte, []int) {
-	return file_types_cffi_proto_rawDescGZIP(), []int{43}
+	return file_types_cffi_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *CFFICheckValue) GetName() string {
@@ -2953,7 +3701,7 @@ type CFFIValueStreamingState struct {
 
 func (x *CFFIValueStreamingState) Reset() {
 	*x = CFFIValueStreamingState{}
-	mi := &file_types_cffi_proto_msgTypes[44]
+	mi := &file_types_cffi_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2965,7 +3713,7 @@ func (x *CFFIValueStreamingState) String() string {
 func (*CFFIValueStreamingState) ProtoMessage() {}
 
 func (x *CFFIValueStreamingState) ProtoReflect() protoreflect.Message {
-	mi := &file_types_cffi_proto_msgTypes[44]
+	mi := &file_types_cffi_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2978,7 +3726,7 @@ func (x *CFFIValueStreamingState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CFFIValueStreamingState.ProtoReflect.Descriptor instead.
 func (*CFFIValueStreamingState) Descriptor() ([]byte, []int) {
-	return file_types_cffi_proto_rawDescGZIP(), []int{44}
+	return file_types_cffi_proto_rawDescGZIP(), []int{52}
 }
 
 func (x *CFFIValueStreamingState) GetValue() *CFFIValueHolder {
@@ -3082,7 +3830,7 @@ const file_types_cffi_proto_rawDesc = "" +
 	"\tmime_type\x18\x04 \x01(\tH\x01R\bmimeType\x88\x01\x01B\t\n" +
 	"\acontentB\f\n" +
 	"\n" +
-	"_mime_type\"\x93\t\n" +
+	"_mime_type\"\xcd\t\n" +
 	"\x13CFFIFieldTypeHolder\x12A\n" +
 	"\vstring_type\x18\x01 \x01(\v2\x1e.baml.cffi.CFFIFieldTypeStringH\x00R\n" +
 	"stringType\x128\n" +
@@ -3106,13 +3854,15 @@ const file_types_cffi_proto_rawDesc = "" +
 	"\x12union_variant_type\x18\x0e \x01(\v2$.baml.cffi.CFFIFieldTypeUnionVariantH\x00R\x10unionVariantType\x12G\n" +
 	"\roptional_type\x18\x0f \x01(\v2 .baml.cffi.CFFIFieldTypeOptionalH\x00R\foptionalType\x12D\n" +
 	"\fchecked_type\x18\x10 \x01(\v2\x1f.baml.cffi.CFFIFieldTypeCheckedH\x00R\vcheckedType\x12Q\n" +
-	"\x11stream_state_type\x18\x11 \x01(\v2#.baml.cffi.CFFIFieldTypeStreamStateH\x00R\x0fstreamStateTypeB\x06\n" +
+	"\x11stream_state_type\x18\x11 \x01(\v2#.baml.cffi.CFFIFieldTypeStreamStateH\x00R\x0fstreamStateType\x128\n" +
+	"\bany_type\x18\x12 \x01(\v2\x1b.baml.cffi.CFFIFieldTypeAnyH\x00R\aanyTypeB\x06\n" +
 	"\x04type\"\x15\n" +
 	"\x13CFFIFieldTypeString\"\x12\n" +
 	"\x10CFFIFieldTypeInt\"\x14\n" +
 	"\x12CFFIFieldTypeFloat\"\x13\n" +
 	"\x11CFFIFieldTypeBool\"\x13\n" +
-	"\x11CFFIFieldTypeNull\")\n" +
+	"\x11CFFIFieldTypeNull\"\x12\n" +
+	"\x10CFFIFieldTypeAny\")\n" +
 	"\x11CFFILiteralString\x12\x14\n" +
 	"\x05value\x18\x01 \x01(\tR\x05value\"&\n" +
 	"\x0eCFFILiteralInt\x12\x14\n" +
@@ -3159,10 +3909,46 @@ const file_types_cffi_proto_rawDesc = "" +
 	"\x0fclient_registry\x18\x02 \x01(\v2\x1d.baml.cffi.CFFIClientRegistryR\x0eclientRegistry\x12'\n" +
 	"\x03env\x18\x03 \x03(\v2\x15.baml.cffi.CFFIEnvVarR\x03env\x128\n" +
 	"\n" +
-	"collectors\x18\x04 \x03(\v2\x18.baml.cffi.CFFICollectorR\n" +
-	"collectors\")\n" +
-	"\rCFFICollector\x12\x18\n" +
-	"\apointer\x18\x01 \x01(\x03R\apointer\"x\n" +
+	"collectors\x18\x04 \x03(\v2\x18.baml.cffi.CFFIRawObjectR\n" +
+	"collectors\"\x9f\x01\n" +
+	"\x19CFFIObjectMethodArguments\x120\n" +
+	"\x06object\x18\x01 \x01(\v2\x18.baml.cffi.CFFIRawObjectR\x06object\x12\x1f\n" +
+	"\vmethod_name\x18\x02 \x01(\tR\n" +
+	"methodName\x12/\n" +
+	"\x06kwargs\x18\x03 \x03(\v2\x17.baml.cffi.CFFIMapEntryR\x06kwargs\"{\n" +
+	"\x19CFFIObjectConstructorArgs\x12-\n" +
+	"\x04type\x18\x01 \x01(\x0e2\x19.baml.cffi.CFFIObjectTypeR\x04type\x12/\n" +
+	"\x06kwargs\x18\x02 \x03(\v2\x17.baml.cffi.CFFIMapEntryR\x06kwargs\"\xcf\x01\n" +
+	"\x19CFFIObjectResponseSuccess\x122\n" +
+	"\x06object\x18\x01 \x01(\v2\x18.baml.cffi.CFFIRawObjectH\x00R\x06object\x12@\n" +
+	"\aobjects\x18\x02 \x01(\v2$.baml.cffi.MultipleRawObjectResponseH\x00R\aobjects\x122\n" +
+	"\x05value\x18\x03 \x01(\v2\x1a.baml.cffi.CFFIValueHolderH\x00R\x05valueB\b\n" +
+	"\x06result\"O\n" +
+	"\x19MultipleRawObjectResponse\x122\n" +
+	"\aobjects\x18\x01 \x03(\v2\x18.baml.cffi.CFFIRawObjectR\aobjects\"/\n" +
+	"\x17CFFIObjectResponseError\x12\x14\n" +
+	"\x05error\x18\x01 \x01(\tR\x05error\"\x9e\x01\n" +
+	"\x12CFFIObjectResponse\x12@\n" +
+	"\asuccess\x18\x01 \x01(\v2$.baml.cffi.CFFIObjectResponseSuccessH\x00R\asuccess\x12:\n" +
+	"\x05error\x18\x02 \x01(\v2\".baml.cffi.CFFIObjectResponseErrorH\x00R\x05errorB\n" +
+	"\n" +
+	"\bresponse\"+\n" +
+	"\x0fCFFIPointerType\x12\x18\n" +
+	"\apointer\x18\x01 \x01(\x03R\apointer\"\xc2\x05\n" +
+	"\rCFFIRawObject\x12:\n" +
+	"\tcollector\x18\x01 \x01(\v2\x1a.baml.cffi.CFFIPointerTypeH\x00R\tcollector\x12?\n" +
+	"\ffunction_log\x18\x02 \x01(\v2\x1a.baml.cffi.CFFIPointerTypeH\x00R\vfunctionLog\x122\n" +
+	"\x05usage\x18\x03 \x01(\v2\x1a.baml.cffi.CFFIPointerTypeH\x00R\x05usage\x124\n" +
+	"\x06timing\x18\x04 \x01(\v2\x1a.baml.cffi.CFFIPointerTypeH\x00R\x06timing\x12A\n" +
+	"\rstream_timing\x18\x05 \x01(\v2\x1a.baml.cffi.CFFIPointerTypeH\x00R\fstreamTiming\x127\n" +
+	"\bllm_call\x18\x06 \x01(\v2\x1a.baml.cffi.CFFIPointerTypeH\x00R\allmCall\x12D\n" +
+	"\x0fllm_stream_call\x18\a \x01(\v2\x1a.baml.cffi.CFFIPointerTypeH\x00R\rllmStreamCall\x12?\n" +
+	"\fhttp_request\x18\b \x01(\v2\x1a.baml.cffi.CFFIPointerTypeH\x00R\vhttpRequest\x12A\n" +
+	"\rhttp_response\x18\t \x01(\v2\x1a.baml.cffi.CFFIPointerTypeH\x00R\fhttpResponse\x129\n" +
+	"\thttp_body\x18\n" +
+	" \x01(\v2\x1a.baml.cffi.CFFIPointerTypeH\x00R\bhttpBody\x12?\n" +
+	"\fsse_response\x18\v \x01(\v2\x1a.baml.cffi.CFFIPointerTypeH\x00R\vsseResponseB\b\n" +
+	"\x06object\"x\n" +
 	"\x12CFFIClientRegistry\x12\x1d\n" +
 	"\aprimary\x18\x01 \x01(\tH\x00R\aprimary\x88\x01\x01\x127\n" +
 	"\aclients\x18\x02 \x03(\v2\x1d.baml.cffi.CFFIClientPropertyR\aclientsB\n" +
@@ -3186,13 +3972,30 @@ const file_types_cffi_proto_rawDesc = "" +
 	"\x05value\x18\x04 \x01(\v2\x1a.baml.cffi.CFFIValueHolderR\x05value\"}\n" +
 	"\x17CFFIValueStreamingState\x120\n" +
 	"\x05value\x18\x01 \x01(\v2\x1a.baml.cffi.CFFIValueHolderR\x05value\x120\n" +
-	"\x05state\x18\x02 \x01(\x0e2\x1a.baml.cffi.CFFIStreamStateR\x05state*0\n" +
-	"\x11CFFITypeNamespace\x12\t\n" +
-	"\x05TYPES\x10\x00\x12\x10\n" +
-	"\fSTREAM_TYPES\x10\x01*%\n" +
+	"\x05state\x18\x02 \x01(\x0e2\x1a.baml.cffi.CFFIStreamStateR\x05state*>\n" +
+	"\x11CFFITypeNamespace\x12\f\n" +
+	"\bINTERNAL\x10\x00\x12\t\n" +
+	"\x05TYPES\x10\x01\x12\x10\n" +
+	"\fSTREAM_TYPES\x10\x02*9\n" +
 	"\rMediaTypeEnum\x12\t\n" +
 	"\x05IMAGE\x10\x00\x12\t\n" +
-	"\x05AUDIO\x10\x01*5\n" +
+	"\x05AUDIO\x10\x01\x12\a\n" +
+	"\x03PDF\x10\x02\x12\t\n" +
+	"\x05VIDEO\x10\x03*\xa9\x02\n" +
+	"\x0eCFFIObjectType\x12\x16\n" +
+	"\x12OBJECT_UNSPECIFIED\x10\x00\x12\x14\n" +
+	"\x10OBJECT_COLLECTOR\x10\x01\x12\x17\n" +
+	"\x13OBJECT_FUNCTION_LOG\x10\x02\x12\x10\n" +
+	"\fOBJECT_USAGE\x10\x03\x12\x11\n" +
+	"\rOBJECT_TIMING\x10\x04\x12\x18\n" +
+	"\x14OBJECT_STREAM_TIMING\x10\x05\x12\x13\n" +
+	"\x0fOBJECT_LLM_CALL\x10\x06\x12\x1a\n" +
+	"\x16OBJECT_LLM_STREAM_CALL\x10\a\x12\x17\n" +
+	"\x13OBJECT_HTTP_REQUEST\x10\b\x12\x18\n" +
+	"\x14OBJECT_HTTP_RESPONSE\x10\t\x12\x14\n" +
+	"\x10OBJECT_HTTP_BODY\x10\n" +
+	"\x12\x17\n" +
+	"\x13OBJECT_SSE_RESPONSE\x10\v*5\n" +
 	"\x0fCFFIStreamState\x12\v\n" +
 	"\aPENDING\x10\x00\x12\v\n" +
 	"\aSTARTED\x10\x01\x12\b\n" +
@@ -3210,140 +4013,171 @@ func file_types_cffi_proto_rawDescGZIP() []byte {
 	return file_types_cffi_proto_rawDescData
 }
 
-var file_types_cffi_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_types_cffi_proto_msgTypes = make([]protoimpl.MessageInfo, 45)
+var file_types_cffi_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
+var file_types_cffi_proto_msgTypes = make([]protoimpl.MessageInfo, 53)
 var file_types_cffi_proto_goTypes = []any{
 	(CFFITypeNamespace)(0),            // 0: baml.cffi.CFFITypeNamespace
 	(MediaTypeEnum)(0),                // 1: baml.cffi.MediaTypeEnum
-	(CFFIStreamState)(0),              // 2: baml.cffi.CFFIStreamState
-	(*CFFIValueHolder)(nil),           // 3: baml.cffi.CFFIValueHolder
-	(*CFFITypeName)(nil),              // 4: baml.cffi.CFFITypeName
-	(*CFFIValueNull)(nil),             // 5: baml.cffi.CFFIValueNull
-	(*CFFIValueList)(nil),             // 6: baml.cffi.CFFIValueList
-	(*CFFIMapEntry)(nil),              // 7: baml.cffi.CFFIMapEntry
-	(*CFFIValueMap)(nil),              // 8: baml.cffi.CFFIValueMap
-	(*CFFIValueClass)(nil),            // 9: baml.cffi.CFFIValueClass
-	(*CFFIValueEnum)(nil),             // 10: baml.cffi.CFFIValueEnum
-	(*CFFIValueMedia)(nil),            // 11: baml.cffi.CFFIValueMedia
-	(*CFFIValueTuple)(nil),            // 12: baml.cffi.CFFIValueTuple
-	(*CFFIValueUnionVariant)(nil),     // 13: baml.cffi.CFFIValueUnionVariant
-	(*CFFIValueChecked)(nil),          // 14: baml.cffi.CFFIValueChecked
-	(*CFFIMediaContentUrl)(nil),       // 15: baml.cffi.CFFIMediaContentUrl
-	(*CFFIMediaContentBase64)(nil),    // 16: baml.cffi.CFFIMediaContentBase64
-	(*CFFIMediaContentFile)(nil),      // 17: baml.cffi.CFFIMediaContentFile
-	(*CFFIMediaValue)(nil),            // 18: baml.cffi.CFFIMediaValue
-	(*CFFIFieldTypeHolder)(nil),       // 19: baml.cffi.CFFIFieldTypeHolder
-	(*CFFIFieldTypeString)(nil),       // 20: baml.cffi.CFFIFieldTypeString
-	(*CFFIFieldTypeInt)(nil),          // 21: baml.cffi.CFFIFieldTypeInt
-	(*CFFIFieldTypeFloat)(nil),        // 22: baml.cffi.CFFIFieldTypeFloat
-	(*CFFIFieldTypeBool)(nil),         // 23: baml.cffi.CFFIFieldTypeBool
-	(*CFFIFieldTypeNull)(nil),         // 24: baml.cffi.CFFIFieldTypeNull
-	(*CFFILiteralString)(nil),         // 25: baml.cffi.CFFILiteralString
-	(*CFFILiteralInt)(nil),            // 26: baml.cffi.CFFILiteralInt
-	(*CFFILiteralBool)(nil),           // 27: baml.cffi.CFFILiteralBool
-	(*CFFIFieldTypeLiteral)(nil),      // 28: baml.cffi.CFFIFieldTypeLiteral
-	(*CFFIFieldTypeMedia)(nil),        // 29: baml.cffi.CFFIFieldTypeMedia
-	(*CFFIFieldTypeEnum)(nil),         // 30: baml.cffi.CFFIFieldTypeEnum
-	(*CFFIFieldTypeClass)(nil),        // 31: baml.cffi.CFFIFieldTypeClass
-	(*CFFIFieldTypeTypeAlias)(nil),    // 32: baml.cffi.CFFIFieldTypeTypeAlias
-	(*CFFIFieldTypeList)(nil),         // 33: baml.cffi.CFFIFieldTypeList
-	(*CFFIFieldTypeMap)(nil),          // 34: baml.cffi.CFFIFieldTypeMap
-	(*CFFIFieldTypeTuple)(nil),        // 35: baml.cffi.CFFIFieldTypeTuple
-	(*CFFIFieldTypeUnionVariant)(nil), // 36: baml.cffi.CFFIFieldTypeUnionVariant
-	(*CFFIFieldTypeOptional)(nil),     // 37: baml.cffi.CFFIFieldTypeOptional
-	(*CFFIFieldTypeChecked)(nil),      // 38: baml.cffi.CFFIFieldTypeChecked
-	(*CFFIFieldTypeStreamState)(nil),  // 39: baml.cffi.CFFIFieldTypeStreamState
-	(*CFFIEnvVar)(nil),                // 40: baml.cffi.CFFIEnvVar
-	(*CFFIFunctionArguments)(nil),     // 41: baml.cffi.CFFIFunctionArguments
-	(*CFFICollector)(nil),             // 42: baml.cffi.CFFICollector
-	(*CFFIClientRegistry)(nil),        // 43: baml.cffi.CFFIClientRegistry
-	(*CFFIClientProperty)(nil),        // 44: baml.cffi.CFFIClientProperty
-	(*CFFICheckType)(nil),             // 45: baml.cffi.CFFICheckType
-	(*CFFICheckValue)(nil),            // 46: baml.cffi.CFFICheckValue
-	(*CFFIValueStreamingState)(nil),   // 47: baml.cffi.CFFIValueStreamingState
+	(CFFIObjectType)(0),               // 2: baml.cffi.CFFIObjectType
+	(CFFIStreamState)(0),              // 3: baml.cffi.CFFIStreamState
+	(*CFFIValueHolder)(nil),           // 4: baml.cffi.CFFIValueHolder
+	(*CFFITypeName)(nil),              // 5: baml.cffi.CFFITypeName
+	(*CFFIValueNull)(nil),             // 6: baml.cffi.CFFIValueNull
+	(*CFFIValueList)(nil),             // 7: baml.cffi.CFFIValueList
+	(*CFFIMapEntry)(nil),              // 8: baml.cffi.CFFIMapEntry
+	(*CFFIValueMap)(nil),              // 9: baml.cffi.CFFIValueMap
+	(*CFFIValueClass)(nil),            // 10: baml.cffi.CFFIValueClass
+	(*CFFIValueEnum)(nil),             // 11: baml.cffi.CFFIValueEnum
+	(*CFFIValueMedia)(nil),            // 12: baml.cffi.CFFIValueMedia
+	(*CFFIValueTuple)(nil),            // 13: baml.cffi.CFFIValueTuple
+	(*CFFIValueUnionVariant)(nil),     // 14: baml.cffi.CFFIValueUnionVariant
+	(*CFFIValueChecked)(nil),          // 15: baml.cffi.CFFIValueChecked
+	(*CFFIMediaContentUrl)(nil),       // 16: baml.cffi.CFFIMediaContentUrl
+	(*CFFIMediaContentBase64)(nil),    // 17: baml.cffi.CFFIMediaContentBase64
+	(*CFFIMediaContentFile)(nil),      // 18: baml.cffi.CFFIMediaContentFile
+	(*CFFIMediaValue)(nil),            // 19: baml.cffi.CFFIMediaValue
+	(*CFFIFieldTypeHolder)(nil),       // 20: baml.cffi.CFFIFieldTypeHolder
+	(*CFFIFieldTypeString)(nil),       // 21: baml.cffi.CFFIFieldTypeString
+	(*CFFIFieldTypeInt)(nil),          // 22: baml.cffi.CFFIFieldTypeInt
+	(*CFFIFieldTypeFloat)(nil),        // 23: baml.cffi.CFFIFieldTypeFloat
+	(*CFFIFieldTypeBool)(nil),         // 24: baml.cffi.CFFIFieldTypeBool
+	(*CFFIFieldTypeNull)(nil),         // 25: baml.cffi.CFFIFieldTypeNull
+	(*CFFIFieldTypeAny)(nil),          // 26: baml.cffi.CFFIFieldTypeAny
+	(*CFFILiteralString)(nil),         // 27: baml.cffi.CFFILiteralString
+	(*CFFILiteralInt)(nil),            // 28: baml.cffi.CFFILiteralInt
+	(*CFFILiteralBool)(nil),           // 29: baml.cffi.CFFILiteralBool
+	(*CFFIFieldTypeLiteral)(nil),      // 30: baml.cffi.CFFIFieldTypeLiteral
+	(*CFFIFieldTypeMedia)(nil),        // 31: baml.cffi.CFFIFieldTypeMedia
+	(*CFFIFieldTypeEnum)(nil),         // 32: baml.cffi.CFFIFieldTypeEnum
+	(*CFFIFieldTypeClass)(nil),        // 33: baml.cffi.CFFIFieldTypeClass
+	(*CFFIFieldTypeTypeAlias)(nil),    // 34: baml.cffi.CFFIFieldTypeTypeAlias
+	(*CFFIFieldTypeList)(nil),         // 35: baml.cffi.CFFIFieldTypeList
+	(*CFFIFieldTypeMap)(nil),          // 36: baml.cffi.CFFIFieldTypeMap
+	(*CFFIFieldTypeTuple)(nil),        // 37: baml.cffi.CFFIFieldTypeTuple
+	(*CFFIFieldTypeUnionVariant)(nil), // 38: baml.cffi.CFFIFieldTypeUnionVariant
+	(*CFFIFieldTypeOptional)(nil),     // 39: baml.cffi.CFFIFieldTypeOptional
+	(*CFFIFieldTypeChecked)(nil),      // 40: baml.cffi.CFFIFieldTypeChecked
+	(*CFFIFieldTypeStreamState)(nil),  // 41: baml.cffi.CFFIFieldTypeStreamState
+	(*CFFIEnvVar)(nil),                // 42: baml.cffi.CFFIEnvVar
+	(*CFFIFunctionArguments)(nil),     // 43: baml.cffi.CFFIFunctionArguments
+	(*CFFIObjectMethodArguments)(nil), // 44: baml.cffi.CFFIObjectMethodArguments
+	(*CFFIObjectConstructorArgs)(nil), // 45: baml.cffi.CFFIObjectConstructorArgs
+	(*CFFIObjectResponseSuccess)(nil), // 46: baml.cffi.CFFIObjectResponseSuccess
+	(*MultipleRawObjectResponse)(nil), // 47: baml.cffi.MultipleRawObjectResponse
+	(*CFFIObjectResponseError)(nil),   // 48: baml.cffi.CFFIObjectResponseError
+	(*CFFIObjectResponse)(nil),        // 49: baml.cffi.CFFIObjectResponse
+	(*CFFIPointerType)(nil),           // 50: baml.cffi.CFFIPointerType
+	(*CFFIRawObject)(nil),             // 51: baml.cffi.CFFIRawObject
+	(*CFFIClientRegistry)(nil),        // 52: baml.cffi.CFFIClientRegistry
+	(*CFFIClientProperty)(nil),        // 53: baml.cffi.CFFIClientProperty
+	(*CFFICheckType)(nil),             // 54: baml.cffi.CFFICheckType
+	(*CFFICheckValue)(nil),            // 55: baml.cffi.CFFICheckValue
+	(*CFFIValueStreamingState)(nil),   // 56: baml.cffi.CFFIValueStreamingState
 }
 var file_types_cffi_proto_depIdxs = []int32{
-	5,  // 0: baml.cffi.CFFIValueHolder.null_value:type_name -> baml.cffi.CFFIValueNull
-	6,  // 1: baml.cffi.CFFIValueHolder.list_value:type_name -> baml.cffi.CFFIValueList
-	8,  // 2: baml.cffi.CFFIValueHolder.map_value:type_name -> baml.cffi.CFFIValueMap
-	9,  // 3: baml.cffi.CFFIValueHolder.class_value:type_name -> baml.cffi.CFFIValueClass
-	10, // 4: baml.cffi.CFFIValueHolder.enum_value:type_name -> baml.cffi.CFFIValueEnum
-	11, // 5: baml.cffi.CFFIValueHolder.media_value:type_name -> baml.cffi.CFFIValueMedia
-	12, // 6: baml.cffi.CFFIValueHolder.tuple_value:type_name -> baml.cffi.CFFIValueTuple
-	13, // 7: baml.cffi.CFFIValueHolder.union_variant_value:type_name -> baml.cffi.CFFIValueUnionVariant
-	14, // 8: baml.cffi.CFFIValueHolder.checked_value:type_name -> baml.cffi.CFFIValueChecked
-	47, // 9: baml.cffi.CFFIValueHolder.streaming_state_value:type_name -> baml.cffi.CFFIValueStreamingState
-	19, // 10: baml.cffi.CFFIValueHolder.type:type_name -> baml.cffi.CFFIFieldTypeHolder
+	6,  // 0: baml.cffi.CFFIValueHolder.null_value:type_name -> baml.cffi.CFFIValueNull
+	7,  // 1: baml.cffi.CFFIValueHolder.list_value:type_name -> baml.cffi.CFFIValueList
+	9,  // 2: baml.cffi.CFFIValueHolder.map_value:type_name -> baml.cffi.CFFIValueMap
+	10, // 3: baml.cffi.CFFIValueHolder.class_value:type_name -> baml.cffi.CFFIValueClass
+	11, // 4: baml.cffi.CFFIValueHolder.enum_value:type_name -> baml.cffi.CFFIValueEnum
+	12, // 5: baml.cffi.CFFIValueHolder.media_value:type_name -> baml.cffi.CFFIValueMedia
+	13, // 6: baml.cffi.CFFIValueHolder.tuple_value:type_name -> baml.cffi.CFFIValueTuple
+	14, // 7: baml.cffi.CFFIValueHolder.union_variant_value:type_name -> baml.cffi.CFFIValueUnionVariant
+	15, // 8: baml.cffi.CFFIValueHolder.checked_value:type_name -> baml.cffi.CFFIValueChecked
+	56, // 9: baml.cffi.CFFIValueHolder.streaming_state_value:type_name -> baml.cffi.CFFIValueStreamingState
+	20, // 10: baml.cffi.CFFIValueHolder.type:type_name -> baml.cffi.CFFIFieldTypeHolder
 	0,  // 11: baml.cffi.CFFITypeName.namespace:type_name -> baml.cffi.CFFITypeNamespace
-	19, // 12: baml.cffi.CFFIValueList.value_type:type_name -> baml.cffi.CFFIFieldTypeHolder
-	3,  // 13: baml.cffi.CFFIValueList.values:type_name -> baml.cffi.CFFIValueHolder
-	3,  // 14: baml.cffi.CFFIMapEntry.value:type_name -> baml.cffi.CFFIValueHolder
-	19, // 15: baml.cffi.CFFIValueMap.key_type:type_name -> baml.cffi.CFFIFieldTypeHolder
-	19, // 16: baml.cffi.CFFIValueMap.value_type:type_name -> baml.cffi.CFFIFieldTypeHolder
-	7,  // 17: baml.cffi.CFFIValueMap.entries:type_name -> baml.cffi.CFFIMapEntry
-	4,  // 18: baml.cffi.CFFIValueClass.name:type_name -> baml.cffi.CFFITypeName
-	7,  // 19: baml.cffi.CFFIValueClass.fields:type_name -> baml.cffi.CFFIMapEntry
-	7,  // 20: baml.cffi.CFFIValueClass.dynamic_fields:type_name -> baml.cffi.CFFIMapEntry
-	4,  // 21: baml.cffi.CFFIValueEnum.name:type_name -> baml.cffi.CFFITypeName
-	29, // 22: baml.cffi.CFFIValueMedia.media_type:type_name -> baml.cffi.CFFIFieldTypeMedia
-	18, // 23: baml.cffi.CFFIValueMedia.media_value:type_name -> baml.cffi.CFFIMediaValue
-	3,  // 24: baml.cffi.CFFIValueTuple.values:type_name -> baml.cffi.CFFIValueHolder
-	4,  // 25: baml.cffi.CFFIValueUnionVariant.name:type_name -> baml.cffi.CFFITypeName
-	19, // 26: baml.cffi.CFFIValueUnionVariant.field_types:type_name -> baml.cffi.CFFIFieldTypeHolder
-	3,  // 27: baml.cffi.CFFIValueUnionVariant.value:type_name -> baml.cffi.CFFIValueHolder
-	3,  // 28: baml.cffi.CFFIValueChecked.value:type_name -> baml.cffi.CFFIValueHolder
-	46, // 29: baml.cffi.CFFIValueChecked.checks:type_name -> baml.cffi.CFFICheckValue
-	15, // 30: baml.cffi.CFFIMediaValue.url_content:type_name -> baml.cffi.CFFIMediaContentUrl
-	16, // 31: baml.cffi.CFFIMediaValue.base64_content:type_name -> baml.cffi.CFFIMediaContentBase64
-	17, // 32: baml.cffi.CFFIMediaValue.file_content:type_name -> baml.cffi.CFFIMediaContentFile
-	20, // 33: baml.cffi.CFFIFieldTypeHolder.string_type:type_name -> baml.cffi.CFFIFieldTypeString
-	21, // 34: baml.cffi.CFFIFieldTypeHolder.int_type:type_name -> baml.cffi.CFFIFieldTypeInt
-	22, // 35: baml.cffi.CFFIFieldTypeHolder.float_type:type_name -> baml.cffi.CFFIFieldTypeFloat
-	23, // 36: baml.cffi.CFFIFieldTypeHolder.bool_type:type_name -> baml.cffi.CFFIFieldTypeBool
-	24, // 37: baml.cffi.CFFIFieldTypeHolder.null_type:type_name -> baml.cffi.CFFIFieldTypeNull
-	28, // 38: baml.cffi.CFFIFieldTypeHolder.literal_type:type_name -> baml.cffi.CFFIFieldTypeLiteral
-	29, // 39: baml.cffi.CFFIFieldTypeHolder.media_type:type_name -> baml.cffi.CFFIFieldTypeMedia
-	30, // 40: baml.cffi.CFFIFieldTypeHolder.enum_type:type_name -> baml.cffi.CFFIFieldTypeEnum
-	31, // 41: baml.cffi.CFFIFieldTypeHolder.class_type:type_name -> baml.cffi.CFFIFieldTypeClass
-	32, // 42: baml.cffi.CFFIFieldTypeHolder.type_alias_type:type_name -> baml.cffi.CFFIFieldTypeTypeAlias
-	33, // 43: baml.cffi.CFFIFieldTypeHolder.list_type:type_name -> baml.cffi.CFFIFieldTypeList
-	34, // 44: baml.cffi.CFFIFieldTypeHolder.map_type:type_name -> baml.cffi.CFFIFieldTypeMap
-	35, // 45: baml.cffi.CFFIFieldTypeHolder.tuple_type:type_name -> baml.cffi.CFFIFieldTypeTuple
-	36, // 46: baml.cffi.CFFIFieldTypeHolder.union_variant_type:type_name -> baml.cffi.CFFIFieldTypeUnionVariant
-	37, // 47: baml.cffi.CFFIFieldTypeHolder.optional_type:type_name -> baml.cffi.CFFIFieldTypeOptional
-	38, // 48: baml.cffi.CFFIFieldTypeHolder.checked_type:type_name -> baml.cffi.CFFIFieldTypeChecked
-	39, // 49: baml.cffi.CFFIFieldTypeHolder.stream_state_type:type_name -> baml.cffi.CFFIFieldTypeStreamState
-	25, // 50: baml.cffi.CFFIFieldTypeLiteral.string_literal:type_name -> baml.cffi.CFFILiteralString
-	26, // 51: baml.cffi.CFFIFieldTypeLiteral.int_literal:type_name -> baml.cffi.CFFILiteralInt
-	27, // 52: baml.cffi.CFFIFieldTypeLiteral.bool_literal:type_name -> baml.cffi.CFFILiteralBool
-	1,  // 53: baml.cffi.CFFIFieldTypeMedia.media:type_name -> baml.cffi.MediaTypeEnum
-	4,  // 54: baml.cffi.CFFIFieldTypeClass.name:type_name -> baml.cffi.CFFITypeName
-	4,  // 55: baml.cffi.CFFIFieldTypeTypeAlias.name:type_name -> baml.cffi.CFFITypeName
-	19, // 56: baml.cffi.CFFIFieldTypeList.element:type_name -> baml.cffi.CFFIFieldTypeHolder
-	19, // 57: baml.cffi.CFFIFieldTypeMap.key:type_name -> baml.cffi.CFFIFieldTypeHolder
-	19, // 58: baml.cffi.CFFIFieldTypeMap.value:type_name -> baml.cffi.CFFIFieldTypeHolder
-	19, // 59: baml.cffi.CFFIFieldTypeTuple.elements:type_name -> baml.cffi.CFFIFieldTypeHolder
-	4,  // 60: baml.cffi.CFFIFieldTypeUnionVariant.name:type_name -> baml.cffi.CFFITypeName
-	19, // 61: baml.cffi.CFFIFieldTypeUnionVariant.options:type_name -> baml.cffi.CFFIFieldTypeHolder
-	19, // 62: baml.cffi.CFFIFieldTypeOptional.value:type_name -> baml.cffi.CFFIFieldTypeHolder
-	19, // 63: baml.cffi.CFFIFieldTypeChecked.value:type_name -> baml.cffi.CFFIFieldTypeHolder
-	45, // 64: baml.cffi.CFFIFieldTypeChecked.checks:type_name -> baml.cffi.CFFICheckType
-	19, // 65: baml.cffi.CFFIFieldTypeStreamState.value:type_name -> baml.cffi.CFFIFieldTypeHolder
-	7,  // 66: baml.cffi.CFFIFunctionArguments.kwargs:type_name -> baml.cffi.CFFIMapEntry
-	43, // 67: baml.cffi.CFFIFunctionArguments.client_registry:type_name -> baml.cffi.CFFIClientRegistry
-	40, // 68: baml.cffi.CFFIFunctionArguments.env:type_name -> baml.cffi.CFFIEnvVar
-	42, // 69: baml.cffi.CFFIFunctionArguments.collectors:type_name -> baml.cffi.CFFICollector
-	44, // 70: baml.cffi.CFFIClientRegistry.clients:type_name -> baml.cffi.CFFIClientProperty
-	7,  // 71: baml.cffi.CFFIClientProperty.options:type_name -> baml.cffi.CFFIMapEntry
-	19, // 72: baml.cffi.CFFICheckType.returns:type_name -> baml.cffi.CFFIFieldTypeHolder
-	3,  // 73: baml.cffi.CFFICheckValue.value:type_name -> baml.cffi.CFFIValueHolder
-	3,  // 74: baml.cffi.CFFIValueStreamingState.value:type_name -> baml.cffi.CFFIValueHolder
-	2,  // 75: baml.cffi.CFFIValueStreamingState.state:type_name -> baml.cffi.CFFIStreamState
-	76, // [76:76] is the sub-list for method output_type
-	76, // [76:76] is the sub-list for method input_type
-	76, // [76:76] is the sub-list for extension type_name
-	76, // [76:76] is the sub-list for extension extendee
-	0,  // [0:76] is the sub-list for field type_name
+	20, // 12: baml.cffi.CFFIValueList.value_type:type_name -> baml.cffi.CFFIFieldTypeHolder
+	4,  // 13: baml.cffi.CFFIValueList.values:type_name -> baml.cffi.CFFIValueHolder
+	4,  // 14: baml.cffi.CFFIMapEntry.value:type_name -> baml.cffi.CFFIValueHolder
+	20, // 15: baml.cffi.CFFIValueMap.key_type:type_name -> baml.cffi.CFFIFieldTypeHolder
+	20, // 16: baml.cffi.CFFIValueMap.value_type:type_name -> baml.cffi.CFFIFieldTypeHolder
+	8,  // 17: baml.cffi.CFFIValueMap.entries:type_name -> baml.cffi.CFFIMapEntry
+	5,  // 18: baml.cffi.CFFIValueClass.name:type_name -> baml.cffi.CFFITypeName
+	8,  // 19: baml.cffi.CFFIValueClass.fields:type_name -> baml.cffi.CFFIMapEntry
+	8,  // 20: baml.cffi.CFFIValueClass.dynamic_fields:type_name -> baml.cffi.CFFIMapEntry
+	5,  // 21: baml.cffi.CFFIValueEnum.name:type_name -> baml.cffi.CFFITypeName
+	31, // 22: baml.cffi.CFFIValueMedia.media_type:type_name -> baml.cffi.CFFIFieldTypeMedia
+	19, // 23: baml.cffi.CFFIValueMedia.media_value:type_name -> baml.cffi.CFFIMediaValue
+	4,  // 24: baml.cffi.CFFIValueTuple.values:type_name -> baml.cffi.CFFIValueHolder
+	5,  // 25: baml.cffi.CFFIValueUnionVariant.name:type_name -> baml.cffi.CFFITypeName
+	20, // 26: baml.cffi.CFFIValueUnionVariant.field_types:type_name -> baml.cffi.CFFIFieldTypeHolder
+	4,  // 27: baml.cffi.CFFIValueUnionVariant.value:type_name -> baml.cffi.CFFIValueHolder
+	4,  // 28: baml.cffi.CFFIValueChecked.value:type_name -> baml.cffi.CFFIValueHolder
+	55, // 29: baml.cffi.CFFIValueChecked.checks:type_name -> baml.cffi.CFFICheckValue
+	16, // 30: baml.cffi.CFFIMediaValue.url_content:type_name -> baml.cffi.CFFIMediaContentUrl
+	17, // 31: baml.cffi.CFFIMediaValue.base64_content:type_name -> baml.cffi.CFFIMediaContentBase64
+	18, // 32: baml.cffi.CFFIMediaValue.file_content:type_name -> baml.cffi.CFFIMediaContentFile
+	21, // 33: baml.cffi.CFFIFieldTypeHolder.string_type:type_name -> baml.cffi.CFFIFieldTypeString
+	22, // 34: baml.cffi.CFFIFieldTypeHolder.int_type:type_name -> baml.cffi.CFFIFieldTypeInt
+	23, // 35: baml.cffi.CFFIFieldTypeHolder.float_type:type_name -> baml.cffi.CFFIFieldTypeFloat
+	24, // 36: baml.cffi.CFFIFieldTypeHolder.bool_type:type_name -> baml.cffi.CFFIFieldTypeBool
+	25, // 37: baml.cffi.CFFIFieldTypeHolder.null_type:type_name -> baml.cffi.CFFIFieldTypeNull
+	30, // 38: baml.cffi.CFFIFieldTypeHolder.literal_type:type_name -> baml.cffi.CFFIFieldTypeLiteral
+	31, // 39: baml.cffi.CFFIFieldTypeHolder.media_type:type_name -> baml.cffi.CFFIFieldTypeMedia
+	32, // 40: baml.cffi.CFFIFieldTypeHolder.enum_type:type_name -> baml.cffi.CFFIFieldTypeEnum
+	33, // 41: baml.cffi.CFFIFieldTypeHolder.class_type:type_name -> baml.cffi.CFFIFieldTypeClass
+	34, // 42: baml.cffi.CFFIFieldTypeHolder.type_alias_type:type_name -> baml.cffi.CFFIFieldTypeTypeAlias
+	35, // 43: baml.cffi.CFFIFieldTypeHolder.list_type:type_name -> baml.cffi.CFFIFieldTypeList
+	36, // 44: baml.cffi.CFFIFieldTypeHolder.map_type:type_name -> baml.cffi.CFFIFieldTypeMap
+	37, // 45: baml.cffi.CFFIFieldTypeHolder.tuple_type:type_name -> baml.cffi.CFFIFieldTypeTuple
+	38, // 46: baml.cffi.CFFIFieldTypeHolder.union_variant_type:type_name -> baml.cffi.CFFIFieldTypeUnionVariant
+	39, // 47: baml.cffi.CFFIFieldTypeHolder.optional_type:type_name -> baml.cffi.CFFIFieldTypeOptional
+	40, // 48: baml.cffi.CFFIFieldTypeHolder.checked_type:type_name -> baml.cffi.CFFIFieldTypeChecked
+	41, // 49: baml.cffi.CFFIFieldTypeHolder.stream_state_type:type_name -> baml.cffi.CFFIFieldTypeStreamState
+	26, // 50: baml.cffi.CFFIFieldTypeHolder.any_type:type_name -> baml.cffi.CFFIFieldTypeAny
+	27, // 51: baml.cffi.CFFIFieldTypeLiteral.string_literal:type_name -> baml.cffi.CFFILiteralString
+	28, // 52: baml.cffi.CFFIFieldTypeLiteral.int_literal:type_name -> baml.cffi.CFFILiteralInt
+	29, // 53: baml.cffi.CFFIFieldTypeLiteral.bool_literal:type_name -> baml.cffi.CFFILiteralBool
+	1,  // 54: baml.cffi.CFFIFieldTypeMedia.media:type_name -> baml.cffi.MediaTypeEnum
+	5,  // 55: baml.cffi.CFFIFieldTypeClass.name:type_name -> baml.cffi.CFFITypeName
+	5,  // 56: baml.cffi.CFFIFieldTypeTypeAlias.name:type_name -> baml.cffi.CFFITypeName
+	20, // 57: baml.cffi.CFFIFieldTypeList.element:type_name -> baml.cffi.CFFIFieldTypeHolder
+	20, // 58: baml.cffi.CFFIFieldTypeMap.key:type_name -> baml.cffi.CFFIFieldTypeHolder
+	20, // 59: baml.cffi.CFFIFieldTypeMap.value:type_name -> baml.cffi.CFFIFieldTypeHolder
+	20, // 60: baml.cffi.CFFIFieldTypeTuple.elements:type_name -> baml.cffi.CFFIFieldTypeHolder
+	5,  // 61: baml.cffi.CFFIFieldTypeUnionVariant.name:type_name -> baml.cffi.CFFITypeName
+	20, // 62: baml.cffi.CFFIFieldTypeUnionVariant.options:type_name -> baml.cffi.CFFIFieldTypeHolder
+	20, // 63: baml.cffi.CFFIFieldTypeOptional.value:type_name -> baml.cffi.CFFIFieldTypeHolder
+	20, // 64: baml.cffi.CFFIFieldTypeChecked.value:type_name -> baml.cffi.CFFIFieldTypeHolder
+	54, // 65: baml.cffi.CFFIFieldTypeChecked.checks:type_name -> baml.cffi.CFFICheckType
+	20, // 66: baml.cffi.CFFIFieldTypeStreamState.value:type_name -> baml.cffi.CFFIFieldTypeHolder
+	8,  // 67: baml.cffi.CFFIFunctionArguments.kwargs:type_name -> baml.cffi.CFFIMapEntry
+	52, // 68: baml.cffi.CFFIFunctionArguments.client_registry:type_name -> baml.cffi.CFFIClientRegistry
+	42, // 69: baml.cffi.CFFIFunctionArguments.env:type_name -> baml.cffi.CFFIEnvVar
+	51, // 70: baml.cffi.CFFIFunctionArguments.collectors:type_name -> baml.cffi.CFFIRawObject
+	51, // 71: baml.cffi.CFFIObjectMethodArguments.object:type_name -> baml.cffi.CFFIRawObject
+	8,  // 72: baml.cffi.CFFIObjectMethodArguments.kwargs:type_name -> baml.cffi.CFFIMapEntry
+	2,  // 73: baml.cffi.CFFIObjectConstructorArgs.type:type_name -> baml.cffi.CFFIObjectType
+	8,  // 74: baml.cffi.CFFIObjectConstructorArgs.kwargs:type_name -> baml.cffi.CFFIMapEntry
+	51, // 75: baml.cffi.CFFIObjectResponseSuccess.object:type_name -> baml.cffi.CFFIRawObject
+	47, // 76: baml.cffi.CFFIObjectResponseSuccess.objects:type_name -> baml.cffi.MultipleRawObjectResponse
+	4,  // 77: baml.cffi.CFFIObjectResponseSuccess.value:type_name -> baml.cffi.CFFIValueHolder
+	51, // 78: baml.cffi.MultipleRawObjectResponse.objects:type_name -> baml.cffi.CFFIRawObject
+	46, // 79: baml.cffi.CFFIObjectResponse.success:type_name -> baml.cffi.CFFIObjectResponseSuccess
+	48, // 80: baml.cffi.CFFIObjectResponse.error:type_name -> baml.cffi.CFFIObjectResponseError
+	50, // 81: baml.cffi.CFFIRawObject.collector:type_name -> baml.cffi.CFFIPointerType
+	50, // 82: baml.cffi.CFFIRawObject.function_log:type_name -> baml.cffi.CFFIPointerType
+	50, // 83: baml.cffi.CFFIRawObject.usage:type_name -> baml.cffi.CFFIPointerType
+	50, // 84: baml.cffi.CFFIRawObject.timing:type_name -> baml.cffi.CFFIPointerType
+	50, // 85: baml.cffi.CFFIRawObject.stream_timing:type_name -> baml.cffi.CFFIPointerType
+	50, // 86: baml.cffi.CFFIRawObject.llm_call:type_name -> baml.cffi.CFFIPointerType
+	50, // 87: baml.cffi.CFFIRawObject.llm_stream_call:type_name -> baml.cffi.CFFIPointerType
+	50, // 88: baml.cffi.CFFIRawObject.http_request:type_name -> baml.cffi.CFFIPointerType
+	50, // 89: baml.cffi.CFFIRawObject.http_response:type_name -> baml.cffi.CFFIPointerType
+	50, // 90: baml.cffi.CFFIRawObject.http_body:type_name -> baml.cffi.CFFIPointerType
+	50, // 91: baml.cffi.CFFIRawObject.sse_response:type_name -> baml.cffi.CFFIPointerType
+	53, // 92: baml.cffi.CFFIClientRegistry.clients:type_name -> baml.cffi.CFFIClientProperty
+	8,  // 93: baml.cffi.CFFIClientProperty.options:type_name -> baml.cffi.CFFIMapEntry
+	20, // 94: baml.cffi.CFFICheckType.returns:type_name -> baml.cffi.CFFIFieldTypeHolder
+	4,  // 95: baml.cffi.CFFICheckValue.value:type_name -> baml.cffi.CFFIValueHolder
+	4,  // 96: baml.cffi.CFFIValueStreamingState.value:type_name -> baml.cffi.CFFIValueHolder
+	3,  // 97: baml.cffi.CFFIValueStreamingState.state:type_name -> baml.cffi.CFFIStreamState
+	98, // [98:98] is the sub-list for method output_type
+	98, // [98:98] is the sub-list for method input_type
+	98, // [98:98] is the sub-list for extension type_name
+	98, // [98:98] is the sub-list for extension extendee
+	0,  // [0:98] is the sub-list for field type_name
 }
 
 func init() { file_types_cffi_proto_init() }
@@ -3390,21 +4224,44 @@ func file_types_cffi_proto_init() {
 		(*CFFIFieldTypeHolder_OptionalType)(nil),
 		(*CFFIFieldTypeHolder_CheckedType)(nil),
 		(*CFFIFieldTypeHolder_StreamStateType)(nil),
+		(*CFFIFieldTypeHolder_AnyType)(nil),
 	}
-	file_types_cffi_proto_msgTypes[25].OneofWrappers = []any{
+	file_types_cffi_proto_msgTypes[26].OneofWrappers = []any{
 		(*CFFIFieldTypeLiteral_StringLiteral)(nil),
 		(*CFFIFieldTypeLiteral_IntLiteral)(nil),
 		(*CFFIFieldTypeLiteral_BoolLiteral)(nil),
 	}
-	file_types_cffi_proto_msgTypes[40].OneofWrappers = []any{}
-	file_types_cffi_proto_msgTypes[41].OneofWrappers = []any{}
+	file_types_cffi_proto_msgTypes[42].OneofWrappers = []any{
+		(*CFFIObjectResponseSuccess_Object)(nil),
+		(*CFFIObjectResponseSuccess_Objects)(nil),
+		(*CFFIObjectResponseSuccess_Value)(nil),
+	}
+	file_types_cffi_proto_msgTypes[45].OneofWrappers = []any{
+		(*CFFIObjectResponse_Success)(nil),
+		(*CFFIObjectResponse_Error)(nil),
+	}
+	file_types_cffi_proto_msgTypes[47].OneofWrappers = []any{
+		(*CFFIRawObject_Collector)(nil),
+		(*CFFIRawObject_FunctionLog)(nil),
+		(*CFFIRawObject_Usage)(nil),
+		(*CFFIRawObject_Timing)(nil),
+		(*CFFIRawObject_StreamTiming)(nil),
+		(*CFFIRawObject_LlmCall)(nil),
+		(*CFFIRawObject_LlmStreamCall)(nil),
+		(*CFFIRawObject_HttpRequest)(nil),
+		(*CFFIRawObject_HttpResponse)(nil),
+		(*CFFIRawObject_HttpBody)(nil),
+		(*CFFIRawObject_SseResponse)(nil),
+	}
+	file_types_cffi_proto_msgTypes[48].OneofWrappers = []any{}
+	file_types_cffi_proto_msgTypes[49].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_types_cffi_proto_rawDesc), len(file_types_cffi_proto_rawDesc)),
-			NumEnums:      3,
-			NumMessages:   45,
+			NumEnums:      4,
+			NumMessages:   53,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

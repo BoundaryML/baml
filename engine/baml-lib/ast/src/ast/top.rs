@@ -114,7 +114,7 @@ impl WithIdentifier for Top {
             Top::Generator(x) => x.identifier(),
             Top::TestCase(x) => x.identifier(),
             Top::RetryPolicy(x) => x.identifier(),
-            Top::TopLevelAssignment(x) => x.stmt.identifier(),
+            Top::TopLevelAssignment(x) => &x.stmt.identifier,
             Top::ExprFn(x) => &x.name,
         }
     }
@@ -132,7 +132,7 @@ impl WithSpan for Top {
             Top::Generator(gen) => gen.span(),
             Top::TestCase(test) => test.span(),
             Top::RetryPolicy(retry) => retry.span(),
-            Top::TopLevelAssignment(asmnt) => asmnt.stmt.span(),
+            Top::TopLevelAssignment(asmnt) => &asmnt.stmt.span,
             Top::ExprFn(function) => &function.span,
         }
     }

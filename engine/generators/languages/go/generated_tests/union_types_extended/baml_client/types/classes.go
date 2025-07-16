@@ -27,7 +27,7 @@ type Admin struct {
 	Type        string   `json:"type"`
 }
 
-func (c *Admin) Decode(holder *cffi.CFFIValueClass) {
+func (c *Admin) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_TYPES, got %s", string(typeName.Namespace.String())))
@@ -91,7 +91,7 @@ type ApiError struct {
 	Code    int64  `json:"code"`
 }
 
-func (c *ApiError) Decode(holder *cffi.CFFIValueClass) {
+func (c *ApiError) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_TYPES, got %s", string(typeName.Namespace.String())))
@@ -150,7 +150,7 @@ type ApiPending struct {
 	Eta      *int64  `json:"eta"`
 }
 
-func (c *ApiPending) Decode(holder *cffi.CFFIValueClass) {
+func (c *ApiPending) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_TYPES, got %s", string(typeName.Namespace.String())))
@@ -208,7 +208,7 @@ type ApiSuccess struct {
 	Data   map[string]string `json:"data"`
 }
 
-func (c *ApiSuccess) Decode(holder *cffi.CFFIValueClass) {
+func (c *ApiSuccess) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_TYPES, got %s", string(typeName.Namespace.String())))
@@ -262,7 +262,7 @@ type Bird struct {
 	Wingspan *float64 `json:"wingspan"`
 }
 
-func (c *Bird) Decode(holder *cffi.CFFIValueClass) {
+func (c *Bird) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_TYPES, got %s", string(typeName.Namespace.String())))
@@ -321,7 +321,7 @@ type Cat struct {
 	Lives   int64  `json:"lives"`
 }
 
-func (c *Cat) Decode(holder *cffi.CFFIValueClass) {
+func (c *Cat) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_TYPES, got %s", string(typeName.Namespace.String())))
@@ -379,7 +379,7 @@ type Circle struct {
 	Radius float64 `json:"radius"`
 }
 
-func (c *Circle) Decode(holder *cffi.CFFIValueClass) {
+func (c *Circle) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_TYPES, got %s", string(typeName.Namespace.String())))
@@ -435,7 +435,7 @@ type ComplexUnions struct {
 	MultiTypeResult      Union3ErrorOrSuccessOrWarning     `json:"multiTypeResult"`
 }
 
-func (c *ComplexUnions) Decode(holder *cffi.CFFIValueClass) {
+func (c *ComplexUnions) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_TYPES, got %s", string(typeName.Namespace.String())))
@@ -504,7 +504,7 @@ type DataResponse struct {
 	Status    string `json:"status"`
 }
 
-func (c *DataResponse) Decode(holder *cffi.CFFIValueClass) {
+func (c *DataResponse) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_TYPES, got %s", string(typeName.Namespace.String())))
@@ -563,7 +563,7 @@ type DiscriminatedUnions struct {
 	Response Union3ApiErrorOrApiPendingOrApiSuccess `json:"response"`
 }
 
-func (c *DiscriminatedUnions) Decode(holder *cffi.CFFIValueClass) {
+func (c *DiscriminatedUnions) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_TYPES, got %s", string(typeName.Namespace.String())))
@@ -622,7 +622,7 @@ type Dog struct {
 	GoodBoy bool   `json:"goodBoy"`
 }
 
-func (c *Dog) Decode(holder *cffi.CFFIValueClass) {
+func (c *Dog) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_TYPES, got %s", string(typeName.Namespace.String())))
@@ -682,7 +682,7 @@ type Error struct {
 	Details *string `json:"details"`
 }
 
-func (c *Error) Decode(holder *cffi.CFFIValueClass) {
+func (c *Error) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_TYPES, got %s", string(typeName.Namespace.String())))
@@ -746,7 +746,7 @@ type ErrorResponse struct {
 	Status string `json:"status"`
 }
 
-func (c *ErrorResponse) Decode(holder *cffi.CFFIValueClass) {
+func (c *ErrorResponse) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_TYPES, got %s", string(typeName.Namespace.String())))
@@ -807,7 +807,7 @@ type PrimitiveUnions struct {
 	AnyPrimitive  Union4BoolOrFloatOrIntOrString `json:"anyPrimitive"`
 }
 
-func (c *PrimitiveUnions) Decode(holder *cffi.CFFIValueClass) {
+func (c *PrimitiveUnions) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_TYPES, got %s", string(typeName.Namespace.String())))
@@ -877,7 +877,7 @@ type Product struct {
 	Type  string  `json:"type"`
 }
 
-func (c *Product) Decode(holder *cffi.CFFIValueClass) {
+func (c *Product) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_TYPES, got %s", string(typeName.Namespace.String())))
@@ -941,7 +941,7 @@ type Rectangle struct {
 	Height float64 `json:"height"`
 }
 
-func (c *Rectangle) Decode(holder *cffi.CFFIValueClass) {
+func (c *Rectangle) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_TYPES, got %s", string(typeName.Namespace.String())))
@@ -999,7 +999,7 @@ type RecursiveUnion struct {
 	Children []Union2RecursiveUnionOrString    `json:"children"`
 }
 
-func (c *RecursiveUnion) Decode(holder *cffi.CFFIValueClass) {
+func (c *RecursiveUnion) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_TYPES, got %s", string(typeName.Namespace.String())))
@@ -1052,7 +1052,7 @@ type Result struct {
 	Metadata map[string]string        `json:"metadata"`
 }
 
-func (c *Result) Decode(holder *cffi.CFFIValueClass) {
+func (c *Result) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_TYPES, got %s", string(typeName.Namespace.String())))
@@ -1106,7 +1106,7 @@ type Success struct {
 	Data    map[string]string `json:"data"`
 }
 
-func (c *Success) Decode(holder *cffi.CFFIValueClass) {
+func (c *Success) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_TYPES, got %s", string(typeName.Namespace.String())))
@@ -1165,7 +1165,7 @@ type Triangle struct {
 	Height float64 `json:"height"`
 }
 
-func (c *Triangle) Decode(holder *cffi.CFFIValueClass) {
+func (c *Triangle) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_TYPES, got %s", string(typeName.Namespace.String())))
@@ -1225,7 +1225,7 @@ type UnionArrays struct {
 	NestedUnionArray []Union2ListIntOrString `json:"nestedUnionArray"`
 }
 
-func (c *UnionArrays) Decode(holder *cffi.CFFIValueClass) {
+func (c *UnionArrays) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_TYPES, got %s", string(typeName.Namespace.String())))
@@ -1289,7 +1289,7 @@ type User struct {
 	Type string `json:"type"`
 }
 
-func (c *User) Decode(holder *cffi.CFFIValueClass) {
+func (c *User) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_TYPES, got %s", string(typeName.Namespace.String())))
@@ -1348,7 +1348,7 @@ type Warning struct {
 	Level   int64  `json:"level"`
 }
 
-func (c *Warning) Decode(holder *cffi.CFFIValueClass) {
+func (c *Warning) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_TYPES, got %s", string(typeName.Namespace.String())))

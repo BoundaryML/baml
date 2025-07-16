@@ -4,7 +4,7 @@ use baml_runtime::client_registry::{ClientProperty, ClientProvider, ClientRegist
 use baml_types::BamlValue;
 
 use super::utils::Decode;
-use crate::raw_ptr_wrapper::CollectorWrapper;
+use crate::raw_ptr_wrapper::{CollectorWrapper, RawPtrType};
 
 pub struct BamlFunctionArguments {
     pub kwargs: baml_types::BamlMap<String, BamlValue>,
@@ -35,7 +35,12 @@ impl Decode for BamlFunctionArguments {
             let collectors = from
                 .collectors
                 .into_iter()
-                .map(CollectorWrapper::decode)
+                .map(RawPtrType::decode)
+                .map(|r| match r {
+                    Ok(RawPtrType::Collector(c)) => Ok(c),
+                    Err(e) => Err(e),
+                    Ok(other) => Err(anyhow::anyhow!("Expected Collector, got {}", other.name())),
+                })
                 .collect::<Result<Vec<_>, _>>()?;
             if collectors.is_empty() {
                 None
@@ -50,17 +55,6 @@ impl Decode for BamlFunctionArguments {
             env_vars,
             collectors,
         })
-    }
-}
-
-impl Decode for CollectorWrapper {
-    type From = crate::baml::cffi::CffiCollector;
-
-    fn decode(from: Self::From) -> Result<Self, anyhow::Error> {
-        match from.pointer {
-            0 => Err(anyhow::anyhow!("Collector pointer is 0")),
-            ptr => Ok(CollectorWrapper::from_raw(ptr as *const libc::c_void, true)),
-        }
     }
 }
 

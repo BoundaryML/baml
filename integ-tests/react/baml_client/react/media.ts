@@ -21,14 +21,14 @@ $ pnpm add @boundaryml/baml
 
 /**
  * @warning This file is intended for browser usage only.
- * For Node.js environments, import Image and Audio directly from '@boundaryml/baml'.
+ * For Node.js environments, import Image, Audio, Pdf, and Video directly from '@boundaryml/baml'.
  * Example:
  * ```ts
  * // ✅ Browser usage
- * import { Image, Audio } from '@boundaryml/baml/browser'
+ * import { Image, Audio, Pdf, Video } from '@boundaryml/baml/browser'
  *
  * // ❌ Don't import these from '@boundaryml/baml' in browser environments
- * import { Image, Audio } from '@boundaryml/baml'
+ * import { Image, Audio, Pdf, Video } from '@boundaryml/baml'
  * ```
  */
 /**

@@ -199,6 +199,8 @@ impl SerializeType for BamlMediaType {
         match self {
             BamlMediaType::Image => "baml.Image".to_string(),
             BamlMediaType::Audio => "baml.Audio".to_string(),
+            BamlMediaType::Pdf => "baml.Pdf".to_string(),
+            BamlMediaType::Video => "baml.Video".to_string(),
         }
     }
 }

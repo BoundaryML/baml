@@ -1,8 +1,10 @@
-use std::{env, fs, path::Path};
+use std::{
+    env, fs,
+    path::{Path, PathBuf},
+};
 
 fn main() {
     let out_dir = env::var_os("OUT_DIR").unwrap();
-    let dest_path = Path::new(&out_dir).join("generated_macro.rs");
 
     // Get the cargo root directory (3 levels up from the test_harness crate)
     let cargo_manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
@@ -10,6 +12,62 @@ fn main() {
         .join("../../..")
         .canonicalize()
         .expect("Failed to canonicalize cargo root path");
+
+    // 3. Figure out the filename for this platform
+    let dylib_name = if cfg!(target_os = "macos") {
+        "libbaml_cffi.dylib"
+    } else if cfg!(target_os = "windows") {
+        "baml_cffi.dll"
+    } else {
+        "libbaml_cffi.so"
+    };
+
+    // Check if we're in a build where baml_cffi has already been built
+    // When baml_cffi is built as a dependency with links="baml_cffi",
+    // Cargo doesn't provide the dylib location through DEP_ variables for cdylib crates
+    // So we still need to look for it in the target directory
+    // Try multiple locations where the dylib might be
+    let possible_paths = [
+        cargo_root.join("target/debug/deps").join(dylib_name),
+        cargo_root.join("target/debug").join(dylib_name),
+    ];
+
+    let dylib_path = possible_paths
+        .iter()
+        .find(|p| p.exists())
+        .cloned()
+        .unwrap_or_else(|| cargo_root.join("target/debug").join(dylib_name));
+
+    println!("dylib_path: {}", dylib_path.display());
+
+    let dest = Path::new(&out_dir).join(dylib_name);
+
+    fs::create_dir_all(dest.parent().unwrap()).unwrap();
+
+    // Only copy if the dylib exists
+    if dylib_path.exists() {
+        fs::copy(&dylib_path, &dest).unwrap();
+
+        // Also copy to the expected location for tests
+        let expected_path = cargo_root.join("target/debug").join(dylib_name);
+        if dylib_path != expected_path {
+            fs::create_dir_all(expected_path.parent().unwrap()).unwrap();
+            fs::copy(&dylib_path, &expected_path).unwrap();
+            println!(
+                "Copied dylib to expected location: {}",
+                expected_path.display()
+            );
+        }
+    } else {
+        // Since baml_cffi is a cdylib, we need to ensure it's built first
+        // The links field will ensure build ordering, but the dylib might not exist yet
+        println!(
+            "cargo:warning=baml_cffi dylib not found at {}. Make sure to build baml_cffi first: cargo build --package baml_cffi",
+            dylib_path.display()
+        );
+    }
+
+    let dest_path = Path::new(&out_dir).join("generated_macro.rs");
 
     let data_dir = cargo_root.join("generators/data");
 

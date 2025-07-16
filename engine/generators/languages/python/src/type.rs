@@ -95,6 +95,8 @@ impl WrapType for TypeMetaPy {
 pub enum MediaTypePy {
     Image,
     Audio,
+    Pdf,
+    Video,
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -329,6 +331,8 @@ impl SerializeType for MediaTypePy {
         match self {
             MediaTypePy::Image => format!("{}Image", Package::imported_base().relative_from(pkg)),
             MediaTypePy::Audio => format!("{}Audio", Package::imported_base().relative_from(pkg)),
+            MediaTypePy::Pdf => format!("{}Pdf", Package::imported_base().relative_from(pkg)),
+            MediaTypePy::Video => format!("{}Video", Package::imported_base().relative_from(pkg)),
         }
     }
 }

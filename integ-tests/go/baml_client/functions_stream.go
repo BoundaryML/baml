@@ -63,7 +63,7 @@ func (*stream) AaaSamOutputFormat(ctx context.Context, recipe string, opts ...Ca
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -72,7 +72,7 @@ func (*stream) AaaSamOutputFormat(ctx context.Context, recipe string, opts ...Ca
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "AaaSamOutputFormat", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "AaaSamOutputFormat", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -141,7 +141,7 @@ func (*stream) AliasThatPointsToRecursiveType(ctx context.Context, data types.Li
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -150,7 +150,7 @@ func (*stream) AliasThatPointsToRecursiveType(ctx context.Context, data types.Li
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "AliasThatPointsToRecursiveType", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "AliasThatPointsToRecursiveType", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -219,7 +219,7 @@ func (*stream) AliasWithMultipleAttrs(ctx context.Context, money int64, opts ...
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -228,7 +228,7 @@ func (*stream) AliasWithMultipleAttrs(ctx context.Context, money int64, opts ...
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "AliasWithMultipleAttrs", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "AliasWithMultipleAttrs", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -297,7 +297,7 @@ func (*stream) AliasedInputClass(ctx context.Context, input types.InputClass, op
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -306,7 +306,7 @@ func (*stream) AliasedInputClass(ctx context.Context, input types.InputClass, op
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "AliasedInputClass", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "AliasedInputClass", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -375,7 +375,7 @@ func (*stream) AliasedInputClass2(ctx context.Context, input types.InputClass, o
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -384,7 +384,7 @@ func (*stream) AliasedInputClass2(ctx context.Context, input types.InputClass, o
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "AliasedInputClass2", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "AliasedInputClass2", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -453,7 +453,7 @@ func (*stream) AliasedInputClassNested(ctx context.Context, input types.InputCla
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -462,7 +462,7 @@ func (*stream) AliasedInputClassNested(ctx context.Context, input types.InputCla
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "AliasedInputClassNested", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "AliasedInputClassNested", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -531,7 +531,7 @@ func (*stream) AliasedInputEnum(ctx context.Context, input types.AliasedEnum, op
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -540,7 +540,7 @@ func (*stream) AliasedInputEnum(ctx context.Context, input types.AliasedEnum, op
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "AliasedInputEnum", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "AliasedInputEnum", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -609,7 +609,7 @@ func (*stream) AliasedInputList(ctx context.Context, input []types.AliasedEnum, 
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -618,7 +618,7 @@ func (*stream) AliasedInputList(ctx context.Context, input []types.AliasedEnum, 
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "AliasedInputList", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "AliasedInputList", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -687,7 +687,7 @@ func (*stream) AllowedOptionals(ctx context.Context, optionals types.OptionalLis
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -696,7 +696,7 @@ func (*stream) AllowedOptionals(ctx context.Context, optionals types.OptionalLis
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "AllowedOptionals", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "AllowedOptionals", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -765,7 +765,7 @@ func (*stream) AssertFn(ctx context.Context, a int64, opts ...CallOptionFunc) (<
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -774,7 +774,7 @@ func (*stream) AssertFn(ctx context.Context, a int64, opts ...CallOptionFunc) (<
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "AssertFn", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "AssertFn", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -843,7 +843,7 @@ func (*stream) AudioInput(ctx context.Context, aud any, opts ...CallOptionFunc) 
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -852,7 +852,7 @@ func (*stream) AudioInput(ctx context.Context, aud any, opts ...CallOptionFunc) 
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "AudioInput", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "AudioInput", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -921,7 +921,7 @@ func (*stream) AudioInputOpenai(ctx context.Context, aud any, prompt string, opt
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -930,7 +930,7 @@ func (*stream) AudioInputOpenai(ctx context.Context, aud any, prompt string, opt
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "AudioInputOpenai", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "AudioInputOpenai", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -999,7 +999,7 @@ func (*stream) BuildLinkedList(ctx context.Context, input []int64, opts ...CallO
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -1008,7 +1008,7 @@ func (*stream) BuildLinkedList(ctx context.Context, input []int64, opts ...CallO
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "BuildLinkedList", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "BuildLinkedList", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -1077,7 +1077,7 @@ func (*stream) BuildTree(ctx context.Context, input types.BinaryNode, opts ...Ca
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -1086,7 +1086,7 @@ func (*stream) BuildTree(ctx context.Context, input types.BinaryNode, opts ...Ca
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "BuildTree", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "BuildTree", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -1155,7 +1155,7 @@ func (*stream) ClassThatPointsToRecursiveClassThroughAlias(ctx context.Context, 
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -1164,7 +1164,7 @@ func (*stream) ClassThatPointsToRecursiveClassThroughAlias(ctx context.Context, 
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "ClassThatPointsToRecursiveClassThroughAlias", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "ClassThatPointsToRecursiveClassThroughAlias", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -1233,7 +1233,7 @@ func (*stream) ClassifyDynEnumTwo(ctx context.Context, input string, opts ...Cal
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -1242,7 +1242,7 @@ func (*stream) ClassifyDynEnumTwo(ctx context.Context, input string, opts ...Cal
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "ClassifyDynEnumTwo", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "ClassifyDynEnumTwo", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -1311,7 +1311,7 @@ func (*stream) ClassifyMessage(ctx context.Context, input string, opts ...CallOp
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -1320,7 +1320,7 @@ func (*stream) ClassifyMessage(ctx context.Context, input string, opts ...CallOp
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "ClassifyMessage", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "ClassifyMessage", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -1389,7 +1389,7 @@ func (*stream) ClassifyMessage2(ctx context.Context, input string, opts ...CallO
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -1398,7 +1398,7 @@ func (*stream) ClassifyMessage2(ctx context.Context, input string, opts ...CallO
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "ClassifyMessage2", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "ClassifyMessage2", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -1467,7 +1467,7 @@ func (*stream) ClassifyMessage3(ctx context.Context, input string, opts ...CallO
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -1476,7 +1476,7 @@ func (*stream) ClassifyMessage3(ctx context.Context, input string, opts ...CallO
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "ClassifyMessage3", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "ClassifyMessage3", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -1545,7 +1545,7 @@ func (*stream) Completion(ctx context.Context, prefix string, suffix string, lan
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -1554,7 +1554,7 @@ func (*stream) Completion(ctx context.Context, prefix string, suffix string, lan
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "Completion", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "Completion", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -1623,7 +1623,7 @@ func (*stream) CustomTask(ctx context.Context, input string, opts ...CallOptionF
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -1632,7 +1632,7 @@ func (*stream) CustomTask(ctx context.Context, input string, opts ...CallOptionF
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "CustomTask", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "CustomTask", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -1701,7 +1701,7 @@ func (*stream) DescribeAudio(ctx context.Context, audio any, opts ...CallOptionF
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -1710,7 +1710,7 @@ func (*stream) DescribeAudio(ctx context.Context, audio any, opts ...CallOptionF
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "DescribeAudio", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "DescribeAudio", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -1779,7 +1779,7 @@ func (*stream) DescribeAudio2(ctx context.Context, audio any, opts ...CallOption
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -1788,7 +1788,7 @@ func (*stream) DescribeAudio2(ctx context.Context, audio any, opts ...CallOption
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "DescribeAudio2", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "DescribeAudio2", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -1857,7 +1857,7 @@ func (*stream) DescribeImage(ctx context.Context, img any, opts ...CallOptionFun
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -1866,7 +1866,7 @@ func (*stream) DescribeImage(ctx context.Context, img any, opts ...CallOptionFun
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "DescribeImage", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "DescribeImage", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -1935,7 +1935,7 @@ func (*stream) DescribeImage2(ctx context.Context, classWithImage types.ClassWit
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -1944,7 +1944,7 @@ func (*stream) DescribeImage2(ctx context.Context, classWithImage types.ClassWit
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "DescribeImage2", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "DescribeImage2", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -2013,7 +2013,7 @@ func (*stream) DescribeImage3(ctx context.Context, classWithImage types.ClassWit
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -2022,7 +2022,7 @@ func (*stream) DescribeImage3(ctx context.Context, classWithImage types.ClassWit
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "DescribeImage3", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "DescribeImage3", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -2091,7 +2091,7 @@ func (*stream) DescribeImage4(ctx context.Context, classWithImage types.ClassWit
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -2100,7 +2100,7 @@ func (*stream) DescribeImage4(ctx context.Context, classWithImage types.ClassWit
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "DescribeImage4", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "DescribeImage4", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -2169,7 +2169,7 @@ func (*stream) DescribeMedia1599(ctx context.Context, img any, client_sector str
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -2178,7 +2178,7 @@ func (*stream) DescribeMedia1599(ctx context.Context, img any, client_sector str
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "DescribeMedia1599", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "DescribeMedia1599", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -2247,7 +2247,7 @@ func (*stream) DifferentiateUnions(ctx context.Context, opts ...CallOptionFunc) 
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -2256,7 +2256,7 @@ func (*stream) DifferentiateUnions(ctx context.Context, opts ...CallOptionFunc) 
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "DifferentiateUnions", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "DifferentiateUnions", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -2325,7 +2325,7 @@ func (*stream) DummyOutputFunction(ctx context.Context, input string, opts ...Ca
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -2334,7 +2334,7 @@ func (*stream) DummyOutputFunction(ctx context.Context, input string, opts ...Ca
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "DummyOutputFunction", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "DummyOutputFunction", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -2403,7 +2403,7 @@ func (*stream) DynamicFunc(ctx context.Context, input types.DynamicClassOne, opt
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -2412,7 +2412,7 @@ func (*stream) DynamicFunc(ctx context.Context, input types.DynamicClassOne, opt
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "DynamicFunc", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "DynamicFunc", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -2481,7 +2481,7 @@ func (*stream) DynamicInputOutput(ctx context.Context, input types.DynInputOutpu
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -2490,7 +2490,7 @@ func (*stream) DynamicInputOutput(ctx context.Context, input types.DynInputOutpu
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "DynamicInputOutput", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "DynamicInputOutput", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -2559,7 +2559,7 @@ func (*stream) DynamicListInputOutput(ctx context.Context, input []types.DynInpu
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -2568,7 +2568,7 @@ func (*stream) DynamicListInputOutput(ctx context.Context, input []types.DynInpu
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "DynamicListInputOutput", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "DynamicListInputOutput", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -2637,7 +2637,7 @@ func (*stream) ExpectFailure(ctx context.Context, opts ...CallOptionFunc) (<-cha
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -2646,7 +2646,7 @@ func (*stream) ExpectFailure(ctx context.Context, opts ...CallOptionFunc) (<-cha
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "ExpectFailure", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "ExpectFailure", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -2715,7 +2715,7 @@ func (*stream) ExtractContactInfo(ctx context.Context, document string, opts ...
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -2724,7 +2724,7 @@ func (*stream) ExtractContactInfo(ctx context.Context, document string, opts ...
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "ExtractContactInfo", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "ExtractContactInfo", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -2793,7 +2793,7 @@ func (*stream) ExtractEntities(ctx context.Context, text string, opts ...CallOpt
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -2802,7 +2802,7 @@ func (*stream) ExtractEntities(ctx context.Context, text string, opts ...CallOpt
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "ExtractEntities", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "ExtractEntities", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -2871,7 +2871,7 @@ func (*stream) ExtractHobby(ctx context.Context, text string, opts ...CallOption
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -2880,7 +2880,7 @@ func (*stream) ExtractHobby(ctx context.Context, text string, opts ...CallOption
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "ExtractHobby", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "ExtractHobby", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -2949,7 +2949,7 @@ func (*stream) ExtractNames(ctx context.Context, input string, opts ...CallOptio
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -2958,7 +2958,7 @@ func (*stream) ExtractNames(ctx context.Context, input string, opts ...CallOptio
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "ExtractNames", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "ExtractNames", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -3027,7 +3027,7 @@ func (*stream) ExtractPeople(ctx context.Context, text string, opts ...CallOptio
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -3036,7 +3036,7 @@ func (*stream) ExtractPeople(ctx context.Context, text string, opts ...CallOptio
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "ExtractPeople", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "ExtractPeople", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -3105,7 +3105,7 @@ func (*stream) ExtractReceiptInfo(ctx context.Context, email string, reason type
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -3114,7 +3114,7 @@ func (*stream) ExtractReceiptInfo(ctx context.Context, email string, reason type
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "ExtractReceiptInfo", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "ExtractReceiptInfo", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -3183,7 +3183,7 @@ func (*stream) ExtractResume(ctx context.Context, resume string, img *any, opts 
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -3192,7 +3192,7 @@ func (*stream) ExtractResume(ctx context.Context, resume string, img *any, opts 
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "ExtractResume", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "ExtractResume", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -3261,7 +3261,7 @@ func (*stream) ExtractResume2(ctx context.Context, resume string, opts ...CallOp
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -3270,7 +3270,7 @@ func (*stream) ExtractResume2(ctx context.Context, resume string, opts ...CallOp
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "ExtractResume2", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "ExtractResume2", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -3339,7 +3339,7 @@ func (*stream) FnClassOptionalOutput(ctx context.Context, input string, opts ...
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -3348,7 +3348,7 @@ func (*stream) FnClassOptionalOutput(ctx context.Context, input string, opts ...
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "FnClassOptionalOutput", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "FnClassOptionalOutput", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -3417,7 +3417,7 @@ func (*stream) FnClassOptionalOutput2(ctx context.Context, input string, opts ..
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -3426,7 +3426,7 @@ func (*stream) FnClassOptionalOutput2(ctx context.Context, input string, opts ..
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "FnClassOptionalOutput2", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "FnClassOptionalOutput2", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -3495,7 +3495,7 @@ func (*stream) FnEnumListOutput(ctx context.Context, input string, opts ...CallO
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -3504,7 +3504,7 @@ func (*stream) FnEnumListOutput(ctx context.Context, input string, opts ...CallO
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "FnEnumListOutput", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "FnEnumListOutput", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -3573,7 +3573,7 @@ func (*stream) FnEnumOutput(ctx context.Context, input string, opts ...CallOptio
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -3582,7 +3582,7 @@ func (*stream) FnEnumOutput(ctx context.Context, input string, opts ...CallOptio
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "FnEnumOutput", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "FnEnumOutput", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -3651,7 +3651,7 @@ func (*stream) FnLiteralClassInputOutput(ctx context.Context, input types.Litera
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -3660,7 +3660,7 @@ func (*stream) FnLiteralClassInputOutput(ctx context.Context, input types.Litera
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "FnLiteralClassInputOutput", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "FnLiteralClassInputOutput", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -3729,7 +3729,7 @@ func (*stream) FnLiteralUnionClassInputOutput(ctx context.Context, input types.U
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -3738,7 +3738,7 @@ func (*stream) FnLiteralUnionClassInputOutput(ctx context.Context, input types.U
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "FnLiteralUnionClassInputOutput", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "FnLiteralUnionClassInputOutput", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -3807,7 +3807,7 @@ func (*stream) FnNamedArgsSingleStringOptional(ctx context.Context, myString *st
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -3816,7 +3816,7 @@ func (*stream) FnNamedArgsSingleStringOptional(ctx context.Context, myString *st
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "FnNamedArgsSingleStringOptional", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "FnNamedArgsSingleStringOptional", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -3885,7 +3885,7 @@ func (*stream) FnOutputBool(ctx context.Context, input string, opts ...CallOptio
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -3894,7 +3894,7 @@ func (*stream) FnOutputBool(ctx context.Context, input string, opts ...CallOptio
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "FnOutputBool", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "FnOutputBool", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -3963,7 +3963,7 @@ func (*stream) FnOutputClass(ctx context.Context, input string, opts ...CallOpti
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -3972,7 +3972,7 @@ func (*stream) FnOutputClass(ctx context.Context, input string, opts ...CallOpti
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "FnOutputClass", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "FnOutputClass", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -4041,7 +4041,7 @@ func (*stream) FnOutputClassList(ctx context.Context, input string, opts ...Call
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -4050,7 +4050,7 @@ func (*stream) FnOutputClassList(ctx context.Context, input string, opts ...Call
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "FnOutputClassList", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "FnOutputClassList", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -4119,7 +4119,7 @@ func (*stream) FnOutputClassNested(ctx context.Context, input string, opts ...Ca
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -4128,7 +4128,7 @@ func (*stream) FnOutputClassNested(ctx context.Context, input string, opts ...Ca
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "FnOutputClassNested", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "FnOutputClassNested", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -4197,7 +4197,7 @@ func (*stream) FnOutputClassWithEnum(ctx context.Context, input string, opts ...
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -4206,7 +4206,7 @@ func (*stream) FnOutputClassWithEnum(ctx context.Context, input string, opts ...
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "FnOutputClassWithEnum", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "FnOutputClassWithEnum", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -4275,7 +4275,7 @@ func (*stream) FnOutputInt(ctx context.Context, input string, opts ...CallOption
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -4284,7 +4284,7 @@ func (*stream) FnOutputInt(ctx context.Context, input string, opts ...CallOption
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "FnOutputInt", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "FnOutputInt", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -4353,7 +4353,7 @@ func (*stream) FnOutputLiteralBool(ctx context.Context, input string, opts ...Ca
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -4362,7 +4362,7 @@ func (*stream) FnOutputLiteralBool(ctx context.Context, input string, opts ...Ca
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "FnOutputLiteralBool", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "FnOutputLiteralBool", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -4431,7 +4431,7 @@ func (*stream) FnOutputLiteralInt(ctx context.Context, input string, opts ...Cal
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -4440,7 +4440,7 @@ func (*stream) FnOutputLiteralInt(ctx context.Context, input string, opts ...Cal
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "FnOutputLiteralInt", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "FnOutputLiteralInt", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -4509,7 +4509,7 @@ func (*stream) FnOutputLiteralString(ctx context.Context, input string, opts ...
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -4518,7 +4518,7 @@ func (*stream) FnOutputLiteralString(ctx context.Context, input string, opts ...
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "FnOutputLiteralString", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "FnOutputLiteralString", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -4587,7 +4587,7 @@ func (*stream) FnOutputStringList(ctx context.Context, input string, opts ...Cal
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -4596,7 +4596,7 @@ func (*stream) FnOutputStringList(ctx context.Context, input string, opts ...Cal
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "FnOutputStringList", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "FnOutputStringList", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -4665,7 +4665,7 @@ func (*stream) FnTestAliasedEnumOutput(ctx context.Context, input string, opts .
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -4674,7 +4674,7 @@ func (*stream) FnTestAliasedEnumOutput(ctx context.Context, input string, opts .
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "FnTestAliasedEnumOutput", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "FnTestAliasedEnumOutput", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -4743,7 +4743,7 @@ func (*stream) FnTestClassAlias(ctx context.Context, input string, opts ...CallO
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -4752,7 +4752,7 @@ func (*stream) FnTestClassAlias(ctx context.Context, input string, opts ...CallO
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "FnTestClassAlias", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "FnTestClassAlias", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -4821,7 +4821,7 @@ func (*stream) FnTestNamedArgsSingleEnum(ctx context.Context, myArg types.NamedA
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -4830,7 +4830,7 @@ func (*stream) FnTestNamedArgsSingleEnum(ctx context.Context, myArg types.NamedA
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "FnTestNamedArgsSingleEnum", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "FnTestNamedArgsSingleEnum", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -4899,7 +4899,7 @@ func (*stream) GetDataType(ctx context.Context, text string, opts ...CallOptionF
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -4908,7 +4908,7 @@ func (*stream) GetDataType(ctx context.Context, text string, opts ...CallOptionF
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "GetDataType", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "GetDataType", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -4977,7 +4977,7 @@ func (*stream) GetOrderInfo(ctx context.Context, email types.Email, opts ...Call
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -4986,7 +4986,7 @@ func (*stream) GetOrderInfo(ctx context.Context, email types.Email, opts ...Call
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "GetOrderInfo", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "GetOrderInfo", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -5055,7 +5055,7 @@ func (*stream) GetQuery(ctx context.Context, query string, opts ...CallOptionFun
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -5064,7 +5064,7 @@ func (*stream) GetQuery(ctx context.Context, query string, opts ...CallOptionFun
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "GetQuery", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "GetQuery", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -5133,7 +5133,7 @@ func (*stream) InOutEnumMapKey(ctx context.Context, i1 map[types.MapKey]string, 
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -5142,7 +5142,7 @@ func (*stream) InOutEnumMapKey(ctx context.Context, i1 map[types.MapKey]string, 
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "InOutEnumMapKey", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "InOutEnumMapKey", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -5211,7 +5211,7 @@ func (*stream) InOutLiteralStringUnionMapKey(ctx context.Context, i1 map[types.U
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -5220,7 +5220,7 @@ func (*stream) InOutLiteralStringUnionMapKey(ctx context.Context, i1 map[types.U
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "InOutLiteralStringUnionMapKey", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "InOutLiteralStringUnionMapKey", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -5289,7 +5289,7 @@ func (*stream) InOutSingleLiteralStringMapKey(ctx context.Context, m map[string]
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -5298,7 +5298,7 @@ func (*stream) InOutSingleLiteralStringMapKey(ctx context.Context, m map[string]
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "InOutSingleLiteralStringMapKey", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "InOutSingleLiteralStringMapKey", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -5367,7 +5367,7 @@ func (*stream) JsonTypeAliasCycle(ctx context.Context, input types.JsonValue, op
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -5376,7 +5376,7 @@ func (*stream) JsonTypeAliasCycle(ctx context.Context, input types.JsonValue, op
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "JsonTypeAliasCycle", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "JsonTypeAliasCycle", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -5445,7 +5445,7 @@ func (*stream) LLMEcho(ctx context.Context, input string, opts ...CallOptionFunc
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -5454,7 +5454,7 @@ func (*stream) LLMEcho(ctx context.Context, input string, opts ...CallOptionFunc
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "LLMEcho", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "LLMEcho", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -5523,7 +5523,7 @@ func (*stream) LiteralUnionsTest(ctx context.Context, input string, opts ...Call
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -5532,7 +5532,7 @@ func (*stream) LiteralUnionsTest(ctx context.Context, input string, opts ...Call
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "LiteralUnionsTest", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "LiteralUnionsTest", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -5601,7 +5601,7 @@ func (*stream) MakeBlockConstraint(ctx context.Context, opts ...CallOptionFunc) 
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -5610,7 +5610,7 @@ func (*stream) MakeBlockConstraint(ctx context.Context, opts ...CallOptionFunc) 
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "MakeBlockConstraint", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "MakeBlockConstraint", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -5679,7 +5679,7 @@ func (*stream) MakeClassWithBlockDone(ctx context.Context, opts ...CallOptionFun
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -5688,7 +5688,7 @@ func (*stream) MakeClassWithBlockDone(ctx context.Context, opts ...CallOptionFun
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "MakeClassWithBlockDone", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "MakeClassWithBlockDone", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -5757,7 +5757,7 @@ func (*stream) MakeClassWithExternalDone(ctx context.Context, opts ...CallOption
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -5766,7 +5766,7 @@ func (*stream) MakeClassWithExternalDone(ctx context.Context, opts ...CallOption
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "MakeClassWithExternalDone", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "MakeClassWithExternalDone", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -5835,7 +5835,7 @@ func (*stream) MakeNestedBlockConstraint(ctx context.Context, opts ...CallOption
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -5844,7 +5844,7 @@ func (*stream) MakeNestedBlockConstraint(ctx context.Context, opts ...CallOption
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "MakeNestedBlockConstraint", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "MakeNestedBlockConstraint", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -5913,7 +5913,7 @@ func (*stream) MakeSemanticContainer(ctx context.Context, opts ...CallOptionFunc
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -5922,7 +5922,7 @@ func (*stream) MakeSemanticContainer(ctx context.Context, opts ...CallOptionFunc
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "MakeSemanticContainer", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "MakeSemanticContainer", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -5991,7 +5991,7 @@ func (*stream) MapAlias(ctx context.Context, m map[string][]string, opts ...Call
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -6000,7 +6000,7 @@ func (*stream) MapAlias(ctx context.Context, m map[string][]string, opts ...Call
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "MapAlias", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "MapAlias", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -6069,7 +6069,7 @@ func (*stream) MergeAliasAttributes(ctx context.Context, money int64, opts ...Ca
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -6078,7 +6078,7 @@ func (*stream) MergeAliasAttributes(ctx context.Context, money int64, opts ...Ca
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "MergeAliasAttributes", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "MergeAliasAttributes", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -6147,7 +6147,7 @@ func (*stream) MyFunc(ctx context.Context, input string, opts ...CallOptionFunc)
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -6156,7 +6156,7 @@ func (*stream) MyFunc(ctx context.Context, input string, opts ...CallOptionFunc)
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "MyFunc", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "MyFunc", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -6225,7 +6225,7 @@ func (*stream) NestedAlias(ctx context.Context, c types.Union6BoolOrFloatOrIntOr
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -6234,7 +6234,7 @@ func (*stream) NestedAlias(ctx context.Context, c types.Union6BoolOrFloatOrIntOr
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "NestedAlias", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "NestedAlias", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -6303,7 +6303,7 @@ func (*stream) NullLiteralClassHello(ctx context.Context, s string, opts ...Call
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -6312,7 +6312,7 @@ func (*stream) NullLiteralClassHello(ctx context.Context, s string, opts ...Call
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "NullLiteralClassHello", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "NullLiteralClassHello", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -6381,7 +6381,7 @@ func (*stream) OpenAIWithAnthropicResponseHello(ctx context.Context, s string, o
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -6390,7 +6390,7 @@ func (*stream) OpenAIWithAnthropicResponseHello(ctx context.Context, s string, o
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "OpenAIWithAnthropicResponseHello", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "OpenAIWithAnthropicResponseHello", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -6459,7 +6459,7 @@ func (*stream) OptionalTest_Function(ctx context.Context, input string, opts ...
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -6468,7 +6468,7 @@ func (*stream) OptionalTest_Function(ctx context.Context, input string, opts ...
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "OptionalTest_Function", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "OptionalTest_Function", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -6516,6 +6516,318 @@ func (*stream) OptionalTest_Function(ctx context.Context, input string, opts ...
 	return channel, nil
 }
 
+// / Streaming version of PdfInput
+func (*stream) PdfInput(ctx context.Context, pdf any, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"pdf": pdf},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := args.Encode()
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: PdfInput: %w", err)
+		panic(wrapped_err)
+	}
+
+	internal_ctx := context.Background()
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "PdfInput", encoded, callOpts.onTick)
+	if err != nil {
+		return nil, err
+	}
+
+	channel := make(chan StreamValue[string, string])
+	go func() {
+		defer func() {
+			internal_ctx.Done()
+		}()
+		for {
+			select {
+			case <-ctx.Done():
+				close(channel)
+				return
+			case result, ok := <-internal_channel:
+				if !ok {
+					// channel closed for some reason
+					close(channel)
+					return
+				}
+				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
+					close(channel)
+					return
+				}
+				if result.HasData {
+					data := (result.Data).(string)
+					channel <- StreamValue[string, string]{
+						IsFinal:  true,
+						as_final: &data,
+					}
+				} else {
+					data := (result.StreamData).(string)
+					channel <- StreamValue[string, string]{
+						IsFinal:   false,
+						as_stream: &data,
+					}
+				}
+			}
+		}
+	}()
+	return channel, nil
+}
+
+// / Streaming version of PdfInputAnthropic
+func (*stream) PdfInputAnthropic(ctx context.Context, pdf any, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"pdf": pdf},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := args.Encode()
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: PdfInputAnthropic: %w", err)
+		panic(wrapped_err)
+	}
+
+	internal_ctx := context.Background()
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "PdfInputAnthropic", encoded, callOpts.onTick)
+	if err != nil {
+		return nil, err
+	}
+
+	channel := make(chan StreamValue[string, string])
+	go func() {
+		defer func() {
+			internal_ctx.Done()
+		}()
+		for {
+			select {
+			case <-ctx.Done():
+				close(channel)
+				return
+			case result, ok := <-internal_channel:
+				if !ok {
+					// channel closed for some reason
+					close(channel)
+					return
+				}
+				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
+					close(channel)
+					return
+				}
+				if result.HasData {
+					data := (result.Data).(string)
+					channel <- StreamValue[string, string]{
+						IsFinal:  true,
+						as_final: &data,
+					}
+				} else {
+					data := (result.StreamData).(string)
+					channel <- StreamValue[string, string]{
+						IsFinal:   false,
+						as_stream: &data,
+					}
+				}
+			}
+		}
+	}()
+	return channel, nil
+}
+
+// / Streaming version of PdfInputOpenai
+func (*stream) PdfInputOpenai(ctx context.Context, pdf any, prompt string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"pdf": pdf, "prompt": prompt},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := args.Encode()
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: PdfInputOpenai: %w", err)
+		panic(wrapped_err)
+	}
+
+	internal_ctx := context.Background()
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "PdfInputOpenai", encoded, callOpts.onTick)
+	if err != nil {
+		return nil, err
+	}
+
+	channel := make(chan StreamValue[string, string])
+	go func() {
+		defer func() {
+			internal_ctx.Done()
+		}()
+		for {
+			select {
+			case <-ctx.Done():
+				close(channel)
+				return
+			case result, ok := <-internal_channel:
+				if !ok {
+					// channel closed for some reason
+					close(channel)
+					return
+				}
+				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
+					close(channel)
+					return
+				}
+				if result.HasData {
+					data := (result.Data).(string)
+					channel <- StreamValue[string, string]{
+						IsFinal:  true,
+						as_final: &data,
+					}
+				} else {
+					data := (result.StreamData).(string)
+					channel <- StreamValue[string, string]{
+						IsFinal:   false,
+						as_stream: &data,
+					}
+				}
+			}
+		}
+	}()
+	return channel, nil
+}
+
+// / Streaming version of PdfInputVertex
+func (*stream) PdfInputVertex(ctx context.Context, pdf any, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"pdf": pdf},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := args.Encode()
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: PdfInputVertex: %w", err)
+		panic(wrapped_err)
+	}
+
+	internal_ctx := context.Background()
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "PdfInputVertex", encoded, callOpts.onTick)
+	if err != nil {
+		return nil, err
+	}
+
+	channel := make(chan StreamValue[string, string])
+	go func() {
+		defer func() {
+			internal_ctx.Done()
+		}()
+		for {
+			select {
+			case <-ctx.Done():
+				close(channel)
+				return
+			case result, ok := <-internal_channel:
+				if !ok {
+					// channel closed for some reason
+					close(channel)
+					return
+				}
+				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
+					close(channel)
+					return
+				}
+				if result.HasData {
+					data := (result.Data).(string)
+					channel <- StreamValue[string, string]{
+						IsFinal:  true,
+						as_final: &data,
+					}
+				} else {
+					data := (result.StreamData).(string)
+					channel <- StreamValue[string, string]{
+						IsFinal:   false,
+						as_stream: &data,
+					}
+				}
+			}
+		}
+	}()
+	return channel, nil
+}
+
 // / Streaming version of PredictAge
 func (*stream) PredictAge(ctx context.Context, name string, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.FooAny, types.FooAny], error) {
 
@@ -6537,7 +6849,7 @@ func (*stream) PredictAge(ctx context.Context, name string, opts ...CallOptionFu
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -6546,7 +6858,7 @@ func (*stream) PredictAge(ctx context.Context, name string, opts ...CallOptionFu
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "PredictAge", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "PredictAge", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -6615,7 +6927,7 @@ func (*stream) PredictAgeBare(ctx context.Context, inp string, opts ...CallOptio
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -6624,7 +6936,7 @@ func (*stream) PredictAgeBare(ctx context.Context, inp string, opts ...CallOptio
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "PredictAgeBare", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "PredictAgeBare", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -6693,7 +7005,7 @@ func (*stream) PrimitiveAlias(ctx context.Context, p types.Union4BoolOrFloatOrIn
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -6702,7 +7014,7 @@ func (*stream) PrimitiveAlias(ctx context.Context, p types.Union4BoolOrFloatOrIn
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "PrimitiveAlias", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "PrimitiveAlias", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -6771,7 +7083,7 @@ func (*stream) PromptTestClaude(ctx context.Context, input string, opts ...CallO
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -6780,7 +7092,7 @@ func (*stream) PromptTestClaude(ctx context.Context, input string, opts ...CallO
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "PromptTestClaude", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "PromptTestClaude", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -6849,7 +7161,7 @@ func (*stream) PromptTestClaudeChat(ctx context.Context, input string, opts ...C
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -6858,7 +7170,7 @@ func (*stream) PromptTestClaudeChat(ctx context.Context, input string, opts ...C
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "PromptTestClaudeChat", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "PromptTestClaudeChat", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -6927,7 +7239,7 @@ func (*stream) PromptTestClaudeChatNoSystem(ctx context.Context, input string, o
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -6936,7 +7248,7 @@ func (*stream) PromptTestClaudeChatNoSystem(ctx context.Context, input string, o
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "PromptTestClaudeChatNoSystem", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "PromptTestClaudeChatNoSystem", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -7005,7 +7317,7 @@ func (*stream) PromptTestOpenAI(ctx context.Context, input string, opts ...CallO
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -7014,7 +7326,7 @@ func (*stream) PromptTestOpenAI(ctx context.Context, input string, opts ...CallO
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "PromptTestOpenAI", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "PromptTestOpenAI", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -7083,7 +7395,7 @@ func (*stream) PromptTestOpenAIChat(ctx context.Context, input string, opts ...C
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -7092,7 +7404,7 @@ func (*stream) PromptTestOpenAIChat(ctx context.Context, input string, opts ...C
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "PromptTestOpenAIChat", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "PromptTestOpenAIChat", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -7161,7 +7473,7 @@ func (*stream) PromptTestOpenAIChatNoSystem(ctx context.Context, input string, o
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -7170,7 +7482,7 @@ func (*stream) PromptTestOpenAIChatNoSystem(ctx context.Context, input string, o
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "PromptTestOpenAIChatNoSystem", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "PromptTestOpenAIChatNoSystem", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -7239,7 +7551,7 @@ func (*stream) PromptTestStreaming(ctx context.Context, input string, opts ...Ca
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -7248,7 +7560,7 @@ func (*stream) PromptTestStreaming(ctx context.Context, input string, opts ...Ca
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "PromptTestStreaming", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "PromptTestStreaming", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -7317,7 +7629,7 @@ func (*stream) RecursiveAliasCycle(ctx context.Context, input types.RecAliasOne,
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -7326,7 +7638,7 @@ func (*stream) RecursiveAliasCycle(ctx context.Context, input types.RecAliasOne,
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "RecursiveAliasCycle", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "RecursiveAliasCycle", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -7395,7 +7707,7 @@ func (*stream) RecursiveClassWithAliasIndirection(ctx context.Context, cls types
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -7404,7 +7716,7 @@ func (*stream) RecursiveClassWithAliasIndirection(ctx context.Context, cls types
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "RecursiveClassWithAliasIndirection", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "RecursiveClassWithAliasIndirection", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -7473,7 +7785,7 @@ func (*stream) RecursiveUnionTest(ctx context.Context, input types.RecursiveUnio
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -7482,7 +7794,7 @@ func (*stream) RecursiveUnionTest(ctx context.Context, input types.RecursiveUnio
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "RecursiveUnionTest", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "RecursiveUnionTest", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -7551,7 +7863,7 @@ func (*stream) ReturnAliasWithMergedAttributes(ctx context.Context, money int64,
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -7560,7 +7872,7 @@ func (*stream) ReturnAliasWithMergedAttributes(ctx context.Context, money int64,
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "ReturnAliasWithMergedAttributes", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "ReturnAliasWithMergedAttributes", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -7629,7 +7941,7 @@ func (*stream) ReturnFailingAssert(ctx context.Context, inp int64, opts ...CallO
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -7638,7 +7950,7 @@ func (*stream) ReturnFailingAssert(ctx context.Context, inp int64, opts ...CallO
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "ReturnFailingAssert", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "ReturnFailingAssert", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -7707,7 +8019,7 @@ func (*stream) ReturnJsonEntry(ctx context.Context, s string, opts ...CallOption
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -7716,7 +8028,7 @@ func (*stream) ReturnJsonEntry(ctx context.Context, s string, opts ...CallOption
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "ReturnJsonEntry", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "ReturnJsonEntry", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -7785,7 +8097,7 @@ func (*stream) ReturnMalformedConstraints(ctx context.Context, a int64, opts ...
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -7794,7 +8106,7 @@ func (*stream) ReturnMalformedConstraints(ctx context.Context, a int64, opts ...
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "ReturnMalformedConstraints", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "ReturnMalformedConstraints", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -7863,7 +8175,7 @@ func (*stream) SchemaDescriptions(ctx context.Context, input string, opts ...Cal
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -7872,7 +8184,7 @@ func (*stream) SchemaDescriptions(ctx context.Context, input string, opts ...Cal
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "SchemaDescriptions", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "SchemaDescriptions", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -7941,7 +8253,7 @@ func (*stream) SimpleRecursiveListAlias(ctx context.Context, input types.Recursi
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -7950,7 +8262,7 @@ func (*stream) SimpleRecursiveListAlias(ctx context.Context, input types.Recursi
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "SimpleRecursiveListAlias", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "SimpleRecursiveListAlias", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -8019,7 +8331,7 @@ func (*stream) SimpleRecursiveMapAlias(ctx context.Context, input types.Recursiv
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -8028,7 +8340,7 @@ func (*stream) SimpleRecursiveMapAlias(ctx context.Context, input types.Recursiv
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "SimpleRecursiveMapAlias", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "SimpleRecursiveMapAlias", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -8097,7 +8409,7 @@ func (*stream) StreamBigNumbers(ctx context.Context, digits int64, opts ...CallO
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -8106,7 +8418,7 @@ func (*stream) StreamBigNumbers(ctx context.Context, digits int64, opts ...CallO
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "StreamBigNumbers", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "StreamBigNumbers", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -8175,7 +8487,7 @@ func (*stream) StreamFailingAssertion(ctx context.Context, theme string, length 
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -8184,7 +8496,7 @@ func (*stream) StreamFailingAssertion(ctx context.Context, theme string, length 
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "StreamFailingAssertion", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "StreamFailingAssertion", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -8253,7 +8565,7 @@ func (*stream) StreamFailingCheck(ctx context.Context, theme string, length int6
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -8262,7 +8574,7 @@ func (*stream) StreamFailingCheck(ctx context.Context, theme string, length int6
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "StreamFailingCheck", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "StreamFailingCheck", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -8331,7 +8643,7 @@ func (*stream) StreamOneBigNumber(ctx context.Context, digits int64, opts ...Cal
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -8340,7 +8652,7 @@ func (*stream) StreamOneBigNumber(ctx context.Context, digits int64, opts ...Cal
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "StreamOneBigNumber", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "StreamOneBigNumber", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -8409,7 +8721,7 @@ func (*stream) StreamUnionIntegers(ctx context.Context, digits int64, opts ...Ca
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -8418,7 +8730,7 @@ func (*stream) StreamUnionIntegers(ctx context.Context, digits int64, opts ...Ca
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "StreamUnionIntegers", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "StreamUnionIntegers", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -8487,7 +8799,7 @@ func (*stream) StreamingCompoundNumbers(ctx context.Context, digits int64, yappi
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -8496,7 +8808,7 @@ func (*stream) StreamingCompoundNumbers(ctx context.Context, digits int64, yappi
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "StreamingCompoundNumbers", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "StreamingCompoundNumbers", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -8565,7 +8877,7 @@ func (*stream) StructureDocument1559(ctx context.Context, document_txt string, o
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -8574,7 +8886,7 @@ func (*stream) StructureDocument1559(ctx context.Context, document_txt string, o
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "StructureDocument1559", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "StructureDocument1559", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -8643,7 +8955,7 @@ func (*stream) TakeRecAliasDep(ctx context.Context, input types.RecursiveAliasDe
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -8652,7 +8964,7 @@ func (*stream) TakeRecAliasDep(ctx context.Context, input types.RecursiveAliasDe
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TakeRecAliasDep", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TakeRecAliasDep", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -8721,7 +9033,7 @@ func (*stream) TellStory(ctx context.Context, story string, opts ...CallOptionFu
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -8730,7 +9042,7 @@ func (*stream) TellStory(ctx context.Context, story string, opts ...CallOptionFu
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TellStory", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TellStory", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -8799,7 +9111,7 @@ func (*stream) TestAnthropic(ctx context.Context, input string, opts ...CallOpti
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -8808,7 +9120,7 @@ func (*stream) TestAnthropic(ctx context.Context, input string, opts ...CallOpti
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestAnthropic", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestAnthropic", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -8877,7 +9189,7 @@ func (*stream) TestAnthropicShorthand(ctx context.Context, input string, opts ..
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -8886,7 +9198,7 @@ func (*stream) TestAnthropicShorthand(ctx context.Context, input string, opts ..
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestAnthropicShorthand", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestAnthropicShorthand", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -8955,7 +9267,7 @@ func (*stream) TestAws(ctx context.Context, input string, opts ...CallOptionFunc
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -8964,7 +9276,7 @@ func (*stream) TestAws(ctx context.Context, input string, opts ...CallOptionFunc
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestAws", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestAws", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -9033,7 +9345,7 @@ func (*stream) TestAwsClaude37(ctx context.Context, input string, opts ...CallOp
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -9042,7 +9354,7 @@ func (*stream) TestAwsClaude37(ctx context.Context, input string, opts ...CallOp
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestAwsClaude37", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestAwsClaude37", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -9111,7 +9423,7 @@ func (*stream) TestAwsInferenceProfile(ctx context.Context, input string, opts .
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -9120,7 +9432,7 @@ func (*stream) TestAwsInferenceProfile(ctx context.Context, input string, opts .
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestAwsInferenceProfile", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestAwsInferenceProfile", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -9189,7 +9501,7 @@ func (*stream) TestAwsInvalidAccessKey(ctx context.Context, input string, opts .
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -9198,7 +9510,7 @@ func (*stream) TestAwsInvalidAccessKey(ctx context.Context, input string, opts .
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestAwsInvalidAccessKey", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestAwsInvalidAccessKey", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -9267,7 +9579,7 @@ func (*stream) TestAwsInvalidProfile(ctx context.Context, input string, opts ...
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -9276,7 +9588,7 @@ func (*stream) TestAwsInvalidProfile(ctx context.Context, input string, opts ...
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestAwsInvalidProfile", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestAwsInvalidProfile", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -9345,7 +9657,7 @@ func (*stream) TestAwsInvalidRegion(ctx context.Context, input string, opts ...C
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -9354,7 +9666,7 @@ func (*stream) TestAwsInvalidRegion(ctx context.Context, input string, opts ...C
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestAwsInvalidRegion", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestAwsInvalidRegion", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -9423,7 +9735,7 @@ func (*stream) TestAwsInvalidSessionToken(ctx context.Context, input string, opt
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -9432,7 +9744,7 @@ func (*stream) TestAwsInvalidSessionToken(ctx context.Context, input string, opt
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestAwsInvalidSessionToken", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestAwsInvalidSessionToken", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -9501,7 +9813,7 @@ func (*stream) TestAzure(ctx context.Context, input string, opts ...CallOptionFu
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -9510,7 +9822,7 @@ func (*stream) TestAzure(ctx context.Context, input string, opts ...CallOptionFu
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestAzure", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestAzure", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -9579,7 +9891,7 @@ func (*stream) TestAzureFailure(ctx context.Context, input string, opts ...CallO
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -9588,7 +9900,7 @@ func (*stream) TestAzureFailure(ctx context.Context, input string, opts ...CallO
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestAzureFailure", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestAzureFailure", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -9657,7 +9969,7 @@ func (*stream) TestAzureO1NoMaxTokens(ctx context.Context, input string, opts ..
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -9666,7 +9978,7 @@ func (*stream) TestAzureO1NoMaxTokens(ctx context.Context, input string, opts ..
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestAzureO1NoMaxTokens", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestAzureO1NoMaxTokens", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -9735,7 +10047,7 @@ func (*stream) TestAzureO1WithMaxCompletionTokens(ctx context.Context, input str
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -9744,7 +10056,7 @@ func (*stream) TestAzureO1WithMaxCompletionTokens(ctx context.Context, input str
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestAzureO1WithMaxCompletionTokens", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestAzureO1WithMaxCompletionTokens", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -9813,7 +10125,7 @@ func (*stream) TestAzureO1WithMaxTokens(ctx context.Context, input string, opts 
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -9822,7 +10134,7 @@ func (*stream) TestAzureO1WithMaxTokens(ctx context.Context, input string, opts 
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestAzureO1WithMaxTokens", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestAzureO1WithMaxTokens", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -9891,7 +10203,7 @@ func (*stream) TestAzureO3NoMaxTokens(ctx context.Context, input string, opts ..
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -9900,7 +10212,7 @@ func (*stream) TestAzureO3NoMaxTokens(ctx context.Context, input string, opts ..
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestAzureO3NoMaxTokens", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestAzureO3NoMaxTokens", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -9969,7 +10281,7 @@ func (*stream) TestAzureO3WithMaxCompletionTokens(ctx context.Context, input str
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -9978,7 +10290,7 @@ func (*stream) TestAzureO3WithMaxCompletionTokens(ctx context.Context, input str
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestAzureO3WithMaxCompletionTokens", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestAzureO3WithMaxCompletionTokens", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -10047,7 +10359,7 @@ func (*stream) TestAzureWithMaxTokens(ctx context.Context, input string, opts ..
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -10056,7 +10368,7 @@ func (*stream) TestAzureWithMaxTokens(ctx context.Context, input string, opts ..
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestAzureWithMaxTokens", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestAzureWithMaxTokens", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -10125,7 +10437,7 @@ func (*stream) TestCaching(ctx context.Context, input string, not_cached string,
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -10134,7 +10446,7 @@ func (*stream) TestCaching(ctx context.Context, input string, not_cached string,
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestCaching", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestCaching", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -10203,7 +10515,7 @@ func (*stream) TestFallbackClient(ctx context.Context, opts ...CallOptionFunc) (
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -10212,7 +10524,7 @@ func (*stream) TestFallbackClient(ctx context.Context, opts ...CallOptionFunc) (
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestFallbackClient", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestFallbackClient", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -10281,7 +10593,7 @@ func (*stream) TestFallbackStrategy(ctx context.Context, input string, opts ...C
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -10290,7 +10602,7 @@ func (*stream) TestFallbackStrategy(ctx context.Context, input string, opts ...C
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestFallbackStrategy", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestFallbackStrategy", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -10359,7 +10671,7 @@ func (*stream) TestFallbackToShorthand(ctx context.Context, input string, opts .
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -10368,7 +10680,7 @@ func (*stream) TestFallbackToShorthand(ctx context.Context, input string, opts .
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestFallbackToShorthand", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestFallbackToShorthand", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -10437,7 +10749,7 @@ func (*stream) TestFnNamedArgsSingleBool(ctx context.Context, myBool bool, opts 
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -10446,7 +10758,7 @@ func (*stream) TestFnNamedArgsSingleBool(ctx context.Context, myBool bool, opts 
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestFnNamedArgsSingleBool", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestFnNamedArgsSingleBool", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -10515,7 +10827,7 @@ func (*stream) TestFnNamedArgsSingleClass(ctx context.Context, myArg types.Named
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -10524,7 +10836,7 @@ func (*stream) TestFnNamedArgsSingleClass(ctx context.Context, myArg types.Named
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestFnNamedArgsSingleClass", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestFnNamedArgsSingleClass", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -10593,7 +10905,7 @@ func (*stream) TestFnNamedArgsSingleEnumList(ctx context.Context, myArg []types.
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -10602,7 +10914,7 @@ func (*stream) TestFnNamedArgsSingleEnumList(ctx context.Context, myArg []types.
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestFnNamedArgsSingleEnumList", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestFnNamedArgsSingleEnumList", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -10671,7 +10983,7 @@ func (*stream) TestFnNamedArgsSingleFloat(ctx context.Context, myFloat float64, 
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -10680,7 +10992,7 @@ func (*stream) TestFnNamedArgsSingleFloat(ctx context.Context, myFloat float64, 
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestFnNamedArgsSingleFloat", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestFnNamedArgsSingleFloat", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -10749,7 +11061,7 @@ func (*stream) TestFnNamedArgsSingleInt(ctx context.Context, myInt int64, opts .
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -10758,7 +11070,7 @@ func (*stream) TestFnNamedArgsSingleInt(ctx context.Context, myInt int64, opts .
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestFnNamedArgsSingleInt", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestFnNamedArgsSingleInt", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -10827,7 +11139,7 @@ func (*stream) TestFnNamedArgsSingleMapStringToClass(ctx context.Context, myMap 
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -10836,7 +11148,7 @@ func (*stream) TestFnNamedArgsSingleMapStringToClass(ctx context.Context, myMap 
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestFnNamedArgsSingleMapStringToClass", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestFnNamedArgsSingleMapStringToClass", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -10905,7 +11217,7 @@ func (*stream) TestFnNamedArgsSingleMapStringToMap(ctx context.Context, myMap ma
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -10914,7 +11226,7 @@ func (*stream) TestFnNamedArgsSingleMapStringToMap(ctx context.Context, myMap ma
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestFnNamedArgsSingleMapStringToMap", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestFnNamedArgsSingleMapStringToMap", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -10983,7 +11295,7 @@ func (*stream) TestFnNamedArgsSingleMapStringToString(ctx context.Context, myMap
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -10992,7 +11304,7 @@ func (*stream) TestFnNamedArgsSingleMapStringToString(ctx context.Context, myMap
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestFnNamedArgsSingleMapStringToString", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestFnNamedArgsSingleMapStringToString", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -11061,7 +11373,7 @@ func (*stream) TestFnNamedArgsSingleString(ctx context.Context, myString string,
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -11070,7 +11382,7 @@ func (*stream) TestFnNamedArgsSingleString(ctx context.Context, myString string,
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestFnNamedArgsSingleString", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestFnNamedArgsSingleString", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -11139,7 +11451,7 @@ func (*stream) TestFnNamedArgsSingleStringArray(ctx context.Context, myStringArr
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -11148,7 +11460,7 @@ func (*stream) TestFnNamedArgsSingleStringArray(ctx context.Context, myStringArr
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestFnNamedArgsSingleStringArray", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestFnNamedArgsSingleStringArray", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -11217,7 +11529,7 @@ func (*stream) TestFnNamedArgsSingleStringList(ctx context.Context, myArg []stri
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -11226,7 +11538,7 @@ func (*stream) TestFnNamedArgsSingleStringList(ctx context.Context, myArg []stri
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestFnNamedArgsSingleStringList", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestFnNamedArgsSingleStringList", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -11295,7 +11607,7 @@ func (*stream) TestGemini(ctx context.Context, input string, opts ...CallOptionF
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -11304,7 +11616,7 @@ func (*stream) TestGemini(ctx context.Context, input string, opts ...CallOptionF
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestGemini", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestGemini", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -11373,7 +11685,7 @@ func (*stream) TestGeminiOpenAiGeneric(ctx context.Context, opts ...CallOptionFu
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -11382,7 +11694,7 @@ func (*stream) TestGeminiOpenAiGeneric(ctx context.Context, opts ...CallOptionFu
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestGeminiOpenAiGeneric", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestGeminiOpenAiGeneric", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -11451,7 +11763,7 @@ func (*stream) TestGeminiSystem(ctx context.Context, input string, opts ...CallO
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -11460,7 +11772,7 @@ func (*stream) TestGeminiSystem(ctx context.Context, input string, opts ...CallO
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestGeminiSystem", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestGeminiSystem", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -11529,7 +11841,7 @@ func (*stream) TestGeminiSystemAsChat(ctx context.Context, input string, opts ..
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -11538,7 +11850,7 @@ func (*stream) TestGeminiSystemAsChat(ctx context.Context, input string, opts ..
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestGeminiSystemAsChat", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestGeminiSystemAsChat", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -11607,7 +11919,7 @@ func (*stream) TestGroq(ctx context.Context, input string, opts ...CallOptionFun
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -11616,7 +11928,7 @@ func (*stream) TestGroq(ctx context.Context, input string, opts ...CallOptionFun
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestGroq", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestGroq", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -11685,7 +11997,7 @@ func (*stream) TestImageInput(ctx context.Context, img any, opts ...CallOptionFu
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -11694,7 +12006,7 @@ func (*stream) TestImageInput(ctx context.Context, img any, opts ...CallOptionFu
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestImageInput", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestImageInput", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -11763,7 +12075,7 @@ func (*stream) TestImageInputAnthropic(ctx context.Context, img any, opts ...Cal
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -11772,7 +12084,7 @@ func (*stream) TestImageInputAnthropic(ctx context.Context, img any, opts ...Cal
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestImageInputAnthropic", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestImageInputAnthropic", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -11841,7 +12153,7 @@ func (*stream) TestImageListInput(ctx context.Context, imgs []any, opts ...CallO
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -11850,7 +12162,7 @@ func (*stream) TestImageListInput(ctx context.Context, imgs []any, opts ...CallO
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestImageListInput", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestImageListInput", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -11919,7 +12231,7 @@ func (*stream) TestMemory(ctx context.Context, input string, opts ...CallOptionF
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -11928,7 +12240,7 @@ func (*stream) TestMemory(ctx context.Context, input string, opts ...CallOptionF
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestMemory", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestMemory", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -11997,7 +12309,7 @@ func (*stream) TestMulticlassNamedArgs(ctx context.Context, myArg types.NamedArg
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -12006,7 +12318,7 @@ func (*stream) TestMulticlassNamedArgs(ctx context.Context, myArg types.NamedArg
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestMulticlassNamedArgs", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestMulticlassNamedArgs", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -12075,7 +12387,7 @@ func (*stream) TestNamedArgsLiteralBool(ctx context.Context, myBool bool, opts .
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -12084,7 +12396,7 @@ func (*stream) TestNamedArgsLiteralBool(ctx context.Context, myBool bool, opts .
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestNamedArgsLiteralBool", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestNamedArgsLiteralBool", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -12153,7 +12465,7 @@ func (*stream) TestNamedArgsLiteralInt(ctx context.Context, myInt int64, opts ..
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -12162,7 +12474,7 @@ func (*stream) TestNamedArgsLiteralInt(ctx context.Context, myInt int64, opts ..
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestNamedArgsLiteralInt", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestNamedArgsLiteralInt", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -12231,7 +12543,7 @@ func (*stream) TestNamedArgsLiteralString(ctx context.Context, myString string, 
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -12240,7 +12552,7 @@ func (*stream) TestNamedArgsLiteralString(ctx context.Context, myString string, 
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestNamedArgsLiteralString", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestNamedArgsLiteralString", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -12309,7 +12621,7 @@ func (*stream) TestOllama(ctx context.Context, input string, opts ...CallOptionF
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -12318,7 +12630,7 @@ func (*stream) TestOllama(ctx context.Context, input string, opts ...CallOptionF
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOllama", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOllama", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -12387,7 +12699,7 @@ func (*stream) TestOllamaHaiku(ctx context.Context, input string, opts ...CallOp
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -12396,7 +12708,7 @@ func (*stream) TestOllamaHaiku(ctx context.Context, input string, opts ...CallOp
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOllamaHaiku", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOllamaHaiku", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -12465,7 +12777,7 @@ func (*stream) TestOpenAI(ctx context.Context, input string, opts ...CallOptionF
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -12474,7 +12786,7 @@ func (*stream) TestOpenAI(ctx context.Context, input string, opts ...CallOptionF
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAI", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAI", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -12543,7 +12855,7 @@ func (*stream) TestOpenAIDummyClient(ctx context.Context, input string, opts ...
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -12552,7 +12864,7 @@ func (*stream) TestOpenAIDummyClient(ctx context.Context, input string, opts ...
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIDummyClient", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIDummyClient", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -12621,7 +12933,7 @@ func (*stream) TestOpenAIGPT4oMini(ctx context.Context, input string, opts ...Ca
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -12630,7 +12942,7 @@ func (*stream) TestOpenAIGPT4oMini(ctx context.Context, input string, opts ...Ca
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIGPT4oMini", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIGPT4oMini", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -12699,7 +13011,7 @@ func (*stream) TestOpenAIGPT4oMini2(ctx context.Context, input string, opts ...C
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -12708,7 +13020,7 @@ func (*stream) TestOpenAIGPT4oMini2(ctx context.Context, input string, opts ...C
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIGPT4oMini2", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIGPT4oMini2", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -12777,7 +13089,7 @@ func (*stream) TestOpenAIGPT4oMini3(ctx context.Context, input string, opts ...C
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -12786,7 +13098,7 @@ func (*stream) TestOpenAIGPT4oMini3(ctx context.Context, input string, opts ...C
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIGPT4oMini3", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIGPT4oMini3", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -12855,7 +13167,7 @@ func (*stream) TestOpenAILegacyProvider(ctx context.Context, input string, opts 
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -12864,7 +13176,7 @@ func (*stream) TestOpenAILegacyProvider(ctx context.Context, input string, opts 
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAILegacyProvider", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAILegacyProvider", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -12933,7 +13245,7 @@ func (*stream) TestOpenAIO1NoMaxTokens(ctx context.Context, input string, opts .
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -12942,7 +13254,7 @@ func (*stream) TestOpenAIO1NoMaxTokens(ctx context.Context, input string, opts .
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIO1NoMaxTokens", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIO1NoMaxTokens", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -13011,7 +13323,7 @@ func (*stream) TestOpenAIO1WithMaxCompletionTokens(ctx context.Context, input st
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -13020,7 +13332,7 @@ func (*stream) TestOpenAIO1WithMaxCompletionTokens(ctx context.Context, input st
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIO1WithMaxCompletionTokens", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIO1WithMaxCompletionTokens", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -13089,7 +13401,7 @@ func (*stream) TestOpenAIO1WithMaxTokens(ctx context.Context, input string, opts
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -13098,7 +13410,7 @@ func (*stream) TestOpenAIO1WithMaxTokens(ctx context.Context, input string, opts
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIO1WithMaxTokens", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIO1WithMaxTokens", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -13167,7 +13479,7 @@ func (*stream) TestOpenAIProviderWithResponsesType(ctx context.Context, input st
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -13176,7 +13488,7 @@ func (*stream) TestOpenAIProviderWithResponsesType(ctx context.Context, input st
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIProviderWithResponsesType", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIProviderWithResponsesType", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -13245,7 +13557,7 @@ func (*stream) TestOpenAIResponses(ctx context.Context, input string, opts ...Ca
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -13254,7 +13566,7 @@ func (*stream) TestOpenAIResponses(ctx context.Context, input string, opts ...Ca
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIResponses", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIResponses", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -13323,7 +13635,7 @@ func (*stream) TestOpenAIResponsesAutoType(ctx context.Context, input string, op
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -13332,7 +13644,7 @@ func (*stream) TestOpenAIResponsesAutoType(ctx context.Context, input string, op
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIResponsesAutoType", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIResponsesAutoType", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -13401,7 +13713,7 @@ func (*stream) TestOpenAIResponsesConversation(ctx context.Context, topic string
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -13410,7 +13722,7 @@ func (*stream) TestOpenAIResponsesConversation(ctx context.Context, topic string
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIResponsesConversation", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIResponsesConversation", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -13479,7 +13791,7 @@ func (*stream) TestOpenAIResponsesCustomURL(ctx context.Context, input string, o
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -13488,7 +13800,7 @@ func (*stream) TestOpenAIResponsesCustomURL(ctx context.Context, input string, o
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIResponsesCustomURL", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIResponsesCustomURL", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -13557,7 +13869,7 @@ func (*stream) TestOpenAIResponsesDifferentModel(ctx context.Context, input stri
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -13566,7 +13878,7 @@ func (*stream) TestOpenAIResponsesDifferentModel(ctx context.Context, input stri
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIResponsesDifferentModel", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIResponsesDifferentModel", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -13635,7 +13947,7 @@ func (*stream) TestOpenAIResponsesEndpoint(ctx context.Context, input string, op
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -13644,7 +13956,7 @@ func (*stream) TestOpenAIResponsesEndpoint(ctx context.Context, input string, op
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIResponsesEndpoint", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIResponsesEndpoint", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -13713,7 +14025,7 @@ func (*stream) TestOpenAIResponsesExplicit(ctx context.Context, input string, op
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -13722,7 +14034,7 @@ func (*stream) TestOpenAIResponsesExplicit(ctx context.Context, input string, op
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIResponsesExplicit", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIResponsesExplicit", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -13791,7 +14103,7 @@ func (*stream) TestOpenAIResponsesFunctionCall(ctx context.Context, query string
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -13800,7 +14112,7 @@ func (*stream) TestOpenAIResponsesFunctionCall(ctx context.Context, query string
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIResponsesFunctionCall", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIResponsesFunctionCall", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -13869,7 +14181,7 @@ func (*stream) TestOpenAIResponsesImageInput(ctx context.Context, image types.Un
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -13878,7 +14190,7 @@ func (*stream) TestOpenAIResponsesImageInput(ctx context.Context, image types.Un
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIResponsesImageInput", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIResponsesImageInput", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -13947,7 +14259,7 @@ func (*stream) TestOpenAIResponsesReasoning(ctx context.Context, problem string,
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -13956,7 +14268,7 @@ func (*stream) TestOpenAIResponsesReasoning(ctx context.Context, problem string,
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIResponsesReasoning", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIResponsesReasoning", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -14025,7 +14337,7 @@ func (*stream) TestOpenAIResponsesShorthand(ctx context.Context, input string, o
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -14034,7 +14346,7 @@ func (*stream) TestOpenAIResponsesShorthand(ctx context.Context, input string, o
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIResponsesShorthand", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIResponsesShorthand", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -14103,7 +14415,7 @@ func (*stream) TestOpenAIResponsesWebSearch(ctx context.Context, query string, o
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -14112,7 +14424,7 @@ func (*stream) TestOpenAIResponsesWebSearch(ctx context.Context, query string, o
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIResponsesWebSearch", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIResponsesWebSearch", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -14181,7 +14493,7 @@ func (*stream) TestOpenAIResponsesWithOpenAIResponseType(ctx context.Context, in
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -14190,7 +14502,7 @@ func (*stream) TestOpenAIResponsesWithOpenAIResponseType(ctx context.Context, in
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIResponsesWithOpenAIResponseType", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIResponsesWithOpenAIResponseType", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -14259,7 +14571,7 @@ func (*stream) TestOpenAIShorthand(ctx context.Context, input string, opts ...Ca
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -14268,7 +14580,7 @@ func (*stream) TestOpenAIShorthand(ctx context.Context, input string, opts ...Ca
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIShorthand", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIShorthand", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -14337,7 +14649,7 @@ func (*stream) TestOpenAIWithFinishReasonError(ctx context.Context, input string
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -14346,7 +14658,7 @@ func (*stream) TestOpenAIWithFinishReasonError(ctx context.Context, input string
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIWithFinishReasonError", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIWithFinishReasonError", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -14415,7 +14727,7 @@ func (*stream) TestOpenAIWithMaxTokens(ctx context.Context, input string, opts .
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -14424,7 +14736,7 @@ func (*stream) TestOpenAIWithMaxTokens(ctx context.Context, input string, opts .
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIWithMaxTokens", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIWithMaxTokens", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -14493,7 +14805,7 @@ func (*stream) TestOpenAIWithNullMaxTokens(ctx context.Context, input string, op
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -14502,7 +14814,7 @@ func (*stream) TestOpenAIWithNullMaxTokens(ctx context.Context, input string, op
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIWithNullMaxTokens", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenAIWithNullMaxTokens", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -14571,7 +14883,7 @@ func (*stream) TestOpenRouterMistralSmall3_1_24b(ctx context.Context, input stri
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -14580,7 +14892,7 @@ func (*stream) TestOpenRouterMistralSmall3_1_24b(ctx context.Context, input stri
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenRouterMistralSmall3_1_24b", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestOpenRouterMistralSmall3_1_24b", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -14649,7 +14961,7 @@ func (*stream) TestRetryConstant(ctx context.Context, opts ...CallOptionFunc) (<
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -14658,7 +14970,7 @@ func (*stream) TestRetryConstant(ctx context.Context, opts ...CallOptionFunc) (<
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestRetryConstant", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestRetryConstant", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -14727,7 +15039,7 @@ func (*stream) TestRetryExponential(ctx context.Context, opts ...CallOptionFunc)
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -14736,7 +15048,7 @@ func (*stream) TestRetryExponential(ctx context.Context, opts ...CallOptionFunc)
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestRetryExponential", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestRetryExponential", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -14805,7 +15117,7 @@ func (*stream) TestRoundRobinStrategy(ctx context.Context, input string, opts ..
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -14814,7 +15126,7 @@ func (*stream) TestRoundRobinStrategy(ctx context.Context, input string, opts ..
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestRoundRobinStrategy", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestRoundRobinStrategy", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -14883,7 +15195,7 @@ func (*stream) TestSingleFallbackClient(ctx context.Context, opts ...CallOptionF
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -14892,7 +15204,7 @@ func (*stream) TestSingleFallbackClient(ctx context.Context, opts ...CallOptionF
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestSingleFallbackClient", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestSingleFallbackClient", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -14961,7 +15273,7 @@ func (*stream) TestThinking(ctx context.Context, input string, opts ...CallOptio
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -14970,7 +15282,7 @@ func (*stream) TestThinking(ctx context.Context, input string, opts ...CallOptio
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestThinking", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestThinking", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -15039,7 +15351,7 @@ func (*stream) TestUniverseQuestion(ctx context.Context, question types.Universe
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -15048,7 +15360,7 @@ func (*stream) TestUniverseQuestion(ctx context.Context, question types.Universe
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestUniverseQuestion", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestUniverseQuestion", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -15117,7 +15429,7 @@ func (*stream) TestVertex(ctx context.Context, input string, opts ...CallOptionF
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -15126,7 +15438,7 @@ func (*stream) TestVertex(ctx context.Context, input string, opts ...CallOptionF
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestVertex", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestVertex", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -15195,7 +15507,7 @@ func (*stream) TestVertexClaude(ctx context.Context, input string, opts ...CallO
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -15204,7 +15516,7 @@ func (*stream) TestVertexClaude(ctx context.Context, input string, opts ...CallO
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestVertexClaude", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestVertexClaude", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -15273,7 +15585,7 @@ func (*stream) TestVertexWithSystemInstructions(ctx context.Context, opts ...Cal
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -15282,7 +15594,7 @@ func (*stream) TestVertexWithSystemInstructions(ctx context.Context, opts ...Cal
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestVertexWithSystemInstructions", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestVertexWithSystemInstructions", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -15351,7 +15663,7 @@ func (*stream) UnionTest_Function(ctx context.Context, input types.Union2BoolOrS
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -15360,7 +15672,7 @@ func (*stream) UnionTest_Function(ctx context.Context, input types.Union2BoolOrS
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "UnionTest_Function", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "UnionTest_Function", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -15429,7 +15741,7 @@ func (*stream) UseBlockConstraint(ctx context.Context, inp types.BlockConstraint
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -15438,7 +15750,7 @@ func (*stream) UseBlockConstraint(ctx context.Context, inp types.BlockConstraint
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "UseBlockConstraint", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "UseBlockConstraint", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -15507,7 +15819,7 @@ func (*stream) UseMaintainFieldOrder(ctx context.Context, input types.MaintainFi
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -15516,7 +15828,7 @@ func (*stream) UseMaintainFieldOrder(ctx context.Context, input types.MaintainFi
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "UseMaintainFieldOrder", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "UseMaintainFieldOrder", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -15585,7 +15897,7 @@ func (*stream) UseMalformedConstraints(ctx context.Context, a types.MalformedCon
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -15594,7 +15906,7 @@ func (*stream) UseMalformedConstraints(ctx context.Context, a types.MalformedCon
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "UseMalformedConstraints", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "UseMalformedConstraints", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -15663,7 +15975,7 @@ func (*stream) UseNestedBlockConstraint(ctx context.Context, inp types.NestedBlo
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -15672,7 +15984,7 @@ func (*stream) UseNestedBlockConstraint(ctx context.Context, inp types.NestedBlo
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "UseNestedBlockConstraint", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "UseNestedBlockConstraint", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -15741,7 +16053,7 @@ func (*stream) ValidateBasicResponses(ctx context.Context, input string, opts ..
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -15750,7 +16062,7 @@ func (*stream) ValidateBasicResponses(ctx context.Context, input string, opts ..
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "ValidateBasicResponses", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "ValidateBasicResponses", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -15819,7 +16131,7 @@ func (*stream) ValidateResponseTypes(ctx context.Context, input string, opts ...
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -15828,7 +16140,163 @@ func (*stream) ValidateResponseTypes(ctx context.Context, input string, opts ...
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "ValidateResponseTypes", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "ValidateResponseTypes", encoded, callOpts.onTick)
+	if err != nil {
+		return nil, err
+	}
+
+	channel := make(chan StreamValue[string, string])
+	go func() {
+		defer func() {
+			internal_ctx.Done()
+		}()
+		for {
+			select {
+			case <-ctx.Done():
+				close(channel)
+				return
+			case result, ok := <-internal_channel:
+				if !ok {
+					// channel closed for some reason
+					close(channel)
+					return
+				}
+				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
+					close(channel)
+					return
+				}
+				if result.HasData {
+					data := (result.Data).(string)
+					channel <- StreamValue[string, string]{
+						IsFinal:  true,
+						as_final: &data,
+					}
+				} else {
+					data := (result.StreamData).(string)
+					channel <- StreamValue[string, string]{
+						IsFinal:   false,
+						as_stream: &data,
+					}
+				}
+			}
+		}
+	}()
+	return channel, nil
+}
+
+// / Streaming version of VideoInputGemini
+func (*stream) VideoInputGemini(ctx context.Context, vid any, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"vid": vid},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := args.Encode()
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: VideoInputGemini: %w", err)
+		panic(wrapped_err)
+	}
+
+	internal_ctx := context.Background()
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "VideoInputGemini", encoded, callOpts.onTick)
+	if err != nil {
+		return nil, err
+	}
+
+	channel := make(chan StreamValue[string, string])
+	go func() {
+		defer func() {
+			internal_ctx.Done()
+		}()
+		for {
+			select {
+			case <-ctx.Done():
+				close(channel)
+				return
+			case result, ok := <-internal_channel:
+				if !ok {
+					// channel closed for some reason
+					close(channel)
+					return
+				}
+				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
+					close(channel)
+					return
+				}
+				if result.HasData {
+					data := (result.Data).(string)
+					channel <- StreamValue[string, string]{
+						IsFinal:  true,
+						as_final: &data,
+					}
+				} else {
+					data := (result.StreamData).(string)
+					channel <- StreamValue[string, string]{
+						IsFinal:   false,
+						as_stream: &data,
+					}
+				}
+			}
+		}
+	}()
+	return channel, nil
+}
+
+// / Streaming version of VideoInputVertex
+func (*stream) VideoInputVertex(ctx context.Context, vid any, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"vid": vid},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := args.Encode()
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: VideoInputVertex: %w", err)
+		panic(wrapped_err)
+	}
+
+	internal_ctx := context.Background()
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "VideoInputVertex", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}

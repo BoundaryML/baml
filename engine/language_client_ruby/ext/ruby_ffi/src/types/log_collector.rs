@@ -280,7 +280,7 @@ impl FunctionLog {
                 }
             }
             baml_runtime::tracingv2::storage::storage::LLMCallKind::Stream(inner) => {
-                if inner.selected {
+                if inner.llm_call.selected {
                     let stream_call = LLMStreamCall {
                         inner: Arc::new(inner.clone()),
                     };
@@ -497,43 +497,52 @@ impl LLMStreamCall {
     pub fn to_s(&self) -> String {
         format!(
             "LLMStreamCall(provider={}, client_name={}, selected={}, usage={}, timing={:?}, http_request={}, http_response={})",
-            self.inner.provider,
-            self.inner.client_name,
-            self.inner.selected,
-            self.inner.usage.as_ref().map_or("null".to_string(), |u| format!("{u:?}")),
+            self.inner.llm_call.provider,
+            self.inner.llm_call.client_name,
+            self.inner.llm_call.selected,
+            self.inner.llm_call.usage.as_ref().map_or("null".to_string(), |u| format!("{u:?}")),
             self.inner.timing,
-            self.inner.request.as_ref().map_or("null".to_string(), |req| format!("{req:?}")),
-            self.inner.response.as_ref().map_or("null".to_string(), |resp| format!("{resp:?}"))
+            self.inner.llm_call.request.as_ref().map_or("null".to_string(), |req| format!("{req:?}")),
+            self.inner.llm_call.response.as_ref().map_or("null".to_string(), |resp| format!("{resp:?}"))
         )
     }
 
     pub fn http_request(&self) -> Option<HTTPRequest> {
         self.inner
+            .llm_call
             .request
             .clone()
             .map(|req| HTTPRequest { inner: req })
     }
 
     pub fn http_response(&self) -> Option<HTTPResponse> {
-        self.inner.response.clone().map(|resp| HTTPResponse {
-            inner: resp.clone(),
-        })
+        self.inner
+            .llm_call
+            .response
+            .clone()
+            .map(|resp| HTTPResponse {
+                inner: resp.clone(),
+            })
     }
 
     pub fn provider(&self) -> String {
-        self.inner.provider.clone()
+        self.inner.llm_call.provider.clone()
     }
 
     pub fn client_name(&self) -> String {
-        self.inner.client_name.clone()
+        self.inner.llm_call.client_name.clone()
     }
 
     pub fn selected(&self) -> bool {
-        self.inner.selected
+        self.inner.llm_call.selected
     }
 
     pub fn usage(&self) -> Option<Usage> {
-        self.inner.usage.clone().map(|u| Usage { inner: u.into() })
+        self.inner
+            .llm_call
+            .usage
+            .clone()
+            .map(|u| Usage { inner: u.into() })
     }
 
     pub fn timing(&self) -> StreamTiming {

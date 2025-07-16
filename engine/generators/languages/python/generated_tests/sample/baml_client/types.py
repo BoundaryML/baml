@@ -45,10 +45,12 @@ def all_succeeded(checks: typing.Dict[CheckName, Check]) -> bool:
 # #########################################################################
 
 class Example(BaseModel):
+    type: typing_extensions.Literal['example_1']
     a: int
     b: str
 
 class Example2(BaseModel):
+    type: typing_extensions.Literal['example_2']
     item: "Example"
     element: str
     element2: str

@@ -177,10 +177,10 @@ impl WithRepr<TopLevelAssignment> for TopLevelAssignmentWalker<'_> {
         let name = self
             .top_level_assignment()
             .stmt
-            .identifier()
+            .identifier
             .name()
             .to_string();
-        let expr = self.top_level_assignment().stmt.body().repr(db)?;
+        let expr = self.top_level_assignment().stmt.expr.repr(db)?;
         Ok(TopLevelAssignment {
             name: Node {
                 elem: name,

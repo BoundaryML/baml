@@ -1,6 +1,6 @@
 import { b } from "./test-setup";
-import { Image, Audio } from "@boundaryml/baml";
-import { image_b64, audio_b64 } from "./base64_test_data";
+import { Image, Audio, Pdf, Video } from "@boundaryml/baml";
+import { image_b64, audio_b64, pdf_b64, video_b64 } from "./base64_test_data";
 
 describe("Media Tests", () => {
   it("should work with image from url", async () => {
@@ -30,5 +30,24 @@ describe("Media Tests", () => {
     );
 
     expect(res.toLowerCase()).toContain("no");
+  });
+
+  it("should work with pdf from base 64", async () => {
+    let res = await b.PdfInput(Pdf.fromBase64("application/pdf", pdf_b64));
+    expect(res.toLowerCase()).toMatch(/(bookmarks|pdf|sample|usage)/);
+  });
+
+  it("should work with video and a youtube url for gemini", async () => {
+    // This test uses a public YouTube video URL as input.
+    // See: https://youtu.be/dQw4w9WgXcQ?si=aQdfsK0DdcDtCCud
+    let res = await b.VideoInputGemini(
+      Video.fromUrl("https://youtu.be/dQw4w9WgXcQ?si=aQdfsK0DdcDtCCud")
+    );
+    expect(res.toLowerCase()).toMatch(/(singing|rickroll|dancing)/);
+  });
+
+  it("should work with video from base 64", async () => {
+    let res = await b.VideoInputGemini(Video.fromBase64("video/mp4", video_b64));
+    expect(res.toLowerCase()).toMatch(/(cartoon|sky|field)/);
   });
 });

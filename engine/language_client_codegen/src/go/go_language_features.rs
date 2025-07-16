@@ -1,5 +1,6 @@
-use crate::dir_writer::LanguageFeatures;
 use baml_types::{BamlMediaType, TypeValue};
+
+use crate::dir_writer::LanguageFeatures;
 
 #[derive(Default)]
 pub(super) struct GoLanguageFeatures {}
@@ -34,6 +35,8 @@ impl ToGo for TypeValue {
             // TODO: add media types
             TypeValue::Media(BamlMediaType::Image) => "any",
             TypeValue::Media(BamlMediaType::Audio) => "any",
+            TypeValue::Media(BamlMediaType::Pdf) => "any",
+            TypeValue::Media(BamlMediaType::Video) => "any",
         }
         .to_string()
     }

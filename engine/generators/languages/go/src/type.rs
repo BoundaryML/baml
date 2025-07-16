@@ -106,6 +106,8 @@ impl WrapType for TypeMetaGo {
 pub enum MediaTypeGo {
     Image,
     Audio,
+    Pdf,
+    Video,
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -170,6 +172,8 @@ impl TypeGo {
             TypeGo::Media(media_type_go, _) => match media_type_go {
                 MediaTypeGo::Image => "Image".to_string(),
                 MediaTypeGo::Audio => "Audio".to_string(),
+                MediaTypeGo::Pdf => "Pdf".to_string(),
+                MediaTypeGo::Video => "Video".to_string(),
             },
             TypeGo::TypeAlias { name, .. } => name.clone(),
             TypeGo::Class { name, .. } => name.clone(),
@@ -387,6 +391,8 @@ impl SerializeType for MediaTypeGo {
         match self {
             MediaTypeGo::Image => "any".to_string(), // format!("{}Image", Package::imported_base().relative_from(pkg)),
             MediaTypeGo::Audio => "any".to_string(), // format!("{}Audio", Package::imported_base().relative_from(pkg)),
+            MediaTypeGo::Pdf => "any".to_string(), // format!("{}Pdf", Package::imported_base().relative_from(pkg)),
+            MediaTypeGo::Video => "any".to_string(), // format!("{}Video", Package::imported_base().relative_from(pkg)),
         }
     }
 }

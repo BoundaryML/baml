@@ -15,6 +15,7 @@ package baml_client
 
 import (
 	"context"
+	"fmt"
 
 	"asserts/baml_client/types"
 
@@ -41,21 +42,40 @@ func PersonTest(ctx context.Context, opts ...CallOptionFunc) (types.Person, erro
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "PersonTest", encoded)
-	if err != nil {
-		return types.Person{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "PersonTest", encoded, callOpts.onTick)
+		if err != nil {
+			return types.Person{}, err
+		}
+
+		if result.Error != nil {
+			return types.Person{}, result.Error
+		}
+
+		casted := (result.Data).(types.Person)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "PersonTest", encoded, callOpts.onTick)
+		if err != nil {
+			return types.Person{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.Person{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.Person), nil
+			}
+		}
+
+		return types.Person{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.Person{}, result.Error
-	}
-
-	casted := (result.Data).(types.Person)
-
-	return casted, nil
 }

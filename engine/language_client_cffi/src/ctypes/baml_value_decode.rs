@@ -64,6 +64,8 @@ impl Decode for BamlValue {
                     let baml_media_type = match media_type.media() {
                         crate::baml::cffi::MediaTypeEnum::Image => baml_types::BamlMediaType::Image,
                         crate::baml::cffi::MediaTypeEnum::Audio => baml_types::BamlMediaType::Audio,
+                        crate::baml::cffi::MediaTypeEnum::Pdf => baml_types::BamlMediaType::Pdf,
+                        crate::baml::cffi::MediaTypeEnum::Video => baml_types::BamlMediaType::Video,
                     };
 
                     let mime_type = media_value.mime_type;

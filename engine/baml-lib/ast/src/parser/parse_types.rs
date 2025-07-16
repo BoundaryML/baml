@@ -133,7 +133,7 @@ fn parse_base_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Fiel
             Rule::identifier => {
                 let identifier = parse_identifier(current.clone(), diagnostics);
                 let field_type = match current.as_str() {
-                    "string" | "int" | "float" | "bool" | "image" | "audio" => {
+                    "string" | "int" | "float" | "bool" | "image" | "audio" | "pdf" | "video" => {
                         FieldType::Primitive(
                             FieldArity::Required,
                             TypeValue::from_str(identifier.name()).expect("Invalid type value"),

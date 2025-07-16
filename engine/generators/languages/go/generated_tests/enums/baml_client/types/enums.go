@@ -79,7 +79,7 @@ func (e *TestEnum) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (e *TestEnum) Decode(holder *cffi.CFFIValueEnum) {
+func (e *TestEnum) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
 	name := holder.Name
 	if name.Name != "TestEnum" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected types.TestEnum, got %s.%s", string(name.Namespace.String()), string(name.Name)))
