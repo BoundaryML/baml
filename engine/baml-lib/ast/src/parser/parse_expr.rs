@@ -64,10 +64,10 @@ pub fn parse_top_level_assignment(
     match parse_statement(tokens.next()?, diagnostics)? {
         Stmt::Let(stmt) => Some(TopLevelAssignment { stmt }),
 
-        Stmt::ForLoop(_) => {
+        Stmt::ForLoop(stmt) => {
             diagnostics.push_error(DatamodelError::new_static(
                 "for loops are not allowed at top level, only let statements are allowed",
-                stmt.span().clone(),
+                stmt.span.clone(),
             ));
 
             None
