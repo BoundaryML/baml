@@ -199,9 +199,9 @@ impl<'g> Compiler<'g> {
         // Compile statements and resolve locals.
         for statement in &block.stmts {
             match statement {
-                ast::Stmt::Let(_) => {
+                ast::Stmt::Let(stmt) => {
                     // Compile the assignment expression.
-                    self.compile_expression(statement.expr());
+                    self.compile_expression(&stmt.expr);
 
                     // Resolve the index of the local variable at runtime.
                     self.locals
@@ -209,16 +209,16 @@ impl<'g> Compiler<'g> {
 
                     // We'll remove scoped locals so that outer local indexes are not
                     // affected.
-                    scope_locals.insert(statement.identifier().name());
+                    scope_locals.insert(stmt.identifier.name());
 
                     // We don't need to emit Instruction::StoreVar because when the
                     // expression is executed and leaves the value on top of the stack,
                     // that index in the stack will be the index of the local variable.
                     // It's already "stored".
                 }
-                ast::Stmt::ForLoop(_) => {
+                ast::Stmt::ForLoop(stmt) => {
                     // Compile the iterator expression (array) - leaves array on stack
-                    self.compile_expression(statement.iterator());
+                    self.compile_expression(&stmt.iterator);
 
                     // Create iterator from array - replaces array with iterator on stack
                     self.emit(Instruction::CreateIterator);
@@ -268,14 +268,14 @@ impl<'g> Compiler<'g> {
                     self.emit(Instruction::Pop); // Pop iterator
 
                     // Remove the loop variable from locals since it's no longer in scope
-                    self.locals.remove(statement.identifier().name());
+                    self.locals.remove(stmt.identifier.name());
 
                     // Push null as the for loop result
                     let null_index = self.add_constant(Value::Null);
                     self.emit(Instruction::LoadConst(null_index));
 
                     // Track this as a local so it gets cleaned up in EndBlock
-                    scope_locals.insert(statement.identifier().name());
+                    scope_locals.insert(stmt.identifier.name());
                 }
             }
         }

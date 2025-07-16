@@ -4,9 +4,9 @@ use super::{Expression, ExpressionBlock, Identifier, Span};
 
 #[derive(Debug, Clone)]
 pub struct LetStmt {
-    identifier: Identifier,
-    expr: Expression,
-    span: Span,
+    pub identifier: Identifier,
+    pub expr: Expression,
+    pub span: Span,
 }
 
 impl LetStmt {
@@ -21,10 +21,10 @@ impl LetStmt {
 
 #[derive(Debug, Clone)]
 pub struct ForLoopStmt {
-    identifier: Identifier,
-    iterator: Expression,
-    body: ExpressionBlock,
-    span: Span,
+    pub identifier: Identifier,
+    pub iterator: Expression,
+    pub body: ExpressionBlock,
+    pub span: Span,
 }
 
 impl ForLoopStmt {
