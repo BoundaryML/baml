@@ -73,7 +73,7 @@ func (*stream) PersonTest(ctx context.Context, opts ...CallOptionFunc) (<-chan S
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "PersonTest", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "PersonTest", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}

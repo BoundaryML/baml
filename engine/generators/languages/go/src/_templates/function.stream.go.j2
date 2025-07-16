@@ -33,7 +33,7 @@ func (*stream) {{ fn.name }}(ctx context.Context{% for (name, go_type) in fn.arg
     }
 
     internal_ctx := context.Background()
-    internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "{{ fn.name }}", encoded)
+    internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "{{ fn.name }}", encoded, callOpts.onTick)
     if err != nil {
         return nil, err
     }

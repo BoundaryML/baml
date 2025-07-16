@@ -73,7 +73,7 @@ func (*stream) TestKitchenSink(ctx context.Context, input string, opts ...CallOp
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestKitchenSink", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestKitchenSink", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -151,7 +151,7 @@ func (*stream) TestRecursiveComplexity(ctx context.Context, input string, opts .
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestRecursiveComplexity", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestRecursiveComplexity", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -229,7 +229,7 @@ func (*stream) TestUltraComplex(ctx context.Context, input string, opts ...CallO
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestUltraComplex", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestUltraComplex", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}

@@ -15,6 +15,7 @@ package baml_client
 
 import (
 	"context"
+	"fmt"
 
 	"example.com/integ-tests/baml_client/types"
 	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
@@ -45,18 +46,37 @@ func AaaSamOutputFormat(ctx context.Context, recipe string, opts ...CallOptionFu
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "AaaSamOutputFormat", encoded)
-	if err != nil {
-		return types.Recipe{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "AaaSamOutputFormat", encoded, callOpts.onTick)
+		if err != nil {
+			return types.Recipe{}, err
+		}
+
+		if result.Error != nil {
+			return types.Recipe{}, result.Error
+		}
+
+		casted := (result.Data).(types.Recipe)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "AaaSamOutputFormat", encoded, callOpts.onTick)
+		if err != nil {
+			return types.Recipe{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.Recipe{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.Recipe), nil
+			}
+		}
+
+		return types.Recipe{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.Recipe{}, result.Error
-	}
-
-	casted := (result.Data).(types.Recipe)
-
-	return casted, nil
 }
 
 func AliasThatPointsToRecursiveType(ctx context.Context, data types.LinkedListAliasNode, opts ...CallOptionFunc) (types.LinkedListAliasNode, error) {
@@ -84,18 +104,37 @@ func AliasThatPointsToRecursiveType(ctx context.Context, data types.LinkedListAl
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "AliasThatPointsToRecursiveType", encoded)
-	if err != nil {
-		return types.LinkedListAliasNode{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "AliasThatPointsToRecursiveType", encoded, callOpts.onTick)
+		if err != nil {
+			return types.LinkedListAliasNode{}, err
+		}
+
+		if result.Error != nil {
+			return types.LinkedListAliasNode{}, result.Error
+		}
+
+		casted := (result.Data).(types.LinkedListAliasNode)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "AliasThatPointsToRecursiveType", encoded, callOpts.onTick)
+		if err != nil {
+			return types.LinkedListAliasNode{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.LinkedListAliasNode{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.LinkedListAliasNode), nil
+			}
+		}
+
+		return types.LinkedListAliasNode{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.LinkedListAliasNode{}, result.Error
-	}
-
-	casted := (result.Data).(types.LinkedListAliasNode)
-
-	return casted, nil
 }
 
 func AliasWithMultipleAttrs(ctx context.Context, money int64, opts ...CallOptionFunc) (int64, error) {
@@ -123,18 +162,37 @@ func AliasWithMultipleAttrs(ctx context.Context, money int64, opts ...CallOption
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "AliasWithMultipleAttrs", encoded)
-	if err != nil {
-		return 0, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "AliasWithMultipleAttrs", encoded, callOpts.onTick)
+		if err != nil {
+			return 0, err
+		}
+
+		if result.Error != nil {
+			return 0, result.Error
+		}
+
+		casted := (result.Data).(int64)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "AliasWithMultipleAttrs", encoded, callOpts.onTick)
+		if err != nil {
+			return 0, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return 0, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(int64), nil
+			}
+		}
+
+		return 0, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return 0, result.Error
-	}
-
-	casted := (result.Data).(int64)
-
-	return casted, nil
 }
 
 func AliasedInputClass(ctx context.Context, input types.InputClass, opts ...CallOptionFunc) (string, error) {
@@ -162,18 +220,37 @@ func AliasedInputClass(ctx context.Context, input types.InputClass, opts ...Call
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "AliasedInputClass", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "AliasedInputClass", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "AliasedInputClass", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func AliasedInputClass2(ctx context.Context, input types.InputClass, opts ...CallOptionFunc) (string, error) {
@@ -201,18 +278,37 @@ func AliasedInputClass2(ctx context.Context, input types.InputClass, opts ...Cal
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "AliasedInputClass2", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "AliasedInputClass2", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "AliasedInputClass2", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func AliasedInputClassNested(ctx context.Context, input types.InputClassNested, opts ...CallOptionFunc) (string, error) {
@@ -240,18 +336,37 @@ func AliasedInputClassNested(ctx context.Context, input types.InputClassNested, 
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "AliasedInputClassNested", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "AliasedInputClassNested", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "AliasedInputClassNested", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func AliasedInputEnum(ctx context.Context, input types.AliasedEnum, opts ...CallOptionFunc) (string, error) {
@@ -279,18 +394,37 @@ func AliasedInputEnum(ctx context.Context, input types.AliasedEnum, opts ...Call
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "AliasedInputEnum", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "AliasedInputEnum", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "AliasedInputEnum", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func AliasedInputList(ctx context.Context, input []types.AliasedEnum, opts ...CallOptionFunc) (string, error) {
@@ -318,18 +452,37 @@ func AliasedInputList(ctx context.Context, input []types.AliasedEnum, opts ...Ca
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "AliasedInputList", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "AliasedInputList", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "AliasedInputList", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func AllowedOptionals(ctx context.Context, optionals types.OptionalListAndMap, opts ...CallOptionFunc) (types.OptionalListAndMap, error) {
@@ -357,18 +510,37 @@ func AllowedOptionals(ctx context.Context, optionals types.OptionalListAndMap, o
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "AllowedOptionals", encoded)
-	if err != nil {
-		return types.OptionalListAndMap{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "AllowedOptionals", encoded, callOpts.onTick)
+		if err != nil {
+			return types.OptionalListAndMap{}, err
+		}
+
+		if result.Error != nil {
+			return types.OptionalListAndMap{}, result.Error
+		}
+
+		casted := (result.Data).(types.OptionalListAndMap)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "AllowedOptionals", encoded, callOpts.onTick)
+		if err != nil {
+			return types.OptionalListAndMap{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.OptionalListAndMap{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.OptionalListAndMap), nil
+			}
+		}
+
+		return types.OptionalListAndMap{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.OptionalListAndMap{}, result.Error
-	}
-
-	casted := (result.Data).(types.OptionalListAndMap)
-
-	return casted, nil
 }
 
 func AssertFn(ctx context.Context, a int64, opts ...CallOptionFunc) (int64, error) {
@@ -396,18 +568,37 @@ func AssertFn(ctx context.Context, a int64, opts ...CallOptionFunc) (int64, erro
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "AssertFn", encoded)
-	if err != nil {
-		return 0, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "AssertFn", encoded, callOpts.onTick)
+		if err != nil {
+			return 0, err
+		}
+
+		if result.Error != nil {
+			return 0, result.Error
+		}
+
+		casted := (result.Data).(int64)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "AssertFn", encoded, callOpts.onTick)
+		if err != nil {
+			return 0, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return 0, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(int64), nil
+			}
+		}
+
+		return 0, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return 0, result.Error
-	}
-
-	casted := (result.Data).(int64)
-
-	return casted, nil
 }
 
 func AudioInput(ctx context.Context, aud any, opts ...CallOptionFunc) (string, error) {
@@ -435,18 +626,37 @@ func AudioInput(ctx context.Context, aud any, opts ...CallOptionFunc) (string, e
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "AudioInput", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "AudioInput", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "AudioInput", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func AudioInputOpenai(ctx context.Context, aud any, prompt string, opts ...CallOptionFunc) (string, error) {
@@ -474,18 +684,37 @@ func AudioInputOpenai(ctx context.Context, aud any, prompt string, opts ...CallO
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "AudioInputOpenai", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "AudioInputOpenai", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "AudioInputOpenai", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func BuildLinkedList(ctx context.Context, input []int64, opts ...CallOptionFunc) (types.LinkedList, error) {
@@ -513,18 +742,37 @@ func BuildLinkedList(ctx context.Context, input []int64, opts ...CallOptionFunc)
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "BuildLinkedList", encoded)
-	if err != nil {
-		return types.LinkedList{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "BuildLinkedList", encoded, callOpts.onTick)
+		if err != nil {
+			return types.LinkedList{}, err
+		}
+
+		if result.Error != nil {
+			return types.LinkedList{}, result.Error
+		}
+
+		casted := (result.Data).(types.LinkedList)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "BuildLinkedList", encoded, callOpts.onTick)
+		if err != nil {
+			return types.LinkedList{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.LinkedList{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.LinkedList), nil
+			}
+		}
+
+		return types.LinkedList{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.LinkedList{}, result.Error
-	}
-
-	casted := (result.Data).(types.LinkedList)
-
-	return casted, nil
 }
 
 func BuildTree(ctx context.Context, input types.BinaryNode, opts ...CallOptionFunc) (types.Tree, error) {
@@ -552,18 +800,37 @@ func BuildTree(ctx context.Context, input types.BinaryNode, opts ...CallOptionFu
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "BuildTree", encoded)
-	if err != nil {
-		return types.Tree{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "BuildTree", encoded, callOpts.onTick)
+		if err != nil {
+			return types.Tree{}, err
+		}
+
+		if result.Error != nil {
+			return types.Tree{}, result.Error
+		}
+
+		casted := (result.Data).(types.Tree)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "BuildTree", encoded, callOpts.onTick)
+		if err != nil {
+			return types.Tree{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.Tree{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.Tree), nil
+			}
+		}
+
+		return types.Tree{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.Tree{}, result.Error
-	}
-
-	casted := (result.Data).(types.Tree)
-
-	return casted, nil
 }
 
 func ClassThatPointsToRecursiveClassThroughAlias(ctx context.Context, cls types.ClassToRecAlias, opts ...CallOptionFunc) (types.ClassToRecAlias, error) {
@@ -591,18 +858,37 @@ func ClassThatPointsToRecursiveClassThroughAlias(ctx context.Context, cls types.
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "ClassThatPointsToRecursiveClassThroughAlias", encoded)
-	if err != nil {
-		return types.ClassToRecAlias{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "ClassThatPointsToRecursiveClassThroughAlias", encoded, callOpts.onTick)
+		if err != nil {
+			return types.ClassToRecAlias{}, err
+		}
+
+		if result.Error != nil {
+			return types.ClassToRecAlias{}, result.Error
+		}
+
+		casted := (result.Data).(types.ClassToRecAlias)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "ClassThatPointsToRecursiveClassThroughAlias", encoded, callOpts.onTick)
+		if err != nil {
+			return types.ClassToRecAlias{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.ClassToRecAlias{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.ClassToRecAlias), nil
+			}
+		}
+
+		return types.ClassToRecAlias{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.ClassToRecAlias{}, result.Error
-	}
-
-	casted := (result.Data).(types.ClassToRecAlias)
-
-	return casted, nil
 }
 
 func ClassifyDynEnumTwo(ctx context.Context, input string, opts ...CallOptionFunc) (types.DynEnumTwo, error) {
@@ -630,18 +916,37 @@ func ClassifyDynEnumTwo(ctx context.Context, input string, opts ...CallOptionFun
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "ClassifyDynEnumTwo", encoded)
-	if err != nil {
-		return types.DynEnumTwo(""), err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "ClassifyDynEnumTwo", encoded, callOpts.onTick)
+		if err != nil {
+			return types.DynEnumTwo(""), err
+		}
+
+		if result.Error != nil {
+			return types.DynEnumTwo(""), result.Error
+		}
+
+		casted := (result.Data).(types.DynEnumTwo)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "ClassifyDynEnumTwo", encoded, callOpts.onTick)
+		if err != nil {
+			return types.DynEnumTwo(""), err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.DynEnumTwo(""), result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.DynEnumTwo), nil
+			}
+		}
+
+		return types.DynEnumTwo(""), fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.DynEnumTwo(""), result.Error
-	}
-
-	casted := (result.Data).(types.DynEnumTwo)
-
-	return casted, nil
 }
 
 func ClassifyMessage(ctx context.Context, input string, opts ...CallOptionFunc) (types.Category, error) {
@@ -669,18 +974,37 @@ func ClassifyMessage(ctx context.Context, input string, opts ...CallOptionFunc) 
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "ClassifyMessage", encoded)
-	if err != nil {
-		return types.Category(""), err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "ClassifyMessage", encoded, callOpts.onTick)
+		if err != nil {
+			return types.Category(""), err
+		}
+
+		if result.Error != nil {
+			return types.Category(""), result.Error
+		}
+
+		casted := (result.Data).(types.Category)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "ClassifyMessage", encoded, callOpts.onTick)
+		if err != nil {
+			return types.Category(""), err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.Category(""), result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.Category), nil
+			}
+		}
+
+		return types.Category(""), fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.Category(""), result.Error
-	}
-
-	casted := (result.Data).(types.Category)
-
-	return casted, nil
 }
 
 func ClassifyMessage2(ctx context.Context, input string, opts ...CallOptionFunc) (types.Category, error) {
@@ -708,18 +1032,37 @@ func ClassifyMessage2(ctx context.Context, input string, opts ...CallOptionFunc)
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "ClassifyMessage2", encoded)
-	if err != nil {
-		return types.Category(""), err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "ClassifyMessage2", encoded, callOpts.onTick)
+		if err != nil {
+			return types.Category(""), err
+		}
+
+		if result.Error != nil {
+			return types.Category(""), result.Error
+		}
+
+		casted := (result.Data).(types.Category)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "ClassifyMessage2", encoded, callOpts.onTick)
+		if err != nil {
+			return types.Category(""), err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.Category(""), result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.Category), nil
+			}
+		}
+
+		return types.Category(""), fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.Category(""), result.Error
-	}
-
-	casted := (result.Data).(types.Category)
-
-	return casted, nil
 }
 
 func ClassifyMessage3(ctx context.Context, input string, opts ...CallOptionFunc) (types.Category, error) {
@@ -747,18 +1090,37 @@ func ClassifyMessage3(ctx context.Context, input string, opts ...CallOptionFunc)
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "ClassifyMessage3", encoded)
-	if err != nil {
-		return types.Category(""), err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "ClassifyMessage3", encoded, callOpts.onTick)
+		if err != nil {
+			return types.Category(""), err
+		}
+
+		if result.Error != nil {
+			return types.Category(""), result.Error
+		}
+
+		casted := (result.Data).(types.Category)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "ClassifyMessage3", encoded, callOpts.onTick)
+		if err != nil {
+			return types.Category(""), err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.Category(""), result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.Category), nil
+			}
+		}
+
+		return types.Category(""), fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.Category(""), result.Error
-	}
-
-	casted := (result.Data).(types.Category)
-
-	return casted, nil
 }
 
 func Completion(ctx context.Context, prefix string, suffix string, language string, opts ...CallOptionFunc) (string, error) {
@@ -786,18 +1148,37 @@ func Completion(ctx context.Context, prefix string, suffix string, language stri
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "Completion", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "Completion", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "Completion", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func CustomTask(ctx context.Context, input string, opts ...CallOptionFunc) (types.Union3BookOrderOrFlightConfirmationOrGroceryReceipt, error) {
@@ -825,18 +1206,37 @@ func CustomTask(ctx context.Context, input string, opts ...CallOptionFunc) (type
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "CustomTask", encoded)
-	if err != nil {
-		return types.Union3BookOrderOrFlightConfirmationOrGroceryReceipt{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "CustomTask", encoded, callOpts.onTick)
+		if err != nil {
+			return types.Union3BookOrderOrFlightConfirmationOrGroceryReceipt{}, err
+		}
+
+		if result.Error != nil {
+			return types.Union3BookOrderOrFlightConfirmationOrGroceryReceipt{}, result.Error
+		}
+
+		casted := (result.Data).(types.Union3BookOrderOrFlightConfirmationOrGroceryReceipt)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "CustomTask", encoded, callOpts.onTick)
+		if err != nil {
+			return types.Union3BookOrderOrFlightConfirmationOrGroceryReceipt{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.Union3BookOrderOrFlightConfirmationOrGroceryReceipt{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.Union3BookOrderOrFlightConfirmationOrGroceryReceipt), nil
+			}
+		}
+
+		return types.Union3BookOrderOrFlightConfirmationOrGroceryReceipt{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.Union3BookOrderOrFlightConfirmationOrGroceryReceipt{}, result.Error
-	}
-
-	casted := (result.Data).(types.Union3BookOrderOrFlightConfirmationOrGroceryReceipt)
-
-	return casted, nil
 }
 
 func DescribeAudio(ctx context.Context, audio any, opts ...CallOptionFunc) (string, error) {
@@ -864,18 +1264,37 @@ func DescribeAudio(ctx context.Context, audio any, opts ...CallOptionFunc) (stri
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "DescribeAudio", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "DescribeAudio", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "DescribeAudio", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func DescribeAudio2(ctx context.Context, audio any, opts ...CallOptionFunc) (string, error) {
@@ -903,18 +1322,37 @@ func DescribeAudio2(ctx context.Context, audio any, opts ...CallOptionFunc) (str
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "DescribeAudio2", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "DescribeAudio2", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "DescribeAudio2", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func DescribeImage(ctx context.Context, img any, opts ...CallOptionFunc) (string, error) {
@@ -942,18 +1380,37 @@ func DescribeImage(ctx context.Context, img any, opts ...CallOptionFunc) (string
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "DescribeImage", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "DescribeImage", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "DescribeImage", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func DescribeImage2(ctx context.Context, classWithImage types.ClassWithImage, img2 any, opts ...CallOptionFunc) (string, error) {
@@ -981,18 +1438,37 @@ func DescribeImage2(ctx context.Context, classWithImage types.ClassWithImage, im
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "DescribeImage2", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "DescribeImage2", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "DescribeImage2", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func DescribeImage3(ctx context.Context, classWithImage types.ClassWithImage, img2 any, opts ...CallOptionFunc) (string, error) {
@@ -1020,18 +1496,37 @@ func DescribeImage3(ctx context.Context, classWithImage types.ClassWithImage, im
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "DescribeImage3", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "DescribeImage3", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "DescribeImage3", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func DescribeImage4(ctx context.Context, classWithImage types.ClassWithImage, img2 any, opts ...CallOptionFunc) (string, error) {
@@ -1059,18 +1554,37 @@ func DescribeImage4(ctx context.Context, classWithImage types.ClassWithImage, im
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "DescribeImage4", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "DescribeImage4", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "DescribeImage4", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func DescribeMedia1599(ctx context.Context, img any, client_sector string, client_name string, opts ...CallOptionFunc) (string, error) {
@@ -1098,18 +1612,37 @@ func DescribeMedia1599(ctx context.Context, img any, client_sector string, clien
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "DescribeMedia1599", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "DescribeMedia1599", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "DescribeMedia1599", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func DifferentiateUnions(ctx context.Context, opts ...CallOptionFunc) (types.Union2OriginalAOrOriginalB, error) {
@@ -1137,18 +1670,37 @@ func DifferentiateUnions(ctx context.Context, opts ...CallOptionFunc) (types.Uni
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "DifferentiateUnions", encoded)
-	if err != nil {
-		return types.Union2OriginalAOrOriginalB{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "DifferentiateUnions", encoded, callOpts.onTick)
+		if err != nil {
+			return types.Union2OriginalAOrOriginalB{}, err
+		}
+
+		if result.Error != nil {
+			return types.Union2OriginalAOrOriginalB{}, result.Error
+		}
+
+		casted := (result.Data).(types.Union2OriginalAOrOriginalB)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "DifferentiateUnions", encoded, callOpts.onTick)
+		if err != nil {
+			return types.Union2OriginalAOrOriginalB{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.Union2OriginalAOrOriginalB{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.Union2OriginalAOrOriginalB), nil
+			}
+		}
+
+		return types.Union2OriginalAOrOriginalB{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.Union2OriginalAOrOriginalB{}, result.Error
-	}
-
-	casted := (result.Data).(types.Union2OriginalAOrOriginalB)
-
-	return casted, nil
 }
 
 func DummyOutputFunction(ctx context.Context, input string, opts ...CallOptionFunc) (types.DummyOutput, error) {
@@ -1176,18 +1728,37 @@ func DummyOutputFunction(ctx context.Context, input string, opts ...CallOptionFu
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "DummyOutputFunction", encoded)
-	if err != nil {
-		return types.DummyOutput{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "DummyOutputFunction", encoded, callOpts.onTick)
+		if err != nil {
+			return types.DummyOutput{}, err
+		}
+
+		if result.Error != nil {
+			return types.DummyOutput{}, result.Error
+		}
+
+		casted := (result.Data).(types.DummyOutput)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "DummyOutputFunction", encoded, callOpts.onTick)
+		if err != nil {
+			return types.DummyOutput{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.DummyOutput{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.DummyOutput), nil
+			}
+		}
+
+		return types.DummyOutput{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.DummyOutput{}, result.Error
-	}
-
-	casted := (result.Data).(types.DummyOutput)
-
-	return casted, nil
 }
 
 func DynamicFunc(ctx context.Context, input types.DynamicClassOne, opts ...CallOptionFunc) (types.DynamicClassTwo, error) {
@@ -1215,18 +1786,37 @@ func DynamicFunc(ctx context.Context, input types.DynamicClassOne, opts ...CallO
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "DynamicFunc", encoded)
-	if err != nil {
-		return types.DynamicClassTwo{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "DynamicFunc", encoded, callOpts.onTick)
+		if err != nil {
+			return types.DynamicClassTwo{}, err
+		}
+
+		if result.Error != nil {
+			return types.DynamicClassTwo{}, result.Error
+		}
+
+		casted := (result.Data).(types.DynamicClassTwo)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "DynamicFunc", encoded, callOpts.onTick)
+		if err != nil {
+			return types.DynamicClassTwo{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.DynamicClassTwo{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.DynamicClassTwo), nil
+			}
+		}
+
+		return types.DynamicClassTwo{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.DynamicClassTwo{}, result.Error
-	}
-
-	casted := (result.Data).(types.DynamicClassTwo)
-
-	return casted, nil
 }
 
 func DynamicInputOutput(ctx context.Context, input types.DynInputOutput, opts ...CallOptionFunc) (types.DynInputOutput, error) {
@@ -1254,18 +1844,37 @@ func DynamicInputOutput(ctx context.Context, input types.DynInputOutput, opts ..
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "DynamicInputOutput", encoded)
-	if err != nil {
-		return types.DynInputOutput{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "DynamicInputOutput", encoded, callOpts.onTick)
+		if err != nil {
+			return types.DynInputOutput{}, err
+		}
+
+		if result.Error != nil {
+			return types.DynInputOutput{}, result.Error
+		}
+
+		casted := (result.Data).(types.DynInputOutput)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "DynamicInputOutput", encoded, callOpts.onTick)
+		if err != nil {
+			return types.DynInputOutput{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.DynInputOutput{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.DynInputOutput), nil
+			}
+		}
+
+		return types.DynInputOutput{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.DynInputOutput{}, result.Error
-	}
-
-	casted := (result.Data).(types.DynInputOutput)
-
-	return casted, nil
 }
 
 func DynamicListInputOutput(ctx context.Context, input []types.DynInputOutput, opts ...CallOptionFunc) ([]types.DynInputOutput, error) {
@@ -1293,18 +1902,37 @@ func DynamicListInputOutput(ctx context.Context, input []types.DynInputOutput, o
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "DynamicListInputOutput", encoded)
-	if err != nil {
-		return nil, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "DynamicListInputOutput", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
+
+		if result.Error != nil {
+			return nil, result.Error
+		}
+
+		casted := (result.Data).([]types.DynInputOutput)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "DynamicListInputOutput", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return nil, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.([]types.DynInputOutput), nil
+			}
+		}
+
+		return nil, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return nil, result.Error
-	}
-
-	casted := (result.Data).([]types.DynInputOutput)
-
-	return casted, nil
 }
 
 func ExpectFailure(ctx context.Context, opts ...CallOptionFunc) (string, error) {
@@ -1332,18 +1960,37 @@ func ExpectFailure(ctx context.Context, opts ...CallOptionFunc) (string, error) 
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "ExpectFailure", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "ExpectFailure", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "ExpectFailure", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func ExtractContactInfo(ctx context.Context, document string, opts ...CallOptionFunc) (types.ContactInfo, error) {
@@ -1371,18 +2018,37 @@ func ExtractContactInfo(ctx context.Context, document string, opts ...CallOption
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "ExtractContactInfo", encoded)
-	if err != nil {
-		return types.ContactInfo{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "ExtractContactInfo", encoded, callOpts.onTick)
+		if err != nil {
+			return types.ContactInfo{}, err
+		}
+
+		if result.Error != nil {
+			return types.ContactInfo{}, result.Error
+		}
+
+		casted := (result.Data).(types.ContactInfo)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "ExtractContactInfo", encoded, callOpts.onTick)
+		if err != nil {
+			return types.ContactInfo{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.ContactInfo{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.ContactInfo), nil
+			}
+		}
+
+		return types.ContactInfo{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.ContactInfo{}, result.Error
-	}
-
-	casted := (result.Data).(types.ContactInfo)
-
-	return casted, nil
 }
 
 func ExtractEntities(ctx context.Context, text string, opts ...CallOptionFunc) (types.DynamicSchema, error) {
@@ -1410,18 +2076,37 @@ func ExtractEntities(ctx context.Context, text string, opts ...CallOptionFunc) (
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "ExtractEntities", encoded)
-	if err != nil {
-		return types.DynamicSchema{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "ExtractEntities", encoded, callOpts.onTick)
+		if err != nil {
+			return types.DynamicSchema{}, err
+		}
+
+		if result.Error != nil {
+			return types.DynamicSchema{}, result.Error
+		}
+
+		casted := (result.Data).(types.DynamicSchema)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "ExtractEntities", encoded, callOpts.onTick)
+		if err != nil {
+			return types.DynamicSchema{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.DynamicSchema{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.DynamicSchema), nil
+			}
+		}
+
+		return types.DynamicSchema{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.DynamicSchema{}, result.Error
-	}
-
-	casted := (result.Data).(types.DynamicSchema)
-
-	return casted, nil
 }
 
 func ExtractHobby(ctx context.Context, text string, opts ...CallOptionFunc) ([]types.Hobby, error) {
@@ -1449,18 +2134,37 @@ func ExtractHobby(ctx context.Context, text string, opts ...CallOptionFunc) ([]t
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "ExtractHobby", encoded)
-	if err != nil {
-		return nil, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "ExtractHobby", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
+
+		if result.Error != nil {
+			return nil, result.Error
+		}
+
+		casted := (result.Data).([]types.Hobby)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "ExtractHobby", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return nil, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.([]types.Hobby), nil
+			}
+		}
+
+		return nil, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return nil, result.Error
-	}
-
-	casted := (result.Data).([]types.Hobby)
-
-	return casted, nil
 }
 
 func ExtractNames(ctx context.Context, input string, opts ...CallOptionFunc) ([]string, error) {
@@ -1488,18 +2192,37 @@ func ExtractNames(ctx context.Context, input string, opts ...CallOptionFunc) ([]
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "ExtractNames", encoded)
-	if err != nil {
-		return nil, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "ExtractNames", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
+
+		if result.Error != nil {
+			return nil, result.Error
+		}
+
+		casted := (result.Data).([]string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "ExtractNames", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return nil, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.([]string), nil
+			}
+		}
+
+		return nil, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return nil, result.Error
-	}
-
-	casted := (result.Data).([]string)
-
-	return casted, nil
 }
 
 func ExtractPeople(ctx context.Context, text string, opts ...CallOptionFunc) ([]types.Person, error) {
@@ -1527,18 +2250,37 @@ func ExtractPeople(ctx context.Context, text string, opts ...CallOptionFunc) ([]
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "ExtractPeople", encoded)
-	if err != nil {
-		return nil, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "ExtractPeople", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
+
+		if result.Error != nil {
+			return nil, result.Error
+		}
+
+		casted := (result.Data).([]types.Person)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "ExtractPeople", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return nil, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.([]types.Person), nil
+			}
+		}
+
+		return nil, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return nil, result.Error
-	}
-
-	casted := (result.Data).([]types.Person)
-
-	return casted, nil
 }
 
 func ExtractReceiptInfo(ctx context.Context, email string, reason types.Union2KcuriosityOrKpersonal_finance, opts ...CallOptionFunc) (types.ReceiptInfo, error) {
@@ -1566,18 +2308,37 @@ func ExtractReceiptInfo(ctx context.Context, email string, reason types.Union2Kc
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "ExtractReceiptInfo", encoded)
-	if err != nil {
-		return types.ReceiptInfo{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "ExtractReceiptInfo", encoded, callOpts.onTick)
+		if err != nil {
+			return types.ReceiptInfo{}, err
+		}
+
+		if result.Error != nil {
+			return types.ReceiptInfo{}, result.Error
+		}
+
+		casted := (result.Data).(types.ReceiptInfo)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "ExtractReceiptInfo", encoded, callOpts.onTick)
+		if err != nil {
+			return types.ReceiptInfo{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.ReceiptInfo{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.ReceiptInfo), nil
+			}
+		}
+
+		return types.ReceiptInfo{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.ReceiptInfo{}, result.Error
-	}
-
-	casted := (result.Data).(types.ReceiptInfo)
-
-	return casted, nil
 }
 
 func ExtractResume(ctx context.Context, resume string, img *any, opts ...CallOptionFunc) (types.Resume, error) {
@@ -1605,18 +2366,37 @@ func ExtractResume(ctx context.Context, resume string, img *any, opts ...CallOpt
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "ExtractResume", encoded)
-	if err != nil {
-		return types.Resume{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "ExtractResume", encoded, callOpts.onTick)
+		if err != nil {
+			return types.Resume{}, err
+		}
+
+		if result.Error != nil {
+			return types.Resume{}, result.Error
+		}
+
+		casted := (result.Data).(types.Resume)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "ExtractResume", encoded, callOpts.onTick)
+		if err != nil {
+			return types.Resume{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.Resume{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.Resume), nil
+			}
+		}
+
+		return types.Resume{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.Resume{}, result.Error
-	}
-
-	casted := (result.Data).(types.Resume)
-
-	return casted, nil
 }
 
 func ExtractResume2(ctx context.Context, resume string, opts ...CallOptionFunc) (types.Resume, error) {
@@ -1644,18 +2424,37 @@ func ExtractResume2(ctx context.Context, resume string, opts ...CallOptionFunc) 
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "ExtractResume2", encoded)
-	if err != nil {
-		return types.Resume{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "ExtractResume2", encoded, callOpts.onTick)
+		if err != nil {
+			return types.Resume{}, err
+		}
+
+		if result.Error != nil {
+			return types.Resume{}, result.Error
+		}
+
+		casted := (result.Data).(types.Resume)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "ExtractResume2", encoded, callOpts.onTick)
+		if err != nil {
+			return types.Resume{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.Resume{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.Resume), nil
+			}
+		}
+
+		return types.Resume{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.Resume{}, result.Error
-	}
-
-	casted := (result.Data).(types.Resume)
-
-	return casted, nil
 }
 
 func FnClassOptionalOutput(ctx context.Context, input string, opts ...CallOptionFunc) (*types.ClassOptionalOutput, error) {
@@ -1683,18 +2482,37 @@ func FnClassOptionalOutput(ctx context.Context, input string, opts ...CallOption
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "FnClassOptionalOutput", encoded)
-	if err != nil {
-		return nil, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "FnClassOptionalOutput", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
+
+		if result.Error != nil {
+			return nil, result.Error
+		}
+
+		casted := (result.Data).(*types.ClassOptionalOutput)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "FnClassOptionalOutput", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return nil, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(*types.ClassOptionalOutput), nil
+			}
+		}
+
+		return nil, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return nil, result.Error
-	}
-
-	casted := (result.Data).(*types.ClassOptionalOutput)
-
-	return casted, nil
 }
 
 func FnClassOptionalOutput2(ctx context.Context, input string, opts ...CallOptionFunc) (*types.ClassOptionalOutput2, error) {
@@ -1722,18 +2540,37 @@ func FnClassOptionalOutput2(ctx context.Context, input string, opts ...CallOptio
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "FnClassOptionalOutput2", encoded)
-	if err != nil {
-		return nil, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "FnClassOptionalOutput2", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
+
+		if result.Error != nil {
+			return nil, result.Error
+		}
+
+		casted := (result.Data).(*types.ClassOptionalOutput2)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "FnClassOptionalOutput2", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return nil, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(*types.ClassOptionalOutput2), nil
+			}
+		}
+
+		return nil, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return nil, result.Error
-	}
-
-	casted := (result.Data).(*types.ClassOptionalOutput2)
-
-	return casted, nil
 }
 
 func FnEnumListOutput(ctx context.Context, input string, opts ...CallOptionFunc) ([]types.EnumOutput, error) {
@@ -1761,18 +2598,37 @@ func FnEnumListOutput(ctx context.Context, input string, opts ...CallOptionFunc)
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "FnEnumListOutput", encoded)
-	if err != nil {
-		return nil, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "FnEnumListOutput", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
+
+		if result.Error != nil {
+			return nil, result.Error
+		}
+
+		casted := (result.Data).([]types.EnumOutput)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "FnEnumListOutput", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return nil, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.([]types.EnumOutput), nil
+			}
+		}
+
+		return nil, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return nil, result.Error
-	}
-
-	casted := (result.Data).([]types.EnumOutput)
-
-	return casted, nil
 }
 
 func FnEnumOutput(ctx context.Context, input string, opts ...CallOptionFunc) (types.EnumOutput, error) {
@@ -1800,18 +2656,37 @@ func FnEnumOutput(ctx context.Context, input string, opts ...CallOptionFunc) (ty
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "FnEnumOutput", encoded)
-	if err != nil {
-		return types.EnumOutput(""), err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "FnEnumOutput", encoded, callOpts.onTick)
+		if err != nil {
+			return types.EnumOutput(""), err
+		}
+
+		if result.Error != nil {
+			return types.EnumOutput(""), result.Error
+		}
+
+		casted := (result.Data).(types.EnumOutput)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "FnEnumOutput", encoded, callOpts.onTick)
+		if err != nil {
+			return types.EnumOutput(""), err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.EnumOutput(""), result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.EnumOutput), nil
+			}
+		}
+
+		return types.EnumOutput(""), fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.EnumOutput(""), result.Error
-	}
-
-	casted := (result.Data).(types.EnumOutput)
-
-	return casted, nil
 }
 
 func FnLiteralClassInputOutput(ctx context.Context, input types.LiteralClassHello, opts ...CallOptionFunc) (types.LiteralClassHello, error) {
@@ -1839,18 +2714,37 @@ func FnLiteralClassInputOutput(ctx context.Context, input types.LiteralClassHell
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "FnLiteralClassInputOutput", encoded)
-	if err != nil {
-		return types.LiteralClassHello{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "FnLiteralClassInputOutput", encoded, callOpts.onTick)
+		if err != nil {
+			return types.LiteralClassHello{}, err
+		}
+
+		if result.Error != nil {
+			return types.LiteralClassHello{}, result.Error
+		}
+
+		casted := (result.Data).(types.LiteralClassHello)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "FnLiteralClassInputOutput", encoded, callOpts.onTick)
+		if err != nil {
+			return types.LiteralClassHello{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.LiteralClassHello{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.LiteralClassHello), nil
+			}
+		}
+
+		return types.LiteralClassHello{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.LiteralClassHello{}, result.Error
-	}
-
-	casted := (result.Data).(types.LiteralClassHello)
-
-	return casted, nil
 }
 
 func FnLiteralUnionClassInputOutput(ctx context.Context, input types.Union2LiteralClassOneOrLiteralClassTwo, opts ...CallOptionFunc) (types.Union2LiteralClassOneOrLiteralClassTwo, error) {
@@ -1878,18 +2772,37 @@ func FnLiteralUnionClassInputOutput(ctx context.Context, input types.Union2Liter
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "FnLiteralUnionClassInputOutput", encoded)
-	if err != nil {
-		return types.Union2LiteralClassOneOrLiteralClassTwo{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "FnLiteralUnionClassInputOutput", encoded, callOpts.onTick)
+		if err != nil {
+			return types.Union2LiteralClassOneOrLiteralClassTwo{}, err
+		}
+
+		if result.Error != nil {
+			return types.Union2LiteralClassOneOrLiteralClassTwo{}, result.Error
+		}
+
+		casted := (result.Data).(types.Union2LiteralClassOneOrLiteralClassTwo)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "FnLiteralUnionClassInputOutput", encoded, callOpts.onTick)
+		if err != nil {
+			return types.Union2LiteralClassOneOrLiteralClassTwo{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.Union2LiteralClassOneOrLiteralClassTwo{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.Union2LiteralClassOneOrLiteralClassTwo), nil
+			}
+		}
+
+		return types.Union2LiteralClassOneOrLiteralClassTwo{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.Union2LiteralClassOneOrLiteralClassTwo{}, result.Error
-	}
-
-	casted := (result.Data).(types.Union2LiteralClassOneOrLiteralClassTwo)
-
-	return casted, nil
 }
 
 func FnNamedArgsSingleStringOptional(ctx context.Context, myString *string, opts ...CallOptionFunc) (string, error) {
@@ -1917,18 +2830,37 @@ func FnNamedArgsSingleStringOptional(ctx context.Context, myString *string, opts
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "FnNamedArgsSingleStringOptional", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "FnNamedArgsSingleStringOptional", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "FnNamedArgsSingleStringOptional", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func FnOutputBool(ctx context.Context, input string, opts ...CallOptionFunc) (bool, error) {
@@ -1956,18 +2888,37 @@ func FnOutputBool(ctx context.Context, input string, opts ...CallOptionFunc) (bo
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "FnOutputBool", encoded)
-	if err != nil {
-		return false, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "FnOutputBool", encoded, callOpts.onTick)
+		if err != nil {
+			return false, err
+		}
+
+		if result.Error != nil {
+			return false, result.Error
+		}
+
+		casted := (result.Data).(bool)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "FnOutputBool", encoded, callOpts.onTick)
+		if err != nil {
+			return false, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return false, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(bool), nil
+			}
+		}
+
+		return false, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return false, result.Error
-	}
-
-	casted := (result.Data).(bool)
-
-	return casted, nil
 }
 
 func FnOutputClass(ctx context.Context, input string, opts ...CallOptionFunc) (types.TestOutputClass, error) {
@@ -1995,18 +2946,37 @@ func FnOutputClass(ctx context.Context, input string, opts ...CallOptionFunc) (t
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "FnOutputClass", encoded)
-	if err != nil {
-		return types.TestOutputClass{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "FnOutputClass", encoded, callOpts.onTick)
+		if err != nil {
+			return types.TestOutputClass{}, err
+		}
+
+		if result.Error != nil {
+			return types.TestOutputClass{}, result.Error
+		}
+
+		casted := (result.Data).(types.TestOutputClass)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "FnOutputClass", encoded, callOpts.onTick)
+		if err != nil {
+			return types.TestOutputClass{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.TestOutputClass{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.TestOutputClass), nil
+			}
+		}
+
+		return types.TestOutputClass{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.TestOutputClass{}, result.Error
-	}
-
-	casted := (result.Data).(types.TestOutputClass)
-
-	return casted, nil
 }
 
 func FnOutputClassList(ctx context.Context, input string, opts ...CallOptionFunc) ([]types.TestOutputClass, error) {
@@ -2034,18 +3004,37 @@ func FnOutputClassList(ctx context.Context, input string, opts ...CallOptionFunc
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "FnOutputClassList", encoded)
-	if err != nil {
-		return nil, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "FnOutputClassList", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
+
+		if result.Error != nil {
+			return nil, result.Error
+		}
+
+		casted := (result.Data).([]types.TestOutputClass)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "FnOutputClassList", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return nil, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.([]types.TestOutputClass), nil
+			}
+		}
+
+		return nil, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return nil, result.Error
-	}
-
-	casted := (result.Data).([]types.TestOutputClass)
-
-	return casted, nil
 }
 
 func FnOutputClassNested(ctx context.Context, input string, opts ...CallOptionFunc) (types.TestClassNested, error) {
@@ -2073,18 +3062,37 @@ func FnOutputClassNested(ctx context.Context, input string, opts ...CallOptionFu
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "FnOutputClassNested", encoded)
-	if err != nil {
-		return types.TestClassNested{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "FnOutputClassNested", encoded, callOpts.onTick)
+		if err != nil {
+			return types.TestClassNested{}, err
+		}
+
+		if result.Error != nil {
+			return types.TestClassNested{}, result.Error
+		}
+
+		casted := (result.Data).(types.TestClassNested)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "FnOutputClassNested", encoded, callOpts.onTick)
+		if err != nil {
+			return types.TestClassNested{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.TestClassNested{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.TestClassNested), nil
+			}
+		}
+
+		return types.TestClassNested{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.TestClassNested{}, result.Error
-	}
-
-	casted := (result.Data).(types.TestClassNested)
-
-	return casted, nil
 }
 
 func FnOutputClassWithEnum(ctx context.Context, input string, opts ...CallOptionFunc) (types.TestClassWithEnum, error) {
@@ -2112,18 +3120,37 @@ func FnOutputClassWithEnum(ctx context.Context, input string, opts ...CallOption
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "FnOutputClassWithEnum", encoded)
-	if err != nil {
-		return types.TestClassWithEnum{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "FnOutputClassWithEnum", encoded, callOpts.onTick)
+		if err != nil {
+			return types.TestClassWithEnum{}, err
+		}
+
+		if result.Error != nil {
+			return types.TestClassWithEnum{}, result.Error
+		}
+
+		casted := (result.Data).(types.TestClassWithEnum)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "FnOutputClassWithEnum", encoded, callOpts.onTick)
+		if err != nil {
+			return types.TestClassWithEnum{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.TestClassWithEnum{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.TestClassWithEnum), nil
+			}
+		}
+
+		return types.TestClassWithEnum{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.TestClassWithEnum{}, result.Error
-	}
-
-	casted := (result.Data).(types.TestClassWithEnum)
-
-	return casted, nil
 }
 
 func FnOutputInt(ctx context.Context, input string, opts ...CallOptionFunc) (int64, error) {
@@ -2151,18 +3178,37 @@ func FnOutputInt(ctx context.Context, input string, opts ...CallOptionFunc) (int
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "FnOutputInt", encoded)
-	if err != nil {
-		return 0, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "FnOutputInt", encoded, callOpts.onTick)
+		if err != nil {
+			return 0, err
+		}
+
+		if result.Error != nil {
+			return 0, result.Error
+		}
+
+		casted := (result.Data).(int64)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "FnOutputInt", encoded, callOpts.onTick)
+		if err != nil {
+			return 0, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return 0, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(int64), nil
+			}
+		}
+
+		return 0, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return 0, result.Error
-	}
-
-	casted := (result.Data).(int64)
-
-	return casted, nil
 }
 
 func FnOutputLiteralBool(ctx context.Context, input string, opts ...CallOptionFunc) (bool, error) {
@@ -2190,18 +3236,37 @@ func FnOutputLiteralBool(ctx context.Context, input string, opts ...CallOptionFu
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "FnOutputLiteralBool", encoded)
-	if err != nil {
-		return false, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "FnOutputLiteralBool", encoded, callOpts.onTick)
+		if err != nil {
+			return false, err
+		}
+
+		if result.Error != nil {
+			return false, result.Error
+		}
+
+		casted := (result.Data).(bool)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "FnOutputLiteralBool", encoded, callOpts.onTick)
+		if err != nil {
+			return false, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return false, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(bool), nil
+			}
+		}
+
+		return false, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return false, result.Error
-	}
-
-	casted := (result.Data).(bool)
-
-	return casted, nil
 }
 
 func FnOutputLiteralInt(ctx context.Context, input string, opts ...CallOptionFunc) (int64, error) {
@@ -2229,18 +3294,37 @@ func FnOutputLiteralInt(ctx context.Context, input string, opts ...CallOptionFun
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "FnOutputLiteralInt", encoded)
-	if err != nil {
-		return 5, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "FnOutputLiteralInt", encoded, callOpts.onTick)
+		if err != nil {
+			return 5, err
+		}
+
+		if result.Error != nil {
+			return 5, result.Error
+		}
+
+		casted := (result.Data).(int64)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "FnOutputLiteralInt", encoded, callOpts.onTick)
+		if err != nil {
+			return 5, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return 5, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(int64), nil
+			}
+		}
+
+		return 5, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return 5, result.Error
-	}
-
-	casted := (result.Data).(int64)
-
-	return casted, nil
 }
 
 func FnOutputLiteralString(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -2268,18 +3352,37 @@ func FnOutputLiteralString(ctx context.Context, input string, opts ...CallOption
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "FnOutputLiteralString", encoded)
-	if err != nil {
-		return "example output", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "FnOutputLiteralString", encoded, callOpts.onTick)
+		if err != nil {
+			return "example output", err
+		}
+
+		if result.Error != nil {
+			return "example output", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "FnOutputLiteralString", encoded, callOpts.onTick)
+		if err != nil {
+			return "example output", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "example output", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "example output", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "example output", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func FnOutputStringList(ctx context.Context, input string, opts ...CallOptionFunc) ([]string, error) {
@@ -2307,18 +3410,37 @@ func FnOutputStringList(ctx context.Context, input string, opts ...CallOptionFun
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "FnOutputStringList", encoded)
-	if err != nil {
-		return nil, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "FnOutputStringList", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
+
+		if result.Error != nil {
+			return nil, result.Error
+		}
+
+		casted := (result.Data).([]string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "FnOutputStringList", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return nil, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.([]string), nil
+			}
+		}
+
+		return nil, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return nil, result.Error
-	}
-
-	casted := (result.Data).([]string)
-
-	return casted, nil
 }
 
 func FnTestAliasedEnumOutput(ctx context.Context, input string, opts ...CallOptionFunc) (types.TestEnum, error) {
@@ -2346,18 +3468,37 @@ func FnTestAliasedEnumOutput(ctx context.Context, input string, opts ...CallOpti
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "FnTestAliasedEnumOutput", encoded)
-	if err != nil {
-		return types.TestEnum(""), err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "FnTestAliasedEnumOutput", encoded, callOpts.onTick)
+		if err != nil {
+			return types.TestEnum(""), err
+		}
+
+		if result.Error != nil {
+			return types.TestEnum(""), result.Error
+		}
+
+		casted := (result.Data).(types.TestEnum)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "FnTestAliasedEnumOutput", encoded, callOpts.onTick)
+		if err != nil {
+			return types.TestEnum(""), err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.TestEnum(""), result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.TestEnum), nil
+			}
+		}
+
+		return types.TestEnum(""), fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.TestEnum(""), result.Error
-	}
-
-	casted := (result.Data).(types.TestEnum)
-
-	return casted, nil
 }
 
 func FnTestClassAlias(ctx context.Context, input string, opts ...CallOptionFunc) (types.TestClassAlias, error) {
@@ -2385,18 +3526,37 @@ func FnTestClassAlias(ctx context.Context, input string, opts ...CallOptionFunc)
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "FnTestClassAlias", encoded)
-	if err != nil {
-		return types.TestClassAlias{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "FnTestClassAlias", encoded, callOpts.onTick)
+		if err != nil {
+			return types.TestClassAlias{}, err
+		}
+
+		if result.Error != nil {
+			return types.TestClassAlias{}, result.Error
+		}
+
+		casted := (result.Data).(types.TestClassAlias)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "FnTestClassAlias", encoded, callOpts.onTick)
+		if err != nil {
+			return types.TestClassAlias{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.TestClassAlias{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.TestClassAlias), nil
+			}
+		}
+
+		return types.TestClassAlias{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.TestClassAlias{}, result.Error
-	}
-
-	casted := (result.Data).(types.TestClassAlias)
-
-	return casted, nil
 }
 
 func FnTestNamedArgsSingleEnum(ctx context.Context, myArg types.NamedArgsSingleEnum, opts ...CallOptionFunc) (string, error) {
@@ -2424,18 +3584,37 @@ func FnTestNamedArgsSingleEnum(ctx context.Context, myArg types.NamedArgsSingleE
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "FnTestNamedArgsSingleEnum", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "FnTestNamedArgsSingleEnum", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "FnTestNamedArgsSingleEnum", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func GetDataType(ctx context.Context, text string, opts ...CallOptionFunc) (types.RaysData, error) {
@@ -2463,18 +3642,37 @@ func GetDataType(ctx context.Context, text string, opts ...CallOptionFunc) (type
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "GetDataType", encoded)
-	if err != nil {
-		return types.RaysData{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "GetDataType", encoded, callOpts.onTick)
+		if err != nil {
+			return types.RaysData{}, err
+		}
+
+		if result.Error != nil {
+			return types.RaysData{}, result.Error
+		}
+
+		casted := (result.Data).(types.RaysData)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "GetDataType", encoded, callOpts.onTick)
+		if err != nil {
+			return types.RaysData{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.RaysData{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.RaysData), nil
+			}
+		}
+
+		return types.RaysData{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.RaysData{}, result.Error
-	}
-
-	casted := (result.Data).(types.RaysData)
-
-	return casted, nil
 }
 
 func GetOrderInfo(ctx context.Context, email types.Email, opts ...CallOptionFunc) (types.OrderInfo, error) {
@@ -2502,18 +3700,37 @@ func GetOrderInfo(ctx context.Context, email types.Email, opts ...CallOptionFunc
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "GetOrderInfo", encoded)
-	if err != nil {
-		return types.OrderInfo{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "GetOrderInfo", encoded, callOpts.onTick)
+		if err != nil {
+			return types.OrderInfo{}, err
+		}
+
+		if result.Error != nil {
+			return types.OrderInfo{}, result.Error
+		}
+
+		casted := (result.Data).(types.OrderInfo)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "GetOrderInfo", encoded, callOpts.onTick)
+		if err != nil {
+			return types.OrderInfo{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.OrderInfo{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.OrderInfo), nil
+			}
+		}
+
+		return types.OrderInfo{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.OrderInfo{}, result.Error
-	}
-
-	casted := (result.Data).(types.OrderInfo)
-
-	return casted, nil
 }
 
 func GetQuery(ctx context.Context, query string, opts ...CallOptionFunc) (types.SearchParams, error) {
@@ -2541,18 +3758,37 @@ func GetQuery(ctx context.Context, query string, opts ...CallOptionFunc) (types.
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "GetQuery", encoded)
-	if err != nil {
-		return types.SearchParams{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "GetQuery", encoded, callOpts.onTick)
+		if err != nil {
+			return types.SearchParams{}, err
+		}
+
+		if result.Error != nil {
+			return types.SearchParams{}, result.Error
+		}
+
+		casted := (result.Data).(types.SearchParams)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "GetQuery", encoded, callOpts.onTick)
+		if err != nil {
+			return types.SearchParams{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.SearchParams{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.SearchParams), nil
+			}
+		}
+
+		return types.SearchParams{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.SearchParams{}, result.Error
-	}
-
-	casted := (result.Data).(types.SearchParams)
-
-	return casted, nil
 }
 
 func InOutEnumMapKey(ctx context.Context, i1 map[types.MapKey]string, i2 map[types.MapKey]string, opts ...CallOptionFunc) (map[types.MapKey]string, error) {
@@ -2580,18 +3816,37 @@ func InOutEnumMapKey(ctx context.Context, i1 map[types.MapKey]string, i2 map[typ
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "InOutEnumMapKey", encoded)
-	if err != nil {
-		return nil, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "InOutEnumMapKey", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
+
+		if result.Error != nil {
+			return nil, result.Error
+		}
+
+		casted := (result.Data).(map[types.MapKey]string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "InOutEnumMapKey", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return nil, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(map[types.MapKey]string), nil
+			}
+		}
+
+		return nil, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return nil, result.Error
-	}
-
-	casted := (result.Data).(map[types.MapKey]string)
-
-	return casted, nil
 }
 
 func InOutLiteralStringUnionMapKey(ctx context.Context, i1 map[types.Union4KfourOrKoneOrKthreeOrKtwo]string, i2 map[types.Union4KfourOrKoneOrKthreeOrKtwo]string, opts ...CallOptionFunc) (map[types.Union4KfourOrKoneOrKthreeOrKtwo]string, error) {
@@ -2619,18 +3874,37 @@ func InOutLiteralStringUnionMapKey(ctx context.Context, i1 map[types.Union4Kfour
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "InOutLiteralStringUnionMapKey", encoded)
-	if err != nil {
-		return nil, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "InOutLiteralStringUnionMapKey", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
+
+		if result.Error != nil {
+			return nil, result.Error
+		}
+
+		casted := (result.Data).(map[types.Union4KfourOrKoneOrKthreeOrKtwo]string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "InOutLiteralStringUnionMapKey", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return nil, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(map[types.Union4KfourOrKoneOrKthreeOrKtwo]string), nil
+			}
+		}
+
+		return nil, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return nil, result.Error
-	}
-
-	casted := (result.Data).(map[types.Union4KfourOrKoneOrKthreeOrKtwo]string)
-
-	return casted, nil
 }
 
 func InOutSingleLiteralStringMapKey(ctx context.Context, m map[string]string, opts ...CallOptionFunc) (map[string]string, error) {
@@ -2658,18 +3932,37 @@ func InOutSingleLiteralStringMapKey(ctx context.Context, m map[string]string, op
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "InOutSingleLiteralStringMapKey", encoded)
-	if err != nil {
-		return nil, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "InOutSingleLiteralStringMapKey", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
+
+		if result.Error != nil {
+			return nil, result.Error
+		}
+
+		casted := (result.Data).(map[string]string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "InOutSingleLiteralStringMapKey", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return nil, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(map[string]string), nil
+			}
+		}
+
+		return nil, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return nil, result.Error
-	}
-
-	casted := (result.Data).(map[string]string)
-
-	return casted, nil
 }
 
 func JsonTypeAliasCycle(ctx context.Context, input types.JsonValue, opts ...CallOptionFunc) (types.JsonValue, error) {
@@ -2697,18 +3990,37 @@ func JsonTypeAliasCycle(ctx context.Context, input types.JsonValue, opts ...Call
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "JsonTypeAliasCycle", encoded)
-	if err != nil {
-		return types.Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "JsonTypeAliasCycle", encoded, callOpts.onTick)
+		if err != nil {
+			return types.Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString{}, err
+		}
+
+		if result.Error != nil {
+			return types.Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString{}, result.Error
+		}
+
+		casted := (result.Data).(types.JsonValue)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "JsonTypeAliasCycle", encoded, callOpts.onTick)
+		if err != nil {
+			return types.Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.JsonValue), nil
+			}
+		}
+
+		return types.Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString{}, result.Error
-	}
-
-	casted := (result.Data).(types.JsonValue)
-
-	return casted, nil
 }
 
 func LLMEcho(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -2736,18 +4048,37 @@ func LLMEcho(ctx context.Context, input string, opts ...CallOptionFunc) (string,
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "LLMEcho", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "LLMEcho", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "LLMEcho", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func LiteralUnionsTest(ctx context.Context, input string, opts ...CallOptionFunc) (types.Union3BoolKTrueOrIntK1OrKstring_output, error) {
@@ -2775,18 +4106,37 @@ func LiteralUnionsTest(ctx context.Context, input string, opts ...CallOptionFunc
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "LiteralUnionsTest", encoded)
-	if err != nil {
-		return types.Union3BoolKTrueOrIntK1OrKstring_output{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "LiteralUnionsTest", encoded, callOpts.onTick)
+		if err != nil {
+			return types.Union3BoolKTrueOrIntK1OrKstring_output{}, err
+		}
+
+		if result.Error != nil {
+			return types.Union3BoolKTrueOrIntK1OrKstring_output{}, result.Error
+		}
+
+		casted := (result.Data).(types.Union3BoolKTrueOrIntK1OrKstring_output)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "LiteralUnionsTest", encoded, callOpts.onTick)
+		if err != nil {
+			return types.Union3BoolKTrueOrIntK1OrKstring_output{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.Union3BoolKTrueOrIntK1OrKstring_output{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.Union3BoolKTrueOrIntK1OrKstring_output), nil
+			}
+		}
+
+		return types.Union3BoolKTrueOrIntK1OrKstring_output{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.Union3BoolKTrueOrIntK1OrKstring_output{}, result.Error
-	}
-
-	casted := (result.Data).(types.Union3BoolKTrueOrIntK1OrKstring_output)
-
-	return casted, nil
 }
 
 func MakeBlockConstraint(ctx context.Context, opts ...CallOptionFunc) (types.Checked[types.BlockConstraint], error) {
@@ -2814,18 +4164,37 @@ func MakeBlockConstraint(ctx context.Context, opts ...CallOptionFunc) (types.Che
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "MakeBlockConstraint", encoded)
-	if err != nil {
-		return types.Checked[types.BlockConstraint]{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "MakeBlockConstraint", encoded, callOpts.onTick)
+		if err != nil {
+			return types.Checked[types.BlockConstraint]{}, err
+		}
+
+		if result.Error != nil {
+			return types.Checked[types.BlockConstraint]{}, result.Error
+		}
+
+		casted := (result.Data).(types.Checked[types.BlockConstraint])
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "MakeBlockConstraint", encoded, callOpts.onTick)
+		if err != nil {
+			return types.Checked[types.BlockConstraint]{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.Checked[types.BlockConstraint]{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.Checked[types.BlockConstraint]), nil
+			}
+		}
+
+		return types.Checked[types.BlockConstraint]{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.Checked[types.BlockConstraint]{}, result.Error
-	}
-
-	casted := (result.Data).(types.Checked[types.BlockConstraint])
-
-	return casted, nil
 }
 
 func MakeClassWithBlockDone(ctx context.Context, opts ...CallOptionFunc) (types.ClassWithBlockDone, error) {
@@ -2853,18 +4222,37 @@ func MakeClassWithBlockDone(ctx context.Context, opts ...CallOptionFunc) (types.
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "MakeClassWithBlockDone", encoded)
-	if err != nil {
-		return types.ClassWithBlockDone{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "MakeClassWithBlockDone", encoded, callOpts.onTick)
+		if err != nil {
+			return types.ClassWithBlockDone{}, err
+		}
+
+		if result.Error != nil {
+			return types.ClassWithBlockDone{}, result.Error
+		}
+
+		casted := (result.Data).(types.ClassWithBlockDone)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "MakeClassWithBlockDone", encoded, callOpts.onTick)
+		if err != nil {
+			return types.ClassWithBlockDone{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.ClassWithBlockDone{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.ClassWithBlockDone), nil
+			}
+		}
+
+		return types.ClassWithBlockDone{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.ClassWithBlockDone{}, result.Error
-	}
-
-	casted := (result.Data).(types.ClassWithBlockDone)
-
-	return casted, nil
 }
 
 func MakeClassWithExternalDone(ctx context.Context, opts ...CallOptionFunc) (types.ClassWithoutDone, error) {
@@ -2892,18 +4280,37 @@ func MakeClassWithExternalDone(ctx context.Context, opts ...CallOptionFunc) (typ
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "MakeClassWithExternalDone", encoded)
-	if err != nil {
-		return types.ClassWithoutDone{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "MakeClassWithExternalDone", encoded, callOpts.onTick)
+		if err != nil {
+			return types.ClassWithoutDone{}, err
+		}
+
+		if result.Error != nil {
+			return types.ClassWithoutDone{}, result.Error
+		}
+
+		casted := (result.Data).(types.ClassWithoutDone)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "MakeClassWithExternalDone", encoded, callOpts.onTick)
+		if err != nil {
+			return types.ClassWithoutDone{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.ClassWithoutDone{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.ClassWithoutDone), nil
+			}
+		}
+
+		return types.ClassWithoutDone{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.ClassWithoutDone{}, result.Error
-	}
-
-	casted := (result.Data).(types.ClassWithoutDone)
-
-	return casted, nil
 }
 
 func MakeNestedBlockConstraint(ctx context.Context, opts ...CallOptionFunc) (types.NestedBlockConstraint, error) {
@@ -2931,18 +4338,37 @@ func MakeNestedBlockConstraint(ctx context.Context, opts ...CallOptionFunc) (typ
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "MakeNestedBlockConstraint", encoded)
-	if err != nil {
-		return types.NestedBlockConstraint{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "MakeNestedBlockConstraint", encoded, callOpts.onTick)
+		if err != nil {
+			return types.NestedBlockConstraint{}, err
+		}
+
+		if result.Error != nil {
+			return types.NestedBlockConstraint{}, result.Error
+		}
+
+		casted := (result.Data).(types.NestedBlockConstraint)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "MakeNestedBlockConstraint", encoded, callOpts.onTick)
+		if err != nil {
+			return types.NestedBlockConstraint{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.NestedBlockConstraint{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.NestedBlockConstraint), nil
+			}
+		}
+
+		return types.NestedBlockConstraint{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.NestedBlockConstraint{}, result.Error
-	}
-
-	casted := (result.Data).(types.NestedBlockConstraint)
-
-	return casted, nil
 }
 
 func MakeSemanticContainer(ctx context.Context, opts ...CallOptionFunc) (types.SemanticContainer, error) {
@@ -2970,18 +4396,37 @@ func MakeSemanticContainer(ctx context.Context, opts ...CallOptionFunc) (types.S
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "MakeSemanticContainer", encoded)
-	if err != nil {
-		return types.SemanticContainer{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "MakeSemanticContainer", encoded, callOpts.onTick)
+		if err != nil {
+			return types.SemanticContainer{}, err
+		}
+
+		if result.Error != nil {
+			return types.SemanticContainer{}, result.Error
+		}
+
+		casted := (result.Data).(types.SemanticContainer)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "MakeSemanticContainer", encoded, callOpts.onTick)
+		if err != nil {
+			return types.SemanticContainer{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.SemanticContainer{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.SemanticContainer), nil
+			}
+		}
+
+		return types.SemanticContainer{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.SemanticContainer{}, result.Error
-	}
-
-	casted := (result.Data).(types.SemanticContainer)
-
-	return casted, nil
 }
 
 func MapAlias(ctx context.Context, m map[string][]string, opts ...CallOptionFunc) (map[string][]string, error) {
@@ -3009,18 +4454,37 @@ func MapAlias(ctx context.Context, m map[string][]string, opts ...CallOptionFunc
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "MapAlias", encoded)
-	if err != nil {
-		return nil, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "MapAlias", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
+
+		if result.Error != nil {
+			return nil, result.Error
+		}
+
+		casted := (result.Data).(map[string][]string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "MapAlias", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return nil, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(map[string][]string), nil
+			}
+		}
+
+		return nil, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return nil, result.Error
-	}
-
-	casted := (result.Data).(map[string][]string)
-
-	return casted, nil
 }
 
 func MergeAliasAttributes(ctx context.Context, money int64, opts ...CallOptionFunc) (types.MergeAttrs, error) {
@@ -3048,18 +4512,37 @@ func MergeAliasAttributes(ctx context.Context, money int64, opts ...CallOptionFu
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "MergeAliasAttributes", encoded)
-	if err != nil {
-		return types.MergeAttrs{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "MergeAliasAttributes", encoded, callOpts.onTick)
+		if err != nil {
+			return types.MergeAttrs{}, err
+		}
+
+		if result.Error != nil {
+			return types.MergeAttrs{}, result.Error
+		}
+
+		casted := (result.Data).(types.MergeAttrs)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "MergeAliasAttributes", encoded, callOpts.onTick)
+		if err != nil {
+			return types.MergeAttrs{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.MergeAttrs{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.MergeAttrs), nil
+			}
+		}
+
+		return types.MergeAttrs{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.MergeAttrs{}, result.Error
-	}
-
-	casted := (result.Data).(types.MergeAttrs)
-
-	return casted, nil
 }
 
 func MyFunc(ctx context.Context, input string, opts ...CallOptionFunc) (types.DynamicOutput, error) {
@@ -3087,18 +4570,37 @@ func MyFunc(ctx context.Context, input string, opts ...CallOptionFunc) (types.Dy
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "MyFunc", encoded)
-	if err != nil {
-		return types.DynamicOutput{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "MyFunc", encoded, callOpts.onTick)
+		if err != nil {
+			return types.DynamicOutput{}, err
+		}
+
+		if result.Error != nil {
+			return types.DynamicOutput{}, result.Error
+		}
+
+		casted := (result.Data).(types.DynamicOutput)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "MyFunc", encoded, callOpts.onTick)
+		if err != nil {
+			return types.DynamicOutput{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.DynamicOutput{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.DynamicOutput), nil
+			}
+		}
+
+		return types.DynamicOutput{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.DynamicOutput{}, result.Error
-	}
-
-	casted := (result.Data).(types.DynamicOutput)
-
-	return casted, nil
 }
 
 func NestedAlias(ctx context.Context, c types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString, opts ...CallOptionFunc) (types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString, error) {
@@ -3126,18 +4628,37 @@ func NestedAlias(ctx context.Context, c types.Union6BoolOrFloatOrIntOrListString
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "NestedAlias", encoded)
-	if err != nil {
-		return types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "NestedAlias", encoded, callOpts.onTick)
+		if err != nil {
+			return types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString{}, err
+		}
+
+		if result.Error != nil {
+			return types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString{}, result.Error
+		}
+
+		casted := (result.Data).(types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "NestedAlias", encoded, callOpts.onTick)
+		if err != nil {
+			return types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString), nil
+			}
+		}
+
+		return types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString{}, result.Error
-	}
-
-	casted := (result.Data).(types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString)
-
-	return casted, nil
 }
 
 func NullLiteralClassHello(ctx context.Context, s string, opts ...CallOptionFunc) (types.ClassForNullLiteral, error) {
@@ -3165,18 +4686,37 @@ func NullLiteralClassHello(ctx context.Context, s string, opts ...CallOptionFunc
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "NullLiteralClassHello", encoded)
-	if err != nil {
-		return types.ClassForNullLiteral{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "NullLiteralClassHello", encoded, callOpts.onTick)
+		if err != nil {
+			return types.ClassForNullLiteral{}, err
+		}
+
+		if result.Error != nil {
+			return types.ClassForNullLiteral{}, result.Error
+		}
+
+		casted := (result.Data).(types.ClassForNullLiteral)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "NullLiteralClassHello", encoded, callOpts.onTick)
+		if err != nil {
+			return types.ClassForNullLiteral{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.ClassForNullLiteral{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.ClassForNullLiteral), nil
+			}
+		}
+
+		return types.ClassForNullLiteral{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.ClassForNullLiteral{}, result.Error
-	}
-
-	casted := (result.Data).(types.ClassForNullLiteral)
-
-	return casted, nil
 }
 
 func OpenAIWithAnthropicResponseHello(ctx context.Context, s string, opts ...CallOptionFunc) (string, error) {
@@ -3204,18 +4744,37 @@ func OpenAIWithAnthropicResponseHello(ctx context.Context, s string, opts ...Cal
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "OpenAIWithAnthropicResponseHello", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "OpenAIWithAnthropicResponseHello", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "OpenAIWithAnthropicResponseHello", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func OptionalTest_Function(ctx context.Context, input string, opts ...CallOptionFunc) ([]*types.OptionalTest_ReturnType, error) {
@@ -3243,18 +4802,37 @@ func OptionalTest_Function(ctx context.Context, input string, opts ...CallOption
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "OptionalTest_Function", encoded)
-	if err != nil {
-		return nil, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "OptionalTest_Function", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
+
+		if result.Error != nil {
+			return nil, result.Error
+		}
+
+		casted := (result.Data).([]*types.OptionalTest_ReturnType)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "OptionalTest_Function", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return nil, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.([]*types.OptionalTest_ReturnType), nil
+			}
+		}
+
+		return nil, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return nil, result.Error
-	}
-
-	casted := (result.Data).([]*types.OptionalTest_ReturnType)
-
-	return casted, nil
 }
 
 func PdfInput(ctx context.Context, pdf any, opts ...CallOptionFunc) (string, error) {
@@ -3282,18 +4860,37 @@ func PdfInput(ctx context.Context, pdf any, opts ...CallOptionFunc) (string, err
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "PdfInput", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "PdfInput", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "PdfInput", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func PdfInputAnthropic(ctx context.Context, pdf any, opts ...CallOptionFunc) (string, error) {
@@ -3321,18 +4918,37 @@ func PdfInputAnthropic(ctx context.Context, pdf any, opts ...CallOptionFunc) (st
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "PdfInputAnthropic", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "PdfInputAnthropic", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "PdfInputAnthropic", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func PdfInputOpenai(ctx context.Context, pdf any, prompt string, opts ...CallOptionFunc) (string, error) {
@@ -3360,18 +4976,37 @@ func PdfInputOpenai(ctx context.Context, pdf any, prompt string, opts ...CallOpt
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "PdfInputOpenai", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "PdfInputOpenai", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "PdfInputOpenai", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func PdfInputVertex(ctx context.Context, pdf any, opts ...CallOptionFunc) (string, error) {
@@ -3399,18 +5034,37 @@ func PdfInputVertex(ctx context.Context, pdf any, opts ...CallOptionFunc) (strin
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "PdfInputVertex", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "PdfInputVertex", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "PdfInputVertex", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func PredictAge(ctx context.Context, name string, opts ...CallOptionFunc) (types.FooAny, error) {
@@ -3438,18 +5092,37 @@ func PredictAge(ctx context.Context, name string, opts ...CallOptionFunc) (types
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "PredictAge", encoded)
-	if err != nil {
-		return types.FooAny{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "PredictAge", encoded, callOpts.onTick)
+		if err != nil {
+			return types.FooAny{}, err
+		}
+
+		if result.Error != nil {
+			return types.FooAny{}, result.Error
+		}
+
+		casted := (result.Data).(types.FooAny)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "PredictAge", encoded, callOpts.onTick)
+		if err != nil {
+			return types.FooAny{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.FooAny{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.FooAny), nil
+			}
+		}
+
+		return types.FooAny{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.FooAny{}, result.Error
-	}
-
-	casted := (result.Data).(types.FooAny)
-
-	return casted, nil
 }
 
 func PredictAgeBare(ctx context.Context, inp string, opts ...CallOptionFunc) (int64, error) {
@@ -3477,18 +5150,37 @@ func PredictAgeBare(ctx context.Context, inp string, opts ...CallOptionFunc) (in
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "PredictAgeBare", encoded)
-	if err != nil {
-		return 0, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "PredictAgeBare", encoded, callOpts.onTick)
+		if err != nil {
+			return 0, err
+		}
+
+		if result.Error != nil {
+			return 0, result.Error
+		}
+
+		casted := (result.Data).(int64)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "PredictAgeBare", encoded, callOpts.onTick)
+		if err != nil {
+			return 0, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return 0, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(int64), nil
+			}
+		}
+
+		return 0, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return 0, result.Error
-	}
-
-	casted := (result.Data).(int64)
-
-	return casted, nil
 }
 
 func PrimitiveAlias(ctx context.Context, p types.Union4BoolOrFloatOrIntOrString, opts ...CallOptionFunc) (types.Union4BoolOrFloatOrIntOrString, error) {
@@ -3516,18 +5208,37 @@ func PrimitiveAlias(ctx context.Context, p types.Union4BoolOrFloatOrIntOrString,
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "PrimitiveAlias", encoded)
-	if err != nil {
-		return types.Union4BoolOrFloatOrIntOrString{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "PrimitiveAlias", encoded, callOpts.onTick)
+		if err != nil {
+			return types.Union4BoolOrFloatOrIntOrString{}, err
+		}
+
+		if result.Error != nil {
+			return types.Union4BoolOrFloatOrIntOrString{}, result.Error
+		}
+
+		casted := (result.Data).(types.Union4BoolOrFloatOrIntOrString)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "PrimitiveAlias", encoded, callOpts.onTick)
+		if err != nil {
+			return types.Union4BoolOrFloatOrIntOrString{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.Union4BoolOrFloatOrIntOrString{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.Union4BoolOrFloatOrIntOrString), nil
+			}
+		}
+
+		return types.Union4BoolOrFloatOrIntOrString{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.Union4BoolOrFloatOrIntOrString{}, result.Error
-	}
-
-	casted := (result.Data).(types.Union4BoolOrFloatOrIntOrString)
-
-	return casted, nil
 }
 
 func PromptTestClaude(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -3555,18 +5266,37 @@ func PromptTestClaude(ctx context.Context, input string, opts ...CallOptionFunc)
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "PromptTestClaude", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "PromptTestClaude", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "PromptTestClaude", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func PromptTestClaudeChat(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -3594,18 +5324,37 @@ func PromptTestClaudeChat(ctx context.Context, input string, opts ...CallOptionF
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "PromptTestClaudeChat", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "PromptTestClaudeChat", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "PromptTestClaudeChat", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func PromptTestClaudeChatNoSystem(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -3633,18 +5382,37 @@ func PromptTestClaudeChatNoSystem(ctx context.Context, input string, opts ...Cal
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "PromptTestClaudeChatNoSystem", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "PromptTestClaudeChatNoSystem", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "PromptTestClaudeChatNoSystem", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func PromptTestOpenAI(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -3672,18 +5440,37 @@ func PromptTestOpenAI(ctx context.Context, input string, opts ...CallOptionFunc)
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "PromptTestOpenAI", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "PromptTestOpenAI", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "PromptTestOpenAI", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func PromptTestOpenAIChat(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -3711,18 +5498,37 @@ func PromptTestOpenAIChat(ctx context.Context, input string, opts ...CallOptionF
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "PromptTestOpenAIChat", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "PromptTestOpenAIChat", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "PromptTestOpenAIChat", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func PromptTestOpenAIChatNoSystem(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -3750,18 +5556,37 @@ func PromptTestOpenAIChatNoSystem(ctx context.Context, input string, opts ...Cal
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "PromptTestOpenAIChatNoSystem", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "PromptTestOpenAIChatNoSystem", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "PromptTestOpenAIChatNoSystem", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func PromptTestStreaming(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -3789,18 +5614,37 @@ func PromptTestStreaming(ctx context.Context, input string, opts ...CallOptionFu
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "PromptTestStreaming", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "PromptTestStreaming", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "PromptTestStreaming", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func RecursiveAliasCycle(ctx context.Context, input types.RecAliasOne, opts ...CallOptionFunc) (types.RecAliasOne, error) {
@@ -3828,18 +5672,37 @@ func RecursiveAliasCycle(ctx context.Context, input types.RecAliasOne, opts ...C
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "RecursiveAliasCycle", encoded)
-	if err != nil {
-		return nil, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "RecursiveAliasCycle", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
+
+		if result.Error != nil {
+			return nil, result.Error
+		}
+
+		casted := (result.Data).(types.RecAliasOne)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "RecursiveAliasCycle", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return nil, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.RecAliasOne), nil
+			}
+		}
+
+		return nil, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return nil, result.Error
-	}
-
-	casted := (result.Data).(types.RecAliasOne)
-
-	return casted, nil
 }
 
 func RecursiveClassWithAliasIndirection(ctx context.Context, cls types.NodeWithAliasIndirection, opts ...CallOptionFunc) (types.NodeWithAliasIndirection, error) {
@@ -3867,18 +5730,37 @@ func RecursiveClassWithAliasIndirection(ctx context.Context, cls types.NodeWithA
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "RecursiveClassWithAliasIndirection", encoded)
-	if err != nil {
-		return types.NodeWithAliasIndirection{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "RecursiveClassWithAliasIndirection", encoded, callOpts.onTick)
+		if err != nil {
+			return types.NodeWithAliasIndirection{}, err
+		}
+
+		if result.Error != nil {
+			return types.NodeWithAliasIndirection{}, result.Error
+		}
+
+		casted := (result.Data).(types.NodeWithAliasIndirection)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "RecursiveClassWithAliasIndirection", encoded, callOpts.onTick)
+		if err != nil {
+			return types.NodeWithAliasIndirection{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.NodeWithAliasIndirection{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.NodeWithAliasIndirection), nil
+			}
+		}
+
+		return types.NodeWithAliasIndirection{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.NodeWithAliasIndirection{}, result.Error
-	}
-
-	casted := (result.Data).(types.NodeWithAliasIndirection)
-
-	return casted, nil
 }
 
 func RecursiveUnionTest(ctx context.Context, input types.RecursiveUnion, opts ...CallOptionFunc) (types.RecursiveUnion, error) {
@@ -3906,18 +5788,37 @@ func RecursiveUnionTest(ctx context.Context, input types.RecursiveUnion, opts ..
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "RecursiveUnionTest", encoded)
-	if err != nil {
-		return types.Union2MapStringKeyRecursiveUnionValueOrString{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "RecursiveUnionTest", encoded, callOpts.onTick)
+		if err != nil {
+			return types.Union2MapStringKeyRecursiveUnionValueOrString{}, err
+		}
+
+		if result.Error != nil {
+			return types.Union2MapStringKeyRecursiveUnionValueOrString{}, result.Error
+		}
+
+		casted := (result.Data).(types.RecursiveUnion)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "RecursiveUnionTest", encoded, callOpts.onTick)
+		if err != nil {
+			return types.Union2MapStringKeyRecursiveUnionValueOrString{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.Union2MapStringKeyRecursiveUnionValueOrString{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.RecursiveUnion), nil
+			}
+		}
+
+		return types.Union2MapStringKeyRecursiveUnionValueOrString{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.Union2MapStringKeyRecursiveUnionValueOrString{}, result.Error
-	}
-
-	casted := (result.Data).(types.RecursiveUnion)
-
-	return casted, nil
 }
 
 func ReturnAliasWithMergedAttributes(ctx context.Context, money int64, opts ...CallOptionFunc) (int64, error) {
@@ -3945,18 +5846,37 @@ func ReturnAliasWithMergedAttributes(ctx context.Context, money int64, opts ...C
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "ReturnAliasWithMergedAttributes", encoded)
-	if err != nil {
-		return 0, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "ReturnAliasWithMergedAttributes", encoded, callOpts.onTick)
+		if err != nil {
+			return 0, err
+		}
+
+		if result.Error != nil {
+			return 0, result.Error
+		}
+
+		casted := (result.Data).(int64)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "ReturnAliasWithMergedAttributes", encoded, callOpts.onTick)
+		if err != nil {
+			return 0, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return 0, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(int64), nil
+			}
+		}
+
+		return 0, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return 0, result.Error
-	}
-
-	casted := (result.Data).(int64)
-
-	return casted, nil
 }
 
 func ReturnFailingAssert(ctx context.Context, inp int64, opts ...CallOptionFunc) (int64, error) {
@@ -3984,18 +5904,37 @@ func ReturnFailingAssert(ctx context.Context, inp int64, opts ...CallOptionFunc)
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "ReturnFailingAssert", encoded)
-	if err != nil {
-		return 0, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "ReturnFailingAssert", encoded, callOpts.onTick)
+		if err != nil {
+			return 0, err
+		}
+
+		if result.Error != nil {
+			return 0, result.Error
+		}
+
+		casted := (result.Data).(int64)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "ReturnFailingAssert", encoded, callOpts.onTick)
+		if err != nil {
+			return 0, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return 0, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(int64), nil
+			}
+		}
+
+		return 0, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return 0, result.Error
-	}
-
-	casted := (result.Data).(int64)
-
-	return casted, nil
 }
 
 func ReturnJsonEntry(ctx context.Context, s string, opts ...CallOptionFunc) (types.JsonTemplate, error) {
@@ -4023,18 +5962,37 @@ func ReturnJsonEntry(ctx context.Context, s string, opts ...CallOptionFunc) (typ
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "ReturnJsonEntry", encoded)
-	if err != nil {
-		return nil, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "ReturnJsonEntry", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
+
+		if result.Error != nil {
+			return nil, result.Error
+		}
+
+		casted := (result.Data).(types.JsonTemplate)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "ReturnJsonEntry", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return nil, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.JsonTemplate), nil
+			}
+		}
+
+		return nil, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return nil, result.Error
-	}
-
-	casted := (result.Data).(types.JsonTemplate)
-
-	return casted, nil
 }
 
 func ReturnMalformedConstraints(ctx context.Context, a int64, opts ...CallOptionFunc) (types.MalformedConstraints, error) {
@@ -4062,18 +6020,37 @@ func ReturnMalformedConstraints(ctx context.Context, a int64, opts ...CallOption
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "ReturnMalformedConstraints", encoded)
-	if err != nil {
-		return types.MalformedConstraints{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "ReturnMalformedConstraints", encoded, callOpts.onTick)
+		if err != nil {
+			return types.MalformedConstraints{}, err
+		}
+
+		if result.Error != nil {
+			return types.MalformedConstraints{}, result.Error
+		}
+
+		casted := (result.Data).(types.MalformedConstraints)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "ReturnMalformedConstraints", encoded, callOpts.onTick)
+		if err != nil {
+			return types.MalformedConstraints{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.MalformedConstraints{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.MalformedConstraints), nil
+			}
+		}
+
+		return types.MalformedConstraints{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.MalformedConstraints{}, result.Error
-	}
-
-	casted := (result.Data).(types.MalformedConstraints)
-
-	return casted, nil
 }
 
 func SchemaDescriptions(ctx context.Context, input string, opts ...CallOptionFunc) (types.Schema, error) {
@@ -4101,18 +6078,37 @@ func SchemaDescriptions(ctx context.Context, input string, opts ...CallOptionFun
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "SchemaDescriptions", encoded)
-	if err != nil {
-		return types.Schema{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "SchemaDescriptions", encoded, callOpts.onTick)
+		if err != nil {
+			return types.Schema{}, err
+		}
+
+		if result.Error != nil {
+			return types.Schema{}, result.Error
+		}
+
+		casted := (result.Data).(types.Schema)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "SchemaDescriptions", encoded, callOpts.onTick)
+		if err != nil {
+			return types.Schema{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.Schema{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.Schema), nil
+			}
+		}
+
+		return types.Schema{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.Schema{}, result.Error
-	}
-
-	casted := (result.Data).(types.Schema)
-
-	return casted, nil
 }
 
 func SimpleRecursiveListAlias(ctx context.Context, input types.RecursiveListAlias, opts ...CallOptionFunc) (types.RecursiveListAlias, error) {
@@ -4140,18 +6136,37 @@ func SimpleRecursiveListAlias(ctx context.Context, input types.RecursiveListAlia
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "SimpleRecursiveListAlias", encoded)
-	if err != nil {
-		return nil, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "SimpleRecursiveListAlias", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
+
+		if result.Error != nil {
+			return nil, result.Error
+		}
+
+		casted := (result.Data).(types.RecursiveListAlias)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "SimpleRecursiveListAlias", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return nil, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.RecursiveListAlias), nil
+			}
+		}
+
+		return nil, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return nil, result.Error
-	}
-
-	casted := (result.Data).(types.RecursiveListAlias)
-
-	return casted, nil
 }
 
 func SimpleRecursiveMapAlias(ctx context.Context, input types.RecursiveMapAlias, opts ...CallOptionFunc) (types.RecursiveMapAlias, error) {
@@ -4179,18 +6194,37 @@ func SimpleRecursiveMapAlias(ctx context.Context, input types.RecursiveMapAlias,
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "SimpleRecursiveMapAlias", encoded)
-	if err != nil {
-		return nil, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "SimpleRecursiveMapAlias", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
+
+		if result.Error != nil {
+			return nil, result.Error
+		}
+
+		casted := (result.Data).(types.RecursiveMapAlias)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "SimpleRecursiveMapAlias", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return nil, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.RecursiveMapAlias), nil
+			}
+		}
+
+		return nil, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return nil, result.Error
-	}
-
-	casted := (result.Data).(types.RecursiveMapAlias)
-
-	return casted, nil
 }
 
 func StreamBigNumbers(ctx context.Context, digits int64, opts ...CallOptionFunc) (types.BigNumbers, error) {
@@ -4218,18 +6252,37 @@ func StreamBigNumbers(ctx context.Context, digits int64, opts ...CallOptionFunc)
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "StreamBigNumbers", encoded)
-	if err != nil {
-		return types.BigNumbers{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "StreamBigNumbers", encoded, callOpts.onTick)
+		if err != nil {
+			return types.BigNumbers{}, err
+		}
+
+		if result.Error != nil {
+			return types.BigNumbers{}, result.Error
+		}
+
+		casted := (result.Data).(types.BigNumbers)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "StreamBigNumbers", encoded, callOpts.onTick)
+		if err != nil {
+			return types.BigNumbers{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.BigNumbers{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.BigNumbers), nil
+			}
+		}
+
+		return types.BigNumbers{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.BigNumbers{}, result.Error
-	}
-
-	casted := (result.Data).(types.BigNumbers)
-
-	return casted, nil
 }
 
 func StreamFailingAssertion(ctx context.Context, theme string, length int64, opts ...CallOptionFunc) (types.TwoStoriesOneTitle, error) {
@@ -4257,18 +6310,37 @@ func StreamFailingAssertion(ctx context.Context, theme string, length int64, opt
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "StreamFailingAssertion", encoded)
-	if err != nil {
-		return types.TwoStoriesOneTitle{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "StreamFailingAssertion", encoded, callOpts.onTick)
+		if err != nil {
+			return types.TwoStoriesOneTitle{}, err
+		}
+
+		if result.Error != nil {
+			return types.TwoStoriesOneTitle{}, result.Error
+		}
+
+		casted := (result.Data).(types.TwoStoriesOneTitle)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "StreamFailingAssertion", encoded, callOpts.onTick)
+		if err != nil {
+			return types.TwoStoriesOneTitle{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.TwoStoriesOneTitle{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.TwoStoriesOneTitle), nil
+			}
+		}
+
+		return types.TwoStoriesOneTitle{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.TwoStoriesOneTitle{}, result.Error
-	}
-
-	casted := (result.Data).(types.TwoStoriesOneTitle)
-
-	return casted, nil
 }
 
 func StreamFailingCheck(ctx context.Context, theme string, length int64, opts ...CallOptionFunc) (types.TwoStoriesOneTitleCheck, error) {
@@ -4296,18 +6368,37 @@ func StreamFailingCheck(ctx context.Context, theme string, length int64, opts ..
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "StreamFailingCheck", encoded)
-	if err != nil {
-		return types.TwoStoriesOneTitleCheck{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "StreamFailingCheck", encoded, callOpts.onTick)
+		if err != nil {
+			return types.TwoStoriesOneTitleCheck{}, err
+		}
+
+		if result.Error != nil {
+			return types.TwoStoriesOneTitleCheck{}, result.Error
+		}
+
+		casted := (result.Data).(types.TwoStoriesOneTitleCheck)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "StreamFailingCheck", encoded, callOpts.onTick)
+		if err != nil {
+			return types.TwoStoriesOneTitleCheck{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.TwoStoriesOneTitleCheck{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.TwoStoriesOneTitleCheck), nil
+			}
+		}
+
+		return types.TwoStoriesOneTitleCheck{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.TwoStoriesOneTitleCheck{}, result.Error
-	}
-
-	casted := (result.Data).(types.TwoStoriesOneTitleCheck)
-
-	return casted, nil
 }
 
 func StreamOneBigNumber(ctx context.Context, digits int64, opts ...CallOptionFunc) (int64, error) {
@@ -4335,18 +6426,37 @@ func StreamOneBigNumber(ctx context.Context, digits int64, opts ...CallOptionFun
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "StreamOneBigNumber", encoded)
-	if err != nil {
-		return 0, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "StreamOneBigNumber", encoded, callOpts.onTick)
+		if err != nil {
+			return 0, err
+		}
+
+		if result.Error != nil {
+			return 0, result.Error
+		}
+
+		casted := (result.Data).(int64)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "StreamOneBigNumber", encoded, callOpts.onTick)
+		if err != nil {
+			return 0, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return 0, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(int64), nil
+			}
+		}
+
+		return 0, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return 0, result.Error
-	}
-
-	casted := (result.Data).(int64)
-
-	return casted, nil
 }
 
 func StreamUnionIntegers(ctx context.Context, digits int64, opts ...CallOptionFunc) ([]types.Union2IntOrString, error) {
@@ -4374,18 +6484,37 @@ func StreamUnionIntegers(ctx context.Context, digits int64, opts ...CallOptionFu
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "StreamUnionIntegers", encoded)
-	if err != nil {
-		return nil, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "StreamUnionIntegers", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
+
+		if result.Error != nil {
+			return nil, result.Error
+		}
+
+		casted := (result.Data).([]types.Union2IntOrString)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "StreamUnionIntegers", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return nil, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.([]types.Union2IntOrString), nil
+			}
+		}
+
+		return nil, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return nil, result.Error
-	}
-
-	casted := (result.Data).([]types.Union2IntOrString)
-
-	return casted, nil
 }
 
 func StreamingCompoundNumbers(ctx context.Context, digits int64, yapping bool, opts ...CallOptionFunc) (types.CompoundBigNumbers, error) {
@@ -4413,18 +6542,37 @@ func StreamingCompoundNumbers(ctx context.Context, digits int64, yapping bool, o
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "StreamingCompoundNumbers", encoded)
-	if err != nil {
-		return types.CompoundBigNumbers{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "StreamingCompoundNumbers", encoded, callOpts.onTick)
+		if err != nil {
+			return types.CompoundBigNumbers{}, err
+		}
+
+		if result.Error != nil {
+			return types.CompoundBigNumbers{}, result.Error
+		}
+
+		casted := (result.Data).(types.CompoundBigNumbers)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "StreamingCompoundNumbers", encoded, callOpts.onTick)
+		if err != nil {
+			return types.CompoundBigNumbers{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.CompoundBigNumbers{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.CompoundBigNumbers), nil
+			}
+		}
+
+		return types.CompoundBigNumbers{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.CompoundBigNumbers{}, result.Error
-	}
-
-	casted := (result.Data).(types.CompoundBigNumbers)
-
-	return casted, nil
 }
 
 func StructureDocument1559(ctx context.Context, document_txt string, opts ...CallOptionFunc) (types.Document1559, error) {
@@ -4452,18 +6600,37 @@ func StructureDocument1559(ctx context.Context, document_txt string, opts ...Cal
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "StructureDocument1559", encoded)
-	if err != nil {
-		return types.Document1559{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "StructureDocument1559", encoded, callOpts.onTick)
+		if err != nil {
+			return types.Document1559{}, err
+		}
+
+		if result.Error != nil {
+			return types.Document1559{}, result.Error
+		}
+
+		casted := (result.Data).(types.Document1559)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "StructureDocument1559", encoded, callOpts.onTick)
+		if err != nil {
+			return types.Document1559{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.Document1559{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.Document1559), nil
+			}
+		}
+
+		return types.Document1559{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.Document1559{}, result.Error
-	}
-
-	casted := (result.Data).(types.Document1559)
-
-	return casted, nil
 }
 
 func TakeRecAliasDep(ctx context.Context, input types.RecursiveAliasDependency, opts ...CallOptionFunc) (types.RecursiveAliasDependency, error) {
@@ -4491,18 +6658,37 @@ func TakeRecAliasDep(ctx context.Context, input types.RecursiveAliasDependency, 
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TakeRecAliasDep", encoded)
-	if err != nil {
-		return types.RecursiveAliasDependency{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TakeRecAliasDep", encoded, callOpts.onTick)
+		if err != nil {
+			return types.RecursiveAliasDependency{}, err
+		}
+
+		if result.Error != nil {
+			return types.RecursiveAliasDependency{}, result.Error
+		}
+
+		casted := (result.Data).(types.RecursiveAliasDependency)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TakeRecAliasDep", encoded, callOpts.onTick)
+		if err != nil {
+			return types.RecursiveAliasDependency{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.RecursiveAliasDependency{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.RecursiveAliasDependency), nil
+			}
+		}
+
+		return types.RecursiveAliasDependency{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.RecursiveAliasDependency{}, result.Error
-	}
-
-	casted := (result.Data).(types.RecursiveAliasDependency)
-
-	return casted, nil
 }
 
 func TellStory(ctx context.Context, story string, opts ...CallOptionFunc) (string, error) {
@@ -4530,18 +6716,37 @@ func TellStory(ctx context.Context, story string, opts ...CallOptionFunc) (strin
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TellStory", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TellStory", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TellStory", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestAnthropic(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -4569,18 +6774,37 @@ func TestAnthropic(ctx context.Context, input string, opts ...CallOptionFunc) (s
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestAnthropic", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestAnthropic", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestAnthropic", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestAnthropicShorthand(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -4608,18 +6832,37 @@ func TestAnthropicShorthand(ctx context.Context, input string, opts ...CallOptio
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestAnthropicShorthand", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestAnthropicShorthand", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestAnthropicShorthand", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestAws(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -4647,18 +6890,37 @@ func TestAws(ctx context.Context, input string, opts ...CallOptionFunc) (string,
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestAws", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestAws", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestAws", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestAwsClaude37(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -4686,18 +6948,37 @@ func TestAwsClaude37(ctx context.Context, input string, opts ...CallOptionFunc) 
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestAwsClaude37", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestAwsClaude37", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestAwsClaude37", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestAwsInferenceProfile(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -4725,18 +7006,37 @@ func TestAwsInferenceProfile(ctx context.Context, input string, opts ...CallOpti
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestAwsInferenceProfile", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestAwsInferenceProfile", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestAwsInferenceProfile", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestAwsInvalidAccessKey(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -4764,18 +7064,37 @@ func TestAwsInvalidAccessKey(ctx context.Context, input string, opts ...CallOpti
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestAwsInvalidAccessKey", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestAwsInvalidAccessKey", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestAwsInvalidAccessKey", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestAwsInvalidProfile(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -4803,18 +7122,37 @@ func TestAwsInvalidProfile(ctx context.Context, input string, opts ...CallOption
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestAwsInvalidProfile", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestAwsInvalidProfile", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestAwsInvalidProfile", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestAwsInvalidRegion(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -4842,18 +7180,37 @@ func TestAwsInvalidRegion(ctx context.Context, input string, opts ...CallOptionF
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestAwsInvalidRegion", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestAwsInvalidRegion", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestAwsInvalidRegion", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestAwsInvalidSessionToken(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -4881,18 +7238,37 @@ func TestAwsInvalidSessionToken(ctx context.Context, input string, opts ...CallO
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestAwsInvalidSessionToken", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestAwsInvalidSessionToken", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestAwsInvalidSessionToken", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestAzure(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -4920,18 +7296,37 @@ func TestAzure(ctx context.Context, input string, opts ...CallOptionFunc) (strin
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestAzure", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestAzure", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestAzure", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestAzureFailure(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -4959,18 +7354,37 @@ func TestAzureFailure(ctx context.Context, input string, opts ...CallOptionFunc)
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestAzureFailure", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestAzureFailure", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestAzureFailure", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestAzureO1NoMaxTokens(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -4998,18 +7412,37 @@ func TestAzureO1NoMaxTokens(ctx context.Context, input string, opts ...CallOptio
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestAzureO1NoMaxTokens", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestAzureO1NoMaxTokens", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestAzureO1NoMaxTokens", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestAzureO1WithMaxCompletionTokens(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -5037,18 +7470,37 @@ func TestAzureO1WithMaxCompletionTokens(ctx context.Context, input string, opts 
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestAzureO1WithMaxCompletionTokens", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestAzureO1WithMaxCompletionTokens", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestAzureO1WithMaxCompletionTokens", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestAzureO1WithMaxTokens(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -5076,18 +7528,37 @@ func TestAzureO1WithMaxTokens(ctx context.Context, input string, opts ...CallOpt
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestAzureO1WithMaxTokens", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestAzureO1WithMaxTokens", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestAzureO1WithMaxTokens", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestAzureO3NoMaxTokens(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -5115,18 +7586,37 @@ func TestAzureO3NoMaxTokens(ctx context.Context, input string, opts ...CallOptio
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestAzureO3NoMaxTokens", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestAzureO3NoMaxTokens", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestAzureO3NoMaxTokens", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestAzureO3WithMaxCompletionTokens(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -5154,18 +7644,37 @@ func TestAzureO3WithMaxCompletionTokens(ctx context.Context, input string, opts 
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestAzureO3WithMaxCompletionTokens", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestAzureO3WithMaxCompletionTokens", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestAzureO3WithMaxCompletionTokens", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestAzureWithMaxTokens(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -5193,18 +7702,37 @@ func TestAzureWithMaxTokens(ctx context.Context, input string, opts ...CallOptio
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestAzureWithMaxTokens", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestAzureWithMaxTokens", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestAzureWithMaxTokens", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestCaching(ctx context.Context, input string, not_cached string, opts ...CallOptionFunc) (string, error) {
@@ -5232,18 +7760,37 @@ func TestCaching(ctx context.Context, input string, not_cached string, opts ...C
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestCaching", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestCaching", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestCaching", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestFallbackClient(ctx context.Context, opts ...CallOptionFunc) (string, error) {
@@ -5271,18 +7818,37 @@ func TestFallbackClient(ctx context.Context, opts ...CallOptionFunc) (string, er
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestFallbackClient", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestFallbackClient", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestFallbackClient", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestFallbackStrategy(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -5310,18 +7876,37 @@ func TestFallbackStrategy(ctx context.Context, input string, opts ...CallOptionF
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestFallbackStrategy", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestFallbackStrategy", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestFallbackStrategy", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestFallbackToShorthand(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -5349,18 +7934,37 @@ func TestFallbackToShorthand(ctx context.Context, input string, opts ...CallOpti
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestFallbackToShorthand", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestFallbackToShorthand", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestFallbackToShorthand", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestFnNamedArgsSingleBool(ctx context.Context, myBool bool, opts ...CallOptionFunc) (string, error) {
@@ -5388,18 +7992,37 @@ func TestFnNamedArgsSingleBool(ctx context.Context, myBool bool, opts ...CallOpt
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestFnNamedArgsSingleBool", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestFnNamedArgsSingleBool", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestFnNamedArgsSingleBool", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestFnNamedArgsSingleClass(ctx context.Context, myArg types.NamedArgsSingleClass, opts ...CallOptionFunc) (string, error) {
@@ -5427,18 +8050,37 @@ func TestFnNamedArgsSingleClass(ctx context.Context, myArg types.NamedArgsSingle
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestFnNamedArgsSingleClass", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestFnNamedArgsSingleClass", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestFnNamedArgsSingleClass", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestFnNamedArgsSingleEnumList(ctx context.Context, myArg []types.NamedArgsSingleEnumList, opts ...CallOptionFunc) (string, error) {
@@ -5466,18 +8108,37 @@ func TestFnNamedArgsSingleEnumList(ctx context.Context, myArg []types.NamedArgsS
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestFnNamedArgsSingleEnumList", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestFnNamedArgsSingleEnumList", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestFnNamedArgsSingleEnumList", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestFnNamedArgsSingleFloat(ctx context.Context, myFloat float64, opts ...CallOptionFunc) (string, error) {
@@ -5505,18 +8166,37 @@ func TestFnNamedArgsSingleFloat(ctx context.Context, myFloat float64, opts ...Ca
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestFnNamedArgsSingleFloat", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestFnNamedArgsSingleFloat", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestFnNamedArgsSingleFloat", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestFnNamedArgsSingleInt(ctx context.Context, myInt int64, opts ...CallOptionFunc) (string, error) {
@@ -5544,18 +8224,37 @@ func TestFnNamedArgsSingleInt(ctx context.Context, myInt int64, opts ...CallOpti
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestFnNamedArgsSingleInt", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestFnNamedArgsSingleInt", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestFnNamedArgsSingleInt", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestFnNamedArgsSingleMapStringToClass(ctx context.Context, myMap map[string]types.StringToClassEntry, opts ...CallOptionFunc) (map[string]types.StringToClassEntry, error) {
@@ -5583,18 +8282,37 @@ func TestFnNamedArgsSingleMapStringToClass(ctx context.Context, myMap map[string
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestFnNamedArgsSingleMapStringToClass", encoded)
-	if err != nil {
-		return nil, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestFnNamedArgsSingleMapStringToClass", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
+
+		if result.Error != nil {
+			return nil, result.Error
+		}
+
+		casted := (result.Data).(map[string]types.StringToClassEntry)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestFnNamedArgsSingleMapStringToClass", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return nil, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(map[string]types.StringToClassEntry), nil
+			}
+		}
+
+		return nil, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return nil, result.Error
-	}
-
-	casted := (result.Data).(map[string]types.StringToClassEntry)
-
-	return casted, nil
 }
 
 func TestFnNamedArgsSingleMapStringToMap(ctx context.Context, myMap map[string]map[string]string, opts ...CallOptionFunc) (map[string]map[string]string, error) {
@@ -5622,18 +8340,37 @@ func TestFnNamedArgsSingleMapStringToMap(ctx context.Context, myMap map[string]m
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestFnNamedArgsSingleMapStringToMap", encoded)
-	if err != nil {
-		return nil, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestFnNamedArgsSingleMapStringToMap", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
+
+		if result.Error != nil {
+			return nil, result.Error
+		}
+
+		casted := (result.Data).(map[string]map[string]string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestFnNamedArgsSingleMapStringToMap", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return nil, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(map[string]map[string]string), nil
+			}
+		}
+
+		return nil, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return nil, result.Error
-	}
-
-	casted := (result.Data).(map[string]map[string]string)
-
-	return casted, nil
 }
 
 func TestFnNamedArgsSingleMapStringToString(ctx context.Context, myMap map[string]string, opts ...CallOptionFunc) (map[string]string, error) {
@@ -5661,18 +8398,37 @@ func TestFnNamedArgsSingleMapStringToString(ctx context.Context, myMap map[strin
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestFnNamedArgsSingleMapStringToString", encoded)
-	if err != nil {
-		return nil, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestFnNamedArgsSingleMapStringToString", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
+
+		if result.Error != nil {
+			return nil, result.Error
+		}
+
+		casted := (result.Data).(map[string]string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestFnNamedArgsSingleMapStringToString", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return nil, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(map[string]string), nil
+			}
+		}
+
+		return nil, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return nil, result.Error
-	}
-
-	casted := (result.Data).(map[string]string)
-
-	return casted, nil
 }
 
 func TestFnNamedArgsSingleString(ctx context.Context, myString string, opts ...CallOptionFunc) (string, error) {
@@ -5700,18 +8456,37 @@ func TestFnNamedArgsSingleString(ctx context.Context, myString string, opts ...C
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestFnNamedArgsSingleString", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestFnNamedArgsSingleString", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestFnNamedArgsSingleString", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestFnNamedArgsSingleStringArray(ctx context.Context, myStringArray []string, opts ...CallOptionFunc) (string, error) {
@@ -5739,18 +8514,37 @@ func TestFnNamedArgsSingleStringArray(ctx context.Context, myStringArray []strin
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestFnNamedArgsSingleStringArray", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestFnNamedArgsSingleStringArray", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestFnNamedArgsSingleStringArray", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestFnNamedArgsSingleStringList(ctx context.Context, myArg []string, opts ...CallOptionFunc) ([]string, error) {
@@ -5778,18 +8572,37 @@ func TestFnNamedArgsSingleStringList(ctx context.Context, myArg []string, opts .
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestFnNamedArgsSingleStringList", encoded)
-	if err != nil {
-		return nil, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestFnNamedArgsSingleStringList", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
+
+		if result.Error != nil {
+			return nil, result.Error
+		}
+
+		casted := (result.Data).([]string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestFnNamedArgsSingleStringList", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return nil, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.([]string), nil
+			}
+		}
+
+		return nil, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return nil, result.Error
-	}
-
-	casted := (result.Data).([]string)
-
-	return casted, nil
 }
 
 func TestGemini(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -5817,18 +8630,37 @@ func TestGemini(ctx context.Context, input string, opts ...CallOptionFunc) (stri
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestGemini", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestGemini", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestGemini", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestGeminiOpenAiGeneric(ctx context.Context, opts ...CallOptionFunc) (string, error) {
@@ -5856,18 +8688,37 @@ func TestGeminiOpenAiGeneric(ctx context.Context, opts ...CallOptionFunc) (strin
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestGeminiOpenAiGeneric", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestGeminiOpenAiGeneric", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestGeminiOpenAiGeneric", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestGeminiSystem(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -5895,18 +8746,37 @@ func TestGeminiSystem(ctx context.Context, input string, opts ...CallOptionFunc)
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestGeminiSystem", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestGeminiSystem", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestGeminiSystem", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestGeminiSystemAsChat(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -5934,18 +8804,37 @@ func TestGeminiSystemAsChat(ctx context.Context, input string, opts ...CallOptio
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestGeminiSystemAsChat", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestGeminiSystemAsChat", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestGeminiSystemAsChat", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestGroq(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -5973,18 +8862,37 @@ func TestGroq(ctx context.Context, input string, opts ...CallOptionFunc) (string
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestGroq", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestGroq", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestGroq", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestImageInput(ctx context.Context, img any, opts ...CallOptionFunc) (string, error) {
@@ -6012,18 +8920,37 @@ func TestImageInput(ctx context.Context, img any, opts ...CallOptionFunc) (strin
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestImageInput", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestImageInput", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestImageInput", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestImageInputAnthropic(ctx context.Context, img any, opts ...CallOptionFunc) (string, error) {
@@ -6051,18 +8978,37 @@ func TestImageInputAnthropic(ctx context.Context, img any, opts ...CallOptionFun
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestImageInputAnthropic", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestImageInputAnthropic", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestImageInputAnthropic", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestImageListInput(ctx context.Context, imgs []any, opts ...CallOptionFunc) (string, error) {
@@ -6090,18 +9036,37 @@ func TestImageListInput(ctx context.Context, imgs []any, opts ...CallOptionFunc)
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestImageListInput", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestImageListInput", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestImageListInput", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestMemory(ctx context.Context, input string, opts ...CallOptionFunc) (types.TestMemoryOutput, error) {
@@ -6129,18 +9094,37 @@ func TestMemory(ctx context.Context, input string, opts ...CallOptionFunc) (type
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestMemory", encoded)
-	if err != nil {
-		return types.TestMemoryOutput{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestMemory", encoded, callOpts.onTick)
+		if err != nil {
+			return types.TestMemoryOutput{}, err
+		}
+
+		if result.Error != nil {
+			return types.TestMemoryOutput{}, result.Error
+		}
+
+		casted := (result.Data).(types.TestMemoryOutput)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestMemory", encoded, callOpts.onTick)
+		if err != nil {
+			return types.TestMemoryOutput{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.TestMemoryOutput{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.TestMemoryOutput), nil
+			}
+		}
+
+		return types.TestMemoryOutput{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.TestMemoryOutput{}, result.Error
-	}
-
-	casted := (result.Data).(types.TestMemoryOutput)
-
-	return casted, nil
 }
 
 func TestMulticlassNamedArgs(ctx context.Context, myArg types.NamedArgsSingleClass, myArg2 types.NamedArgsSingleClass, opts ...CallOptionFunc) (string, error) {
@@ -6168,18 +9152,37 @@ func TestMulticlassNamedArgs(ctx context.Context, myArg types.NamedArgsSingleCla
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestMulticlassNamedArgs", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestMulticlassNamedArgs", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestMulticlassNamedArgs", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestNamedArgsLiteralBool(ctx context.Context, myBool bool, opts ...CallOptionFunc) (string, error) {
@@ -6207,18 +9210,37 @@ func TestNamedArgsLiteralBool(ctx context.Context, myBool bool, opts ...CallOpti
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestNamedArgsLiteralBool", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestNamedArgsLiteralBool", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestNamedArgsLiteralBool", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestNamedArgsLiteralInt(ctx context.Context, myInt int64, opts ...CallOptionFunc) (string, error) {
@@ -6246,18 +9268,37 @@ func TestNamedArgsLiteralInt(ctx context.Context, myInt int64, opts ...CallOptio
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestNamedArgsLiteralInt", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestNamedArgsLiteralInt", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestNamedArgsLiteralInt", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestNamedArgsLiteralString(ctx context.Context, myString string, opts ...CallOptionFunc) (string, error) {
@@ -6285,18 +9326,37 @@ func TestNamedArgsLiteralString(ctx context.Context, myString string, opts ...Ca
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestNamedArgsLiteralString", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestNamedArgsLiteralString", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestNamedArgsLiteralString", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestOllama(ctx context.Context, input string, opts ...CallOptionFunc) (*string, error) {
@@ -6324,18 +9384,37 @@ func TestOllama(ctx context.Context, input string, opts ...CallOptionFunc) (*str
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOllama", encoded)
-	if err != nil {
-		return nil, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestOllama", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
+
+		if result.Error != nil {
+			return nil, result.Error
+		}
+
+		casted := (result.Data).(*string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestOllama", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return nil, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(*string), nil
+			}
+		}
+
+		return nil, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return nil, result.Error
-	}
-
-	casted := (result.Data).(*string)
-
-	return casted, nil
 }
 
 func TestOllamaHaiku(ctx context.Context, input string, opts ...CallOptionFunc) (types.Haiku, error) {
@@ -6363,18 +9442,37 @@ func TestOllamaHaiku(ctx context.Context, input string, opts ...CallOptionFunc) 
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOllamaHaiku", encoded)
-	if err != nil {
-		return types.Haiku{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestOllamaHaiku", encoded, callOpts.onTick)
+		if err != nil {
+			return types.Haiku{}, err
+		}
+
+		if result.Error != nil {
+			return types.Haiku{}, result.Error
+		}
+
+		casted := (result.Data).(types.Haiku)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestOllamaHaiku", encoded, callOpts.onTick)
+		if err != nil {
+			return types.Haiku{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.Haiku{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.Haiku), nil
+			}
+		}
+
+		return types.Haiku{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.Haiku{}, result.Error
-	}
-
-	casted := (result.Data).(types.Haiku)
-
-	return casted, nil
 }
 
 func TestOpenAI(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -6402,18 +9500,37 @@ func TestOpenAI(ctx context.Context, input string, opts ...CallOptionFunc) (stri
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAI", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestOpenAI", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestOpenAI", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestOpenAIDummyClient(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -6441,18 +9558,37 @@ func TestOpenAIDummyClient(ctx context.Context, input string, opts ...CallOption
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIDummyClient", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIDummyClient", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestOpenAIDummyClient", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestOpenAIGPT4oMini(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -6480,18 +9616,37 @@ func TestOpenAIGPT4oMini(ctx context.Context, input string, opts ...CallOptionFu
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIGPT4oMini", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIGPT4oMini", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestOpenAIGPT4oMini", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestOpenAIGPT4oMini2(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -6519,18 +9674,37 @@ func TestOpenAIGPT4oMini2(ctx context.Context, input string, opts ...CallOptionF
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIGPT4oMini2", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIGPT4oMini2", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestOpenAIGPT4oMini2", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestOpenAIGPT4oMini3(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -6558,18 +9732,37 @@ func TestOpenAIGPT4oMini3(ctx context.Context, input string, opts ...CallOptionF
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIGPT4oMini3", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIGPT4oMini3", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestOpenAIGPT4oMini3", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestOpenAILegacyProvider(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -6597,18 +9790,37 @@ func TestOpenAILegacyProvider(ctx context.Context, input string, opts ...CallOpt
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAILegacyProvider", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestOpenAILegacyProvider", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestOpenAILegacyProvider", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestOpenAIO1NoMaxTokens(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -6636,18 +9848,37 @@ func TestOpenAIO1NoMaxTokens(ctx context.Context, input string, opts ...CallOpti
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIO1NoMaxTokens", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIO1NoMaxTokens", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestOpenAIO1NoMaxTokens", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestOpenAIO1WithMaxCompletionTokens(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -6675,18 +9906,37 @@ func TestOpenAIO1WithMaxCompletionTokens(ctx context.Context, input string, opts
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIO1WithMaxCompletionTokens", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIO1WithMaxCompletionTokens", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestOpenAIO1WithMaxCompletionTokens", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestOpenAIO1WithMaxTokens(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -6714,18 +9964,37 @@ func TestOpenAIO1WithMaxTokens(ctx context.Context, input string, opts ...CallOp
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIO1WithMaxTokens", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIO1WithMaxTokens", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestOpenAIO1WithMaxTokens", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestOpenAIProviderWithResponsesType(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -6753,18 +10022,37 @@ func TestOpenAIProviderWithResponsesType(ctx context.Context, input string, opts
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIProviderWithResponsesType", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIProviderWithResponsesType", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestOpenAIProviderWithResponsesType", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestOpenAIResponses(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -6792,18 +10080,37 @@ func TestOpenAIResponses(ctx context.Context, input string, opts ...CallOptionFu
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponses", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponses", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestOpenAIResponses", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestOpenAIResponsesAutoType(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -6831,18 +10138,37 @@ func TestOpenAIResponsesAutoType(ctx context.Context, input string, opts ...Call
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponsesAutoType", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponsesAutoType", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestOpenAIResponsesAutoType", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestOpenAIResponsesConversation(ctx context.Context, topic string, opts ...CallOptionFunc) (string, error) {
@@ -6870,18 +10196,37 @@ func TestOpenAIResponsesConversation(ctx context.Context, topic string, opts ...
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponsesConversation", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponsesConversation", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestOpenAIResponsesConversation", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestOpenAIResponsesCustomURL(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -6909,18 +10254,37 @@ func TestOpenAIResponsesCustomURL(ctx context.Context, input string, opts ...Cal
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponsesCustomURL", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponsesCustomURL", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestOpenAIResponsesCustomURL", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestOpenAIResponsesDifferentModel(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -6948,18 +10312,37 @@ func TestOpenAIResponsesDifferentModel(ctx context.Context, input string, opts .
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponsesDifferentModel", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponsesDifferentModel", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestOpenAIResponsesDifferentModel", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestOpenAIResponsesEndpoint(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -6987,18 +10370,37 @@ func TestOpenAIResponsesEndpoint(ctx context.Context, input string, opts ...Call
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponsesEndpoint", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponsesEndpoint", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestOpenAIResponsesEndpoint", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestOpenAIResponsesExplicit(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -7026,18 +10428,37 @@ func TestOpenAIResponsesExplicit(ctx context.Context, input string, opts ...Call
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponsesExplicit", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponsesExplicit", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestOpenAIResponsesExplicit", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestOpenAIResponsesFunctionCall(ctx context.Context, query string, opts ...CallOptionFunc) (string, error) {
@@ -7065,18 +10486,37 @@ func TestOpenAIResponsesFunctionCall(ctx context.Context, query string, opts ...
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponsesFunctionCall", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponsesFunctionCall", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestOpenAIResponsesFunctionCall", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestOpenAIResponsesImageInput(ctx context.Context, image types.Union2ImageOrString, opts ...CallOptionFunc) (string, error) {
@@ -7104,18 +10544,37 @@ func TestOpenAIResponsesImageInput(ctx context.Context, image types.Union2ImageO
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponsesImageInput", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponsesImageInput", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestOpenAIResponsesImageInput", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestOpenAIResponsesReasoning(ctx context.Context, problem string, opts ...CallOptionFunc) (string, error) {
@@ -7143,18 +10602,37 @@ func TestOpenAIResponsesReasoning(ctx context.Context, problem string, opts ...C
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponsesReasoning", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponsesReasoning", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestOpenAIResponsesReasoning", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestOpenAIResponsesShorthand(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -7182,18 +10660,37 @@ func TestOpenAIResponsesShorthand(ctx context.Context, input string, opts ...Cal
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponsesShorthand", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponsesShorthand", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestOpenAIResponsesShorthand", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestOpenAIResponsesWebSearch(ctx context.Context, query string, opts ...CallOptionFunc) (string, error) {
@@ -7221,18 +10718,37 @@ func TestOpenAIResponsesWebSearch(ctx context.Context, query string, opts ...Cal
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponsesWebSearch", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponsesWebSearch", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestOpenAIResponsesWebSearch", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestOpenAIResponsesWithOpenAIResponseType(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -7260,18 +10776,37 @@ func TestOpenAIResponsesWithOpenAIResponseType(ctx context.Context, input string
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponsesWithOpenAIResponseType", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIResponsesWithOpenAIResponseType", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestOpenAIResponsesWithOpenAIResponseType", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestOpenAIShorthand(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -7299,18 +10834,37 @@ func TestOpenAIShorthand(ctx context.Context, input string, opts ...CallOptionFu
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIShorthand", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIShorthand", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestOpenAIShorthand", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestOpenAIWithFinishReasonError(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -7338,18 +10892,37 @@ func TestOpenAIWithFinishReasonError(ctx context.Context, input string, opts ...
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIWithFinishReasonError", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIWithFinishReasonError", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestOpenAIWithFinishReasonError", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestOpenAIWithMaxTokens(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -7377,18 +10950,37 @@ func TestOpenAIWithMaxTokens(ctx context.Context, input string, opts ...CallOpti
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIWithMaxTokens", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIWithMaxTokens", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestOpenAIWithMaxTokens", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestOpenAIWithNullMaxTokens(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -7416,18 +11008,37 @@ func TestOpenAIWithNullMaxTokens(ctx context.Context, input string, opts ...Call
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIWithNullMaxTokens", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIWithNullMaxTokens", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestOpenAIWithNullMaxTokens", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestOpenRouterMistralSmall3_1_24b(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -7455,18 +11066,37 @@ func TestOpenRouterMistralSmall3_1_24b(ctx context.Context, input string, opts .
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestOpenRouterMistralSmall3_1_24b", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestOpenRouterMistralSmall3_1_24b", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestOpenRouterMistralSmall3_1_24b", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestRetryConstant(ctx context.Context, opts ...CallOptionFunc) (string, error) {
@@ -7494,18 +11124,37 @@ func TestRetryConstant(ctx context.Context, opts ...CallOptionFunc) (string, err
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestRetryConstant", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestRetryConstant", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestRetryConstant", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestRetryExponential(ctx context.Context, opts ...CallOptionFunc) (string, error) {
@@ -7533,18 +11182,37 @@ func TestRetryExponential(ctx context.Context, opts ...CallOptionFunc) (string, 
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestRetryExponential", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestRetryExponential", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestRetryExponential", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestRoundRobinStrategy(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -7572,18 +11240,37 @@ func TestRoundRobinStrategy(ctx context.Context, input string, opts ...CallOptio
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestRoundRobinStrategy", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestRoundRobinStrategy", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestRoundRobinStrategy", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestSingleFallbackClient(ctx context.Context, opts ...CallOptionFunc) (string, error) {
@@ -7611,18 +11298,37 @@ func TestSingleFallbackClient(ctx context.Context, opts ...CallOptionFunc) (stri
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestSingleFallbackClient", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestSingleFallbackClient", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestSingleFallbackClient", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestThinking(ctx context.Context, input string, opts ...CallOptionFunc) (types.CustomStory, error) {
@@ -7650,18 +11356,37 @@ func TestThinking(ctx context.Context, input string, opts ...CallOptionFunc) (ty
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestThinking", encoded)
-	if err != nil {
-		return types.CustomStory{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestThinking", encoded, callOpts.onTick)
+		if err != nil {
+			return types.CustomStory{}, err
+		}
+
+		if result.Error != nil {
+			return types.CustomStory{}, result.Error
+		}
+
+		casted := (result.Data).(types.CustomStory)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestThinking", encoded, callOpts.onTick)
+		if err != nil {
+			return types.CustomStory{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.CustomStory{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.CustomStory), nil
+			}
+		}
+
+		return types.CustomStory{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.CustomStory{}, result.Error
-	}
-
-	casted := (result.Data).(types.CustomStory)
-
-	return casted, nil
 }
 
 func TestUniverseQuestion(ctx context.Context, question types.UniverseQuestionInput, opts ...CallOptionFunc) (types.UniverseQuestion, error) {
@@ -7689,18 +11414,37 @@ func TestUniverseQuestion(ctx context.Context, question types.UniverseQuestionIn
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestUniverseQuestion", encoded)
-	if err != nil {
-		return types.UniverseQuestion{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestUniverseQuestion", encoded, callOpts.onTick)
+		if err != nil {
+			return types.UniverseQuestion{}, err
+		}
+
+		if result.Error != nil {
+			return types.UniverseQuestion{}, result.Error
+		}
+
+		casted := (result.Data).(types.UniverseQuestion)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestUniverseQuestion", encoded, callOpts.onTick)
+		if err != nil {
+			return types.UniverseQuestion{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.UniverseQuestion{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.UniverseQuestion), nil
+			}
+		}
+
+		return types.UniverseQuestion{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.UniverseQuestion{}, result.Error
-	}
-
-	casted := (result.Data).(types.UniverseQuestion)
-
-	return casted, nil
 }
 
 func TestVertex(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -7728,18 +11472,37 @@ func TestVertex(ctx context.Context, input string, opts ...CallOptionFunc) (stri
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestVertex", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestVertex", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestVertex", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestVertexClaude(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -7767,18 +11530,37 @@ func TestVertexClaude(ctx context.Context, input string, opts ...CallOptionFunc)
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestVertexClaude", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestVertexClaude", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestVertexClaude", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func TestVertexWithSystemInstructions(ctx context.Context, opts ...CallOptionFunc) (string, error) {
@@ -7806,18 +11588,37 @@ func TestVertexWithSystemInstructions(ctx context.Context, opts ...CallOptionFun
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestVertexWithSystemInstructions", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestVertexWithSystemInstructions", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestVertexWithSystemInstructions", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func UnionTest_Function(ctx context.Context, input types.Union2BoolOrString, opts ...CallOptionFunc) (types.UnionTest_ReturnType, error) {
@@ -7845,18 +11646,37 @@ func UnionTest_Function(ctx context.Context, input types.Union2BoolOrString, opt
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "UnionTest_Function", encoded)
-	if err != nil {
-		return types.UnionTest_ReturnType{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "UnionTest_Function", encoded, callOpts.onTick)
+		if err != nil {
+			return types.UnionTest_ReturnType{}, err
+		}
+
+		if result.Error != nil {
+			return types.UnionTest_ReturnType{}, result.Error
+		}
+
+		casted := (result.Data).(types.UnionTest_ReturnType)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "UnionTest_Function", encoded, callOpts.onTick)
+		if err != nil {
+			return types.UnionTest_ReturnType{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.UnionTest_ReturnType{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.UnionTest_ReturnType), nil
+			}
+		}
+
+		return types.UnionTest_ReturnType{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.UnionTest_ReturnType{}, result.Error
-	}
-
-	casted := (result.Data).(types.UnionTest_ReturnType)
-
-	return casted, nil
 }
 
 func UseBlockConstraint(ctx context.Context, inp types.BlockConstraintForParam, opts ...CallOptionFunc) (int64, error) {
@@ -7884,18 +11704,37 @@ func UseBlockConstraint(ctx context.Context, inp types.BlockConstraintForParam, 
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "UseBlockConstraint", encoded)
-	if err != nil {
-		return 0, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "UseBlockConstraint", encoded, callOpts.onTick)
+		if err != nil {
+			return 0, err
+		}
+
+		if result.Error != nil {
+			return 0, result.Error
+		}
+
+		casted := (result.Data).(int64)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "UseBlockConstraint", encoded, callOpts.onTick)
+		if err != nil {
+			return 0, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return 0, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(int64), nil
+			}
+		}
+
+		return 0, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return 0, result.Error
-	}
-
-	casted := (result.Data).(int64)
-
-	return casted, nil
 }
 
 func UseMaintainFieldOrder(ctx context.Context, input types.MaintainFieldOrder, opts ...CallOptionFunc) (types.MaintainFieldOrder, error) {
@@ -7923,18 +11762,37 @@ func UseMaintainFieldOrder(ctx context.Context, input types.MaintainFieldOrder, 
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "UseMaintainFieldOrder", encoded)
-	if err != nil {
-		return types.MaintainFieldOrder{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "UseMaintainFieldOrder", encoded, callOpts.onTick)
+		if err != nil {
+			return types.MaintainFieldOrder{}, err
+		}
+
+		if result.Error != nil {
+			return types.MaintainFieldOrder{}, result.Error
+		}
+
+		casted := (result.Data).(types.MaintainFieldOrder)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "UseMaintainFieldOrder", encoded, callOpts.onTick)
+		if err != nil {
+			return types.MaintainFieldOrder{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.MaintainFieldOrder{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.MaintainFieldOrder), nil
+			}
+		}
+
+		return types.MaintainFieldOrder{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.MaintainFieldOrder{}, result.Error
-	}
-
-	casted := (result.Data).(types.MaintainFieldOrder)
-
-	return casted, nil
 }
 
 func UseMalformedConstraints(ctx context.Context, a types.MalformedConstraints2, opts ...CallOptionFunc) (int64, error) {
@@ -7962,18 +11820,37 @@ func UseMalformedConstraints(ctx context.Context, a types.MalformedConstraints2,
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "UseMalformedConstraints", encoded)
-	if err != nil {
-		return 0, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "UseMalformedConstraints", encoded, callOpts.onTick)
+		if err != nil {
+			return 0, err
+		}
+
+		if result.Error != nil {
+			return 0, result.Error
+		}
+
+		casted := (result.Data).(int64)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "UseMalformedConstraints", encoded, callOpts.onTick)
+		if err != nil {
+			return 0, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return 0, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(int64), nil
+			}
+		}
+
+		return 0, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return 0, result.Error
-	}
-
-	casted := (result.Data).(int64)
-
-	return casted, nil
 }
 
 func UseNestedBlockConstraint(ctx context.Context, inp types.NestedBlockConstraintForParam, opts ...CallOptionFunc) (int64, error) {
@@ -8001,18 +11878,37 @@ func UseNestedBlockConstraint(ctx context.Context, inp types.NestedBlockConstrai
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "UseNestedBlockConstraint", encoded)
-	if err != nil {
-		return 0, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "UseNestedBlockConstraint", encoded, callOpts.onTick)
+		if err != nil {
+			return 0, err
+		}
+
+		if result.Error != nil {
+			return 0, result.Error
+		}
+
+		casted := (result.Data).(int64)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "UseNestedBlockConstraint", encoded, callOpts.onTick)
+		if err != nil {
+			return 0, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return 0, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(int64), nil
+			}
+		}
+
+		return 0, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return 0, result.Error
-	}
-
-	casted := (result.Data).(int64)
-
-	return casted, nil
 }
 
 func ValidateBasicResponses(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -8040,18 +11936,37 @@ func ValidateBasicResponses(ctx context.Context, input string, opts ...CallOptio
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "ValidateBasicResponses", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "ValidateBasicResponses", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "ValidateBasicResponses", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func ValidateResponseTypes(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
@@ -8079,18 +11994,37 @@ func ValidateResponseTypes(ctx context.Context, input string, opts ...CallOption
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "ValidateResponseTypes", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "ValidateResponseTypes", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "ValidateResponseTypes", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func VideoInputGemini(ctx context.Context, vid any, opts ...CallOptionFunc) (string, error) {
@@ -8118,18 +12052,37 @@ func VideoInputGemini(ctx context.Context, vid any, opts ...CallOptionFunc) (str
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "VideoInputGemini", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "VideoInputGemini", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "VideoInputGemini", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }
 
 func VideoInputVertex(ctx context.Context, vid any, opts ...CallOptionFunc) (string, error) {
@@ -8157,16 +12110,35 @@ func VideoInputVertex(ctx context.Context, vid any, opts ...CallOptionFunc) (str
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "VideoInputVertex", encoded)
-	if err != nil {
-		return "", err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "VideoInputVertex", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "VideoInputVertex", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return "", result.Error
-	}
-
-	casted := (result.Data).(string)
-
-	return casted, nil
 }

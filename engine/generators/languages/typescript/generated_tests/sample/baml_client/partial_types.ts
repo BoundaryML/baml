@@ -37,10 +37,12 @@ export interface StreamState<T> {
 
 export namespace partial_types {
     export interface Example {
+      type: "example_1"
       a?: number | null
       b?: string | null
     }
     export interface Example2 {
+      type: "example_2"
       item?: Example | null
       element?: string | null
       element2?: string | null

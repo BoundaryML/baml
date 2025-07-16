@@ -73,7 +73,7 @@ func (*stream) Foo(ctx context.Context, x int64, opts ...CallOptionFunc) (<-chan
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "Foo", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "Foo", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -151,7 +151,7 @@ func (*stream) JsonInput(ctx context.Context, x types.JSON, opts ...CallOptionFu
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "JsonInput", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "JsonInput", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}

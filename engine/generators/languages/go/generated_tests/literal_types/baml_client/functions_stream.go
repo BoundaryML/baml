@@ -73,7 +73,7 @@ func (*stream) TestBooleanLiterals(ctx context.Context, input string, opts ...Ca
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestBooleanLiterals", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestBooleanLiterals", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -151,7 +151,7 @@ func (*stream) TestComplexLiterals(ctx context.Context, input string, opts ...Ca
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestComplexLiterals", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestComplexLiterals", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -229,7 +229,7 @@ func (*stream) TestIntegerLiterals(ctx context.Context, input string, opts ...Ca
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestIntegerLiterals", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestIntegerLiterals", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -307,7 +307,7 @@ func (*stream) TestMixedLiterals(ctx context.Context, input string, opts ...Call
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestMixedLiterals", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestMixedLiterals", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -385,7 +385,7 @@ func (*stream) TestStringLiterals(ctx context.Context, input string, opts ...Cal
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestStringLiterals", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestStringLiterals", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}

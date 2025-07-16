@@ -48,12 +48,14 @@ export function get_checks<CheckName extends string>(checks: Record<CheckName, C
     return Object.values(checks)
 }
 export interface Example {
+  type: "example_1"
   a: number
   b: string
   
 }
 
 export interface Example2 {
+  type: "example_2"
   item: Example
   element: string
   element2: string

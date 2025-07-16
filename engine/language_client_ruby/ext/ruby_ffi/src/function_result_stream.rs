@@ -38,6 +38,7 @@ impl FunctionResultStream {
         };
 
         match rb_self.t.block_on(rb_self.inner.borrow_mut().run(
+            None::<fn()>,
             on_event,
             &ctx.inner,
             None,

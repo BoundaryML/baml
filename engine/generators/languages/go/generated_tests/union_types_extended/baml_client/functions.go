@@ -15,6 +15,7 @@ package baml_client
 
 import (
 	"context"
+	"fmt"
 
 	"union_types_extended/baml_client/types"
 
@@ -46,18 +47,37 @@ func TestComplexUnions(ctx context.Context, input string, opts ...CallOptionFunc
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestComplexUnions", encoded)
-	if err != nil {
-		return types.ComplexUnions{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestComplexUnions", encoded, callOpts.onTick)
+		if err != nil {
+			return types.ComplexUnions{}, err
+		}
+
+		if result.Error != nil {
+			return types.ComplexUnions{}, result.Error
+		}
+
+		casted := (result.Data).(types.ComplexUnions)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestComplexUnions", encoded, callOpts.onTick)
+		if err != nil {
+			return types.ComplexUnions{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.ComplexUnions{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.ComplexUnions), nil
+			}
+		}
+
+		return types.ComplexUnions{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.ComplexUnions{}, result.Error
-	}
-
-	casted := (result.Data).(types.ComplexUnions)
-
-	return casted, nil
 }
 
 func TestDiscriminatedUnions(ctx context.Context, input string, opts ...CallOptionFunc) (types.DiscriminatedUnions, error) {
@@ -85,18 +105,37 @@ func TestDiscriminatedUnions(ctx context.Context, input string, opts ...CallOpti
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestDiscriminatedUnions", encoded)
-	if err != nil {
-		return types.DiscriminatedUnions{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestDiscriminatedUnions", encoded, callOpts.onTick)
+		if err != nil {
+			return types.DiscriminatedUnions{}, err
+		}
+
+		if result.Error != nil {
+			return types.DiscriminatedUnions{}, result.Error
+		}
+
+		casted := (result.Data).(types.DiscriminatedUnions)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestDiscriminatedUnions", encoded, callOpts.onTick)
+		if err != nil {
+			return types.DiscriminatedUnions{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.DiscriminatedUnions{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.DiscriminatedUnions), nil
+			}
+		}
+
+		return types.DiscriminatedUnions{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.DiscriminatedUnions{}, result.Error
-	}
-
-	casted := (result.Data).(types.DiscriminatedUnions)
-
-	return casted, nil
 }
 
 func TestPrimitiveUnions(ctx context.Context, input string, opts ...CallOptionFunc) (types.PrimitiveUnions, error) {
@@ -124,18 +163,37 @@ func TestPrimitiveUnions(ctx context.Context, input string, opts ...CallOptionFu
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestPrimitiveUnions", encoded)
-	if err != nil {
-		return types.PrimitiveUnions{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestPrimitiveUnions", encoded, callOpts.onTick)
+		if err != nil {
+			return types.PrimitiveUnions{}, err
+		}
+
+		if result.Error != nil {
+			return types.PrimitiveUnions{}, result.Error
+		}
+
+		casted := (result.Data).(types.PrimitiveUnions)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestPrimitiveUnions", encoded, callOpts.onTick)
+		if err != nil {
+			return types.PrimitiveUnions{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.PrimitiveUnions{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.PrimitiveUnions), nil
+			}
+		}
+
+		return types.PrimitiveUnions{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.PrimitiveUnions{}, result.Error
-	}
-
-	casted := (result.Data).(types.PrimitiveUnions)
-
-	return casted, nil
 }
 
 func TestUnionArrays(ctx context.Context, input string, opts ...CallOptionFunc) (types.UnionArrays, error) {
@@ -163,16 +221,35 @@ func TestUnionArrays(ctx context.Context, input string, opts ...CallOptionFunc) 
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestUnionArrays", encoded)
-	if err != nil {
-		return types.UnionArrays{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestUnionArrays", encoded, callOpts.onTick)
+		if err != nil {
+			return types.UnionArrays{}, err
+		}
+
+		if result.Error != nil {
+			return types.UnionArrays{}, result.Error
+		}
+
+		casted := (result.Data).(types.UnionArrays)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestUnionArrays", encoded, callOpts.onTick)
+		if err != nil {
+			return types.UnionArrays{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.UnionArrays{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.UnionArrays), nil
+			}
+		}
+
+		return types.UnionArrays{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.UnionArrays{}, result.Error
-	}
-
-	casted := (result.Data).(types.UnionArrays)
-
-	return casted, nil
 }

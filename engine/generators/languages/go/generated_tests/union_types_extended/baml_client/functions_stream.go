@@ -73,7 +73,7 @@ func (*stream) TestComplexUnions(ctx context.Context, input string, opts ...Call
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestComplexUnions", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestComplexUnions", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -151,7 +151,7 @@ func (*stream) TestDiscriminatedUnions(ctx context.Context, input string, opts .
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestDiscriminatedUnions", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestDiscriminatedUnions", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -229,7 +229,7 @@ func (*stream) TestPrimitiveUnions(ctx context.Context, input string, opts ...Ca
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestPrimitiveUnions", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestPrimitiveUnions", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -307,7 +307,7 @@ func (*stream) TestUnionArrays(ctx context.Context, input string, opts ...CallOp
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestUnionArrays", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestUnionArrays", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}

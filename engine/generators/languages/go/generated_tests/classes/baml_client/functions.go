@@ -15,6 +15,7 @@ package baml_client
 
 import (
 	"context"
+	"fmt"
 
 	"classes/baml_client/types"
 
@@ -46,18 +47,37 @@ func ConsumeSimpleClass(ctx context.Context, item types.SimpleClass, opts ...Cal
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "ConsumeSimpleClass", encoded)
-	if err != nil {
-		return types.SimpleClass{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "ConsumeSimpleClass", encoded, callOpts.onTick)
+		if err != nil {
+			return types.SimpleClass{}, err
+		}
+
+		if result.Error != nil {
+			return types.SimpleClass{}, result.Error
+		}
+
+		casted := (result.Data).(types.SimpleClass)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "ConsumeSimpleClass", encoded, callOpts.onTick)
+		if err != nil {
+			return types.SimpleClass{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.SimpleClass{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.SimpleClass), nil
+			}
+		}
+
+		return types.SimpleClass{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.SimpleClass{}, result.Error
-	}
-
-	casted := (result.Data).(types.SimpleClass)
-
-	return casted, nil
 }
 
 func MakeSimpleClass(ctx context.Context, opts ...CallOptionFunc) (types.SimpleClass, error) {
@@ -85,16 +105,35 @@ func MakeSimpleClass(ctx context.Context, opts ...CallOptionFunc) (types.SimpleC
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "MakeSimpleClass", encoded)
-	if err != nil {
-		return types.SimpleClass{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "MakeSimpleClass", encoded, callOpts.onTick)
+		if err != nil {
+			return types.SimpleClass{}, err
+		}
+
+		if result.Error != nil {
+			return types.SimpleClass{}, result.Error
+		}
+
+		casted := (result.Data).(types.SimpleClass)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "MakeSimpleClass", encoded, callOpts.onTick)
+		if err != nil {
+			return types.SimpleClass{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.SimpleClass{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.SimpleClass), nil
+			}
+		}
+
+		return types.SimpleClass{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.SimpleClass{}, result.Error
-	}
-
-	casted := (result.Data).(types.SimpleClass)
-
-	return casted, nil
 }

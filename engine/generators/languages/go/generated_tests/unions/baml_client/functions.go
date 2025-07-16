@@ -15,6 +15,7 @@ package baml_client
 
 import (
 	"context"
+	"fmt"
 
 	"unions/baml_client/types"
 
@@ -46,16 +47,35 @@ func JsonInput(ctx context.Context, x []types.ExistingSystemComponent, opts ...C
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "JsonInput", encoded)
-	if err != nil {
-		return nil, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "JsonInput", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
+
+		if result.Error != nil {
+			return nil, result.Error
+		}
+
+		casted := (result.Data).([]string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "JsonInput", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return nil, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.([]string), nil
+			}
+		}
+
+		return nil, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return nil, result.Error
-	}
-
-	casted := (result.Data).([]string)
-
-	return casted, nil
 }

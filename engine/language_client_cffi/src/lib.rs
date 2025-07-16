@@ -104,6 +104,7 @@ use baml_types::BamlValue;
 use crate::ctypes::{BamlFunctionArguments, DecodeFromBuffer};
 
 pub type CallbackFn = extern "C" fn(call_id: u32, is_done: i32, content: *const i8, length: usize);
+pub type OnTickCallbackFn = extern "C" fn(call_id: u32);
 
 /// cbindgen:ignore
 static RESULT_CALLBACK_FN: OnceCell<CallbackFn> = OnceCell::new();
@@ -111,8 +112,15 @@ static RESULT_CALLBACK_FN: OnceCell<CallbackFn> = OnceCell::new();
 /// cbindgen:ignore
 static ERROR_CALLBACK_FN: OnceCell<CallbackFn> = OnceCell::new();
 
+/// cbindgen:ignore
+static ON_TICK_CALLBACK_FN: OnceCell<OnTickCallbackFn> = OnceCell::new();
+
 #[no_mangle]
-extern "C" fn register_callbacks(callback_fn: CallbackFn, error_callback_fn: CallbackFn) {
+extern "C" fn register_callbacks(
+    callback_fn: CallbackFn,
+    error_callback_fn: CallbackFn,
+    on_tick_callback_fn: OnTickCallbackFn,
+) {
     let log_setup = baml_log::init();
     if let Err(e) = log_setup {
         eprintln!("Error setting up BAML_LOG logging: {e}");
@@ -126,6 +134,7 @@ extern "C" fn register_callbacks(callback_fn: CallbackFn, error_callback_fn: Cal
     // Create a global runtime or pass it along as needed.
     let _ = RESULT_CALLBACK_FN.set(callback_fn);
     let _ = ERROR_CALLBACK_FN.set(error_callback_fn);
+    let _ = ON_TICK_CALLBACK_FN.set(on_tick_callback_fn);
 }
 
 fn safe_trigger_callback(
@@ -321,6 +330,7 @@ fn call_function_stream_from_c_inner(
     RUNTIME.spawn(async move {
         let (result, _) = stream
             .run(
+                Some(|| on_tick(id)),
                 Some(|r| on_event(id, r, runtime)),
                 &ctx,
                 None,
@@ -332,6 +342,13 @@ fn call_function_stream_from_c_inner(
     });
 
     Ok(())
+}
+
+fn on_tick(id: u32) {
+    let on_tick_fn = ON_TICK_CALLBACK_FN
+        .get()
+        .expect("expected on tick callback function to be set. Did you call register_callbacks?");
+    on_tick_fn(id);
 }
 
 fn on_event(id: u32, result: FunctionResult, runtime: &BamlRuntime) {

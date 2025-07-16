@@ -16,6 +16,8 @@ typedef void (*CallbackFn)(uint32_t call_id,
                            const int8_t *content,
                            uintptr_t length);
 
+typedef void (*OnTickCallbackFn)(uint32_t call_id);
+
 typedef struct Buffer {
   const int8_t *ptr;
   size_t len;
@@ -31,7 +33,9 @@ void destroy_baml_runtime(const void *runtime);
 
 int invoke_runtime_cli(const char *const *args);
 
-void register_callbacks(CallbackFn callback_fn, CallbackFn error_callback_fn);
+void register_callbacks(CallbackFn callback_fn,
+                        CallbackFn error_callback_fn,
+                        OnTickCallbackFn on_tick_callback_fn);
 
 /**
  * Extern "C" function that returns immediately, scheduling the async call.

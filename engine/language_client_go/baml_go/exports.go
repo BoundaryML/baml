@@ -57,8 +57,8 @@ func InvokeRuntimeCli(args []string) (int, error) {
 	return int(result), nil
 }
 
-func RegisterCallbacks(callbackFn unsafe.Pointer, errorFn unsafe.Pointer) error {
-	C.WrapRegisterCallbacks((C.CallbackFn)(callbackFn), (C.CallbackFn)(errorFn))
+func RegisterCallbacks(callbackFn unsafe.Pointer, errorFn unsafe.Pointer, onTickFn unsafe.Pointer) error {
+	C.WrapRegisterCallbacks((C.CallbackFn)(callbackFn), (C.CallbackFn)(errorFn), (C.OnTickCallbackFn)(onTickFn))
 	return nil
 }
 

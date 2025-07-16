@@ -73,7 +73,7 @@ func (*stream) TestComplexNested(ctx context.Context, input string, opts ...Call
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestComplexNested", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestComplexNested", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -151,7 +151,7 @@ func (*stream) TestDeeplyNested(ctx context.Context, input string, opts ...CallO
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestDeeplyNested", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestDeeplyNested", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -229,7 +229,7 @@ func (*stream) TestRecursiveStructure(ctx context.Context, input string, opts ..
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestRecursiveStructure", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestRecursiveStructure", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -307,7 +307,7 @@ func (*stream) TestSimpleNested(ctx context.Context, input string, opts ...CallO
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestSimpleNested", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestSimpleNested", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
