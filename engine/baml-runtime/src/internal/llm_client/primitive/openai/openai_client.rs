@@ -683,6 +683,7 @@ mod tests {
                 provider: "openai-responses".to_string(),
                 default_role: "user".to_string(),
                 allowed_roles: vec!["user".to_string(), "assistant".to_string()],
+                options: IndexMap::new(),
             },
             features: ModelFeatures {
                 chat: true,
@@ -733,6 +734,7 @@ mod tests {
                 provider: "openai".to_string(),
                 default_role: "user".to_string(),
                 allowed_roles: vec!["user".to_string(), "assistant".to_string()],
+                options: IndexMap::new(),
             },
             features: ModelFeatures {
                 chat: true,
