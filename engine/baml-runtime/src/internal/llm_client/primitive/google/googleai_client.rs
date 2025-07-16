@@ -19,7 +19,7 @@ use crate::{
     internal::llm_client::{
         primitive::{
             google::types::GoogleResponse,
-            request::{make_parsed_request, make_request, RequestBuilder, ResponseType},
+            request::{make_parsed_request, RequestBuilder, ResponseType},
         },
         traits::{
             CompletionToProviderBody, HttpContext, SseResponseTrait, StreamResponse,
@@ -128,6 +128,7 @@ impl GoogleAIClient {
                 provider: client.elem().provider.to_string(),
                 default_role: properties.default_role(),
                 allowed_roles: properties.allowed_roles(),
+                options: properties.properties.clone(),
             },
             features: ModelFeatures {
                 chat: true,
@@ -155,6 +156,7 @@ impl GoogleAIClient {
                 provider: client.provider.to_string(),
                 default_role: properties.default_role(),
                 allowed_roles: properties.allowed_roles(),
+                options: properties.properties.clone(),
             },
             features: ModelFeatures {
                 chat: true,

@@ -17,7 +17,7 @@ use super::{
 use crate::{
     client_registry::ClientProperty,
     internal::llm_client::{
-        primitive::request::{make_parsed_request, make_request, RequestBuilder, ResponseType},
+        primitive::request::{make_parsed_request, RequestBuilder, ResponseType},
         traits::{
             CompletionToProviderBody, HttpContext, SseResponseTrait, StreamResponse,
             ToProviderMessage, ToProviderMessageExt, WithChat, WithClient, WithClientProperties,
@@ -360,6 +360,7 @@ macro_rules! make_openai_client {
                 provider: $client.provider.to_string(),
                 default_role: $properties.default_role(),
                 allowed_roles: $properties.allowed_roles(),
+                options: $properties.properties.clone(),
             },
             features: ModelFeatures {
                 chat: true,
@@ -385,6 +386,7 @@ macro_rules! make_openai_client {
                 provider: $client.elem().provider.to_string(),
                 default_role: $properties.default_role(),
                 allowed_roles: $properties.allowed_roles(),
+                options: $properties.properties.clone(),
             },
             features: ModelFeatures {
                 chat: true,
@@ -681,6 +683,7 @@ mod tests {
                 provider: "openai-responses".to_string(),
                 default_role: "user".to_string(),
                 allowed_roles: vec!["user".to_string(), "assistant".to_string()],
+                options: IndexMap::new(),
             },
             features: ModelFeatures {
                 chat: true,
@@ -731,6 +734,7 @@ mod tests {
                 provider: "openai".to_string(),
                 default_role: "user".to_string(),
                 allowed_roles: vec!["user".to_string(), "assistant".to_string()],
+                options: IndexMap::new(),
             },
             features: ModelFeatures {
                 chat: true,

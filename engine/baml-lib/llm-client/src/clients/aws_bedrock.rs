@@ -5,6 +5,7 @@ use baml_derive::BamlHash;
 use baml_types::{ApiKeyWithProvenance, EvaluationContext, GetEnvVar, StringOr, UnresolvedValue};
 use indexmap::IndexMap;
 use secrecy::SecretString;
+use serde::Serialize;
 use serde_json::Value;
 
 use super::helpers::{Error, PropertyHandler};
@@ -62,7 +63,7 @@ impl UnresolvedInferenceConfiguration {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct InferenceConfiguration {
     pub max_tokens: Option<i32>,
     pub temperature: Option<f32>,
@@ -108,6 +109,21 @@ impl std::fmt::Debug for ResolvedAwsBedrock {
 }
 
 impl ResolvedAwsBedrock {
+    pub fn client_options(&self) -> IndexMap<String, serde_json::Value> {
+        let mut options = indexmap::IndexMap::new();
+        options.insert(
+            "model".to_string(),
+            serde_json::Value::String(self.model.clone()),
+        );
+        if let Some(region) = &self.region {
+            options.insert(
+                "region".to_string(),
+                serde_json::Value::String(region.clone()),
+            );
+        }
+        options
+    }
+
     pub fn allowed_roles(&self) -> Vec<String> {
         self.role_selection.allowed_or_else(|| {
             vec![
