@@ -60,7 +60,6 @@ pub fn parse_top_level_assignment(
 ) -> Option<expr::TopLevelAssignment> {
     assert_correct_parser!(token, Rule::top_level_assignment);
     let mut tokens = token.into_inner();
-    let stmt = parse_statement(tokens.next()?, diagnostics)?;
 
     match parse_statement(tokens.next()?, diagnostics)? {
         Stmt::Let(stmt) => Some(TopLevelAssignment { stmt }),
