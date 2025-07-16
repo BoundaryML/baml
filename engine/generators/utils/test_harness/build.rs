@@ -27,7 +27,7 @@ fn main() {
     // Cargo doesn't provide the dylib location through DEP_ variables for cdylib crates
     // So we still need to look for it in the target directory
     // Try multiple locations where the dylib might be
-    let possible_paths = vec![
+    let possible_paths = [
         cargo_root.join("target/debug/deps").join(dylib_name),
         cargo_root.join("target/debug").join(dylib_name),
     ];
@@ -61,8 +61,8 @@ fn main() {
     } else {
         // Since baml_cffi is a cdylib, we need to ensure it's built first
         // The links field will ensure build ordering, but the dylib might not exist yet
-        println!(
-            "cargo:warning=baml_cffi dylib not found at {}. Make sure to build baml_cffi first.",
+        panic!(
+            "baml_cffi dylib not found at {}. Make sure to build baml_cffi first: cargo build --package baml_cffi",
             dylib_path.display()
         );
     }
