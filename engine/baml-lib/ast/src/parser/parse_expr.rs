@@ -80,12 +80,12 @@ pub fn parse_for_loop(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<
     let identifier = parse_identifier(tokens.next()?, diagnostics);
     let iterator = parse_expression(tokens.next()?, diagnostics)?;
     let body = parse_expr_block(tokens.next()?, diagnostics)?;
-    Some(Stmt::ForLoop(ForLoopStmt::new(
+    Some(Stmt::ForLoop(ForLoopStmt {
         identifier,
         iterator,
         body,
-        span.clone(),
-    )))
+        span: span.clone(),
+    }))
 }
 
 pub fn parse_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Stmt> {

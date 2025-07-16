@@ -27,22 +27,6 @@ pub struct ForLoopStmt {
     pub span: Span,
 }
 
-impl ForLoopStmt {
-    pub fn new(
-        identifier: Identifier,
-        iterator: Expression,
-        body: ExpressionBlock,
-        span: Span,
-    ) -> Self {
-        Self {
-            identifier,
-            iterator,
-            body,
-            span,
-        }
-    }
-}
-
 // Stmt(statements) perform actions and not often return values.
 #[derive(Debug, Clone)]
 pub enum Stmt {
@@ -95,31 +79,10 @@ impl Stmt {
         }
     }
 
-    pub fn body(&self) -> &ExpressionBlock {
-        match self {
-            Stmt::Let(_) => panic!("Let statement does not have a body"),
-            Stmt::ForLoop(stmt) => &stmt.body,
-        }
-    }
-
     pub fn expr(&self) -> &Expression {
         match self {
             Stmt::Let(stmt) => &stmt.expr,
             Stmt::ForLoop(stmt) => &stmt.body.expr,
-        }
-    }
-
-    pub fn iterator(&self) -> &Expression {
-        match self {
-            Stmt::Let(_) => panic!("Let statement does not have an iterator"),
-            Stmt::ForLoop(stmt) => &stmt.iterator,
-        }
-    }
-
-    pub fn statements(&self) -> &Vec<Stmt> {
-        match self {
-            Stmt::Let(_) => panic!("Let statement does not have statements"),
-            Stmt::ForLoop(stmt) => &stmt.body.stmts,
         }
     }
 }
