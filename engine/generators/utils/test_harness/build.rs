@@ -61,8 +61,8 @@ fn main() {
     } else {
         // Since baml_cffi is a cdylib, we need to ensure it's built first
         // The links field will ensure build ordering, but the dylib might not exist yet
-        panic!(
-            "baml_cffi dylib not found at {}. Make sure to build baml_cffi first: cargo build --package baml_cffi",
+        println!(
+            "cargo:warning=baml_cffi dylib not found at {}. Make sure to build baml_cffi first: cargo build --package baml_cffi",
             dylib_path.display()
         );
     }
