@@ -376,8 +376,6 @@ test TestURLAudioInput{
   }  
 }
 
-
-
 // BAML supports multi-modal inputs! Check the raw cURL request toggle in the playground to see the prompt is transformed into an API call
 
 // How to call this BAML function in python or Typescript: https://docs.boundaryml.com/docs/snippets/supported-types#image

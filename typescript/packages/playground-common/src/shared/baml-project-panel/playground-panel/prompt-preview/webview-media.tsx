@@ -220,7 +220,7 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
     switch (bamlMediaType) {
       case 'image':
         return (
-          <div className="relative w-full h-[80vh] flex items-center justify-center">
+          <div className="relative w-full h-[65vh] flex items-center justify-center">
             <img
               src={optimizedMediaUrl || ''}
               // biome-ignore lint/a11y/noRedundantAlt: not correct

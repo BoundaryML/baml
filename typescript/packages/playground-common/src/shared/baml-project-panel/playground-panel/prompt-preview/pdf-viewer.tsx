@@ -22,6 +22,10 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({ url }) => {
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageInputValue, setPageInputValue] = useState<string>('1');
   
+  // Virtual scrolling state
+  const [visiblePages, setVisiblePages] = useState<Set<number>>(new Set([1]));
+  const [pageHeights, setPageHeights] = useState<{ [key: number]: number }>({});
+  
   // Zoom and pan state
   const [zoom, setZoom] = useState<number>(0.8);
   const [zoomInputValue, setZoomInputValue] = useState<string>('80');
@@ -51,6 +55,8 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({ url }) => {
     setZoomInputValue('80');
     setPanOffset({ x: 0, y: 0 });
     setIsZoomInitialized(false);
+    setVisiblePages(new Set([1]));
+    setPageHeights({});
   }, [url]);
 
   // Zoom functions
@@ -203,14 +209,63 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({ url }) => {
     }
   }, [zoom]);
 
-  // Intersection observer to track visible pages
+  // Calculate which pages should be visible based on viewport
+  const calculateVisiblePages = useCallback(() => {
+    if (!pdfContainerRef.current || !numPages) return;
+
+    const container = pdfContainerRef.current;
+    const containerTop = container.scrollTop;
+    const containerBottom = containerTop + container.clientHeight;
+    
+    // Add buffer for smoother scrolling (render 2 pages before/after visible area)
+    const bufferSize = 2;
+    const newVisiblePages = new Set<number>();
+    
+    // Estimate page height if we don't have exact measurements
+    const estimatedPageHeight = 800 * zoom; // Rough estimate
+    const padding = 16; // 8px top + 8px bottom from container padding
+    
+    for (let pageNum = 1; pageNum <= numPages; pageNum++) {
+      const pageElement = pageRefs.current[pageNum];
+      let pageTop: number;
+      let pageBottom: number;
+      
+      if (pageElement) {
+        // Use actual measurements if available
+        const rect = pageElement.getBoundingClientRect();
+        const containerRect = container.getBoundingClientRect();
+        pageTop = container.scrollTop + (rect.top - containerRect.top);
+        pageBottom = pageTop + rect.height;
+      } else {
+        // Estimate position based on page number and estimated height
+        const spacing = 16; // Gap between pages
+        pageTop = padding + (pageNum - 1) * (estimatedPageHeight + spacing);
+        pageBottom = pageTop + estimatedPageHeight;
+      }
+      
+      // Check if page is within buffered viewport
+      const isInBuffer = pageBottom >= containerTop - (bufferSize * estimatedPageHeight) &&
+                        pageTop <= containerBottom + (bufferSize * estimatedPageHeight);
+      
+      if (isInBuffer) {
+        newVisiblePages.add(pageNum);
+      }
+    }
+    
+    // Always include at least the current page
+    newVisiblePages.add(currentPage);
+    
+    setVisiblePages(newVisiblePages);
+  }, [numPages, zoom, currentPage]);
+
+  // Intersection observer to track visible pages and current page
   useEffect(() => {
-    if (!numPages || numPages <= 1) return;
+    if (!numPages) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
         // Find the page that's most visible
-        let mostVisiblePage = 1;
+        let mostVisiblePage = currentPage;
         let maxIntersectionRatio = 0;
 
         entries.forEach((entry) => {
@@ -225,6 +280,9 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({ url }) => {
           setCurrentPage(mostVisiblePage);
           setPageInputValue(mostVisiblePage.toString());
         }
+        
+        // Recalculate visible pages
+        calculateVisiblePages();
       },
       {
         root: pdfContainerRef.current,
@@ -233,7 +291,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({ url }) => {
       }
     );
 
-    // Observe all page elements
+    // Observe all rendered page elements
     Object.values(pageRefs.current).forEach((pageElement) => {
       if (pageElement) {
         observer.observe(pageElement);
@@ -243,7 +301,20 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({ url }) => {
     return () => {
       observer.disconnect();
     };
-  }, [numPages, currentPage]);
+  }, [numPages, currentPage, calculateVisiblePages]);
+
+  // Recalculate visible pages on scroll
+  useEffect(() => {
+    if (!pdfContainerRef.current) return;
+    
+    const container = pdfContainerRef.current;
+    const handleScroll = () => {
+      calculateVisiblePages();
+    };
+    
+    container.addEventListener('scroll', handleScroll);
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, [calculateVisiblePages]);
 
   const handlePageChange = (newPage: number) => {
     if (numPages && newPage >= 1 && newPage <= numPages) {
@@ -387,28 +458,62 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({ url }) => {
                   }
                   className="space-y-4"
                 >
-                  {numPages && Array.from({ length: numPages }, (_, index) => (
-                    <div
-                      key={index + 1}
-                      ref={(el) => {
-                        pageRefs.current[index + 1] = el;
-                      }}
-                      data-page-number={index + 1}
-                      className="relative shadow-sm rounded overflow-hidden bg-white"
-                      style={{ flexShrink: 0 }}
-                    >
-                      <Page
-                        pageNumber={index + 1}
-                        scale={zoom}
-                        renderTextLayer={true}
-                        renderAnnotationLayer={true}
-                        className="border border-[var(--vscode-panel-border)]"
-                      />
-                      <div className="absolute top-1 right-1 bg-[var(--vscode-editor-background)] text-[var(--vscode-foreground)] text-xs px-1.5 py-0.5 rounded border border-[var(--vscode-panel-border)]">
-                        {index + 1}
+                  {numPages && Array.from({ length: numPages }, (_, index) => {
+                    const pageNumber = index + 1;
+                    const isVisible = visiblePages.has(pageNumber);
+                    
+                    // Estimate page height for non-rendered pages
+                    const estimatedPageHeight = 800 * zoom;
+                    const spacing = 16;
+                    
+                    return (
+                      <div
+                        key={pageNumber}
+                        ref={(el) => {
+                          pageRefs.current[pageNumber] = el;
+                        }}
+                        data-page-number={pageNumber}
+                        className="relative shadow-sm rounded overflow-hidden bg-white"
+                        style={{ 
+                          flexShrink: 0,
+                          // For non-visible pages, maintain height to preserve scroll position
+                          minHeight: isVisible ? 'auto' : `${estimatedPageHeight}px`
+                        }}
+                      >
+                        {isVisible ? (
+                          <>
+                            <Page
+                              pageNumber={pageNumber}
+                              scale={zoom}
+                              renderTextLayer={true}
+                              renderAnnotationLayer={true}
+                              className="border border-[var(--vscode-panel-border)]"
+                              onLoadSuccess={(page: any) => {
+                                // Store actual page height for better estimates
+                                setPageHeights(prev => ({
+                                  ...prev,
+                                  [pageNumber]: page.view[3] * zoom
+                                }));
+                              }}
+                            />
+                            <div className="absolute top-1 right-1 bg-[var(--vscode-editor-background)] text-[var(--vscode-foreground)] text-xs px-1.5 py-0.5 rounded border border-[var(--vscode-panel-border)]">
+                              {pageNumber}
+                            </div>
+                          </>
+                        ) : (
+                          // Placeholder for non-visible pages
+                          <div 
+                            className="flex items-center justify-center border border-[var(--vscode-panel-border)] bg-gray-100"
+                            style={{ height: `${estimatedPageHeight}px` }}
+                          >
+                            <div className="text-gray-500 text-sm">
+                              Page {pageNumber}
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </Document>
               </div>
             </div>
@@ -484,7 +589,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({ url }) => {
                   onBlur={handleZoomInputSubmit}
                   className="w-8 h-5 px-1 text-xs text-center bg-[var(--vscode-input-background)] border border-[var(--vscode-panel-border)] rounded focus:outline-none focus:border-[var(--vscode-focus-border)] leading-none"
                 />
-                <span className="text-xs text-[var(--vscode-description-foreground)] leading-none">%</span>
+                <span className="text-xs text-[var(--vscode-description-foreground)] pl-1">%</span>
               </div>
               
               <button
