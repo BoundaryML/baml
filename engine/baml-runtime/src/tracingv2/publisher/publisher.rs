@@ -256,7 +256,7 @@ impl TracePublisher {
             .ast
             .env_var("BAML_TRACE_BATCH_SIZE")
             .and_then(|s| s.parse::<usize>().ok())
-            .unwrap_or(12);
+            .unwrap_or(100);
 
         Self {
             rx,
