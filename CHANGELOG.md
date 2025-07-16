@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.202.0](https://github.com/boundaryml/baml/compare/0.201.0..0.202.0) - 2025-07-16
+
+### Bug Fixes
+
+- issues with setup-dev.sh (#2133) - ([059b7c3](https://github.com/boundaryml/baml/commit/059b7c304482444c5e6b58330ed31bcf528375b3)) - Chris Watts
+- Fix baml-cli generate panic (#2142) - ([8884e20](https://github.com/boundaryml/baml/commit/8884e2040660782d52f2b63a0049f44bfbd05bc4)) - aaronvg
+- Fix generation of ignore files in openapi (#2112) - ([7eb1450](https://github.com/boundaryml/baml/commit/7eb145080d95f6f8f407e849ff338ff6f8fa9cfb)) - Greg Hale
+- In go, fix issue with top level strings / primitiive types being returned (#2110) - ([0a1aa60](https://github.com/boundaryml/baml/commit/0a1aa60d38efa2129e39b2578df1a18a211c5516)) - hellovai
+- Support moving / renaming baml files and directories and remove language server crash (#2131) - ([9d6a3db](https://github.com/boundaryml/baml/commit/9d6a3dbb4cce7a04c9c156e298196c810a74b36b)) - Antonio Sarosi
+- Propertly escape env vars from VSCode -> BAML runtime to handle JSON strings (credentials for vertex) (#2135) - ([d81a0a7](https://github.com/boundaryml/baml/commit/d81a0a7225dbd17b32e6bf4d515380b97539f850)) - hellovai
+
+### Documentation
+
+- Update playground UI references and screenshots (#2122) - ([a7974fb](https://github.com/boundaryml/baml/commit/a7974fb8294f17d1d496adc9e4cef2ec9e31a5bc)) - George
+- Improved documentation for baml versioning (#2124) - ([083ccb7](https://github.com/boundaryml/baml/commit/083ccb785e6ce9164cbef9e75a525ab3c36b9d48)) - egol
+- Docs for using anthropic models on vertex (#2123) - ([0db53c1](https://github.com/boundaryml/baml/commit/0db53c1fd93d9683fcb9ad2a6fea970161d16730)) - Gabe Villasana
+- Make baml directory structure and set up easier (./scripts/setup-dev.sh && pnpm build) (#2087) - ([6b7c178](https://github.com/boundaryml/baml/commit/6b7c1782ce73c19891a08b81e1291c2295500daf)) - Chris Watts
+
+### Features
+
+- Add new provider "openai-responses" for OpenAI Responses API support  (#2103) - ([18ef4e4](https://github.com/boundaryml/baml/commit/18ef4e4a59f6fd5c15e8eeca275ce579745603cf)) - Rahul Tiwari
+- Add SSE stream to the collector (#2118) - ([d389451](https://github.com/boundaryml/baml/commit/d389451fd1dd2dc114eedf1c158339b74ef67455)) - hellovai
+- Add Pdf and Video support (#2121) - ([f33bd71](https://github.com/boundaryml/baml/commit/f33bd718ff29315e8fc6cd67f596cba922409c38)) - egol
+- Add collector capability to Go (#2119) - ([de024cf](https://github.com/boundaryml/baml/commit/de024cf5324640b85358312a42c1e9f9d3405cd5)) - hellovai
+- [feat] Add experiemental support for accessing collector prior to first streamed value in go (#2146) - ([786c303](https://github.com/boundaryml/baml/commit/786c303ea29207036f8570006e3ca38d0185244f)) - hellovai
+
+
 ## [0.201.0](https://github.com/boundaryml/baml/compare/0.200.0..0.201.0) - 2025-07-03
 
 
