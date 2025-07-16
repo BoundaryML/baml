@@ -179,7 +179,7 @@ jobs:
       - name: Publish to NPM
         # This reads the credential from .npmrc, which is written by the setup-node step.
         # It does not use the NODE_AUTH_TOKEN environment variable.
-        run: pnpm --filter=@boundaryml/baml publish --access public
+        run: pnpm --filter=@boundaryml/baml publish --access public --no-git-checks
 
   # publish-to-rubygems:
   #   environment: release
