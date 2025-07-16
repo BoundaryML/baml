@@ -305,8 +305,8 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({ url }) => {
     );
   }
 
-  // For blob URLs or data URLs, use react-pdf for local rendering
-  if (url.startsWith('blob:') || url.startsWith('data:')) {
+  // Currently using the local pdf viewer for everything.
+  if (true) {
     return (
       <div className="h-[70vh] relative bg-[var(--vscode-editor-background)] border border-[var(--vscode-panel-border)] rounded overflow-hidden">
         {pdfError ? (
