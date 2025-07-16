@@ -176,16 +176,10 @@ jobs:
           pattern: bindings-*
           path: engine/language_client_typescript/artifacts
 
-      - name: Create npm directories
-        run: pnpm --filter=@baml/language-client-typescript napi create-npm-dirs
-
-      - name: Move artifacts
-        run: pnpm --filter=@baml/language-client-typescript artifacts
-
       - name: Publish to NPM
         # This reads the credential from .npmrc, which is written by the setup-node step.
         # It does not use the NODE_AUTH_TOKEN environment variable.
-        run: pnpm --filter=@baml/language-client-typescript publish --access public
+        run: pnpm --filter=@boundaryml/baml publish --access public
 
   # publish-to-rubygems:
   #   environment: release

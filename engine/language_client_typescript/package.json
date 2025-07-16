@@ -62,7 +62,7 @@
     "access": "public"
   },
   "scripts": {
-    "artifacts": "napi artifacts",
+    "artifacts": "mkdir -p artifacts && napi artifacts",
     "build": "pnpm build:napi-debug && pnpm build:ts_build && pnpm napi create-npm-dirs && pnpm artifacts",
     "release": "pnpm build:napi-release && pnpm build:ts_build",
     "build:debug": "pnpm build:napi-debug && pnpm build:ts_build",
@@ -72,7 +72,7 @@
     "build:local": "pnpm build:debug && pnpm napi create-npm-dirs && pnpm artifacts",
     "build:napi-debug-local": "napi build -o ./artifacts --js ./native.js --dts ./native.d.ts --platform",
     "build:ts_build_local": "tsc ./typescript_src/*.ts --outDir ./artifacts --module nodenext --module nodenext --allowJs --declaration true --declarationMap true || true",
-    "prepublishOnly": "napi prepublish --no-gh-release",
+    "prepublishOnly": "napi create-npm-dirs && pnpm artifacts && napi prepublish --no-gh-release",
     "test": "jest --config jest.config.js",
     "version": "napi version",
     "clean": "git clean -xdf .turbo node_modules target artifacts npm *.node",

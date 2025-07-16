@@ -106,7 +106,7 @@ export const envKeyValuesAtom = atom(
 );
 
 export const userApiKeysAtom = atom(
-  (get) => {
+  (get): Record<string, string> => {
     const envKeyValues = get(envKeyValuesAtom);
     const result = Object.fromEntries(
       envKeyValues
