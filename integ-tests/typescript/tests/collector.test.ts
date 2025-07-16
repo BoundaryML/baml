@@ -132,7 +132,7 @@ describe("Collector Tests", () => {
     const log = collector.last;
     expect(log).not.toBeNull();
     expect(log?.functionName).toBe("TestOpenAIGPT4oMini");
-    expect(log?.logType).toBe("call");
+    expect(log?.logType).toBe("stream");
 
     // Verify timing fields
     expect(log?.timing.startTimeUtcMs).toBeGreaterThan(0);
