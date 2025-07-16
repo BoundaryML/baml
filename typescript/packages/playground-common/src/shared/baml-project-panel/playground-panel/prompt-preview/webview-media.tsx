@@ -2,12 +2,22 @@
 import type { WasmChatMessagePartMedia } from '@gloo-ai/baml-schema-wasm-web';
 /* eslint-disable @typescript-eslint/require-await */
 import { useAtomValue, useSetAtom } from 'jotai';
-import { ExternalLinkIcon, ImageIcon, Music, FileText, Video } from 'lucide-react';
+import { ExternalLinkIcon, ImageIcon, Music, FileText, Video, Copy, Check, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import useSWR from 'swr';
+// @ts-ignore - react-pdf types are handled at runtime
+import { Document, Page, pdfjs } from 'react-pdf';
+import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
+import 'react-pdf/dist/esm/Page/TextLayer.css';
 import { wasmAtom } from '../../atoms';
 import { showTokensAtom } from './render-text';
 import { imageStatsMapAtom } from './image-stats-atom';
+
+// Configure PDF.js worker (recommended approach)
+pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.min.mjs',
+  import.meta.url,
+).toString();
 
 interface WebviewMediaProps {
   bamlMediaType: 'image' | 'audio' | 'pdf' | 'video';
@@ -74,6 +84,15 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
   // Track blob URLs for cleanup
   const blobUrlRef = useRef<string | null>(null);
   const [optimizedMediaUrl, setOptimizedMediaUrl] = useState<string | null>(null);
+  
+  // PDF-related state
+  const [numPages, setNumPages] = useState<number | null>(null);
+  const [pdfError, setPdfError] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageInputValue, setPageInputValue] = useState<string>('1');
+  
+  // Copy status state
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'copying' | 'success' | 'error'>('idle');
 
   const {
     data: mediaUrl,
@@ -126,6 +145,16 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
     }
   }, [mediaUrl, bamlMediaType]);
 
+  // Reset PDF state when URL changes
+  useEffect(() => {
+    if (bamlMediaType === 'pdf') {
+      setNumPages(null);
+      setPdfError(null);
+      setCurrentPage(1);
+      setPageInputValue('1');
+    }
+  }, [optimizedMediaUrl, mediaUrl, bamlMediaType]);
+
   // Cleanup blob URLs on unmount
   useEffect(() => {
     return () => {
@@ -137,19 +166,46 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
 
   if (error) {
     return (
-      <div className="px-4 py-3 rounded-lg bg-destructive/15 text-destructive">
-        <p className="text-sm font-medium">Error loading {bamlMediaType}</p>
-        <p className="mt-1 text-xs">{error.message}</p>
+      <div className="w-full flex justify-center">
+        <div className="max-w-4xl w-full border border-[var(--vscode-panel-border)] rounded bg-[var(--vscode-editor-background)] p-4">
+          <div className="flex h-[30vh] items-center justify-center">
+            <div className="text-center space-y-3 text-[var(--vscode-charts-red)]">
+              <div className="flex items-center justify-center gap-2 mb-2">
+                {bamlMediaType === 'image' && <ImageIcon className="w-6 h-6" />}
+                {bamlMediaType === 'audio' && <Music className="w-6 h-6" />}
+                {bamlMediaType === 'pdf' && <FileText className="w-6 h-6" />}
+                {bamlMediaType === 'video' && <Video className="w-6 h-6" />}
+              </div>
+              <p className="text-sm font-medium">Error loading {bamlMediaType}</p>
+              <p className="text-xs text-[var(--vscode-charts-red)] bg-[var(--vscode-editor-background)] p-2 rounded border border-[var(--vscode-panel-border)] font-mono max-w-md">
+                {error.message}
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
 
   if (isLoading) {
     return (
-      <div className="flex h-[200px] items-center justify-center rounded-lg bg-accent">
-        <p className="text-sm text-muted-foreground">
-          Loading {bamlMediaType}...
-        </p>
+      <div className="w-full flex justify-center">
+        <div className="max-w-4xl w-full border border-[var(--vscode-panel-border)] rounded bg-[var(--vscode-editor-background)] p-4">
+          <div className="flex h-[30vh] items-center justify-center">
+            <div className="text-center space-y-3">
+              <div className="w-8 h-8 border-2 border-[var(--vscode-panel-border)] border-t-[var(--vscode-foreground)] rounded-full animate-spin mx-auto"></div>
+              <div className="flex items-center gap-2">
+                {bamlMediaType === 'image' && <ImageIcon className="w-4 h-4 text-[var(--vscode-description-foreground)]" />}
+                {bamlMediaType === 'audio' && <Music className="w-4 h-4 text-[var(--vscode-description-foreground)]" />}
+                {bamlMediaType === 'pdf' && <FileText className="w-4 h-4 text-[var(--vscode-description-foreground)]" />}
+                {bamlMediaType === 'video' && <Video className="w-4 h-4 text-[var(--vscode-description-foreground)]" />}
+                <p className="text-sm text-[var(--vscode-description-foreground)]">
+                  Loading {bamlMediaType}...
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -185,21 +241,34 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
     switch (bamlMediaType) {
       case 'image':
         return (
-          <img
-            src={optimizedMediaUrl || ''}
-            // biome-ignore lint/a11y/noRedundantAlt: not correct
-            alt={'Image Not Found'}
-            className="max-h-[400px] max-w-[400px] rounded-b-lg object-contain"
-            onLoad={onImageLoad}
-          />
+          <div className="relative w-full h-[80vh] flex items-center justify-center">
+            <img
+              src={optimizedMediaUrl || ''}
+              // biome-ignore lint/a11y/noRedundantAlt: not correct
+              alt={'Image Not Found'}
+              className="max-w-full max-h-full rounded object-contain border border-[var(--vscode-panel-border)]"
+              onLoad={onImageLoad}
+            />
+            {imageStats && isDebugMode && (
+              <div className="max-h-sm absolute bottom-2 left-2 bg-[var(--vscode-editor-background)] text-[var(--vscode-foreground)] text-xs px-2 py-1 rounded border border-[var(--vscode-panel-border)]">
+              {imageStats.width}×{imageStats.height} • {imageStats.size}
+              </div>
+            )}
+          </div>
         );
       case 'audio':
         return (
-          // biome-ignore lint/a11y/useMediaCaption: not correct
-          <audio controls className="p-2 w-full">
-            <source src={optimizedMediaUrl || ''} />
-            Your browser does not support the audio element.
-          </audio>
+          <div className="w-full max-w-2xl mx-auto bg-[var(--vscode-editor-background)] border border-[var(--vscode-panel-border)] rounded-lg shadow-sm p-4">
+            <div className="flex items-center gap-3 mb-3">
+              <Music className="w-5 h-5 text-[var(--vscode-description-foreground)]" />
+              <span className="text-sm font-medium text-[var(--vscode-foreground)]">Audio Player</span>
+            </div>
+            {/* biome-ignore lint/a11y/useMediaCaption: not correct */}
+            <audio controls className="w-full">
+              <source src={optimizedMediaUrl || ''} />
+              Your browser does not support the audio element.
+            </audio>
+          </div>
         );
       case 'pdf':
         return renderPdfContent(optimizedMediaUrl || mediaUrl || '');
@@ -253,8 +322,11 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
   const renderVideoContent = (url: string) => {
     if (!url) {
       return (
-        <div className="flex h-[300px] items-center justify-center rounded-lg bg-accent border-2 border-dashed border-muted-foreground/30">
-          <p className="text-sm text-muted-foreground">No video URL available</p>
+        <div className="flex h-[30vh] items-center justify-center rounded bg-[var(--vscode-editor-background)] border-2 border-dashed border-[var(--vscode-panel-border)]">
+          <div className="text-center space-y-2">
+            <Video className="w-8 h-8 mx-auto text-[var(--vscode-description-foreground)]" />
+            <p className="text-sm text-[var(--vscode-description-foreground)]">No video URL available</p>
+          </div>
         </div>
       );
     }
@@ -263,17 +335,19 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
     const youtubeEmbedUrl = getYouTubeEmbedUrl(url);
     if (youtubeEmbedUrl) {
       return (
-        <div className="w-full max-w-[600px] aspect-video border rounded-lg overflow-hidden">
-          <iframe
-            src={youtubeEmbedUrl}
-            width="100%"
-            height="100%"
-            className="w-full h-full"
-            frameBorder="0"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            allowFullScreen
-            title="YouTube video"
-          />
+        <div className="w-full max-w-3xl mx-auto">
+          <div className="aspect-video border border-[var(--vscode-panel-border)] rounded overflow-hidden">
+            <iframe
+              src={youtubeEmbedUrl}
+              width="100%"
+              height="100%"
+              className="w-full h-full"
+              frameBorder="0"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+              title="YouTube video"
+            />
+          </div>
         </div>
       );
     }
@@ -282,17 +356,19 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
     const vimeoEmbedUrl = getVimeoEmbedUrl(url);
     if (vimeoEmbedUrl) {
       return (
-        <div className="w-full max-w-[600px] aspect-video border rounded-lg overflow-hidden">
-          <iframe
-            src={vimeoEmbedUrl}
-            width="100%"
-            height="100%"
-            className="w-full h-full"
-            frameBorder="0"
-            allow="autoplay; fullscreen; picture-in-picture"
-            allowFullScreen
-            title="Vimeo video"
-          />
+        <div className="w-full max-w-3xl mx-auto">
+          <div className="aspect-video border border-[var(--vscode-panel-border)] rounded overflow-hidden">
+            <iframe
+              src={vimeoEmbedUrl}
+              width="100%"
+              height="100%"
+              className="w-full h-full"
+              frameBorder="0"
+              allow="autoplay; fullscreen; picture-in-picture"
+              allowFullScreen
+              title="Vimeo video"
+            />
+          </div>
         </div>
       );
     }
@@ -300,18 +376,20 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
     // Check if it's a direct video file
     if (isDirectVideoFile(url)) {
       return (
-        // biome-ignore lint/a11y/useMediaCaption: not correct
-        <video controls className="max-h-[400px] max-w-[600px] rounded-lg">
-          <source src={url} />
-          Your browser does not support the video element.
-        </video>
+        <div className="w-full max-w-3xl mx-auto border border-[var(--vscode-panel-border)] rounded overflow-hidden bg-black">
+          {/* biome-ignore lint/a11y/useMediaCaption: not correct */}
+          <video controls className="w-full h-auto max-h-[50vh] object-contain">
+            <source src={url} />
+            Your browser does not support the video element.
+          </video>
+        </div>
       );
     }
 
     // Fallback: try to embed as iframe (for other video platforms)
     return (
-      <div className="w-full max-w-[600px] space-y-2">
-        <div className="aspect-video border rounded-lg overflow-hidden">
+      <div className="w-full max-w-3xl mx-auto">
+        <div className="aspect-video border border-[var(--vscode-panel-border)] rounded overflow-hidden">
           <iframe
             src={url}
             width="100%"
@@ -323,9 +401,6 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
             title="Video content"
           />
         </div>
-        <p className="text-xs text-muted-foreground text-center">
-          If the video doesn't load, try opening the link directly
-        </p>
       </div>
     );
   };
@@ -333,34 +408,111 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
   const renderPdfContent = (url: string) => {
     if (!url) {
       return (
-        <div className="flex h-[300px] items-center justify-center rounded-lg bg-accent border-2 border-dashed border-muted-foreground/30">
-          <p className="text-sm text-muted-foreground">No PDF URL available</p>
+        <div className="flex h-[30vh] items-center justify-center rounded bg-[var(--vscode-editor-background)] border-2 border-dashed border-[var(--vscode-panel-border)]">
+          <div className="text-center space-y-2">
+            <FileText className="w-8 h-8 mx-auto text-[var(--vscode-description-foreground)]" />
+            <p className="text-sm text-[var(--vscode-description-foreground)]">No PDF URL available</p>
+          </div>
         </div>
       );
     }
 
-    // For blob URLs or data URLs, use direct embed which works better in same-origin context
+    // For blob URLs or data URLs, use react-pdf for local rendering
     if (url.startsWith('blob:') || url.startsWith('data:')) {
       return (
-        <div className="w-full max-w-[600px] space-y-2">
-          <div className="h-[500px] border rounded-lg overflow-hidden bg-white">
-            <embed
-              src={url}
-              type="application/pdf"
-              width="100%"
-              height="100%"
-              className="w-full h-full"
-              title="PDF Document"
-            />
-          </div>
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
-            {url.startsWith('data:') && (
-              <span className="text-green-600">✓ Base64 content loaded</span>
-            )}
-            {url.startsWith('blob:') && (
-              <span className="text-green-600">✓ Blob content loaded</span>
-            )}
-          </div>
+        <div className="h-[70vh] relative bg-[var(--vscode-editor-background)] border border-[var(--vscode-panel-border)] rounded overflow-hidden">
+          {pdfError ? (
+            <div className="flex items-center justify-center h-full text-[var(--vscode-charts-red)]">
+              <div className="text-center space-y-2">
+                <FileText className="w-8 h-8 mx-auto" />
+                <p className="text-sm">Error loading PDF: {pdfError}</p>
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* PDF Content */}
+              <div className="h-full overflow-auto">
+                <Document
+                  file={url}
+                  onLoadSuccess={(pdf: any) => {
+                    setNumPages(pdf.numPages);
+                    setPdfError(null);
+                  }}
+                  onLoadError={(error: any) => {
+                    setPdfError(error.message || 'Failed to load PDF');
+                  }}
+                  loading={
+                    <div className="flex items-center justify-center h-full min-h-[200px]">
+                      <div className="text-center space-y-2">
+                        <div className="w-6 h-6 border-2 border-[var(--vscode-panel-border)] border-t-[var(--vscode-foreground)] rounded-full animate-spin mx-auto"></div>
+                        <p className="text-sm text-[var(--vscode-description-foreground)]">Loading PDF...</p>
+                      </div>
+                    </div>
+                  }
+                  className="flex flex-col items-center p-2"
+                >
+                  {numPages && (
+                    <div className="relative shadow-sm rounded overflow-hidden bg-white max-w-full">
+                      <Page
+                        pageNumber={currentPage}
+                        scale={0.8}
+                        renderTextLayer={true}
+                        renderAnnotationLayer={true}
+                        className="border border-[var(--vscode-panel-border)] max-w-full"
+                      />
+                      <div className="absolute top-1 right-1 bg-[var(--vscode-editor-background)] text-[var(--vscode-foreground)] text-xs px-1.5 py-0.5 rounded border border-[var(--vscode-panel-border)]">
+                        {currentPage}
+                      </div>
+                    </div>
+                  )}
+                </Document>
+              </div>
+              
+              {/* Navigation Controls Overlay */}
+              {numPages && numPages > 1 && (
+                <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-10 flex items-center gap-1 px-3 py-1.5 bg-[var(--vscode-editor-background)]/95 backdrop-blur-sm border border-[var(--vscode-panel-border)] rounded-lg shadow-lg pointer-events-auto">
+                  <button
+                    onClick={() => handlePageChange(currentPage - 1)}
+                    disabled={currentPage <= 1}
+                    className={`p-1.5 rounded transition-colors ${
+                      currentPage <= 1
+                        ? 'text-[var(--vscode-description-foreground)] cursor-not-allowed'
+                        : 'text-[var(--vscode-foreground)] hover:bg-[var(--vscode-button-hover-background)]'
+                    }`}
+                    title="Previous page"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                  </button>
+                  
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-[var(--vscode-foreground)]">Page</span>
+                    <input
+                      type="text"
+                      value={pageInputValue}
+                      onChange={(e) => handlePageInputChange(e.target.value)}
+                      onKeyDown={handlePageInputKeyDown}
+                      onBlur={handlePageInputSubmit}
+                      className="w-10 h-6 px-1.5 text-xs text-center bg-[var(--vscode-input-background)] border border-[var(--vscode-panel-border)] rounded focus:outline-none focus:border-[var(--vscode-focus-border)]"
+                    />
+                    <span className="text-xs text-[var(--vscode-description-foreground)]">of {numPages}</span>
+                  </div>
+                  
+                  <button
+                    onClick={() => handlePageChange(currentPage + 1)}
+                    disabled={currentPage >= numPages}
+                    className={`p-1.5 rounded transition-colors ${
+                      currentPage >= numPages
+                        ? 'text-[var(--vscode-description-foreground)] cursor-not-allowed'
+                        : 'text-[var(--vscode-foreground)] hover:bg-[var(--vscode-button-hover-background)]'
+                    }`}
+                    title="Next page"
+                  >
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+            </>
+          )}
         </div>
       );
     }
@@ -369,8 +521,8 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
     const pdfViewerUrl = `https://mozilla.github.io/pdf.js/web/viewer.html?file=${encodeURIComponent(url)}`;
 
     return (
-      <div className="w-full max-w-[600px] space-y-2">
-        <div className="h-[500px] border rounded-lg overflow-hidden bg-white">
+      <div className="w-full max-w-4xl mx-auto">
+        <div className="h-[70vh] border border-[var(--vscode-panel-border)] rounded overflow-hidden bg-[var(--vscode-editor-background)]">
           <iframe
             src={pdfViewerUrl}
             width="100%"
@@ -383,27 +535,101 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
             }}
           />
         </div>
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span className="text-blue-600">✓ External PDF loaded</span>
-        </div>
       </div>
     );
   };
 
+  const handleCopyToClipboard = async () => {
+    if (mediaUrl) {
+      setCopyStatus('copying');
+      try {
+        await navigator.clipboard.writeText(mediaUrl);
+        setCopyStatus('success');
+        // Reset to idle after 2 seconds
+        setTimeout(() => setCopyStatus('idle'), 2000);
+      } catch (err) {
+        console.error('Failed to copy to clipboard:', err);
+        setCopyStatus('error');
+        // Reset to idle after 2 seconds
+        setTimeout(() => setCopyStatus('idle'), 2000);
+      }
+    }
+  };
+
+  const handlePageChange = (newPage: number) => {
+    if (numPages && newPage >= 1 && newPage <= numPages) {
+      setCurrentPage(newPage);
+      setPageInputValue(newPage.toString());
+    }
+  };
+
+  const handlePageInputChange = (value: string) => {
+    setPageInputValue(value);
+  };
+
+  const handlePageInputSubmit = () => {
+    const pageNum = parseInt(pageInputValue, 10);
+    if (numPages && pageNum >= 1 && pageNum <= numPages) {
+      setCurrentPage(pageNum);
+    } else {
+      // Reset to current page if invalid
+      setPageInputValue(currentPage.toString());
+    }
+  };
+
+  const handlePageInputKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handlePageInputSubmit();
+    }
+  };
+
+  const isBase64 = mediaUrl?.startsWith('data:');
+
   return (
-    <div className="w-full">
-      <div className="relative w-full flex flex-col items-center bg-accent py-2 space-y-2">
+    <div className="w-full flex justify-center p-4 bg-[var(--vscode-sideBar-background)]">
+      <div className="max-w-lg w-full border border-[var(--vscode-panel-border)] rounded bg-[var(--vscode-editor-background)] p-4 space-y-3">
         {renderMediaContent()}
         {mediaUrl && (
-          <a
-            href={mediaUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex gap-1 items-center transition-colors hover:text-primary text-xs"
-          >
-            <ExternalLinkIcon className="w-3 h-3" />
-            <span className="max-w-[150px] truncate">{getDisplayUrl(mediaUrl, bamlMediaType)}</span>
-          </a>
+          <div className="flex justify-center">
+            {isBase64 ? (
+              <button
+                onClick={handleCopyToClipboard}
+                disabled={copyStatus === 'copying'}
+                className={`flex gap-2 items-center transition-all duration-200 text-xs bg-[var(--vscode-editor-background)] px-3 py-2 rounded border ${
+                  copyStatus === 'success'
+                    ? 'border-[var(--vscode-charts-green)] text-[var(--vscode-charts-green)]'
+                    : copyStatus === 'error'
+                    ? 'border-[var(--vscode-charts-red)] text-[var(--vscode-charts-red)]'
+                    : copyStatus === 'copying'
+                    ? 'border-[var(--vscode-panel-border)] text-[var(--vscode-description-foreground)] cursor-not-allowed'
+                    : 'border-[var(--vscode-panel-border)] text-[var(--vscode-description-foreground)] hover:text-[var(--vscode-charts-blue)] hover:border-[var(--vscode-charts-blue)] hover:bg-[var(--vscode-button-hover-background)]'
+                }`}
+              >
+                {copyStatus === 'copying' && (
+                  <div className="w-3 h-3 border border-[var(--vscode-description-foreground)] border-t-transparent rounded-full animate-spin" />
+                )}
+                {copyStatus === 'success' && <Check className="w-3 h-3" />}
+                {copyStatus === 'error' && <X className="w-3 h-3" />}
+                {copyStatus === 'idle' && <Copy className="w-3 h-3" />}
+                <span className="font-medium">
+                  {copyStatus === 'copying' && `Copying...`}
+                  {copyStatus === 'success' && `Copied!`}
+                  {copyStatus === 'error' && `Failed to copy`}
+                  {copyStatus === 'idle' && `Copy Base64 ${bamlMediaType}`}
+                </span>
+              </button>
+            ) : (
+              <a
+                href={mediaUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex gap-2 items-center transition-all duration-200 hover:text-[var(--vscode-charts-blue)] text-[var(--vscode-description-foreground)] text-xs bg-[var(--vscode-editor-background)] px-3 py-2 rounded border border-[var(--vscode-panel-border)] hover:border-[var(--vscode-charts-blue)] hover:bg-[var(--vscode-button-hover-background)]"
+              >
+                <ExternalLinkIcon className="w-3 h-3" />
+                <span className="max-w-[200px] truncate font-medium">{getDisplayUrl(mediaUrl, bamlMediaType)}</span>
+              </a>
+            )}
+          </div>
         )}
       </div>
     </div>
