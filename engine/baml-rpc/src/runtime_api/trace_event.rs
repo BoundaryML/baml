@@ -1,6 +1,7 @@
 use std::{borrow::Cow, collections::HashMap};
 
 use baml_ids::{FunctionCallId, FunctionEventId};
+use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -98,6 +99,13 @@ pub struct EvaluationContext {
     // pub client_registry: Option<ClientRegistryValue>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct RpcClientDetails {
+    pub name: String,
+    pub provider: String,
+    pub options: IndexMap<String, serde_json::Value>,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub enum IntermediateData<'a> {
     /// These are all resolved from the client
@@ -108,17 +116,21 @@ pub enum IntermediateData<'a> {
         prompt: Vec<LLMChatMessage<'a>>,
     },
     RawLLMRequest {
+        http_request_id: String,
         url: String,
         method: String,
         headers: HashMap<String, String>,
         body: HTTPBody<'a>,
     },
     RawLLMResponse {
+        http_request_id: String,
         status: u16,
         headers: Option<HashMap<String, String>>,
         body: HTTPBody<'a>,
+        client_details: RpcClientDetails,
     },
     RawLLMResponseStream {
+        http_request_id: String,
         event: Event<'a>,
     },
     LLMResponse {

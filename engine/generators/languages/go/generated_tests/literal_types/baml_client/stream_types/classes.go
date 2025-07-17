@@ -26,7 +26,7 @@ type BooleanLiterals struct {
 	EitherBool  *Union2BoolKFalseOrBoolKTrue `json:"eitherBool"`
 }
 
-func (c *BooleanLiterals) Decode(holder *cffi.CFFIValueClass) {
+func (c *BooleanLiterals) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))
@@ -87,7 +87,7 @@ type ComplexLiterals struct {
 	Codes      []Union3IntK200OrIntK404OrIntK500                       `json:"codes"`
 }
 
-func (c *ComplexLiterals) Decode(holder *cffi.CFFIValueClass) {
+func (c *ComplexLiterals) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))
@@ -156,7 +156,7 @@ type IntegerLiterals struct {
 	MaxRetries *Union4IntK0OrIntK1OrIntK3OrIntK5                  `json:"maxRetries"`
 }
 
-func (c *IntegerLiterals) Decode(holder *cffi.CFFIValueClass) {
+func (c *IntegerLiterals) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))
@@ -217,7 +217,7 @@ type MixedLiterals struct {
 	ApiVersion *Union3Kv1OrKv2OrKv3         `json:"apiVersion"`
 }
 
-func (c *MixedLiterals) Decode(holder *cffi.CFFIValueClass) {
+func (c *MixedLiterals) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))
@@ -286,7 +286,7 @@ type StringLiterals struct {
 	Method      *Union4KDELETEOrKGETOrKPOSTOrKPUT   `json:"method"`
 }
 
-func (c *StringLiterals) Decode(holder *cffi.CFFIValueClass) {
+func (c *StringLiterals) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))

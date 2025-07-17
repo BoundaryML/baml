@@ -60,8 +60,19 @@ pub fn parse_top_level_assignment(
 ) -> Option<expr::TopLevelAssignment> {
     assert_correct_parser!(token, Rule::top_level_assignment);
     let mut tokens = token.into_inner();
-    let stmt = parse_statement(tokens.next()?, diagnostics)?;
-    Some(TopLevelAssignment { stmt })
+
+    match parse_statement(tokens.next()?, diagnostics)? {
+        Stmt::Let(stmt) => Some(TopLevelAssignment { stmt }),
+
+        Stmt::ForLoop(stmt) => {
+            diagnostics.push_error(DatamodelError::new_static(
+                "for loops are not allowed at top level, only let statements are allowed",
+                stmt.span.clone(),
+            ));
+
+            None
+        }
+    }
 }
 
 pub fn parse_for_loop(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Stmt> {
@@ -129,10 +140,12 @@ pub fn parse_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
     match maybe_semicolon {
         Some(p) if p.as_str() == ";" => {}
         _ => {
-            diagnostics.push_error(DatamodelError::new_static(
-                "Statement must end with a semicolon.",
-                span.clone(),
-            ));
+            if matches!(stmt, Some(Stmt::Let(_))) {
+                diagnostics.push_error(DatamodelError::new_static(
+                    "Statement must end with a semicolon.",
+                    span.clone(),
+                ));
+            }
         }
     }
 

@@ -32,7 +32,7 @@ type MixedPrimitives struct {
 	Flags        []bool    `json:"flags"`
 }
 
-func (c *MixedPrimitives) Decode(holder *cffi.CFFIValueClass) {
+func (c *MixedPrimitives) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))
@@ -122,7 +122,7 @@ type PrimitiveArrays struct {
 	BoolArray   []bool    `json:"boolArray"`
 }
 
-func (c *PrimitiveArrays) Decode(holder *cffi.CFFIValueClass) {
+func (c *PrimitiveArrays) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))
@@ -187,7 +187,7 @@ type PrimitiveMaps struct {
 	BoolMap   map[string]bool    `json:"boolMap"`
 }
 
-func (c *PrimitiveMaps) Decode(holder *cffi.CFFIValueClass) {
+func (c *PrimitiveMaps) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))
@@ -253,7 +253,7 @@ type PrimitiveTypes struct {
 	NullField   any      `json:"nullField"`
 }
 
-func (c *PrimitiveTypes) Decode(holder *cffi.CFFIValueClass) {
+func (c *PrimitiveTypes) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))

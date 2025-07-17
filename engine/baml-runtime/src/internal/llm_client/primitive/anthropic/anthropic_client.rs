@@ -22,7 +22,7 @@ use crate::{
     internal::llm_client::{
         primitive::{
             anthropic::types::AnthropicMessageResponse,
-            request::{make_parsed_request, make_request, RequestBuilder, ResponseType},
+            request::{make_parsed_request, RequestBuilder, ResponseType},
         },
         traits::{
             CompletionToProviderBody, HttpContext, SseResponseTrait, StreamResponse,
@@ -140,6 +140,7 @@ impl AnthropicClient {
                 provider: client.provider.to_string(),
                 default_role: properties.default_role(),
                 allowed_roles: properties.allowed_roles(),
+                options: properties.properties.clone(),
             },
             features: ModelFeatures {
                 chat: true,
@@ -166,6 +167,7 @@ impl AnthropicClient {
                 provider: client.elem().provider.to_string(),
                 default_role: properties.default_role(),
                 allowed_roles: properties.allowed_roles(),
+                options: properties.properties.clone(),
             },
             features: ModelFeatures {
                 chat: true,

@@ -64,7 +64,7 @@ func (*stream) ConsumeSimpleClass(ctx context.Context, item types.SimpleClass, o
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -73,7 +73,7 @@ func (*stream) ConsumeSimpleClass(ctx context.Context, item types.SimpleClass, o
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "ConsumeSimpleClass", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "ConsumeSimpleClass", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -142,7 +142,7 @@ func (*stream) MakeSimpleClass(ctx context.Context, opts ...CallOptionFunc) (<-c
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -151,7 +151,7 @@ func (*stream) MakeSimpleClass(ctx context.Context, opts ...CallOptionFunc) (<-c
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "MakeSimpleClass", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "MakeSimpleClass", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}

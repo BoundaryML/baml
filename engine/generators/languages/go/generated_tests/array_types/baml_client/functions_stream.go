@@ -64,7 +64,7 @@ func (*stream) TestEmptyArrays(ctx context.Context, input string, opts ...CallOp
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -73,7 +73,7 @@ func (*stream) TestEmptyArrays(ctx context.Context, input string, opts ...CallOp
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestEmptyArrays", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestEmptyArrays", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -142,7 +142,7 @@ func (*stream) TestLargeArrays(ctx context.Context, input string, opts ...CallOp
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -151,7 +151,7 @@ func (*stream) TestLargeArrays(ctx context.Context, input string, opts ...CallOp
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestLargeArrays", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestLargeArrays", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -220,7 +220,7 @@ func (*stream) TestMixedArrays(ctx context.Context, input string, opts ...CallOp
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -229,7 +229,7 @@ func (*stream) TestMixedArrays(ctx context.Context, input string, opts ...CallOp
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestMixedArrays", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestMixedArrays", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -298,7 +298,7 @@ func (*stream) TestNestedArrays(ctx context.Context, input string, opts ...CallO
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -307,7 +307,7 @@ func (*stream) TestNestedArrays(ctx context.Context, input string, opts ...CallO
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestNestedArrays", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestNestedArrays", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -376,7 +376,7 @@ func (*stream) TestObjectArrays(ctx context.Context, input string, opts ...CallO
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -385,7 +385,7 @@ func (*stream) TestObjectArrays(ctx context.Context, input string, opts ...CallO
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestObjectArrays", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestObjectArrays", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -454,7 +454,7 @@ func (*stream) TestSimpleArrays(ctx context.Context, input string, opts ...CallO
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -463,7 +463,7 @@ func (*stream) TestSimpleArrays(ctx context.Context, input string, opts ...CallO
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestSimpleArrays", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestSimpleArrays", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -532,7 +532,7 @@ func (*stream) TestTopLevel3DArray(ctx context.Context, input string, opts ...Ca
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -541,7 +541,7 @@ func (*stream) TestTopLevel3DArray(ctx context.Context, input string, opts ...Ca
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestTopLevel3DArray", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestTopLevel3DArray", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -610,7 +610,7 @@ func (*stream) TestTopLevelArrayOfMaps(ctx context.Context, input string, opts .
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -619,7 +619,7 @@ func (*stream) TestTopLevelArrayOfMaps(ctx context.Context, input string, opts .
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestTopLevelArrayOfMaps", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestTopLevelArrayOfMaps", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -688,7 +688,7 @@ func (*stream) TestTopLevelBoolArray(ctx context.Context, input string, opts ...
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -697,7 +697,7 @@ func (*stream) TestTopLevelBoolArray(ctx context.Context, input string, opts ...
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestTopLevelBoolArray", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestTopLevelBoolArray", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -766,7 +766,7 @@ func (*stream) TestTopLevelEmptyArray(ctx context.Context, input string, opts ..
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -775,7 +775,7 @@ func (*stream) TestTopLevelEmptyArray(ctx context.Context, input string, opts ..
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestTopLevelEmptyArray", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestTopLevelEmptyArray", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -844,7 +844,7 @@ func (*stream) TestTopLevelFloatArray(ctx context.Context, input string, opts ..
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -853,7 +853,7 @@ func (*stream) TestTopLevelFloatArray(ctx context.Context, input string, opts ..
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestTopLevelFloatArray", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestTopLevelFloatArray", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -922,7 +922,7 @@ func (*stream) TestTopLevelIntArray(ctx context.Context, input string, opts ...C
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -931,7 +931,7 @@ func (*stream) TestTopLevelIntArray(ctx context.Context, input string, opts ...C
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestTopLevelIntArray", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestTopLevelIntArray", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -1000,7 +1000,7 @@ func (*stream) TestTopLevelMixedArray(ctx context.Context, input string, opts ..
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -1009,7 +1009,7 @@ func (*stream) TestTopLevelMixedArray(ctx context.Context, input string, opts ..
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestTopLevelMixedArray", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestTopLevelMixedArray", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -1078,7 +1078,7 @@ func (*stream) TestTopLevelNestedArray(ctx context.Context, input string, opts .
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -1087,7 +1087,7 @@ func (*stream) TestTopLevelNestedArray(ctx context.Context, input string, opts .
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestTopLevelNestedArray", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestTopLevelNestedArray", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -1156,7 +1156,7 @@ func (*stream) TestTopLevelNullableArray(ctx context.Context, input string, opts
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -1165,7 +1165,7 @@ func (*stream) TestTopLevelNullableArray(ctx context.Context, input string, opts
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestTopLevelNullableArray", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestTopLevelNullableArray", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -1234,7 +1234,7 @@ func (*stream) TestTopLevelObjectArray(ctx context.Context, input string, opts .
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -1243,7 +1243,7 @@ func (*stream) TestTopLevelObjectArray(ctx context.Context, input string, opts .
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestTopLevelObjectArray", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestTopLevelObjectArray", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -1312,7 +1312,7 @@ func (*stream) TestTopLevelStringArray(ctx context.Context, input string, opts .
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -1321,7 +1321,7 @@ func (*stream) TestTopLevelStringArray(ctx context.Context, input string, opts .
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestTopLevelStringArray", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestTopLevelStringArray", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}

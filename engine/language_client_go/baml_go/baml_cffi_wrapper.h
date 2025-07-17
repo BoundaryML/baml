@@ -20,7 +20,7 @@ void SetInvokeRuntimeCliFn(void *fn);
 int WrapInvokeRuntimeCli(const char *const *args);
 
 void SetRegisterCallbacksFn(void *fn);
-void WrapRegisterCallbacks(CallbackFn callback_fn, CallbackFn error_callback_fn);
+void WrapRegisterCallbacks(CallbackFn callback_fn, CallbackFn error_callback_fn, OnTickCallbackFn on_tick_callback_fn);
 
 void SetCallFunctionFromCFn(void *fn);
 const void *WrapCallFunctionFromC(const void *runtime, const char *function_name, const char *encoded_args, uintptr_t length, uint32_t id);
@@ -28,7 +28,14 @@ const void *WrapCallFunctionFromC(const void *runtime, const char *function_name
 void SetCallFunctionStreamFromCFn(void *fn);
 const void *WrapCallFunctionStreamFromC(const void *runtime, const char *function_name, const char *encoded_args, uintptr_t length, uint32_t id);
 
-void SetCallCollectorFunctionFn(void *fn);
-const void *WrapCallCollectorFunction(const void *object, const char *object_type, const char *function_name);
+void SetCallObjectConstructorFn(void *fn);
+Buffer WrapCallObjectConstructor(const char *encoded_args, uintptr_t length);
+
+void SetCallObjectMethodFunctionFn(void *fn);
+Buffer WrapCallObjectMethodFunction(const char *encoded_args, uintptr_t length);
+
+void SetFreeBufferFn(void *fn);
+void WrapFreeBuffer(Buffer buffer);
+
 
 #endif // BAML_CFFI_WRAPPER_H

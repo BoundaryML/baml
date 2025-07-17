@@ -236,7 +236,7 @@ expr_block = { BLOCK_OPEN ~ NEWLINE? ~ (stmt | comment_block | empty_lines)* ~ e
 
 // Statement.
 // Currently the only statement is a let-binding.
-stmt = { (let_expr | for_loop) ~ SEMICOLON? ~ trailing_comment? ~ NEWLINE? }
+stmt = { ((let_expr ~ SEMICOLON?) | for_loop) ~ trailing_comment? ~ NEWLINE? }
 
 // Let-binding statement.
 let_expr = { "let" ~ identifier ~ "=" ~ expression }

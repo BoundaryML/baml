@@ -57,8 +57,8 @@ func InvokeRuntimeCli(args []string) (int, error) {
 	return int(result), nil
 }
 
-func RegisterCallbacks(callbackFn unsafe.Pointer, errorFn unsafe.Pointer) error {
-	C.WrapRegisterCallbacks((C.CallbackFn)(callbackFn), (C.CallbackFn)(errorFn))
+func RegisterCallbacks(callbackFn unsafe.Pointer, errorFn unsafe.Pointer, onTickFn unsafe.Pointer) error {
+	C.WrapRegisterCallbacks((C.CallbackFn)(callbackFn), (C.CallbackFn)(errorFn), (C.OnTickCallbackFn)(onTickFn))
 	return nil
 }
 
@@ -82,16 +82,4 @@ func CallFunctionStreamFromC(runtime unsafe.Pointer, functionName string, encode
 	result := C.WrapCallFunctionStreamFromC(runtime, cFunctionName, cEncodedArgs, C.uintptr_t(len(encodedArgs)), C.uint32_t(id))
 
 	return result, nil
-}
-
-func CallCollectorFunction(object unsafe.Pointer, objectType string, functionName string) (unsafe.Pointer, error) {
-	cObjectType := C.CString(objectType)
-	defer C.free(unsafe.Pointer(cObjectType))
-
-	cFunctionName := C.CString(functionName)
-	defer C.free(unsafe.Pointer(cFunctionName))
-
-	pointer := C.WrapCallCollectorFunction(object, cObjectType, cFunctionName)
-
-	return pointer, nil
 }

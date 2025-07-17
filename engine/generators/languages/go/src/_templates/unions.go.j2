@@ -5,7 +5,7 @@ type {{ name }} struct {
     {% endfor %}
 }
 
-func (u *{{ name }}) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *{{ name }}) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
     valueHolder := holder.Value
     variantName := holder.VariantName
 	switch variantName {

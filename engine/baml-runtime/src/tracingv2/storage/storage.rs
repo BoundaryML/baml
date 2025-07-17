@@ -248,7 +248,6 @@ fn build_function_log(
                 let entry = calls_map.entry(rid.clone()).or_default();
 
                 // find or insert the event
-
                 match &mut entry.http_response_stream {
                     Some(stream) => {
                         stream.lock().unwrap().push(http_res_stream.clone());
@@ -327,16 +326,22 @@ fn build_function_log(
 
             // Streaming call
             calls.push(LLMCallKind::Stream(LLMStreamCall {
-                client_name: client,
-                provider,
+                llm_call: LLMCall {
+                    client_name: client,
+                    provider,
+                    timing: Timing {
+                        start_time_utc_ms: start_t,
+                        duration_ms: Some(partial_duration),
+                    },
+                    request: call_acc.http_request.clone(),
+                    response: call_acc.http_response.clone(),
+                    usage: Some(local_usage),
+                    selected: call_acc.llm_response.is_some(),
+                },
                 timing: StreamTiming {
                     start_time_utc_ms: start_t,
                     duration_ms: Some(partial_duration),
                 },
-                request: call_acc.http_request.clone(),
-                response: call_acc.http_response.clone(),
-                usage: Some(local_usage),
-                selected: call_acc.llm_response.is_some(),
                 sse_chunks,
             }));
         }
@@ -364,7 +369,8 @@ fn build_function_log(
     };
 
     let new_arc = Arc::new(Mutex::new(function_log_inner));
-    {
+    // only cache if we we've finished the function
+    if function_end_time.is_some() {
         // Insert into the cache
         let mut lock = storage.function_inners.lock().unwrap();
         lock.insert(function_id.clone(), new_arc.clone());
@@ -568,7 +574,21 @@ impl LLMCallKind {
     pub fn selected(&self) -> bool {
         match self {
             LLMCallKind::Basic(c) => c.selected,
-            LLMCallKind::Stream(c) => c.selected,
+            LLMCallKind::Stream(c) => c.llm_call.selected,
+        }
+    }
+
+    pub fn as_request(&self) -> Option<&LLMCall> {
+        match self {
+            LLMCallKind::Basic(c) => Some(c),
+            LLMCallKind::Stream(c) => None,
+        }
+    }
+
+    pub fn as_stream(&self) -> Option<&LLMStreamCall> {
+        match self {
+            LLMCallKind::Basic(c) => None,
+            LLMCallKind::Stream(c) => Some(c),
         }
     }
 }
@@ -586,13 +606,8 @@ pub struct LLMCall {
 
 #[derive(Debug, Default, Clone, Serialize)]
 pub struct LLMStreamCall {
-    pub client_name: String,
-    pub provider: String,
+    pub llm_call: LLMCall,
     pub timing: StreamTiming,
-    pub request: Option<Arc<HTTPRequest>>,
-    pub response: Option<Arc<HTTPResponse>>,
-    pub usage: Option<Usage>,
-    pub selected: bool,
     pub sse_chunks: Option<Arc<LLMHTTPStreamResponse>>,
 }
 
@@ -638,6 +653,16 @@ impl Collector {
         if guard.swap_remove(fid) {
             BAML_TRACER.lock().unwrap().dec_ref(fid);
         }
+    }
+
+    pub fn clear(&self) -> usize {
+        let mut guard = self.tracked_ids.lock().unwrap();
+        for fid in guard.iter() {
+            BAML_TRACER.lock().unwrap().dec_ref(fid);
+        }
+        let len = guard.len();
+        guard.clear();
+        len
     }
 
     pub fn function_logs(&self) -> Vec<FunctionLog> {

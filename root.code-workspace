@@ -63,10 +63,15 @@
       "editor.defaultFormatter": "biomejs.biome"
     },
     "files.associations": {
+      "*.toml": "toml",
+      "*.hb": "handlebars",
       "*.baml.j2": "jinja",
       "*.js.j2": "jinja-js",
       "*.ts.j2": "jinja-js",
-      "justfile": "makefile"
+      "justfile": "makefile",
+      "__locale": "c",
+      "string": "c",
+      "string_view": "c"
     },
     "editor.colorDecoratorsLimit": 2000,
     "editor.formatOnSaveMode": "file",

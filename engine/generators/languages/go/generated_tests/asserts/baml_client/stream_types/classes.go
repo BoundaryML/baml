@@ -25,7 +25,7 @@ type Person struct {
 	Age  *int64  `json:"age"`
 }
 
-func (c *Person) Decode(holder *cffi.CFFIValueClass) {
+func (c *Person) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))

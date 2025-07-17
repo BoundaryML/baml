@@ -26,7 +26,7 @@
     "format:fix": "biome check --write",
     "docker-build": "bash build-docker.sh",
     "test": "turbo run test",
-    "integ-test": "turbo run integ-test --concurrency=1"
+    "integ-tests": "pnpm run generate && turbo run integ-tests"
   },
   "devDependencies": {
     "@infisical/cli": "0.41.89",

@@ -15,6 +15,15 @@ macro_rules! lang_wrapper {
                 }
             }
         }
+
+        impl From<std::sync::Arc<$type>> for $name {
+            fn from(inner: std::sync::Arc<$type>) -> Self {
+                Self {
+                    inner,
+                    $($attr_name: $default),*
+                }
+            }
+        }
     };
 
     ($name:ident, $type:ty, thread_safe $(, $attr_name:ident : $attr_type:ty)*) => {

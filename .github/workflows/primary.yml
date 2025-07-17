@@ -218,6 +218,8 @@ jobs:
           # Find Ruby library path and add it to LD_LIBRARY_PATH
           RUBY_LIB_PATH=$(ruby -e 'puts RbConfig::CONFIG["libdir"]')
           export LD_LIBRARY_PATH="${RUBY_LIB_PATH}:${LD_LIBRARY_PATH}"
+          # We need to build baml_cffi first so that the baml_cffi.dylib is available for the tests
+          cargo build --package baml_cffi
           cargo test --lib
         working-directory: engine
 

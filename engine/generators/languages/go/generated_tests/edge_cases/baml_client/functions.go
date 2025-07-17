@@ -15,6 +15,7 @@ package baml_client
 
 import (
 	"context"
+	"fmt"
 
 	"edge_cases/baml_client/types"
 
@@ -41,23 +42,42 @@ func TestCircularReference(ctx context.Context, input string, opts ...CallOption
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestCircularReference", encoded)
-	if err != nil {
-		return types.CircularReference{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestCircularReference", encoded, callOpts.onTick)
+		if err != nil {
+			return types.CircularReference{}, err
+		}
+
+		if result.Error != nil {
+			return types.CircularReference{}, result.Error
+		}
+
+		casted := (result.Data).(types.CircularReference)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestCircularReference", encoded, callOpts.onTick)
+		if err != nil {
+			return types.CircularReference{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.CircularReference{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.CircularReference), nil
+			}
+		}
+
+		return types.CircularReference{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.CircularReference{}, result.Error
-	}
-
-	casted := (result.Data).(types.CircularReference)
-
-	return casted, nil
 }
 
 func TestDeepRecursion(ctx context.Context, depth int64, opts ...CallOptionFunc) (types.DeepRecursion, error) {
@@ -80,23 +100,42 @@ func TestDeepRecursion(ctx context.Context, depth int64, opts ...CallOptionFunc)
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestDeepRecursion", encoded)
-	if err != nil {
-		return types.DeepRecursion{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestDeepRecursion", encoded, callOpts.onTick)
+		if err != nil {
+			return types.DeepRecursion{}, err
+		}
+
+		if result.Error != nil {
+			return types.DeepRecursion{}, result.Error
+		}
+
+		casted := (result.Data).(types.DeepRecursion)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestDeepRecursion", encoded, callOpts.onTick)
+		if err != nil {
+			return types.DeepRecursion{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.DeepRecursion{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.DeepRecursion), nil
+			}
+		}
+
+		return types.DeepRecursion{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.DeepRecursion{}, result.Error
-	}
-
-	casted := (result.Data).(types.DeepRecursion)
-
-	return casted, nil
 }
 
 func TestEmptyCollections(ctx context.Context, input string, opts ...CallOptionFunc) (types.EmptyCollections, error) {
@@ -119,23 +158,42 @@ func TestEmptyCollections(ctx context.Context, input string, opts ...CallOptionF
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestEmptyCollections", encoded)
-	if err != nil {
-		return types.EmptyCollections{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestEmptyCollections", encoded, callOpts.onTick)
+		if err != nil {
+			return types.EmptyCollections{}, err
+		}
+
+		if result.Error != nil {
+			return types.EmptyCollections{}, result.Error
+		}
+
+		casted := (result.Data).(types.EmptyCollections)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestEmptyCollections", encoded, callOpts.onTick)
+		if err != nil {
+			return types.EmptyCollections{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.EmptyCollections{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.EmptyCollections), nil
+			}
+		}
+
+		return types.EmptyCollections{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.EmptyCollections{}, result.Error
-	}
-
-	casted := (result.Data).(types.EmptyCollections)
-
-	return casted, nil
 }
 
 func TestLargeStructure(ctx context.Context, input string, opts ...CallOptionFunc) (types.LargeStructure, error) {
@@ -158,23 +216,42 @@ func TestLargeStructure(ctx context.Context, input string, opts ...CallOptionFun
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestLargeStructure", encoded)
-	if err != nil {
-		return types.LargeStructure{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestLargeStructure", encoded, callOpts.onTick)
+		if err != nil {
+			return types.LargeStructure{}, err
+		}
+
+		if result.Error != nil {
+			return types.LargeStructure{}, result.Error
+		}
+
+		casted := (result.Data).(types.LargeStructure)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestLargeStructure", encoded, callOpts.onTick)
+		if err != nil {
+			return types.LargeStructure{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.LargeStructure{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.LargeStructure), nil
+			}
+		}
+
+		return types.LargeStructure{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.LargeStructure{}, result.Error
-	}
-
-	casted := (result.Data).(types.LargeStructure)
-
-	return casted, nil
 }
 
 func TestNumberEdgeCases(ctx context.Context, input string, opts ...CallOptionFunc) (types.NumberEdgeCases, error) {
@@ -197,23 +274,42 @@ func TestNumberEdgeCases(ctx context.Context, input string, opts ...CallOptionFu
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestNumberEdgeCases", encoded)
-	if err != nil {
-		return types.NumberEdgeCases{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestNumberEdgeCases", encoded, callOpts.onTick)
+		if err != nil {
+			return types.NumberEdgeCases{}, err
+		}
+
+		if result.Error != nil {
+			return types.NumberEdgeCases{}, result.Error
+		}
+
+		casted := (result.Data).(types.NumberEdgeCases)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestNumberEdgeCases", encoded, callOpts.onTick)
+		if err != nil {
+			return types.NumberEdgeCases{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.NumberEdgeCases{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.NumberEdgeCases), nil
+			}
+		}
+
+		return types.NumberEdgeCases{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.NumberEdgeCases{}, result.Error
-	}
-
-	casted := (result.Data).(types.NumberEdgeCases)
-
-	return casted, nil
 }
 
 func TestSpecialCharacters(ctx context.Context, input string, opts ...CallOptionFunc) (types.SpecialCharacters, error) {
@@ -236,21 +332,40 @@ func TestSpecialCharacters(ctx context.Context, input string, opts ...CallOption
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "TestSpecialCharacters", encoded)
-	if err != nil {
-		return types.SpecialCharacters{}, err
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestSpecialCharacters", encoded, callOpts.onTick)
+		if err != nil {
+			return types.SpecialCharacters{}, err
+		}
+
+		if result.Error != nil {
+			return types.SpecialCharacters{}, result.Error
+		}
+
+		casted := (result.Data).(types.SpecialCharacters)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestSpecialCharacters", encoded, callOpts.onTick)
+		if err != nil {
+			return types.SpecialCharacters{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.SpecialCharacters{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.SpecialCharacters), nil
+			}
+		}
+
+		return types.SpecialCharacters{}, fmt.Errorf("No data returned from stream")
 	}
-
-	if result.Error != nil {
-		return types.SpecialCharacters{}, result.Error
-	}
-
-	casted := (result.Data).(types.SpecialCharacters)
-
-	return casted, nil
 }

@@ -61,7 +61,6 @@ export const resetEnvKeyValuesAtom = atom(null, (get, set) => {
 export const envKeyValuesAtom = atom(
   (get) => {
     const envKeyValues = get(envKeyValueStorage);
-    console.log('envKeyValuesAtom getter, returning:', envKeyValues);
     return envKeyValues.map(([k, v], idx): [string, string, number] => [
       k,
       v,
@@ -84,7 +83,6 @@ export const envKeyValuesAtom = atom(
           value?: string;
         },
   ) => {
-    console.log('envKeyValuesAtom setter called with update:', update);
     if (update.itemIndex !== null) {
       const keyValues = [...get(envKeyValueStorage)];
       const targetItem = keyValues[update.itemIndex];
@@ -108,18 +106,16 @@ export const envKeyValuesAtom = atom(
 );
 
 export const userApiKeysAtom = atom(
-  (get) => {
+  (get): Record<string, string> => {
     const envKeyValues = get(envKeyValuesAtom);
     const result = Object.fromEntries(
       envKeyValues
         .map(([k, v]) => [k, v])
         .filter(([k]) => k !== 'BOUNDARY_PROXY_URL'),
-    ) as Record<string, string>;
-    console.log('userApiKeysAtom getter:', { envKeyValues, result });
+    );
     return result;
   },
   (get, set, newEnvVars: Record<string, string>) => {
-    console.log('userApiKeysAtom setter called with:', newEnvVars);
 
     // Get current envKeyValues to preserve BOUNDARY_PROXY_URL if it exists
     const currentEnvKeyValues = get(envKeyValuesAtom);
@@ -134,7 +130,6 @@ export const userApiKeysAtom = atom(
       envKeyValues.push([boundaryProxyEntry[0], boundaryProxyEntry[1]]);
     }
 
-    console.log('userApiKeysAtom setter setting envKeyValueStorage to:', envKeyValues);
     set(envKeyValueStorage, envKeyValues);
   },
 );
@@ -223,7 +218,6 @@ const defaultEnvKeyValues: [string, string][] = (() => {
     return [];
   }
   if ((window as any).next?.version) {
-    console.log('Running in nextjs');
 
     const domain = window?.location?.origin || '';
     if (domain.includes('localhost')) {
@@ -232,21 +226,18 @@ const defaultEnvKeyValues: [string, string][] = (() => {
     }
     return [['BOUNDARY_PROXY_URL', 'https://fiddle-proxy.fly.dev']];
   }
-  console.log('Not running in a Next.js environment, set default value');
+  console.debug('Not running in a Next.js environment, set default value');
   // Not running in a Next.js environment, set default value
   return [['BOUNDARY_PROXY_URL', 'http://localhost:0000']];
 })();
 
-console.log('Default env key values:', defaultEnvKeyValues);
 
 // Check what's currently in localStorage
 if (typeof window !== 'undefined' && window.localStorage) {
   const storedValue = window.localStorage.getItem('env-key-values');
-  console.log('Current localStorage value for env-key-values:', storedValue);
   if (storedValue) {
     try {
       const parsed = JSON.parse(storedValue);
-      console.log('Parsed localStorage value:', parsed);
     } catch (e) {
       console.error('Failed to parse localStorage value:', e);
     }
@@ -288,7 +279,6 @@ export const initializeLocalApiKeysAtom = atom(
   null,
   (get, set) => {
     const userApiKeys = get(userApiKeysAtom);
-    console.log('initializeLocalApiKeysAtom: Setting localApiKeys from userApiKeys:', userApiKeys);
     set(localApiKeysAtom, userApiKeys);
     set(hasInitializedAtom, true);
   }
@@ -300,8 +290,6 @@ export const renderedApiKeysAtom = atom((get) => {
   const requiredApiKeys = get(requiredApiKeysAtom);
   const visibility = get(apiKeyVisibilityAtom);
   const recentlyAddedKeys = get(recentlyAddedKeysAtom);
-
-  console.log('renderedApiKeysAtom: Computing apiKeys from localApiKeys:', localApiKeys);
 
   const vars: ApiKeyEntry[] = Object.entries(localApiKeys).map(
     ([key, value]) => ({
@@ -337,7 +325,6 @@ export const renderedApiKeysAtom = atom((get) => {
     return a.key.localeCompare(b.key);
   });
 
-  console.log('renderedApiKeysAtom: Computed apiKeys:', sorted);
   return sorted;
 });
 
@@ -374,13 +361,11 @@ export const deleteApiKeyAtom = atom(
 export const addApiKeyAtom = atom(
   null,
   (get, set, { key, value }: { key: string; value: string }) => {
-    console.log('addApiKeyAtom: Adding API key:', key, 'with value:', value);
     set(localApiKeysAtom, (prev: Record<string, string>) => {
       const newState = {
         ...prev,
         [key]: value,
       };
-      console.log('addApiKeyAtom: New localApiKeys after add:', newState);
       return newState;
     });
     set(hasLocalChangesAtom, true);
@@ -407,25 +392,12 @@ export const saveApiKeyChangesAtom = atom(
   null,
   async (get, set) => {
     const localApiKeys = get(localApiKeysAtom);
-    console.log('saveApiKeyChangesAtom: Starting saveChanges with localApiKeys:', localApiKeys);
     set(isSavingAtom, true);
 
     // Small delay to ensure UI updates immediately
     await new Promise(resolve => setTimeout(resolve, 0));
 
-    console.log('saveApiKeyChangesAtom: Setting userApiKeys to:', localApiKeys);
     set(userApiKeysAtom, localApiKeys);
-
-    // Verify what's in localStorage after save
-    setTimeout(() => {
-      const saved = window.localStorage.getItem('env-key-values');
-      console.log('saveApiKeyChangesAtom: After save, localStorage contains:', saved);
-      try {
-        console.log('saveApiKeyChangesAtom: Parsed localStorage:', JSON.parse(saved || '[]'));
-      } catch (e) {
-        console.error('saveApiKeyChangesAtom: Error parsing localStorage:', e);
-      }
-    }, 100);
 
     set(hasLocalChangesAtom, false);
     set(justSavedAtom, true); // Set flag to prevent immediate re-initialization
@@ -435,7 +407,6 @@ export const saveApiKeyChangesAtom = atom(
     // Reset saving state after a small delay to show completion
     setTimeout(() => {
       set(isSavingAtom, false);
-      console.log('saveApiKeyChangesAtom: Save complete, isSaving set to false');
     }, 200);
   }
 );
@@ -449,16 +420,8 @@ export const syncLocalApiKeysAtom = atom(
     const hasInitialized = get(hasInitializedAtom);
     const userApiKeys = get(userApiKeysAtom);
 
-    console.log('syncLocalApiKeysAtom triggered:', {
-      hasLocalChanges,
-      justSaved,
-      hasInitialized,
-      userApiKeys,
-    });
-
     // Always initialize on first render
     if (!hasInitialized) {
-      console.log('syncLocalApiKeysAtom: Initial load, setting localApiKeys from userApiKeys:', userApiKeys);
       set(localApiKeysAtom, userApiKeys);
       set(hasInitializedAtom, true);
       return;
@@ -466,14 +429,10 @@ export const syncLocalApiKeysAtom = atom(
 
     // Sync when no local changes and not just saved
     if (!hasLocalChanges && !justSaved) {
-      console.log('syncLocalApiKeysAtom: Resetting localApiKeys from userApiKeys:', userApiKeys);
       set(localApiKeysAtom, userApiKeys);
     } else if (justSaved) {
-      console.log('syncLocalApiKeysAtom: Just saved, not resetting localApiKeys');
       // Reset the flag after the effect runs once
       set(justSavedAtom, false);
-    } else if (hasLocalChanges) {
-      console.log('syncLocalApiKeysAtom: Not syncing because hasLocalChanges:', hasLocalChanges);
     }
   }
 );

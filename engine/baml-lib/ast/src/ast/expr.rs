@@ -4,7 +4,8 @@ use baml_types::{TypeValue, UnresolvedValue};
 use internal_baml_diagnostics::Diagnostics;
 
 use crate::ast::{
-    ArgumentsList, BlockArgs, Expression, ExpressionBlock, FieldType, Identifier, Span, Stmt,
+    ArgumentsList, BlockArgs, Expression, ExpressionBlock, FieldType, Identifier, LetStmt, Span,
+    Stmt,
 };
 
 /// A function definition.
@@ -21,5 +22,5 @@ pub struct ExprFn {
 /// E.g. (at top-level in source file) `let x = 1;`
 #[derive(Debug, Clone)]
 pub struct TopLevelAssignment {
-    pub stmt: Stmt,
+    pub stmt: LetStmt,
 }

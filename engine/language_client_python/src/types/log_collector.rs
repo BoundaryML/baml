@@ -203,7 +203,7 @@ impl FunctionLog {
                 }
             }
             baml_runtime::tracingv2::storage::storage::LLMCallKind::Stream(inner) => {
-                if inner.selected {
+                if inner.llm_call.selected {
                     Some(Either::Right(LLMStreamCall { inner }))
                 } else {
                     None
@@ -307,6 +307,7 @@ impl LLMStreamCall {
     #[getter]
     pub fn http_request(&self) -> Option<HTTPRequest> {
         self.inner
+            .llm_call
             .request
             .clone()
             .map(|req| HTTPRequest { inner: req })
@@ -315,6 +316,7 @@ impl LLMStreamCall {
     #[getter]
     pub fn http_response(&self) -> Option<HTTPResponse> {
         self.inner
+            .llm_call
             .response
             .clone()
             .map(|resp| HTTPResponse { inner: resp })
@@ -323,22 +325,26 @@ impl LLMStreamCall {
     // TODO: use python subclassing
     #[getter]
     pub fn provider(&self) -> String {
-        self.inner.provider.clone()
+        self.inner.llm_call.provider.clone()
     }
 
     #[getter]
     pub fn client_name(&self) -> String {
-        self.inner.client_name.clone()
+        self.inner.llm_call.client_name.clone()
     }
 
     #[getter]
     pub fn selected(&self) -> bool {
-        self.inner.selected
+        self.inner.llm_call.selected
     }
 
     #[getter]
     pub fn usage(&self) -> Option<Usage> {
-        self.inner.usage.clone().map(|u| Usage { inner: u })
+        self.inner
+            .llm_call
+            .usage
+            .clone()
+            .map(|u| Usage { inner: u })
     }
 
     #[getter]

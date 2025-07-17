@@ -11,6 +11,7 @@ node = "lts"     # For pnpm
 # Rust tools
 "cargo:wasm-pack" = "0.13.1"
 "cargo:cross" = "latest"
+"cargo:cargo-watch" = "latest"
 
 # Go tools
 # "go:google.golang.org/protobuf/cmd/protoc-gen-go" = "v1.36.6"
@@ -28,4 +29,4 @@ node = "lts"     # For pnpm
 
 [settings]
 experimental = true
-idiomatic_version_file_enable_tools = ["node", "python", "ruby", "go"]
+# idiomatic_version_file_enable_tools = ["node", "python", "ruby", "go"]

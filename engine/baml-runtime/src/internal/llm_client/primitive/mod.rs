@@ -356,6 +356,7 @@ impl LLMPrimitiveProvider {
 #[cfg(test)]
 mod tests {
     use anyhow::Result;
+    use indexmap::IndexMap;
 
     use super::request::RequestBuilder;
     use crate::internal::llm_client::traits::WithClient;
@@ -384,6 +385,7 @@ mod tests {
                     provider: "mock".to_string(),
                     default_role: "user".to_string(),
                     allowed_roles: vec![],
+                    options: IndexMap::new(),
                 },
                 request_options: baml_types::BamlMap::new(),
             }

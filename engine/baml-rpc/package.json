@@ -10,7 +10,9 @@
     "build": "cargo test export_bindings && tsc",
     "release": "cargo test export_bindings && tsc",
     "typecheck": "cargo test export_bindings && tsc --noEmit --emitDeclarationOnly false",
-    "clean": "git clean -xdf .turbo node_modules target"
+    "clean": "git clean -xdf .turbo node_modules target",
+    "dev.skip": "cargo watch -x 'test export_bindings' -s 'tsc'",
+    "dev": "pnpm run build"
   },
   "devDependencies": {
     "typescript": "5.8.3"

@@ -23,21 +23,40 @@ func {{ fn.name }}(ctx context.Context{% for (name, go_type) in fn.args -%}
         args.Collectors = callOpts.collectors
     }
 
-    encoded, err := baml.EncodeArgs(args)
+    encoded, err := args.Encode()
     if err != nil {
         panic(err)
     }
 
-    result, err := bamlRuntime.CallFunction(ctx, "{{ fn.name }}", encoded)
-    if err != nil {
-        return {{ fn.return_type.zero_value(pkg) }}, err
+    if callOpts.onTick == nil {
+        result, err := bamlRuntime.CallFunction(ctx, "{{ fn.name }}", encoded, callOpts.onTick)
+        if err != nil {
+            return {{ fn.return_type.zero_value(pkg) }}, err
+        }
+
+        if result.Error != nil {
+            return {{ fn.return_type.zero_value(pkg) }}, result.Error
+        }
+
+        casted := {{ fn.return_type.cast_from_function("result.Data", pkg) }}
+
+        return casted, nil
+    } else {
+        channel, err := bamlRuntime.CallFunctionStream(ctx, "{{ fn.name }}", encoded, callOpts.onTick)
+        if err != nil {
+            return {{ fn.return_type.zero_value(pkg) }}, err
+        }
+
+        for result := range channel {
+            if result.Error != nil {
+                return {{ fn.return_type.zero_value(pkg) }}, result.Error
+            }
+
+            if result.HasData {
+                return result.Data.({{ fn.return_type.serialize_type(pkg) }}), nil
+            }
+        }
+
+        return {{ fn.return_type.zero_value(pkg) }}, fmt.Errorf("No data returned from stream")
     }
-
-    if result.Error != nil {
-        return {{ fn.return_type.zero_value(pkg) }}, result.Error
-    }
-
-    casted := {{ fn.return_type.cast_from_function("result.Data", pkg) }}
-
-    return casted, nil
 }

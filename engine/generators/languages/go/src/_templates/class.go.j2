@@ -10,7 +10,7 @@ type {{ name }} struct {
     {%- endif %}
 }
 
-func (c *{{ name }}) Decode(holder *cffi.CFFIValueClass) {
+func (c *{{ name }}) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != {{ pkg.namespace() }} {
 		panic(fmt.Sprintf("expected {{ pkg.namespace() }}, got %s", string(typeName.Namespace.String())))

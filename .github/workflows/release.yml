@@ -157,8 +157,40 @@ jobs:
         with:
           pattern: bindings-*
           path: engine/language_client_typescript/artifacts
+
       - name: Publish to NPM
+        # This reads the credential from .npmrc, which is written by the setup-node step.
+        # It does not use the NODE_AUTH_TOKEN environment variable.
         run: pnpm --filter=@boundaryml/baml publish --access public --no-git-checks
+
+  # publish-to-rubygems:
+  #   environment: release
+  #   needs: [all-builds]
+  #   if: ${{ startsWith(github.ref, 'refs/tags/') }}
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+
+  #     - uses: rubygems/configure-rubygems-credentials@main
+  #       with:
+  #         # https://rubygems.org/profile/oidc/api_key_roles/rg_oidc_akr_p6x4xz53qtk948na3bgy
+  #         role-to-assume: rg_oidc_akr_p6x4xz53qtk948na3bgy
+
+  #     - uses: jdx/mise-action@v2
+
+  #     - uses: actions/download-artifact@v4
+  #       with:
+  #         pattern: gem-*
+  #         path: engine/language_client_ruby/pkg/
+  #         merge-multiple: true
+
+  #     - working-directory: engine/language_client_ruby
+  #       run: |
+  #         set -euxo pipefail
+  #         find pkg
+  #         for i in $(ls pkg/*.gem); do
+  #           gem push $i
+  #         done
 
   publish-to-open-vsx:
     environment: release

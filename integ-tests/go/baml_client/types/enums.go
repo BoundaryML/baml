@@ -69,7 +69,7 @@ func (e *AliasedEnum) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (e *AliasedEnum) Decode(holder *cffi.CFFIValueEnum) {
+func (e *AliasedEnum) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
 	name := holder.Name
 	if name.Name != "AliasedEnum" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected types.AliasedEnum, got %s.%s", string(name.Namespace.String()), string(name.Name)))
@@ -147,7 +147,7 @@ func (e *Category) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (e *Category) Decode(holder *cffi.CFFIValueEnum) {
+func (e *Category) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
 	name := holder.Name
 	if name.Name != "Category" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected types.Category, got %s.%s", string(name.Namespace.String()), string(name.Name)))
@@ -225,7 +225,7 @@ func (e *Category2) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (e *Category2) Decode(holder *cffi.CFFIValueEnum) {
+func (e *Category2) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
 	name := holder.Name
 	if name.Name != "Category2" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected types.Category2, got %s.%s", string(name.Namespace.String()), string(name.Name)))
@@ -303,7 +303,7 @@ func (e *Category3) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (e *Category3) Decode(holder *cffi.CFFIValueEnum) {
+func (e *Category3) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
 	name := holder.Name
 	if name.Name != "Category3" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected types.Category3, got %s.%s", string(name.Namespace.String()), string(name.Name)))
@@ -379,7 +379,7 @@ func (e *Color) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (e *Color) Decode(holder *cffi.CFFIValueEnum) {
+func (e *Color) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
 	name := holder.Name
 	if name.Name != "Color" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected types.Color, got %s.%s", string(name.Namespace.String()), string(name.Name)))
@@ -451,7 +451,7 @@ func (e *DataType) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (e *DataType) Decode(holder *cffi.CFFIValueEnum) {
+func (e *DataType) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
 	name := holder.Name
 	if name.Name != "DataType" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected types.DataType, got %s.%s", string(name.Namespace.String()), string(name.Name)))
@@ -516,7 +516,7 @@ func (e *DynEnumOne) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (e *DynEnumOne) Decode(holder *cffi.CFFIValueEnum) {
+func (e *DynEnumOne) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
 	name := holder.Name
 	if name.Name != "DynEnumOne" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected types.DynEnumOne, got %s.%s", string(name.Namespace.String()), string(name.Name)))
@@ -581,7 +581,7 @@ func (e *DynEnumTwo) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (e *DynEnumTwo) Decode(holder *cffi.CFFIValueEnum) {
+func (e *DynEnumTwo) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
 	name := holder.Name
 	if name.Name != "DynEnumTwo" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected types.DynEnumTwo, got %s.%s", string(name.Namespace.String()), string(name.Name)))
@@ -653,7 +653,7 @@ func (e *EnumInClass) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (e *EnumInClass) Decode(holder *cffi.CFFIValueEnum) {
+func (e *EnumInClass) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
 	name := holder.Name
 	if name.Name != "EnumInClass" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected types.EnumInClass, got %s.%s", string(name.Namespace.String()), string(name.Name)))
@@ -732,7 +732,7 @@ func (e *EnumOutput) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (e *EnumOutput) Decode(holder *cffi.CFFIValueEnum) {
+func (e *EnumOutput) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
 	name := holder.Name
 	if name.Name != "EnumOutput" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected types.EnumOutput, got %s.%s", string(name.Namespace.String()), string(name.Name)))
@@ -802,7 +802,7 @@ func (e *Hobby) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (e *Hobby) Decode(holder *cffi.CFFIValueEnum) {
+func (e *Hobby) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
 	name := holder.Name
 	if name.Name != "Hobby" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected types.Hobby, got %s.%s", string(name.Namespace.String()), string(name.Name)))
@@ -876,7 +876,7 @@ func (e *MapKey) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (e *MapKey) Decode(holder *cffi.CFFIValueEnum) {
+func (e *MapKey) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
 	name := holder.Name
 	if name.Name != "MapKey" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected types.MapKey, got %s.%s", string(name.Namespace.String()), string(name.Name)))
@@ -948,7 +948,7 @@ func (e *NamedArgsSingleEnum) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (e *NamedArgsSingleEnum) Decode(holder *cffi.CFFIValueEnum) {
+func (e *NamedArgsSingleEnum) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
 	name := holder.Name
 	if name.Name != "NamedArgsSingleEnum" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected types.NamedArgsSingleEnum, got %s.%s", string(name.Namespace.String()), string(name.Name)))
@@ -1020,7 +1020,7 @@ func (e *NamedArgsSingleEnumList) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (e *NamedArgsSingleEnumList) Decode(holder *cffi.CFFIValueEnum) {
+func (e *NamedArgsSingleEnumList) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
 	name := holder.Name
 	if name.Name != "NamedArgsSingleEnumList" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected types.NamedArgsSingleEnumList, got %s.%s", string(name.Namespace.String()), string(name.Name)))
@@ -1094,7 +1094,7 @@ func (e *OptionalTest_CategoryType) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (e *OptionalTest_CategoryType) Decode(holder *cffi.CFFIValueEnum) {
+func (e *OptionalTest_CategoryType) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
 	name := holder.Name
 	if name.Name != "OptionalTest_CategoryType" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected types.OptionalTest_CategoryType, got %s.%s", string(name.Namespace.String()), string(name.Name)))
@@ -1170,7 +1170,7 @@ func (e *OrderStatus) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (e *OrderStatus) Decode(holder *cffi.CFFIValueEnum) {
+func (e *OrderStatus) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
 	name := holder.Name
 	if name.Name != "OrderStatus" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected types.OrderStatus, got %s.%s", string(name.Namespace.String()), string(name.Name)))
@@ -1244,7 +1244,7 @@ func (e *Tag) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (e *Tag) Decode(holder *cffi.CFFIValueEnum) {
+func (e *Tag) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
 	name := holder.Name
 	if name.Name != "Tag" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected types.Tag, got %s.%s", string(name.Namespace.String()), string(name.Name)))
@@ -1326,7 +1326,7 @@ func (e *TestEnum) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (e *TestEnum) Decode(holder *cffi.CFFIValueEnum) {
+func (e *TestEnum) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
 	name := holder.Name
 	if name.Name != "TestEnum" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected types.TestEnum, got %s.%s", string(name.Namespace.String()), string(name.Name)))

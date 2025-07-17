@@ -3,12 +3,12 @@ use std::{collections::HashMap, sync::Arc};
 use anyhow::{Context, Result};
 use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
 use baml_types::{
-    tracing::events::{HTTPBody, HTTPRequest, HTTPResponse, TraceEvent},
+    tracing::events::{ClientDetails, HTTPBody, HTTPRequest, HTTPResponse, TraceEvent},
     BamlMap,
 };
 use bytes::Bytes;
 use http::Response as HttpResponse;
-use internal_baml_jinja::{RenderedChatMessage, RenderedPrompt};
+use internal_baml_jinja::{RenderContext_Client, RenderedChatMessage, RenderedPrompt};
 pub use internal_llm_client::ResponseType;
 use reqwest::{header::HeaderMap, Response, StatusCode};
 use serde::de::DeserializeOwned;
@@ -125,6 +125,7 @@ async fn log_http_response(
     status: u16,
     headers: Option<HashMap<String, String>>,
     body: HTTPBody,
+    client: &RenderContext_Client,
 ) {
     let event = TraceEvent::new_raw_llm_response(
         runtime_context.runtime_context().call_id_stack.clone(),
@@ -133,6 +134,11 @@ async fn log_http_response(
             status,
             headers,
             body,
+            ClientDetails {
+                name: client.name.clone(),
+                provider: client.provider.clone(),
+                options: client.options.clone(),
+            },
         )),
     );
     BAML_TRACER.lock().unwrap().put(Arc::new(event));
@@ -223,6 +229,7 @@ pub async fn execute_request(
                     .as_u16(),
                 None,
                 HTTPBody::new(format!("No response. Error: {e:?}").into_bytes()),
+                client.context(),
             )
             .await;
 
@@ -262,6 +269,7 @@ pub async fn execute_request(
                     0,
                     None,
                     HTTPBody::new(format!("Could not read response body: {e:?}").into_bytes()),
+                    client.context(),
                 )
                 .await;
                 return Err(LLMResponse::LLMFailure(LLMErrorResponse {
@@ -289,6 +297,7 @@ pub async fn execute_request(
             logged_res.status.as_u16(),
             Some(json_headers(&logged_res.headers)),
             HTTPBody::new(resp_body.clone().into_bytes()),
+            client.context(),
         )
         .await;
 
@@ -316,6 +325,7 @@ pub async fn execute_request(
                     0,
                     None,
                     HTTPBody::new(format!("Could not read response body: {e:?}").into_bytes()),
+                    client.context(),
                 )
                 .await;
                 return Err(LLMResponse::LLMFailure(LLMErrorResponse {
@@ -342,6 +352,7 @@ pub async fn execute_request(
             logged_response.status.as_u16(),
             Some(json_headers(&logged_response.headers)),
             HTTPBody::new(resp_body.into_bytes()),
+            client.context(),
         )
         .await;
 

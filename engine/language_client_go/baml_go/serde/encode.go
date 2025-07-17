@@ -1,11 +1,11 @@
-package baml
+package serde
 
 import (
 	"fmt"
 	"reflect"
 
+	"github.com/boundaryml/baml/engine/language_client_go/baml_go/shared"
 	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
-	"google.golang.org/protobuf/proto"
 )
 
 // BamlSerializer interface for custom class encoding
@@ -15,10 +15,15 @@ type BamlSerializer interface {
 	BamlEncodeName() *cffi.CFFITypeName
 }
 
+type InternalBamlSerializer interface {
+	InternalBamlSerializer()
+	Encode() (*cffi.CFFIValueHolder, error)
+}
+
 // implment BamlSerializer for anything that implements BamlClassSerializer, BamlEnumSerializer, or BamlUnionSerializer
 func EncodeClass(nameEncoder func() *cffi.CFFITypeName, fields map[string]any, dynamicFields *map[string]any) (*cffi.CFFIValueHolder, error) {
 	// Encode Static Fields
-	staticFields, err := encodeMapEntries(fields, "static class")
+	staticFields, err := EncodeMapEntries(fields, "static class")
 	if err != nil {
 		return nil, err // Error already includes context
 	}
@@ -26,7 +31,7 @@ func EncodeClass(nameEncoder func() *cffi.CFFITypeName, fields map[string]any, d
 	// Encode Dynamic Fields
 	var dynamicFieldsEncoded []*cffi.CFFIMapEntry
 	if dynamicFields != nil {
-		dynamicFieldsEncoded, err = encodeMapEntries(*dynamicFields, "dynamic class")
+		dynamicFieldsEncoded, err = EncodeMapEntries(*dynamicFields, "dynamic class")
 		if err != nil {
 			return nil, err // Error already includes context
 		}
@@ -132,20 +137,10 @@ func encodeValue(value any) (*cffi.CFFIValueHolder, error) {
 	}
 
 	switch v := concreteValue.(type) {
-	case Checked[any]: // Use any here, or make encodeValue generic (more complex)
-		encoded, err := encodeChecked(v)
-		if err != nil {
-			return nil, fmt.Errorf("encoding Checked value: %w", err)
-		}
-		return encoded, nil
-	case StreamState[any]: // Use any here
-		encoded, err := encodeStreamState(v) // Pass typeMap
-		if err != nil {
-			return nil, fmt.Errorf("encoding StreamState value: %w", err)
-		}
-		return encoded, nil
-	case BamlFunctionArguments:
-		return nil, fmt.Errorf("BamlFunctionArguments not supported here, must be encoded separately")
+	case shared.Checked[any]:
+		return encodeChecked(v)
+	case shared.StreamState[any]:
+		return encodeStreamState(v)
 	}
 
 	// Handle primitive kinds and collections using reflection value rv (points to underlying value)
@@ -276,7 +271,7 @@ func encodeMap(mapValue reflect.Value) (*cffi.CFFIValueHolder, error) {
 }
 
 // Helper function to encode map entries into a vector offset
-func encodeMapEntries(fields map[string]any, context string) ([]*cffi.CFFIMapEntry, error) {
+func EncodeMapEntries(fields map[string]any, context string) ([]*cffi.CFFIMapEntry, error) {
 	entries := make([]*cffi.CFFIMapEntry, 0, len(fields))
 	// Build entries (order doesn't strictly matter, but need to build bottom-up)
 	for k, v := range fields {
@@ -295,7 +290,7 @@ func encodeMapEntries(fields map[string]any, context string) ([]*cffi.CFFIMapEnt
 	return entries, nil
 }
 
-func encodeEnvVar(fields map[string]string) ([]*cffi.CFFIEnvVar, error) {
+func EncodeEnvVar(fields map[string]string) ([]*cffi.CFFIEnvVar, error) {
 	if len(fields) == 0 || fields == nil {
 		return nil, nil
 	}
@@ -312,7 +307,7 @@ func encodeEnvVar(fields map[string]string) ([]*cffi.CFFIEnvVar, error) {
 }
 
 // encodeChecked now accepts and passes TypeMap
-func encodeChecked(checkedVal Checked[any]) (*cffi.CFFIValueHolder, error) {
+func encodeChecked(checkedVal shared.Checked[any]) (*cffi.CFFIValueHolder, error) {
 	valueHolder, err := encodeValue(checkedVal.Value)
 	if err != nil {
 		return nil, fmt.Errorf("encoding inner value for Checked: %w", err)
@@ -338,13 +333,13 @@ func encodeChecked(checkedVal Checked[any]) (*cffi.CFFIValueHolder, error) {
 }
 
 // encodeStreamStateType remains the same
-func encodeStreamStateType(state StreamStateType) cffi.CFFIStreamState {
+func encodeStreamStateType(state shared.StreamStateType) cffi.CFFIStreamState {
 	switch state {
-	case StreamStatePending:
+	case shared.StreamStatePending:
 		return cffi.CFFIStreamState_PENDING
-	case StreamStateIncomplete:
+	case shared.StreamStateIncomplete:
 		return cffi.CFFIStreamState_STARTED
-	case StreamStateComplete:
+	case shared.StreamStateComplete:
 		return cffi.CFFIStreamState_DONE
 	default:
 		panic(fmt.Sprintf("unexpected Go stream state: %s", state))
@@ -352,7 +347,7 @@ func encodeStreamStateType(state StreamStateType) cffi.CFFIStreamState {
 }
 
 // encodeStreamState now accepts and passes TypeMap
-func encodeStreamState(streamStateVal StreamState[any]) (*cffi.CFFIValueHolder, error) {
+func encodeStreamState(streamStateVal shared.StreamState[any]) (*cffi.CFFIValueHolder, error) {
 	valueHolder, err := encodeValue(streamStateVal.Value) // Pass typeMap
 	if err != nil {
 		return nil, fmt.Errorf("encoding inner value for StreamState: %w", err)
@@ -368,80 +363,6 @@ func encodeStreamState(streamStateVal StreamState[any]) (*cffi.CFFIValueHolder, 
 			},
 		},
 	}, nil
-}
-
-func encodeFunctionArguments(functionArgumentsVal BamlFunctionArguments) (*cffi.CFFIFunctionArguments, error) {
-	kwargs, err := encodeMapEntries(functionArgumentsVal.Kwargs, "function arguments")
-	if err != nil {
-		return nil, fmt.Errorf("encoding function arguments: %w", err)
-	}
-
-	var clientRegistry *cffi.CFFIClientRegistry
-	if functionArgumentsVal.ClientRegistry != nil {
-		clientRegistry, err = encodeClientRegistry(functionArgumentsVal.ClientRegistry)
-		if err != nil {
-			return nil, fmt.Errorf("encoding client registry: %w", err)
-		}
-	}
-
-	var env []*cffi.CFFIEnvVar
-	if functionArgumentsVal.Env != nil {
-		env, err = encodeEnvVar(functionArgumentsVal.Env)
-		if err != nil {
-			return nil, fmt.Errorf("encoding env vars: %w", err)
-		}
-	}
-
-	var collectors []*cffi.CFFICollector
-	if functionArgumentsVal.Collectors != nil {
-		collectors, err = encodeCollectors(functionArgumentsVal.Collectors)
-		if err != nil {
-			return nil, fmt.Errorf("encoding collectors: %w", err)
-		}
-	}
-
-	functionArguments := cffi.CFFIFunctionArguments{
-		Kwargs:         kwargs,
-		ClientRegistry: clientRegistry,
-		Env:            env,
-		Collectors:     collectors,
-	}
-
-	return &functionArguments, nil
-}
-
-func encodeCollectors(collectorsVal []Collector) ([]*cffi.CFFICollector, error) {
-	collectors := make([]*cffi.CFFICollector, 0, len(collectorsVal))
-	for _, collector := range collectorsVal {
-		collectors = append(collectors, &cffi.CFFICollector{
-			Pointer: collector.id(),
-		})
-	}
-
-	return collectors, nil
-}
-
-func encodeClientRegistry(clientRegistryVal *ClientRegistry) (*cffi.CFFIClientRegistry, error) {
-
-	clientOffsets := make([]*cffi.CFFIClientProperty, 0, len(clientRegistryVal.clients))
-	for _, client := range clientRegistryVal.clients {
-		options, err := encodeMapEntries(client.options, "client options")
-		if err != nil {
-			return nil, fmt.Errorf("encoding client options: %w", err)
-		}
-		clientOffsets = append(clientOffsets, &cffi.CFFIClientProperty{
-			Provider:    client.provider,
-			RetryPolicy: client.retryPolicy,
-			Options:     options,
-		})
-	}
-
-	clients := cffi.CFFIClientRegistry{
-		Clients: clientOffsets,
-		Primary: clientRegistryVal.primary,
-	}
-
-	return &clients, nil
 }
 
 func encodeFieldType(fieldType reflect.Type) (*cffi.CFFIFieldTypeHolder, error) {
@@ -553,14 +474,6 @@ func encodeFieldType(fieldType reflect.Type) (*cffi.CFFIFieldTypeHolder, error) 
 	default:
 		return nil, fmt.Errorf("unexpected field type: %s", fieldType.Kind())
 	}
-}
-
-func EncodeArgs(args BamlFunctionArguments) ([]byte, error) {
-	root, err := encodeFunctionArguments(args)
-	if err != nil {
-		return nil, err
-	}
-	return proto.Marshal(root)
 }
 
 // This is only used for testing, do not use in production

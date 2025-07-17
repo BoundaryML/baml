@@ -64,7 +64,7 @@ func (*stream) TestEmptyCollections(ctx context.Context, input string, opts ...C
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -73,7 +73,7 @@ func (*stream) TestEmptyCollections(ctx context.Context, input string, opts ...C
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestEmptyCollections", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestEmptyCollections", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -142,7 +142,7 @@ func (*stream) TestMixedPrimitives(ctx context.Context, input string, opts ...Ca
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -151,7 +151,7 @@ func (*stream) TestMixedPrimitives(ctx context.Context, input string, opts ...Ca
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestMixedPrimitives", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestMixedPrimitives", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -220,7 +220,7 @@ func (*stream) TestPrimitiveArrays(ctx context.Context, input string, opts ...Ca
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -229,7 +229,7 @@ func (*stream) TestPrimitiveArrays(ctx context.Context, input string, opts ...Ca
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestPrimitiveArrays", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestPrimitiveArrays", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -298,7 +298,7 @@ func (*stream) TestPrimitiveMaps(ctx context.Context, input string, opts ...Call
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -307,7 +307,7 @@ func (*stream) TestPrimitiveMaps(ctx context.Context, input string, opts ...Call
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestPrimitiveMaps", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestPrimitiveMaps", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -376,7 +376,7 @@ func (*stream) TestPrimitiveTypes(ctx context.Context, input string, opts ...Cal
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -385,7 +385,7 @@ func (*stream) TestPrimitiveTypes(ctx context.Context, input string, opts ...Cal
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestPrimitiveTypes", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestPrimitiveTypes", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -454,7 +454,7 @@ func (*stream) TestTopLevelBool(ctx context.Context, input string, opts ...CallO
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -463,7 +463,7 @@ func (*stream) TestTopLevelBool(ctx context.Context, input string, opts ...CallO
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestTopLevelBool", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestTopLevelBool", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -532,7 +532,7 @@ func (*stream) TestTopLevelFloat(ctx context.Context, input string, opts ...Call
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -541,7 +541,7 @@ func (*stream) TestTopLevelFloat(ctx context.Context, input string, opts ...Call
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestTopLevelFloat", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestTopLevelFloat", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -610,7 +610,7 @@ func (*stream) TestTopLevelInt(ctx context.Context, input string, opts ...CallOp
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -619,7 +619,7 @@ func (*stream) TestTopLevelInt(ctx context.Context, input string, opts ...CallOp
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestTopLevelInt", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestTopLevelInt", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -688,7 +688,7 @@ func (*stream) TestTopLevelNull(ctx context.Context, input string, opts ...CallO
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -697,7 +697,7 @@ func (*stream) TestTopLevelNull(ctx context.Context, input string, opts ...CallO
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestTopLevelNull", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestTopLevelNull", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -766,7 +766,7 @@ func (*stream) TestTopLevelString(ctx context.Context, input string, opts ...Cal
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -775,7 +775,7 @@ func (*stream) TestTopLevelString(ctx context.Context, input string, opts ...Cal
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestTopLevelString", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestTopLevelString", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}

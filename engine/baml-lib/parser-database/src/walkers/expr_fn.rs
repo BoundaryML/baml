@@ -10,7 +10,7 @@ pub type TopLevelAssignmentWalker<'db> = Walker<'db, ast::TopLevelAssignmentId>;
 impl<'db> TopLevelAssignmentWalker<'db> {
     /// Returns the name of the top level assignment.
     pub fn name(&self) -> &str {
-        self.db.ast[self.id].stmt.identifier().name()
+        self.db.ast[self.id].stmt.identifier.name()
     }
 
     /// Return the AST node for the top level assignment.
@@ -20,7 +20,7 @@ impl<'db> TopLevelAssignmentWalker<'db> {
 
     /// Returns the expression of the top level assignment.
     pub fn expr(&self) -> &ast::Expression {
-        self.db.ast[self.id].stmt.body()
+        &self.db.ast[self.id].stmt.expr
     }
 }
 
