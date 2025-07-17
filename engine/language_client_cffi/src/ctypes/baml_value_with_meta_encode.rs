@@ -159,12 +159,10 @@ where
                     .to_streaming_type(lookup),
                 other => other.clone(),
             },
-            |field_type| match field_type {
-                TypeGeneric::Class { mode, .. } => match mode {
-                    baml_types::StreamingMode::NonStreaming => CffiTypeNamespace::Types,
-                    baml_types::StreamingMode::Streaming => CffiTypeNamespace::StreamTypes,
-                },
-                _ => CffiTypeNamespace::StreamTypes,
+            |field_type| match field_type.mode(lookup) {
+                Ok(baml_types::StreamingMode::NonStreaming) => CffiTypeNamespace::Types,
+                Ok(baml_types::StreamingMode::Streaming) => CffiTypeNamespace::StreamTypes,
+                Err(e) => panic!("Failed to get mode for field type: {e}"),
             },
         )
     }

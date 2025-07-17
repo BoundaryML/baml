@@ -280,6 +280,20 @@ func convertFieldTypeToGoType(fieldType *cffi.CFFIFieldTypeHolder, typeMap TypeM
 		return reflect.TypeOf(float64(0))
 	}
 
+	if literal, ok := type_.(*cffi.CFFIFieldTypeHolder_LiteralType); ok {
+		literalType := literal.LiteralType
+		switch literalType.Literal.(type) {
+		case *cffi.CFFIFieldTypeLiteral_BoolLiteral:
+			return reflect.TypeOf(false)
+		case *cffi.CFFIFieldTypeLiteral_IntLiteral:
+			return reflect.TypeOf(int64(0))
+		case *cffi.CFFIFieldTypeLiteral_StringLiteral:
+			return reflect.TypeOf("")
+		default:
+			panic(fmt.Sprintf("unexpected cffi.isCFFIFieldTypeLiteral_Literal: %#v", literalType.Literal))
+		}
+	}
+
 	if class, ok := type_.(*cffi.CFFIFieldTypeHolder_ClassType); ok {
 		name := class.ClassType.Name.Name
 		namespace := class.ClassType.Name.Namespace.Enum().String()

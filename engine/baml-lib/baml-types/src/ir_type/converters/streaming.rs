@@ -11,7 +11,7 @@ pub fn from_type_ir(r#type: &TypeIR, lookup: &impl TypeLookups) -> TypeStreaming
     fn partialize_helper(r#type: &TypeIR, lookup: &impl TypeLookups) -> TypeStreaming {
         let type_meta::base::StreamingBehavior {
             done,
-            needed,
+            mut needed,
             state,
         } = r#type
             .streaming_behavior()
@@ -55,12 +55,14 @@ pub fn from_type_ir(r#type: &TypeIR, lookup: &impl TypeLookups) -> TypeStreaming
                 meta: meta.clone(),
             },
             TypeIR::List(item_type, _) => {
+                needed = true;
                 // items inside of arrays don't need to nullable.
                 let mut item_type = item_type.clone();
                 item_type.meta_mut().streaming_behavior.needed = true;
                 TypeStreaming::List(Box::new(from_type_ir(&item_type, lookup)), meta)
             }
             TypeIR::Map(key_type, item_type, _) => {
+                needed = true;
                 TypeStreaming::Map(
                     {
                         // Keys cannot be null in maps
