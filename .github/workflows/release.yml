@@ -55,9 +55,6 @@ jobs:
       - run: echo "::do-nothing::" >/dev/null
 
   publish-to-github:
-    environment: release
-    permissions:
-      contents: write
     needs: [all-builds, determine-version]
     runs-on: ubuntu-latest
     steps:
@@ -72,7 +69,7 @@ jobs:
       - name: List downloaded artifacts
         run: |
           echo "Playground artifacts:"
-          ls -la playground-dist-*.tar.gz*
+          ls -la playground-dist-*.tar.gz* || echo "No playground tarball files found"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -80,8 +77,8 @@ jobs:
           name: ${{ needs.determine-version.outputs.version_string }}
           tag_name: ${{ needs.determine-version.outputs.version_string }}
           body: Playground dist test
-          draft: false
-          prerelease: false
+          draft: true
+          prerelease: true
           files: |
             playground-dist-*.tar.gz
             playground-dist-*.tar.gz.sha256
