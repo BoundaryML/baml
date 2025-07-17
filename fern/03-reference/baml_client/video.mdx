@@ -155,7 +155,7 @@ Different AI models have varying levels of support for video input methods **(As
 
 | Provider / API         |   | Video Input Support                                                                                                   |
 |-----------------------|---|----------------------------------------------------------------------------------------------------------------------|
-| **Anthropic**         | ✗ | No native video support. Only accepts PDF, images, and common docs. Any video analysis demos extract frames first.  |
+| **Anthropic**         | ✗ | No native video support. Only accepts PDF, images, and common docs.  |
 | **AWS Bedrock**       | ✓ | Fully multimodal. Accepts video as Base64 bytes in request or S3 URI. JSON must include format (e.g. mp4) and source.|
 | **Google Gemini**     | ✓ | Three options: upload with `ai.files.upload` and use `file_uri`, inline Base64 (&lt;20MB), or YouTube URL (preview). Requires `mime_type`.|
 | **OpenAI**            | ✗ | Video input not yet in public API. Only text and images. Must extract frames and send as images for now.            |
