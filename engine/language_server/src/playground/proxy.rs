@@ -189,7 +189,7 @@ fn parse_target_url(url_str: &str) -> Result<url::Url, Rejection> {
 
 /// Check if this is a simple GET request that doesn't need proxying
 fn is_simple_get_request(method: &http::Method, path: &str) -> bool {
-    path.matches('.').count() == 1 && method == &http::Method::GET
+    path.matches('.').count() == 1 && method == http::Method::GET
 }
 
 /// Create an empty successful response
@@ -208,9 +208,9 @@ fn construct_final_path(url: &url::Url, path_str: &str) -> String {
         path_str.trim_end_matches('/').to_string()
     } else if !path_str.starts_with(base_path) {
         if path_str.starts_with('/') {
-            format!("{}{}", base_path, path_str)
+            format!("{base_path}{path_str}")
         } else {
-            format!("{}/{}", base_path, path_str)
+            format!("{base_path}/{path_str}")
         }
     } else {
         path_str.to_string()
@@ -223,7 +223,7 @@ fn construct_final_path(url: &url::Url, path_str: &str) -> String {
 fn build_proxied_request(
     method: http::Method,
     target_url: &url::Url,
-    mut headers: http::HeaderMap,
+    headers: http::HeaderMap,
     body: bytes::Bytes,
 ) -> Result<http::Request<Vec<u8>>, Rejection> {
     let mut request_builder = http::Request::builder()
@@ -254,7 +254,7 @@ fn inject_api_key(
     for (allowed_origin, header_name, env_var, baml_header) in API_PROVIDERS {
         if origin == *allowed_origin {
             if let Some(api_key) = get_api_key(env_var, baml_header, headers) {
-                let header_value = format_api_key_header(*header_name, &api_key);
+                let header_value = format_api_key_header(header_name, &api_key);
                 let new_builder = std::mem::replace(request_builder, http::Request::builder());
                 *request_builder = new_builder.header(*header_name, header_value);
             }
@@ -267,8 +267,8 @@ fn inject_api_key(
 fn get_origin_string(url: &url::Url) -> String {
     match url.origin() {
         url::Origin::Tuple(scheme, host, port) => match (scheme.as_str(), port) {
-            ("http", 80) | ("https", 443) => format!("{}://{}", scheme, host),
-            _ => format!("{}://{}:{}", scheme, host, port),
+            ("http", 80) | ("https", 443) => format!("{scheme}://{host}"),
+            _ => format!("{scheme}://{host}:{port}"),
         },
         url::Origin::Opaque(_) => String::new(),
     }
@@ -298,7 +298,7 @@ fn get_api_key(env_var: &str, baml_header: &str, headers: &http::HeaderMap) -> O
 /// Format API key header value based on header type
 fn format_api_key_header(header_name: &str, api_key: &str) -> String {
     if header_name == "Authorization" {
-        format!("Bearer {}", api_key)
+        format!("Bearer {api_key}")
     } else {
         api_key.to_string()
     }
