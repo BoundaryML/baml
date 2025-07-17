@@ -45,8 +45,9 @@ macro_rules! define_id {
 
             pub fn testonly_from_u16(counter: u16) -> Self {
                 use std::str::FromStr;
+                // f008 sets the version and variant bits correctly, for the resulting uuid to be a uuidv7
                 Self::from_str(&format!(
-                    "{}_00000000000000000000e{:05}",
+                    "{}_0000000000f008000test{:05}",
                     $type_str, counter
                 ))
                 .unwrap()
