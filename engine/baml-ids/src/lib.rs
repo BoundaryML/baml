@@ -42,6 +42,15 @@ macro_rules! define_id {
                         $inner_name::TYPE
                     ))
             }
+
+            pub fn testonly_from_u16(counter: u16) -> Self {
+                use std::str::FromStr;
+                Self::from_str(&format!(
+                    "{}_00000000000000000000e{:05}",
+                    $type_str, counter
+                ))
+                .unwrap()
+            }
         }
 
         impl Default for $name {
