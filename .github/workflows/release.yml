@@ -333,12 +333,21 @@ jobs:
           path: cffi-artifacts
           merge-multiple: true
 
+      - name: Download playground artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: playground-dist-*
+          path: playground-artifacts
+          merge-multiple: true
+
       - name: List downloaded artifacts
         run: |
           echo "CLI artifacts:"
           ls -R cli-artifacts/
           echo "\nCFFI artifacts:"
           ls -R cffi-artifacts/
+          echo "\nPlayground artifacts:"
+          ls -R playground-artifacts/
 
       # Prepare changelog
       - name: Prepare changelog
@@ -360,6 +369,7 @@ jobs:
           files: |
             cli-artifacts/**/*
             cffi-artifacts/**/*
+            playground-artifacts/**/*
           fail_on_unmatched_files: true
           token: ${{ secrets.GITHUB_TOKEN }}
           generate_release_notes: false
