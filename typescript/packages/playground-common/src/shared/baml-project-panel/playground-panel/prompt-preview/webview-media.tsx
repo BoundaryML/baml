@@ -5,6 +5,7 @@ import { useAtomValue, useSetAtom } from 'jotai';
 import { ExternalLinkIcon, ImageIcon, Music, FileText, Video, Copy, Check, X } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import useSWR from 'swr';
+import { Button } from '@baml/ui/button';
 import { wasmAtom } from '../../atoms';
 import { showTokensAtom } from './render-text';
 import { imageStatsMapAtom } from './image-stats-atom';
@@ -57,6 +58,49 @@ const getDisplayUrl = (url: string, mediaType: string): string => {
     return `Base64 ${mediaType}`;
   }
   return url;
+};
+
+// Helper function to extract file format from URL or data URI
+const getFileFormat = (url: string, mediaType: string): string => {
+  if (url.startsWith('data:')) {
+    const mimeMatch = url.match(/data:([^;]+)/);
+    if (mimeMatch && mimeMatch[1]) {
+      const mimeType = mimeMatch[1];
+      // Extract format from mime type
+      if (mimeType.includes('image/')) {
+        return mimeType.replace('image/', '').toUpperCase();
+      } else if (mimeType.includes('audio/')) {
+        return mimeType.replace('audio/', '').toUpperCase();
+      } else if (mimeType.includes('application/pdf')) {
+        return 'PDF';
+      } else if (mimeType.includes('video/')) {
+        return mimeType.replace('video/', '').toUpperCase();
+      }
+    }
+  } else {
+    // Extract from URL extension
+    const urlLower = url.toLowerCase();
+    const extensionMatch = urlLower.match(/\.([a-z0-9]+)(?:\?|#|$)/);
+    if (extensionMatch && extensionMatch[1]) {
+      return extensionMatch[1].toUpperCase();
+    }
+  }
+  return '';
+};
+
+// Helper function to get file size from data URI
+const getDataUriSize = (url: string): string => {
+  if (url.startsWith('data:')) {
+    const sizeMatch = url.match(/^data:[^;]+;base64,(.+)$/);
+    if (sizeMatch && sizeMatch[1]) {
+      const base64Length = sizeMatch[1].length;
+      const sizeInBytes = base64Length * 0.75;
+      return sizeInBytes > 1048576 
+        ? `${(sizeInBytes / 1048576).toFixed(2)} MB` 
+        : `${(sizeInBytes / 1024).toFixed(2)} KB`;
+    }
+  }
+  return '';
 };
 
 export const WebviewMedia: React.FC<WebviewMediaProps> = ({
@@ -408,53 +452,106 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
 
 
   const isBase64 = mediaUrl?.startsWith('data:');
+  const fileFormat = getFileFormat(mediaUrl || '', bamlMediaType);
+  const fileSize = isBase64 ? getDataUriSize(mediaUrl || '') : '';
 
   return (
     <div className="w-full flex justify-center p-4 bg-[var(--vscode-sideBar-background)]">
-      <div className="max-w-lg w-full border border-[var(--vscode-panel-border)] rounded bg-[var(--vscode-editor-background)] p-4 space-y-3">
-        {renderMediaContent()}
+      <div className="max-w-lg w-full border border-[var(--vscode-panel-border)] rounded bg-[var(--vscode-editor-background)] space-y-3">
+        {/* Header with file type icon and link/copy */}
         {mediaUrl && (
-          <div className="flex justify-center">
+          <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--vscode-panel-border)] bg-[var(--vscode-sideBar-background)]">
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              {bamlMediaType === 'image' && <ImageIcon className="w-4 h-4 text-[var(--vscode-charts-blue)] flex-shrink-0" />}
+              {bamlMediaType === 'audio' && <Music className="w-4 h-4 text-[var(--vscode-charts-purple)] flex-shrink-0" />}
+              {bamlMediaType === 'pdf' && <FileText className="w-4 h-4 text-[var(--vscode-charts-red)] flex-shrink-0" />}
+              {bamlMediaType === 'video' && <Video className="w-4 h-4 text-[var(--vscode-charts-green)] flex-shrink-0" />}
+              <div className="flex flex-col min-w-0">
+                <span className="text-xs font-medium text-[var(--vscode-foreground)] capitalize leading-tight">
+                  {bamlMediaType}
+                </span>
+                {/* File statistics */}
+                <span className="text-xs text-[var(--vscode-description-foreground)] leading-tight truncate">
+                  {bamlMediaType === 'image' && imageStats ? 
+                    `${fileFormat ? `${fileFormat} • ` : ''}${imageStats.width}×${imageStats.height}${fileSize ? ` • ${fileSize}` : imageStats.size ? ` • ${imageStats.size}` : ''}` :
+                   bamlMediaType === 'audio' ? 
+                    `${fileFormat || 'Unknown format'}${fileSize ? ` • ${fileSize}` : ''}` :
+                   bamlMediaType === 'pdf' ? 
+                    `${fileSize || 'PDF document'}` :
+                   bamlMediaType === 'video' ? 
+                    `${fileFormat || 'Video'}${fileSize ? ` • ${fileSize}` : ''}` :
+                   'Media file'}
+                  {!isBase64 && mediaUrl && ` • ${getDisplayUrl(mediaUrl, bamlMediaType)}`}
+                </span>
+              </div>
+            </div>
+            {/* Button area, right-aligned, same size for both buttons */}
+            <div className="flex items-center ml-2">
             {isBase64 ? (
-              <button
+              <Button
                 onClick={handleCopyToClipboard}
                 disabled={copyStatus === 'copying'}
-                className={`flex gap-2 items-center transition-all duration-200 text-xs bg-[var(--vscode-editor-background)] px-3 py-2 rounded border ${
-                  copyStatus === 'success'
-                    ? 'border-[var(--vscode-charts-green)] text-[var(--vscode-charts-green)]'
+                variant="outline"
+                size="xs"
+                className={`flex gap-1.5 items-center text-xs px-2 py-1 rounded flex-shrink-0 min-w-[110px] transition-all duration-200
+                  ${copyStatus === 'success'
+                    ? 'border-[var(--vscode-charts-green)] text-[var(--vscode-charts-green)] bg-[var(--vscode-editor-background)]'
                     : copyStatus === 'error'
-                    ? 'border-[var(--vscode-charts-red)] text-[var(--vscode-charts-red)]'
-                    : copyStatus === 'copying'
-                    ? 'border-[var(--vscode-panel-border)] text-[var(--vscode-description-foreground)] cursor-not-allowed'
-                    : 'border-[var(--vscode-panel-border)] text-[var(--vscode-description-foreground)] hover:text-[var(--vscode-charts-blue)] hover:border-[var(--vscode-charts-blue)] hover:bg-[var(--vscode-button-hover-background)]'
-                }`}
+                    ? 'border-[var(--vscode-charts-red)] text-[var(--vscode-charts-red)] bg-[var(--vscode-editor-background)]'
+                    : ''
+                  }`}
               >
                 {copyStatus === 'copying' && (
-                  <div className="w-3 h-3 border border-[var(--vscode-description-foreground)] border-t-transparent rounded-full animate-spin" />
+                  <div className="w-3 h-3 border border-[var(--vscode-button-foreground)] border-t-transparent rounded-full animate-spin" />
                 )}
                 {copyStatus === 'success' && <Check className="w-3 h-3" />}
                 {copyStatus === 'error' && <X className="w-3 h-3" />}
                 {copyStatus === 'idle' && <Copy className="w-3 h-3" />}
-                <span className="font-medium">
+                <span>
                   {copyStatus === 'copying' && `Copying...`}
                   {copyStatus === 'success' && `Copied!`}
-                  {copyStatus === 'error' && `Failed to copy`}
-                  {copyStatus === 'idle' && `Copy Base64 ${bamlMediaType}`}
+                  {copyStatus === 'error' && `Failed`}
+                  {copyStatus === 'idle' && `Copy Base64`}
                 </span>
-              </button>
+              </Button>
             ) : (
-              <a
-                href={mediaUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex gap-2 items-center transition-all duration-200 hover:text-[var(--vscode-charts-blue)] text-[var(--vscode-description-foreground)] text-xs bg-[var(--vscode-editor-background)] px-3 py-2 rounded border border-[var(--vscode-panel-border)] hover:border-[var(--vscode-charts-blue)] hover:bg-[var(--vscode-button-hover-background)]"
+              <Button
+                asChild
+                variant="outline"
+                size="xs"
+                className="flex gap-1.5 items-center text-xs px-2 py-1 rounded border flex-shrink-0 min-w-[110px] transition-all duration-200"
               >
-                <ExternalLinkIcon className="w-3 h-3" />
-                <span className="max-w-[200px] truncate font-medium">{getDisplayUrl(mediaUrl, bamlMediaType)}</span>
-              </a>
+                <a
+                  href={mediaUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex gap-1.5 items-center w-full h-full"
+                >
+                  <ExternalLinkIcon className="w-3 h-3" />
+                  <span>
+                    {(() => {
+                      const url = mediaUrl || '';
+                      // Extract filename from URL
+                      const urlParts = url.split('/');
+                      const filename = urlParts[urlParts.length - 1];
+                      const cleanFilename = filename?.split('?')[0]?.split('#')[0];
+                      if (cleanFilename && cleanFilename.length > 0 && cleanFilename.includes('.')) {
+                        return `Open ${cleanFilename.length > 20 ? cleanFilename.substring(0, 17) + '...' : cleanFilename}`;
+                      }
+                      return 'Open Link';
+                    })()}
+                  </span>
+                </a>
+              </Button>
             )}
+            </div>
           </div>
         )}
+
+        {/* Media content */}
+        <div className="p-4">
+          {renderMediaContent()}
+        </div>
       </div>
     </div>
   );

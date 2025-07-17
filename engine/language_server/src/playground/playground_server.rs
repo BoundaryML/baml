@@ -63,8 +63,7 @@ impl PlaygroundServer {
         //     "VSCODE_DEBUG_MODE is set. Using local playground dist at {}",
         //     local_dist.display()
         // );
-
-        let dist_dir = Some(local_dist);
+        // let dist_dir = Some(local_dist);
 
         let routes = create_server_routes(self.state, self.session, dist_dir);
 
