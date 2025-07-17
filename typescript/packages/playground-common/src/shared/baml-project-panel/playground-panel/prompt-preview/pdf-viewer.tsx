@@ -5,11 +5,9 @@ import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
 import 'react-pdf/dist/esm/Page/TextLayer.css';
 
-// Configure PDF.js worker (recommended approach)
-pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.min.mjs',
-  import.meta.url,
-).toString();
+// Configure PDF.js worker - use CDN to ensure version compatibility
+// react-pdf 9.0.0 uses pdfjs-dist API version 4.3.136
+pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@4.3.136/build/pdf.worker.min.mjs`;
 
 interface PdfViewerProps {
   url: string;

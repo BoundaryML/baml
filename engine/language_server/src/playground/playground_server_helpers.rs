@@ -4,6 +4,7 @@ use std::{
     io::Cursor,
     path::{Path, PathBuf},
     sync::Arc,
+    time::Duration,
 };
 
 use anyhow::{Context, Result};
@@ -173,7 +174,13 @@ pub fn create_server_routes(
                         let file_path = dir.join(file);
                         match tokio::fs::read(&file_path).await {
                             Ok(body) => {
-                                let mime = from_path(file).first_or_octet_stream();
+                                let mut mime = from_path(file).first_or_octet_stream();
+
+                                // Ensure .mjs files are served with correct MIME type for ES modules
+                                if file.ends_with(".mjs") {
+                                    mime = "application/javascript".parse().unwrap_or(mime);
+                                }
+
                                 Ok::<_, warp::Rejection>(
                                     Response::builder()
                                         .header("content-type", mime.as_ref())
@@ -287,12 +294,20 @@ async fn verify_sha256_checksum(
     tracing::info!("Downloading SHA256 checksum from: {}", checksum_url);
 
     // Download the checksum file
+    tracing::info!("Downloading checksum file...");
     let checksum_resp = client
         .get(checksum_url)
         .header("User-Agent", "baml-playground-server")
         .send()
         .await
         .map_err(|e| anyhow::anyhow!("Failed to download checksum file: {e}"))?;
+
+    if !checksum_resp.status().is_success() {
+        return Err(anyhow::anyhow!(
+            "Checksum download failed with status: {}",
+            checksum_resp.status()
+        ));
+    }
 
     let checksum_text = checksum_resp.text().await?;
 
@@ -333,15 +348,42 @@ pub async fn get_playground_dist(github_repo: &str, version: &str) -> anyhow::Re
     let api_url = format!("https://api.github.com/repos/{github_repo}/releases/tags/{version}");
     tracing::info!("Fetching web-panel release metadata from: {}", api_url);
 
-    // Fetch release metadata
-    let client = Client::new();
+    // Fetch release metadata with timeout
+    let client = Client::builder()
+        .timeout(Duration::from_secs(30))
+        .connect_timeout(Duration::from_secs(10))
+        .build()
+        .map_err(|e| anyhow::anyhow!("Failed to create HTTP client: {e}"))?;
+
+    tracing::info!("Sending request to GitHub API...");
     let resp = client
         .get(&api_url)
         .header("User-Agent", "baml-playground-server")
         .send()
         .await
         .map_err(|e| anyhow::anyhow!("Failed to fetch release metadata: {e}"))?;
-    let release: serde_json::Value = resp.json().await?;
+
+    tracing::info!("Received response with status: {}", resp.status());
+
+    // Check if the response is successful
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let body = resp
+            .text()
+            .await
+            .unwrap_or_else(|_| "Failed to read response body".to_string());
+        return Err(anyhow::anyhow!(
+            "GitHub API request failed with status {}: {}",
+            status,
+            body
+        ));
+    }
+
+    tracing::info!("Parsing JSON response...");
+    let release: serde_json::Value = resp
+        .json()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to parse JSON response: {e}"))?;
 
     // Find the main asset
     let assets = release["assets"]
@@ -368,6 +410,12 @@ pub async fn get_playground_dist(github_repo: &str, version: &str) -> anyhow::Re
     let checksum_url = checksum_asset["browser_download_url"]
         .as_str()
         .ok_or_else(|| anyhow::anyhow!("No download URL for checksum asset"))?;
+
+    tracing::info!(
+        "Found assets - main: {}, checksum: {}",
+        download_url,
+        checksum_url
+    );
 
     // Compute extraction directory using the provided version
     let home = home_dir().ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?;

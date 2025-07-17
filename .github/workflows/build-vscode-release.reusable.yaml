@@ -65,129 +65,125 @@ jobs:
       - name: Setup Go
         uses: ./.github/actions/setup-go
 
-      # CLI artifact steps commented out for playground dist testing
-      # - name: Determine CLI Artifact Name
-      #   id: cli_artifact
-      #   run: |
-      #     TARGET="${{ matrix.rust-target }}" # Use rust-target from matrix
-      #     VERSION="${{ inputs.version }}"
-      #     ARTIFACT_BASE="baml-cli-${TARGET}"
-      #     if [[ "$TARGET" == *"windows"* ]]; then
-      #       ARTIFACT_NAME="${ARTIFACT_BASE}.zip"
-      #     else
-      #       ARTIFACT_NAME="${ARTIFACT_BASE}.tar.gz"
-      #     fi
-      #     echo "artifact_base=${ARTIFACT_BASE}" >> $GITHUB_OUTPUT
-      #     echo "artifact_name=${ARTIFACT_NAME}" >> $GITHUB_OUTPUT
-      #     echo "Determined artifact name for ${{ matrix.code-target }}: ${ARTIFACT_NAME}"
+      - name: Determine CLI Artifact Name
+        id: cli_artifact
+        run: |
+          TARGET="${{ matrix.rust-target }}" # Use rust-target from matrix
+          VERSION="${{ inputs.version }}"
+          ARTIFACT_BASE="baml-cli-${TARGET}"
+          if [[ "$TARGET" == *"windows"* ]]; then
+            ARTIFACT_NAME="${ARTIFACT_BASE}.zip"
+          else
+            ARTIFACT_NAME="${ARTIFACT_BASE}.tar.gz"
+          fi
+          echo "artifact_base=${ARTIFACT_BASE}" >> $GITHUB_OUTPUT
+          echo "artifact_name=${ARTIFACT_NAME}" >> $GITHUB_OUTPUT
+          echo "Determined artifact name for ${{ matrix.code-target }}: ${ARTIFACT_NAME}"
 
-      # - name: Download specific CLI artifact for ${{ matrix.code-target }}
-      #   uses: actions/download-artifact@v4
-      #   with:
-      #     name: baml-cli-${{ matrix.rust-target }}
-      #     path: cli-artifact-${{ matrix.code-target }}
-      #     # Unique path per job
-      #   # Add error handling if the specific artifact isn't found
+      - name: Download specific CLI artifact for ${{ matrix.code-target }}
+        uses: actions/download-artifact@v4
+        with:
+          name: baml-cli-${{ matrix.rust-target }}
+          path: cli-artifact-${{ matrix.code-target }}
 
-      # - name: List downloaded artifact content
-      #   run: |
-      #     echo "Contents of cli-artifact-${{ matrix.code-target }} directory:"
-      #     ls -R cli-artifact-${{ matrix.code-target }}
+      - name: List downloaded artifact content
+        run: |
+          echo "Contents of cli-artifact-${{ matrix.code-target }} directory:"
+          ls -R cli-artifact-${{ matrix.code-target }}
 
-      # This step extracts and copies ONLY the single downloaded binary for the current matrix target
-      # - name: Extract and copy binary for ${{ matrix.code-target }}
-      #   shell: bash
-      #   run: |
-      #     set -euo pipefail
-      #     TARGET="${{ matrix.rust-target }}"
-      #     CODE_TARGET="${{ matrix.code-target }}"
-      #     VERSION="${{ inputs.version }}" # Get version input
-      #     echo "Preparing CLI binary for target: $TARGET ($CODE_TARGET) version $VERSION"
+      - name: Extract and copy binary for ${{ matrix.code-target }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TARGET="${{ matrix.rust-target }}"
+          CODE_TARGET="${{ matrix.code-target }}"
+          VERSION="${{ inputs.version }}" # Get version input
+          echo "Preparing CLI binary for target: $TARGET ($CODE_TARGET) version $VERSION"
 
-      #     # Determine expected binary name based on Rust target OS part
-      #     binary_name="baml-cli"
-      #     download_dir="cli-artifact-$CODE_TARGET"
-      #     extract_dir="tmp-extract-$CODE_TARGET"
-      #     archive_base_name="baml-cli-$VERSION-$TARGET" # Construct base name with version
-      #     actual_archive_file="" # Variable to hold the full archive file path
+          # Determine expected binary name based on Rust target OS part
+          binary_name="baml-cli"
+          download_dir="cli-artifact-$CODE_TARGET"
+          extract_dir="tmp-extract-$CODE_TARGET"
+          archive_base_name="baml-cli-$VERSION-$TARGET" # Construct base name with version
+          actual_archive_file="" # Variable to hold the full archive file path
 
-      #     if [[ "$TARGET" == *"windows"* ]]; then
-      #       binary_name="baml-cli.exe"
-      #       actual_archive_file="$download_dir/${archive_base_name}.zip" # Construct full zip path
-      #       echo "Expecting archive file: $actual_archive_file"
-      #       # Add check for zip file existence
-      #       if [ ! -f "$actual_archive_file" ]; then
-      #         echo "Error: Expected archive file not found at $actual_archive_file"
-      #         echo "Contents of download directory ($download_dir):"
-      #         ls -R "$download_dir"
-      #         exit 1
-      #       fi
-      #       unzip -o "$actual_archive_file" -d "$extract_dir"
-      #     else
-      #       actual_archive_file="$download_dir/${archive_base_name}.tar.gz" # Construct full tar.gz path
-      #       echo "Expecting archive file: $actual_archive_file"
-      #       # Add check for tarball file existence
-      #       if [ ! -f "$actual_archive_file" ]; then
-      #          echo "Error: Expected archive file not found at $actual_archive_file"
-      #          echo "Contents of download directory ($download_dir):"
-      #          ls -R "$download_dir"
-      #          exit 1
-      #       fi
-      #       mkdir -p "$extract_dir"
-      #       tar xzf "$actual_archive_file" -C "$extract_dir"
-      #     fi
+          if [[ "$TARGET" == *"windows"* ]]; then
+            binary_name="baml-cli.exe"
+            actual_archive_file="$download_dir/${archive_base_name}.zip" # Construct full zip path
+            echo "Expecting archive file: $actual_archive_file"
+            # Add check for zip file existence
+            if [ ! -f "$actual_archive_file" ]; then
+              echo "Error: Expected archive file not found at $actual_archive_file"
+              echo "Contents of download directory ($download_dir):"
+              ls -R "$download_dir"
+              exit 1
+            fi
+            unzip -o "$actual_archive_file" -d "$extract_dir"
+          else
+            actual_archive_file="$download_dir/${archive_base_name}.tar.gz" # Construct full tar.gz path
+            echo "Expecting archive file: $actual_archive_file"
+            # Add check for tarball file existence
+            if [ ! -f "$actual_archive_file" ]; then
+               echo "Error: Expected archive file not found at $actual_archive_file"
+               echo "Contents of download directory ($download_dir):"
+               ls -R "$download_dir"
+               exit 1
+            fi
+            mkdir -p "$extract_dir"
+            tar xzf "$actual_archive_file" -C "$extract_dir"
+          fi
 
-      #     echo "Extracted contents:"
-      #     ls -R "$extract_dir"
+          echo "Extracted contents:"
+          ls -R "$extract_dir"
 
-      #     binary_path=$(find "$extract_dir" -type f -name "$binary_name")
+          binary_path=$(find "$extract_dir" -type f -name "$binary_name")
 
-      #     if [ -z "$binary_path" ]; then
-      #       echo "Error: Could not find binary '$binary_name' for target '$TARGET' in extracted files at '$extract_dir'"
-      #       exit 1
-      #     fi
-      #     binary_path=$(echo "$binary_path" | head -n 1)
-      #     echo "Found binary at: $binary_path"
+          if [ -z "$binary_path" ]; then
+            echo "Error: Could not find binary '$binary_name' for target '$TARGET' in extracted files at '$extract_dir'"
+            exit 1
+          fi
+          binary_path=$(echo "$binary_path" | head -n 1)
+          echo "Found binary at: $binary_path"
 
-      #     # Copy to BOTH locations:
-      #     # 1. The @baml/cli package for workspace consistency
-      #     # 2. The vscode-ext dist folder for VSIX packaging
+          # Copy to BOTH locations:
+          # 1. The @baml/cli package for workspace consistency
+          # 2. The vscode-ext dist folder for VSIX packaging
 
-      #     # First, copy to @baml/cli package
-      #     cli_dest_dir="engine/cli/dist"
-      #     cli_dest_path="$cli_dest_dir/$binary_name"
-      #     mkdir -p "$cli_dest_dir"
+          # First, copy to @baml/cli package
+          cli_dest_dir="engine/cli/dist"
+          cli_dest_path="$cli_dest_dir/$binary_name"
+          mkdir -p "$cli_dest_dir"
 
-      #     echo "Copying '$binary_path' to '$cli_dest_path' (@baml/cli package)"
-      #     cp "$binary_path" "$cli_dest_path"
-      #     chmod +x "$cli_dest_path"
+          echo "Copying '$binary_path' to '$cli_dest_path' (@baml/cli package)"
+          cp "$binary_path" "$cli_dest_path"
+          chmod +x "$cli_dest_path"
 
-      #     # Then, copy to vscode-ext dist for VSIX packaging
-      #     # This ensures the VSIX contains the platform-specific binary
-      #     vsce_dest_dir="typescript/apps/vscode-ext/dist/$TARGET"
-      #     vsce_dest_path="$vsce_dest_dir/$binary_name"
-      #     mkdir -p "$vsce_dest_dir"
+          # Then, copy to vscode-ext dist for VSIX packaging
+          # This ensures the VSIX contains the platform-specific binary
+          vsce_dest_dir="typescript/apps/vscode-ext/dist/$TARGET"
+          vsce_dest_path="$vsce_dest_dir/$binary_name"
+          mkdir -p "$vsce_dest_dir"
 
-      #     echo "Copying '$binary_path' to '$vsce_dest_path' (for VSIX packaging)"
-      #     cp "$binary_path" "$vsce_dest_path"
-      #     chmod +x "$vsce_dest_path"
+          echo "Copying '$binary_path' to '$vsce_dest_path' (for VSIX packaging)"
+          cp "$binary_path" "$vsce_dest_path"
+          chmod +x "$vsce_dest_path"
 
-      #     rm -rf "$extract_dir"
+          rm -rf "$extract_dir"
 
-      #     echo "Verification: checking presence of binaries"
-      #     if [ ! -f "$cli_dest_path" ]; then
-      #        echo "Error: Binary not found at @baml/cli destination $cli_dest_path after copy!"
-      #        exit 1
-      #     fi
-      #     if [ ! -f "$vsce_dest_path" ]; then
-      #        echo "Error: Binary not found at VSIX destination $vsce_dest_path after copy!"
-      #        exit 1
-      #     fi
-      #     echo "Binary copied successfully for $CODE_TARGET to both locations."
-      #     echo "@baml/cli location:"
-      #     ls -l "$cli_dest_path"
-      #     echo "VSIX packaging location:"
-      #     ls -l "$vsce_dest_path"
+          echo "Verification: checking presence of binaries"
+          if [ ! -f "$cli_dest_path" ]; then
+             echo "Error: Binary not found at @baml/cli destination $cli_dest_path after copy!"
+             exit 1
+          fi
+          if [ ! -f "$vsce_dest_path" ]; then
+             echo "Error: Binary not found at VSIX destination $vsce_dest_path after copy!"
+             exit 1
+          fi
+          echo "Binary copied successfully for $CODE_TARGET to both locations."
+          echo "@baml/cli location:"
+          ls -l "$cli_dest_path"
+          echo "VSIX packaging location:"
+          ls -l "$vsce_dest_path"
 
       - name: Build Typescript Project (Common Code & WASM)
         run: |
@@ -201,27 +197,26 @@ jobs:
         env:
           TARGET: ${{ matrix.rust-target }}
 
-      # VSCode packaging commented out for playground dist testing
-      # - name: Package VSCode Extension for ${{ matrix.code-target }}
-      #   id: package
-      #   run: |
-      #     PRE_RELEASE_FLAG=""
-      #     if [[ "${{ inputs.is_release_build }}" == "false" ]]; then
-      #       PRE_RELEASE_FLAG="--pre-release"
-      #     fi
-      #     OUTPUT_FILENAME="baml-${{ matrix.code-target }}.vsix"
-      #     echo "Packaging for target: ${{ matrix.code-target }}"
-      #     # Run vsce from the directory containing the extension's package.json
-      #     npx @vscode/vsce package $PRE_RELEASE_FLAG --target ${{ matrix.code-target }} -o $OUTPUT_FILENAME --no-dependencies
-      #     echo "vsix_path=$OUTPUT_FILENAME" >> $GITHUB_OUTPUT
-      #   working-directory: typescript/apps/vscode-ext
+      - name: Package VSCode Extension for ${{ matrix.code-target }}
+        id: package
+        run: |
+          PRE_RELEASE_FLAG=""
+          if [[ "${{ inputs.is_release_build }}" == "false" ]]; then
+            PRE_RELEASE_FLAG="--pre-release"
+          fi
+          OUTPUT_FILENAME="baml-${{ matrix.code-target }}.vsix"
+          echo "Packaging for target: ${{ matrix.code-target }}"
+          # Run vsce from the directory containing the extension's package.json
+          npx @vscode/vsce package $PRE_RELEASE_FLAG --target ${{ matrix.code-target }} -o $OUTPUT_FILENAME --no-dependencies
+          echo "vsix_path=$OUTPUT_FILENAME" >> $GITHUB_OUTPUT
+        working-directory: typescript/apps/vscode-ext
 
-      # - name: Upload VSIX artifact for ${{ matrix.code-target }}
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: baml-vscode-vsix-${{ matrix.code-target }}
-      #     path: typescript/apps/vscode-ext/${{ steps.package.outputs.vsix_path }}
-      #     if-no-files-found: error
+      - name: Upload VSIX artifact for ${{ matrix.code-target }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: baml-vscode-vsix-${{ matrix.code-target }}
+          path: typescript/apps/vscode-ext/${{ steps.package.outputs.vsix_path }}
+          if-no-files-found: error
 
       # Build/Upload Playground only once
       - name: Build & Upload Playground Artifact (conditional)

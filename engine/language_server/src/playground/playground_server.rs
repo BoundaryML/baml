@@ -43,6 +43,8 @@ impl PlaygroundServer {
             Some(local_dist)
         } else {
             let version = env!("CARGO_PKG_VERSION");
+            // Test release
+            // let version = "test-zed";
 
             match get_playground_dist(GITHUB_REPO, version).await {
                 Ok(dir) => Some(std::path::PathBuf::from(dir)),
