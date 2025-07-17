@@ -270,7 +270,9 @@ jobs:
   sync-zed-repository:
     runs-on: ubuntu-latest
     # Only run on pushes to canary branch or manual dispatch
-    if: github.ref == 'refs/heads/canary' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    # if: github.ref == 'refs/heads/canary' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    # Debug: Run this job on push to the current branch
+    # if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.ref_name)
     steps:
       - name: Checkout main repository
         uses: actions/checkout@v4
