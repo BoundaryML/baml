@@ -222,7 +222,8 @@ jobs:
           cargo build --package baml_cffi
           cargo test --lib
         working-directory: engine
-
+      - name: Run Coverage
+        uses: ./.github/actions/coverage
       - name: Run Python integration tests
         if: matrix.test-suite == 'python-integration'
         run: |
