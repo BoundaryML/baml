@@ -18,7 +18,7 @@ members = [
   "generators/utils/*",
   "generators/languages/*",
   "sandbox",
-  "zed", "llm-response-parser",
+  "llm-response-parser",
 ]
 default-members = [
   "baml-lsp-types",
