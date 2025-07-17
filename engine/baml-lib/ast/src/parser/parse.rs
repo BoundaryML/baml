@@ -16,6 +16,7 @@ use super::{
 use crate::ast::*;
 
 #[cfg(feature = "debug_parser")]
+#[allow(dead_code)]
 fn pretty_print<'a>(pair: pest::iterators::Pair<'a, Rule>, indent_level: usize) {
     // Indentation for the current level
     let indent = "  ".repeat(indent_level);
