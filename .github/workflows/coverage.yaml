@@ -9,8 +9,8 @@ jobs:
       CARGO_TERM_COLOR: always
     steps:
       - uses: actions/checkout@v4
-      - name: Install Rust
-        run: rustup update stable
+      - name: Setup development environment
+        uses: ./.github/actions/setup-all
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
       - name: Generate code coverage
