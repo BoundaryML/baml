@@ -66,14 +66,13 @@ jobs:
       - name: Download playground artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: playground-dist-*
-          path: playground-artifacts
-          merge-multiple: true
+          name: playground-dist-${{ needs.determine-version.outputs.version_string }}
+          path: .
 
       - name: List downloaded artifacts
         run: |
           echo "Playground artifacts:"
-          ls -R playground-artifacts/
+          ls -la playground-dist-*.tar.gz*
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -84,7 +83,8 @@ jobs:
           draft: false
           prerelease: false
           files: |
-            playground-artifacts/**/*
+            playground-dist-*.tar.gz
+            playground-dist-*.tar.gz.sha256
           fail_on_unmatched_files: true
           token: ${{ secrets.GITHUB_TOKEN }}
           generate_release_notes: false
