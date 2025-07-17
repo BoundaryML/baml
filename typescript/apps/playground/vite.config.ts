@@ -24,15 +24,6 @@ export default defineConfig({
         {
           src: srcPath,
           dest: destPath
-        },
-        // Copy PDF.js worker files to assets directory
-        {
-          src: normalizePath(path.resolve(__dirname, './node_modules/pdfjs-dist/build/pdf.worker.min.mjs')),
-          dest: 'assets/pdfjs-dist/build'
-        },
-        {
-          src: normalizePath(path.resolve(__dirname, './node_modules/pdfjs-dist/build/pdf.worker.mjs.map')),
-          dest: 'assets/pdfjs-dist/build'
         }
       ]
     })

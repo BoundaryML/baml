@@ -264,7 +264,7 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
     switch (bamlMediaType) {
       case 'image':
         return (
-          <div className="relative w-full h-[65vh] flex items-center justify-center">
+          <div className="relative w-full min-h-[200px] max-h-[60vh] flex items-center justify-center overflow-hidden">
             <img
               src={optimizedMediaUrl || ''}
               // biome-ignore lint/a11y/noRedundantAlt: not correct
@@ -462,10 +462,10 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
         {mediaUrl && (
           <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--vscode-panel-border)] bg-[var(--vscode-sideBar-background)]">
             <div className="flex items-center gap-2 min-w-0 flex-1">
-              {bamlMediaType === 'image' && <ImageIcon className="w-4 h-4 text-[var(--vscode-charts-blue)] flex-shrink-0" />}
-              {bamlMediaType === 'audio' && <Music className="w-4 h-4 text-[var(--vscode-charts-purple)] flex-shrink-0" />}
-              {bamlMediaType === 'pdf' && <FileText className="w-4 h-4 text-[var(--vscode-charts-red)] flex-shrink-0" />}
-              {bamlMediaType === 'video' && <Video className="w-4 h-4 text-[var(--vscode-charts-green)] flex-shrink-0" />}
+              {bamlMediaType === 'image' && <ImageIcon className="w-6 h-6 text-blue-400 flex-shrink-0" />}
+              {bamlMediaType === 'audio' && <Music className="w-6 h-6 text-purple-400 flex-shrink-0" />}
+              {bamlMediaType === 'pdf' && <FileText className="w-6 h-6 text-red-400 flex-shrink-0" />}
+              {bamlMediaType === 'video' && <Video className="w-6 h-6 text-green-400 flex-shrink-0" />}
               <div className="flex flex-col min-w-0">
                 <span className="text-xs font-medium text-[var(--vscode-foreground)] capitalize leading-tight">
                   {bamlMediaType}
@@ -477,9 +477,9 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
                    bamlMediaType === 'audio' ? 
                     `${fileFormat || 'Unknown format'}${fileSize ? ` • ${fileSize}` : ''}` :
                    bamlMediaType === 'pdf' ? 
-                    `${fileSize || 'PDF document'}` :
+                    `${fileSize || 'PDF url'}` :
                    bamlMediaType === 'video' ? 
-                    `${fileFormat || 'Video'}${fileSize ? ` • ${fileSize}` : ''}` :
+                    `${fileFormat || 'Video url'}${fileSize ? ` • ${fileSize}` : ''}` :
                    'Media file'}
                   {!isBase64 && mediaUrl && ` • ${getDisplayUrl(mediaUrl, bamlMediaType)}`}
                 </span>

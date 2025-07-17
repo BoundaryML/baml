@@ -112,7 +112,6 @@ class VSCodeAPIWrapper {
       };
 
       ws.onmessage = (event) => {
-        console.log('RPC WebSocket message received:', event.data);
         try {
           const response = JSON.parse(event.data);
           if (response.rpcId && this.rpcTable.has(response.rpcId)) {
