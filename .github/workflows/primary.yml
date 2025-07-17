@@ -185,7 +185,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        test-suite: [rust-unit, python-integration]
+        test-suite: [rust-unit, python-integration, rust-coverage]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -222,8 +222,11 @@ jobs:
           cargo build --package baml_cffi
           cargo test --lib
         working-directory: engine
+
       - name: Run Coverage
+        if: matrix.test-suite == 'rust-coverage'
         uses: ./.github/actions/coverage
+
       - name: Run Python integration tests
         if: matrix.test-suite == 'python-integration'
         run: |
