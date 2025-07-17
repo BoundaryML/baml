@@ -148,14 +148,16 @@ export function TestPdfInput() {
 
 ## Model Compatibility
 
-Different AI models have varying levels of support for PDF input methods (As of July 2025):
+Different AI models have varying levels of support for PDF input methods **(As of July 2025)**:
 
-- **Anthropic Claude**: Accepts PDFs as a direct https URL or a base‑64 string in a document block.
-- **AWS Bedrock**: A PDF must be supplied either as raw bytes (base‑64 inside the request) or as an Amazon S3 URI (s3:// style). Ordinary https links are not supported.
-- **Google AI Gemini (stand-alone API)**: You provide the file as inline base‑64 or upload it first with media.upload and then pass the returned file_uri. The model does not fetch http/https URLs for you directly.
-- **OpenAI GPT‑4o / o‑series**: PDF support works via base‑64 in the request. Supplying a plain URL is not accepted.
-- **Google Vertex AI (Gemini on Vertex)**: Accepts either base‑64 data or a Cloud Storage gs:// URI in a file_data part; you must set mime_type (for PDFs use application/pdf). Generic https URLs are not allowed.
+| Provider / API         |   | PDF Input Support                                                                                                   |
+|-----------------------|---|----------------------------------------------------------------------------------------------------------------------|
+| **Anthropic**         | ✓ | Accepts PDFs as a direct https URL or a base‑64 string in a document block. |
+| **AWS Bedrock**       | ✓ | PDF must be supplied as raw bytes (base‑64 in the request) or as an Amazon S3 URI (s3:// style). Ordinary https links are not supported. |
+| **Google Gemini**     | ✓ | Provide as inline base‑64 or upload first with media.upload and use the returned file_uri. The model does not fetch http/https URLs for you. |
+| **OpenAI**            | ✓ | PDF support (added March 2025) via base‑64 in the request. Supplying a plain URL is not accepted. |
+| **Google Vertex AI**  | ✓ | Accepts either base‑64 data or a Cloud Storage gs:// URI in a file_data part; you must set mime_type (for PDFs use application/pdf). Generic https URLs are not allowed. |
 
 <Info>
-  For most models, direct https URLs are not accepted (except Anthropic). Prefer using base64 or the appropriate cloud storage/file upload mechanism for your provider. Always specify the correct MIME type (e.g., application/pdf) when required.
+  For most models, direct https URLs are not accepted (except Anthropic). Prefer using base64, file uploads, or the appropriate cloud storage/file upload mechanism for your provider. Always specify the correct MIME type (e.g., application/pdf) when required.
 </Info> 

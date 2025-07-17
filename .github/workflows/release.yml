@@ -66,9 +66,8 @@ jobs:
       - name: Download playground artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: playground-dist-*
+          name: playground-dist
           path: playground-artifacts
-          merge-multiple: true
 
       - name: List downloaded artifacts
         run: |
