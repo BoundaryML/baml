@@ -116,7 +116,18 @@ pub enum Object {
     Array(Vec<Value>),
 
     /// Iterator over an array (array for now).
-    Iterator { iterable: usize, index: usize },
+    Iterator {
+        iterable: usize,
+        index: usize,
+    },
+
+    Future(Future),
+}
+
+#[derive(Clone, Debug)]
+pub enum Future {
+    Pending,
+    Ready(Result<baml_types::BamlValue, String>),
 }
 
 impl Object {
@@ -144,6 +155,13 @@ impl std::fmt::Display for Object {
             Object::Iterator { iterable, index } => {
                 write!(f, "<iterator iterable={iterable} index={index}>")
             }
+            Object::Future(future) => match future {
+                Future::Pending => write!(f, "<pending>"),
+                Future::Ready(result) => match result {
+                    Ok(value) => write!(f, "<ready: {value}>"),
+                    Err(error) => write!(f, "<ready: {error}>"),
+                },
+            },
         }
     }
 }
@@ -428,6 +446,36 @@ pub struct Vm {
     ///
     /// This stores the functions and globally declared variables.
     pub globals: Vec<Value>,
+
+    /// Async channel for LLM calls.
+    pub async_channel: AsyncChannel,
+}
+
+pub struct AsyncChannel {
+    rx: std::sync::mpsc::Receiver<(usize, baml_types::BamlValue)>,
+    tx: std::sync::mpsc::Sender<(usize, String, baml_types::BamlValue)>,
+}
+
+impl AsyncChannel {
+    pub fn send(&self, future: usize, function_name: String, value: baml_types::BamlValue) {
+        self.tx.send((future, function_name, value)).unwrap();
+    }
+
+    pub fn recv(&self) -> (usize, baml_types::BamlValue) {
+        loop {
+            match self.rx.try_recv() {
+                Ok(result) => return result,
+
+                // Spin lock.
+                Err(std::sync::mpsc::TryRecvError::Empty) => continue,
+
+                // TODO @antonio: Handle this.
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    panic!("Async channel disconnected");
+                }
+            }
+        }
+    }
 }
 
 impl Vm {
@@ -730,6 +778,95 @@ impl Vm {
                     function = self.objects[frame.function].as_function()?;
                 }
 
+                Instruction::DispatchFuture(arg_count) => {
+                    let locals_offset =
+                        self.stack.len().saturating_sub(arg_count).saturating_sub(1);
+
+                    // Get the function object from the stack.
+                    let Value::Object(index) = &self.stack[locals_offset] else {
+                        return Err(VmError::from(InternalError::TypeError {
+                            expected: Type::Object,
+                            got: Type::of(&self.stack[locals_offset]),
+                        }));
+                    };
+
+                    // Can't call a function if it's not a function ¯\_(ツ)_/¯
+                    let Object::Function(llm_function) = &self.objects[*index] else {
+                        return Err(InternalError::InvalidFunctionRef.into());
+                    };
+
+                    // Compiler should have already checked this so we could
+                    // skip it but it's an easy and fast check.
+                    if arg_count != llm_function.arity {
+                        return Err(VmError::from(InternalError::InvalidArgumentCount {
+                            expected: llm_function.arity,
+                            got: arg_count,
+                        }));
+                    }
+
+                    // Not a future.
+                    if !matches!(llm_function.kind, FunctionKind::Llm) {
+                        return Err(VmError::from(InternalError::TypeError {
+                            expected: Type::Object,
+                            got: Type::Object,
+                        }));
+                    }
+
+                    let llm_fn_name = llm_function.name.clone();
+
+                    // TODO @antonio: Convert VM values to Runtime values.
+                    let llm_args = baml_types::BamlValue::Map(baml_types::BamlMap::new());
+
+                    self.objects.push(Object::Future(Future::Pending));
+
+                    self.async_channel
+                        .send(self.objects.len() - 1, llm_fn_name, llm_args);
+
+                    // Drop parameters and LLM call.
+                    self.stack.drain(locals_offset..);
+
+                    // Push future on top of the stack.
+                    self.stack.push(Value::Object(self.objects.len() - 1));
+
+                    function = self.objects[frame.function].as_function()?;
+                }
+
+                Instruction::Await => {
+                    let Some(Value::Object(index)) = self.stack.last() else {
+                        return Err(InternalError::UnexpectedEmptyStack.into());
+                    };
+
+                    let Object::Future(awaiting) = &self.objects[*index] else {
+                        return Err(VmError::from(InternalError::TypeError {
+                            expected: Type::Object,
+                            got: Type::Object,
+                        }));
+                    };
+
+                    if let Future::Ready(result) = awaiting {
+                        continue;
+                    }
+
+                    loop {
+                        let (ready_index, result) = self.async_channel.recv();
+
+                        let Object::Future(future) = &mut self.objects[ready_index] else {
+                            return Err(VmError::from(InternalError::TypeError {
+                                expected: Type::Object,
+                                got: Type::Object,
+                            }));
+                        };
+
+                        *future = Future::Ready(Ok(result));
+
+                        if ready_index == *index {
+                            break;
+                        }
+                    }
+
+                    function = self.objects[frame.function].as_function()?;
+                }
+
                 Instruction::Call(arg_count) => {
                     // Function calls are pushed onto the stack like this:
                     //
@@ -741,11 +878,8 @@ impl Vm {
                     //
                     // That's how we compute the relative offset of the callee
                     // and it's local args in the stack.
-                    let locals_offset = if self.stack.is_empty() {
-                        0
-                    } else {
-                        self.stack.len() - arg_count - 1
-                    };
+                    let locals_offset =
+                        self.stack.len().saturating_sub(arg_count).saturating_sub(1);
 
                     // Get the function object from the stack.
                     let Value::Object(index) = &self.stack[locals_offset] else {

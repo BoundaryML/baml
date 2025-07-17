@@ -111,21 +111,14 @@ pub fn display_instruction(
             format!("({})", display_value(&globals[*index], objects))
         }
 
-        Instruction::CreateIterator => {
-            // display debug information for create iterator
-            // stack before: [array]
-            // stack after: [iterator]
-            format!("(array)")
-        }
-
-        Instruction::IterNext => {
-            format!("(iterator)")
-        }
-
         Instruction::Pop
-        | Instruction::AllocArray(_)
-        | Instruction::Call(_)
         | Instruction::EndBlock(_)
+        | Instruction::AllocArray(_)
+        | Instruction::CreateIterator
+        | Instruction::IterNext
+        | Instruction::DispatchFuture(_)
+        | Instruction::Await
+        | Instruction::Call(_)
         | Instruction::Return => String::new(),
     };
 
@@ -187,6 +180,9 @@ fn instruction_color(instruction: &Instruction) -> Color {
         Instruction::AllocInstance(_)
         | Instruction::AllocArray(_)
         | Instruction::CreateIterator => Color::Cyan,
+
+        // Async instructions.
+        Instruction::DispatchFuture(_) | Instruction::Await => Color::BrightGreen,
 
         // Pop from stack instructions.
         Instruction::Pop | Instruction::EndBlock(_) => Color::BrightBlack,

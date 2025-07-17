@@ -8,6 +8,8 @@ license-file.workspace = true
 
 [dependencies]
 colored = "2.1.0"
+tokio = { workspace = true }
+baml-types = { path = "../baml-lib/baml-types" }
 
 [lints.clippy]
 new_without_default = "allow"

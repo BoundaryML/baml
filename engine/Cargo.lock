@@ -1307,10 +1307,12 @@ version = "0.202.0"
 dependencies = [
  "anyhow",
  "baml-compiler",
+ "baml-types",
  "colored 2.2.0",
  "internal-baml-core",
  "internal-baml-diagnostics",
  "internal-baml-parser-database",
+ "tokio",
 ]
 
 [[package]]

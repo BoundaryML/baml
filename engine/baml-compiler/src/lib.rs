@@ -39,6 +39,9 @@ struct Compiler<'g> {
     /// lifetime.
     class_fields: &'g HashMap<String, HashMap<String, usize>>,
 
+    /// LLM functions.
+    llm_functions: &'g HashSet<String>,
+
     /// Resolved local variables.
     ///
     /// Maps the name of the variable to its final index in the eval stack.
@@ -82,11 +85,13 @@ impl<'g> Compiler<'g> {
     pub fn new(
         globals: &'g HashMap<String, usize>,
         class_fields: &'g HashMap<String, HashMap<String, usize>>,
+        llm_functions: &'g HashSet<String>,
         objects: &'g mut Vec<Object>,
     ) -> Self {
         Self {
             globals,
             class_fields,
+            llm_functions,
             objects,
             scope: 0,
             locals: HashMap::new(),
@@ -506,8 +511,13 @@ impl<'g> Compiler<'g> {
                     self.compile_expression(arg);
                 }
 
-                // Call the function.
-                self.emit(Instruction::Call(app.args.len()));
+                // Either async LLM call or regular function call.
+                if self.llm_functions.contains(app.name.name()) {
+                    self.emit(Instruction::DispatchFuture(app.args.len()));
+                    self.emit(Instruction::Await(app.args.len()));
+                } else {
+                    self.emit(Instruction::Call(app.args.len()));
+                }
             }
 
             Expression::JinjaExpressionValue(jinja_expression, _) => todo!(),
@@ -577,6 +587,8 @@ pub fn compile(ast: ParserDatabase) -> anyhow::Result<(Vec<Object>, Vec<Value>)>
     let mut resolved_globals = HashMap::new();
     // Class Name -> (Field Name -> Index)
     let mut resolved_class_fields = HashMap::new();
+    // LLM function names.
+    let mut llm_functions = HashSet::new();
 
     // Name resolution phase.
     for top in &ast.ast.tops {
@@ -601,6 +613,11 @@ pub fn compile(ast: ParserDatabase) -> anyhow::Result<(Vec<Object>, Vec<Value>)>
                 resolved_globals.insert(function.name.to_string(), resolved_globals.len());
             }
 
+            ast::Top::Function(llm_function) => {
+                resolved_globals.insert(llm_function.name().to_string(), resolved_globals.len());
+                llm_functions.insert(llm_function.name().to_string());
+            }
+
             _ => todo!("name resolution: unhandled Top variant: {top:?}"),
         }
     }
@@ -621,9 +638,34 @@ pub fn compile(ast: ParserDatabase) -> anyhow::Result<(Vec<Object>, Vec<Value>)>
             }),
 
             ast::Top::ExprFn(function) => Object::Function(
-                Compiler::new(&resolved_globals, &resolved_class_fields, &mut objects)
-                    .compile(function)?,
+                Compiler::new(
+                    &resolved_globals,
+                    &resolved_class_fields,
+                    &llm_functions,
+                    &mut objects,
+                )
+                .compile(function)?,
             ),
+
+            ast::Top::Function(llm_function) => Object::Function(Function {
+                name: llm_function.name().to_string(),
+                arity: llm_function
+                    .input()
+                    .map(|block_args| block_args.args.len())
+                    .unwrap_or(0),
+                bytecode: Bytecode::new(),
+                kind: FunctionKind::Llm,
+                local_var_names: llm_function
+                    .input()
+                    .iter()
+                    .flat_map(|block_args| {
+                        block_args
+                            .args
+                            .iter()
+                            .map(|(name, _)| name.name().to_string())
+                    })
+                    .collect(),
+            }),
 
             _ => todo!("compilation: unhandled Top variant: {top:?}"),
         };
