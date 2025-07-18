@@ -1,4 +1,4 @@
-use baml_types::{ir_type::TypeGeneric, TypeIR};
+use baml_types::ir_type::TypeGeneric;
 use dir_writer::{FileCollector, GeneratorArgs, IntermediateRepr, LanguageFeatures};
 use functions::{
     render_functions, render_functions_stream, render_runtime_code, render_source_files,
