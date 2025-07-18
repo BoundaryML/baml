@@ -209,7 +209,7 @@ jobs:
           cache: "false"
 
       - name: Setup Ruby
-        if: matrix.test-suite == 'rust-unit'
+        if: matrix.test-suite == 'rust-unit' || matrix.test-suite == 'rust-coverage'
         uses: ./.github/actions/setup-ruby
 
       - name: Run Rust unit tests
