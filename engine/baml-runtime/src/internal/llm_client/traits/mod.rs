@@ -515,12 +515,7 @@ async fn process_media(
                                 .strip_prefix("file://")
                                 .unwrap_or(media_path.as_str())
                         ),
-                        // necessary due to media type is used in the pdf mime type
-                        Some(if part.media_type == BamlMediaType::Pdf {
-                            "application/pdf".to_string()
-                        } else {
-                            format!("{}/{}", part.media_type, ext)
-                        }),
+                        Some(format!("{}/{}", part.media_type, ext)),
                     ));
                 }
             }
@@ -537,17 +532,31 @@ async fn process_media(
 
             if mime_type.is_none() {
                 if let Some(ext) = media_file.extension() {
-                    mime_type = Some(if part.media_type == BamlMediaType::Pdf {
-                        "application/pdf".to_string()
-                    } else {
-                        format!("{}/{}", part.media_type, ext)
-                    });
+                    mime_type = Some(format!("{}/{}", part.media_type, ext));
                 }
             }
 
             if mime_type.is_none() {
                 if let Some(t) = infer::get(&bytes) {
                     mime_type = Some(t.mime_type().to_string());
+                }
+            }
+
+            // ENFORCEMENT: For PDF, the mime type must be application/pdf
+            if part.media_type == BamlMediaType::Pdf {
+                match &mime_type {
+                    Some(mt) if mt != "application/pdf" => {
+                        anyhow::bail!(
+                            "File provided for PDF input is not a PDF. Detected mime type: '{}'. Only application/pdf is allowed.",
+                            mt
+                        );
+                    }
+                    None => {
+                        anyhow::bail!(
+                            "Could not determine mime type for PDF input. Only application/pdf is allowed."
+                        );
+                    }
+                    _ => {}
                 }
             }
 
