@@ -5,7 +5,6 @@
   "scripts": {
     "build": "tsc",
     "start": "node ./dist/main.js",
-    "generate": "baml-cli generate --from ../baml_src",
     "typecheck": "tsc --noEmit"
   },
   "engines": {
