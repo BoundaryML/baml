@@ -1,7 +1,8 @@
 //! Manual Rust evaluator for UDFs defined in YAML.
 //!
 //! ## Problem with `if` branches
-//! Consider the Jinja expression:  ```jinja
+//! Consider the Jinja expression:  
+//! ```jinja
 //! raw.output_tokens_details.cached_tokens if raw.output_token_details else 1
 //! ```
 //!
@@ -19,22 +20,29 @@
 //! raw.output_token_details` branch yields the wrong value.
 //!
 
+mod path_trie;
+
 use baml_types::BamlMap;
 use indexmap::IndexSet;
+use path_trie::PathTrie;
+use serde::Serialize;
 
-use crate::config::{Constant, Function, OutputExpression, UDFConfig};
+use crate::{
+    config::{Constant, Function, OutputExpression, UDFConfig},
+    get_env,
+};
 
 pub fn match_and_compute_row<'src>(
     udf: &'src UDFConfig,
     row: serde_json::Value,
-    all_names: &IndexSet<&'src str>,
+    context: &mut CompileContext<'src>,
 ) -> anyhow::Result<FunctionResults<'src>> {
     Ok(match find_function_for_row(udf, &row)? {
-        Some(result) => eval_function(result, row, all_names),
+        Some(result) => eval_function(result, row, context),
         None => FunctionResults {
-            compile_errors: BamlMap::new(),
+            has_compile_errors: Vec::new(),
             defined: BamlMap::new(),
-            not_defined: all_names.iter().copied().collect(),
+            not_defined: context.outputs.iter().copied().collect(),
         },
     })
 }
@@ -42,50 +50,27 @@ pub fn match_and_compute_row<'src>(
 fn eval_function<'src>(
     ev: MatchedFunction<'src>,
     row: serde_json::Value,
-    all_names: &IndexSet<&'src str>,
+    context: &mut CompileContext<'src>,
 ) -> FunctionResults<'src> {
-    let (defined, compile_errors) = eval_existing_returns(ev, serde_json::to_value(row).unwrap());
+    let (defined, compile_errors) = eval_existing_returns(ev, row);
 
-    let not_defined: Vec<_> = all_names
+    let not_defined: Vec<_> = context
+        .outputs
         .iter()
         .copied()
         .filter(|&key| !(defined.contains_key(key) || compile_errors.contains_key(key)))
         .collect();
 
+    let has_compile_errors = compile_errors.iter().map(|x| *x.0).collect();
+
+    context.compile_errors.extend(compile_errors);
+
     FunctionResults {
-        compile_errors,
+        has_compile_errors,
         defined,
         not_defined,
     }
 }
-
-/// Adds `date_between` filter to the environment.
-fn get_env<'s>() -> minijinja::Environment<'s> {
-    let mut env = internal_baml_core::ir::jinja_helpers::get_env();
-
-    env.add_filter("date_between", date_between);
-    env
-}
-
-fn parse_date(date: &str) -> chrono::ParseResult<chrono::NaiveDate> {
-    chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d")
-}
-
-// TODO: (Jesus) use real date type
-fn date_between(date: String, begin: String, end: String) -> Result<bool, minijinja::Error> {
-    // TODO: (Jesus) handle parse errors?
-    // NOTE: (Jesus) This will be parsing `begin` and `end` dates for all rows and `date` for all date
-    // comparisons.
-    let date = parse_date(&date).unwrap();
-    let begin = parse_date(&begin).unwrap();
-    let end = parse_date(&end).unwrap();
-
-    Ok(date >= begin && date <= end)
-}
-
-// TODO: before sql:
-// - 1 single jinja expression
-// - 1 statement per return
 
 #[derive(Debug)]
 pub struct DefinedResult {
@@ -94,21 +79,57 @@ pub struct DefinedResult {
 }
 
 #[derive(Debug)]
-pub struct FunctionResults<'udf> {
-    // NOTE: (Jesus) compile_errors does not fit very well here, specially when considering
-    // matching multiple rows. I'd want to compile the expressions and keep here a set of outputs
-    // that have known errors but have the errors pop up elsewhere.
-    /// return expressions that failed to compile
+pub struct CompileContext<'udf> {
+    /// For returns that have compile errors, the errors that we could find.
     pub compile_errors: BamlMap<&'udf str, minijinja::Error>,
+    pub env: minijinja::Environment<'udf>,
+    pub outputs: &'udf IndexSet<&'udf str>,
+}
+
+impl<'udf> CompileContext<'udf> {
+    /// `outputs` can be gathered using [`crate::config::gather_all_outputs`]
+    pub fn with_outputs(outputs: &'udf IndexSet<&'udf str>) -> Self {
+        Self {
+            env: {
+                let mut env = get_env();
+                env.set_undefined_behavior(minijinja::UndefinedBehavior::Chainable);
+                env
+            },
+            compile_errors: Default::default(),
+            outputs,
+        }
+    }
+}
+
+/// There was a compile error, and it has been registered to the specified return
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub struct RegisteredCompilerError;
+
+impl<'udf> CompileContext<'udf> {
+    pub fn compile_expression_for_return<'env, 'src>(
+        &'env mut self,
+        ret_name: &'udf str,
+        source: &'src str,
+    ) -> Result<minijinja::Expression<'env, 'src>, RegisteredCompilerError>
+    where
+        'udf: 'src,
+    {
+        self.env.compile_expression(source).map_err(|e| {
+            self.compile_errors.insert(ret_name, e);
+            RegisteredCompilerError
+        })
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct FunctionResults<'udf> {
+    /// Set of outputs that have compile errors.
+    pub has_compile_errors: Vec<&'udf str>,
     pub defined: BamlMap<&'udf str, DefinedResult>,
     /// List of accessors (e.g `raw.output_tokens.count`) that were not defined when running the
     /// functions.
     pub not_defined: Vec<&'udf str>,
 }
-
-// src/rust_version.rs -> return Option<float> per return, also return None when
-// src/all_jinja.rs
-// src/clickhouse.rs
 
 #[derive(Debug, Default)]
 struct MatchedFunction<'a> {
@@ -130,16 +151,12 @@ struct MatchedFunction<'a> {
 #[cfg(test)]
 mod tests {
 
-    use crate::{config::gather_all_outputs, read_udf_config};
+    use crate::{
+        config::gather_all_outputs,
+        tests::{data, load_sample_udf},
+    };
 
     use super::*;
-
-    fn load_sample_udf() -> UDFConfig {
-        use anyhow::Context;
-        read_udf_config("./sample-prices.yaml")
-            .context("load sample UDF config")
-            .unwrap()
-    }
 
     #[test]
     fn parse_yaml_file() {
@@ -174,15 +191,17 @@ mod tests {
 
         let all_names = gather_all_outputs(&udf);
 
+        let mut context = CompileContext::with_outputs(&all_names);
+
         let match_res = mock.map(|mock| {
-            match_and_compute_row(&udf, serde_json::to_value(mock).unwrap(), &all_names).unwrap()
+            match_and_compute_row(&udf, serde_json::to_value(mock).unwrap(), &mut context).unwrap()
         });
 
         insta::assert_debug_snapshot!(match_res);
     }
 
     #[test]
-    fn exec_jinja_matches() {
+    fn match_functions() {
         let udf = load_sample_udf();
 
         let mock = [
@@ -197,287 +216,8 @@ mod tests {
 
         insta::assert_debug_snapshot!(results);
     }
-
-    mod data {
-
-        use serde::Serialize;
-        use serde_json::{json, Map};
-
-        type Dict = Map<String, serde_json::Value>;
-
-        pub fn gemini() -> DbHttpMetadata {
-            DbHttpMetadata {
-                client: DbHttpClientDetails {
-                    name: "client-c".into(),
-                    provider: "gemini".into(),
-                    base_url: Some("https://generativelanguage.googleapis.com".into()),
-                    options: json!({
-                        "model": "gemini-pro"
-                    })
-                    .as_object()
-                    .unwrap()
-                    .clone(),
-                },
-                response: DbHttpResponseMetadata {
-                    status: 200,
-                    error_message: None,
-                    headers: json!({
-                        "content-type": "application/json"
-                    })
-                    .as_object()
-                    .unwrap()
-                    .clone(),
-                    model: Some("gemini-pro".into()),
-                },
-                options: json!({
-                    "model": "gemini-pro"
-                })
-                .as_object()
-                .unwrap()
-                .clone(),
-                date: "2025-06-10".into(),
-                raw: json!({
-                    "usageMetadata": {
-                        "promptTokenCount": 900,
-                        "cachedTokenCount": 100,
-                        "candidatesTokenCount": 400
-                    }
-                })
-                .as_object()
-                .unwrap()
-                .clone(),
-            }
-        }
-
-        pub fn anthropic() -> DbHttpMetadata {
-            DbHttpMetadata {
-                client: DbHttpClientDetails {
-                    name: "client-b".into(),
-                    provider: "anthropic".into(),
-                    base_url: Some("https://api.anthropic.com".into()),
-                    options: json!({
-                        "model": "claude-3-opus"
-                    })
-                    .as_object()
-                    .unwrap()
-                    .clone(),
-                },
-                response: DbHttpResponseMetadata {
-                    status: 200,
-                    error_message: None,
-                    headers: json!({
-                        "content-type": "application/json"
-                    })
-                    .as_object()
-                    .unwrap()
-                    .clone(),
-                    model: Some("claude-3-opus".into()),
-                },
-                options: json!({
-                    "model": "claude-3-opus"
-                })
-                .as_object()
-                .unwrap()
-                .clone(),
-                date: "2025-06-01".into(),
-                raw: json!({
-                    "usage": {
-                        "input_tokens": 1200,
-                        "cached_tokens": 150,
-                        "output_tokens": 600
-                    }
-                })
-                .as_object()
-                .unwrap()
-                .clone(),
-            }
-        }
-
-        pub fn none_match() -> DbHttpMetadata {
-            DbHttpMetadata {
-                client: DbHttpClientDetails {
-                    name: "unknown-client".into(),
-                    provider: "llama-corp".into(), // Not openai, anthropic, or gemini
-                    base_url: Some("https://api.unknown-llm.com".into()),
-                    options: json!({
-                        "model": "llama-9000"
-                    })
-                    .as_object()
-                    .unwrap()
-                    .clone(),
-                },
-                response: DbHttpResponseMetadata {
-                    status: 500, // Doesn't match any known expression like "status == 200"
-                    error_message: Some("Internal server error".into()),
-                    headers: json!({
-                        "content-type": "application/json"
-                    })
-                    .as_object()
-                    .unwrap()
-                    .clone(),
-                    model: Some("llama-9000".into()),
-                },
-                options: json!({
-                    "model": "llama-9000"
-                })
-                .as_object()
-                .unwrap()
-                .clone(),
-                date: "2025-07-01".into(),
-                raw: json!({
-                    "error": {
-                        "message": "Model not found",
-                        "code": 404
-                    }
-                })
-                .as_object()
-                .unwrap()
-                .clone(),
-            }
-        }
-
-        pub fn anthropic_with_bad_raw() -> DbHttpMetadata {
-            DbHttpMetadata {
-                client: DbHttpClientDetails {
-                    name: "client-x".into(),
-                    provider: "anthropic".into(), // ✅ matches provider expression
-                    base_url: Some("https://api.anthropic.com".into()),
-                    options: json!({
-                        "model": "claude-3-haiku"
-                    })
-                    .as_object()
-                    .unwrap()
-                    .clone(),
-                },
-                response: DbHttpResponseMetadata {
-                    status: 200,
-                    error_message: None,
-                    headers: json!({
-                        "content-type": "application/json"
-                    })
-                    .as_object()
-                    .unwrap()
-                    .clone(),
-                    model: Some("claude-3-haiku".into()),
-                },
-                options: json!({
-                    "model": "claude-3-haiku"
-                })
-                .as_object()
-                .unwrap()
-                .clone(),
-                date: "2025-06-12".into(),
-                raw: json!({
-                    // ❌ Missing `input_tokens`, `cached_tokens`, `output_tokens`
-                    "meta": {
-                        "token_usage": {
-                            "prompt": 123,
-                            "completion": 456
-                        }
-                    },
-                    "data": {
-                        "some_other_field": true
-                    }
-                })
-                .as_object()
-                .unwrap()
-                .clone(),
-            }
-        }
-
-        pub fn openai() -> DbHttpMetadata {
-            use serde_json::json;
-
-            DbHttpMetadata {
-                client: DbHttpClientDetails {
-                    name: "client-a".into(),
-                    provider: "openai".into(),
-                    base_url: Some("https://api.openai.com".into()),
-                    options: json!({
-                        "model": "gpt-4-turbo",
-                        "stream": false,
-                    })
-                    .as_object()
-                    .unwrap()
-                    .clone(),
-                },
-                response: DbHttpResponseMetadata {
-                    status: 200,
-                    error_message: None,
-                    headers: json!({
-                        "content-type": "application/json",
-                    })
-                    .as_object()
-                    .unwrap()
-                    .clone(),
-                    model: Some("gpt-4-turbo".into()),
-                },
-                options: json!({
-                    "model": "gpt-4-turbo",
-                    "stream": false,
-                })
-                .as_object()
-                .unwrap()
-                .clone(),
-                date: "2025-05-15".into(),
-                raw: json!({
-                    "usage": {
-                        "input_tokens": 1000,
-                        "output_tokens": 500,
-                        "input_tokens_details": {
-                            "cached_tokens": 100
-                        },
-                        "output_tokens_details": {
-                            "reasoning_tokens": 400
-                        }
-                    }
-                })
-                .as_object()
-                .unwrap()
-                .clone(),
-            }
-        }
-
-        #[derive(Debug, Serialize)]
-        struct DbHttpClientDetails {
-            ///  BAML client name
-            name: String,
-            ///  Provider name (openai, anthropic, etc.)
-            provider: String,
-            ///  API base URL
-            base_url: Option<String>,
-            ///   Request parameters
-            options: Dict,
-        }
-
-        #[derive(Debug, Serialize)]
-        pub struct DbHttpResponseMetadata {
-            /// HTTP status code
-            status: i32,
-            /// Error message if failed
-            error_message: Option<String>,
-            /// Response headers
-            headers: Dict,
-            /// Extracted model name
-            model: Option<String>,
-        }
-
-        #[derive(Debug, Serialize)]
-        pub struct DbHttpMetadata {
-            client: DbHttpClientDetails,
-            response: DbHttpResponseMetadata,
-            /// Request parameters (e.g., options['model'])
-            options: Dict,
-            // NOTE: (Jesus) do we need a more granular type ?
-            date: String,
-            /// Full response body parsed as JSON
-            raw: Dict,
-        }
-    }
 }
 
-// TODO: move inner functions to internal module? Like eval or something. Specially the trie for
-// static analysis :]
 /// Evaluate selected outputs of function
 fn eval_existing_returns<'src>(
     ev: MatchedFunction<'src>,
@@ -501,7 +241,6 @@ fn eval_existing_returns<'src>(
             .expect("serialized data context must come in the form of a dictionary");
 
         // add constants to env
-        // TODO: keep values in serde_json::Value?
         for (name, value) in ev.constants {
             env_map.insert(name.into(), serde_json::to_value(value.0).unwrap());
         }
@@ -511,9 +250,6 @@ fn eval_existing_returns<'src>(
 
     // compile all expressions to a vec, since we're going to do two passes over them. We'll
     // know which is which because of IndexMap's consistent iteration order.
-    // TODO: Gather the compilations elsewhere? Have like a Cow<> but triggering a compilation.
-    // Compiler errors should be gathered, and an error state kept, but the errors themselves don't
-    // need to be copied to the result.
     let compiled_expressions: Vec<_> = ev
         .returns
         .values()
@@ -527,9 +263,8 @@ fn eval_existing_returns<'src>(
     let mut string_stash = Vec::new();
     let mut ranges = Vec::with_capacity(compiled_expressions.len());
 
-    // store all the undefined strings into a stash.
-    // TODO: (Jesus) could group returns here, external to the trie.
-    // When submitting a "mark this as zeroed", then we can consult the map.
+    // store all the undefined strings into a stash, since otherwise we can't fullfill the lifetime
+    // requirement for `PathTrie`.
     for expr in &compiled_expressions {
         let start = string_stash.len();
 
@@ -540,10 +275,12 @@ fn eval_existing_returns<'src>(
         ranges.push(start..string_stash.len());
     }
     for (return_index, range) in ranges.into_iter().enumerate() {
-        let ret_order = ReturnIterationOrder(return_index);
+        let ret_order = path_trie::ReturnIterationOrder(return_index);
 
         for und in &string_stash[range] {
-            insert_into_trie(&mut path_trie, und, ret_order);
+            {
+                path_trie.insert(und, ret_order);
+            };
         }
     }
 
@@ -551,23 +288,7 @@ fn eval_existing_returns<'src>(
         .take(compiled_expressions.len())
         .collect();
 
-    // DFS the path trie, in two modes:
-    // - tracking mode: starting with the existing map, on each node visited (each `PathTrie` has
-    // multiple path-compressed nodes):
-    //      - try to interpret the current value as a map. If it fails (e.g it's a number), the
-    //      expression will fail when interpreting and we will not consider it for zeroing. Stop DFS
-    //      here.
-    //      - try to access the map with this node as a key. If it fails, we're going to consider all
-    //      the paths as zero. Switch this node to zeroing mode.
-    // - zeroing mode: DFS all nodes.
-    //      - if node is terminal, add its path [NOTE: could confuse when the access is used in `if` to
-    //      check?] to all registered returns.
-    //      - if node does not have any children, define it as zero value on the map.
-    //      - if node has children, define it as a map. Keep the map reference to track it.
-    //
-    // Due to Rust restrictions on &mut pointers, the algorithm will use a recursive DFS.
-
-    dfs_tracking(&path_trie, &mut serialized_data, &mut undefined_lists);
+    path_trie::zero_undefined_values(&path_trie, &mut serialized_data, &mut undefined_lists);
 
     // execute the expressions.
     for ((&name, expr), missing_values) in ev
@@ -576,6 +297,13 @@ fn eval_existing_returns<'src>(
         .zip(compiled_expressions)
         .zip(undefined_lists)
     {
+        // when testing, make sure that the entries have consistent order.
+        #[cfg(test)]
+        let missing_values = {
+            let mut m = missing_values;
+            m.sort();
+            m
+        };
         let expr = match expr {
             Ok(e) => e,
             Err(err) => {
@@ -584,278 +312,47 @@ fn eval_existing_returns<'src>(
             }
         };
 
-        let result = expr
-            .eval(&serialized_data)
-            .map_or_else(|e| Ok(Err(e)), |val| f64::try_from(val).map(Ok));
-
-        // when testing, make sure that the entries have consistent order.
-        #[cfg(test)]
-        let missing_values = {
-            let mut m = missing_values;
-            m.sort();
-            m
-        };
-
-        match result {
-            Ok(res) => {
-                result_map.insert(
-                    name,
-                    DefinedResult {
-                        missing_values,
-                        result: res,
-                    },
-                );
-            }
-            Err(e) => {
-                // TODO: (Jesus) what do we do when we don't find floats?
-                // Currently ignore them.
-                log::warn!("function result is not coercible to floating point: {e}");
-            }
-        }
-    }
-    return (result_map, errors_map);
-
-    fn dfs_tracking(
-        trie: &PathTrie,
-        tracked_value: &mut serde_json::Value,
-        zeroed_lists: &mut [Vec<String>],
-    ) {
-        visit_pieces(
-            trie.partial_path.iter().copied().enumerate(),
-            trie,
-            tracked_value,
-            zeroed_lists,
+        eval_return(
+            &serialized_data,
+            &mut result_map,
+            name,
+            missing_values,
+            &expr,
         );
-
-        // NOTE: (Jesus) tail-recursive, because I couldn't get the for-loop version to work.
-        // It complained about `as_map` being used in the part that bails out, i.e:
-        // ```rs
-        // let Some(next) = as_map.get_mut(piece) else {
-        // // says it's borrowed here
-        //    return dfs_transition_to_zeroing(...);
-        // }
-        fn visit_pieces<'s, 'l>(
-            mut pieces: impl Iterator<Item = (usize, &'l str)>,
-            trie: &'l PathTrie<'l>,
-            tracked_value: &'s mut serde_json::Value,
-            zeroed_lists: &'l mut [Vec<String>],
-        ) {
-            match pieces.next() {
-                None => {
-                    // continue DFS
-                    for child in &trie.children {
-                        dfs_tracking(child, tracked_value, zeroed_lists);
-                    }
-                }
-                Some((piece_index, piece)) => {
-                    let Some(as_map) = tracked_value.as_object_mut() else {
-                        return;
-                    };
-
-                    match as_map.get_mut(piece) {
-                        Some(next) => visit_pieces(pieces, trie, next, zeroed_lists),
-                        None => dfs_transition_to_zeroing(
-                            trie,
-                            piece_index,
-                            tracked_value,
-                            zeroed_lists,
-                        ),
-                    }
-                }
-            }
-        }
     }
+    (result_map, errors_map)
+}
 
-    // TODO: use Map instead of Value in the tracked_value?
-    fn dfs_transition_to_zeroing(
-        trie: &PathTrie,
-        piece_index: usize,
-        mut tracked_value: &mut serde_json::Value,
-        zeroed_lists: &mut [Vec<String>],
-    ) {
-        let last_piece_with_children = if trie.children.is_empty() {
-            trie.partial_path.len() - 1
-        } else {
-            trie.partial_path.len()
-        };
+// This is going to copy-paste on each different `T`. It's okay as it's very little code.
+/// Evaluate a compiled expression for a single return, and add it onto the defined result map if
+/// it can extract an `f64` out of it, or if it has a runtime error.
+pub fn eval_return<'udf, 'src, T: Serialize>(
+    serialized_row: &T,
+    result_map: &mut BamlMap<&'udf str, DefinedResult>,
+    name: &'udf str,
+    missing_values: Vec<String>,
+    expr: &minijinja::Expression<'_, 'src>,
+) {
+    let result = expr
+        .eval(serialized_row)
+        .map_or_else(|e| Ok(Err(e)), |v| f64::try_from(v).map(Ok));
 
-        // problem:
-        // - if I make a map, then the ones that are using it as `if` are wrong (it yields
-        // non-zero).
-        // - if I make a value, then the ones using as a map are wrong, and I cauld have it in
-        // the trie as terminal because there's a usage within an `if` (e.g `if hello.world`)
-        //
-        // -> node has children -> it's used elsewhere as a map.
-        // If it is used within `if`, then there's a problem. Can I just use the AST to find
-        // about it? -> not doing that. Annotated at the top what the problem looks like.
-        // -> node has no children -> it's safe to set to zero
-
-        for &piece in &trie.partial_path[piece_index..last_piece_with_children] {
-            // non-terminal and has at least 1 child.
-
-            let object = tracked_value.as_object_mut().unwrap();
-
-            object.insert(piece.into(), serde_json::Map::new().into());
-
-            tracked_value = object.get_mut(piece).unwrap();
-        }
-
-        if let Some(terminal) = trie.terminal_full_path.as_ref() {
-            // last needs to be zero.
-            tracked_value.as_object_mut().unwrap().insert(
-                trie.partial_path.last().copied().unwrap().into(),
-                0f64.into(),
-            );
-
-            for &index in &terminal.results {
-                zeroed_lists[index.0].push(terminal.full_path.into());
-            }
-        }
-
-        for child in &trie.children {
-            dfs_zeroing(child, tracked_value, zeroed_lists);
-        }
-    }
-
-    #[inline]
-    fn dfs_zeroing(
-        trie: &PathTrie,
-        tracked_value: &mut serde_json::Value,
-        zeroed_lists: &mut [Vec<String>],
-    ) {
-        dfs_transition_to_zeroing(trie, 0, tracked_value, zeroed_lists)
-    }
-
-    /// Index from iteration order (which is consistent due to IndexMap) for a certain
-    /// return. Used to register
-    #[derive(Clone, Copy)]
-    struct ReturnIterationOrder(usize);
-
-    struct TrieTerminal<'a> {
-        full_path: &'a str,
-        // TODO: this could be just a bit set.
-        /// The results that are registered for this terminal. If a variable path is found to be zero,
-        /// then all of these should have said path added to their "missing value" list.
-        results: Vec<ReturnIterationOrder>,
-    }
-
-    #[derive(Default)]
-    struct PathTrie<'a> {
-        partial_path: Vec<&'a str>,
-        children: Vec<PathTrie<'a>>,
-        terminal_full_path: Option<TrieTerminal<'a>>,
-    }
-
-    fn insert_into_trie<'src>(
-        root: &mut PathTrie<'src>,
-        path: &'src str,
-        ret_handle: ReturnIterationOrder,
-    ) {
-        insert_into_trie_recursive(root, path, path.split('.'), ret_handle)
-    }
-
-    // using a tail-recursive approach because that plays better with the borrow checker.
-    fn insert_into_trie_recursive<'src>(
-        root: &mut PathTrie<'src>,
-        path: &'src str,
-        mut path_it: impl Iterator<Item = &'src str>,
-        ret_handle: ReturnIterationOrder,
-    ) {
-        // assume everything until `root` is matched.
-        let Some(first) = path_it.next() else {
-            root.terminal_full_path = Some(match root.terminal_full_path.take() {
-                Some(mut terminal) => {
-                    terminal.results.push(ret_handle);
-                    terminal
-                }
-                None => TrieTerminal {
-                    full_path: path,
-                    results: vec![ret_handle],
+    match result {
+        Ok(res) => {
+            result_map.insert(
+                name,
+                DefinedResult {
+                    missing_values,
+                    result: res,
                 },
-            });
-
-            return;
-        };
-
-        // find a child that matches.
-        let matching_child = root
-            .children
-            .iter_mut()
-            .find(|child| child.partial_path[0] == first);
-
-        match matching_child {
-            None => {
-                // found no children -> insert into the trie.
-                root.children.push(PathTrie {
-                    partial_path: [first].into_iter().chain(path_it).collect(),
-                    children: Vec::new(),
-                    terminal_full_path: Some(TrieTerminal {
-                        full_path: path,
-                        results: vec![ret_handle],
-                    }),
-                });
-                return;
-            }
-            Some(child) => {
-                // match as much of the path as possible.
-                for index in 1..child.partial_path.len() {
-                    match path_it.next() {
-                        None => {
-                            // cut the child abcd -> abc {d}, with abc terminal.
-                            let partial_path = child.partial_path.drain(0..index).collect();
-
-                            let cutoff_child = std::mem::replace(
-                                child,
-                                PathTrie {
-                                    partial_path,
-                                    children: Vec::with_capacity(1),
-                                    terminal_full_path: Some(TrieTerminal {
-                                        full_path: path,
-                                        results: vec![ret_handle],
-                                    }),
-                                },
-                            );
-
-                            // child is now the branch that we inserted.
-                            child.children.push(cutoff_child);
-                            return;
-                        }
-                        Some(piece) => {
-                            if piece == child.partial_path[index] {
-                                // matched, go to next.
-                                continue;
-                            }
-
-                            // cut the child abcd -> abc {d e}, with abc non-terminal
-
-                            let partial_path = child.partial_path.drain(0..index).collect();
-                            let cutoff_child = std::mem::replace(
-                                child,
-                                PathTrie {
-                                    partial_path,
-                                    children: Vec::with_capacity(2),
-                                    terminal_full_path: None,
-                                },
-                            );
-
-                            let branch = child;
-                            branch.children.push(cutoff_child);
-                            branch.children.push(PathTrie {
-                                partial_path: [piece].into_iter().chain(path_it).collect(),
-                                children: Vec::new(),
-                                terminal_full_path: Some(TrieTerminal {
-                                    full_path: path,
-                                    results: vec![ret_handle],
-                                }),
-                            });
-                            return;
-                        }
-                    }
-                }
-
-                // full path has been matched.
-                insert_into_trie_recursive(child, path, path_it, ret_handle)
-            }
+            );
+        }
+        Err(e) => {
+            // NOTE: (Jesus) By ignoring the result, we are purposefully not registering the return
+            // as defined, i.e we're setting the result value to undefined. We could use our own
+            // error variant/ anyhow for this too, but I think emitting a warn is the desirable
+            // output anyway.
+            log::warn!("function result is not coercible to floating point: {e}");
         }
     }
 }
@@ -865,14 +362,15 @@ fn find_function_for_row<'c>(
     row: &serde_json::Value,
 ) -> anyhow::Result<Option<MatchedFunction<'c>>> {
     use anyhow::Context;
-    let env = get_env();
+    let mut env = get_env();
+
+    env.set_undefined_behavior(minijinja::UndefinedBehavior::Chainable);
 
     fn eval_match(
         src: &str,
         env: &minijinja::Environment,
         row: &serde_json::Value,
     ) -> anyhow::Result<bool> {
-        // TODO: (Jesus) cache compiled expressions
         let expr = env
             .compile_expression(src)
             .context("compiling match expression")?;
@@ -913,7 +411,6 @@ fn find_function_for_row<'c>(
 
     let mut eval = MatchedFunction {
         constants: {
-            // TODO: bind UDFConfig to the source lifetime.
             let s = config
                 .global_constants
                 .iter()

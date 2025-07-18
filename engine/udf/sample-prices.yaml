@@ -4,22 +4,11 @@ version: "1.0"
 name: "LLM Usage Cost Configuration"
 description: "Define cost calculations for LLM API calls"
 
-# we can use this for diagnostics, e.g "missing reasoning_cost" warning
-# spelling mistakes - levenshtein
-# custom functions
-returns:
-  - input_cost
-  - output_cost
-  # define other functions in terms of existing outputs
-  # - name: total_cost
-  #   expression: "out.input_cost + out.output_cost"
-  - reasoning_cost
-
 
 # Global constants (can be overridden)
 constants:
-  DEFAULT_INPUT_COST: 0.001 # 1/1k, 0.01/10
-  DEFAULT_OUTPUT_COST: 0.002 # 2/1k, 0.02/10 (allow pennies as 0.0x dollars)
+  DEFAULT_INPUT_COST: 0.001
+  DEFAULT_OUTPUT_COST: 0.002
 
 functions:
   - match: >
@@ -27,36 +16,22 @@ functions:
         client.base_url | regex_match('^https://api\\.openai\\.com')
 
     constants:
-      # TODO: use real openai base pricing model?
       INPUT_TOKEN_COST: 0.00001
       OUTPUT_TOKEN_COST: 0.00003
 
-
-      # DefinedMissingValue(<>, "raw.usage.[...]")
-      # - undefined/defined trivial           2h ~ 6h
-      # - missing values xx because compiler does not have the data -> infinite h
-      # - silencing warning (allow missing)
-      #   Expression::undefined_values -> find these fields -> mark expressions as having missing values.
-    #    Rust -> if is_marked_undefined { return undefined }
-      #          if is_mraked_missing { mark_missing } 
-    #    - Query clickhouse if they're missing <- 3 passes
-
-
-
     returns:
       total_cost: >
-        (raw.usage.input_tokens - raw.usage.input_tokens_details.cached_tokens) * INPUT_TOKEN_COST +
-        raw.usage.output_tokens * OUTPUT_TOKEN_COST
+        (response.body.usage.input_tokens | int - response.body.usage.input_tokens_details.cached_tokens | int) * INPUT_TOKEN_COST +
+        response.body.usage.output_tokens | int * OUTPUT_TOKEN_COST
 
-      reasoning_cost: >
-        raw.usage.output_tokens_details.reasoning_tokens * OUTPUT_TOKEN_COST
+      completion_cost: >
+        response.body.usage.completion_tokens | int * OUTPUT_TOKEN_COST
 
     # Time-based overrides
     overrides:
       # first thing that matches
-    # 2025-01-01 is parsed as a single token. "a - b" is parsed as an operation.
       - match: >
-          date | date_between('2025-01-01', '2025-06-30') and
+          headers.date | date_between('2025-01-01', '2025-06-30') and
           response.model == 'gpt-4-turbo'
 
         # override constants
@@ -67,40 +42,35 @@ functions:
 
       # Complex matching with AND/OR logic
       - match: >
-          options.model | regex_match('^gpt-4') and
-          response.status == 200
+          response.model | regex_match('^gpt-4') and
+          response.status == '200'
 
         returns:
           # override outputs
           total_cost: >
-            raw.usage.total_tokens * 0.00005 * (1.1 if options.stream else 1.0)
+            response.body.usage.total_tokens | int * 0.00005 * (1.1 if client.options.stream else 1.0)
 
   - match: >
       client.provider == 'anthropic'
 
     constants:
-        # TODO: use real costs?
-        INPUT_TOKEN_COST: 0.00002
-        OUTPUT_TOKEN_COST: 0.00006 # 6/1M
-
-    returns:
-      total_cost: >
-        (raw.usage.input_tokens - raw.usage.cached_tokens) * INPUT_TOKEN_COST +
-        raw.usage.output_tokens * OUTPUT_TOKEN_COST
-
-    # TODO: add overrides
-
-  - match: >
-        client.provider == 'gemini'
-
-    constants:
-        # TODO: use real costs?
         INPUT_TOKEN_COST: 0.00002
         OUTPUT_TOKEN_COST: 0.00006
 
     returns:
       total_cost: >
-        (raw.usageMetadata.promptTokenCount - raw.usageMetadata.cachedTokenCount) * INPUT_TOKEN_COST +
-        raw.usageMetadata.candidatesTokenCount * OUTPUT_TOKEN_COST
+        (response.body.usage.input_tokens - response.body.usage.cached_tokens) * INPUT_TOKEN_COST +
+        response.body.usage.output_tokens * OUTPUT_TOKEN_COST
 
-    # TODO: add overrides
+  - match: >
+        client.provider == 'gemini'
+
+    constants:
+        INPUT_TOKEN_COST: 0.00002
+        OUTPUT_TOKEN_COST: 0.00006
+
+    returns:
+      total_cost: >
+        (response.body.usageMetadata.promptTokenCount - response.body.usageMetadata.cachedTokenCount) * INPUT_TOKEN_COST +
+        response.body.usageMetadata.candidatesTokenCount * OUTPUT_TOKEN_COST
+

@@ -1,15 +1,13 @@
 ---
-source: udf/src/eval.rs
-expression: match_res
+source: udf/src/yaml2jinja.rs
+expression: results
 ---
 [
     FunctionResults {
         has_compile_errors: [],
         defined: {
             "total_cost": DefinedResult {
-                missing_values: [
-                    "client.options.stream",
-                ],
+                missing_values: [],
                 result: Ok(
                     0.0115,
                 ),
@@ -39,27 +37,23 @@ expression: match_res
     },
     FunctionResults {
         has_compile_errors: [],
-        defined: {},
+        defined: {
+            "total_cost": DefinedResult {
+                missing_values: [],
+                result: Ok(
+                    0.04,
+                ),
+            },
+        },
         not_defined: [
-            "total_cost",
             "completion_cost",
         ],
     },
     FunctionResults {
         has_compile_errors: [],
-        defined: {
-            "total_cost": DefinedResult {
-                missing_values: [
-                    "response.body.usage.cached_tokens",
-                    "response.body.usage.input_tokens",
-                    "response.body.usage.output_tokens",
-                ],
-                result: Ok(
-                    0.0,
-                ),
-            },
-        },
+        defined: {},
         not_defined: [
+            "total_cost",
             "completion_cost",
         ],
     },

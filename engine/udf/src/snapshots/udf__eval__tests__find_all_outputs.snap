@@ -4,5 +4,5 @@ expression: result
 ---
 {
     "total_cost",
-    "reasoning_cost",
+    "completion_cost",
 }

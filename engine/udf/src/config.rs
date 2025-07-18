@@ -1,6 +1,7 @@
 use baml_types::BamlMap;
 use indexmap::IndexSet;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 /// Collects all outputs declared in the configuration file, regardless of which functions declare
 /// them.
@@ -35,7 +36,7 @@ pub fn gather_all_outputs<'a>(udf: &'a UDFConfig) -> IndexSet<&'a str> {
 #[repr(transparent)]
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(transparent)]
-pub struct Constant(pub minijinja::Value);
+pub struct Constant(pub serde_json::Value);
 
 // NOTE: (Jesus) would be optimal to compile all the expressions while deserializing, but that is not
 // easy to do with serde.
@@ -59,13 +60,45 @@ pub struct OutputExpression(pub String);
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct UDFConfig {
-    pub(crate) version: String,
-    pub(crate) name: String,
-    pub(crate) description: String,
+    pub version: String,
+    pub name: String,
+    pub description: String,
     #[serde(rename = "constants")]
     #[serde(default)]
-    pub(crate) global_constants: BamlMap<String, Constant>,
-    pub(crate) functions: Vec<Function>,
+    pub global_constants: BamlMap<String, Constant>,
+    pub functions: Vec<Function>,
+}
+
+#[derive(Debug, Error)]
+pub enum UDFConfigError {
+    #[error("This config does not have any returns declared! At least one return in one match path is required.")]
+    NoReturnsDeclared,
+}
+
+impl UDFConfig {
+    /// Verifies that the configuration is valid beyond deserialization format.
+    /// Checked invariants:
+    /// - At least one return is declared in the configuration: `gather_all_outputs` will return a
+    /// non-empty set.
+    pub fn check(&self) -> Result<(), UDFConfigError> {
+        fn find_returns(overrides: &[Function]) -> bool {
+            for ov in overrides {
+                if !ov.returns.is_empty() {
+                    return true;
+                }
+            }
+
+            overrides.iter().any(|f| find_returns(&f.overrides))
+        }
+
+        let has_returns = find_returns(&self.functions);
+
+        if has_returns {
+            Ok(())
+        } else {
+            Err(UDFConfigError::NoReturnsDeclared)
+        }
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize)]

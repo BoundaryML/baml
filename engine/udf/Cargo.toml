@@ -3,10 +3,6 @@ name = "udf"
 version = "0.1.0"
 edition = "2021"
 
-[[bin]]
-name = "upload-traces"
-path = "src/upload-traces-main.rs"
-
 [dependencies]
 anyhow.workspace = true
 baml-types.workspace = true
@@ -19,6 +15,7 @@ chrono = "0.4.41"
 log.workspace = true
 indexmap.workspace = true
 serde_json.workspace = true
+thiserror.workspace = true
 
 [dev-dependencies]
 insta = { version = "1.43.1", features = ["yaml"] }
