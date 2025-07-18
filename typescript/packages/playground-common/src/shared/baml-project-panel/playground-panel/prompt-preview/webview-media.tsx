@@ -1,7 +1,7 @@
 // import Link from "next/link";
 import type { WasmChatMessagePartMedia } from '@gloo-ai/baml-schema-wasm-web';
 /* eslint-disable @typescript-eslint/require-await */
-import { useAtomValue, useSetAtom } from 'jotai';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { ExternalLinkIcon, ImageIcon, Music, FileText, Video, Copy, Check, X, ChevronDown, ChevronUp } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import useSWR from 'swr';
@@ -9,6 +9,7 @@ import { Button } from '@baml/ui/button';
 import { wasmAtom } from '../../atoms';
 import { showTokensAtom } from './render-text';
 import { imageStatsMapAtom } from './image-stats-atom';
+import { mediaCollapsedMapAtom } from './media-collapsed-atom';
 import { PdfViewer } from './pdf-viewer';
 
 interface WebviewMediaProps {
@@ -110,6 +111,7 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
   const wasm = useAtomValue(wasmAtom);
   const isDebugMode = useAtomValue(showTokensAtom);
   const setImageStatsMap = useSetAtom(imageStatsMapAtom);
+  const [mediaCollapsedMap, setMediaCollapsedMap] = useAtom(mediaCollapsedMapAtom);
   const [imageStats, setImageStats] = useState<{
     width: number;
     height: number;
@@ -119,7 +121,17 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
   // Track blob URLs for cleanup
   const blobUrlRef = useRef<string | null>(null);
   const [optimizedMediaUrl, setOptimizedMediaUrl] = useState<string | null>(null);
-  const [collapsed, setCollapsed] = useState(false);
+  
+  // Create unique key for this media item and get its collapsed state
+  const mediaKey = media.content;
+  const collapsed = mediaCollapsedMap.get(mediaKey) ?? false;
+  const setCollapsed = (newCollapsed: boolean) => {
+    setMediaCollapsedMap((prev) => {
+      const newMap = new Map(prev);
+      newMap.set(mediaKey, newCollapsed);
+      return newMap;
+    });
+  };
   
 
   
@@ -265,13 +277,14 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
     switch (bamlMediaType) {
       case 'image':
         return (
-          <div className="relative w-full min-h-[200px] max-h-[60vh] flex items-center justify-center overflow-hidden">
+          <div className="relative w-full flex items-center justify-center">
             <img
               src={optimizedMediaUrl || ''}
               // biome-ignore lint/a11y/noRedundantAlt: not correct
               alt={'Image Not Found'}
-              className="max-w-full max-h-full rounded object-contain border border-[var(--vscode-panel-border)]"
+              className="max-w-full h-auto rounded object-contain border border-[var(--vscode-panel-border)]"
               onLoad={onImageLoad}
+              style={{ maxHeight: '70vh' }}
             />
             {imageStats && isDebugMode && (
               <div className="max-h-sm absolute bottom-2 left-2 bg-[var(--vscode-editor-background)] text-[var(--vscode-foreground)] text-xs px-2 py-1 rounded border border-[var(--vscode-panel-border)]">
@@ -458,13 +471,15 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
 
   return (
     <div className="w-full flex justify-center p-4 bg-[var(--vscode-sideBar-background)]">
-      <div className="max-w-lg w-full border border-[var(--vscode-panel-border)] rounded bg-[var(--vscode-editor-background)] space-y-3">
+      <div className={`border border-[var(--vscode-panel-border)] rounded bg-[var(--vscode-editor-background)] space-y-3 ${
+        bamlMediaType === 'image' ? 'w-fit max-w-[90vw] min-w-80' : 'max-w-lg w-full'
+      }`}>
         {/* Header with file type icon and link/copy */}
         {mediaUrl && (
           <div
             className="flex items-center justify-between px-3 py-2 border-b border-[var(--vscode-panel-border)] bg-[var(--vscode-sideBar-background)] cursor-pointer select-none overflow-hidden"
             onClick={e => {
-              setCollapsed((c) => !c);
+              setCollapsed(!collapsed);
             }}
             tabIndex={0}
             role="button"
@@ -486,7 +501,7 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
                    bamlMediaType === 'audio' ? 
                     `${fileFormat || 'Unknown format'}${fileSize ? ` • ${fileSize}` : ''}` :
                    bamlMediaType === 'pdf' ? 
-                    `${fileSize || 'PDF url'}` :
+                    `${fileSize || 'Url'}` :
                    bamlMediaType === 'video' ? 
                     `${fileFormat || 'Video url'}${fileSize ? ` • ${fileSize}` : ''}` :
                    'Media file'}
@@ -557,7 +572,7 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
             )}
             {/* Collapse/Expand Button (rightmost) */}
             <Button
-              onClick={e => { e.stopPropagation(); setCollapsed((c) => !c); }}
+              onClick={e => { e.stopPropagation(); setCollapsed(!collapsed); }}
               aria-label={collapsed ? 'Expand media' : 'Collapse media'}
               variant="outline"
               size="xs"
