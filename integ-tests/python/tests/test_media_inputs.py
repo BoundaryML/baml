@@ -31,7 +31,10 @@ def test_media_url_roundtrip(cls, url, mime):
 )
 def test_media_base64_roundtrip(cls, mime, base64_stub):
     """Ensure `from_base64` stores mime-type and base64 string, and `as_base64` returns them."""
-    obj = cls.from_base64(mime, base64_stub)
+    if cls is Pdf:
+        obj = cls.from_base64(base64_stub)
+    else:
+        obj = cls.from_base64(mime, base64_stub)
     assert not obj.is_url()
     base64_out, mime_out = obj.as_base64()
     assert base64_out == base64_stub

@@ -8,12 +8,13 @@ export const Loader: React.FC<{ message?: string; className?: string }> = ({
   return (
     <div
       className={cn(
-        'flex gap-2 justify-center items-center text-muted-foreground',
+        // VSCode webview: prevent flexbox/scrollbar glitches
+        'flex justify-center items-center text-muted-foreground min-w-[80px] min-h-[32px] overflow-hidden',
         className,
       )}
     >
-      <Loader2 className="animate-spin" />
-      {message}
+      <Loader2 className="animate-spin w-5 h-5 flex-shrink-0 mr-2" />
+      {message && <span className="whitespace-nowrap">{message}</span>}
     </div>
   );
 };

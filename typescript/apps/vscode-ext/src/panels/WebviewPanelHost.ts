@@ -260,9 +260,70 @@ export class WebviewPanelHost {
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <link rel="stylesheet" type="text/css" href="${stylesUri}">
         <title>BAML Playground</title>
+        <style>
+          /* Match playground loading spinner style */
+          .baml-loading-container {
+            width: 100vw;
+            height: 100vh;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--vscode-sideBar-background, #18181b);
+          }
+          .baml-loading-box {
+            max-width: 24rem;
+            width: 100%;
+            border: 1px solid var(--vscode-panel-border, #333);
+            border-radius: 0.5rem;
+            background: var(--vscode-editor-background, #23272e);
+            padding: 2rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+          }
+          .baml-spinner {
+            width: 2rem;
+            height: 2rem;
+            border: 2px solid var(--vscode-panel-border, #333);
+            border-top: 2px solid var(--vscode-foreground, #fff);
+            border-radius: 50%;
+            animation: baml-spin 1s linear infinite;
+            margin-bottom: 1.5rem;
+            box-sizing: border-box;
+            transform-origin: center;
+            will-change: transform;
+            flex-shrink: 0;
+          }
+          @keyframes baml-spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+          }
+          .baml-loading-title {
+            font-size: 1.125rem;
+            font-weight: 500;
+            color: var(--vscode-foreground, #fff);
+            margin-bottom: 0.5rem;
+            text-align: center;
+          }
+          .baml-loading-desc {
+            font-size: 0.95rem;
+            color: var(--vscode-description-foreground, #aaa);
+            text-align: center;
+          }
+        </style>
       </head>
       <body>
-        <div id="root">Loading BAML Playground...</div>
+        <div id="root">
+          <div class="baml-loading-container">
+            <div class="baml-loading-box">
+              <div class="baml-spinner"></div>
+              <div class="baml-loading-title">Loading BAML Playground...</div>
+              <div class="baml-loading-desc">Please wait while the playground loads.</div>
+            </div>
+          </div>
+        </div>
         ${isDevelopment ? reactRefresh : ''}
         <script type="module" ${isDevelopment ? '' : `nonce=\"${nonce}\"`} src="${scriptUri}"></script>
       </body>

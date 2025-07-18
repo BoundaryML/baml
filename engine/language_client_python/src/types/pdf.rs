@@ -12,20 +12,23 @@ crate::lang_wrapper!(BamlPdfPy, baml_types::BamlMedia);
 #[pymethods]
 impl BamlPdfPy {
     #[staticmethod]
-    #[pyo3(signature = (url, media_type = None))]
-    fn from_url(url: String, media_type: Option<String>) -> Self {
+    fn from_url(url: String) -> Self {
         BamlPdfPy {
-            inner: baml_types::BamlMedia::url(baml_types::BamlMediaType::Pdf, url, media_type),
+            inner: baml_types::BamlMedia::url(
+                baml_types::BamlMediaType::Pdf,
+                url,
+                Some("application/pdf".to_string()),
+            ),
         }
     }
 
     #[staticmethod]
-    fn from_base64(media_type: String, base64: String) -> Self {
+    fn from_base64(base64: String) -> Self {
         BamlPdfPy {
             inner: baml_types::BamlMedia::base64(
                 baml_types::BamlMediaType::Pdf,
                 base64,
-                Some(media_type),
+                Some("application/pdf".to_string()),
             ),
         }
     }
