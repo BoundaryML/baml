@@ -160,13 +160,9 @@ jobs:
       - name: Setup Rust
         uses: ./.github/actions/setup-rust
         with:
-          enable-wasm: true
-
-      - name: Setup Go
-        uses: ./.github/actions/setup-go
-
-      - name: Setup Python
-        uses: ./.github/actions/setup-python
+          enable-wasm: false
+          enable-cross: false
+          cache-on-failure: true
 
       - name: Test Generators
         run: |
