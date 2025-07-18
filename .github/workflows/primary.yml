@@ -265,3 +265,69 @@ jobs:
         with:
           name: baml-cli-${{ matrix.target }}
           path: engine/target/release/baml-cli*
+
+  # Sync Zed extension to separate repository
+  sync-zed-repository:
+    runs-on: ubuntu-latest
+    # Only run on pushes to canary branch or manual dispatch
+    if: github.ref == 'refs/heads/canary' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    steps:
+      - name: Checkout main repository
+        uses: actions/checkout@v4
+        with:
+          path: main-repo
+
+      - name: Checkout zed-baml repository
+        uses: actions/checkout@v4
+        with:
+          repository: BoundaryML/zed-baml
+          token: ${{ secrets.ZED_BAML_SYNC_TOKEN }}
+          path: zed-baml-repo
+
+      - name: Setup rsync
+        run: sudo apt-get update && sudo apt-get install -y rsync
+
+      - name: Sync zed directory contents
+        run: |
+          # Change to the source directory
+          cd main-repo/engine/zed
+          
+          # Create a temporary directory for filtered content
+          mkdir -p /tmp/zed-sync
+          
+          # Copy files respecting gitignore
+          rsync -av \
+            --exclude-from=.gitignore \
+            --exclude='.git' \
+            --exclude='.gitignore' \
+            ./ /tmp/zed-sync/
+          
+          # Copy the gitignore file separately (we want it in the target repo)
+          cp .gitignore /tmp/zed-sync/
+
+      - name: Update zed-baml repository
+        run: |
+          cd zed-baml-repo
+          
+          # Remove all existing content except .git
+          find . -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
+          
+          # Copy new content
+          cp -r /tmp/zed-sync/* .
+          cp /tmp/zed-sync/.gitignore . 2>/dev/null || true
+          
+          # Configure git
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          
+          # Add and commit changes
+          git add .
+          
+          # Check if there are changes to commit
+          if ! git diff --staged --quiet; then
+            git commit -m "Sync from main repository - $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+            git push
+            echo "✅ Successfully synced zed extension to zed-baml repository"
+          else
+            echo "ℹ️ No changes to sync"
+          fi

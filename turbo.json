@@ -23,7 +23,7 @@
     "biome.json"
   ],
   "ui": "tui",
-  "concurrency": "15",
+  "concurrency": "20",
   "tasks": {
     "//#clean": {
       "cache": false

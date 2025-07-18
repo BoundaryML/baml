@@ -5,8 +5,13 @@ description: Learn how to handle Pdf inputs in BAML functions
 
 Pdf values to BAML functions can be created in client libraries. This document explains how to use these functions both at compile time and runtime to handle Pdf data. For more details, refer to [pdf types](/ref/baml/types#pdf).
 
+<Info>
+  `Pdf` instances can be created from URLs, Base64 data, or local files. URLs are automatically converted to Base64 for models that don't support them directly (like OpenAI), while other models (like Anthropic, AWS Bedrock, Gemini) accept URLs natively.
+  Please note that many websites will block requests to directly fetch PDFs.
+</Info>
+
 <Warning>
-  `Pdf` instances must be created from Base64 or local file data; URLs are not supported.
+  Some models like Vertex AI require the media type to be explicitly specified. Always provide the `mediaType` parameter when possible for better compatibility.
 </Warning>
 
 ## Usage Examples
@@ -17,19 +22,27 @@ from baml_py import Pdf
 from baml_client import b
 
 async def test_pdf_input():
+    # Create a Pdf object from URL
+    pdf_url = Pdf.from_url("https://example.com/document.pdf", "application/pdf")
+    res1 = await b.TestPdfInput(pdf=pdf_url)
+    
     # Create a Pdf object from Base64 data
     pdf_b64 = "JVBERi0K..."
     pdf = Pdf.from_base64("application/pdf", pdf_b64)
-    res = await b.TestPdfInput(pdf=pdf)
+    res2 = await b.TestPdfInput(pdf=pdf)
 ```
 
 ```typescript
 import { b } from '../baml_client'
 import { Pdf } from "@boundaryml/baml"
 
+// Create a Pdf object from URL
+const pdfUrl = Pdf.fromUrl('https://example.com/document.pdf', 'application/pdf')
+const res1 = await b.TestPdfInput(pdfUrl)
+
 // Create a Pdf object from Base64 data
 const pdf_b64 = "JVBERi0K..."
-const res = await b.TestPdfInput(
+const res2 = await b.TestPdfInput(
   Pdf.fromBase64('application/pdf', pdf_b64)
 )
 
@@ -46,6 +59,11 @@ export function TestPdfInput() {
     const { mutate } = useTestPdfInput()
 
     const handleClick = async () => {
+        // Using URL
+        const pdfUrl = Pdf.fromUrl('https://example.com/document.pdf', 'application/pdf')
+        mutate(pdfUrl)
+        
+        // Or using Base64
         const pdf_b64 = "JVBERi0K..."
         const pdf = Pdf.fromBase64('application/pdf', pdf_b64)
         mutate(pdf)
@@ -69,10 +87,17 @@ export function TestPdfInput() {
 ## Static Methods
 
 <ParamField
+  path="fromUrl"
+  type="(url: string, mediaType?: string) => Pdf"
+>
+  Creates a Pdf object from a URL. The `mediaType` parameter is optional but recommended for better model compatibility. If not provided, the media type will be inferred when the content is fetched.
+</ParamField>
+
+<ParamField
   path="fromBase64"
   type="(mediaType: string, base64: string) => Pdf"
 >
-  Creates a Pdf object using Base64 encoded data along with the given MIME type.
+  Creates a Pdf object using Base64 encoded data along with the given MIME type. The `mediaType` parameter is required.
 </ParamField>
 
 <ParamField
@@ -83,15 +108,29 @@ export function TestPdfInput() {
   Creates a Pdf object from a File object. Available in browser environments only.
 </ParamField>
 
-{/* <ParamField
+<ParamField
   path="fromBlob"
   type="(blob: Blob, mediaType?: string) => Promise<Pdf>"
 >
   <Info>Only available in browser environments. @boundaryml/baml/browser</Info>
   Creates a Pdf object from a Blob object. Available in browser environments only.
-</ParamField> */}
+</ParamField>
 
 ## Instance Methods
+
+<ParamField
+  path="isUrl"
+  type="() => boolean"
+>
+  Check if the Pdf is stored as a URL.
+</ParamField>
+
+<ParamField
+  path="asUrl"
+  type="() => string"
+>
+  Get the URL if the Pdf is stored as a URL. Throws an Error if the Pdf is not stored as a URL.
+</ParamField>
 
 <ParamField
   path="asBase64"
@@ -102,7 +141,23 @@ export function TestPdfInput() {
 
 <ParamField
   path="toJSON"
-  type="() => { base64: string; media_type: string }"
+  type="() => { url: string } | { base64: string; media_type: string }"
 >
-  Convert the Pdf to a JSON representation. Returns a base64 object with media type.
-</ParamField> 
+  Convert the Pdf to a JSON representation. Returns either a URL object or a base64 object with media type, depending on how the Pdf was created.
+</ParamField>
+
+## Model Compatibility
+
+Different AI models have varying levels of support for PDF input methods **(As of July 2025)**:
+
+| Provider / API         |   | PDF Input Support                                                                                                   |
+|-----------------------|---|----------------------------------------------------------------------------------------------------------------------|
+| **Anthropic**         | ✓ | Accepts PDFs as a direct https URL or a base‑64 string in a document block. |
+| **AWS Bedrock**       | ✓ | PDF must be supplied as raw bytes (base‑64 in the request) or as an Amazon S3 URI (s3:// style). Ordinary https links are not supported. |
+| **Google Gemini**     | ✓ | Provide as inline base‑64 or upload first with media.upload and use the returned file_uri. The model does not fetch http/https URLs for you. |
+| **OpenAI**            | ✓ | PDF support (added March 2025) via base‑64 in the request. Supplying a plain URL is not accepted. |
+| **Google Vertex AI**  | ✓ | Accepts either base‑64 data or a Cloud Storage gs:// URI in a file_data part; you must set mime_type (for PDFs use application/pdf). Generic https URLs are not allowed. |
+
+<Info>
+  For most models, direct https URLs are not accepted (except Anthropic). Prefer using base64, file uploads, or the appropriate cloud storage/file upload mechanism for your provider. Always specify the correct MIME type (e.g., application/pdf) when required.
+</Info> 
