@@ -83,13 +83,85 @@ pub fn builtin_schemas() -> IndexMap<TypeName, TypeOpenApi> {
             },
         ),
         (
+            TypeName("BamlPdf".to_string()),
+            TypeOpenApi::Union {
+                one_of: vec![
+                    TypeOpenApi::Inline {
+                        r#type: TypePrimitive::Object {
+                            properties: IndexMap::from_iter(vec![
+                                ("base64".to_string(), type_string()),
+                                ("media_type".to_string(), type_string()),
+                            ]),
+                            required: IndexSet::from_iter(vec!["base64".to_string()]),
+                            additional_properties: AdditionalProperties::Closed,
+                        },
+                        meta: OpenApiMeta {
+                            title: Some("BamlPdfBase64".to_string()),
+                            ..OpenApiMeta::default()
+                        },
+                    },
+                    TypeOpenApi::Inline {
+                        r#type: TypePrimitive::Object {
+                            properties: IndexMap::from_iter(vec![
+                                ("url".to_string(), type_string()),
+                                ("media_type".to_string(), type_string()),
+                            ]),
+                            required: IndexSet::from_iter(vec!["url".to_string()]),
+                            additional_properties: AdditionalProperties::Closed,
+                        },
+                        meta: OpenApiMeta {
+                            title: Some("BamlPdfUrl".to_string()),
+                            ..OpenApiMeta::default()
+                        },
+                    },
+                ],
+                meta: OpenApiMeta::default(),
+            },
+        ),
+        (
+            TypeName("BamlVideo".to_string()),
+            TypeOpenApi::Union {
+                one_of: vec![
+                    TypeOpenApi::Inline {
+                        r#type: TypePrimitive::Object {
+                            properties: IndexMap::from_iter(vec![
+                                ("base64".to_string(), type_string()),
+                                ("media_type".to_string(), type_string()),
+                            ]),
+                            required: IndexSet::from_iter(vec!["base64".to_string()]),
+                            additional_properties: AdditionalProperties::Closed,
+                        },
+                        meta: OpenApiMeta {
+                            title: Some("BamlVideoBase64".to_string()),
+                            ..OpenApiMeta::default()
+                        },
+                    },
+                    TypeOpenApi::Inline {
+                        r#type: TypePrimitive::Object {
+                            properties: IndexMap::from_iter(vec![
+                                ("url".to_string(), type_string()),
+                                ("media_type".to_string(), type_string()),
+                            ]),
+                            required: IndexSet::from_iter(vec!["url".to_string()]),
+                            additional_properties: AdditionalProperties::Closed,
+                        },
+                        meta: OpenApiMeta {
+                            title: Some("BamlVideoUrl".to_string()),
+                            ..OpenApiMeta::default()
+                        },
+                    },
+                ],
+                meta: OpenApiMeta::default(),
+            },
+        ),
+        (
             TypeName("BamlOptions".to_string()),
             TypeOpenApi::Inline {
                 r#type: TypePrimitive::Object {
                     properties: IndexMap::from_iter(vec![(
                         "client_registry".to_string(),
                         TypeOpenApi::Ref {
-                            r#ref: "#/components/schemas/ClientRegistry".to_string(),
+                            r#ref: "#/components/schemas/ClientProperty".to_string(),
                             meta: OpenApiMeta::default(),
                         },
                     )]),

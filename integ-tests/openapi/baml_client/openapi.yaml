@@ -999,7 +999,8 @@ paths:
             application/json:
               schema:
                 title: JsonTypeAliasCycleResponse
-                AnyValue: {}
+                type: object
+                additionalProperties: true
       operationId: JsonTypeAliasCycle
   /call/LLMEcho:
     post:
@@ -1433,7 +1434,8 @@ paths:
             application/json:
               schema:
                 title: RecursiveAliasCycleResponse
-                AnyValue: {}
+                type: object
+                additionalProperties: true
       operationId: RecursiveAliasCycle
   /call/RecursiveClassWithAliasIndirection:
     post:
@@ -1459,7 +1461,8 @@ paths:
             application/json:
               schema:
                 title: RecursiveUnionTestResponse
-                AnyValue: {}
+                type: object
+                additionalProperties: true
       operationId: RecursiveUnionTest
   /call/ReturnAliasWithMergedAttributes:
     post:
@@ -1513,7 +1516,8 @@ paths:
             application/json:
               schema:
                 title: ReturnJsonEntryResponse
-                AnyValue: {}
+                type: object
+                additionalProperties: true
       operationId: ReturnJsonEntry
   /call/ReturnMalformedConstraints:
     post:
@@ -1552,7 +1556,8 @@ paths:
             application/json:
               schema:
                 title: SimpleRecursiveListAliasResponse
-                AnyValue: {}
+                type: object
+                additionalProperties: true
       operationId: SimpleRecursiveListAlias
   /call/SimpleRecursiveMapAlias:
     post:
@@ -1565,7 +1570,8 @@ paths:
             application/json:
               schema:
                 title: SimpleRecursiveMapAliasResponse
-                AnyValue: {}
+                type: object
+                additionalProperties: true
       operationId: SimpleRecursiveMapAlias
   /call/StreamBigNumbers:
     post:
@@ -4072,7 +4078,8 @@ components:
             type: object
             properties:
               input:
-                AnyValue: {}
+                type: object
+                additionalProperties: true
               __baml_options__:
                 nullable: true
                 $ref: '#/components/schemas/BamlOptions'
@@ -4546,7 +4553,8 @@ components:
             type: object
             properties:
               input:
-                AnyValue: {}
+                type: object
+                additionalProperties: true
               __baml_options__:
                 nullable: true
                 $ref: '#/components/schemas/BamlOptions'
@@ -4578,7 +4586,8 @@ components:
             type: object
             properties:
               input:
-                AnyValue: {}
+                type: object
+                additionalProperties: true
               __baml_options__:
                 nullable: true
                 $ref: '#/components/schemas/BamlOptions'
@@ -4674,7 +4683,8 @@ components:
             type: object
             properties:
               input:
-                AnyValue: {}
+                type: object
+                additionalProperties: true
               __baml_options__:
                 nullable: true
                 $ref: '#/components/schemas/BamlOptions'
@@ -4690,7 +4700,8 @@ components:
             type: object
             properties:
               input:
-                AnyValue: {}
+                type: object
+                additionalProperties: true
               __baml_options__:
                 nullable: true
                 $ref: '#/components/schemas/BamlOptions'
@@ -6398,11 +6409,55 @@ components:
         required:
         - url
         additionalProperties: false
+    BamlPdf:
+      oneOf:
+      - title: BamlPdfBase64
+        type: object
+        properties:
+          base64:
+            type: string
+          media_type:
+            type: string
+        required:
+        - base64
+        additionalProperties: false
+      - title: BamlPdfUrl
+        type: object
+        properties:
+          url:
+            type: string
+          media_type:
+            type: string
+        required:
+        - url
+        additionalProperties: false
+    BamlVideo:
+      oneOf:
+      - title: BamlVideoBase64
+        type: object
+        properties:
+          base64:
+            type: string
+          media_type:
+            type: string
+        required:
+        - base64
+        additionalProperties: false
+      - title: BamlVideoUrl
+        type: object
+        properties:
+          url:
+            type: string
+          media_type:
+            type: string
+        required:
+        - url
+        additionalProperties: false
     BamlOptions:
       type: object
       properties:
         client_registry:
-          $ref: '#/components/schemas/ClientRegistry'
+          $ref: '#/components/schemas/ClientProperty'
       required:
       - client_registry
       additionalProperties: false
@@ -7576,7 +7631,8 @@ components:
       type: object
       properties:
         value:
-          AnyValue: {}
+          type: object
+          additionalProperties: true
       required:
       - value
       additionalProperties: false
