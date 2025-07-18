@@ -23,12 +23,12 @@ from baml_client import b
 
 async def test_pdf_input():
     # Create a Pdf object from URL
-    pdf_url = Pdf.from_url("https://example.com/document.pdf", "application/pdf")
+    pdf_url = Pdf.from_url("https://example.com/document.pdf")
     res1 = await b.TestPdfInput(pdf=pdf_url)
     
     # Create a Pdf object from Base64 data
     pdf_b64 = "JVBERi0K..."
-    pdf = Pdf.from_base64("application/pdf", pdf_b64)
+    pdf = Pdf.from_base64(pdf_b64)
     res2 = await b.TestPdfInput(pdf=pdf)
 ```
 
@@ -37,18 +37,18 @@ import { b } from '../baml_client'
 import { Pdf } from "@boundaryml/baml"
 
 // Create a Pdf object from URL
-const pdfUrl = Pdf.fromUrl('https://example.com/document.pdf', 'application/pdf')
+const pdfUrl = Pdf.fromUrl('https://example.com/document.pdf')
 const res1 = await b.TestPdfInput(pdfUrl)
 
 // Create a Pdf object from Base64 data
 const pdf_b64 = "JVBERi0K..."
 const res2 = await b.TestPdfInput(
-  Pdf.fromBase64('application/pdf', pdf_b64)
+  Pdf.fromBase64(pdf_b64)
 )
 
 // Browser-specific helpers
 const filePdf = await Pdf.fromFile(file)
-const blobPdf = await Pdf.fromBlob(blob, 'application/pdf')
+const blobPdf = await Pdf.fromBlob(blob)
 ```
 
 ```tsx
@@ -60,12 +60,12 @@ export function TestPdfInput() {
 
     const handleClick = async () => {
         // Using URL
-        const pdfUrl = Pdf.fromUrl('https://example.com/document.pdf', 'application/pdf')
+        const pdfUrl = Pdf.fromUrl('https://example.com/document.pdf')
         mutate(pdfUrl)
         
         // Or using Base64
         const pdf_b64 = "JVBERi0K..."
-        const pdf = Pdf.fromBase64('application/pdf', pdf_b64)
+        const pdf = Pdf.fromBase64(pdf_b64)
         mutate(pdf)
     }
 

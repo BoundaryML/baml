@@ -2,7 +2,7 @@
 import type { WasmChatMessagePartMedia } from '@gloo-ai/baml-schema-wasm-web';
 /* eslint-disable @typescript-eslint/require-await */
 import { useAtomValue, useSetAtom } from 'jotai';
-import { ExternalLinkIcon, ImageIcon, Music, FileText, Video, Copy, Check, X } from 'lucide-react';
+import { ExternalLinkIcon, ImageIcon, Music, FileText, Video, Copy, Check, X, ChevronDown, ChevronUp } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import useSWR from 'swr';
 import { Button } from '@baml/ui/button';
@@ -119,6 +119,7 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
   // Track blob URLs for cleanup
   const blobUrlRef = useRef<string | null>(null);
   const [optimizedMediaUrl, setOptimizedMediaUrl] = useState<string | null>(null);
+  const [collapsed, setCollapsed] = useState(false);
   
 
   
@@ -460,17 +461,25 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
       <div className="max-w-lg w-full border border-[var(--vscode-panel-border)] rounded bg-[var(--vscode-editor-background)] space-y-3">
         {/* Header with file type icon and link/copy */}
         {mediaUrl && (
-          <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--vscode-panel-border)] bg-[var(--vscode-sideBar-background)]">
-            <div className="flex items-center gap-2 min-w-0 flex-1">
+          <div
+            className="flex items-center justify-between px-3 py-2 border-b border-[var(--vscode-panel-border)] bg-[var(--vscode-sideBar-background)] cursor-pointer select-none overflow-hidden"
+            onClick={e => {
+              setCollapsed((c) => !c);
+            }}
+            tabIndex={0}
+            role="button"
+            aria-expanded={!collapsed}
+            style={{ userSelect: 'none' }}
+          >
+            <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
               {bamlMediaType === 'image' && <ImageIcon className="w-6 h-6 text-blue-400 flex-shrink-0" />}
               {bamlMediaType === 'audio' && <Music className="w-6 h-6 text-purple-400 flex-shrink-0" />}
               {bamlMediaType === 'pdf' && <FileText className="w-6 h-6 text-red-400 flex-shrink-0" />}
               {bamlMediaType === 'video' && <Video className="w-6 h-6 text-green-400 flex-shrink-0" />}
-              <div className="flex flex-col min-w-0">
-                <span className="text-xs font-medium text-[var(--vscode-foreground)] capitalize leading-tight">
+              <div className="flex flex-col min-w-0 overflow-hidden">
+                <span className="text-xs font-medium text-[var(--vscode-foreground)] capitalize leading-tight truncate">
                   {bamlMediaType}
                 </span>
-                {/* File statistics */}
                 <span className="text-xs text-[var(--vscode-description-foreground)] leading-tight truncate">
                   {bamlMediaType === 'image' && imageStats ? 
                     `${fileFormat ? `${fileFormat} • ` : ''}${imageStats.width}×${imageStats.height}${fileSize ? ` • ${fileSize}` : imageStats.size ? ` • ${imageStats.size}` : ''}` :
@@ -485,21 +494,22 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
                 </span>
               </div>
             </div>
-            {/* Button area, right-aligned, same size for both buttons */}
-            <div className="flex items-center ml-2">
+            {/* Button area, right-aligned, compact, no overflow */}
+            <div className="flex items-center ml-2 flex-nowrap gap-1 h-7" onClick={e => e.stopPropagation()} style={{maxWidth: 'calc(100% - 2rem)'}}>
             {isBase64 ? (
               <Button
                 onClick={handleCopyToClipboard}
                 disabled={copyStatus === 'copying'}
                 variant="outline"
                 size="xs"
-                className={`flex gap-1.5 items-center text-xs px-2 py-1 rounded flex-shrink-0 min-w-[110px] transition-all duration-200
+                className={`flex gap-1 items-center text-xs px-2 py-0 rounded flex-shrink-0 h-7 transition-all duration-200
                   ${copyStatus === 'success'
                     ? 'border-[var(--vscode-charts-green)] text-[var(--vscode-charts-green)] bg-[var(--vscode-editor-background)]'
                     : copyStatus === 'error'
                     ? 'border-[var(--vscode-charts-red)] text-[var(--vscode-charts-red)] bg-[var(--vscode-editor-background)]'
                     : ''
                   }`}
+                style={{minWidth: 0, maxWidth: 140}}
               >
                 {copyStatus === 'copying' && (
                   <div className="w-3 h-3 border border-[var(--vscode-button-foreground)] border-t-transparent rounded-full animate-spin" />
@@ -507,7 +517,7 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
                 {copyStatus === 'success' && <Check className="w-3 h-3" />}
                 {copyStatus === 'error' && <X className="w-3 h-3" />}
                 {copyStatus === 'idle' && <Copy className="w-3 h-3" />}
-                <span>
+                <span className="truncate">
                   {copyStatus === 'copying' && `Copying...`}
                   {copyStatus === 'success' && `Copied!`}
                   {copyStatus === 'error' && `Failed`}
@@ -519,19 +529,20 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
                 asChild
                 variant="outline"
                 size="xs"
-                className="flex gap-1.5 items-center text-xs px-2 py-1 rounded border flex-shrink-0 min-w-[110px] transition-all duration-200"
+                className="flex gap-1 items-center text-xs px-2 py-0 rounded border flex-shrink-0 h-7 transition-all duration-200"
+                style={{minWidth: 0, maxWidth: 140}}
               >
                 <a
                   href={mediaUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex gap-1.5 items-center w-full h-full"
+                  className="flex gap-1 items-center w-full h-full truncate"
+                  style={{maxWidth: 120}}
                 >
                   <ExternalLinkIcon className="w-3 h-3" />
-                  <span>
+                  <span className="truncate">
                     {(() => {
                       const url = mediaUrl || '';
-                      // Extract filename from URL
                       const urlParts = url.split('/');
                       const filename = urlParts[urlParts.length - 1];
                       const cleanFilename = filename?.split('?')[0]?.split('#')[0];
@@ -544,14 +555,32 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
                 </a>
               </Button>
             )}
+            {/* Collapse/Expand Button (rightmost) */}
+            <Button
+              onClick={e => { e.stopPropagation(); setCollapsed((c) => !c); }}
+              aria-label={collapsed ? 'Expand media' : 'Collapse media'}
+              variant="outline"
+              size="xs"
+              className="ml-1 flex items-center justify-center px-1.5 py-0 h-7 transition-colors duration-150 flex-shrink-0"
+              style={{ outline: 'none', minWidth: 0 }}
+              tabIndex={0}
+            >
+              {collapsed ? (
+                <ChevronDown className="w-4 h-4" />
+              ) : (
+                <ChevronUp className="w-4 h-4" />
+              )}
+            </Button>
             </div>
           </div>
         )}
 
-        {/* Media content */}
-        <div className="p-4">
-          {renderMediaContent()}
-        </div>
+        {/* Media content (collapsible) */}
+        {!collapsed && (
+          <div className="p-4">
+            {renderMediaContent()}
+          </div>
+        )}
       </div>
     </div>
   );
