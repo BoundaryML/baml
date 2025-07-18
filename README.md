@@ -25,6 +25,8 @@
 
 </div>
 
+[![codecov](https://codecov.io/github/ba11b0y/baml/branch/ci%2Fcodecov/graph/badge.svg?token=P5K290YZTA)](https://codecov.io/github/ba11b0y/baml)
+
 BAML is a simple prompting language for building reliable **AI workflows and agents**.
 
 BAML makes prompt engineering easy by turning it into _schema engineering_ -- where you mostly focus on the models of your prompt -- to get more reliable outputs. 
