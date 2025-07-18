@@ -161,18 +161,22 @@ fn safe_trigger_callback(
                         checks: &f.1,
                     });
 
-                    meta.encode_to_c_buffer(runtime.inner.ir.as_ref())
+                    meta.encode_to_c_buffer(
+                        runtime.inner.ir.as_ref(),
+                        baml_types::StreamingMode::NonStreaming,
+                    )
                 } else {
-                    let meta = content.0.map_meta(|f| {
-                        // Top level types in streaming always have `not_null` set to true.
-                        let mut result_type = f.3.clone();
-                        result_type.meta_mut().streaming_behavior.needed = true;
-                        ctypes::EncodeMeta {
-                            field_type: result_type.to_streaming_type(runtime.inner.ir.as_ref()),
-                            checks: &f.1,
-                        }
+                    // Top level types in streaming always have `not_null` set to true.
+                    let mut content = content.0.clone();
+                    content.meta_mut().3.meta_mut().streaming_behavior.needed = true;
+                    let meta = content.map_meta(|f| ctypes::EncodeMeta {
+                        field_type: f.3.to_streaming_type(runtime.inner.ir.as_ref()),
+                        checks: &f.1,
                     });
-                    meta.encode_to_c_buffer(runtime.inner.ir.as_ref())
+                    meta.encode_to_c_buffer(
+                        runtime.inner.ir.as_ref(),
+                        baml_types::StreamingMode::Streaming,
+                    )
                 };
 
                 let is_done_int = if is_done { 1 } else { 0 };
@@ -383,7 +387,7 @@ pub extern "C" fn call_object_constructor(
     length: usize,
 ) -> Buffer {
     let result = call_object_constructor_impl(encoded_args, length);
-    let buf = result.encode_to_c_buffer(&BasicLookup);
+    let buf = result.encode_to_c_buffer(&BasicLookup, baml_types::StreamingMode::NonStreaming);
     Buffer::from(buf)
 }
 
@@ -413,7 +417,7 @@ pub extern "C" fn free_buffer(buf: Buffer) {
 #[no_mangle]
 pub extern "C" fn call_object_method(encoded_args: *const libc::c_char, length: usize) -> Buffer {
     let result = call_object_method_impl(encoded_args, length);
-    let raw = result.encode_to_c_buffer(&BasicLookup);
+    let raw = result.encode_to_c_buffer(&BasicLookup, baml_types::StreamingMode::NonStreaming);
     Buffer::from(raw)
 }
 

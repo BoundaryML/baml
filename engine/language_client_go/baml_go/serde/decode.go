@@ -71,6 +71,16 @@ func (d *DynamicEnum) Decode(holder *cffi.CFFIValueEnum) {
 	d.Value = string(holder.Value)
 }
 
+type DynamicUnion struct {
+	Variant string
+	Value   any
+}
+
+func (d *DynamicUnion) Decode(holder *cffi.CFFIValueUnionVariant, typeMap TypeMap) {
+	d.Variant = string(holder.VariantName)
+	d.Value = Decode(holder.Value, typeMap).Interface()
+}
+
 func decodeListValue(valueList *cffi.CFFIValueList, typeMap TypeMap) reflect.Value {
 	debugLog("decodeListValue: valueList=%+v\n", valueList)
 	if valueList == nil {
@@ -207,13 +217,18 @@ func decodeUnionValue(valueUnion *cffi.CFFIValueUnionVariant, typeMap TypeMap) r
 		return Decode(value, typeMap)
 	}
 
+	debugLog("decodeUnionValue: unionName: %s, namespace: %s\n", unionName, namespace)
 	found, ok := typeMap[namespace+"."+unionName]
 	if !ok {
+		// Union not found
 		// This is a fully dynamic union, so we
 		// decode the value as the value and drop
 		// union type information
-		value := valueUnion.Value
-		return Decode(value, typeMap)
+		dynamicUnion := DynamicUnion{
+			Variant: unionName,
+			Value:   Decode(valueUnion.Value, typeMap).Interface(),
+		}
+		return reflect.ValueOf(dynamicUnion)
 	}
 
 	union := reflect.New(found)
@@ -278,6 +293,20 @@ func convertFieldTypeToGoType(fieldType *cffi.CFFIFieldTypeHolder, typeMap TypeM
 
 	if _, ok := type_.(*cffi.CFFIFieldTypeHolder_FloatType); ok {
 		return reflect.TypeOf(float64(0))
+	}
+
+	if literal, ok := type_.(*cffi.CFFIFieldTypeHolder_LiteralType); ok {
+		literalType := literal.LiteralType
+		switch literalType.Literal.(type) {
+		case *cffi.CFFIFieldTypeLiteral_BoolLiteral:
+			return reflect.TypeOf(false)
+		case *cffi.CFFIFieldTypeLiteral_IntLiteral:
+			return reflect.TypeOf(int64(0))
+		case *cffi.CFFIFieldTypeLiteral_StringLiteral:
+			return reflect.TypeOf("")
+		default:
+			panic(fmt.Sprintf("unexpected cffi.isCFFIFieldTypeLiteral_Literal: %#v", literalType.Literal))
+		}
 	}
 
 	if class, ok := type_.(*cffi.CFFIFieldTypeHolder_ClassType); ok {
@@ -394,7 +423,7 @@ func maybeDecodePrimitive(holder *cffi.CFFIValueHolder) (*reflect.Value, bool) {
 // Used when we have a nil value but its of unknown type
 
 func maybeOptional(value reflect.Value, targetType *cffi.CFFIFieldTypeHolder, isUnion bool, typeMap TypeMap) reflect.Value {
-	// debugLog("decoding value: %v\n", targetType)
+	debugLog("maybeOptional: value: %v, targetType: %v\n", value, targetType)
 	if optional, ok := targetType.Type.(*cffi.CFFIFieldTypeHolder_OptionalType); ok {
 		optionalType := optional.OptionalType
 		if optionalType.Value.GetUnionVariantType() != nil {
@@ -416,6 +445,8 @@ func maybeOptional(value reflect.Value, targetType *cffi.CFFIFieldTypeHolder, is
 
 func Decode(holder *cffi.CFFIValueHolder, typeMap TypeMap) reflect.Value {
 	value := holder.Value
+
+	debugLog("Decode: holder.Value: %v\n", value)
 
 	if _, ok := value.(*cffi.CFFIValueHolder_NullValue); ok {
 		retType := convertFieldTypeToGoType(holder.Type, typeMap)

@@ -6,8 +6,12 @@ description: Learn how to handle video inputs in BAML functions
 Video values to BAML functions can be created in client libraries. This document explains how to use these functions both at compile time and runtime to handle video data. For more details, refer to [video types](/ref/baml/types#video).
 
 <Info>
-  When you create a `Video` using `from_url` or `fromUrl`, the URL is passed directly to the model without any intermediate fetching. If the model cannot access external media, it will fail on such inputs. In these cases, convert the video to Base64 before passing it to the model.
+  When you create a `Video` using `from_url` (Python) or `fromUrl` (TypeScript), the URL is passed directly to the model without any intermediate fetching. If the model cannot access external media, it will fail on such inputs. In these cases, convert the video to Base64 before passing it to the model.
 </Info>
+
+<Warning>
+  Only Google Gemini and Vertex AI currently support video input directly. Other providers (Anthropic Claude, OpenAI GPT-4o, AWS Bedrock) will error or require you to extract frames as images or provide transcripts. See the model compatibility table below for details.
+</Warning>
 
 ## Usage Examples
 
@@ -45,7 +49,7 @@ res = await b.TestVideoInput(
 // Browser-specific methods
 const fileVideo = await Video.fromFile(file)
 const blobVideo = await Video.fromBlob(blob, 'video/mp4')
-const fetchedVideo = await Video.fromUrlAsync('https://www.youtube.com/watch?v=dQw4w9WgXcQ')
+const fetchedVideo = await Video.fromUrlToBase64('https://www.youtube.com/watch?v=dQw4w9WgXcQ')
 ```
 
 ```tsx
@@ -99,7 +103,7 @@ export function TestVideoInput() {
   Creates a Video object from a File object. Available in browser environments only.
 </ParamField>
 
-<ParamField
+{/* <ParamField
   path="fromBlob"
   type="(blob: Blob, mediaType?: string) => Promise<Video>"
 >
@@ -113,7 +117,7 @@ export function TestVideoInput() {
 >
   <Info>Only available in browser environments.</Info>
   Creates a Video object by fetching from a URL. Available in browser environments only.
-</ParamField>
+</ParamField> */}
 
 ## Instance Methods
 
@@ -138,9 +142,25 @@ export function TestVideoInput() {
   Get the base64 data and media type if the video is stored as base64. Returns [base64Data, mediaType]. Throws an Error if the video is not stored as base64.
 </ParamField>
 
-<ParamField
+{/* <ParamField
   path="toJSON"
   type="() => { url: string } | { base64: string; media_type: string }"
 >
   Convert the video to a JSON representation. Returns either a URL object or a base64 object with media type.
-</ParamField> 
+</ParamField> */}
+
+## Model Compatibility
+
+Different AI models have varying levels of support for video input methods **(As of July 2025)**:
+
+| Provider / API         |   | Video Input Support                                                                                                   |
+|-----------------------|---|----------------------------------------------------------------------------------------------------------------------|
+| **Anthropic**         | ✗ | No native video support. Only accepts PDF, images, and common docs.  |
+| **AWS Bedrock**       | ✓ | Fully multimodal. Accepts video as Base64 bytes in request or S3 URI. JSON must include format (e.g. mp4) and source.|
+| **Google Gemini**     | ✓ | Three options: upload with `ai.files.upload` and use `file_uri`, inline Base64 (&lt;20MB), or YouTube URL (preview). Requires `mime_type`.|
+| **OpenAI**            | ✗ | Video input not yet in public API. Only text and images. Must extract frames and send as images for now.            |
+| **Google Vertex AI**  | ✓ | Accepts video via Cloud Storage `gs://` URI (up to 2GB), public HTTP/HTTPS URL (&le;15MB), YouTube URL, or inline Base64. Requires `mimeType`.|
+
+<Info>
+  For most models, direct video input is only supported by Google Gemini and Vertex AI. For other providers, you must extract frames as images or use transcripts. Always specify the correct MIME type (e.g., video/mp4) when required.
+</Info> 

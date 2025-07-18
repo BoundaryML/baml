@@ -833,7 +833,7 @@ dependencies = [
 
 [[package]]
 name = "baml-cli"
-version = "0.202.0"
+version = "0.202.1"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -922,7 +922,7 @@ dependencies = [
 
 [[package]]
 name = "baml-derive"
-version = "0.202.0"
+version = "0.202.1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -943,7 +943,7 @@ dependencies = [
 
 [[package]]
 name = "baml-lib"
-version = "0.202.0"
+version = "0.202.1"
 dependencies = [
  "base64 0.13.1",
  "dissimilar",
@@ -959,7 +959,7 @@ dependencies = [
 
 [[package]]
 name = "baml-log"
-version = "0.202.0"
+version = "0.202.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -973,7 +973,7 @@ dependencies = [
 
 [[package]]
 name = "baml-lsp-types"
-version = "0.202.0"
+version = "0.202.1"
 dependencies = [
  "anyhow",
  "baml-runtime",
@@ -1003,7 +1003,7 @@ dependencies = [
 
 [[package]]
 name = "baml-python-ffi"
-version = "0.202.0"
+version = "0.202.1"
 dependencies = [
  "anyhow",
  "baml-cli",
@@ -1080,7 +1080,7 @@ dependencies = [
 
 [[package]]
 name = "baml-runtime"
-version = "0.202.0"
+version = "0.202.1"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -1198,7 +1198,7 @@ dependencies = [
 
 [[package]]
 name = "baml-schema-build"
-version = "0.202.0"
+version = "0.202.1"
 dependencies = [
  "anyhow",
  "baml-ids",
@@ -1243,7 +1243,7 @@ dependencies = [
 
 [[package]]
 name = "baml-types"
-version = "0.202.0"
+version = "0.202.1"
 dependencies = [
  "anyhow",
  "baml-ids",
@@ -1268,7 +1268,7 @@ dependencies = [
 
 [[package]]
 name = "baml-typescript-ffi"
-version = "0.202.0"
+version = "0.202.1"
 dependencies = [
  "anyhow",
  "baml-cli",
@@ -1292,7 +1292,7 @@ dependencies = [
 
 [[package]]
 name = "baml_cffi"
-version = "0.202.0"
+version = "0.202.1"
 dependencies = [
  "anyhow",
  "baml-cli",
@@ -1407,7 +1407,7 @@ dependencies = [
 
 [[package]]
 name = "bstd"
-version = "0.202.0"
+version = "0.202.1"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -2146,7 +2146,7 @@ dependencies = [
 
 [[package]]
 name = "dir-writer"
-version = "0.202.0"
+version = "0.202.1"
 dependencies = [
  "anyhow",
  "baml-log",
@@ -2641,7 +2641,7 @@ dependencies = [
 
 [[package]]
 name = "generators-go"
-version = "0.202.0"
+version = "0.202.1"
 dependencies = [
  "anyhow",
  "askama",
@@ -2654,7 +2654,7 @@ dependencies = [
 
 [[package]]
 name = "generators-lib"
-version = "0.202.0"
+version = "0.202.1"
 dependencies = [
  "anyhow",
  "baml-log",
@@ -2671,7 +2671,7 @@ dependencies = [
 
 [[package]]
 name = "generators-openapi"
-version = "0.202.0"
+version = "0.202.1"
 dependencies = [
  "anyhow",
  "askama",
@@ -2690,7 +2690,7 @@ dependencies = [
 
 [[package]]
 name = "generators-python"
-version = "0.202.0"
+version = "0.202.1"
 dependencies = [
  "anyhow",
  "askama",
@@ -2703,7 +2703,7 @@ dependencies = [
 
 [[package]]
 name = "generators-ruby"
-version = "0.202.0"
+version = "0.202.1"
 dependencies = [
  "anyhow",
  "askama",
@@ -2716,7 +2716,7 @@ dependencies = [
 
 [[package]]
 name = "generators-typescript"
-version = "0.202.0"
+version = "0.202.1"
 dependencies = [
  "anyhow",
  "askama",
@@ -2932,9 +2932,6 @@ name = "heck"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "95505c38b4572b2d910cecb0281560f54b440a19336cbbcb27bf6ce6adc6f5a8"
-dependencies = [
- "unicode-segmentation",
-]
 
 [[package]]
 name = "heck"
@@ -3277,12 +3274,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "id-arena"
-version = "2.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "25a2bc672d1148e28034f176e01fffebb08b35768468cc954630da77a1449005"
-
-[[package]]
 name = "ident_case"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3443,7 +3434,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-ast"
-version = "0.202.0"
+version = "0.202.1"
 dependencies = [
  "anyhow",
  "baml-types",
@@ -3464,7 +3455,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-codegen"
-version = "0.202.0"
+version = "0.202.1"
 dependencies = [
  "anyhow",
  "askama",
@@ -3493,7 +3484,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-core"
-version = "0.202.0"
+version = "0.202.1"
 dependencies = [
  "anyhow",
  "baml-derive",
@@ -3533,7 +3524,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-diagnostics"
-version = "0.202.0"
+version = "0.202.1"
 dependencies = [
  "anyhow",
  "colored 2.2.0",
@@ -3546,7 +3537,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-jinja"
-version = "0.202.0"
+version = "0.202.1"
 dependencies = [
  "anyhow",
  "askama",
@@ -3567,7 +3558,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-jinja-types"
-version = "0.202.0"
+version = "0.202.1"
 dependencies = [
  "anyhow",
  "askama",
@@ -3586,7 +3577,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-parser-database"
-version = "0.202.0"
+version = "0.202.1"
 dependencies = [
  "anyhow",
  "baml-derive",
@@ -3612,7 +3603,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-prompt-parser"
-version = "0.202.0"
+version = "0.202.1"
 dependencies = [
  "internal-baml-ast",
  "internal-baml-diagnostics",
@@ -3624,7 +3615,7 @@ dependencies = [
 
 [[package]]
 name = "internal-llm-client"
-version = "0.202.0"
+version = "0.202.1"
 dependencies = [
  "anyhow",
  "aws-config",
@@ -3807,7 +3798,7 @@ checksum = "9dbbfed4e59ba9750e15ba154fdfd9329cee16ff3df539c2666b70f58cc32105"
 
 [[package]]
 name = "jsonish"
-version = "0.202.0"
+version = "0.202.1"
 dependencies = [
  "anyhow",
  "assert-json-diff",
@@ -3888,13 +3879,15 @@ dependencies = [
 
 [[package]]
 name = "language-server"
-version = "0.202.0"
+version = "0.202.1"
 dependencies = [
  "anyhow",
  "baml-log",
  "baml-lsp-types",
  "baml-runtime",
  "baml-types",
+ "base64 0.21.7",
+ "bytes",
  "colored 3.0.0",
  "crossbeam",
  "crossbeam-channel",
@@ -3956,12 +3949,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "830d08ce1d1d941e6b30645f1a0eb5643013d835ce3779a5fc208261dbe10f55"
 
 [[package]]
-name = "leb128"
-version = "0.2.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "884e2677b40cc8c339eaefcb701c32ef1fd2493d71118dc0ca4b6a736c93bd67"
-
-[[package]]
 name = "libc"
 version = "0.2.174"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4008,7 +3995,7 @@ checksum = "241eaef5fd12c88705a01fc1066c48c4b36e0dd4377dcdc7ec3942cea7a69956"
 
 [[package]]
 name = "llm-response-parser"
-version = "0.202.0"
+version = "0.202.1"
 dependencies = [
  "anyhow",
  "serde",
@@ -6297,15 +6284,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "spdx"
-version = "0.10.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "58b69356da67e2fc1f542c71ea7e654a361a79c938e4424392ecf4fa065d2193"
-dependencies = [
- "smallvec",
-]
-
-[[package]]
 name = "spin"
 version = "0.9.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6516,7 +6494,7 @@ checksum = "8f50febec83f5ee1df3015341d8bd429f2d1cc62bcba7ea2076759d315084683"
 
 [[package]]
 name = "test-harness"
-version = "0.202.0"
+version = "0.202.1"
 dependencies = [
  "anyhow",
  "baml-log",
@@ -7058,12 +7036,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4a1a07cc7db3810833284e8d372ccdc6da29741639ecc70c9ec107df0fa6154c"
 
 [[package]]
-name = "unicode-xid"
-version = "0.2.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
-
-[[package]]
 name = "unindent"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7261,7 +7233,7 @@ version = "0.14.2+wasi-0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9683f9a5a998d873c0d21fcbe3c083009670149a8fab228644b8bd36b2c48cb3"
 dependencies = [
- "wit-bindgen-rt 0.39.0",
+ "wit-bindgen-rt",
 ]
 
 [[package]]
@@ -7362,15 +7334,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "wasm-encoder"
-version = "0.201.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b9c7d2731df60006819b013f64ccc2019691deccf6e11a1804bc850cd6748f1a"
-dependencies = [
- "leb128",
-]
-
-[[package]]
 name = "wasm-logger"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7379,22 +7342,6 @@ dependencies = [
  "log",
  "wasm-bindgen",
  "web-sys",
-]
-
-[[package]]
-name = "wasm-metadata"
-version = "0.201.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0fd83062c17b9f4985d438603cde0a5e8c5c8198201a6937f778b607924c7da2"
-dependencies = [
- "anyhow",
- "indexmap 2.9.0",
- "serde",
- "serde_derive",
- "serde_json",
- "spdx",
- "wasm-encoder",
- "wasmparser",
 ]
 
 [[package]]
@@ -7408,17 +7355,6 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
-]
-
-[[package]]
-name = "wasmparser"
-version = "0.201.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "84e5df6dba6c0d7fafc63a450f1738451ed7a0b52295d83e868218fa286bf708"
-dependencies = [
- "bitflags 2.9.1",
- "indexmap 2.9.0",
- "semver",
 ]
 
 [[package]]
@@ -7930,104 +7866,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d135d17ab770252ad95e9a872d365cf3090e3be864a34ab46f48555993efc904"
 
 [[package]]
-name = "wit-bindgen"
-version = "0.22.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "288f992ea30e6b5c531b52cdd5f3be81c148554b09ea416f058d16556ba92c27"
-dependencies = [
- "bitflags 2.9.1",
- "wit-bindgen-rt 0.22.0",
- "wit-bindgen-rust-macro",
-]
-
-[[package]]
-name = "wit-bindgen-core"
-version = "0.22.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e85e72719ffbccf279359ad071497e47eb0675fe22106dea4ed2d8a7fcb60ba4"
-dependencies = [
- "anyhow",
- "wit-parser",
-]
-
-[[package]]
-name = "wit-bindgen-rt"
-version = "0.22.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fcb8738270f32a2d6739973cbbb7c1b6dd8959ce515578a6e19165853272ee64"
-
-[[package]]
 name = "wit-bindgen-rt"
 version = "0.39.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6f42320e61fe2cfd34354ecb597f86f413484a798ba44a8ca1165c58d42da6c1"
 dependencies = [
  "bitflags 2.9.1",
-]
-
-[[package]]
-name = "wit-bindgen-rust"
-version = "0.22.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d8a39a15d1ae2077688213611209849cad40e9e5cccf6e61951a425850677ff3"
-dependencies = [
- "anyhow",
- "heck 0.4.1",
- "indexmap 2.9.0",
- "wasm-metadata",
- "wit-bindgen-core",
- "wit-component",
-]
-
-[[package]]
-name = "wit-bindgen-rust-macro"
-version = "0.22.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d376d3ae5850526dfd00d937faea0d81a06fa18f7ac1e26f386d760f241a8f4b"
-dependencies = [
- "anyhow",
- "proc-macro2",
- "quote",
- "syn 2.0.104",
- "wit-bindgen-core",
- "wit-bindgen-rust",
-]
-
-[[package]]
-name = "wit-component"
-version = "0.201.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "421c0c848a0660a8c22e2fd217929a0191f14476b68962afd2af89fd22e39825"
-dependencies = [
- "anyhow",
- "bitflags 2.9.1",
- "indexmap 2.9.0",
- "log",
- "serde",
- "serde_derive",
- "serde_json",
- "wasm-encoder",
- "wasm-metadata",
- "wasmparser",
- "wit-parser",
-]
-
-[[package]]
-name = "wit-parser"
-version = "0.201.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "196d3ecfc4b759a8573bf86a9b3f8996b304b3732e4c7de81655f875f6efdca6"
-dependencies = [
- "anyhow",
- "id-arena",
- "indexmap 2.9.0",
- "log",
- "semver",
- "serde",
- "serde_derive",
- "serde_json",
- "unicode-xid",
- "wasmparser",
 ]
 
 [[package]]
@@ -8080,24 +7924,6 @@ dependencies = [
  "quote",
  "syn 2.0.104",
  "synstructure",
-]
-
-[[package]]
-name = "zed"
-version = "0.202.0"
-dependencies = [
- "zed_extension_api",
-]
-
-[[package]]
-name = "zed_extension_api"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "594fd10dd0f2f853eb243e2425e7c95938cef49adb81d9602921d002c5e6d9d9"
-dependencies = [
- "serde",
- "serde_json",
- "wit-bindgen",
 ]
 
 [[package]]

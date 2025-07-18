@@ -36,6 +36,7 @@ where
                             WithIr {
                                 value,
                                 lookup: self.lookup,
+                                mode: self.mode,
                             }
                             .encode(),
                         ),
@@ -47,11 +48,13 @@ where
                 let key_type = WithIr {
                     value: &(key_type.as_ref(), UnionAllowance::Disallow),
                     lookup: self.lookup,
+                    mode: self.mode,
                 }
                 .encode();
                 let value_type = WithIr {
                     value: &(value_type.as_ref(), UnionAllowance::Disallow),
                     lookup: self.lookup,
+                    mode: self.mode,
                 }
                 .encode();
                 cValue::MapValue(CffiValueMap {
@@ -67,6 +70,7 @@ where
                         WithIr {
                             value,
                             lookup: self.lookup,
+                            mode: self.mode,
                         }
                         .encode(),
                     );
@@ -77,6 +81,7 @@ where
                 let value_type = WithIr {
                     value: &(value_type.as_ref(), UnionAllowance::Disallow),
                     lookup: self.lookup,
+                    mode: self.mode,
                 }
                 .encode();
                 cValue::ListValue(CffiValueList {
@@ -109,6 +114,7 @@ where
                             WithIr {
                                 value,
                                 lookup: self.lookup,
+                                mode: self.mode,
                             }
                             .encode(),
                         ),
@@ -122,6 +128,7 @@ where
                 WithIr {
                     value: &(&type_ir, UnionAllowance::Disallow),
                     lookup: self.lookup,
+                    mode: self.mode,
                 }
                 .encode(),
             ),
@@ -174,11 +181,13 @@ where
                 let key_type = WithIr {
                     value: &(key_type.as_ref(), UnionAllowance::Disallow),
                     lookup: self.lookup,
+                    mode: self.mode,
                 }
                 .encode();
                 let value_type = WithIr {
                     value: &(value_type.as_ref(), UnionAllowance::Disallow),
                     lookup: self.lookup,
+                    mode: self.mode,
                 }
                 .encode();
                 CffiFieldTypeHolder {
@@ -197,6 +206,7 @@ where
                 let item_type = WithIr {
                     value: &(item_type.as_ref(), UnionAllowance::Disallow),
                     lookup: self.lookup,
+                    mode: self.mode,
                 }
                 .encode();
                 CffiFieldTypeHolder {
@@ -210,6 +220,7 @@ where
             other => WithIr {
                 value: &(&other.to_type_ir(), UnionAllowance::Disallow),
                 lookup: self.lookup,
+                mode: self.mode,
             }
             .encode(),
         }

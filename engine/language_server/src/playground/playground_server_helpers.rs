@@ -4,6 +4,7 @@ use std::{
     io::Cursor,
     path::{Path, PathBuf},
     sync::Arc,
+    time::Duration,
 };
 
 use anyhow::{Context, Result};
@@ -13,13 +14,15 @@ use futures_util::{SinkExt, StreamExt};
 use include_dir::{include_dir, Dir};
 use mime_guess::from_path;
 use reqwest::Client;
+use serde_json::Value;
 use sha2::{Digest, Sha256};
 use tar::Archive;
 use tokio::{fs as async_fs, sync::RwLock};
-use warp::{http::Response, ws::Message, Filter};
+use warp::{http, http::Response, ws::Message, Filter, Rejection, Reply};
 
 use crate::{
     playground::definitions::{FrontendMessage, PlaygroundState},
+    playground::playground_server_rpc::handle_rpc_websocket,
     session::Session,
 };
 
@@ -81,6 +84,8 @@ pub async fn start_client_connection(
         let buffered_events = st.drain_event_buffer();
         for event in buffered_events.clone() {
             let _ = ws_tx.send(Message::text(event)).await;
+            // Add configurable delay between buffered events
+            tokio::time::sleep(tokio::time::Duration::from_millis(400)).await;
         }
         tracing::info!("Sent {} buffered events", buffered_events.len());
         st.mark_first_client_connected();
@@ -128,15 +133,32 @@ pub fn create_server_routes(
     dist_dir: Option<std::path::PathBuf>,
 ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
     // WebSocket handler with error handling
+    let ws_state = state.clone();
+    let ws_session = session.clone();
     let ws_route = warp::path("ws")
         .and(warp::ws())
         .map(move |ws: warp::ws::Ws| {
-            let state = state.clone();
-            let session = session.clone();
+            let state = ws_state.clone();
+            let session = ws_session.clone();
             ws.on_upgrade(move |socket| async move {
                 start_client_connection(socket, state, session).await;
             })
         });
+
+    tracing::info!("Setting up RPC websocket...");
+    // RPC WebSocket handler
+    let rpc_session = session.clone();
+    let rpc_route = warp::path("rpc")
+        .and(warp::ws())
+        .map(move |ws: warp::ws::Ws| {
+            let session = rpc_session.clone();
+            ws.on_upgrade(move |socket| async move {
+                handle_rpc_websocket(socket, session).await;
+            })
+        });
+
+    // Static file serving for user files (e.g., images, data)
+    let static_files = warp::path("static").and(warp::fs::dir("."));
 
     // Static file serving - either real files or error page
     let spa = warp::path::full()
@@ -152,7 +174,13 @@ pub fn create_server_routes(
                         let file_path = dir.join(file);
                         match tokio::fs::read(&file_path).await {
                             Ok(body) => {
-                                let mime = from_path(file).first_or_octet_stream();
+                                let mut mime = from_path(file).first_or_octet_stream();
+
+                                // Ensure .mjs files are served with correct MIME type for ES modules
+                                if file.ends_with(".mjs") {
+                                    mime = "application/javascript".parse().unwrap_or(mime);
+                                }
+
                                 Ok::<_, warp::Rejection>(
                                     Response::builder()
                                         .header("content-type", mime.as_ref())
@@ -174,7 +202,11 @@ pub fn create_server_routes(
             }
         });
 
-    ws_route.or(spa).with(warp::log("playground-server"))
+    ws_route
+        .or(rpc_route)
+        .or(static_files)
+        .or(spa)
+        .with(warp::log("playground-server"))
 }
 
 /// Creates a nice HTML error page when playground assets are not available
@@ -262,12 +294,20 @@ async fn verify_sha256_checksum(
     tracing::info!("Downloading SHA256 checksum from: {}", checksum_url);
 
     // Download the checksum file
+    tracing::info!("Downloading checksum file...");
     let checksum_resp = client
         .get(checksum_url)
         .header("User-Agent", "baml-playground-server")
         .send()
         .await
         .map_err(|e| anyhow::anyhow!("Failed to download checksum file: {e}"))?;
+
+    if !checksum_resp.status().is_success() {
+        return Err(anyhow::anyhow!(
+            "Checksum download failed with status: {}",
+            checksum_resp.status()
+        ));
+    }
 
     let checksum_text = checksum_resp.text().await?;
 
@@ -308,15 +348,42 @@ pub async fn get_playground_dist(github_repo: &str, version: &str) -> anyhow::Re
     let api_url = format!("https://api.github.com/repos/{github_repo}/releases/tags/{version}");
     tracing::info!("Fetching web-panel release metadata from: {}", api_url);
 
-    // Fetch release metadata
-    let client = Client::new();
+    // Fetch release metadata with timeout
+    let client = Client::builder()
+        .timeout(Duration::from_secs(30))
+        .connect_timeout(Duration::from_secs(10))
+        .build()
+        .map_err(|e| anyhow::anyhow!("Failed to create HTTP client: {e}"))?;
+
+    tracing::info!("Sending request to GitHub API...");
     let resp = client
         .get(&api_url)
         .header("User-Agent", "baml-playground-server")
         .send()
         .await
         .map_err(|e| anyhow::anyhow!("Failed to fetch release metadata: {e}"))?;
-    let release: serde_json::Value = resp.json().await?;
+
+    tracing::info!("Received response with status: {}", resp.status());
+
+    // Check if the response is successful
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let body = resp
+            .text()
+            .await
+            .unwrap_or_else(|_| "Failed to read response body".to_string());
+        return Err(anyhow::anyhow!(
+            "GitHub API request failed with status {}: {}",
+            status,
+            body
+        ));
+    }
+
+    tracing::info!("Parsing JSON response...");
+    let release: serde_json::Value = resp
+        .json()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to parse JSON response: {e}"))?;
 
     // Find the main asset
     let assets = release["assets"]
@@ -343,6 +410,12 @@ pub async fn get_playground_dist(github_repo: &str, version: &str) -> anyhow::Re
     let checksum_url = checksum_asset["browser_download_url"]
         .as_str()
         .ok_or_else(|| anyhow::anyhow!("No download URL for checksum asset"))?;
+
+    tracing::info!(
+        "Found assets - main: {}, checksum: {}",
+        download_url,
+        checksum_url
+    );
 
     // Compute extraction directory using the provided version
     let home = home_dir().ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?;

@@ -18,12 +18,14 @@ import (
 
 	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
+
+	"mixed_complex_types/baml_client/types"
 )
 
 type Action struct {
-	Type       *string                            `json:"type"`
-	Parameters map[string]Union3BoolOrIntOrString `json:"parameters"`
-	Async_     *bool                              `json:"async_"`
+	Type       *string                                  `json:"type"`
+	Parameters map[string]types.Union3BoolOrIntOrString `json:"parameters"`
+	Async_     *bool                                    `json:"async_"`
 }
 
 func (c *Action) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -44,7 +46,7 @@ func (c *Action) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.Type = baml.Decode(valueHolder).Interface().(*string)
 
 		case "parameters":
-			c.Parameters = baml.Decode(valueHolder).Interface().(map[string]Union3BoolOrIntOrString)
+			c.Parameters = baml.Decode(valueHolder).Interface().(map[string]types.Union3BoolOrIntOrString)
 
 		case "async_":
 			c.Async_ = baml.Decode(valueHolder).Interface().(*bool)
@@ -80,10 +82,10 @@ func (u Action) BamlEncodeName() *cffi.CFFITypeName {
 }
 
 type Asset struct {
-	Id       *int64                           `json:"id"`
-	Type     *Union3KaudioOrKdocumentOrKimage `json:"type"`
-	Metadata *AssetMetadata                   `json:"metadata"`
-	Tags     []string                         `json:"tags"`
+	Id       *int64                                 `json:"id"`
+	Type     *types.Union3KaudioOrKdocumentOrKimage `json:"type"`
+	Metadata *AssetMetadata                         `json:"metadata"`
+	Tags     []string                               `json:"tags"`
 }
 
 func (c *Asset) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -104,7 +106,7 @@ func (c *Asset) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.Id = baml.Decode(valueHolder).Interface().(*int64)
 
 		case "type":
-			c.Type = baml.Decode(valueHolder).Interface().(*Union3KaudioOrKdocumentOrKimage)
+			c.Type = baml.Decode(valueHolder).Interface().(*types.Union3KaudioOrKdocumentOrKimage)
 
 		case "metadata":
 			c.Metadata = baml.Decode(valueHolder).Interface().(*AssetMetadata)
@@ -334,7 +336,7 @@ func (u ComplexData) BamlEncodeName() *cffi.CFFITypeName {
 }
 
 type Condition struct {
-	Type       *Union3KandOrKnotOrKor             `json:"type"`
+	Type       *types.Union3KandOrKnotOrKor       `json:"type"`
 	Conditions []Union2ConditionOrSimpleCondition `json:"conditions"`
 }
 
@@ -353,7 +355,7 @@ func (c *Condition) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 		switch key {
 
 		case "type":
-			c.Type = baml.Decode(valueHolder).Interface().(*Union3KandOrKnotOrKor)
+			c.Type = baml.Decode(valueHolder).Interface().(*types.Union3KandOrKnotOrKor)
 
 		case "conditions":
 			c.Conditions = baml.Decode(valueHolder).Interface().([]Union2ConditionOrSimpleCondition)
@@ -452,9 +454,9 @@ func (u Configuration) BamlEncodeName() *cffi.CFFITypeName {
 }
 
 type ContainerWidget struct {
-	Layout   *Union3KflexOrKgridOrKstack `json:"layout"`
-	Children []Widget                    `json:"children"`
-	Style    map[string]string           `json:"style"`
+	Layout   *types.Union3KflexOrKgridOrKstack `json:"layout"`
+	Children []Widget                          `json:"children"`
+	Style    map[string]string                 `json:"style"`
 }
 
 func (c *ContainerWidget) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -472,7 +474,7 @@ func (c *ContainerWidget) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeM
 		switch key {
 
 		case "layout":
-			c.Layout = baml.Decode(valueHolder).Interface().(*Union3KflexOrKgridOrKstack)
+			c.Layout = baml.Decode(valueHolder).Interface().(*types.Union3KflexOrKgridOrKstack)
 
 		case "children":
 			c.Children = baml.Decode(valueHolder).Interface().([]Widget)
@@ -800,10 +802,10 @@ func (u ErrorDetail) BamlEncodeName() *cffi.CFFITypeName {
 }
 
 type Feature struct {
-	Name         *string                             `json:"name"`
-	Enabled      *bool                               `json:"enabled"`
-	Config       *map[string]Union3BoolOrIntOrString `json:"config"`
-	Dependencies []string                            `json:"dependencies"`
+	Name         *string                                   `json:"name"`
+	Enabled      *bool                                     `json:"enabled"`
+	Config       *map[string]types.Union3BoolOrIntOrString `json:"config"`
+	Dependencies []string                                  `json:"dependencies"`
 }
 
 func (c *Feature) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -827,7 +829,7 @@ func (c *Feature) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.Enabled = baml.Decode(valueHolder).Interface().(*bool)
 
 		case "config":
-			c.Config = baml.Decode(valueHolder).Interface().(*map[string]Union3BoolOrIntOrString)
+			c.Config = baml.Decode(valueHolder).Interface().(*map[string]types.Union3BoolOrIntOrString)
 
 		case "dependencies":
 			c.Dependencies = baml.Decode(valueHolder).Interface().([]string)
@@ -918,10 +920,10 @@ func (u ImageWidget) BamlEncodeName() *cffi.CFFITypeName {
 }
 
 type Item struct {
-	Id         *int64                                    `json:"id"`
-	Name       *string                                   `json:"name"`
-	Variants   []Variant                                 `json:"variants"`
-	Attributes map[string]Union4BoolOrFloatOrIntOrString `json:"attributes"`
+	Id         *int64                                          `json:"id"`
+	Name       *string                                         `json:"name"`
+	Variants   []Variant                                       `json:"variants"`
+	Attributes map[string]types.Union4BoolOrFloatOrIntOrString `json:"attributes"`
 }
 
 func (c *Item) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -948,7 +950,7 @@ func (c *Item) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.Variants = baml.Decode(valueHolder).Interface().([]Variant)
 
 		case "attributes":
-			c.Attributes = baml.Decode(valueHolder).Interface().(map[string]Union4BoolOrFloatOrIntOrString)
+			c.Attributes = baml.Decode(valueHolder).Interface().(map[string]types.Union4BoolOrFloatOrIntOrString)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -983,25 +985,25 @@ func (u Item) BamlEncodeName() *cffi.CFFITypeName {
 }
 
 type KitchenSink struct {
-	Id          *int64                                   `json:"id"`
-	Name        *string                                  `json:"name"`
-	Score       *float64                                 `json:"score"`
-	Active      *bool                                    `json:"active"`
-	Nothing     any                                      `json:"nothing"`
-	Status      *Union3KarchivedOrKdraftOrKpublished     `json:"status"`
-	Priority    *Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5 `json:"priority"`
-	Tags        []string                                 `json:"tags"`
-	Numbers     []int64                                  `json:"numbers"`
-	Matrix      [][]int64                                `json:"matrix"`
-	Metadata    map[string]string                        `json:"metadata"`
-	Scores      map[string]float64                       `json:"scores"`
-	Description *string                                  `json:"description"`
-	Notes       *string                                  `json:"notes"`
-	Data        *Union3DataObjectOrIntOrString           `json:"data"`
-	Result      *Union2ErrorOrSuccess                    `json:"result"`
-	User        *User                                    `json:"user"`
-	Items       []Item                                   `json:"items"`
-	Config      *Configuration                           `json:"config"`
+	Id          *int64                                         `json:"id"`
+	Name        *string                                        `json:"name"`
+	Score       *float64                                       `json:"score"`
+	Active      *bool                                          `json:"active"`
+	Nothing     any                                            `json:"nothing"`
+	Status      *types.Union3KarchivedOrKdraftOrKpublished     `json:"status"`
+	Priority    *types.Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5 `json:"priority"`
+	Tags        []string                                       `json:"tags"`
+	Numbers     []int64                                        `json:"numbers"`
+	Matrix      [][]int64                                      `json:"matrix"`
+	Metadata    map[string]string                              `json:"metadata"`
+	Scores      map[string]float64                             `json:"scores"`
+	Description *string                                        `json:"description"`
+	Notes       *string                                        `json:"notes"`
+	Data        *Union3DataObjectOrIntOrString                 `json:"data"`
+	Result      *Union2ErrorOrSuccess                          `json:"result"`
+	User        *User                                          `json:"user"`
+	Items       []Item                                         `json:"items"`
+	Config      *Configuration                                 `json:"config"`
 }
 
 func (c *KitchenSink) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -1034,10 +1036,10 @@ func (c *KitchenSink) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) 
 			c.Nothing = baml.Decode(valueHolder).Interface().(any)
 
 		case "status":
-			c.Status = baml.Decode(valueHolder).Interface().(*Union3KarchivedOrKdraftOrKpublished)
+			c.Status = baml.Decode(valueHolder).Interface().(*types.Union3KarchivedOrKdraftOrKpublished)
 
 		case "priority":
-			c.Priority = baml.Decode(valueHolder).Interface().(*Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5)
+			c.Priority = baml.Decode(valueHolder).Interface().(*types.Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5)
 
 		case "tags":
 			c.Tags = baml.Decode(valueHolder).Interface().([]string)
@@ -1139,7 +1141,7 @@ func (u KitchenSink) BamlEncodeName() *cffi.CFFITypeName {
 
 type Node struct {
 	Id       *int64                                              `json:"id"`
-	Type     *Union2KbranchOrKleaf                               `json:"type"`
+	Type     *types.Union2KbranchOrKleaf                         `json:"type"`
 	Value    *Union4IntOrListNodeOrMapStringKeyNodeValueOrString `json:"value"`
 	Metadata *NodeMetadata                                       `json:"metadata"`
 }
@@ -1162,7 +1164,7 @@ func (c *Node) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.Id = baml.Decode(valueHolder).Interface().(*int64)
 
 		case "type":
-			c.Type = baml.Decode(valueHolder).Interface().(*Union2KbranchOrKleaf)
+			c.Type = baml.Decode(valueHolder).Interface().(*types.Union2KbranchOrKleaf)
 
 		case "value":
 			c.Value = baml.Decode(valueHolder).Interface().(*Union4IntOrListNodeOrMapStringKeyNodeValueOrString)
@@ -1203,10 +1205,10 @@ func (u Node) BamlEncodeName() *cffi.CFFITypeName {
 }
 
 type NodeMetadata struct {
-	Created    *string                            `json:"created"`
-	Modified   *string                            `json:"modified"`
-	Tags       []string                           `json:"tags"`
-	Attributes map[string]Union3BoolOrIntOrString `json:"attributes"`
+	Created    *string                                   `json:"created"`
+	Modified   *string                                   `json:"modified"`
+	Tags       []string                                  `json:"tags"`
+	Attributes map[string]*types.Union3BoolOrIntOrString `json:"attributes"`
 }
 
 func (c *NodeMetadata) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -1233,7 +1235,7 @@ func (c *NodeMetadata) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap)
 			c.Tags = baml.Decode(valueHolder).Interface().([]string)
 
 		case "attributes":
-			c.Attributes = baml.Decode(valueHolder).Interface().(map[string]Union3BoolOrIntOrString)
+			c.Attributes = baml.Decode(valueHolder).Interface().(map[string]*types.Union3BoolOrIntOrString)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -1268,9 +1270,9 @@ func (u NodeMetadata) BamlEncodeName() *cffi.CFFITypeName {
 }
 
 type PrimaryData struct {
-	Values   []Union3FloatOrIntOrString   `json:"values"`
-	Mappings map[string]map[string]string `json:"mappings"`
-	Flags    []bool                       `json:"flags"`
+	Values   []types.Union3FloatOrIntOrString `json:"values"`
+	Mappings map[string]map[string]string     `json:"mappings"`
+	Flags    []bool                           `json:"flags"`
 }
 
 func (c *PrimaryData) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -1288,7 +1290,7 @@ func (c *PrimaryData) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) 
 		switch key {
 
 		case "values":
-			c.Values = baml.Decode(valueHolder).Interface().([]Union3FloatOrIntOrString)
+			c.Values = baml.Decode(valueHolder).Interface().([]types.Union3FloatOrIntOrString)
 
 		case "mappings":
 			c.Mappings = baml.Decode(valueHolder).Interface().(map[string]map[string]string)
@@ -1327,9 +1329,9 @@ func (u PrimaryData) BamlEncodeName() *cffi.CFFITypeName {
 }
 
 type Record struct {
-	Id      *int64                             `json:"id"`
-	Data    map[string]Union3BoolOrIntOrString `json:"data"`
-	Related *[]Record                          `json:"related"`
+	Id      *int64                                    `json:"id"`
+	Data    map[string]*types.Union3BoolOrIntOrString `json:"data"`
+	Related *[]Record                                 `json:"related"`
 }
 
 func (c *Record) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -1350,7 +1352,7 @@ func (c *Record) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.Id = baml.Decode(valueHolder).Interface().(*int64)
 
 		case "data":
-			c.Data = baml.Decode(valueHolder).Interface().(map[string]Union3BoolOrIntOrString)
+			c.Data = baml.Decode(valueHolder).Interface().(map[string]*types.Union3BoolOrIntOrString)
 
 		case "related":
 			c.Related = baml.Decode(valueHolder).Interface().(*[]Record)
@@ -1575,9 +1577,9 @@ func (u SecondaryData) BamlEncodeName() *cffi.CFFITypeName {
 }
 
 type Setting struct {
-	Key      *string                  `json:"key"`
-	Value    *Union3BoolOrIntOrString `json:"value"`
-	Metadata *map[string]string       `json:"metadata"`
+	Key      *string                        `json:"key"`
+	Value    *types.Union3BoolOrIntOrString `json:"value"`
+	Metadata *map[string]string             `json:"metadata"`
 }
 
 func (c *Setting) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -1598,7 +1600,7 @@ func (c *Setting) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.Key = baml.Decode(valueHolder).Interface().(*string)
 
 		case "value":
-			c.Value = baml.Decode(valueHolder).Interface().(*Union3BoolOrIntOrString)
+			c.Value = baml.Decode(valueHolder).Interface().(*types.Union3BoolOrIntOrString)
 
 		case "metadata":
 			c.Metadata = baml.Decode(valueHolder).Interface().(*map[string]string)
@@ -1634,9 +1636,9 @@ func (u Setting) BamlEncodeName() *cffi.CFFITypeName {
 }
 
 type SimpleCondition struct {
-	Field    *string                              `json:"field"`
-	Operator *Union5KcontainsOrKeqOrKgtOrKltOrKne `json:"operator"`
-	Value    *Union4BoolOrFloatOrIntOrString      `json:"value"`
+	Field    *string                                    `json:"field"`
+	Operator *types.Union5KcontainsOrKeqOrKgtOrKltOrKne `json:"operator"`
+	Value    *types.Union4BoolOrFloatOrIntOrString      `json:"value"`
 }
 
 func (c *SimpleCondition) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -1657,10 +1659,10 @@ func (c *SimpleCondition) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeM
 			c.Field = baml.Decode(valueHolder).Interface().(*string)
 
 		case "operator":
-			c.Operator = baml.Decode(valueHolder).Interface().(*Union5KcontainsOrKeqOrKgtOrKltOrKne)
+			c.Operator = baml.Decode(valueHolder).Interface().(*types.Union5KcontainsOrKeqOrKgtOrKltOrKne)
 
 		case "value":
-			c.Value = baml.Decode(valueHolder).Interface().(*Union4BoolOrFloatOrIntOrString)
+			c.Value = baml.Decode(valueHolder).Interface().(*types.Union4BoolOrFloatOrIntOrString)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -1805,9 +1807,9 @@ func (u TertiaryData) BamlEncodeName() *cffi.CFFITypeName {
 }
 
 type TextWidget struct {
-	Content *string                         `json:"content"`
-	Format  *Union3KhtmlOrKmarkdownOrKplain `json:"format"`
-	Style   map[string]string               `json:"style"`
+	Content *string                               `json:"content"`
+	Format  *types.Union3KhtmlOrKmarkdownOrKplain `json:"format"`
+	Style   map[string]string                     `json:"style"`
 }
 
 func (c *TextWidget) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -1828,7 +1830,7 @@ func (c *TextWidget) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.Content = baml.Decode(valueHolder).Interface().(*string)
 
 		case "format":
-			c.Format = baml.Decode(valueHolder).Interface().(*Union3KhtmlOrKmarkdownOrKplain)
+			c.Format = baml.Decode(valueHolder).Interface().(*types.Union3KhtmlOrKmarkdownOrKplain)
 
 		case "style":
 			c.Style = baml.Decode(valueHolder).Interface().(map[string]string)
@@ -2059,10 +2061,10 @@ func (u UserProfile) BamlEncodeName() *cffi.CFFITypeName {
 }
 
 type UserResponse struct {
-	Status   *Union2KerrorOrKsuccess `json:"status"`
-	Data     *User                   `json:"data"`
-	Error    *ErrorDetail            `json:"error"`
-	Metadata *ResponseMetadata       `json:"metadata"`
+	Status   *types.Union2KerrorOrKsuccess `json:"status"`
+	Data     *User                         `json:"data"`
+	Error    *ErrorDetail                  `json:"error"`
+	Metadata *ResponseMetadata             `json:"metadata"`
 }
 
 func (c *UserResponse) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -2080,7 +2082,7 @@ func (c *UserResponse) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap)
 		switch key {
 
 		case "status":
-			c.Status = baml.Decode(valueHolder).Interface().(*Union2KerrorOrKsuccess)
+			c.Status = baml.Decode(valueHolder).Interface().(*types.Union2KerrorOrKsuccess)
 
 		case "data":
 			c.Data = baml.Decode(valueHolder).Interface().(*User)
@@ -2189,11 +2191,11 @@ func (u Variant) BamlEncodeName() *cffi.CFFITypeName {
 }
 
 type Widget struct {
-	Type      *Union4KbuttonOrKcontainerOrKimageOrKtext `json:"type"`
-	Button    *ButtonWidget                             `json:"button"`
-	Text      *TextWidget                               `json:"text"`
-	Image     *ImageWidget                              `json:"image"`
-	Container *ContainerWidget                          `json:"container"`
+	Type      *types.Union4KbuttonOrKcontainerOrKimageOrKtext `json:"type"`
+	Button    *ButtonWidget                                   `json:"button"`
+	Text      *TextWidget                                     `json:"text"`
+	Image     *ImageWidget                                    `json:"image"`
+	Container *ContainerWidget                                `json:"container"`
 }
 
 func (c *Widget) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -2211,7 +2213,7 @@ func (c *Widget) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 		switch key {
 
 		case "type":
-			c.Type = baml.Decode(valueHolder).Interface().(*Union4KbuttonOrKcontainerOrKimageOrKtext)
+			c.Type = baml.Decode(valueHolder).Interface().(*types.Union4KbuttonOrKcontainerOrKimageOrKtext)
 
 		case "button":
 			c.Button = baml.Decode(valueHolder).Interface().(*ButtonWidget)

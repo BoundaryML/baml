@@ -493,7 +493,7 @@ export type Combination = number | string | boolean | number | string[] | Record
 
 export type Currency = types.Checked<number,"gt_ten"> | null
 
-export type Graph = Record<string, string[]> | null
+export type Graph = Record<string, string[]>
 
 export type JsonArray = JsonValue[]
 
@@ -503,7 +503,7 @@ export type JsonValue = number | string | boolean | number | JsonObject | JsonAr
 
 export type LinkedListAlias = LinkedListAliasNode | null
 
-export type List = string[] | null
+export type List = string[]
 
 export type MultipleAttrs = types.Checked<number,"gt_ten"> | null
 

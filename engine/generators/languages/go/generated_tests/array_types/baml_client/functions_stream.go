@@ -980,7 +980,7 @@ func (*stream) TestTopLevelIntArray(ctx context.Context, input string, opts ...C
 }
 
 // / Streaming version of TestTopLevelMixedArray
-func (*stream) TestTopLevelMixedArray(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[[]stream_types.Union3BoolOrIntOrString, []types.Union3BoolOrIntOrString], error) {
+func (*stream) TestTopLevelMixedArray(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[[]types.Union3BoolOrIntOrString, []types.Union3BoolOrIntOrString], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -1014,7 +1014,7 @@ func (*stream) TestTopLevelMixedArray(ctx context.Context, input string, opts ..
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[[]stream_types.Union3BoolOrIntOrString, []types.Union3BoolOrIntOrString])
+	channel := make(chan StreamValue[[]types.Union3BoolOrIntOrString, []types.Union3BoolOrIntOrString])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -1031,7 +1031,7 @@ func (*stream) TestTopLevelMixedArray(ctx context.Context, input string, opts ..
 					return
 				}
 				if result.Error != nil {
-					channel <- StreamValue[[]stream_types.Union3BoolOrIntOrString, []types.Union3BoolOrIntOrString]{
+					channel <- StreamValue[[]types.Union3BoolOrIntOrString, []types.Union3BoolOrIntOrString]{
 						IsError: true,
 						Error:   result.Error,
 					}
@@ -1040,13 +1040,13 @@ func (*stream) TestTopLevelMixedArray(ctx context.Context, input string, opts ..
 				}
 				if result.HasData {
 					data := (result.Data).([]types.Union3BoolOrIntOrString)
-					channel <- StreamValue[[]stream_types.Union3BoolOrIntOrString, []types.Union3BoolOrIntOrString]{
+					channel <- StreamValue[[]types.Union3BoolOrIntOrString, []types.Union3BoolOrIntOrString]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).([]stream_types.Union3BoolOrIntOrString)
-					channel <- StreamValue[[]stream_types.Union3BoolOrIntOrString, []types.Union3BoolOrIntOrString]{
+					data := (result.StreamData).([]types.Union3BoolOrIntOrString)
+					channel <- StreamValue[[]types.Union3BoolOrIntOrString, []types.Union3BoolOrIntOrString]{
 						IsFinal:   false,
 						as_stream: &data,
 					}

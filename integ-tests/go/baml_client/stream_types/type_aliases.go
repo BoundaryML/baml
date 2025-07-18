@@ -18,22 +18,22 @@ import (
 )
 
 type Amount = *int64
-type Combination = *Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString
+type Combination = *types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString
 type Currency = *types.Checked[int64]
-type Graph = *map[string][]string
-type JsonArray = *[]JsonValue
+type Graph = map[string][]string
+type JsonArray = []JsonValue
 type JsonEntry = *Union2JsonTemplateOrSimpleTag
-type JsonObject = *map[string]JsonValue
-type JsonTemplate = *map[string]JsonEntry
+type JsonObject = map[string]JsonValue
+type JsonTemplate = map[string]JsonEntry
 type JsonValue = *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString
 type LinkedListAlias = *LinkedListAliasNode
-type List = *[]string
+type List = []string
 type MultipleAttrs = *types.Checked[int64]
 type NodeIndirection = *NodeWithAliasIndirection
-type Primitive = *Union4BoolOrFloatOrIntOrString
+type Primitive = *types.Union4BoolOrFloatOrIntOrString
 type RecAliasOne = *RecAliasTwo
-type RecAliasThree = *[]any
+type RecAliasThree = []any
 type RecAliasTwo = *RecAliasThree
-type RecursiveListAlias = *[]any
-type RecursiveMapAlias = *map[string]any
+type RecursiveListAlias = []any
+type RecursiveMapAlias = map[string]any
 type RecursiveUnion = *Union2MapStringKeyRecursiveUnionValueOrString
