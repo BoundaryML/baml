@@ -119,7 +119,7 @@ pub(crate) fn stream_type_to_go(field: &TypeStreaming, lookup: &impl TypeLookups
                 name.sort();
                 let name = name.join("Or");
                 TypeGo::Union {
-                    package: match field.mode(lookup) {
+                    package: match field.mode(&baml_types::StreamingMode::Streaming, lookup) {
                         Ok(baml_types::StreamingMode::NonStreaming) => types_pkg.clone(),
                         Ok(baml_types::StreamingMode::Streaming) => stream_pkg.clone(),
                         Err(e) => {
@@ -145,7 +145,7 @@ pub(crate) fn stream_type_to_go(field: &TypeStreaming, lookup: &impl TypeLookups
                 let mut meta = meta;
                 meta.make_optional();
                 TypeGo::Union {
-                    package: match field.mode(lookup) {
+                    package: match field.mode(&baml_types::StreamingMode::Streaming, lookup) {
                         Ok(baml_types::StreamingMode::NonStreaming) => types_pkg.clone(),
                         Ok(baml_types::StreamingMode::Streaming) => stream_pkg.clone(),
                         Err(e) => {

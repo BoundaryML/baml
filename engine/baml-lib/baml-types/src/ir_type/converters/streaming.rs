@@ -107,13 +107,14 @@ pub fn from_type_ir(r#type: &TypeIR, lookup: &impl TypeLookups) -> TypeStreaming
                 meta,
             ),
             TypeIR::Union(union_type, _) => {
+                let is_optional = union_type.is_optional();
                 let variants = union_type.iter_skip_null();
                 let variants = variants.into_iter().cloned().map(|mut t| {
                     t.meta_mut().streaming_behavior.needed = true;
                     from_type_ir(&t, lookup)
                 });
 
-                let variants = if !needed {
+                let variants = if !needed || is_optional {
                     variants
                         .chain(std::iter::once(TypeStreaming::null()))
                         .collect()
@@ -199,7 +200,8 @@ pub fn to_type_ir(r#type: &TypeStreaming) -> TypeIR {
                 streaming_behavior: type_meta::base::StreamingBehavior {
                     done: streaming_behavior.done,
                     state: streaming_behavior.state,
-                    ..Default::default()
+                    // stream types already include nulls, so we don't need to add them again
+                    needed: true,
                 },
                 constraints: constraints.clone(),
             }

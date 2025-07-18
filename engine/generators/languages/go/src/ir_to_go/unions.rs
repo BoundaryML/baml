@@ -55,7 +55,7 @@ pub fn ir_union_to_go_stream<'a>(
     pkg: &'a CurrentRenderPackage,
 ) -> Option<crate::generated_types::UnionGo<'a>> {
     if matches!(
-        stream_union.mode(pkg.lookup()),
+        stream_union.mode(&baml_types::StreamingMode::Streaming, pkg.lookup()),
         Ok(baml_types::StreamingMode::NonStreaming) | Err(_)
     ) {
         return None;

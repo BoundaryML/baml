@@ -237,8 +237,14 @@ fn relevant_data_models<'a>(
                         .map(|field| find_existing_class_field(name, &field, &walker, env_values))
                         .map(|field| {
                             let (name, t, prop1, needed) = field?;
-                            let t = if partialize && !metadata.streaming_behavior.done {
-                                t.to_streaming_type(ir).to_ir_type()
+                            let t = if partialize {
+                                if metadata.streaming_behavior.done {
+                                    let mut t = t;
+                                    t.meta_mut().streaming_behavior.needed = true;
+                                    t
+                                } else {
+                                    t.to_streaming_type(ir).to_ir_type()
+                                }
                             } else {
                                 t
                             };

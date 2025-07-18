@@ -45,7 +45,7 @@ pub enum TypeGeneric<T> {
     Union(UnionTypeGeneric<T>, T),
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, strum::Display)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize, strum::Display)]
 pub enum StreamingMode {
     NonStreaming,
     Streaming,
@@ -635,24 +635,35 @@ fn merge_modes<Mode: Iterator<Item = anyhow::Result<StreamingMode>>>(
 }
 
 impl<T> TypeGeneric<T> {
-    pub fn mode(&self, lookup: &impl TypeLookups) -> anyhow::Result<StreamingMode> {
+    pub fn mode(
+        &self,
+        mode: &StreamingMode,
+        lookup: &impl TypeLookups,
+    ) -> anyhow::Result<StreamingMode> {
+        if *mode == StreamingMode::NonStreaming {
+            return Ok(StreamingMode::NonStreaming);
+        }
+
         match self {
             TypeGeneric::Class { mode, .. } => Ok(mode.clone()),
             TypeGeneric::Arrow(_, _)
             | TypeGeneric::Primitive(_, _)
             | TypeGeneric::Enum { .. }
             | TypeGeneric::Literal(_, _) => Ok(StreamingMode::NonStreaming),
-            TypeGeneric::List(inner, _) => inner.mode(lookup),
+            TypeGeneric::List(inner, _) => inner.mode(mode, lookup),
             TypeGeneric::Map(key, value, ..) => {
                 let items: Vec<Result<StreamingMode, anyhow::Error>> =
-                    vec![key.mode(lookup), value.mode(lookup)];
+                    vec![key.mode(mode, lookup), value.mode(mode, lookup)];
                 merge_modes(items.into_iter())
             }
             TypeGeneric::RecursiveTypeAlias { mode, .. } => Ok(mode.clone()),
-            TypeGeneric::Tuple(inner, _) => merge_modes(inner.iter().map(|t| t.mode(lookup))),
-            TypeGeneric::Union(union_type_generic, _) => {
-                merge_modes(union_type_generic.types.iter().map(|t| t.mode(lookup)))
-            }
+            TypeGeneric::Tuple(inner, _) => merge_modes(inner.iter().map(|t| t.mode(mode, lookup))),
+            TypeGeneric::Union(union_type_generic, _) => merge_modes(
+                union_type_generic
+                    .types
+                    .iter()
+                    .map(|t| t.mode(mode, lookup)),
+            ),
         }
     }
 }
@@ -1304,6 +1315,15 @@ mod tests {
                 meta: Default::default(),
             })
         );
+    }
+
+    #[test]
+    fn streaming_type_roundtrip() {
+        let class = TypeIR::union(vec![TypeIR::literal("ok"), TypeIR::literal("error")]);
+        let streaming_type = class.to_streaming_type(&TestLookup);
+        let again_class = streaming_type.to_ir_type();
+        let again_streaming_type = again_class.to_streaming_type(&TestLookup);
+        assert_eq!(streaming_type, again_streaming_type);
     }
 
     #[test]
