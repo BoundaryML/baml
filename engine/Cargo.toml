@@ -18,7 +18,7 @@ members = [
   "generators/utils/*",
   "generators/languages/*",
   "sandbox",
-  "zed", "llm-response-parser",
+  "llm-response-parser",
 ]
 default-members = [
   "baml-lsp-types",
@@ -130,7 +130,7 @@ tokio = { version = "1", default-features = false, features = [
 ] }
 
 [workspace.package]
-version = "0.202.0"
+version = "0.202.1"
 authors = ["Boundary <contact@boundaryml.com>"]
 
 description = "BAML Toolchain"

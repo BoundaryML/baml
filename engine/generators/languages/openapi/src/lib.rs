@@ -164,7 +164,6 @@ mod tests {
 
     use dir_writer::{FileCollector, GeneratorArgs};
     use internal_baml_core::ir::repr::make_test_ir;
-    use tempfile;
 
     use super::*;
 
@@ -194,7 +193,7 @@ mod tests {
         .expect("Valid IR");
 
         // Create FileCollector and generate files
-        let lang_features = OpenApiLanguageFeatures::default();
+        let lang_features = OpenApiLanguageFeatures;
         let mut collector = FileCollector::<OpenApiLanguageFeatures>::new();
 
         let args = GeneratorArgs {
@@ -228,8 +227,7 @@ mod tests {
             let file_path = PathBuf::from(expected_file);
             assert!(
                 result.contains_key(&file_path),
-                "Generated files should contain {}",
-                expected_file
+                "Generated files should contain {expected_file}"
             );
         }
 

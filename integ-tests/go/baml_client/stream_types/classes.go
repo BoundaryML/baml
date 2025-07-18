@@ -868,10 +868,10 @@ func (u ClientDetails1559) BamlEncodeName() *cffi.CFFITypeName {
 }
 
 type ComplexMemoryObject struct {
-	Id          *string                    `json:"id"`
-	Name        *string                    `json:"name"`
-	Description *string                    `json:"description"`
-	Metadata    []Union3FloatOrIntOrString `json:"metadata"`
+	Id          *string                          `json:"id"`
+	Name        *string                          `json:"name"`
+	Description *string                          `json:"description"`
+	Metadata    []types.Union3FloatOrIntOrString `json:"metadata"`
 }
 
 func (c *ComplexMemoryObject) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -898,7 +898,7 @@ func (c *ComplexMemoryObject) Decode(holder *cffi.CFFIValueClass, typeMap baml.T
 			c.Description = baml.Decode(valueHolder).Interface().(*string)
 
 		case "metadata":
-			c.Metadata = baml.Decode(valueHolder).Interface().([]Union3FloatOrIntOrString)
+			c.Metadata = baml.Decode(valueHolder).Interface().([]types.Union3FloatOrIntOrString)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -2235,10 +2235,10 @@ func (u FormatterTest3) BamlEncodeName() *cffi.CFFITypeName {
 }
 
 type GroceryReceipt struct {
-	ReceiptId   *string                    `json:"receiptId"`
-	StoreName   *string                    `json:"storeName"`
-	Items       []Union3FloatOrIntOrString `json:"items"`
-	TotalAmount *float64                   `json:"totalAmount"`
+	ReceiptId   *string                          `json:"receiptId"`
+	StoreName   *string                          `json:"storeName"`
+	Items       []types.Union3FloatOrIntOrString `json:"items"`
+	TotalAmount *float64                         `json:"totalAmount"`
 }
 
 func (c *GroceryReceipt) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -2262,7 +2262,7 @@ func (c *GroceryReceipt) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMa
 			c.StoreName = baml.Decode(valueHolder).Interface().(*string)
 
 		case "items":
-			c.Items = baml.Decode(valueHolder).Interface().([]Union3FloatOrIntOrString)
+			c.Items = baml.Decode(valueHolder).Interface().([]types.Union3FloatOrIntOrString)
 
 		case "totalAmount":
 			c.TotalAmount = baml.Decode(valueHolder).Interface().(*float64)
@@ -3994,8 +3994,8 @@ func (u PhoneNumber) BamlEncodeName() *cffi.CFFITypeName {
 }
 
 type Quantity struct {
-	Amount *Union2FloatOrInt `json:"amount"`
-	Unit   *string           `json:"unit"`
+	Amount *types.Union2FloatOrInt `json:"amount"`
+	Unit   *string                 `json:"unit"`
 }
 
 func (c *Quantity) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -4013,7 +4013,7 @@ func (c *Quantity) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 		switch key {
 
 		case "amount":
-			c.Amount = baml.Decode(valueHolder).Interface().(*Union2FloatOrInt)
+			c.Amount = baml.Decode(valueHolder).Interface().(*types.Union2FloatOrInt)
 
 		case "unit":
 			c.Unit = baml.Decode(valueHolder).Interface().(*string)
@@ -4100,9 +4100,9 @@ func (u RaysData) BamlEncodeName() *cffi.CFFITypeName {
 }
 
 type ReceiptInfo struct {
-	Items      []ReceiptItem              `json:"items"`
-	Total_cost *float64                   `json:"total_cost"`
-	Venue      *Union2KbarisaOrKox_burger `json:"venue"`
+	Items      []ReceiptItem                    `json:"items"`
+	Total_cost *float64                         `json:"total_cost"`
+	Venue      *types.Union2KbarisaOrKox_burger `json:"venue"`
 }
 
 func (c *ReceiptInfo) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -4126,7 +4126,7 @@ func (c *ReceiptInfo) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) 
 			c.Total_cost = baml.Decode(valueHolder).Interface().(*float64)
 
 		case "venue":
-			c.Venue = baml.Decode(valueHolder).Interface().(*Union2KbarisaOrKox_burger)
+			c.Venue = baml.Decode(valueHolder).Interface().(*types.Union2KbarisaOrKox_burger)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -4224,8 +4224,8 @@ func (u ReceiptItem) BamlEncodeName() *cffi.CFFITypeName {
 }
 
 type Recipe struct {
-	Ingredients map[string]Quantity        `json:"ingredients"`
-	Recipe_type *Union2KbreakfastOrKdinner `json:"recipe_type"`
+	Ingredients map[string]Quantity              `json:"ingredients"`
+	Recipe_type *types.Union2KbreakfastOrKdinner `json:"recipe_type"`
 }
 
 func (c *Recipe) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -4246,7 +4246,7 @@ func (c *Recipe) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.Ingredients = baml.Decode(valueHolder).Interface().(map[string]Quantity)
 
 		case "recipe_type":
-			c.Recipe_type = baml.Decode(valueHolder).Interface().(*Union2KbreakfastOrKdinner)
+			c.Recipe_type = baml.Decode(valueHolder).Interface().(*types.Union2KbreakfastOrKdinner)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -4405,9 +4405,9 @@ type Schema struct {
 	Prop2        *Union2NestedOrString     `json:"prop2"`
 	Prop5        []*string                 `json:"prop5"`
 	Prop6        *Union2ListNestedOrString `json:"prop6"`
-	Nested_attrs []Union2NestedOrString    `json:"nested_attrs"`
+	Nested_attrs []*Union2NestedOrString   `json:"nested_attrs"`
 	Parens       *string                   `json:"parens"`
-	Other_group  *Union2IntOrString        `json:"other_group"`
+	Other_group  *types.Union2IntOrString  `json:"other_group"`
 }
 
 func (c *Schema) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -4437,13 +4437,13 @@ func (c *Schema) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.Prop6 = baml.Decode(valueHolder).Interface().(*Union2ListNestedOrString)
 
 		case "nested_attrs":
-			c.Nested_attrs = baml.Decode(valueHolder).Interface().([]Union2NestedOrString)
+			c.Nested_attrs = baml.Decode(valueHolder).Interface().([]*Union2NestedOrString)
 
 		case "parens":
 			c.Parens = baml.Decode(valueHolder).Interface().(*string)
 
 		case "other_group":
-			c.Other_group = baml.Decode(valueHolder).Interface().(*Union2IntOrString)
+			c.Other_group = baml.Decode(valueHolder).Interface().(*types.Union2IntOrString)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -4484,12 +4484,12 @@ func (u Schema) BamlEncodeName() *cffi.CFFITypeName {
 }
 
 type SearchParams struct {
-	DateRange   *int64              `json:"dateRange"`
-	Location    []string            `json:"location"`
-	JobTitle    *WithReasoning      `json:"jobTitle"`
-	Company     *WithReasoning      `json:"company"`
-	Description []WithReasoning     `json:"description"`
-	Tags        []Union2StringOrTag `json:"tags"`
+	DateRange   *int64                    `json:"dateRange"`
+	Location    []string                  `json:"location"`
+	JobTitle    *WithReasoning            `json:"jobTitle"`
+	Company     *WithReasoning            `json:"company"`
+	Description []WithReasoning           `json:"description"`
+	Tags        []types.Union2StringOrTag `json:"tags"`
 }
 
 func (c *SearchParams) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -4522,7 +4522,7 @@ func (c *SearchParams) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap)
 			c.Description = baml.Decode(valueHolder).Interface().([]WithReasoning)
 
 		case "tags":
-			c.Tags = baml.Decode(valueHolder).Interface().([]Union2StringOrTag)
+			c.Tags = baml.Decode(valueHolder).Interface().([]types.Union2StringOrTag)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -5305,9 +5305,9 @@ func (u TwoStoriesOneTitleCheck) BamlEncodeName() *cffi.CFFITypeName {
 }
 
 type UnionTest_ReturnType struct {
-	Prop1 *Union2BoolOrString      `json:"prop1"`
-	Prop2 []Union2BoolOrFloat      `json:"prop2"`
-	Prop3 *Union2ListBoolOrListInt `json:"prop3"`
+	Prop1 *types.Union2BoolOrString      `json:"prop1"`
+	Prop2 []types.Union2BoolOrFloat      `json:"prop2"`
+	Prop3 *types.Union2ListBoolOrListInt `json:"prop3"`
 }
 
 func (c *UnionTest_ReturnType) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -5325,13 +5325,13 @@ func (c *UnionTest_ReturnType) Decode(holder *cffi.CFFIValueClass, typeMap baml.
 		switch key {
 
 		case "prop1":
-			c.Prop1 = baml.Decode(valueHolder).Interface().(*Union2BoolOrString)
+			c.Prop1 = baml.Decode(valueHolder).Interface().(*types.Union2BoolOrString)
 
 		case "prop2":
-			c.Prop2 = baml.Decode(valueHolder).Interface().([]Union2BoolOrFloat)
+			c.Prop2 = baml.Decode(valueHolder).Interface().([]types.Union2BoolOrFloat)
 
 		case "prop3":
-			c.Prop3 = baml.Decode(valueHolder).Interface().(*Union2ListBoolOrListInt)
+			c.Prop3 = baml.Decode(valueHolder).Interface().(*types.Union2ListBoolOrListInt)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))

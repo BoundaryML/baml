@@ -55,6 +55,7 @@ where
                             WithIr {
                                 value,
                                 lookup: self.lookup,
+                                mode: self.mode,
                             }
                             .encode(),
                         ),

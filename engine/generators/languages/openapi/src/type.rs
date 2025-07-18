@@ -1047,7 +1047,7 @@ mod tests {
                         TypeOpenApi::Ref { r#ref, .. } => {
                             assert_eq!(r#ref, expected_ref);
                         }
-                        _ => panic!("Expected class reference at position {}", i),
+                        _ => panic!("Expected class reference at position {i}"),
                     }
                 }
             }

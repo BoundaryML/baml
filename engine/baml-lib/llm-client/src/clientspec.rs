@@ -465,7 +465,7 @@ mod tests {
             ClientProvider::OpenAI(OpenAIClientProviderVariant::Responses) => {
                 // Success!
             }
-            _ => panic!("Expected OpenAI Responses variant, got {:?}", provider),
+            _ => panic!("Expected OpenAI Responses variant, got {provider:?}"),
         }
     }
 

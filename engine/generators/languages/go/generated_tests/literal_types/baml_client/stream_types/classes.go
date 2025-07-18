@@ -18,12 +18,14 @@ import (
 
 	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
+
+	"literal_types/baml_client/types"
 )
 
 type BooleanLiterals struct {
-	AlwaysTrue  *bool                        `json:"alwaysTrue"`
-	AlwaysFalse *bool                        `json:"alwaysFalse"`
-	EitherBool  *Union2BoolKFalseOrBoolKTrue `json:"eitherBool"`
+	AlwaysTrue  *bool                              `json:"alwaysTrue"`
+	AlwaysFalse *bool                              `json:"alwaysFalse"`
+	EitherBool  *types.Union2BoolKFalseOrBoolKTrue `json:"eitherBool"`
 }
 
 func (c *BooleanLiterals) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -47,7 +49,7 @@ func (c *BooleanLiterals) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeM
 			c.AlwaysFalse = baml.Decode(valueHolder).Interface().(*bool)
 
 		case "eitherBool":
-			c.EitherBool = baml.Decode(valueHolder).Interface().(*Union2BoolKFalseOrBoolKTrue)
+			c.EitherBool = baml.Decode(valueHolder).Interface().(*types.Union2BoolKFalseOrBoolKTrue)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -80,11 +82,11 @@ func (u BooleanLiterals) BamlEncodeName() *cffi.CFFITypeName {
 }
 
 type ComplexLiterals struct {
-	State      *Union4KarchivedOrKdeletedOrKdraftOrKpublished          `json:"state"`
-	RetryCount *Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8 `json:"retryCount"`
-	Response   *Union3KerrorOrKsuccessOrKtimeout                       `json:"response"`
-	Flags      []Union2BoolKFalseOrBoolKTrue                           `json:"flags"`
-	Codes      []Union3IntK200OrIntK404OrIntK500                       `json:"codes"`
+	State      *types.Union4KarchivedOrKdeletedOrKdraftOrKpublished          `json:"state"`
+	RetryCount *types.Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8 `json:"retryCount"`
+	Response   *types.Union3KerrorOrKsuccessOrKtimeout                       `json:"response"`
+	Flags      []types.Union2BoolKFalseOrBoolKTrue                           `json:"flags"`
+	Codes      []types.Union3IntK200OrIntK404OrIntK500                       `json:"codes"`
 }
 
 func (c *ComplexLiterals) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -102,19 +104,19 @@ func (c *ComplexLiterals) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeM
 		switch key {
 
 		case "state":
-			c.State = baml.Decode(valueHolder).Interface().(*Union4KarchivedOrKdeletedOrKdraftOrKpublished)
+			c.State = baml.Decode(valueHolder).Interface().(*types.Union4KarchivedOrKdeletedOrKdraftOrKpublished)
 
 		case "retryCount":
-			c.RetryCount = baml.Decode(valueHolder).Interface().(*Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8)
+			c.RetryCount = baml.Decode(valueHolder).Interface().(*types.Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8)
 
 		case "response":
-			c.Response = baml.Decode(valueHolder).Interface().(*Union3KerrorOrKsuccessOrKtimeout)
+			c.Response = baml.Decode(valueHolder).Interface().(*types.Union3KerrorOrKsuccessOrKtimeout)
 
 		case "flags":
-			c.Flags = baml.Decode(valueHolder).Interface().([]Union2BoolKFalseOrBoolKTrue)
+			c.Flags = baml.Decode(valueHolder).Interface().([]types.Union2BoolKFalseOrBoolKTrue)
 
 		case "codes":
-			c.Codes = baml.Decode(valueHolder).Interface().([]Union3IntK200OrIntK404OrIntK500)
+			c.Codes = baml.Decode(valueHolder).Interface().([]types.Union3IntK200OrIntK404OrIntK500)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -151,9 +153,9 @@ func (u ComplexLiterals) BamlEncodeName() *cffi.CFFITypeName {
 }
 
 type IntegerLiterals struct {
-	Priority   *Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5           `json:"priority"`
-	HttpStatus *Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500 `json:"httpStatus"`
-	MaxRetries *Union4IntK0OrIntK1OrIntK3OrIntK5                  `json:"maxRetries"`
+	Priority   *types.Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5           `json:"priority"`
+	HttpStatus *types.Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500 `json:"httpStatus"`
+	MaxRetries *types.Union4IntK0OrIntK1OrIntK3OrIntK5                  `json:"maxRetries"`
 }
 
 func (c *IntegerLiterals) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -171,13 +173,13 @@ func (c *IntegerLiterals) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeM
 		switch key {
 
 		case "priority":
-			c.Priority = baml.Decode(valueHolder).Interface().(*Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5)
+			c.Priority = baml.Decode(valueHolder).Interface().(*types.Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5)
 
 		case "httpStatus":
-			c.HttpStatus = baml.Decode(valueHolder).Interface().(*Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500)
+			c.HttpStatus = baml.Decode(valueHolder).Interface().(*types.Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500)
 
 		case "maxRetries":
-			c.MaxRetries = baml.Decode(valueHolder).Interface().(*Union4IntK0OrIntK1OrIntK3OrIntK5)
+			c.MaxRetries = baml.Decode(valueHolder).Interface().(*types.Union4IntK0OrIntK1OrIntK3OrIntK5)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -210,11 +212,11 @@ func (u IntegerLiterals) BamlEncodeName() *cffi.CFFITypeName {
 }
 
 type MixedLiterals struct {
-	Id         *int64                       `json:"id"`
-	Type       *Union3KadminOrKguestOrKuser `json:"type"`
-	Level      *Union3IntK1OrIntK2OrIntK3   `json:"level"`
-	IsActive   *Union2BoolKFalseOrBoolKTrue `json:"isActive"`
-	ApiVersion *Union3Kv1OrKv2OrKv3         `json:"apiVersion"`
+	Id         *int64                             `json:"id"`
+	Type       *types.Union3KadminOrKguestOrKuser `json:"type"`
+	Level      *types.Union3IntK1OrIntK2OrIntK3   `json:"level"`
+	IsActive   *types.Union2BoolKFalseOrBoolKTrue `json:"isActive"`
+	ApiVersion *types.Union3Kv1OrKv2OrKv3         `json:"apiVersion"`
 }
 
 func (c *MixedLiterals) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -235,16 +237,16 @@ func (c *MixedLiterals) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap
 			c.Id = baml.Decode(valueHolder).Interface().(*int64)
 
 		case "type":
-			c.Type = baml.Decode(valueHolder).Interface().(*Union3KadminOrKguestOrKuser)
+			c.Type = baml.Decode(valueHolder).Interface().(*types.Union3KadminOrKguestOrKuser)
 
 		case "level":
-			c.Level = baml.Decode(valueHolder).Interface().(*Union3IntK1OrIntK2OrIntK3)
+			c.Level = baml.Decode(valueHolder).Interface().(*types.Union3IntK1OrIntK2OrIntK3)
 
 		case "isActive":
-			c.IsActive = baml.Decode(valueHolder).Interface().(*Union2BoolKFalseOrBoolKTrue)
+			c.IsActive = baml.Decode(valueHolder).Interface().(*types.Union2BoolKFalseOrBoolKTrue)
 
 		case "apiVersion":
-			c.ApiVersion = baml.Decode(valueHolder).Interface().(*Union3Kv1OrKv2OrKv3)
+			c.ApiVersion = baml.Decode(valueHolder).Interface().(*types.Union3Kv1OrKv2OrKv3)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -281,9 +283,9 @@ func (u MixedLiterals) BamlEncodeName() *cffi.CFFITypeName {
 }
 
 type StringLiterals struct {
-	Status      *Union3KactiveOrKinactiveOrKpending `json:"status"`
-	Environment *Union3KdevOrKprodOrKstaging        `json:"environment"`
-	Method      *Union4KDELETEOrKGETOrKPOSTOrKPUT   `json:"method"`
+	Status      *types.Union3KactiveOrKinactiveOrKpending `json:"status"`
+	Environment *types.Union3KdevOrKprodOrKstaging        `json:"environment"`
+	Method      *types.Union4KDELETEOrKGETOrKPOSTOrKPUT   `json:"method"`
 }
 
 func (c *StringLiterals) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -301,13 +303,13 @@ func (c *StringLiterals) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMa
 		switch key {
 
 		case "status":
-			c.Status = baml.Decode(valueHolder).Interface().(*Union3KactiveOrKinactiveOrKpending)
+			c.Status = baml.Decode(valueHolder).Interface().(*types.Union3KactiveOrKinactiveOrKpending)
 
 		case "environment":
-			c.Environment = baml.Decode(valueHolder).Interface().(*Union3KdevOrKprodOrKstaging)
+			c.Environment = baml.Decode(valueHolder).Interface().(*types.Union3KdevOrKprodOrKstaging)
 
 		case "method":
-			c.Method = baml.Decode(valueHolder).Interface().(*Union4KDELETEOrKGETOrKPOSTOrKPUT)
+			c.Method = baml.Decode(valueHolder).Interface().(*types.Union4KDELETEOrKGETOrKPOSTOrKPUT)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))

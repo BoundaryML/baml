@@ -1,4 +1,4 @@
-use baml_types::{ir_type::TypeGeneric, TypeIR};
+use baml_types::ir_type::TypeGeneric;
 use dir_writer::{FileCollector, GeneratorArgs, IntermediateRepr, LanguageFeatures};
 use functions::{
     render_functions, render_functions_stream, render_runtime_code, render_source_files,
@@ -142,12 +142,24 @@ impl LanguageFeatures for GoLanguageFeatures {
             .collect::<Vec<_>>();
         stream_type_aliases.sort_by(|a, b| a.name.cmp(&b.name));
 
+        let stream_unions = {
+            let mut unions = ir
+                .walk_all_streaming_unions()
+                .filter_map(|t| ir_to_go::unions::ir_union_to_go_stream(&t, &pkg))
+                .collect::<Vec<_>>();
+            // dedup by name!
+            unions.sort_by_key(|u| u.name.clone());
+            unions.dedup_by_key(|u| u.name.clone());
+            unions
+        };
+
         let _ = collector.add_file(
             "type_map.go",
             render_type_map(
                 &go_classes,
                 &enums,
                 &unions,
+                &stream_unions,
                 &go_type_aliases,
                 &stream_type_aliases,
                 go_mod_name,
@@ -165,17 +177,6 @@ impl LanguageFeatures for GoLanguageFeatures {
             render_go_types(&go_type_aliases, &pkg)?,
         );
 
-        let unions = {
-            let mut unions = ir
-                .walk_all_streaming_unions()
-                .filter_map(|t| ir_to_go::unions::ir_union_to_go_stream(&t, &pkg))
-                .collect::<Vec<_>>();
-            // dedup by name!
-            unions.sort_by_key(|u| u.name.clone());
-            unions.dedup_by_key(|u| u.name.clone());
-            unions
-        };
-
         let go_classes = ir
             .walk_classes()
             .map(|c| ir_to_go::classes::ir_class_to_go_stream(c.item, &pkg))
@@ -189,7 +190,7 @@ impl LanguageFeatures for GoLanguageFeatures {
         );
         let _ = collector.add_file(
             "stream_types/unions.go",
-            render_go_stream_types(&unions, &pkg, go_mod_name)?,
+            render_go_stream_types(&stream_unions, &pkg, go_mod_name)?,
         );
         let _ = collector.add_file(
             "stream_types/type_aliases.go",

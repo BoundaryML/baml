@@ -382,7 +382,7 @@ class Schema(BaseModel):
     prop2: typing.Optional[typing.Union["Nested", str]] = None
     prop5: typing.List[typing.Optional[str]]
     prop6: typing.Optional[typing.Union[str, typing.List["Nested"]]] = None
-    nested_attrs: typing.List[typing.Union[str, "Nested"]]
+    nested_attrs: typing.List[typing.Optional[typing.Union[str, "Nested"]]]
     parens: typing.Optional[str] = None
     other_group: typing.Optional[typing.Union[str, int]] = None
 
@@ -486,19 +486,19 @@ Combination: typing_extensions.TypeAlias = typing.Optional[typing.Union[int, str
 Currency: typing_extensions.TypeAlias = typing.Optional[types.Checked[int, typing_extensions.Literal['gt_ten']]]
 
 
-Graph: typing_extensions.TypeAlias = typing.Optional[typing.Dict[str, typing.List[str]]]
+Graph: typing_extensions.TypeAlias = typing.Dict[str, typing.List[str]]
 
 
-JsonArray: typing_extensions.TypeAlias = typing.Optional[typing.List["JsonValue"]]
+JsonArray: typing_extensions.TypeAlias = typing.List["JsonValue"]
 
 
 JsonEntry: typing_extensions.TypeAlias = typing.Optional[typing.Union["SimpleTag", "JsonTemplate"]]
 
 
-JsonObject: typing_extensions.TypeAlias = typing.Optional[typing.Dict[str, "JsonValue"]]
+JsonObject: typing_extensions.TypeAlias = typing.Dict[str, "JsonValue"]
 
 
-JsonTemplate: typing_extensions.TypeAlias = typing.Optional[typing.Dict[str, "JsonEntry"]]
+JsonTemplate: typing_extensions.TypeAlias = typing.Dict[str, "JsonEntry"]
 
 
 JsonValue: typing_extensions.TypeAlias = typing.Optional[typing.Union[int, str, bool, float, "JsonObject", "JsonArray"]]
@@ -507,7 +507,7 @@ JsonValue: typing_extensions.TypeAlias = typing.Optional[typing.Union[int, str, 
 LinkedListAlias: typing_extensions.TypeAlias = typing.Optional["LinkedListAliasNode"]
 
 
-List: typing_extensions.TypeAlias = typing.Optional[typing.List[str]]
+List: typing_extensions.TypeAlias = typing.List[str]
 
 
 MultipleAttrs: typing_extensions.TypeAlias = typing.Optional[types.Checked[int, typing_extensions.Literal['gt_ten']]]
@@ -522,16 +522,16 @@ Primitive: typing_extensions.TypeAlias = typing.Optional[typing.Union[int, str, 
 RecAliasOne: typing_extensions.TypeAlias = typing.Optional["RecAliasTwo"]
 
 
-RecAliasThree: typing_extensions.TypeAlias = typing.Optional[typing.List["RecAliasOne"]]
+RecAliasThree: typing_extensions.TypeAlias = typing.List["RecAliasOne"]
 
 
 RecAliasTwo: typing_extensions.TypeAlias = typing.Optional["RecAliasThree"]
 
 
-RecursiveListAlias: typing_extensions.TypeAlias = typing.Optional[typing.List["RecursiveListAlias"]]
+RecursiveListAlias: typing_extensions.TypeAlias = typing.List["RecursiveListAlias"]
 
 
-RecursiveMapAlias: typing_extensions.TypeAlias = typing.Optional[typing.Dict[str, "RecursiveMapAlias"]]
+RecursiveMapAlias: typing_extensions.TypeAlias = typing.Dict[str, "RecursiveMapAlias"]
 
 
 RecursiveUnion: typing_extensions.TypeAlias = typing.Optional[typing.Union[str, typing.Dict[str, "RecursiveUnion"]]]

@@ -18,6 +18,8 @@ import (
 
 	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
+
+	"array_types/baml_client/types"
 )
 
 type ArrayWithConstraints struct {
@@ -80,11 +82,11 @@ func (u ArrayWithConstraints) BamlEncodeName() *cffi.CFFITypeName {
 }
 
 type MixedArrays struct {
-	PrimitiveArray []Union4BoolOrFloatOrIntOrString `json:"primitiveArray"`
-	NullableArray  []*string                        `json:"nullableArray"`
-	OptionalItems  []*string                        `json:"optionalItems"`
-	ArrayOfArrays  [][]string                       `json:"arrayOfArrays"`
-	ComplexMixed   []Union3ProductOrTagOrUser       `json:"complexMixed"`
+	PrimitiveArray []types.Union4BoolOrFloatOrIntOrString `json:"primitiveArray"`
+	NullableArray  []*string                              `json:"nullableArray"`
+	OptionalItems  []*string                              `json:"optionalItems"`
+	ArrayOfArrays  [][]string                             `json:"arrayOfArrays"`
+	ComplexMixed   []Union3ProductOrTagOrUser             `json:"complexMixed"`
 }
 
 func (c *MixedArrays) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -102,7 +104,7 @@ func (c *MixedArrays) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) 
 		switch key {
 
 		case "primitiveArray":
-			c.PrimitiveArray = baml.Decode(valueHolder).Interface().([]Union4BoolOrFloatOrIntOrString)
+			c.PrimitiveArray = baml.Decode(valueHolder).Interface().([]types.Union4BoolOrFloatOrIntOrString)
 
 		case "nullableArray":
 			c.NullableArray = baml.Decode(valueHolder).Interface().([]*string)

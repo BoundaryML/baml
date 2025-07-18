@@ -207,7 +207,7 @@ impl AnthropicClient {
                 max_one_system_prompt: true,
                 resolve_audio_urls: ResolveMediaUrls::Never,
                 resolve_image_urls: ResolveMediaUrls::Never,
-                resolve_pdf_urls: ResolveMediaUrls::Always,
+                resolve_pdf_urls: ResolveMediaUrls::Never,
                 resolve_video_urls: ResolveMediaUrls::Never,
                 allowed_metadata: AllowedRoleMetadata::None,
             },
