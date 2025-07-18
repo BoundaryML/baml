@@ -11,6 +11,7 @@
 <div align="center">
 
 [![BAML Version](https://img.shields.io/pypi/v/baml-py?color=006dad&label=BAML%20Version)](https://pypi.org/project/baml-py/)
+[![codecov](https://codecov.io/gh/BoundaryML/baml/graph/badge.svg?token=P5K290YZTA)](https://codecov.io/gh/BoundaryML/baml)
 
 
 ## BAML: Basically a Made-up Language
@@ -24,8 +25,6 @@
 
 
 </div>
-
-[![codecov](https://codecov.io/github/ba11b0y/baml/branch/ci%2Fcodecov/graph/badge.svg?token=P5K290YZTA)](https://codecov.io/github/ba11b0y/baml)
 
 BAML is a simple prompting language for building reliable **AI workflows and agents**.
 
