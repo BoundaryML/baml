@@ -513,8 +513,8 @@ impl<'g> Compiler<'g> {
 
                 // Either async LLM call or regular function call.
                 if self.llm_functions.contains(app.name.name()) {
-                    self.emit(Instruction::DispatchFuture(app.args.len()));
-                    self.emit(Instruction::Await(app.args.len()));
+                    self.emit(Instruction::CreateFuture(app.args.len()));
+                    self.emit(Instruction::Await);
                 } else {
                     self.emit(Instruction::Call(app.args.len()));
                 }

@@ -147,8 +147,25 @@ pub enum Instruction {
     /// TODO(Rahul): Check with Antonio, if this insn is complex than needed.
     IterNext,
 
-    DispatchFuture(usize),
+    /// Creates a futures and pushes it on the stack.
+    ///
+    /// Format: `CREATE_FUTURE n` where `n` is the number of arguments passed to
+    /// the _callable_ future.
+    ///
+    /// [`Instruction::CreateFuture`] behaves like a function call
+    /// ([`Instruction::Call`]). That is due to the fact that as of right now
+    /// the only "futures" we can really run are LLM calls, and the VM doesn't
+    /// even run those, that's up to the embedder. So, just like a function
+    /// call, the stack should contain the future followed by the arguments, and
+    /// this instruction takes care of emmiting a notification to the embedder
+    /// so that it can schedule the future.
+    CreateFuture(usize),
 
+    /// Awaits the future on top of the stack.
+    ///
+    /// VM yields execution back to the embedder because it is blocked awaiting
+    /// a future. But obviously, the VM will not "block", it just returns
+    /// control flow to the embedder and doesn't care about anything else.
     Await,
 
     /// Call a function.
@@ -185,7 +202,7 @@ impl std::fmt::Display for Instruction {
             Instruction::AllocInstance(i) => write!(f, "ALLOC_INSTANCE {i}"),
             Instruction::CreateIterator => f.write_str("CREATE_ITERATOR"),
             Instruction::IterNext => f.write_str("ITER_NEXT"),
-            Instruction::DispatchFuture(i) => write!(f, "DISPATCH_FUTURE {i}"),
+            Instruction::CreateFuture(i) => write!(f, "DISPATCH_FUTURE {i}"),
             Instruction::Await => f.write_str("AWAIT"),
             Instruction::Call(n) => write!(f, "CALL {n}"),
             Instruction::Return => f.write_str("RETURN"),

@@ -116,7 +116,7 @@ pub fn display_instruction(
         | Instruction::AllocArray(_)
         | Instruction::CreateIterator
         | Instruction::IterNext
-        | Instruction::DispatchFuture(_)
+        | Instruction::CreateFuture(_)
         | Instruction::Await
         | Instruction::Call(_)
         | Instruction::Return => String::new(),
@@ -182,7 +182,7 @@ fn instruction_color(instruction: &Instruction) -> Color {
         | Instruction::CreateIterator => Color::Cyan,
 
         // Async instructions.
-        Instruction::DispatchFuture(_) | Instruction::Await => Color::BrightGreen,
+        Instruction::CreateFuture(_) | Instruction::Await => Color::BrightGreen,
 
         // Pop from stack instructions.
         Instruction::Pop | Instruction::EndBlock(_) => Color::BrightBlack,

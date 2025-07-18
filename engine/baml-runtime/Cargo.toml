@@ -28,10 +28,12 @@ arc_with_non_send_sync = "allow"
 
 [dependencies]
 anyhow.workspace = true
+baml-compiler = { path = "../baml-compiler" }
 baml-ids.workspace = true
 baml-log.workspace = true
 baml-types.workspace = true
 baml-rpc.workspace = true
+baml-vm = { path = "../baml-vm" }
 base64.workspace = true
 bytes.workspace = true
 cfg-if.workspace = true

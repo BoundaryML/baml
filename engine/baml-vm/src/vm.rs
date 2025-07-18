@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::bytecode::{Bytecode, Instruction};
 
 /// Max call stack size.
@@ -127,7 +129,7 @@ pub enum Object {
 #[derive(Clone, Debug)]
 pub enum Future {
     Pending,
-    Ready(Result<baml_types::BamlValue, String>),
+    Ready(Value),
 }
 
 impl Object {
@@ -157,10 +159,7 @@ impl std::fmt::Display for Object {
             }
             Object::Future(future) => match future {
                 Future::Pending => write!(f, "<pending>"),
-                Future::Ready(result) => match result {
-                    Ok(value) => write!(f, "<ready: {value}>"),
-                    Err(error) => write!(f, "<ready: {error}>"),
-                },
+                Future::Ready(value) => write!(f, "<ready: {value}>"),
             },
         }
     }
@@ -447,42 +446,48 @@ pub struct Vm {
     /// This stores the functions and globally declared variables.
     pub globals: Vec<Value>,
 
-    /// Async channel for LLM calls.
-    pub async_channel: AsyncChannel,
+    /// Offset of the first runtime allocated object.
+    ///
+    /// This is used to track the index of the first runtime allocated object.
+    /// When the embedder calls [`Vm::collect_garbage`] it will drop all values
+    /// after this offset.
+    pub runtime_allocs_offset: usize,
 }
 
-pub struct AsyncChannel {
-    rx: std::sync::mpsc::Receiver<(usize, baml_types::BamlValue)>,
-    tx: std::sync::mpsc::Sender<(usize, String, baml_types::BamlValue)>,
-}
+pub enum VmExecState {
+    /// VM cannot proceed. It is awaiting a pending future to complete.
+    Await(usize),
 
-impl AsyncChannel {
-    pub fn send(&self, future: usize, function_name: String, value: baml_types::BamlValue) {
-        self.tx.send((future, function_name, value)).unwrap();
-    }
+    /// VM notifies caller about a future that needs to be scheduled.
+    ///
+    /// Bytecode execution continues when control flow is handled back to the
+    /// VM.
+    SpawnFuture(usize),
 
-    pub fn recv(&self) -> (usize, baml_types::BamlValue) {
-        loop {
-            match self.rx.try_recv() {
-                Ok(result) => return result,
-
-                // Spin lock.
-                Err(std::sync::mpsc::TryRecvError::Empty) => continue,
-
-                // TODO @antonio: Handle this.
-                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                    panic!("Async channel disconnected");
-                }
-            }
-        }
-    }
+    /// VM has completed the execution of all available bytecode.
+    Complete(Value),
 }
 
 impl Vm {
+    pub fn fulfil_future(&mut self, future: usize, value: Value) {
+        let Object::Future(future) = &mut self.objects[future] else {
+            panic!("expect future, got {:?}", self.objects[future]);
+        };
+
+        *future = Future::Ready(value);
+    }
+
+    /// Keeps only compile time necessary objects.
+    ///
+    /// Everything allocated while the program run is dropped.
+    pub fn collect_garbage(&mut self) {
+        self.objects.drain(self.runtime_allocs_offset..);
+    }
+
     /// Main VM execution loop.
     ///
     /// Each "cycle" (loop iteration) executes a single instruction.
-    pub fn exec(&mut self) -> Result<Value, VmError> {
+    pub fn exec(&mut self) -> Result<VmExecState, VmError> {
         // Grab the last frame from the call stack.
         //
         // Note that [`Frame`] is [`Copy`], so in case the borrow checker
@@ -494,7 +499,7 @@ impl Vm {
         // `tarjan.rs` file.
         let Some(mut frame) = self.frames.last_mut() else {
             // This should actually return "Void" or () like Rust.
-            return Ok(Value::Null);
+            return Ok(VmExecState::Complete(Value::Null));
         };
 
         // Grab a reference to the function object. We do this before the loop
@@ -778,7 +783,7 @@ impl Vm {
                     function = self.objects[frame.function].as_function()?;
                 }
 
-                Instruction::DispatchFuture(arg_count) => {
+                Instruction::CreateFuture(arg_count) => {
                     let locals_offset =
                         self.stack.len().saturating_sub(arg_count).saturating_sub(1);
 
@@ -819,16 +824,13 @@ impl Vm {
 
                     self.objects.push(Object::Future(Future::Pending));
 
-                    self.async_channel
-                        .send(self.objects.len() - 1, llm_fn_name, llm_args);
-
                     // Drop parameters and LLM call.
                     self.stack.drain(locals_offset..);
 
                     // Push future on top of the stack.
                     self.stack.push(Value::Object(self.objects.len() - 1));
 
-                    function = self.objects[frame.function].as_function()?;
+                    return Ok(VmExecState::SpawnFuture(self.objects.len() - 1));
                 }
 
                 Instruction::Await => {
@@ -843,28 +845,10 @@ impl Vm {
                         }));
                     };
 
-                    if let Future::Ready(result) = awaiting {
-                        continue;
+                    // Can't do nothing, handle control flow back to embedder.
+                    if let Future::Pending = awaiting {
+                        return Ok(VmExecState::Await(*index));
                     }
-
-                    loop {
-                        let (ready_index, result) = self.async_channel.recv();
-
-                        let Object::Future(future) = &mut self.objects[ready_index] else {
-                            return Err(VmError::from(InternalError::TypeError {
-                                expected: Type::Object,
-                                got: Type::Object,
-                            }));
-                        };
-
-                        *future = Future::Ready(Ok(result));
-
-                        if ready_index == *index {
-                            break;
-                        }
-                    }
-
-                    function = self.objects[frame.function].as_function()?;
                 }
 
                 Instruction::Call(arg_count) => {
@@ -944,6 +928,7 @@ impl Vm {
                         return self
                             .stack
                             .pop()
+                            .map(VmExecState::Complete)
                             .ok_or(InternalError::UnexpectedEmptyStack.into());
                     };
 
