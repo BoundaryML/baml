@@ -31,7 +31,7 @@ if ! command -v curl &> /dev/null; then
     exit 1
 fi
 
-# Install Rust directly.
+# Install Rust directly
 echo "Installing Rust..."
 if ! command -v rustc &> /dev/null; then
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
