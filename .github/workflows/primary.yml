@@ -121,6 +121,8 @@ jobs:
       # Install protoc-gen-go
       - name: Setup Go
         uses: ./.github/actions/setup-go
+        with:
+          install-goimports: false
 
       - name: Run typecheck for typescript and rust
         run: pnpm typecheck --force
