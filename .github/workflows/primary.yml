@@ -224,7 +224,6 @@ jobs:
           export LD_LIBRARY_PATH="${RUBY_LIB_PATH}:${LD_LIBRARY_PATH}"
           # We need to build baml_cffi first so that the baml_cffi.dylib is available for the tests
           cargo build --package baml_cffi
-          cargo test --lib
           cargo llvm-cov --lib --lcov --output-path lcov.info
         working-directory: engine      
 
