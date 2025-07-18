@@ -349,6 +349,9 @@ importers:
       '@baml/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      '@gloo-ai/baml-schema-wasm-web':
+        specifier: workspace:*
+        version: link:../../../engine/baml-schema-wasm/web
       '@microsoft/fetch-event-source':
         specifier: 2.0.1
         version: 2.0.1
