@@ -168,10 +168,6 @@ jobs:
       - name: Setup Python
         uses: ./.github/actions/setup-python
 
-      - name: Build Node
-        run: pnpm build:debug
-        working-directory: engine/language_client_typescript
-
       - name: Test Generators
         run: |
           pnpm generate --force || (echo "::error:: merge canary and run codegen again" && exit 1)
