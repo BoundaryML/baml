@@ -1,0 +1,79 @@
+---
+source: udf/src/eval.rs
+expression: results
+---
+[
+    Some(
+        MatchedFunction {
+            constants: {
+                "DEFAULT_INPUT_COST": Constant(
+                    0.001,
+                ),
+                "DEFAULT_OUTPUT_COST": Constant(
+                    0.002,
+                ),
+                "INPUT_TOKEN_COST": Constant(
+                    2e-5,
+                ),
+                "OUTPUT_TOKEN_COST": Constant(
+                    6e-5,
+                ),
+            },
+            returns: {
+                "total_cost": OutputExpression(
+                    "(raw.usage.input_tokens - raw.usage.input_tokens_details.cached_tokens) * INPUT_TOKEN_COST + raw.usage.output_tokens * OUTPUT_TOKEN_COST\n",
+                ),
+                "reasoning_cost": OutputExpression(
+                    "raw.usage.output_tokens_details.reasoning_tokens * OUTPUT_TOKEN_COST\n",
+                ),
+            },
+        },
+    ),
+    Some(
+        MatchedFunction {
+            constants: {
+                "DEFAULT_INPUT_COST": Constant(
+                    0.001,
+                ),
+                "DEFAULT_OUTPUT_COST": Constant(
+                    0.002,
+                ),
+                "INPUT_TOKEN_COST": Constant(
+                    2e-5,
+                ),
+                "OUTPUT_TOKEN_COST": Constant(
+                    6e-5,
+                ),
+            },
+            returns: {
+                "total_cost": OutputExpression(
+                    "(raw.usageMetadata.promptTokenCount - raw.usageMetadata.cachedTokenCount) * INPUT_TOKEN_COST + raw.usageMetadata.candidatesTokenCount * OUTPUT_TOKEN_COST\n",
+                ),
+            },
+        },
+    ),
+    Some(
+        MatchedFunction {
+            constants: {
+                "DEFAULT_INPUT_COST": Constant(
+                    0.001,
+                ),
+                "DEFAULT_OUTPUT_COST": Constant(
+                    0.002,
+                ),
+                "INPUT_TOKEN_COST": Constant(
+                    2e-5,
+                ),
+                "OUTPUT_TOKEN_COST": Constant(
+                    6e-5,
+                ),
+            },
+            returns: {
+                "total_cost": OutputExpression(
+                    "(raw.usage.input_tokens - raw.usage.cached_tokens) * INPUT_TOKEN_COST + raw.usage.output_tokens * OUTPUT_TOKEN_COST\n",
+                ),
+            },
+        },
+    ),
+    None,
+]

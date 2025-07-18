@@ -1,0 +1,64 @@
+---
+source: udf/src/eval.rs
+expression: match_res
+---
+[
+    FunctionResults {
+        compile_errors: {},
+        defined: {
+            "total_cost": DefinedResult {
+                missing_values: [],
+                result: Ok(
+                    0.048,
+                ),
+            },
+            "reasoning_cost": DefinedResult {
+                missing_values: [],
+                result: Ok(
+                    0.024,
+                ),
+            },
+        },
+        not_defined: [],
+    },
+    FunctionResults {
+        compile_errors: {},
+        defined: {
+            "total_cost": DefinedResult {
+                missing_values: [],
+                result: Ok(
+                    0.05700000000000001,
+                ),
+            },
+        },
+        not_defined: [
+            "reasoning_cost",
+        ],
+    },
+    FunctionResults {
+        compile_errors: {},
+        defined: {},
+        not_defined: [
+            "total_cost",
+            "reasoning_cost",
+        ],
+    },
+    FunctionResults {
+        compile_errors: {},
+        defined: {
+            "total_cost": DefinedResult {
+                missing_values: [
+                    "raw.usage.cached_tokens",
+                    "raw.usage.input_tokens",
+                    "raw.usage.output_tokens",
+                ],
+                result: Ok(
+                    0.0,
+                ),
+            },
+        },
+        not_defined: [
+            "reasoning_cost",
+        ],
+    },
+]

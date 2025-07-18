@@ -1,0 +1,8 @@
+---
+source: udf/src/eval.rs
+expression: result
+---
+{
+    "total_cost",
+    "reasoning_cost",
+}

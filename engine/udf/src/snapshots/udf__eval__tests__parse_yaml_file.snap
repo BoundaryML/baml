@@ -1,0 +1,44 @@
+---
+source: udf/src/eval.rs
+expression: deser
+---
+version: "1.0"
+name: LLM Usage Cost Configuration
+description: Define cost calculations for LLM API calls
+constants:
+  DEFAULT_INPUT_COST: 0.001
+  DEFAULT_OUTPUT_COST: 0.002
+functions:
+  - match: "client.provider == 'openai' or client.base_url | regex_match('^https://api\\\\.openai\\\\.com')\n"
+    constants:
+      INPUT_TOKEN_COST: 0.00001
+      OUTPUT_TOKEN_COST: 0.00003
+    returns:
+      total_cost: "(raw.usage.input_tokens - raw.usage.input_tokens_details.cached_tokens) * INPUT_TOKEN_COST + raw.usage.output_tokens * OUTPUT_TOKEN_COST\n"
+      reasoning_cost: "raw.usage.output_tokens_details.reasoning_tokens * OUTPUT_TOKEN_COST\n"
+    overrides:
+      - match: "date | date_between('2025-01-01', '2025-06-30') and response.model == 'gpt-4-turbo'\n"
+        constants:
+          INPUT_TOKEN_COST: 0.00002
+          OUTPUT_TOKEN_COST: 0.00006
+        returns: {}
+        overrides: []
+      - match: "options.model | regex_match('^gpt-4') and response.status == 200\n"
+        constants: {}
+        returns:
+          total_cost: "raw.usage.total_tokens * 0.00005 * (1.1 if options.stream else 1.0)\n"
+        overrides: []
+  - match: "client.provider == 'anthropic'\n"
+    constants:
+      INPUT_TOKEN_COST: 0.00002
+      OUTPUT_TOKEN_COST: 0.00006
+    returns:
+      total_cost: "(raw.usage.input_tokens - raw.usage.cached_tokens) * INPUT_TOKEN_COST + raw.usage.output_tokens * OUTPUT_TOKEN_COST\n"
+    overrides: []
+  - match: "client.provider == 'gemini'\n"
+    constants:
+      INPUT_TOKEN_COST: 0.00002
+      OUTPUT_TOKEN_COST: 0.00006
+    returns:
+      total_cost: "(raw.usageMetadata.promptTokenCount - raw.usageMetadata.cachedTokenCount) * INPUT_TOKEN_COST + raw.usageMetadata.candidatesTokenCount * OUTPUT_TOKEN_COST\n"
+    overrides: []
