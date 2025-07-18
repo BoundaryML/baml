@@ -81,7 +81,7 @@ export OPENSSL_NO_VENDOR=1
 pnpm build
 
 # Go back to root directory
-cd ../../
+cd ../../../
 
 # Run the build
 echo "Building fiddle-web-app..."
