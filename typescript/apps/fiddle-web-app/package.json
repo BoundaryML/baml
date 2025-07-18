@@ -16,6 +16,7 @@
     "@baml/codemirror-lang-baml": "workspace:*",
     "@baml/common": "workspace:*",
     "@baml/playground-common": "workspace:*",
+    "@gloo-ai/baml-schema-wasm-web": "workspace:*",
     "@baml/ui": "workspace:*",
     "@microsoft/fetch-event-source": "2.0.1",
     "@vercel/kv": "3.0.0",
