@@ -78,6 +78,7 @@ rustup target add wasm32-unknown-unknown
 # Now navigate to the baml-schema-wasm directory for building
 cd engine/baml-schema-wasm
 export OPENSSL_NO_VENDOR=1
+pnpm build
 
 # Go back to root directory
 cd ../../

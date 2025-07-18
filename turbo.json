@@ -59,13 +59,7 @@
       ]
     },
     "generate": {
-      "dependsOn": [
-        "@baml/cli#build",
-        "@boundaryml/baml#build",
-        "@baml/language-client-python#build",
-        "@baml/language-client-ruby#build",
-        "@baml/language-client-go#build"
-      ],
+      "dependsOn": ["@boundaryml/baml#build"],
       "inputs": ["**/*.baml", "**/*.j2", "**/*.hbs", "**/generators.baml"],
       "outputs": ["baml_client/**"],
       "env": ["SKIP_BAML_SRC_CHECK"]

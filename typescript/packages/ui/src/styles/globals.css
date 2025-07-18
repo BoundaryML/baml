@@ -49,7 +49,8 @@
   --animation-duration-slow: 0.5s;
   --animation-duration-very-slow: 0.8s;
   /* Monospace font fallback for preview window */
-  --vscode-editor-font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace;
+  --vscode-editor-font-family: ui-monospace, SFMono-Regular, Menlo, Monaco,
+    Consolas, Liberation Mono, monospace;
 }
 
 .dark {
@@ -68,8 +69,9 @@
   --accent: oklch(0.274 0.006 286.033);
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 22%);
-  --input: oklch(1 0 0 / 20%);
+  --border: oklch(1 0 0 / 10%);
+
+  --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.541 0.281 293.009);
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
@@ -171,14 +173,14 @@
   --color-chart-5: var(--vscode-charts-red, var(--chart-5));
 
   /* Additional VSCode variables with fallbacks for standalone use */
-  
+
   /* Panel and UI borders */
   --vscode-panel-border: var(--border);
   --vscode-input-border: var(--border);
   --vscode-focus-border: var(--ring);
   --vscode-notifications-border: var(--border);
   --vscode-sideBar-border: var(--border);
-  
+
   /* Text and foreground colors */
   --vscode-foreground: var(--foreground);
   --vscode-editor-foreground: var(--foreground);
@@ -193,7 +195,7 @@
   --vscode-sideBar-foreground: var(--sidebar-foreground);
   --vscode-sideBarSectionHeader-foreground: var(--sidebar-primary-foreground);
   --vscode-text-separator-foreground: var(--border);
-  
+
   /* Background colors */
   --vscode-editor-background: var(--background);
   --vscode-panel-background: var(--card);
@@ -201,8 +203,16 @@
   --vscode-dropdown-background: var(--muted);
   --vscode-button-background: var(--primary);
   --vscode-button-secondaryBackground: var(--secondary);
-  --vscode-button-hover-background: color-mix(in srgb, var(--primary) 90%, transparent);
-  --vscode-button-hoverBackground: color-mix(in srgb, var(--primary) 90%, transparent);
+  --vscode-button-hover-background: color-mix(
+    in srgb,
+    var(--primary) 90%,
+    transparent
+  );
+  --vscode-button-hoverBackground: color-mix(
+    in srgb,
+    var(--primary) 90%,
+    transparent
+  );
   --vscode-notifications-background: var(--card);
   --vscode-input-background: var(--input);
   --vscode-menu-selection-background: var(--accent);
@@ -319,7 +329,6 @@ body {
 
 /* controls dropdown styling on rsjf */
 
-
 .field-array {
   @apply w-full;
 }
@@ -327,7 +336,6 @@ body {
 /* .checkbox {
   @apply bg-vscode-checkbox-background text-vscode-checkbox-foreground flex flex-row items-center gap-x-1;
 } */
-
 
 /* .array-item-remove::after {
   content: 'Remove';
@@ -611,5 +619,5 @@ button.woot-elements--right:nth-child(2) {
 }
 
 /* input:focus { */
-  /* @apply outline-none; */
+/* @apply outline-none; */
 /* } */
