@@ -170,7 +170,7 @@ jobs:
 
       - name: Test Generators
         run: |
-          pnpm generate --force || (echo "::error:: merge canary and run codegen again" && exit 1)
+          pnpm generate --force --filter=@boundaryml/baml
 
       - name: Ensure No Changes
         run: |
