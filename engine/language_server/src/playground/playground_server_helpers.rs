@@ -21,8 +21,10 @@ use tokio::{fs as async_fs, sync::RwLock};
 use warp::{http, http::Response, ws::Message, Filter, Rejection, Reply};
 
 use crate::{
-    playground::definitions::{FrontendMessage, PlaygroundState},
-    playground::playground_server_rpc::handle_rpc_websocket,
+    playground::{
+        definitions::{FrontendMessage, PlaygroundState},
+        playground_server_rpc::handle_rpc_websocket,
+    },
     session::Session,
 };
 

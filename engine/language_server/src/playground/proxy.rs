@@ -1,5 +1,6 @@
-use anyhow::Result;
 use std::sync::Arc;
+
+use anyhow::Result;
 use warp::{http, Filter, Rejection, Reply};
 
 /// Custom response type for binary data with CORS headers

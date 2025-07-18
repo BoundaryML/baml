@@ -7,8 +7,10 @@ use tokio::sync::RwLock;
 /// On the input port
 use crate::playground::definitions::PlaygroundState;
 use crate::{
-    playground::playground_server_helpers::{create_server_routes, get_playground_dist},
-    playground::proxy::ProxyServer,
+    playground::{
+        playground_server_helpers::{create_server_routes, get_playground_dist},
+        proxy::ProxyServer,
+    },
     session::Session,
 };
 
