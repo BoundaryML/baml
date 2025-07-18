@@ -11,8 +11,7 @@
 <div align="center">
 
 [![BAML Version](https://img.shields.io/pypi/v/baml-py?color=006dad&label=BAML%20Version)](https://pypi.org/project/baml-py/)
-[![codecov](https://codecov.io/gh/BoundaryML/baml/graph/badge.svg?token=P5K290YZTA)](https://codecov.io/gh/BoundaryML/baml)
-
+[![codecov](https://codecov.io/gh/BoundaryML/baml/graph/badge.svg?token=5cpwzWhfXz)](https://codecov.io/gh/BoundaryML/baml)
 
 ## BAML: Basically a Made-up Language
 <h4>
