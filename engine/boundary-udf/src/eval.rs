@@ -134,7 +134,7 @@ pub struct FunctionResults<'udf> {
 #[derive(Debug, Default)]
 struct MatchedFunction<'a> {
     // NOTE: (Jesus) If required, a reference to the original provider + override map could be used.
-    // Override map is required because many overrides can be merged. Otheriwise we could have just
+    // Override map is required because many overrides can be merged. Otherwise we could have just
     // a reference to the provider and an optional reference to *the* selected override. This
     // would remove a substantial amount of copies, taking into account that right now we're
     // cloning *all* of the strings.

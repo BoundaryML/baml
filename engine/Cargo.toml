@@ -20,7 +20,7 @@ members = [
   "generators/languages/*",
   "sandbox",
   "llm-response-parser",
-  "udf",
+  "boundary-udf",
   "zed",
 ]
 default-members = [

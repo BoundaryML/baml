@@ -104,11 +104,11 @@ impl UDFConfig {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Function {
     #[serde(rename = "match")]
-    pub(crate) match_expr: MatchExpression,
+    pub match_expr: MatchExpression,
     #[serde(default)]
-    pub(crate) constants: BamlMap<String, Constant>,
+    pub constants: BamlMap<String, Constant>,
     #[serde(default)]
-    pub(crate) returns: BamlMap<String, OutputExpression>,
+    pub returns: BamlMap<String, OutputExpression>,
     #[serde(default)]
-    pub(crate) overrides: Vec<Function>,
+    pub overrides: Vec<Function>,
 }
