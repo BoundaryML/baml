@@ -222,10 +222,11 @@ jobs:
           # Find Ruby library path and add it to LD_LIBRARY_PATH
           RUBY_LIB_PATH=$(ruby -e 'puts RbConfig::CONFIG["libdir"]')
           export LD_LIBRARY_PATH="${RUBY_LIB_PATH}:${LD_LIBRARY_PATH}"
-          # Build baml_cffi shared library with coverage instrumentation (no tests)
-          cargo llvm-cov --no-run --package baml_cffi
-          # Run tests with coverage for all packages without rebuilding
-          cargo llvm-cov --lib --lcov --output-path lcov.info --workspace --no-clean
+          # Build baml_cffi shared library first to ensure it's available
+          cargo build --package baml_cffi
+          # Run tests with coverage, but clean first to ensure consistent instrumentation
+          cargo llvm-cov clean --workspace
+          cargo llvm-cov --lib --lcov --output-path lcov.info --workspace
         working-directory: engine      
 
       - name: Upload coverage to Codecov
