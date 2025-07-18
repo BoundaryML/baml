@@ -222,19 +222,17 @@ jobs:
           # Find Ruby library path and add it to LD_LIBRARY_PATH
           RUBY_LIB_PATH=$(ruby -e 'puts RbConfig::CONFIG["libdir"]')
           export LD_LIBRARY_PATH="${RUBY_LIB_PATH}:${LD_LIBRARY_PATH}"
-          # Clean workspace to avoid mixing instrumented and non-instrumented builds
-          cargo llvm-cov clean --workspace
           # Set up environment for coverage
           source <(cargo llvm-cov show-env --export-prefix)
           # Build baml_cffi with coverage instrumentation
           cargo build --package baml_cffi
           # Run tests without cleaning the build artifacts
-          cargo llvm-cov --lib --workspace --lcov --output-path lcov.info --no-clean
+          cargo llvm-cov --lib --workspace --lcov --output-path lcov.info
         working-directory: engine      
 
       - name: Upload coverage to Codecov
         if: matrix.test-suite == 'rust-unit'
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@18283e04ce6e62d37312384ff67231eb8fd56d24
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: engine/lcov.info
