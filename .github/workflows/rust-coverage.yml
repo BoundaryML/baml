@@ -1,0 +1,65 @@
+name: Rust Coverage
+
+on:
+  push:
+    branches: [canary]
+  pull_request:
+    branches: [canary]
+
+env:
+  UV_SYSTEM_PYTHON: 1
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/canary' }}
+
+jobs:
+  rust-coverage:
+    runs-on: ubuntu-latest
+    # Don't fail the PR if coverage fails
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Tools
+        uses: ./.github/actions/setup-tools
+
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+
+      - name: Setup Go
+        uses: ./.github/actions/setup-go
+
+      - name: Setup Python
+        uses: ./.github/actions/setup-python
+        with:
+          cache: "false"
+
+      - name: Setup Ruby
+        uses: ./.github/actions/setup-ruby
+      
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+
+      - name: Generate Rust coverage
+        run: |
+          # Find Ruby library path and add it to LD_LIBRARY_PATH
+          RUBY_LIB_PATH=$(ruby -e 'puts RbConfig::CONFIG["libdir"]')
+          export LD_LIBRARY_PATH="${RUBY_LIB_PATH}:${LD_LIBRARY_PATH}"
+          # Clean workspace to avoid mixing instrumented and non-instrumented builds
+          cargo llvm-cov clean --workspace
+          # Set up environment for coverage
+          source <(cargo llvm-cov show-env --export-prefix)
+          # Build baml_cffi with coverage instrumentation
+          cargo build --package baml_cffi
+          # Run tests without cleaning the build artifacts
+          cargo llvm-cov --lib --workspace --lcov --output-path lcov.info --no-clean
+        working-directory: engine
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@18283e04ce6e62d37312384ff67231eb8fd56d24
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: engine/lcov.info
+          fail_ci_if_error: false  # Don't fail if codecov upload fails

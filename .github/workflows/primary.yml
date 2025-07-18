@@ -211,10 +211,6 @@ jobs:
       - name: Setup Ruby
         if: matrix.test-suite == 'rust-unit'
         uses: ./.github/actions/setup-ruby
-      
-      - name: Install cargo-llvm-cov
-        if: matrix.test-suite == 'rust-unit'
-        uses: taiki-e/install-action@cargo-llvm-cov
 
       - name: Run Rust unit tests
         if: matrix.test-suite == 'rust-unit'
@@ -222,21 +218,11 @@ jobs:
           # Find Ruby library path and add it to LD_LIBRARY_PATH
           RUBY_LIB_PATH=$(ruby -e 'puts RbConfig::CONFIG["libdir"]')
           export LD_LIBRARY_PATH="${RUBY_LIB_PATH}:${LD_LIBRARY_PATH}"
-          # Set up environment for coverage
-          source <(cargo llvm-cov show-env --export-prefix)
-          # Build baml_cffi with coverage instrumentation
+          # Build baml_cffi shared library
           cargo build --package baml_cffi
-          # Run tests without cleaning the build artifacts
-          cargo llvm-cov --lib --workspace --lcov --output-path lcov.info
-        working-directory: engine      
-
-      - name: Upload coverage to Codecov
-        if: matrix.test-suite == 'rust-unit'
-        uses: codecov/codecov-action@18283e04ce6e62d37312384ff67231eb8fd56d24
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: engine/lcov.info
-          fail_ci_if_error: true
+          # Run tests
+          cargo test --lib
+        working-directory: engine
 
       - name: Run Python integration tests
         if: matrix.test-suite == 'python-integration'
