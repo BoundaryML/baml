@@ -449,7 +449,7 @@ impl<T> TypeGeneric<T> {
             } => TypeGeneric::Class {
                 meta: f(meta),
                 name: name.clone(),
-                mode: mode.clone(),
+                mode: *mode,
                 dynamic: *dynamic,
             },
             TypeGeneric::Arrow(arrow, type_metadata_ir) => TypeGeneric::Arrow(
@@ -485,7 +485,7 @@ impl<T> TypeGeneric<T> {
             TypeGeneric::RecursiveTypeAlias { meta, name, mode } => {
                 TypeGeneric::RecursiveTypeAlias {
                     meta: f(meta),
-                    mode: mode.clone(),
+                    mode: *mode,
                     name: name.clone(),
                 }
             }
@@ -645,7 +645,7 @@ impl<T> TypeGeneric<T> {
         }
 
         match self {
-            TypeGeneric::Class { mode, .. } => Ok(mode.clone()),
+            TypeGeneric::Class { mode, .. } => Ok(*mode),
             TypeGeneric::Arrow(_, _)
             | TypeGeneric::Primitive(_, _)
             | TypeGeneric::Enum { .. }
@@ -656,7 +656,7 @@ impl<T> TypeGeneric<T> {
                     vec![key.mode(mode, lookup), value.mode(mode, lookup)];
                 merge_modes(items.into_iter())
             }
-            TypeGeneric::RecursiveTypeAlias { mode, .. } => Ok(mode.clone()),
+            TypeGeneric::RecursiveTypeAlias { mode, .. } => Ok(*mode),
             TypeGeneric::Tuple(inner, _) => merge_modes(inner.iter().map(|t| t.mode(mode, lookup))),
             TypeGeneric::Union(union_type_generic, _) => merge_modes(
                 union_type_generic

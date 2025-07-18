@@ -76,7 +76,7 @@ where
                 let key = WithIr {
                     value: &(type_generic.as_ref(), allow_user_defined_unions),
                     lookup,
-                    mode: mode.clone(),
+                    mode,
                 }
                 .encode();
                 let value = WithIr {
@@ -153,7 +153,7 @@ where
                                     WithIr {
                                         value: &(t, allow_user_defined_unions),
                                         lookup,
-                                        mode: mode.clone(),
+                                        mode,
                                     }
                                     .encode()
                                 })
@@ -187,7 +187,7 @@ where
                                     WithIr {
                                         value: &(t, allow_user_defined_unions),
                                         lookup,
-                                        mode: mode.clone(),
+                                        mode,
                                     }
                                     .encode()
                                 })

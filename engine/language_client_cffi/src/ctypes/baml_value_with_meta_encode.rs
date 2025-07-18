@@ -93,7 +93,7 @@ where
                     WithIr {
                         value: &(t, UnionAllowance::Allow),
                         lookup,
-                        mode: mode,
+                        mode,
                     }
                     .encode()
                 })
