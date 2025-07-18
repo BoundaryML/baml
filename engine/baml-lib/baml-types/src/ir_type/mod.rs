@@ -638,7 +638,7 @@ impl<T> TypeGeneric<T> {
     pub fn mode(
         &self,
         mode: &StreamingMode,
-        lookup: &impl TypeLookups,
+        _lookup: &impl TypeLookups,
     ) -> anyhow::Result<StreamingMode> {
         if *mode == StreamingMode::NonStreaming {
             return Ok(StreamingMode::NonStreaming);
@@ -650,19 +650,21 @@ impl<T> TypeGeneric<T> {
             | TypeGeneric::Primitive(_, _)
             | TypeGeneric::Enum { .. }
             | TypeGeneric::Literal(_, _) => Ok(StreamingMode::NonStreaming),
-            TypeGeneric::List(inner, _) => inner.mode(mode, lookup),
+            TypeGeneric::List(inner, _) => inner.mode(mode, _lookup),
             TypeGeneric::Map(key, value, ..) => {
                 let items: Vec<Result<StreamingMode, anyhow::Error>> =
-                    vec![key.mode(mode, lookup), value.mode(mode, lookup)];
+                    vec![key.mode(mode, _lookup), value.mode(mode, _lookup)];
                 merge_modes(items.into_iter())
             }
             TypeGeneric::RecursiveTypeAlias { mode, .. } => Ok(*mode),
-            TypeGeneric::Tuple(inner, _) => merge_modes(inner.iter().map(|t| t.mode(mode, lookup))),
+            TypeGeneric::Tuple(inner, _) => {
+                merge_modes(inner.iter().map(|t| t.mode(mode, _lookup)))
+            }
             TypeGeneric::Union(union_type_generic, _) => merge_modes(
                 union_type_generic
                     .types
                     .iter()
-                    .map(|t| t.mode(mode, lookup)),
+                    .map(|t| t.mode(mode, _lookup)),
             ),
         }
     }

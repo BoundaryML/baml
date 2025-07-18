@@ -191,6 +191,7 @@ struct TypeMap<'a> {
     pkg: &'a CurrentRenderPackage,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn render_type_map(
     classes: &[ClassGo],
     enums: &[EnumGo],
