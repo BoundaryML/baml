@@ -11,6 +11,7 @@ type SearchParams = Promise<{ [key: string]: string | string[] | undefined }>
 //   title: 'Prompt Fiddle',
 //   description: '...',
 // }
+//
 
 export default async function Home({
   searchParams,
