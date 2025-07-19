@@ -52,7 +52,20 @@ if (typeof window !== 'undefined' && !window.localStorage) {
 }
 
 export const vscodeLocalStorageStore: SyncStorage<any> = createJSONStorage(
-  () => window.localStorage,
+  () => {
+    if (typeof window !== 'undefined') {
+      return window.localStorage;
+    }
+    // Fallback for SSR - return a mock storage that does nothing
+    return {
+      getItem: () => null,
+      setItem: () => {},
+      removeItem: () => {},
+      clear: () => {},
+      key: () => null,
+      length: 0,
+    };
+  },
 );
 // export const persistentVSCodeStore: SyncStorage<any> = createJSONStorage(() => ({
 //   getItem: (key: string) => {
@@ -76,7 +89,20 @@ export const vscodeLocalStorageStore: SyncStorage<any> = createJSONStorage(
 //   },
 // }))
 export const sessionStore: SyncStorage<any> = createJSONStorage(
-  () => sessionStorage,
+  () => {
+    if (typeof window !== 'undefined') {
+      return sessionStorage;
+    }
+    // Fallback for SSR - return a mock storage that does nothing
+    return {
+      getItem: () => null,
+      setItem: () => {},
+      removeItem: () => {},
+      clear: () => {},
+      key: () => null,
+      length: 0,
+    };
+  },
 );
 
 export function JotaiProvider({ children }: { children: React.ReactNode }) {
