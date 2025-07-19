@@ -19,6 +19,9 @@ export function RB2BElement() {
   useEffect(() => {
     // Directly adding your script content here
     function foo() {
+      if (typeof window === 'undefined') {
+        return;
+      }
       // @ts-ignore
       var reb2b = (window.reb2b = window.reb2b || []);
       if (reb2b.invoked) return;

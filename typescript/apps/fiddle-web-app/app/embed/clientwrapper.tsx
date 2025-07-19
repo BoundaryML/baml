@@ -48,6 +48,9 @@ const CustomErrorBoundary: React.FC<{ children: React.ReactNode; message?: strin
         </div>
       )}
       onReset={() => {
+        if (typeof window === 'undefined') {
+          return;
+        }
         window.location.reload();
       }}
     >

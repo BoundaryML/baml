@@ -22,6 +22,9 @@ const TestPanel = () => {
           <ErrorBoundary
             fallback={<div>Error rendering</div>}
             onReset={() => {
+              if (typeof window === 'undefined') {
+                return;
+              }
               window.location.reload()
             }}
             resetKeys={[viewType]}
