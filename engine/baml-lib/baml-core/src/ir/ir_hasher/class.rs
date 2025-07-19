@@ -2,7 +2,8 @@ use std::collections::HashSet;
 
 use baml_types::{Constraint, StringOr, TypeIR};
 
-use super::{super::Class, ShallowSignature};
+use super::ShallowSignature;
+use crate::ir::repr::{Class, Node};
 
 /// Find some way to hash the class
 
@@ -62,7 +63,7 @@ impl<'a> std::hash::Hash for ClassImplementationHash<'a> {
     }
 }
 
-impl super::ShallowSignature for Class {
+impl super::ShallowSignature for &Node<Class> {
     fn shallow_hash_prefix(&self) -> &'static str {
         "class"
     }

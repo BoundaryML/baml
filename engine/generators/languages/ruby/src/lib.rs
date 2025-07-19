@@ -122,8 +122,9 @@ impl LanguageFeatures for RbLanguageFeatures {
         // collector.add_file("parser.rb", render_parser(&functions, &pkg)?)?;
 
         let rb_classes = ir
-            .walk_classes()
-            .map(|c| ir_to_rb::classes::ir_class_to_rb(c.item, &pkg))
+            .classes
+            .iter()
+            .map(|c| ir_to_rb::classes::ir_class_to_rb(c, &pkg))
             .collect::<Vec<_>>();
         let enums = ir
             .walk_enums()
@@ -161,8 +162,9 @@ impl LanguageFeatures for RbLanguageFeatures {
         rb_stream_type_aliases.sort_by(|a, b| a.name.cmp(&b.name));
 
         let rb_classes = ir
-            .walk_classes()
-            .map(|c| ir_to_rb::classes::ir_class_to_rb_stream(c.item, &pkg))
+            .classes
+            .iter()
+            .map(|c| ir_to_rb::classes::ir_class_to_rb_stream(c, &pkg))
             .collect::<Vec<_>>();
 
         pkg.set("BamlClient.StreamTypes");

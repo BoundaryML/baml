@@ -13,8 +13,8 @@ use internal_llm_client::ClientSpec;
 use crate::ir::{
     jinja_helpers::render_expression,
     repr::{self, ExprFunction, FunctionConfig, Node, TypeBuilderEntry, WithRepr},
-    Class, Client, Enum, EnumValue, ExprFunctionNode, Field, Function, FunctionNode, IRHelper,
-    Impl, IntermediateRepr, RetryPolicy, TemplateString, TestCase, TypeIR, Walker,
+    Client, Enum, EnumValue, ExprFunctionNode, Field, Function, FunctionNode, IRHelper, Impl,
+    IntermediateRepr, RetryPolicy, TemplateString, TestCase, TypeIR, Walker,
 };
 
 impl<'a> Walker<'a, &'a ExprFunctionNode> {
@@ -304,55 +304,6 @@ impl<'a> Walker<'a, (&'a FunctionNode, &'a TestCase)> {
             ir: self.ir,
             item: self.item.0,
         }
-    }
-}
-
-impl<'a> Walker<'a, &'a Class> {
-    pub fn name(&self) -> &'a str {
-        &self.elem().name
-    }
-
-    pub fn alias(&self, ctx: &EvaluationContext<'_>) -> Result<Option<String>> {
-        self.item
-            .attributes
-            .alias()
-            .map(|v| v.resolve(ctx))
-            .transpose()
-    }
-
-    pub fn streaming_behavior(&self) -> StreamingBehavior {
-        self.item.attributes.streaming_behavior()
-    }
-
-    pub fn walk_fields(&'a self) -> impl Iterator<Item = Walker<'a, &'a Field>> {
-        self.item.elem.static_fields.iter().map(|f| Walker {
-            ir: self.ir,
-            item: f,
-        })
-    }
-
-    pub fn find_field(&'a self, name: &str) -> Option<Walker<'a, &'a Field>> {
-        self.item
-            .elem
-            .static_fields
-            .iter()
-            .find(|f| f.elem.name == name)
-            .map(|f| Walker {
-                ir: self.ir,
-                item: f,
-            })
-    }
-
-    pub fn elem(&self) -> &'a repr::Class {
-        &self.item.elem
-    }
-
-    pub fn span(&self) -> Option<&crate::Span> {
-        self.item.attributes.span.as_ref()
-    }
-
-    pub fn inputs(&self) -> &'a Vec<(String, baml_types::TypeIR)> {
-        self.elem().inputs()
     }
 }
 

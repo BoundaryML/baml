@@ -35,10 +35,10 @@ impl OpenApiUserData {
                     convert_ir_enum(&r#enum.item.elem),
                 )
             })
-            .chain(ir.walk_classes().map(|class| {
+            .chain(ir.classes.iter().map(|class| {
                 (
-                    TypeName(class.name().to_string()),
-                    convert_ir_class(ir, &class.item.elem),
+                    TypeName(class.elem.name.clone()),
+                    convert_ir_class(ir, &class.elem),
                 )
             }))
             .collect();
@@ -141,11 +141,12 @@ impl OpenApiUserData {
 
 mod class {
     use indexmap::IndexSet;
+    use internal_baml_core::ir::repr::Class;
 
     use super::*;
     use crate::r#type::{TypeOpenApi, TypePrimitive};
 
-    pub fn convert_ir_class(ir: &repr::IntermediateRepr, class: &repr::Class) -> TypeOpenApi {
+    pub fn convert_ir_class(ir: &repr::IntermediateRepr, class: &Class) -> TypeOpenApi {
         let mut required = IndexSet::new();
         let mut properties: IndexMap<String, TypeOpenApi> = class
             .static_fields

@@ -5,8 +5,9 @@ use serde_json::json;
 
 use super::{
     repr::{self},
-    Class, Enum, FunctionArgs, FunctionNode, IntermediateRepr, TypeIR, Walker,
+    Enum, FunctionArgs, FunctionNode, IntermediateRepr, TypeIR, Walker,
 };
+use crate::ir::repr::Class;
 
 pub trait WithJsonSchema {
     fn json_schema(&self) -> serde_json::Value;
@@ -18,8 +19,9 @@ impl WithJsonSchema for IntermediateRepr {
             .walk_enums()
             .map(|e| (e.elem().name.clone(), e.json_schema()));
         let classes = self
-            .walk_classes()
-            .map(|c| (c.elem().name.clone(), c.json_schema()));
+            .classes
+            .iter()
+            .map(|c| (c.elem.name.clone(), c.elem.json_schema()));
         let function_inputs = self
             .walk_functions()
             .map(|f| (format!("{}_input", f.name()), (f.item, true).json_schema()));
@@ -125,18 +127,18 @@ impl WithJsonSchema for Walker<'_, &Enum> {
     }
 }
 
-impl WithJsonSchema for Walker<'_, &Class> {
+impl WithJsonSchema for Class {
     fn json_schema(&self) -> serde_json::Value {
         let mut properties = json!({});
         let mut required_props = vec![];
-        for field in self.elem().static_fields.iter() {
+        for field in self.static_fields.iter() {
             properties[field.elem.name.clone()] = field.elem.r#type.elem.json_schema();
             if !field.elem.r#type.elem.is_optional() {
                 required_props.push(field.elem.name.clone());
             }
         }
         json!({
-                "title": self.elem().name,
+                "title": self.name,
                 "type": "object",
                 "properties": properties,
                 "required": required_props,

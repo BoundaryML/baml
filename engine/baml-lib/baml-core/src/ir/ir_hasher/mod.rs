@@ -291,8 +291,8 @@ impl IRSignature {
     pub fn new_from_ir(ir: &IntermediateRepr) -> Result<Self> {
         let mut shallow_hash = HashMap::new();
 
-        for class in ir.walk_classes() {
-            shallow_hash.insert(class.name(), ShallowHash::from_signature(class));
+        for class in &ir.classes {
+            shallow_hash.insert(class.elem.name.as_str(), ShallowHash::from_signature(class));
         }
         for r#enum in ir.walk_enums() {
             shallow_hash.insert(r#enum.name(), ShallowHash::from_signature(r#enum));
@@ -335,21 +335,25 @@ impl IRSignature {
             .collect::<Result<_>>()?;
 
         let classes_map: HashMap<String, (TypeNodeSignature, ClassSignatureDetails)> = ir
-            .walk_classes()
-            .map(|class_walker| {
+            .classes
+            .iter()
+            .map(|class| {
                 Ok((
-                    class_walker.name().to_string(),
+                    class.elem.name.to_string(),
                     (
                         TypeNodeSignature {
-                            signature: Signature::new_class(class_walker.name(), &shallow_hash)?,
+                            signature: Signature::new_class(
+                                class.elem.name.as_str(),
+                                &shallow_hash,
+                            )?,
                             field_type: Arc::new(baml_types::ir_type::TypeNonStreaming::class(
-                                class_walker.name(),
+                                class.elem.name.as_str(),
                             )),
                         },
                         ClassSignatureDetails {
                             fields: Arc::new(
-                                class_walker
-                                    .elem()
+                                class
+                                    .elem
                                     .static_fields
                                     .iter()
                                     .map(|field_node| {

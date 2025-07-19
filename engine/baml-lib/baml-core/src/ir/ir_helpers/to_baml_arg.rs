@@ -230,13 +230,17 @@ impl ArgCoercer {
                 BamlValue::Class(_, obj) | BamlValue::Map(obj) => match ir.find_class(name) {
                     Ok(c) => {
                         let mut fields = BamlMap::new();
-                        let is_dynamic = c.item.attributes.dynamic();
+                        let is_dynamic = c.attributes.dynamic();
 
                         // Process fields in the order they appear in the input object to preserve ordering
                         for (key, value) in obj {
                             // Check if this is a known class field first
-                            if let Some(field) = c.walk_fields().find(|f| f.name() == key) {
-                                if let Ok(v) = self.coerce_arg(ir, field.r#type(), value, scope) {
+                            if let Some(field) =
+                                c.elem.static_fields.iter().find(|f| &f.elem.name == key)
+                            {
+                                if let Ok(v) =
+                                    self.coerce_arg(ir, &field.elem.r#type.elem, value, scope)
+                                {
                                     fields.insert(key.clone(), v);
                                 }
                             } else if is_dynamic {
@@ -253,12 +257,13 @@ impl ArgCoercer {
                         }
 
                         // Check for missing required fields
-                        for f in c.walk_fields() {
-                            if !fields.contains_key(f.name()) && !f.r#type().is_optional() {
+                        for f in c.elem.static_fields.iter() {
+                            if !fields.contains_key(&f.elem.name)
+                                && !f.elem.r#type.elem.is_optional()
+                            {
                                 scope.push_error(format!(
                                     "Missing required field `{}` for class {}",
-                                    f.name(),
-                                    name
+                                    f.elem.name, name
                                 ));
                             }
                         }

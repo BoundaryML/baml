@@ -229,14 +229,14 @@ impl TypeCheckAttributes {
 /// `Classes_a` and `Classes_a_b`.
 pub fn type_check_attributes(ir: &IntermediateRepr) -> HashSet<TypeCheckAttributes> {
     let mut all_types_in_ir: Vec<&TypeIR> = Vec::new();
-    for class in ir.walk_classes() {
-        for field in class.item.elem.static_fields.iter() {
+    for class in &ir.classes {
+        for field in &class.elem.static_fields {
             let field_type = &field.elem.r#type.elem;
             all_types_in_ir.push(field_type);
         }
     }
     for function in ir.walk_functions() {
-        for (_param_name, parameter) in function.item.elem.inputs.iter() {
+        for (_param_name, parameter) in &function.item.elem.inputs {
             all_types_in_ir.push(parameter);
         }
         let return_type = &function.item.elem.output;

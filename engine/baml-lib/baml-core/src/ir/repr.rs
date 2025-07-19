@@ -8,8 +8,10 @@ use baml_types::{
     baml_value::TypeLookups,
     expr::{self, Builtin, Expr, ExprMetadata, Name, VarIndex},
     ir_type::{ArrowGeneric, TypeNonStreaming, TypeStreaming, UnionConstructor},
-    type_meta, Arrow, BamlMap, BamlValueWithMeta, Constraint, ConstraintLevel, JinjaExpression,
-    Resolvable, StreamingMode, StringOr, TypeIR, TypeValue, UnionType, UnresolvedValue,
+    type_meta::{self, base::StreamingBehavior},
+    Arrow, BamlMap, BamlValueWithMeta, Constraint, ConstraintLevel, EvaluationContext,
+    JinjaExpression, Resolvable, StreamingMode, StringOr, TypeIR, TypeValue, UnionType,
+    UnresolvedValue,
 };
 use either::Either;
 use indexmap::{IndexMap, IndexSet};
@@ -570,10 +572,6 @@ impl IntermediateRepr {
 
     pub fn walk_enums(&self) -> impl ExactSizeIterator<Item = Walker<'_, &Node<Enum>>> {
         self.enums.iter().map(|e| Walker { ir: self, item: e })
-    }
-
-    pub fn walk_classes(&self) -> impl Iterator<Item = Walker<'_, &Node<Class>>> {
-        self.classes.iter().map(|e| Walker { ir: self, item: e })
     }
 
     // TODO: Exact size Iterator + Node<>?
@@ -1402,6 +1400,21 @@ impl<T> Node<T> {
     pub fn span(&self) -> Option<&ast::Span> {
         self.attributes.span.as_ref()
     }
+
+    pub fn alias(&self, ctx: &EvaluationContext<'_>) -> Result<Option<String>> {
+        self.attributes.alias().map(|v| v.resolve(ctx)).transpose()
+    }
+
+    pub fn description(&self, ctx: &EvaluationContext<'_>) -> Result<Option<String>> {
+        self.attributes
+            .description()
+            .map(|v| v.resolve(ctx))
+            .transpose()
+    }
+
+    pub fn streaming_behavior(&self) -> StreamingBehavior {
+        self.attributes.streaming_behavior()
+    }
 }
 
 /// Implement this for every node in the IR AST, where T is the type of IR node
@@ -1890,6 +1903,10 @@ impl WithRepr<Class> for ClassWalker<'_> {
 impl Class {
     pub fn inputs(&self) -> &Vec<(String, TypeIR)> {
         &self.inputs
+    }
+
+    pub fn find_field(&self, name: &str) -> Option<&Node<Field>> {
+        self.static_fields.iter().find(|f| f.elem.name == name)
     }
 }
 
@@ -2856,7 +2873,7 @@ mod tests {
         .unwrap();
 
         // Test class docstrings
-        let foo = ir.find_class("Foo").as_ref().unwrap().clone().elem();
+        let foo = &ir.find_class("Foo").as_ref().unwrap().clone().elem;
         assert_eq!(foo.docstring.as_ref().unwrap().0.as_str(), "Foo class.");
         match foo.static_fields.as_slice() {
             [field1, field2] => {
@@ -2939,33 +2956,27 @@ mod tests {
         )
         .unwrap();
         let foo = ir.find_class("Foo").unwrap();
-        assert!(!foo.streaming_behavior().done);
-        match foo.walk_fields().collect::<Vec<_>>().as_slice() {
+        assert!(!foo.attributes.streaming_behavior().done);
+        match foo.elem.static_fields.as_slice() {
             [field1, field2, field3] => {
-                let type1 = &field1.item.elem.r#type;
+                let type1 = &field1.elem.r#type;
                 assert!(type1.attributes.streaming_behavior().needed);
-                let type2 = &field2.item.elem.r#type;
-                assert!(!field2.streaming_behavior().state);
+                let type2 = &field2.elem.r#type;
+                assert!(!field2.attributes.streaming_behavior().state);
                 assert!(type2.attributes.get("stream.with_state").is_some());
-                let type3 = &field3.item.elem.r#type;
+                let type3 = &field3.elem.r#type;
                 // the field doesnt have this attribute / behavior -- the type does. But we should document why somewhere better.
-                assert!(!field3.streaming_behavior().done);
+                assert!(!field3.attributes.streaming_behavior().done);
                 assert!(type3.attributes.get("stream.done").is_some());
             }
             _ => panic!("Expected exactly 3 fields"),
         }
         let bar = ir.find_class("Bar").unwrap();
-        assert!(bar.streaming_behavior().done);
-        match bar.walk_fields().collect::<Vec<_>>().as_slice() {
+        assert!(bar.attributes.streaming_behavior().done);
+        match bar.elem.static_fields.as_slice() {
             [field1, field2] => {
-                assert!(!field1.streaming_behavior().done);
-                assert!(field1
-                    .item
-                    .elem
-                    .r#type
-                    .attributes
-                    .get("stream.done")
-                    .is_some());
+                assert!(!field1.attributes.streaming_behavior().done);
+                assert!(field1.elem.r#type.attributes.get("stream.done").is_some());
             }
             _ => panic!("Expected exactly 2 fields"),
         }
@@ -2986,9 +2997,9 @@ mod tests {
         .unwrap();
 
         let class = ir.find_class("Test").unwrap();
-        let alias = class.find_field("field").unwrap();
+        let alias = class.elem.find_field("field").unwrap();
 
-        assert_eq!(*alias.r#type(), TypeIR::int());
+        assert_eq!(alias.elem.r#type.elem, TypeIR::int());
     }
 
     #[test]
@@ -3007,9 +3018,9 @@ mod tests {
         .unwrap();
 
         let class = ir.find_class("Test").unwrap();
-        let alias = class.find_field("field").unwrap();
+        let alias = class.elem.find_field("field").unwrap();
 
-        let type_meta::base::TypeMeta { constraints, .. } = alias.r#type().meta();
+        let type_meta::base::TypeMeta { constraints, .. } = alias.elem.r#type.elem.meta();
 
         assert_eq!(constraints.len(), 3);
 
@@ -3042,11 +3053,11 @@ mod tests {
             .unwrap();
 
             let class = ir.find_class("UseMyUnion").unwrap();
-            let field1 = class.find_field("u").unwrap();
-            let field1_type = &field1.elem().r#type.elem;
+            let field1 = class.elem.find_field("u").unwrap();
+            let field1_type = &field1.elem.r#type.elem;
 
-            let field2 = class.find_field("u2").unwrap();
-            let field2_type = &field2.elem().r#type.elem;
+            let field2 = class.elem.find_field("u2").unwrap();
+            let field2_type = &field2.elem.r#type.elem;
 
             // Both fields should have consistent type resolution for Recursive1
             assert_eq!(
@@ -3081,11 +3092,11 @@ mod tests {
             .unwrap();
 
             let class = ir.find_class("UseMyUnion").unwrap();
-            let field1 = class.find_field("u").unwrap();
-            let field1_type = &field1.elem().r#type.elem;
+            let field1 = class.elem.find_field("u").unwrap();
+            let field1_type = &field1.elem.r#type.elem;
 
-            let field2 = class.find_field("u2").unwrap();
-            let field2_type = &field2.elem().r#type.elem;
+            let field2 = class.elem.find_field("u2").unwrap();
+            let field2_type = &field2.elem.r#type.elem;
 
             // Both fields should have consistent type resolution for Recursive1
             assert_eq!(

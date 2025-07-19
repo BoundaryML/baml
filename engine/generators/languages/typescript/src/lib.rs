@@ -55,8 +55,9 @@ $ pnpm add @boundaryml/baml
         let pkg = package::CurrentRenderPackage::new("baml_client", ir.clone());
         let file_map = args.file_map_as_json_string()?;
         let mut types: Vec<String> = ir
-            .walk_classes()
-            .map(|c| c.name().to_string())
+            .classes
+            .iter()
+            .map(|c| c.elem.name.clone())
             .chain(ir.walk_enums().map(|e| e.name().to_string()))
             .chain(ir.walk_alias_cycles().map(|a| a.item.0.clone()))
             .collect();
@@ -92,14 +93,15 @@ $ pnpm add @boundaryml/baml
         )?;
 
         // Generate type files
-        let classes = ir.walk_classes().collect::<Vec<_>>();
-        let ts_classes = classes
+        let ts_classes = ir
+            .classes
             .iter()
-            .map(|c| ir_to_ts::classes::ir_class_to_ts(c.item, &pkg))
+            .map(|c| ir_to_ts::classes::ir_class_to_ts(c, &pkg))
             .collect::<Vec<_>>();
-        let ts_classes_stream = classes
+        let ts_classes_stream = ir
+            .classes
             .iter()
-            .map(|c| ir_to_ts::classes::ir_class_to_ts_stream(c.item, &pkg))
+            .map(|c| ir_to_ts::classes::ir_class_to_ts_stream(c, &pkg))
             .collect::<Vec<_>>();
         let ts_enums = ir
             .walk_enums()

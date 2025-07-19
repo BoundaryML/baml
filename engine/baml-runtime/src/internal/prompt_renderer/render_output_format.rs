@@ -8,7 +8,8 @@ use baml_types::{
 };
 use indexmap::{IndexMap, IndexSet};
 use internal_baml_core::ir::{
-    repr::IntermediateRepr, ClassWalker, EnumWalker, IRHelper, IRHelperExtended,
+    repr::{self, IntermediateRepr},
+    EnumWalker, IRHelper, IRHelperExtended,
 };
 use internal_baml_jinja::types::{Class, Enum, Name, OutputFormatContent};
 
@@ -77,7 +78,7 @@ impl OverridableValue<String> {
 fn find_new_class_field(
     class_name: &str,
     field_name: &str,
-    class_walker: &Result<ClassWalker<'_>>,
+    class_walker: &Result<&repr::Node<repr::Class>>,
     overrides: &RuntimeClassOverride,
     _ctx: &RuntimeContext,
 ) -> Result<(Name, TypeIR, Option<String>, bool)> {
@@ -86,8 +87,8 @@ fn find_new_class_field(
     };
 
     // Ensure the original field does not exist
-    if let Ok(class_walker) = class_walker {
-        if class_walker.find_field(field_name).is_some() {
+    if let Ok(class) = class_walker {
+        if class.elem.find_field(field_name).is_some() {
             anyhow::bail!(
                 "Class {} already has a pre-defined field: {}",
                 class_name,
@@ -108,15 +109,15 @@ fn find_new_class_field(
 fn find_existing_class_field(
     class_name: &str,
     field_name: &str,
-    class_walker: &Result<ClassWalker<'_>>,
+    class_walker: &Result<&repr::Node<repr::Class>>,
     overrides: &Option<&RuntimeClassOverride>,
     ctx: &RuntimeContext,
 ) -> Result<(Name, TypeIR, Option<String>, bool)> {
-    let Ok(class_walker) = class_walker else {
+    let Ok(class) = class_walker else {
         anyhow::bail!("Class {} does not exist", class_name);
     };
 
-    let Some(field_walker) = class_walker.find_field(field_name) else {
+    let Some(field_walker) = class.elem.find_field(field_name) else {
         anyhow::bail!("Class {} does not have a field: {}", class_name, field_name);
     };
 
@@ -148,7 +149,7 @@ fn find_existing_class_field(
 
     let name = Name::new_with_alias(field_name.to_string(), alias.value());
     let desc = desc.value();
-    let r#type = field_walker.r#type();
+    let r#type = &field_walker.elem.r#type.elem;
     let needed = needed.value().unwrap_or(false);
     Ok((name, r#type.clone(), desc, needed))
 }
@@ -348,7 +349,7 @@ fn relevant_data_models<'a>(
 
                     let real_fields = walker
                         .as_ref()
-                        .map(|e| e.walk_fields().map(|v| v.name().to_string()))
+                        .map(|e| e.elem.static_fields.iter().map(|v| v.elem.name.to_string()))
                         .ok();
                     let override_fields = overrides
                         .map(|o| o.update_fields.keys().cloned())

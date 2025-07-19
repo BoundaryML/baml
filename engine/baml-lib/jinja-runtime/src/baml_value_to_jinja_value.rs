@@ -65,13 +65,13 @@ impl IntoMiniJinjaValue for BamlValue {
 
                 let mut key_to_alias = IndexMap::new();
                 if let Ok(c) = ir.find_class(name) {
-                    for field in c.walk_fields() {
+                    for field in c.elem.static_fields.iter() {
                         let key = field
                             .alias(eval_ctx)
                             .ok()
                             .and_then(|a| a)
-                            .unwrap_or_else(|| field.name().to_string());
-                        key_to_alias.insert(field.name().to_string(), key);
+                            .unwrap_or_else(|| field.elem.name.clone());
+                        key_to_alias.insert(field.elem.name.clone(), key);
                     }
                 }
 

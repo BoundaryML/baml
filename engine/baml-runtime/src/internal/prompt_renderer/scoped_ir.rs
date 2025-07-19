@@ -32,7 +32,12 @@ impl<'ir> ScopedIr<'ir> {
     fn find_class(
         &self,
         class_name: &str,
-    ) -> Result<FindResult<internal_baml_core::ir::ClassWalker<'ir>, &RuntimeClassOverride>> {
+    ) -> Result<
+        FindResult<
+            &internal_baml_core::ir::repr::Node<internal_baml_core::ir::repr::Class>,
+            &RuntimeClassOverride,
+        >,
+    > {
         let class_override = self.ctx.class_override.get(class_name);
         let class = self.ir.find_class(class_name);
 
@@ -68,10 +73,12 @@ impl IRSemanticStreamingHelper for ScopedIr<'_> {
         let class_type = &self.find_class(class_name)?;
         let result = match class_type {
             FindResult::OnlyIr(cls) | FindResult::Overriden(cls, _) => cls
-                .walk_fields()
+                .elem
+                .static_fields
+                .iter()
                 .filter_map(|field| {
                     if field.streaming_behavior().needed {
-                        Some(field.name().to_string())
+                        Some(field.elem.name.to_string())
                     } else {
                         None
                     }
@@ -93,7 +100,7 @@ impl IRSemanticStreamingHelper for ScopedIr<'_> {
                     .iter()
                     .map(|(k, v)| (k.clone(), v.0.clone()));
 
-                cls.elem()
+                cls.elem
                     .static_fields
                     .iter()
                     .map(|field_node| {
@@ -111,7 +118,7 @@ impl IRSemanticStreamingHelper for ScopedIr<'_> {
                 .map(|(k, v)| (k.clone(), v.0.clone()))
                 .collect(),
             FindResult::OnlyIr(cls) => cls
-                .elem()
+                .elem
                 .static_fields
                 .iter()
                 .map(|field_node| {
@@ -135,10 +142,12 @@ impl IRSemanticStreamingHelper for ScopedIr<'_> {
 
         let result = match class_type {
             FindResult::OnlyIr(cls) | FindResult::Overriden(cls, _) => cls
-                .walk_fields()
+                .elem
+                .static_fields
+                .iter()
                 .filter_map(|field| {
-                    if !value_names.contains(field.name()) {
-                        Some(field.name().to_string())
+                    if !value_names.contains(&field.elem.name) {
+                        Some(field.elem.name.to_string())
                     } else {
                         None
                     }

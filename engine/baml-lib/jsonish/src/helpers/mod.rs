@@ -11,8 +11,8 @@ use internal_baml_core::{
     ast::Field,
     internal_baml_diagnostics::SourceFile,
     ir::{
-        repr::IntermediateRepr, ClassWalker, EnumWalker, IRHelper, IRHelperExtended, TypeIR,
-        TypeValue,
+        repr::{self, IntermediateRepr, Node},
+        EnumWalker, IRHelper, IRHelperExtended, TypeIR, TypeValue,
     },
     validate,
 };
@@ -68,21 +68,21 @@ pub fn render_output_format(
 fn find_existing_class_field(
     class_name: &str,
     field_name: &str,
-    class_walker: &Result<ClassWalker<'_>>,
+    class: &Result<&Node<repr::Class>>,
     env_values: &EvaluationContext<'_>,
 ) -> Result<(Name, TypeIR, Option<String>, bool)> {
-    let Ok(class_walker) = class_walker else {
+    let Ok(class_walker) = class else {
         anyhow::bail!("Class {} does not exist", class_name);
     };
 
-    let Some(field_walker) = class_walker.find_field(field_name) else {
+    let Some(field) = class_walker.elem.find_field(field_name) else {
         anyhow::bail!("Class {} does not have a field: {}", class_name, field_name);
     };
 
-    let name = Name::new_with_alias(field_name.to_string(), field_walker.alias(env_values)?);
-    let desc = field_walker.description(env_values)?;
-    let r#type = field_walker.r#type();
-    let streaming_needed = field_walker.item.attributes.streaming_behavior().needed;
+    let name = Name::new_with_alias(field_name.to_string(), field.alias(env_values)?);
+    let desc = field.description(env_values)?;
+    let r#type = &field.elem.r#type.elem;
+    let streaming_needed = field.streaming_behavior().needed;
     Ok((name, r#type.clone(), desc, streaming_needed))
 }
 
@@ -228,7 +228,7 @@ fn relevant_data_models<'a>(
 
                     let real_fields = walker
                         .as_ref()
-                        .map(|e| e.walk_fields().map(|v| v.name().to_string()))
+                        .map(|e| e.elem.static_fields.iter().map(|v| v.elem.name.to_string()))
                         .ok();
 
                     let fields = real_fields

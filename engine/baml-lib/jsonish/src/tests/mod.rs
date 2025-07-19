@@ -30,7 +30,7 @@ use indexmap::{IndexMap, IndexSet};
 use internal_baml_core::{
     ast::Field,
     internal_baml_diagnostics::SourceFile,
-    ir::{repr::IntermediateRepr, ClassWalker, EnumWalker, IRHelper, TypeValue},
+    ir::{repr::IntermediateRepr, EnumWalker, IRHelper, TypeValue},
     validate,
 };
 use internal_baml_jinja::types::{Class, Enum, Name, OutputFormatContent};
@@ -98,7 +98,7 @@ test_deserializer!(
     r#"Some preview text
 
     JSON Output:
-    
+
     [
       {
         "blah": "blah"
@@ -114,7 +114,7 @@ test_deserializer!(
     r#"Some preview text
 
     JSON Output:
-    
+
     [
       {
         "blah": "blah"
@@ -132,7 +132,7 @@ test_deserializer!(
     test_string_from_string22,
     EMPTY_FILE,
     r#"Hello there.
-    
+
     JSON Output:
     ```json
     [
@@ -150,7 +150,7 @@ test_deserializer!(
     "#,
     TypeIR::Primitive(TypeValue::String, Default::default()),
     r#"Hello there.
-    
+
     JSON Output:
     ```json
     [
@@ -218,24 +218,24 @@ class Score {
       1 to 100
     "#)
   }
-  
+
   class PopularityOverTime {
     bookName string
     scores Score[]
   }
-  
+
   class WordCount {
     bookName string
     count int
   }
-  
+
   class Ranking {
     bookName string
     score int @description(#"
       1 to 100 of your own personal score of this book
     "#)
   }
-   
+
   class BookAnalysis {
     bookNames string[] @description(#"
       The list of book names  provided
@@ -244,10 +244,10 @@ class Score {
       Print the popularity of EACH BOOK over time.
     "#) @alias(popularityData)
     // popularityRankings Ranking[] @description(#"
-    //   A list of the book's popularity rankings over time. 
+    //   A list of the book's popularity rankings over time.
     //   The first element is the top ranking
     // "#)
-   
+
     // wordCounts WordCount[]
   }
 "##;

@@ -1,11 +1,14 @@
-use internal_baml_core::ir::{Class, Field};
+use internal_baml_core::ir::{
+    repr::{Class, Node},
+    Field,
+};
 
 use crate::{
     generated_types::{ClassGo, FieldGo},
     package::CurrentRenderPackage,
 };
 
-pub fn ir_class_to_go<'a>(class: &Class, pkg: &'a CurrentRenderPackage) -> ClassGo<'a> {
+pub fn ir_class_to_go<'a>(class: &'a Node<Class>, pkg: &'a CurrentRenderPackage) -> ClassGo<'a> {
     ClassGo {
         name: class.elem.name.clone(),
         docstring: class
@@ -24,7 +27,10 @@ pub fn ir_class_to_go<'a>(class: &Class, pkg: &'a CurrentRenderPackage) -> Class
     }
 }
 
-pub fn ir_class_to_go_stream<'a>(class: &Class, pkg: &'a CurrentRenderPackage) -> ClassGo<'a> {
+pub fn ir_class_to_go_stream<'a>(
+    class: &'a Node<Class>,
+    pkg: &'a CurrentRenderPackage,
+) -> ClassGo<'a> {
     ClassGo {
         name: class.elem.name.clone(),
         docstring: class
@@ -91,7 +97,7 @@ mod tests {
         )
         .unwrap();
         let ir = std::sync::Arc::new(ir);
-        let class = ir.find_class("SimpleClass").unwrap().item;
+        let class = ir.find_class("SimpleClass").unwrap();
         let pkg = CurrentRenderPackage::new("baml_client", ir.clone());
         let class_go = ir_class_to_go_stream(class, &pkg);
         assert_eq!(class_go.name, "SimpleClass");
@@ -110,7 +116,7 @@ mod tests {
         )
         .unwrap();
         let ir = std::sync::Arc::new(ir);
-        let class = ir.find_class("ChildClass").unwrap().item;
+        let class = ir.find_class("ChildClass").unwrap();
         let pkg = CurrentRenderPackage::new("baml_client", ir.clone());
         let class_go = ir_class_to_go_stream(class, &pkg);
         let digits_field = class_go.fields.iter().find(|f| f.name == "digits").unwrap();
@@ -131,7 +137,7 @@ mod tests {
         )
         .expect("Valid IR");
         let ir = std::sync::Arc::new(ir);
-        let class = ir.find_class("Foo").unwrap().item;
+        let class = ir.find_class("Foo").unwrap();
         let pkg = CurrentRenderPackage::new("baml_client", ir.clone());
         let class_go = ir_class_to_go_stream(class, &pkg);
         assert_eq!(class_go.fields[0].docstring, Some("ds".to_string()));

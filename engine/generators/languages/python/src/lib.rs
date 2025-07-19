@@ -70,8 +70,9 @@ impl LanguageFeatures for PyLanguageFeatures {
         collector.add_file("parser.py", render_parser(&functions, &pkg)?)?;
 
         let py_classes = ir
-            .walk_classes()
-            .map(|c| ir_to_py::classes::ir_class_to_py(c.item, &pkg))
+            .classes
+            .iter()
+            .map(|c| ir_to_py::classes::ir_class_to_py(c, &pkg))
             .collect::<Vec<_>>();
         let enums = ir
             .walk_enums()
@@ -109,8 +110,9 @@ impl LanguageFeatures for PyLanguageFeatures {
         py_stream_type_aliases.sort_by(|a, b| a.name.cmp(&b.name));
 
         let py_classes = ir
-            .walk_classes()
-            .map(|c| ir_to_py::classes::ir_class_to_py_stream(c.item, &pkg))
+            .classes
+            .iter()
+            .map(|c| ir_to_py::classes::ir_class_to_py_stream(c, &pkg))
             .collect::<Vec<_>>();
 
         pkg.set("baml_client.stream_types");

@@ -252,26 +252,23 @@ pub fn typecheck_in_context(
             spread,
             meta,
         } => {
-            if let Ok(class_walker) = ir.find_class(name) {
+            if let Ok(class) = ir.find_class(name) {
                 // Typecheck each field in the constructor.
                 for (field_name, field_value) in fields.iter() {
                     let maybe_field_type = field_value.meta().1.clone();
                     if let Some(field_type) = maybe_field_type {
-                        if let Some(field_walker) = class_walker.find_field(field_name) {
+                        if let Some(field_walker) = class.elem.find_field(field_name) {
                             // panic!("SOME FIELD TYPE FOUND: {:?}", field_walker.r#type());
                             if !compatible_as_subtype(
                                 ir,
-                                &Some(field_walker.r#type().clone()),
+                                &Some(field_walker.elem.r#type.elem.clone()),
                                 &Some(field_type.clone()),
                             ) {
                                 // panic!("INCOMPATIBLE");
                                 diagnostics.push_error(DatamodelError::new_validation_error(
                                     &format!(
                                         "{}.{} expected type {}, but found {}",
-                                        name,
-                                        field_name,
-                                        field_walker.r#type(),
-                                        field_type
+                                        name, field_name, field_walker.elem.r#type.elem, field_type
                                     ),
                                     field_value.meta().0.clone(),
                                 ));
@@ -288,11 +285,13 @@ pub fn typecheck_in_context(
 
                 // Check that all fields are present.
                 if spread.is_none() {
-                    let missing_fields = class_walker
-                        .walk_fields()
+                    let missing_fields = class
+                        .elem
+                        .static_fields
+                        .iter()
                         .filter_map(|f| {
-                            if !fields.contains_key(f.name()) {
-                                Some(f.name().to_string())
+                            if !fields.contains_key(&f.elem.name) {
+                                Some(f.elem.name.to_string())
                             } else {
                                 None
                             }

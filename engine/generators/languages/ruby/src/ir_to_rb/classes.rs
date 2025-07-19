@@ -1,11 +1,14 @@
-use internal_baml_core::ir::{Class, Field};
+use internal_baml_core::ir::{
+    repr::{Class, Node},
+    Field,
+};
 
 use crate::{
     generated_types::{ClassRb, FieldRb},
     package::CurrentRenderPackage,
 };
 
-pub fn ir_class_to_rb<'a>(class: &Class, pkg: &'a CurrentRenderPackage) -> ClassRb<'a> {
+pub fn ir_class_to_rb<'a>(class: &'a Node<Class>, pkg: &'a CurrentRenderPackage) -> ClassRb<'a> {
     ClassRb {
         name: class.elem.name.clone(),
         docstring: class
@@ -24,7 +27,10 @@ pub fn ir_class_to_rb<'a>(class: &Class, pkg: &'a CurrentRenderPackage) -> Class
     }
 }
 
-pub fn ir_class_to_rb_stream<'a>(class: &Class, pkg: &'a CurrentRenderPackage) -> ClassRb<'a> {
+pub fn ir_class_to_rb_stream<'a>(
+    class: &'a Node<Class>,
+    pkg: &'a CurrentRenderPackage,
+) -> ClassRb<'a> {
     ClassRb {
         name: class.elem.name.clone(),
         docstring: class

@@ -22,8 +22,8 @@ use super::{repr, ExprFunctionNode};
 use crate::{
     error_not_found,
     ir::{
-        repr::{IntermediateRepr, Node, TypeAlias, Walker},
-        Class, Client, Enum, EnumValue, Field, FunctionNode, RetryPolicy, TemplateString, TestCase,
+        repr::{Class, IntermediateRepr, Node, TypeAlias, Walker},
+        Client, Enum, EnumValue, Field, FunctionNode, RetryPolicy, TemplateString, TestCase,
     },
 };
 
@@ -31,7 +31,6 @@ pub type FunctionWalker<'a> = Walker<'a, &'a FunctionNode>;
 pub type ExprFunctionWalker<'a> = Walker<'a, &'a ExprFunctionNode>;
 pub type EnumWalker<'a> = Walker<'a, &'a Enum>;
 pub type EnumValueWalker<'a> = Walker<'a, &'a EnumValue>;
-pub type ClassWalker<'a> = Walker<'a, &'a Class>;
 pub type TemplateStringWalker<'a> = Walker<'a, &'a TemplateString>;
 pub type ClientWalker<'a> = Walker<'a, &'a Client>;
 pub type RetryPolicyWalker<'a> = Walker<'a, &'a RetryPolicy>;
@@ -41,7 +40,7 @@ pub type ClassFieldWalker<'a> = Walker<'a, &'a Field>;
 
 pub trait IRHelper {
     fn find_enum<'a>(&'a self, enum_name: &str) -> Result<EnumWalker<'a>>;
-    fn find_class<'a>(&'a self, class_name: &str) -> Result<ClassWalker<'a>>;
+    fn find_class(&self, class_name: &str) -> Result<&Node<Class>>;
     fn find_type_alias(&self, alias_name: &str) -> Result<&Node<TypeAlias>>;
     fn find_expr_fn<'a>(&'a self, function_name: &str) -> Result<ExprFunctionWalker<'a>>;
     fn find_function<'a>(&'a self, function_name: &str) -> Result<FunctionWalker<'a>>;
@@ -426,12 +425,16 @@ impl IRHelper for IntermediateRepr {
         }
     }
 
-    fn find_class<'a>(&'a self, class_name: &str) -> Result<ClassWalker<'a>> {
-        match self.walk_classes().find(|e| e.name() == class_name) {
+    fn find_class(&self, class_name: &str) -> Result<&Node<Class>> {
+        match self.classes.iter().find(|e| e.elem.name == class_name) {
             Some(e) => Ok(e),
             None => {
                 // Get best match.
-                let classes = self.walk_classes().map(|e| e.name()).collect::<Vec<_>>();
+                let classes = self
+                    .classes
+                    .iter()
+                    .map(|c| c.elem.name.clone())
+                    .collect::<Vec<_>>();
                 error_not_found!("class", class_name, &classes)
             }
         }
@@ -545,24 +548,17 @@ impl IRHelper for IntermediateRepr {
     fn find_class_locations(&self, class_name: &str) -> Vec<Span> {
         let mut locations = vec![];
 
-        for cls in self.walk_classes() {
+        for cls in &self.classes {
             // First look for the definition of the class.
-            if cls.name() == class_name {
-                locations.push(
-                    cls.item
-                        .attributes
-                        .identifier_span
-                        .as_ref()
-                        .unwrap()
-                        .to_owned(),
-                );
+            if cls.elem.name == class_name {
+                locations.push(cls.attributes.identifier_span.as_ref().unwrap().to_owned());
             }
 
             // After that we'll find all the references to this class in the
             // fields of other classes.
-            for field in cls.walk_fields() {
+            for field in &cls.elem.static_fields {
                 field
-                    .elem()
+                    .elem
                     .r#type
                     .attributes
                     .symbol_spans
@@ -625,10 +621,10 @@ impl IRHelper for IntermediateRepr {
 
         // Then find all the references to this enum in the fields of other
         // classes.
-        for cls in self.walk_classes() {
-            for field in cls.walk_fields() {
+        for cls in &self.classes {
+            for field in &cls.elem.static_fields {
                 field
-                    .elem()
+                    .elem
                     .r#type
                     .attributes
                     .symbol_spans
@@ -691,10 +687,10 @@ impl IRHelper for IntermediateRepr {
 
         // Then find all the references to this type alias in the fields of other
         // classes.
-        for cls in self.walk_classes() {
-            for field in cls.walk_fields() {
+        for cls in &self.classes {
+            for field in &cls.elem.static_fields {
                 field
-                    .elem()
+                    .elem
                     .r#type
                     .attributes
                     .symbol_spans
@@ -788,12 +784,14 @@ impl IRHelperExtended for IntermediateRepr {
 
 impl IRSemanticStreamingHelper for IntermediateRepr {
     fn class_streaming_needed_fields(&self, class_name: &str) -> Result<HashSet<String>> {
-        let class = self.find_class(class_name)?;
-        Ok(class
-            .walk_fields()
-            .filter_map(|field: Walker<'_, &Field>| {
-                if field.r#type().streaming_behavior().needed {
-                    Some(field.name().to_string())
+        Ok(self
+            .find_class(class_name)?
+            .elem
+            .static_fields
+            .iter()
+            .filter_map(|field| {
+                if field.elem.r#type.elem.streaming_behavior().needed {
+                    Some(field.elem.name.clone())
                 } else {
                     None
                 }
@@ -802,8 +800,9 @@ impl IRSemanticStreamingHelper for IntermediateRepr {
     }
 
     fn class_fields(&self, class_name: &str) -> Result<BamlMap<String, TypeIR>> {
-        let class = self.find_class(class_name)?.elem();
-        Ok(class
+        Ok(self
+            .find_class(class_name)?
+            .elem
             .static_fields
             .iter()
             .map(|field_node| {
@@ -824,10 +823,12 @@ impl IRSemanticStreamingHelper for IntermediateRepr {
             Err(_) => Ok(HashSet::new()),
             Ok(class) => {
                 let missing_fields = class
-                    .walk_fields()
-                    .filter_map(|field: Walker<'_, &Field>| {
-                        if !value_names.contains(field.name()) {
-                            Some(field.name().to_string())
+                    .elem
+                    .static_fields
+                    .iter()
+                    .filter_map(|field| {
+                        if !value_names.contains(&field.elem.name) {
+                            Some(field.elem.name.clone())
                         } else {
                             None
                         }

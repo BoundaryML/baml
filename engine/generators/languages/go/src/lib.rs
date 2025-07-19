@@ -69,8 +69,9 @@ impl LanguageFeatures for GoLanguageFeatures {
         );
 
         let go_classes = ir
-            .walk_classes()
-            .map(|c| ir_to_go::classes::ir_class_to_go(c.item, &pkg))
+            .classes
+            .iter()
+            .map(|c| ir_to_go::classes::ir_class_to_go(c, &pkg))
             .collect::<Vec<_>>();
         let enums = ir
             .walk_enums()
@@ -178,8 +179,9 @@ impl LanguageFeatures for GoLanguageFeatures {
         };
 
         let go_classes = ir
-            .walk_classes()
-            .map(|c| ir_to_go::classes::ir_class_to_go_stream(c.item, &pkg))
+            .classes
+            .iter()
+            .map(|c| ir_to_go::classes::ir_class_to_go_stream(c, &pkg))
             .collect::<Vec<_>>();
 
         pkg.set("baml_client.stream_types");
