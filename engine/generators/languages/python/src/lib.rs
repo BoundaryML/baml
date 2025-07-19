@@ -77,11 +77,11 @@ impl LanguageFeatures for PyLanguageFeatures {
             .walk_enums()
             .map(|e| ir_to_py::enums::ir_enum_to_py(e.item, &pkg))
             .collect::<Vec<_>>();
-        let type_aliases = ir.walk_type_aliases().collect::<Vec<_>>();
 
-        let mut py_type_aliases = type_aliases
+        let mut py_type_aliases = ir
+            .type_aliases
             .iter()
-            .map(|c| ir_to_py::type_aliases::ir_type_alias_to_py(c.item, &pkg))
+            .map(|alias| ir_to_py::type_aliases::ir_type_alias_to_py(&alias.elem, &pkg))
             .collect::<Vec<_>>();
         py_type_aliases.sort_by(|a, b| a.name.cmp(&b.name));
 
@@ -101,9 +101,10 @@ impl LanguageFeatures for PyLanguageFeatures {
         collector.append_to_file("types.py", &render_py_types(&py_classes, &pkg)?)?;
         collector.append_to_file("types.py", &render_py_types(&py_type_aliases, &pkg)?)?;
 
-        let mut py_stream_type_aliases = type_aliases
+        let mut py_stream_type_aliases = ir
+            .type_aliases
             .iter()
-            .map(|c| ir_to_py::type_aliases::ir_type_alias_to_py_stream(c.item, &pkg))
+            .map(|alias| ir_to_py::type_aliases::ir_type_alias_to_py_stream(&alias.elem, &pkg))
             .collect::<Vec<_>>();
         py_stream_type_aliases.sort_by(|a, b| a.name.cmp(&b.name));
 

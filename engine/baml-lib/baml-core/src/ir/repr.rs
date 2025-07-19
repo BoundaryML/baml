@@ -576,12 +576,6 @@ impl IntermediateRepr {
         self.classes.iter().map(|e| Walker { ir: self, item: e })
     }
 
-    pub fn walk_type_aliases(&self) -> impl ExactSizeIterator<Item = Walker<'_, &Node<TypeAlias>>> {
-        self.type_aliases
-            .iter()
-            .map(|e| Walker { ir: self, item: e })
-    }
-
     // TODO: Exact size Iterator + Node<>?
     pub fn walk_alias_cycles(&self) -> impl Iterator<Item = Walker<'_, (&String, &TypeIR)>> {
         self.structural_recursive_alias_cycles
@@ -1009,9 +1003,9 @@ impl IntermediateRepr {
         }
 
         // Also check regular type aliases that directly reference themselves
-        for alias in self.walk_type_aliases() {
-            let alias_name = &alias.item.elem.name;
-            let field_type = &alias.item.elem.r#type.elem;
+        for alias in &self.type_aliases {
+            let alias_name = &alias.elem.name;
+            let field_type = &alias.elem.r#type.elem;
 
             // Check if this alias directly references itself (causes immediate circular reference)
             if self.type_directly_references_self(field_type, alias_name) {
@@ -1157,8 +1151,8 @@ impl IntermediateRepr {
         let mut conversion_map = std::collections::HashMap::new();
 
         // All type aliases default to type aliases
-        for alias in self.walk_type_aliases() {
-            conversion_map.insert(alias.item.elem.name.clone(), false);
+        for alias in &self.type_aliases {
+            conversion_map.insert(alias.elem.name.clone(), false);
         }
 
         // All recursive alias cycle types default to type aliases
@@ -1402,6 +1396,12 @@ fn to_ir_attributes(
 pub struct Node<T> {
     pub attributes: NodeAttributes,
     pub elem: T,
+}
+
+impl<T> Node<T> {
+    pub fn span(&self) -> Option<&ast::Span> {
+        self.attributes.span.as_ref()
+    }
 }
 
 /// Implement this for every node in the IR AST, where T is the type of IR node

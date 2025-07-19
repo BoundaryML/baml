@@ -14,7 +14,7 @@ use crate::ir::{
     jinja_helpers::render_expression,
     repr::{self, ExprFunction, FunctionConfig, Node, TypeBuilderEntry, WithRepr},
     Class, Client, Enum, EnumValue, ExprFunctionNode, Field, Function, FunctionNode, IRHelper,
-    Impl, IntermediateRepr, RetryPolicy, TemplateString, TestCase, TypeAlias, TypeIR, Walker,
+    Impl, IntermediateRepr, RetryPolicy, TemplateString, TestCase, TypeIR, Walker,
 };
 
 impl<'a> Walker<'a, &'a ExprFunctionNode> {
@@ -353,20 +353,6 @@ impl<'a> Walker<'a, &'a Class> {
 
     pub fn inputs(&self) -> &'a Vec<(String, baml_types::TypeIR)> {
         self.elem().inputs()
-    }
-}
-
-impl<'a> Walker<'a, &'a TypeAlias> {
-    pub fn elem(&self) -> &'a repr::TypeAlias {
-        &self.item.elem
-    }
-
-    pub fn name(&self) -> &'a str {
-        &self.elem().name
-    }
-
-    pub fn span(&self) -> Option<&crate::Span> {
-        self.item.attributes.span.as_ref()
     }
 }
 

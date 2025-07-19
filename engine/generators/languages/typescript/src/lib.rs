@@ -105,7 +105,6 @@ $ pnpm add @boundaryml/baml
             .walk_enums()
             .map(|e| ir_to_ts::enums::ir_enum_to_ts(e.item))
             .collect::<Vec<_>>();
-        let type_aliases = ir.walk_type_aliases().collect::<Vec<_>>();
 
         // Get the conversion map to determine which type aliases should become interfaces
         let conversion_map = ir.get_typescript_alias_conversion_map();
@@ -122,8 +121,8 @@ $ pnpm add @boundaryml/baml
             .collect();
 
         // Process regular type aliases (skip those that are part of recursive cycles)
-        for alias_walker in type_aliases.iter() {
-            let alias_name = &alias_walker.item.elem.name;
+        for alias in &ir.type_aliases {
+            let alias_name = &alias.elem.name;
 
             // Skip if this alias is part of a recursive cycle (will be processed separately)
             if recursive_alias_names.contains(alias_name) {
@@ -133,20 +132,20 @@ $ pnpm add @boundaryml/baml
             if conversion_map.get(alias_name) == Some(&true) {
                 // Convert to interface
                 if let Some(interface) =
-                    ir_to_ts::type_aliases::ir_type_alias_to_ts_interface(alias_walker.item, &pkg)
+                    ir_to_ts::type_aliases::ir_type_alias_to_ts_interface(&alias.elem, &pkg)
                 {
                     ts_interface_aliases.push(interface);
                 } else {
                     // Fallback to regular type alias if interface conversion fails
                     ts_type_aliases.push(ir_to_ts::type_aliases::ir_type_alias_to_ts(
-                        alias_walker.item,
+                        &alias.elem,
                         &pkg,
                     ));
                 }
             } else {
                 // Keep as type alias
                 ts_type_aliases.push(ir_to_ts::type_aliases::ir_type_alias_to_ts(
-                    alias_walker.item,
+                    &alias.elem,
                     &pkg,
                 ));
             }
@@ -171,14 +170,14 @@ $ pnpm add @boundaryml/baml
                     };
 
                     if let Some(interface) = ir_to_ts::type_aliases::ir_type_alias_to_ts_interface(
-                        &synthetic_alias,
+                        &synthetic_alias.elem,
                         &pkg,
                     ) {
                         ts_interface_aliases.push(interface);
                     } else {
                         // Fallback to regular type alias
                         ts_type_aliases.push(ir_to_ts::type_aliases::ir_type_alias_to_ts(
-                            &synthetic_alias,
+                            &synthetic_alias.elem,
                             &pkg,
                         ));
                     }
@@ -197,7 +196,7 @@ $ pnpm add @boundaryml/baml
                         },
                     };
                     ts_type_aliases.push(ir_to_ts::type_aliases::ir_type_alias_to_ts(
-                        &synthetic_alias,
+                        &synthetic_alias.elem,
                         &pkg,
                     ));
                 }
@@ -224,8 +223,8 @@ $ pnpm add @boundaryml/baml
         let mut ts_stream_interface_aliases = Vec::new();
 
         // Process regular type aliases (skip those that are part of recursive cycles)
-        for alias_walker in type_aliases.iter() {
-            let alias_name = &alias_walker.item.elem.name;
+        for alias in &ir.type_aliases {
+            let alias_name = &alias.elem.name;
 
             // Skip if this alias is part of a recursive cycle (will be processed separately)
             if recursive_alias_names.contains(alias_name) {
@@ -235,22 +234,19 @@ $ pnpm add @boundaryml/baml
             if conversion_map.get(alias_name) == Some(&true) {
                 // Convert to interface
                 if let Some(interface) =
-                    ir_to_ts::type_aliases::ir_type_alias_to_ts_interface_stream(
-                        alias_walker.item,
-                        &pkg,
-                    )
+                    ir_to_ts::type_aliases::ir_type_alias_to_ts_interface_stream(&alias.elem, &pkg)
                 {
                     ts_stream_interface_aliases.push(interface);
                 } else {
                     // Fallback to regular type alias if interface conversion fails
                     ts_stream_type_aliases.push(
-                        ir_to_ts::type_aliases::ir_type_alias_to_ts_stream(alias_walker.item, &pkg),
+                        ir_to_ts::type_aliases::ir_type_alias_to_ts_stream(&alias.elem, &pkg),
                     );
                 }
             } else {
                 // Keep as type alias
                 ts_stream_type_aliases.push(ir_to_ts::type_aliases::ir_type_alias_to_ts_stream(
-                    alias_walker.item,
+                    &alias.elem,
                     &pkg,
                 ));
             }
@@ -276,7 +272,7 @@ $ pnpm add @boundaryml/baml
 
                     if let Some(interface) =
                         ir_to_ts::type_aliases::ir_type_alias_to_ts_interface_stream(
-                            &synthetic_alias,
+                            &synthetic_alias.elem,
                             &pkg,
                         )
                     {
@@ -285,7 +281,7 @@ $ pnpm add @boundaryml/baml
                         // Fallback to regular type alias
                         ts_stream_type_aliases.push(
                             ir_to_ts::type_aliases::ir_type_alias_to_ts_stream(
-                                &synthetic_alias,
+                                &synthetic_alias.elem,
                                 &pkg,
                             ),
                         );
@@ -305,7 +301,10 @@ $ pnpm add @boundaryml/baml
                         },
                     };
                     ts_stream_type_aliases.push(
-                        ir_to_ts::type_aliases::ir_type_alias_to_ts_stream(&synthetic_alias, &pkg),
+                        ir_to_ts::type_aliases::ir_type_alias_to_ts_stream(
+                            &synthetic_alias.elem,
+                            &pkg,
+                        ),
                     );
                 }
             }

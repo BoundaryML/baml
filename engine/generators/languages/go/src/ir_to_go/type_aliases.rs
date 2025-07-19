@@ -1,5 +1,5 @@
 use baml_types::baml_value::TypeLookups;
-use internal_baml_core::ir::TypeAlias;
+use internal_baml_core::ir::repr::TypeAlias;
 
 use crate::{generated_types::TypeAliasGo, ir_to_go, package::CurrentRenderPackage};
 
@@ -25,19 +25,15 @@ pub fn ir_type_alias_to_go<'a>(
     pkg: &'a CurrentRenderPackage,
     drop_type: Option<&String>,
 ) -> TypeAliasGo<'a> {
-    let non_streaming = alias.elem.r#type.elem.to_non_streaming_type(pkg.lookup());
+    let non_streaming = alias.r#type.elem.to_non_streaming_type(pkg.lookup());
     let lookup = LookupWithDrop {
         lookup: pkg.lookup(),
         drop_type,
     };
     TypeAliasGo {
-        name: alias.elem.name.clone(),
+        name: alias.name.clone(),
         type_: ir_to_go::type_to_go(&non_streaming, &lookup),
-        docstring: alias
-            .elem
-            .docstring
-            .clone()
-            .map(|docstring| docstring.0.clone()),
+        docstring: alias.docstring.clone().map(|docstring| docstring.0.clone()),
         pkg,
     }
 }
@@ -47,20 +43,16 @@ pub fn ir_type_alias_to_go_stream<'a>(
     pkg: &'a CurrentRenderPackage,
     drop_type: Option<&String>,
 ) -> TypeAliasGo<'a> {
-    let partialized = alias.elem.r#type.elem.to_streaming_type(pkg.lookup());
+    let partialized = alias.r#type.elem.to_streaming_type(pkg.lookup());
 
     let lookup = LookupWithDrop {
         lookup: pkg.lookup(),
         drop_type,
     };
     TypeAliasGo {
-        name: alias.elem.name.clone(),
+        name: alias.name.clone(),
         type_: ir_to_go::stream_type_to_go(&partialized, &lookup),
-        docstring: alias
-            .elem
-            .docstring
-            .clone()
-            .map(|docstring| docstring.0.clone()),
+        docstring: alias.docstring.clone().map(|docstring| docstring.0.clone()),
         pkg,
     }
 }

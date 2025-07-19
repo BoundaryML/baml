@@ -2,7 +2,8 @@ use std::collections::HashSet;
 
 use baml_types::TypeIR;
 
-use super::{super::TypeAlias, ShallowSignature};
+use super::ShallowSignature;
+use crate::ir::repr::{Node, TypeAlias};
 
 /// Find some way to hash the class
 
@@ -35,7 +36,7 @@ impl<'a> std::hash::Hash for TypeAliasImplementationHash<'a> {
     }
 }
 
-impl super::ShallowSignature for TypeAlias {
+impl super::ShallowSignature for &Node<TypeAlias> {
     fn shallow_hash_prefix(&self) -> &'static str {
         "type_alias"
     }

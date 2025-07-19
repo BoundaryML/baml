@@ -297,8 +297,8 @@ impl IRSignature {
         for r#enum in ir.walk_enums() {
             shallow_hash.insert(r#enum.name(), ShallowHash::from_signature(r#enum));
         }
-        for type_alias in ir.walk_type_aliases() {
-            shallow_hash.insert(type_alias.name(), ShallowHash::from_signature(type_alias));
+        for alias in &ir.type_aliases {
+            shallow_hash.insert(&alias.elem.name, ShallowHash::from_signature(alias));
         }
         for func in ir.walk_functions() {
             shallow_hash.insert(func.name(), ShallowHash::from_signature(func));
@@ -402,16 +402,14 @@ impl IRSignature {
             .collect::<Result<_>>()?;
 
         let type_aliases_map: HashMap<String, TypeNodeSignature> = ir
-            .walk_type_aliases()
-            .map(|type_alias_walker| {
-                let resolved_field_type = type_alias_walker.elem().r#type.elem.clone();
+            .type_aliases
+            .iter()
+            .map(|type_alias| {
+                let resolved_field_type = type_alias.elem.r#type.elem.clone();
                 Ok((
-                    type_alias_walker.name().to_string(),
+                    type_alias.elem.name.to_string(),
                     TypeNodeSignature {
-                        signature: Signature::new_type_alias(
-                            type_alias_walker.name(),
-                            &shallow_hash,
-                        )?,
+                        signature: Signature::new_type_alias(&type_alias.elem.name, &shallow_hash)?,
                         field_type: Arc::new(resolved_field_type.to_non_streaming_type(ir)),
                     },
                 ))

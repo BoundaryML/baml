@@ -129,10 +129,10 @@ impl LanguageFeatures for RbLanguageFeatures {
             .walk_enums()
             .map(|e| ir_to_rb::enums::ir_enum_to_rb(e.item, &pkg))
             .collect::<Vec<_>>();
-        let type_aliases = ir.walk_type_aliases().collect::<Vec<_>>();
-        let mut rb_type_aliases = type_aliases
+        let mut rb_type_aliases = ir
+            .type_aliases
             .iter()
-            .map(|c| ir_to_rb::type_aliases::ir_type_alias_to_rb(c.item, &pkg))
+            .map(|alias| ir_to_rb::type_aliases::ir_type_alias_to_rb(&alias.elem, &pkg))
             .collect::<Vec<_>>();
         rb_type_aliases.sort_by(|a, b| a.name.cmp(&b.name));
 
@@ -153,9 +153,10 @@ impl LanguageFeatures for RbLanguageFeatures {
         collector.append_to_file("types.rb", &render_rb_types(&rb_type_aliases, &pkg)?)?;
         collector.append_to_file("types.rb", "\nend\n")?;
 
-        let mut rb_stream_type_aliases = type_aliases
+        let mut rb_stream_type_aliases = ir
+            .type_aliases
             .iter()
-            .map(|c| ir_to_rb::type_aliases::ir_type_alias_to_rb_stream(c.item, &pkg))
+            .map(|alias| ir_to_rb::type_aliases::ir_type_alias_to_rb_stream(&alias.elem, &pkg))
             .collect::<Vec<_>>();
         rb_stream_type_aliases.sort_by(|a, b| a.name.cmp(&b.name));
 

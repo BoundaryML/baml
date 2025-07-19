@@ -22,9 +22,8 @@ use super::{repr, ExprFunctionNode};
 use crate::{
     error_not_found,
     ir::{
-        repr::{IntermediateRepr, Walker},
+        repr::{IntermediateRepr, Node, TypeAlias, Walker},
         Class, Client, Enum, EnumValue, Field, FunctionNode, RetryPolicy, TemplateString, TestCase,
-        TypeAlias,
     },
 };
 
@@ -33,7 +32,6 @@ pub type ExprFunctionWalker<'a> = Walker<'a, &'a ExprFunctionNode>;
 pub type EnumWalker<'a> = Walker<'a, &'a Enum>;
 pub type EnumValueWalker<'a> = Walker<'a, &'a EnumValue>;
 pub type ClassWalker<'a> = Walker<'a, &'a Class>;
-pub type TypeAliasWalker<'a> = Walker<'a, &'a TypeAlias>;
 pub type TemplateStringWalker<'a> = Walker<'a, &'a TemplateString>;
 pub type ClientWalker<'a> = Walker<'a, &'a Client>;
 pub type RetryPolicyWalker<'a> = Walker<'a, &'a RetryPolicy>;
@@ -44,7 +42,7 @@ pub type ClassFieldWalker<'a> = Walker<'a, &'a Field>;
 pub trait IRHelper {
     fn find_enum<'a>(&'a self, enum_name: &str) -> Result<EnumWalker<'a>>;
     fn find_class<'a>(&'a self, class_name: &str) -> Result<ClassWalker<'a>>;
-    fn find_type_alias<'a>(&'a self, alias_name: &str) -> Result<TypeAliasWalker<'a>>;
+    fn find_type_alias(&self, alias_name: &str) -> Result<&Node<TypeAlias>>;
     fn find_expr_fn<'a>(&'a self, function_name: &str) -> Result<ExprFunctionWalker<'a>>;
     fn find_function<'a>(&'a self, function_name: &str) -> Result<FunctionWalker<'a>>;
     fn find_client<'a>(&'a self, client_name: &str) -> Result<ClientWalker<'a>>;
@@ -439,15 +437,22 @@ impl IRHelper for IntermediateRepr {
         }
     }
 
-    fn find_type_alias<'a>(&'a self, alias_name: &str) -> Result<TypeAliasWalker<'a>> {
-        match self.walk_type_aliases().find(|e| e.name() == alias_name) {
+    fn find_type_alias(&self, alias_name: &str) -> Result<&Node<TypeAlias>> {
+        match self
+            .type_aliases
+            .iter()
+            .find(|alias| alias.elem.name == alias_name)
+        {
             Some(e) => Ok(e),
+
             None => {
                 // Get best match.
                 let aliases = self
-                    .walk_type_aliases()
-                    .map(|e| e.name())
+                    .type_aliases
+                    .iter()
+                    .map(|alias| alias.elem.name.clone())
                     .collect::<Vec<_>>();
+
                 error_not_found!("type alias", alias_name, &aliases)
             }
         }
@@ -571,9 +576,9 @@ impl IRHelper for IntermediateRepr {
         }
 
         // Now do the same for type aliases.
-        for alias in self.walk_type_aliases() {
+        for alias in &self.type_aliases {
             alias
-                .elem()
+                .elem
                 .r#type
                 .attributes
                 .symbol_spans
@@ -637,9 +642,9 @@ impl IRHelper for IntermediateRepr {
         }
 
         // Now do the same for type aliases.
-        for alias in self.walk_type_aliases() {
+        for alias in &self.type_aliases {
             alias
-                .elem()
+                .elem
                 .r#type
                 .attributes
                 .symbol_spans
@@ -671,11 +676,10 @@ impl IRHelper for IntermediateRepr {
         let mut locations = vec![];
 
         // First look for the definition of the type alias.
-        for alias in self.walk_type_aliases() {
-            if alias.name() == type_alias_name {
+        for alias in &self.type_aliases {
+            if alias.elem.name == type_alias_name {
                 locations.push(
                     alias
-                        .item
                         .attributes
                         .identifier_span
                         .as_ref()
@@ -704,9 +708,9 @@ impl IRHelper for IntermediateRepr {
         }
 
         // Now do the same for type aliases.
-        for alias in self.walk_type_aliases() {
+        for alias in &self.type_aliases {
             alias
-                .elem()
+                .elem
                 .r#type
                 .attributes
                 .symbol_spans

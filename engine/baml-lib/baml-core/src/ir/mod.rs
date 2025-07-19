@@ -10,7 +10,6 @@ pub use ir_helpers::{
     scope_diagnostics, ArgCoercer, ClassFieldWalker, ClassWalker, ClientWalker, EnumValueWalker,
     EnumWalker, ExprFunctionWalker, FunctionWalker, IRHelper, IRHelperExtended,
     IRSemanticStreamingHelper, RetryPolicyWalker, TemplateStringWalker, TestCaseWalker,
-    TypeAliasWalker,
 };
 pub(super) use repr::IntermediateRepr;
 
@@ -18,7 +17,6 @@ pub(super) use repr::IntermediateRepr;
 pub type Enum = repr::Node<repr::Enum>;
 pub type EnumValue = repr::Node<repr::EnumValue>;
 pub type Class = repr::Node<repr::Class>;
-pub type TypeAlias = repr::Node<repr::TypeAlias>;
 pub type Field = repr::Node<repr::Field>;
 pub type TypeIR = baml_types::TypeIR;
 pub type TypeValue = baml_types::TypeValue;
