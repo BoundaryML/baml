@@ -4,6 +4,8 @@
 //! The "missing data is set to zero" feature and the "missing data is reported as missing" feature
 //! are purposefully out of scope for this implementation, at least for the time being.
 
+use std::collections::HashMap;
+
 use baml_types::BamlMap;
 use minijinja::machinery::ast;
 
@@ -11,6 +13,7 @@ use crate::{
     config::{Constant, Function, OutputExpression},
     eval::CompileContext,
     IntrusiveStack,
+    HashByPtr,
 };
 
 pub fn compile_returns_to_jinja<'udf>(
@@ -29,6 +32,20 @@ pub fn compile_returns_to_jinja<'udf>(
     });
 
     (strings, maps)
+}
+
+pub fn rebuild_with_known_constants<'search, 'src>(
+    expr: &ast::Expr<'src>,
+    constants: &'search dyn SearchBy<'search, &'src str, Constant>,
+) -> String {
+    let flattened = PreOrderTraversal::from_root(expr, |arg| match arg {
+        ast::CallArg::Pos(expr)
+        | ast::CallArg::Kwarg(_, expr)
+        | ast::CallArg::PosSplat(expr)
+        | ast::CallArg::KwargSplat(expr) => Some(expr),
+    });
+
+    rebuild_from_flattened(&flattened, constants)
 }
 
 #[cfg(test)]
@@ -212,8 +229,7 @@ fn compile_override_match_open<'a>(
                         // Then we would just replace Lookup() whenever required :]
                         // We also can't get from ast::Expr to Expression because Expression::new
                         // (used by Environment::compile_expression) is not exported...
-                        let rebuilt_expr =
-                            rebuild_with_known_constants(&ast, Some(&map_stack_for_func));
+                        let rebuilt_expr = rebuild_with_known_constants(&ast, &map_stack_for_func);
                         result += &rebuilt_expr;
                     }
                     Err(e) => {
@@ -235,6 +251,8 @@ fn compile_override_match_open<'a>(
 }
 
 // NOTE: could use a simpler generic set with search(self, name: K) -> Option<V>.
+/// Trait for searching a map-like structure by key. Used to implement searching for
+/// IntrusiveStack.
 pub trait SearchBy<'a, K, V> {
     fn search(&'a self, name: K) -> Option<&'a V>;
 }
@@ -277,189 +295,311 @@ where
     }
 }
 
-fn search_constant<'a, 'k>(
-    map_stack: Option<&'a dyn SearchBy<'a, &'k str, Constant>>,
-    name: &'k str,
-) -> Option<&'a Constant> {
-    map_stack.and_then(|map| map.search(name))
+/// Contains a pre-order traversal of a Jinja AST, in linear form. This allows for easy (and fast!) traversal in
+/// either pre-order or post-order (iterate in reverse).
+#[derive(Clone, Debug)]
+pub struct PreOrderTraversal<'ast, 'src>(pub Vec<&'ast ast::Expr<'src>>);
+
+impl<'ast, 'src> PreOrderTraversal<'ast, 'src> {
+    pub fn from_root(
+        ast: &'ast ast::Expr<'src>,
+        mut arg_filter: impl FnMut(&'ast ast::CallArg<'src>) -> Option<&'ast ast::Expr<'src>>,
+    ) -> Self {
+        Self::from_root_dyn_impl(ast, &mut arg_filter)
+    }
+
+    pub fn preorder(&self) -> impl Iterator<Item = &'ast ast::Expr<'src>> + '_ {
+        self.0.iter().copied()
+    }
+
+    pub fn preorder_mut<'s>(
+        &'s mut self,
+    ) -> impl Iterator<Item = &'s mut &'ast ast::Expr<'src>> + 's {
+        self.0.iter_mut()
+    }
+
+    pub fn postorder(&self) -> impl Iterator<Item = &'ast ast::Expr<'src>> + '_ {
+        self.0.iter().rev().copied()
+    }
+
+    pub fn postorder_mut<'s>(
+        &'s mut self,
+    ) -> impl Iterator<Item = &'s mut &'ast ast::Expr<'src>> + 's {
+        self.0.iter_mut().rev()
+    }
+
+    // NOTE: (Jesus) this function uses `dyn` to avoid explosion of code due to monomorphization.
+    // Not concerned with performance difference, since the objective of using this is to do this expensive
+    // traversal once and do the rest by iterating over the Vec.
+    fn from_root_dyn_impl(
+        ast: &'ast ast::Expr<'src>,
+        mut arg_filter: &mut dyn FnMut(&'ast ast::CallArg<'src>) -> Option<&'ast ast::Expr<'src>>,
+    ) -> Self {
+        let mut stack = Vec::new();
+        let mut top = ast;
+
+        let mut result = Vec::new();
+
+        loop {
+            result.push(top);
+
+            use ast::Expr::*;
+            top = match top {
+                Var(_) | Const(_) => match stack.pop() {
+                    Some(expr) => expr,
+                    None => break,
+                },
+                Slice(spanned) => {
+                    stack.extend(spanned.step.as_ref());
+                    stack.extend(spanned.stop.as_ref());
+                    stack.extend(spanned.start.as_ref());
+                    match stack.pop() {
+                        Some(expr) => expr,
+                        None => break,
+                    }
+                }
+                UnaryOp(spanned) => &spanned.expr,
+                BinOp(spanned) => {
+                    stack.push(&spanned.right);
+                    &spanned.left
+                }
+                IfExpr(spanned) => {
+                    stack.extend(spanned.false_expr.as_ref());
+                    stack.push(&spanned.true_expr);
+                    &spanned.test_expr
+                }
+                Filter(spanned) => {
+                    stack.extend(spanned.args.iter().filter_map(&mut arg_filter));
+                    spanned
+                        .expr
+                        .as_ref()
+                        .expect("filter expression must have a child expression")
+                }
+                Test(spanned) => {
+                    stack.extend(spanned.args.iter().filter_map(&mut arg_filter));
+                    &spanned.expr
+                }
+                GetAttr(spanned) => &spanned.expr,
+                GetItem(spanned) => {
+                    stack.push(&spanned.subscript_expr);
+                    &spanned.expr
+                }
+                Call(spanned) => {
+                    stack.extend(spanned.args.iter().filter_map(&mut arg_filter));
+                    &spanned.expr
+                }
+                List(spanned) => {
+                    stack.extend(&spanned.items);
+                    match stack.pop() {
+                        Some(expr) => expr,
+                        None => break,
+                    }
+                }
+                Map(spanned) => {
+                    stack.extend(&spanned.values);
+                    stack.extend(&spanned.keys);
+                    match stack.pop() {
+                        Some(expr) => expr,
+                        None => break,
+                    }
+                }
+            };
+        }
+
+        Self(result)
+    }
 }
 
-pub fn rebuild_with_known_constants<'search, 'src>(
-    expr: &ast::Expr<'src>,
-    map_stack: Option<&'search dyn SearchBy<'search, &'src str, Constant>>,
+impl<'ast, 'src> core::ops::DerefMut for PreOrderTraversal<'ast, 'src> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl<'ast, 'src> core::ops::Deref for PreOrderTraversal<'ast, 'src> {
+    type Target = [&'ast ast::Expr<'src>];
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+
+fn rebuild_from_flattened<'search, 'src>(
+    flattened: &PreOrderTraversal<'_, 'src>,
+    constants: &'search dyn SearchBy<'search, &'src str, Constant>,
 ) -> String {
-    fn rebuild_args<'search, 'src>(
-        map_stack: Option<&'search dyn SearchBy<'search, &'src str, Constant>>,
-        args: &Vec<minijinja::machinery::ast::CallArg<'src>>,
+    // NOTE: using a hashmap to allow for arbitrary order of access.
+    let mut result_map = HashMap::new();
+
+    fn extract<'ast, 'src>(
+        result_map: &mut HashMap<HashByPtr<'ast, ast::Expr<'src>>, String>,
+        key: &'ast ast::Expr<'src>,
+    ) -> String {
+        result_map
+            .remove(&HashByPtr(key))
+            .expect("should have compiled")
+    }
+
+    fn rebuild_args<'search, 'ast, 'src>(
+        result_map: &'search mut HashMap<HashByPtr<'ast, ast::Expr<'src>>, String>,
+        args: &'ast [ast::CallArg<'src>],
     ) -> String {
         args.iter()
             .map(|arg| match arg {
-                ast::CallArg::Pos(expr) => rebuild_with_known_constants(expr, map_stack),
+                ast::CallArg::Pos(expr) => extract(result_map, expr),
                 ast::CallArg::Kwarg(id, expr) => {
-                    format!("{id}={}", rebuild_with_known_constants(expr, map_stack))
+                    format!("{id}={}", extract(result_map, expr))
                 }
-                ast::CallArg::PosSplat(expr) => {
-                    format!("*{}", rebuild_with_known_constants(expr, map_stack))
-                }
-                ast::CallArg::KwargSplat(expr) => {
-                    format!("**{}", rebuild_with_known_constants(expr, map_stack))
-                }
+                ast::CallArg::PosSplat(expr) => format!("*{}", extract(result_map, expr)),
+                ast::CallArg::KwargSplat(expr) => format!("**{}", extract(result_map, expr)),
             })
-            .collect::<Vec<String>>()
+            .collect::<Vec<_>>()
             .join(",")
     }
 
-    match expr {
-        ast::Expr::Var(spanned) => match search_constant(map_stack, spanned.id) {
-            Some(Constant(value)) => format!("{value}"),
-            None => spanned.id.to_owned(),
-        },
-        ast::Expr::Const(spanned) => format!("{:?}", spanned.value),
-        ast::Expr::Slice(spanned) => {
-            let start = spanned
-                .start
-                .as_ref()
-                .map(|e| rebuild_with_known_constants(e, map_stack))
-                .unwrap_or_else(String::new);
-            let stop = spanned
-                .stop
-                .as_ref()
-                .map(|e| rebuild_with_known_constants(e, map_stack))
-                .unwrap_or_else(String::new);
-            let step = spanned
-                .step
-                .as_ref()
-                .map(|e| format!(":{}", rebuild_with_known_constants(e, map_stack)))
-                .unwrap_or_else(String::new);
+    for expr in flattened.postorder() {
+        use ast::Expr::*;
+        let expr_result = match expr {
+            Var(spanned) => match constants.search(spanned.id) {
+                Some(Constant(value)) => value.to_string(),
+                None => spanned.id.to_string(),
+            },
+            Const(spanned) => format!("{:?}", spanned.value),
+            Slice(spanned) => {
+                let start = spanned
+                    .start
+                    .as_ref()
+                    .map_or_else(String::new, |e| extract(&mut result_map, e));
 
-            format!(
-                "{}[{start}:{stop}{step}]",
-                rebuild_with_known_constants(&spanned.expr, map_stack)
-            )
-        }
-        ast::Expr::UnaryOp(spanned) => {
-            let op_char = match spanned.op {
-                ast::UnaryOpKind::Not => '!',
-                ast::UnaryOpKind::Neg => '-',
-            };
+                let stop = spanned
+                    .stop
+                    .as_ref()
+                    .map_or_else(String::new, |e| extract(&mut result_map, e));
 
-            format!(
-                "({}{})",
-                op_char,
-                rebuild_with_known_constants(&spanned.expr, map_stack)
-            )
-        }
-        ast::Expr::BinOp(spanned) => {
-            let op_str = match spanned.op {
-                ast::BinOpKind::Eq => "==",
-                ast::BinOpKind::Ne => "!=",
-                ast::BinOpKind::Lt => "<",
-                ast::BinOpKind::Lte => "<=",
-                ast::BinOpKind::Gt => ">",
-                ast::BinOpKind::Gte => ">=",
-                ast::BinOpKind::ScAnd => "&&",
-                ast::BinOpKind::ScOr => "||",
-                ast::BinOpKind::Add | ast::BinOpKind::Concat => "+",
-                ast::BinOpKind::Sub => "-",
-                ast::BinOpKind::Mul => "*",
-                ast::BinOpKind::Div => "/",
-                ast::BinOpKind::FloorDiv => "//",
-                ast::BinOpKind::Rem => "%",
-                ast::BinOpKind::Pow => "**",
-                ast::BinOpKind::In => "in",
-            };
+                let step = spanned
+                    .step
+                    .as_ref()
+                    .map_or_else(String::new, |e| format!(":{}", extract(&mut result_map, e)));
 
-            let left = rebuild_with_known_constants(&spanned.left, map_stack);
-            let right = rebuild_with_known_constants(&spanned.right, map_stack);
+                let inner = extract(&mut result_map, &spanned.expr);
 
-            format!("({left} {op_str} {right})")
-        }
-        ast::Expr::IfExpr(spanned) => {
-            let test = rebuild_with_known_constants(&spanned.test_expr, map_stack);
-            let true_branch = rebuild_with_known_constants(&spanned.true_expr, map_stack);
-            let false_branch = spanned
-                .false_expr
-                .as_ref()
-                .map(|ex| rebuild_with_known_constants(ex, map_stack))
-                .unwrap_or_else(|| "undefined".into());
+                format!("{inner}[{start}:{stop}{step}]")
+            }
+            UnaryOp(spanned) => {
+                let op_char = match spanned.op {
+                    ast::UnaryOpKind::Not => '!',
+                    ast::UnaryOpKind::Neg => '-',
+                };
 
-            format!("({true_branch} if {test} else {false_branch})")
-        }
-        ast::Expr::Filter(spanned) => {
-            let args = rebuild_args(map_stack, &spanned.args);
+                let inner = extract(&mut result_map, &spanned.expr);
 
-            let expr = rebuild_with_known_constants(
-                spanned
+                format!("({op_char}{inner})")
+            }
+            BinOp(spanned) => {
+                let op_str = match spanned.op {
+                    ast::BinOpKind::Eq => "==",
+                    ast::BinOpKind::Ne => "!=",
+                    ast::BinOpKind::Lt => "<",
+                    ast::BinOpKind::Lte => "<=",
+                    ast::BinOpKind::Gt => ">",
+                    ast::BinOpKind::Gte => ">=",
+                    ast::BinOpKind::ScAnd => "&&",
+                    ast::BinOpKind::ScOr => "||",
+                    ast::BinOpKind::Add | ast::BinOpKind::Concat => "+",
+                    ast::BinOpKind::Sub => "-",
+                    ast::BinOpKind::Mul => "*",
+                    ast::BinOpKind::Div => "/",
+                    ast::BinOpKind::FloorDiv => "//",
+                    ast::BinOpKind::Rem => "%",
+                    ast::BinOpKind::Pow => "**",
+                    ast::BinOpKind::In => "in",
+                };
+
+                let left = extract(&mut result_map, &spanned.left);
+                let right = extract(&mut result_map, &spanned.right);
+
+                format!("({left} {op_str} {right})")
+            }
+            IfExpr(spanned) => {
+                let test = extract(&mut result_map, &spanned.test_expr);
+                let true_branch = extract(&mut result_map, &spanned.true_expr);
+                let false_branch = spanned.false_expr.as_ref().map_or_else(
+                    || "undefined".to_string(),
+                    |ex| extract(&mut result_map, ex),
+                );
+
+                format!("({true_branch} if {test} else {false_branch})")
+            }
+            Filter(spanned) => {
+                let args = rebuild_args(&mut result_map, &spanned.args);
+
+                let expr = spanned
                     .expr
                     .as_ref()
-                    .expect("filter expression must have a child expression"),
-                map_stack,
-            );
+                    .expect("filter expression must have a child expression");
 
-            format!("({expr} | {name}{args})", name = spanned.name)
-        }
-        ast::Expr::Test(spanned) => {
-            let has_args = !spanned.args.is_empty();
+                let inner = extract(&mut result_map, expr);
 
-            let expr = rebuild_with_known_constants(&spanned.expr, map_stack);
-            let name = spanned.name;
-
-            if has_args {
-                let args = rebuild_args(map_stack, &spanned.args);
-
-                format!("({expr} is {name}({args}))")
-            } else {
-                format!("({expr} is {name})")
+                format!("({inner} | {name}{args})", name = spanned.name)
             }
-        }
-        ast::Expr::GetAttr(spanned) => {
-            format!(
-                "{inner}.{name}",
-                inner = rebuild_with_known_constants(&spanned.expr, map_stack),
-                name = spanned.name
-            )
-        }
-        ast::Expr::GetItem(spanned) => {
-            format!(
-                "{inner}[{index}]",
-                inner = rebuild_with_known_constants(&spanned.expr, map_stack),
-                index = rebuild_with_known_constants(&spanned.subscript_expr, map_stack),
-            )
-        }
-        ast::Expr::Call(spanned) => {
-            format!(
-                "{inner}({args})",
-                inner = rebuild_with_known_constants(&spanned.expr, map_stack),
-                args = rebuild_args(map_stack, &spanned.args),
-            )
-        }
-        ast::Expr::List(spanned) => {
-            let args = spanned
-                .items
-                .iter()
-                .map(|e| rebuild_with_known_constants(e, map_stack))
-                .collect::<Vec<_>>()
-                .join(", ");
+            Test(spanned) => {
+                let has_args = !spanned.args.is_empty();
+                let args = rebuild_args(&mut result_map, &spanned.args);
+                let expr = extract(&mut result_map, &spanned.expr);
 
-            format!("[{args}]")
-        }
-        ast::Expr::Map(spanned) => {
-            let keys = spanned
-                .keys
-                .iter()
-                .map(|e| rebuild_with_known_constants(e, map_stack));
-            let values = spanned
-                .values
-                .iter()
-                .map(|e| rebuild_with_known_constants(e, map_stack));
+                if has_args {
+                    format!("({expr} is {name}({args}))", name = spanned.name)
+                } else {
+                    format!("({expr} is {name})", name = spanned.name)
+                }
+            }
+            GetAttr(spanned) => {
+                let inner = extract(&mut result_map, &spanned.expr);
+                format!("{inner}.{name}", name = spanned.name)
+            }
+            GetItem(spanned) => {
+                let inner = extract(&mut result_map, &spanned.expr);
+                let index = extract(&mut result_map, &spanned.subscript_expr);
+                format!("{inner}[{index}]")
+            }
+            Call(spanned) => {
+                let args = rebuild_args(&mut result_map, &spanned.args);
+                let inner = extract(&mut result_map, &spanned.expr);
+                format!("{inner}({args})")
+            }
+            List(spanned) => {
+                let args = spanned
+                    .items
+                    .iter()
+                    .map(|e| extract(&mut result_map, e))
+                    .collect::<Vec<_>>()
+                    .join(", ");
 
-            let pairs = keys
-                .zip(values)
-                .map(|(k, v)| format!("{k}: {v}"))
-                .collect::<Vec<_>>()
-                .join(", ");
+                format!("[{args}]")
+            }
+            Map(spanned) => {
+                let pairs = spanned
+                    .keys
+                    .iter()
+                    .zip(&spanned.values)
+                    .map(|(k, v)| (extract(&mut result_map, k), extract(&mut result_map, v)))
+                    .map(|(k, v)| format!("{k}: {v}"))
+                    .collect::<Vec<_>>()
+                    .join(", ");
 
-            format!("{{{pairs}}}")
-        }
+                format!("{{{pairs}}}")
+            }
+        };
+
+        result_map.insert(HashByPtr(expr), expr_result);
     }
+
+    assert_eq!(
+        result_map.len(),
+        1,
+        "All other expressions but root should have been consumed",
+    );
+
+    extract(&mut result_map, flattened[0])
 }

@@ -13,18 +13,66 @@ pub fn read_udf_config(path: impl AsRef<Path>) -> anyhow::Result<UDFConfig> {
     serde_yaml::from_str(&contents).context("deserialize UDF config file")
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct IntrusiveStack<'a, T> {
-    pub prev: Option<&'a IntrusiveStack<'a, T>>,
-    pub cur: T,
-}
-
 /// Adds `date_between` filter to the environment.
 pub fn get_env<'s>() -> minijinja::Environment<'s> {
     let mut env = internal_baml_core::ir::jinja_helpers::get_env();
 
     env.add_filter("date_between", date_between);
     env
+}
+
+/// Wrapper struct that allows for hashing by pointer address.
+#[derive(Clone, Copy)]
+pub struct HashByPtr<'a, T: ?Sized>(pub &'a T);
+
+impl <T: ?Sized + std::fmt::Debug> std::fmt::Debug for HashByPtr<'_, T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+
+        // add the pointer address to the debug output
+        write!(f, "(@{:p}) {:?}", self.0 as *const _, self.0)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IntrusiveStack<'a, T> {
+    pub prev: Option<&'a IntrusiveStack<'a, T>>,
+    pub cur: T,
+}
+
+impl<T: ?Sized> Ord for HashByPtr<'_, T> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        // NOTE: (Jesus) cast to *const () removes metadata so that we're sure that we're only
+        // comparing raw addresses.
+        let self_ptr = self.0 as *const T as *const ();
+        let other_ptr = other.0 as *const T as *const ();
+        self_ptr.cmp(&other_ptr)
+    }
+}
+
+impl<T: ?Sized> Eq for HashByPtr<'_, T> {}
+
+impl<'a, T: ?Sized> PartialOrd for HashByPtr<'a, T> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        // NOTE: (Jesus) cast to *const () removes metadata so that we're sure that we're only
+        // comparing raw addresses.
+        let self_ptr = self.0 as *const T as *const ();
+        let other_ptr = other.0 as *const T as *const ();
+        self_ptr.partial_cmp(&other_ptr)
+    }
+}
+
+impl<'a, T: ?Sized> PartialEq for HashByPtr<'a, T> {
+    fn eq(&self, other: &Self) -> bool {
+        // Compare the pointer addresses for equality
+        std::ptr::eq(self.0, other.0)
+    }
+}
+
+impl<'a, T: ?Sized> std::hash::Hash for HashByPtr<'a, T> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        // Use the pointer address to hash the expression
+        std::ptr::hash(self.0, state);
+    }
 }
 
 // NOTE: (Jesus) Could use real date type
