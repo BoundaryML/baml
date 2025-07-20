@@ -234,8 +234,18 @@ fn compile_override_match_open<'a>(
     result
 }
 
+// NOTE: could use a simpler generic set with search(self, name: K) -> Option<V>.
 pub trait SearchBy<'a, K, V> {
     fn search(&'a self, name: K) -> Option<&'a V>;
+}
+
+#[derive(Clone, Copy)]
+pub struct NullSearch;
+
+impl<'a, K, V> SearchBy<'a, K, V> for NullSearch {
+    fn search(&'a self, _name: K) -> Option<&'a V> {
+        None
+    }
 }
 
 impl<'a, 'k, K, V, Q> SearchBy<'a, &'k Q, V> for BamlMap<K, V>
