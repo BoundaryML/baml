@@ -2,7 +2,7 @@ packages:
   - typescript/apps/*
   - typescript/packages/*
   - typescript/workspace-tools/*
-  - integ-tests/*
+  - integ-tests/**
   - engine
   - engine/*
   - engine/baml-schema-wasm/*
