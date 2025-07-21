@@ -60,5 +60,5 @@ runs:
 
     - name: Install Node dependencies
       if: inputs.install-dependencies == 'true'
-      run: pnpm install ${{ inputs.frozen-lockfile == 'true' && '--frozen-lockfile' || '' }}
+      run: pnpm install ${{ inputs.frozen-lockfile == 'true' && '--frozen-lockfile' || '--no-frozen-lockfile' }}
       shell: bash

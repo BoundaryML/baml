@@ -2,9 +2,9 @@
   "name": "@baml/integ-tests",
   "version": "1.0.0",
   "scripts": {
-    "generate": "baml-cli generate --from ../baml_src"
+    "generate": "cd typescript && pnpm run integ-tests"
   },
   "dependencies": {
-    "@boundaryml/baml": "workspace:*"
-  }
+    "@baml/cli": "workspace:*"
+   }
 }
