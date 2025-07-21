@@ -179,8 +179,14 @@ mod type_builder {
     ///             raise ValueError(f"Property {name} already exists.")
     ///         return self._bldr.property(name).type(type)
     ///
-    ///     def list_properties(self) -> typing.List[typing.Tuple[str, {{ class.class_property_type() }}]]:
-    ///         return [(name, self._bldr.property(name)) for name in self._properties]
+    ///     def list_properties(self) -> typing.List[typing.Tuple[str, typing.Optional[baml_py.FieldType]]]:
+    ///         return self._bldr.list_properties()
+    ///
+    ///     def remove_property(self, name: str) -> None:
+    ///         self._bldr.remove_property(name)
+    ///
+    ///     def clear(self) -> None:
+    ///         self._bldr.clear()
     ///
     ///     {% else %}
     ///     def list_properties(self) -> typing.List[typing.Tuple[str, {{ class.class_property_type() }}]]:

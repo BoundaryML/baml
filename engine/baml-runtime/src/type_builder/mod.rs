@@ -1,5 +1,6 @@
 use std::{
     fmt,
+    ops::Deref,
     sync::{Arc, Mutex},
 };
 
@@ -68,6 +69,7 @@ pub struct ClassBuilder {
 }
 impl_meta!(ClassBuilder);
 
+#[derive(Clone)]
 pub struct ClassPropertyBuilder {
     r#type: Arc<Mutex<Option<TypeIR>>>,
     meta: MetaData,
@@ -78,6 +80,11 @@ impl ClassPropertyBuilder {
     pub fn r#type(&self, r#type: TypeIR) -> &Self {
         *self.r#type.lock().unwrap() = Some(r#type);
         self
+    }
+
+    /// Inner API, user's don't see this.
+    pub fn get_type(&self) -> Option<TypeIR> {
+        self.r#type.lock().unwrap().clone()
     }
 }
 
@@ -95,6 +102,16 @@ impl ClassBuilder {
         }
     }
 
+    // TODO: Figure out captured lifetime issue and return Iterator.
+    pub fn list_properties(&self) -> Vec<(String, ClassPropertyBuilder)> {
+        self.properties
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|(name, prop)| (name.clone(), prop.lock().unwrap().deref().to_owned()))
+            .collect()
+    }
+
     pub fn property(&self, name: &str) -> Arc<Mutex<ClassPropertyBuilder>> {
         let mut properties = self.properties.lock().unwrap();
         Arc::clone(properties.entry(name.to_string()).or_insert_with(|| {
@@ -103,6 +120,15 @@ impl ClassBuilder {
                 meta: Default::default(),
             }))
         }))
+    }
+
+    pub fn remove_property(&self, name: &str) {
+        let mut properties = self.properties.lock().unwrap();
+        properties.shift_remove(name);
+    }
+
+    pub fn clear(&self) {
+        self.properties.lock().unwrap().clear();
     }
 }
 
@@ -454,8 +480,6 @@ pub struct TypeBuilder {
     type_aliases: Arc<Mutex<IndexMap<String, Arc<Mutex<TypeAliasBuilder>>>>>,
     recursive_type_aliases: Arc<Mutex<Vec<IndexMap<String, TypeIR>>>>,
     recursive_classes: Arc<Mutex<Vec<IndexSet<String>>>>,
-
-    parser_database: ParserDatabase,
 }
 
 impl Default for TypeBuilder {
@@ -472,8 +496,15 @@ impl TypeBuilder {
             type_aliases: Default::default(),
             recursive_type_aliases: Default::default(),
             recursive_classes: Default::default(),
-            parser_database: Default::default(),
         }
+    }
+
+    pub fn clear(&self) {
+        self.classes.lock().unwrap().clear();
+        self.enums.lock().unwrap().clear();
+        self.type_aliases.lock().unwrap().clear();
+        self.recursive_type_aliases.lock().unwrap().clear();
+        self.recursive_classes.lock().unwrap().clear();
     }
 
     pub fn class(&self, name: &str) -> Arc<Mutex<ClassBuilder>> {

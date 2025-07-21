@@ -524,3 +524,87 @@ async def test_referencing_existing_class_types():
     tb = TypeBuilder()
     # useful for adding dynamic tools for example
     tb.Person.add_property("props", tb.union([tb.Resume.type(), tb.Hobby.type()]))
+
+
+def test_type_builder_clear():
+    tb = TypeBuilder()
+    tb.Person.add_property("last_name", tb.string().list())
+    tb.Person.add_property("height", tb.float().optional()).description("Height in meters")
+    tb.clear()
+
+    person_props_after_tb_clear = {name for name, _ in tb.Person.list_properties()}
+
+    assert "last_name" not in person_props_after_tb_clear
+    assert "height" not in person_props_after_tb_clear
+
+
+def test_type_builder_class_clear():
+    tb = TypeBuilder()
+    tb.Person.add_property("last_name", tb.string().list())
+    tb.Person.add_property("height", tb.float().optional()).description("Height in meters")
+
+    tb.DynamicOutput.add_property("hair_color", tb.string())
+    tb.DynamicOutput.add_property("height", tb.float().optional()).description("Height in meters")
+
+    tb.Person.clear()
+
+    person_props_after_class_clear = {name for name, _ in tb.Person.list_properties()}
+    dynamic_output_props_after_class_clear = {name for name, _ in tb.DynamicOutput.list_properties()}
+
+    assert "last_name" not in person_props_after_class_clear
+    assert "height" not in person_props_after_class_clear
+
+    assert "hair_color" in dynamic_output_props_after_class_clear
+    assert "height" in dynamic_output_props_after_class_clear
+
+
+def test_type_builder_class_remove_property():
+    tb = TypeBuilder()
+    tb.Person.add_property("last_name", tb.string().list())
+    tb.Person.add_property("height", tb.float().optional()).description("Height in meters")
+
+    tb.Person.remove_property("last_name")
+
+    person_props_after_class_remove_property = {name for name, _ in tb.Person.list_properties()}
+
+    assert "last_name" not in person_props_after_class_remove_property
+    assert "height" in person_props_after_class_remove_property
+
+
+def test_type_builder_add_class_clear():
+    tb = TypeBuilder()
+    person_class = tb.add_class("AddedPerson")
+    person_class.add_property("last_name", tb.string().list())
+    person_class.add_property("height", tb.float().optional()).description("Height in meters")
+
+    person_class.clear()
+
+    person_props_after_class_clear = {name for name, _ in person_class.list_properties()}
+
+    assert "last_name" not in person_props_after_class_clear
+    assert "height" not in person_props_after_class_clear
+
+
+def test_type_builder_add_class_remove_property():
+    tb = TypeBuilder()
+    person_class = tb.add_class("AddedPerson")
+    person_class.add_property("last_name", tb.string().list())
+    person_class.add_property("height", tb.float().optional()).description("Height in meters")
+
+    person_class.remove_property("last_name")
+
+    person_props_after_class_remove_property = {name for name, _ in person_class.list_properties()}
+
+    assert "last_name" not in person_props_after_class_remove_property
+    assert "height" in person_props_after_class_remove_property
+
+
+def test_class_prop_get_type():
+    tb = TypeBuilder()
+    tb.Person.add_property("last_name", tb.string().list())
+    tb.Person.add_property("height", tb.float().optional()).description("Height in meters")
+
+    props = {name: prop_type for name, prop_type in tb.Person.list_properties()}
+
+    assert props["last_name"] == tb.string().list()
+    assert props["height"] == tb.float().optional()

@@ -19,6 +19,9 @@ class TypeBuilder:
         self.__tb = _TypeBuilder()
         self.__runtime = runtime
 
+    def clear(self):
+        self.__tb.clear()
+
     def __str__(self) -> str:
         """
         returns a comprehensive string representation of the typebuilder.
@@ -117,11 +120,14 @@ class NewClassBuilder:
     def type(self) -> FieldType:
         return self.__bldr.field()
 
-    def list_properties(self) -> typing.List[typing.Tuple[str, "ClassPropertyBuilder"]]:
-        return [
-            (name, ClassPropertyBuilder(self.__bldr.property(name)))
-            for name in self.__properties
-        ]
+    def list_properties(self) -> typing.List[typing.Tuple[str, typing.Optional[FieldType]]]:
+        return self.__bldr.list_properties()
+
+    def clear(self):
+        self.__bldr.clear()
+
+    def remove_property(self, name: str):
+        self.__bldr.remove_property(name)
 
     def add_property(self, name: str, type: FieldType) -> "ClassPropertyBuilder":
         if name in self.__properties:

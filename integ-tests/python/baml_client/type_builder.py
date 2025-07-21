@@ -2371,8 +2371,14 @@ class DummyOutputBuilder(DummyOutputAst):
             raise ValueError(f"Property {name} already exists.")
         return self._bldr.property(name).type(type)
 
-    def list_properties(self) -> typing.List[typing.Tuple[str, baml_py.ClassPropertyBuilder]]:
-        return [(name, self._bldr.property(name)) for name in self._properties]
+    def list_properties(self) -> typing.List[typing.Tuple[str, typing.Optional[baml_py.FieldType]]]:
+        return self._bldr.list_properties()
+
+    def remove_property(self, name: str) -> None:
+        self._bldr.remove_property(name)
+
+    def clear(self) -> None:
+        self._bldr.clear()
 
     
 
@@ -2425,8 +2431,14 @@ class DynInputOutputBuilder(DynInputOutputAst):
             raise ValueError(f"Property {name} already exists.")
         return self._bldr.property(name).type(type)
 
-    def list_properties(self) -> typing.List[typing.Tuple[str, baml_py.ClassPropertyBuilder]]:
-        return [(name, self._bldr.property(name)) for name in self._properties]
+    def list_properties(self) -> typing.List[typing.Tuple[str, typing.Optional[baml_py.FieldType]]]:
+        return self._bldr.list_properties()
+
+    def remove_property(self, name: str) -> None:
+        self._bldr.remove_property(name)
+
+    def clear(self) -> None:
+        self._bldr.clear()
 
     
 
@@ -2475,8 +2487,14 @@ class DynamicClassOneBuilder(DynamicClassOneAst):
             raise ValueError(f"Property {name} already exists.")
         return self._bldr.property(name).type(type)
 
-    def list_properties(self) -> typing.List[typing.Tuple[str, baml_py.ClassPropertyBuilder]]:
-        return [(name, self._bldr.property(name)) for name in self._properties]
+    def list_properties(self) -> typing.List[typing.Tuple[str, typing.Optional[baml_py.FieldType]]]:
+        return self._bldr.list_properties()
+
+    def remove_property(self, name: str) -> None:
+        self._bldr.remove_property(name)
+
+    def clear(self) -> None:
+        self._bldr.clear()
 
     
 
@@ -2521,8 +2539,14 @@ class DynamicClassTwoBuilder(DynamicClassTwoAst):
             raise ValueError(f"Property {name} already exists.")
         return self._bldr.property(name).type(type)
 
-    def list_properties(self) -> typing.List[typing.Tuple[str, baml_py.ClassPropertyBuilder]]:
-        return [(name, self._bldr.property(name)) for name in self._properties]
+    def list_properties(self) -> typing.List[typing.Tuple[str, typing.Optional[baml_py.FieldType]]]:
+        return self._bldr.list_properties()
+
+    def remove_property(self, name: str) -> None:
+        self._bldr.remove_property(name)
+
+    def clear(self) -> None:
+        self._bldr.clear()
 
     
 
@@ -2579,8 +2603,14 @@ class DynamicOutputBuilder(DynamicOutputAst):
             raise ValueError(f"Property {name} already exists.")
         return self._bldr.property(name).type(type)
 
-    def list_properties(self) -> typing.List[typing.Tuple[str, baml_py.ClassPropertyBuilder]]:
-        return [(name, self._bldr.property(name)) for name in self._properties]
+    def list_properties(self) -> typing.List[typing.Tuple[str, typing.Optional[baml_py.FieldType]]]:
+        return self._bldr.list_properties()
+
+    def remove_property(self, name: str) -> None:
+        self._bldr.remove_property(name)
+
+    def clear(self) -> None:
+        self._bldr.clear()
 
     
 
@@ -2625,8 +2655,14 @@ class DynamicSchemaBuilder(DynamicSchemaAst):
             raise ValueError(f"Property {name} already exists.")
         return self._bldr.property(name).type(type)
 
-    def list_properties(self) -> typing.List[typing.Tuple[str, baml_py.ClassPropertyBuilder]]:
-        return [(name, self._bldr.property(name)) for name in self._properties]
+    def list_properties(self) -> typing.List[typing.Tuple[str, typing.Optional[baml_py.FieldType]]]:
+        return self._bldr.list_properties()
+
+    def remove_property(self, name: str) -> None:
+        self._bldr.remove_property(name)
+
+    def clear(self) -> None:
+        self._bldr.clear()
 
     
 
@@ -4548,8 +4584,14 @@ class OriginalBBuilder(OriginalBAst):
             raise ValueError(f"Property {name} already exists.")
         return self._bldr.property(name).type(type)
 
-    def list_properties(self) -> typing.List[typing.Tuple[str, baml_py.ClassPropertyBuilder]]:
-        return [(name, self._bldr.property(name)) for name in self._properties]
+    def list_properties(self) -> typing.List[typing.Tuple[str, typing.Optional[baml_py.FieldType]]]:
+        return self._bldr.list_properties()
+
+    def remove_property(self, name: str) -> None:
+        self._bldr.remove_property(name)
+
+    def clear(self) -> None:
+        self._bldr.clear()
 
     
 
@@ -4598,8 +4640,14 @@ class PersonBuilder(PersonAst):
             raise ValueError(f"Property {name} already exists.")
         return self._bldr.property(name).type(type)
 
-    def list_properties(self) -> typing.List[typing.Tuple[str, baml_py.ClassPropertyBuilder]]:
-        return [(name, self._bldr.property(name)) for name in self._properties]
+    def list_properties(self) -> typing.List[typing.Tuple[str, typing.Optional[baml_py.FieldType]]]:
+        return self._bldr.list_properties()
+
+    def remove_property(self, name: str) -> None:
+        self._bldr.remove_property(name)
+
+    def clear(self) -> None:
+        self._bldr.clear()
 
     
 
@@ -5287,8 +5335,14 @@ class SomeClassNestedDynamicBuilder(SomeClassNestedDynamicAst):
             raise ValueError(f"Property {name} already exists.")
         return self._bldr.property(name).type(type)
 
-    def list_properties(self) -> typing.List[typing.Tuple[str, baml_py.ClassPropertyBuilder]]:
-        return [(name, self._bldr.property(name)) for name in self._properties]
+    def list_properties(self) -> typing.List[typing.Tuple[str, typing.Optional[baml_py.FieldType]]]:
+        return self._bldr.list_properties()
+
+    def remove_property(self, name: str) -> None:
+        self._bldr.remove_property(name)
+
+    def clear(self) -> None:
+        self._bldr.clear()
 
     
 

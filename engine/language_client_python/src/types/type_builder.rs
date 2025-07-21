@@ -37,6 +37,10 @@ impl TypeBuilder {
         type_builder::TypeBuilder::new().into()
     }
 
+    pub fn clear(&self) {
+        self.inner.clear();
+    }
+
     /// provides a detailed string representation of the typebuilder for python users.
     ///
     /// this method exposes the rust-implemented string formatting to python, ensuring
@@ -149,6 +153,10 @@ impl FieldType {
     pub fn optional(&self) -> FieldType {
         self.inner.lock().unwrap().clone().as_optional().into()
     }
+
+    pub fn __eq__(&self, other: &FieldType) -> bool {
+        self.inner.lock().unwrap().clone() == other.inner.lock().unwrap().clone()
+    }
 }
 
 #[pymethods]
@@ -213,6 +221,24 @@ impl ClassBuilder {
         baml_types::TypeIR::class(&self.name).into()
     }
 
+    pub fn list_properties(&self) -> Vec<(String, Option<FieldType>)> {
+        self.inner
+            .lock()
+            .unwrap()
+            .list_properties()
+            .into_iter()
+            .map(|(name, prop)| (name, prop.get_type().map(FieldType::from)))
+            .collect()
+    }
+
+    pub fn remove_property(&self, name: &str) {
+        self.inner.lock().unwrap().remove_property(name);
+    }
+
+    pub fn clear(&self) {
+        self.inner.lock().unwrap().clear();
+    }
+
     pub fn property(&self, name: &str) -> ClassPropertyBuilder {
         self.inner.lock().unwrap().property(name).into()
     }
@@ -226,6 +252,10 @@ impl ClassPropertyBuilder {
             .unwrap()
             .r#type(r#type.inner.lock().unwrap().clone());
         self.inner.clone().into()
+    }
+
+    pub fn get_type(&self) -> Option<FieldType> {
+        self.inner.lock().unwrap().get_type().map(|t| t.into())
     }
 
     #[pyo3(signature = (alias = None))]
