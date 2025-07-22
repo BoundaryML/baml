@@ -17,7 +17,7 @@ Gem::Specification.new do |spec|
   spec.files = Dir["exe/*", "lib/**/*.rb", "ext/**/*.{rs,toml,lock,rb}"]
   spec.bindir = "exe"
   # TODO: make sure this is invoke-able from an installed gem
-  spec.executables = ["baml-cli"]
+  spec.executables = ["baml-cli", "baml"]
   spec.require_paths = ["lib"]
   spec.extensions = ["ext/ruby_ffi/extconf.rb"]
 

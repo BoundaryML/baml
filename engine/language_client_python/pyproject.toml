@@ -21,6 +21,7 @@ features = ["pyo3/extension-module", "pyo3/generate-import-lib"]
 
 [project.scripts]
 baml-cli = "baml_py:invoke_runtime_cli"
+baml = "baml_py:invoke_runtime_cli"
 
 # NOTE: dependencies is _deliberately_ empty so that different flavors of BAML
 # don't have to share dependencies, e.g. we currently generate python/pydantic

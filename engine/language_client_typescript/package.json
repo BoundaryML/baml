@@ -17,7 +17,8 @@
     "node-addon-api"
   ],
   "bin": {
-    "baml-cli": "cli.js"
+    "baml-cli": "cli.js",
+    "baml": "cli.js"
   },
   "files": [
     "./cli.js",
