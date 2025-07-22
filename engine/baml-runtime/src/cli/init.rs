@@ -126,7 +126,6 @@ fn install_vscode_extension() {
         }
 
         baml_log::info!("Installing BAML VSCode extension...");
-        baml_log::debug!("Running: code --install-extension {}", BAML_EXTENSION_ID);
 
         match Command::new("code")
             .args(&["--install-extension", BAML_EXTENSION_ID])
@@ -135,10 +134,6 @@ fn install_vscode_extension() {
             Ok(output) => {
                 let stdout = String::from_utf8_lossy(&output.stdout);
                 let stderr = String::from_utf8_lossy(&output.stderr);
-
-                baml_log::debug!("VSCode install stdout: {}", stdout);
-                baml_log::debug!("VSCode install stderr: {}", stderr);
-                baml_log::debug!("VSCode install exit status: {}", output.status);
 
                 if output.status.success() {
                     baml_log::info!("Successfully installed BAML VSCode extension!");
@@ -157,8 +152,6 @@ fn install_vscode_extension() {
                 }
             }
             Err(e) => {
-                baml_log::warn!("Failed to run VSCode command: {}", e);
-                baml_log::debug!("Error details: {:?}", e);
                 baml_log::info!("Attempting manual installation...");
                 install_extension_manually("code");
             }
@@ -179,7 +172,6 @@ fn install_cursor_extension() {
         }
 
         baml_log::info!("Installing BAML Cursor extension...");
-        baml_log::debug!("Running: cursor --install-extension {}", BAML_EXTENSION_ID);
 
         match Command::new("cursor")
             .args(&["--install-extension", BAML_EXTENSION_ID])
@@ -188,10 +180,6 @@ fn install_cursor_extension() {
             Ok(output) => {
                 let stdout = String::from_utf8_lossy(&output.stdout);
                 let stderr = String::from_utf8_lossy(&output.stderr);
-
-                baml_log::debug!("Cursor install stdout: {}", stdout);
-                baml_log::debug!("Cursor install stderr: {}", stderr);
-                baml_log::debug!("Cursor install exit status: {}", output.status);
 
                 if output.status.success() {
                     baml_log::info!("Successfully installed BAML Cursor extension!");
@@ -210,8 +198,6 @@ fn install_cursor_extension() {
                 }
             }
             Err(e) => {
-                baml_log::warn!("Failed to run Cursor command: {}", e);
-                baml_log::debug!("Error details: {:?}", e);
                 baml_log::info!("Attempting manual installation...");
                 install_extension_manually("cursor");
             }
@@ -227,17 +213,14 @@ fn download_vsix(url: &str, filename: &str) -> Result<PathBuf> {
     let vsix_path = temp_dir.join(filename);
 
     baml_log::info!("Downloading BAML extension to: {}", vsix_path.display());
-    baml_log::debug!("Download URL: {}", url);
 
     // Use curl to download the file
     let curl_args = vec!["-L", "-o", vsix_path.to_str().unwrap(), url];
-    baml_log::debug!("Running: curl {}", curl_args.join(" "));
 
     let output = Command::new("curl").args(&curl_args).output()?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        baml_log::debug!("Curl stderr: {}", stderr);
         anyhow::bail!("Failed to download extension: {}", stderr);
     }
 
@@ -247,7 +230,6 @@ fn download_vsix(url: &str, filename: &str) -> Result<PathBuf> {
     }
 
     let metadata = fs::metadata(&vsix_path)?;
-    baml_log::debug!("Downloaded file size: {} bytes", metadata.len());
 
     Ok(vsix_path)
 }
