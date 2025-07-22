@@ -96,8 +96,8 @@ fn detect_and_install_extension() {
 
 fn is_extension_installed(editor: &str) -> bool {
     let result = match editor {
-        "code" => Command::new("code").args(&["--list-extensions"]).output(),
-        "cursor" => Command::new("cursor").args(&["--list-extensions"]).output(),
+        "code" => Command::new("code").args(["--list-extensions"]).output(),
+        "cursor" => Command::new("cursor").args(["--list-extensions"]).output(),
         _ => return false,
     };
 
@@ -128,7 +128,7 @@ fn install_vscode_extension() {
         baml_log::info!("Installing BAML VSCode extension...");
 
         match Command::new("code")
-            .args(&["--install-extension", BAML_EXTENSION_ID])
+            .args(["--install-extension", BAML_EXTENSION_ID])
             .output()
         {
             Ok(output) => {
@@ -137,22 +137,16 @@ fn install_vscode_extension() {
 
                 if output.status.success() {
                     baml_log::info!("Successfully installed BAML VSCode extension!");
+                } else if stderr.contains("already installed")
+                    || stdout.contains("already installed")
+                {
+                    baml_log::info!("BAML VSCode extension is already installed");
                 } else {
-                    if stderr.contains("already installed") || stdout.contains("already installed")
-                    {
-                        baml_log::info!("BAML VSCode extension is already installed");
-                    } else {
-                        baml_log::warn!("Failed to install BAML VSCode extension");
-                        baml_log::warn!("Exit code: {}", output.status.code().unwrap_or(-1));
-                        baml_log::warn!("Stderr: {}", stderr);
-                        baml_log::warn!("Stdout: {}", stdout);
-                        baml_log::info!("Attempting manual installation...");
-                        install_extension_manually("code");
-                    }
+                    baml_log::info!("Attempting manual installation...");
+                    install_extension_manually("code");
                 }
             }
-            Err(e) => {
-                baml_log::warn!("Failed to run VSCode command: {}", e);
+            Err(_) => {
                 baml_log::info!("Attempting manual installation...");
                 install_extension_manually("code");
             }
@@ -175,7 +169,7 @@ fn install_cursor_extension() {
         baml_log::info!("Installing BAML Cursor extension...");
 
         match Command::new("cursor")
-            .args(&["--install-extension", BAML_EXTENSION_ID])
+            .args(["--install-extension", BAML_EXTENSION_ID])
             .output()
         {
             Ok(output) => {
@@ -184,22 +178,16 @@ fn install_cursor_extension() {
 
                 if output.status.success() {
                     baml_log::info!("Successfully installed BAML Cursor extension!");
+                } else if stderr.contains("already installed")
+                    || stdout.contains("already installed")
+                {
+                    baml_log::info!("BAML Cursor extension is already installed");
                 } else {
-                    if stderr.contains("already installed") || stdout.contains("already installed")
-                    {
-                        baml_log::info!("BAML Cursor extension is already installed");
-                    } else {
-                        baml_log::warn!("Failed to install BAML Cursor extension");
-                        baml_log::warn!("Exit code: {}", output.status.code().unwrap_or(-1));
-                        baml_log::warn!("Stderr: {}", stderr);
-                        baml_log::warn!("Stdout: {}", stdout);
-                        baml_log::info!("Attempting manual installation...");
-                        install_extension_manually("cursor");
-                    }
+                    baml_log::info!("Attempting manual installation...");
+                    install_extension_manually("cursor");
                 }
             }
-            Err(e) => {
-                baml_log::warn!("Failed to run Cursor command: {}", e);
+            Err(_) => {
                 baml_log::info!("Attempting manual installation...");
                 install_extension_manually("cursor");
             }
@@ -267,8 +255,7 @@ fn install_extension_manually(editor: &str) {
                                 .all(|c| c.is_alphanumeric() || c == '_' || c == '-')
                         {
                             let user_path = format!(
-                                "C:\\Users\\{}\\AppData\\Local\\Programs\\cursor\\cursor.exe",
-                                username
+                                "C:\\Users\\{username}\\AppData\\Local\\Programs\\cursor\\cursor.exe"
                             );
                             paths.push(user_path);
                         }
@@ -288,7 +275,7 @@ fn install_extension_manually(editor: &str) {
                     );
                     if let Some(vsix_path_str) = vsix_path.to_str() {
                         match Command::new(path)
-                            .args(&["--install-extension", vsix_path_str])
+                            .args(["--install-extension", vsix_path_str])
                             .output()
                         {
                             Ok(output) => {
@@ -323,8 +310,7 @@ fn install_extension_manually(editor: &str) {
                 let _ = fs::remove_file(vsix_path_clone);
             });
         }
-        Err(e) => {
-            baml_log::warn!("Failed to download extension: {}", e);
+        Err(_) => {
             baml_log::info!(
                 "Please install the BAML extension manually from the {} marketplace",
                 if editor == "code" { "VSCode" } else { "Cursor" }
