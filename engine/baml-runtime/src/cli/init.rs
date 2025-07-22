@@ -1,9 +1,11 @@
-use std::{path::PathBuf, process::Command};
+use std::{env, fs, io::Write, path::PathBuf, process::Command};
 
 use anyhow::Result;
 use baml_types::GeneratorOutputType;
 use include_dir::include_dir;
 use which::which;
+
+const BAML_EXTENSION_ID: &str = "boundary.baml-extension";
 
 #[derive(clap::Args, Debug)]
 pub struct InitArgs {
@@ -43,6 +45,292 @@ fn infer_openapi_command() -> Result<&'static str> {
     }
 
     anyhow::bail!("Found none of openapi-generator, openapi-generator-cli, or npx in PATH")
+}
+
+#[derive(Debug)]
+enum EditorType {
+    VSCode,
+    Cursor,
+    Unknown,
+}
+
+fn detect_editor() -> EditorType {
+    // Check for Cursor first since it might also set VSCode-like variables
+    if let Ok(cursor_trace_id) = env::var("CURSOR_TRACE_ID") {
+        if !cursor_trace_id.is_empty() {
+            return EditorType::Cursor;
+        }
+    }
+
+    // Then check TERM_PROGRAM for both VSCode and Cursor
+    if let Ok(term_program) = env::var("TERM_PROGRAM") {
+        let term_lower = term_program.to_lowercase();
+        if term_lower.contains("cursor") {
+            return EditorType::Cursor;
+        }
+        if term_lower == "vscode" {
+            return EditorType::VSCode;
+        }
+    }
+
+    EditorType::Unknown
+}
+
+fn detect_and_install_extension() {
+    let editor = detect_editor();
+
+    match editor {
+        EditorType::VSCode => {
+            baml_log::info!("Detected VSCode terminal environment");
+            install_vscode_extension();
+        }
+        EditorType::Cursor => {
+            baml_log::info!("Detected Cursor terminal environment");
+            install_cursor_extension();
+        }
+        EditorType::Unknown => {
+            // Don't log anything for unknown editors to avoid noise
+        }
+    }
+}
+
+fn is_extension_installed(editor: &str) -> bool {
+    let result = match editor {
+        "code" => Command::new("code").args(&["--list-extensions"]).output(),
+        "cursor" => Command::new("cursor").args(&["--list-extensions"]).output(),
+        _ => return false,
+    };
+
+    match result {
+        Ok(output) => {
+            if output.status.success() {
+                let extensions = String::from_utf8_lossy(&output.stdout);
+                extensions
+                    .lines()
+                    .any(|line| line.trim() == BAML_EXTENSION_ID)
+            } else {
+                false
+            }
+        }
+        Err(_) => false,
+    }
+}
+
+fn install_vscode_extension() {
+    // Check if 'code' command is available
+    if which("code").is_ok() {
+        // First check if extension is already installed
+        if is_extension_installed("code") {
+            baml_log::info!("BAML VSCode extension is already installed");
+            return;
+        }
+
+        baml_log::info!("Installing BAML VSCode extension...");
+        baml_log::debug!("Running: code --install-extension {}", BAML_EXTENSION_ID);
+
+        match Command::new("code")
+            .args(&["--install-extension", BAML_EXTENSION_ID])
+            .output()
+        {
+            Ok(output) => {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                let stderr = String::from_utf8_lossy(&output.stderr);
+
+                baml_log::debug!("VSCode install stdout: {}", stdout);
+                baml_log::debug!("VSCode install stderr: {}", stderr);
+                baml_log::debug!("VSCode install exit status: {}", output.status);
+
+                if output.status.success() {
+                    baml_log::info!("Successfully installed BAML VSCode extension!");
+                } else {
+                    if stderr.contains("already installed") || stdout.contains("already installed")
+                    {
+                        baml_log::info!("BAML VSCode extension is already installed");
+                    } else {
+                        baml_log::warn!("Failed to install BAML VSCode extension");
+                        baml_log::warn!("Exit code: {}", output.status.code().unwrap_or(-1));
+                        baml_log::warn!("Stderr: {}", stderr);
+                        baml_log::warn!("Stdout: {}", stdout);
+                        baml_log::info!("Attempting manual installation...");
+                        install_extension_manually("code");
+                    }
+                }
+            }
+            Err(e) => {
+                baml_log::warn!("Failed to run VSCode command: {}", e);
+                baml_log::debug!("Error details: {:?}", e);
+                baml_log::info!("Attempting manual installation...");
+                install_extension_manually("code");
+            }
+        }
+    } else {
+        baml_log::info!("VSCode 'code' command not found in PATH. Attempting to download and install extension manually...");
+        install_extension_manually("code");
+    }
+}
+
+fn install_cursor_extension() {
+    // Check if 'cursor' command is available
+    if which("cursor").is_ok() {
+        // First check if extension is already installed
+        if is_extension_installed("cursor") {
+            baml_log::info!("BAML Cursor extension is already installed");
+            return;
+        }
+
+        baml_log::info!("Installing BAML Cursor extension...");
+        baml_log::debug!("Running: cursor --install-extension {}", BAML_EXTENSION_ID);
+
+        match Command::new("cursor")
+            .args(&["--install-extension", BAML_EXTENSION_ID])
+            .output()
+        {
+            Ok(output) => {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                let stderr = String::from_utf8_lossy(&output.stderr);
+
+                baml_log::debug!("Cursor install stdout: {}", stdout);
+                baml_log::debug!("Cursor install stderr: {}", stderr);
+                baml_log::debug!("Cursor install exit status: {}", output.status);
+
+                if output.status.success() {
+                    baml_log::info!("Successfully installed BAML Cursor extension!");
+                } else {
+                    if stderr.contains("already installed") || stdout.contains("already installed")
+                    {
+                        baml_log::info!("BAML Cursor extension is already installed");
+                    } else {
+                        baml_log::warn!("Failed to install BAML Cursor extension");
+                        baml_log::warn!("Exit code: {}", output.status.code().unwrap_or(-1));
+                        baml_log::warn!("Stderr: {}", stderr);
+                        baml_log::warn!("Stdout: {}", stdout);
+                        baml_log::info!("Attempting manual installation...");
+                        install_extension_manually("cursor");
+                    }
+                }
+            }
+            Err(e) => {
+                baml_log::warn!("Failed to run Cursor command: {}", e);
+                baml_log::debug!("Error details: {:?}", e);
+                baml_log::info!("Attempting manual installation...");
+                install_extension_manually("cursor");
+            }
+        }
+    } else {
+        baml_log::info!("Cursor command not found in PATH. Attempting to download and install extension manually...");
+        install_extension_manually("cursor");
+    }
+}
+
+fn download_vsix(url: &str, filename: &str) -> Result<PathBuf> {
+    let temp_dir = std::env::temp_dir();
+    let vsix_path = temp_dir.join(filename);
+
+    baml_log::info!("Downloading BAML extension to: {}", vsix_path.display());
+    baml_log::debug!("Download URL: {}", url);
+
+    // Use curl to download the file
+    let curl_args = vec!["-L", "-o", vsix_path.to_str().unwrap(), url];
+    baml_log::debug!("Running: curl {}", curl_args.join(" "));
+
+    let output = Command::new("curl").args(&curl_args).output()?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        baml_log::debug!("Curl stderr: {}", stderr);
+        anyhow::bail!("Failed to download extension: {}", stderr);
+    }
+
+    // Verify the file was downloaded
+    if !vsix_path.exists() {
+        anyhow::bail!("VSIX file was not created at expected location");
+    }
+
+    let metadata = fs::metadata(&vsix_path)?;
+    baml_log::debug!("Downloaded file size: {} bytes", metadata.len());
+
+    Ok(vsix_path)
+}
+
+fn install_extension_manually(editor: &str) {
+    // Try to download the VSIX file
+    let vsix_url = "https://marketplace.visualstudio.com/_apis/public/gallery/publishers/Boundary/vsextensions/baml-extension/latest/vspackage";
+    let vsix_filename = "baml-extension.vsix";
+
+    match download_vsix(vsix_url, vsix_filename) {
+        Ok(vsix_path) => {
+            baml_log::info!("Downloaded BAML extension to {}", vsix_path.display());
+
+            // Try to find the editor executable in common locations
+            let editor_paths = match editor {
+                "code" => vec![
+                    "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code",
+                    "/usr/local/bin/code",
+                    "/opt/homebrew/bin/code",
+                    "C:\\Program Files\\Microsoft VS Code\\bin\\code.cmd",
+                    "C:\\Program Files (x86)\\Microsoft VS Code\\bin\\code.cmd",
+                ],
+                "cursor" => vec![
+                    "/Applications/Cursor.app/Contents/Resources/app/bin/cursor",
+                    "/usr/local/bin/cursor",
+                    "/opt/homebrew/bin/cursor",
+                    "C:\\Program Files\\Cursor\\cursor.exe",
+                    "C:\\Users\\%USERNAME%\\AppData\\Local\\Programs\\cursor\\cursor.exe",
+                ],
+                _ => vec![],
+            };
+
+            let mut installed = false;
+            for path in editor_paths {
+                if std::path::Path::new(path).exists() {
+                    baml_log::info!(
+                        "Found {} at {}, attempting to install extension...",
+                        editor,
+                        path
+                    );
+                    match Command::new(path)
+                        .args(&["--install-extension", vsix_path.to_str().unwrap()])
+                        .output()
+                    {
+                        Ok(output) => {
+                            if output.status.success() {
+                                baml_log::info!("Successfully installed BAML extension!");
+                                installed = true;
+                                break;
+                            }
+                        }
+                        Err(_) => continue,
+                    }
+                }
+            }
+
+            if !installed {
+                baml_log::info!(
+                    "Could not automatically install the extension. Please install it manually:\n\
+                    1. Open {} \n\
+                    2. Go to Extensions (Cmd/Ctrl+Shift+X)\n\
+                    3. Click the '...' menu and select 'Install from VSIX...'\n\
+                    4. Select the downloaded file: {}",
+                    if editor == "code" { "VSCode" } else { "Cursor" },
+                    vsix_path.display()
+                );
+            }
+
+            // Clean up the downloaded file after a delay to give user time to install manually
+            let vsix_path_clone = vsix_path.clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_secs(300)); // 5 minutes
+                let _ = fs::remove_file(vsix_path_clone);
+            });
+        }
+        Err(e) => {
+            baml_log::warn!("Failed to download extension: {}", e);
+            baml_log::info!(
+                "Please install the BAML extension manually from the {} marketplace",
+                if editor == "code" { "VSCode" } else { "Cursor" }
+            );
+        }
+    }
 }
 
 impl InitArgs {
@@ -108,6 +396,9 @@ impl InitArgs {
                 GeneratorOutputType::Go => "go",
             }
         );
+
+        // Detect and install VSCode/Cursor extension
+        detect_and_install_extension();
 
         Ok(())
     }
@@ -256,6 +547,8 @@ generator target {{
 
 #[cfg(test)]
 mod tests {
+    use std::env;
+
     use pretty_assertions::assert_eq;
 
     use super::*;
