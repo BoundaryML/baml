@@ -152,6 +152,7 @@ fn install_vscode_extension() {
                 }
             }
             Err(e) => {
+                baml_log::warn!("Failed to run VSCode command: {}", e);
                 baml_log::info!("Attempting manual installation...");
                 install_extension_manually("code");
             }
@@ -198,6 +199,7 @@ fn install_cursor_extension() {
                 }
             }
             Err(e) => {
+                baml_log::warn!("Failed to run Cursor command: {}", e);
                 baml_log::info!("Attempting manual installation...");
                 install_extension_manually("cursor");
             }
@@ -229,8 +231,6 @@ fn download_vsix(url: &str, filename: &str) -> Result<PathBuf> {
         anyhow::bail!("VSIX file was not created at expected location");
     }
 
-    let metadata = fs::metadata(&vsix_path)?;
-
     Ok(vsix_path)
 }
 
@@ -246,42 +246,60 @@ fn install_extension_manually(editor: &str) {
             // Try to find the editor executable in common locations
             let editor_paths = match editor {
                 "code" => vec![
-                    "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code",
-                    "/usr/local/bin/code",
-                    "/opt/homebrew/bin/code",
-                    "C:\\Program Files\\Microsoft VS Code\\bin\\code.cmd",
-                    "C:\\Program Files (x86)\\Microsoft VS Code\\bin\\code.cmd",
+                    "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code"
+                        .to_string(),
+                    "/usr/local/bin/code".to_string(),
+                    "/opt/homebrew/bin/code".to_string(),
+                    "C:\\Program Files\\Microsoft VS Code\\bin\\code.cmd".to_string(),
+                    "C:\\Program Files (x86)\\Microsoft VS Code\\bin\\code.cmd".to_string(),
                 ],
-                "cursor" => vec![
-                    "/Applications/Cursor.app/Contents/Resources/app/bin/cursor",
-                    "/usr/local/bin/cursor",
-                    "/opt/homebrew/bin/cursor",
-                    "C:\\Program Files\\Cursor\\cursor.exe",
-                    "C:\\Users\\%USERNAME%\\AppData\\Local\\Programs\\cursor\\cursor.exe",
-                ],
+                "cursor" => {
+                    let mut paths = vec![
+                        "/Applications/Cursor.app/Contents/Resources/app/bin/cursor".to_string(),
+                        "/usr/local/bin/cursor".to_string(),
+                        "/opt/homebrew/bin/cursor".to_string(),
+                        "C:\\Program Files\\Cursor\\cursor.exe".to_string(),
+                    ];
+                    if let Ok(username) = env::var("USERNAME") {
+                        if !username.is_empty()
+                            && username
+                                .chars()
+                                .all(|c| c.is_alphanumeric() || c == '_' || c == '-')
+                        {
+                            let user_path = format!(
+                                "C:\\Users\\{}\\AppData\\Local\\Programs\\cursor\\cursor.exe",
+                                username
+                            );
+                            paths.push(user_path);
+                        }
+                    }
+                    paths
+                }
                 _ => vec![],
             };
 
             let mut installed = false;
-            for path in editor_paths {
+            for path in &editor_paths {
                 if std::path::Path::new(path).exists() {
                     baml_log::info!(
                         "Found {} at {}, attempting to install extension...",
                         editor,
                         path
                     );
-                    match Command::new(path)
-                        .args(&["--install-extension", vsix_path.to_str().unwrap()])
-                        .output()
-                    {
-                        Ok(output) => {
-                            if output.status.success() {
-                                baml_log::info!("Successfully installed BAML extension!");
-                                installed = true;
-                                break;
+                    if let Some(vsix_path_str) = vsix_path.to_str() {
+                        match Command::new(path)
+                            .args(&["--install-extension", vsix_path_str])
+                            .output()
+                        {
+                            Ok(output) => {
+                                if output.status.success() {
+                                    baml_log::info!("Successfully installed BAML extension!");
+                                    installed = true;
+                                    break;
+                                }
                             }
+                            Err(_) => continue,
                         }
-                        Err(_) => continue,
                     }
                 }
             }
