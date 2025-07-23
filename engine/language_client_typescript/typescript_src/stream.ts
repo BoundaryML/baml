@@ -7,65 +7,75 @@ import type {
 
 export class BamlStream<PartialOutputType, FinalOutputType> {
   private task: Promise<FunctionResult> | null = null;
-  private error: Error | null = null;
-
   private eventQueue: (FunctionResult | null)[] = [];
-  private abortSignal?: AbortSignal;
+  private abortController: AbortController = new AbortController();
+  private externalSignal: AbortSignal | null = null;
+  private aborted = false;
 
   constructor(
     private ffiStream: FunctionResultStream,
     private partialCoerce: (result: any) => PartialOutputType,
     private finalCoerce: (result: any) => FinalOutputType,
     private ctxManager: RuntimeContextManager,
-    abortSignal?: AbortSignal
+    options?: { signal?: AbortSignal }
   ) {
-    this.abortSignal = abortSignal;
+    // If an external signal is provided, link it to our internal controller
+    if (options?.signal) {
+      this.externalSignal = options.signal;
+      
+      // If the signal is already aborted, abort immediately
+      if (this.externalSignal.aborted) {
+        this.abort();
+      } else {
+        // Otherwise listen for abort events
+        this.externalSignal.addEventListener('abort', () => {
+          this.abort();
+        });
+      }
+    }
+  }
 
-    // Listen for abort to clean up
-    if (abortSignal) {
-      abortSignal.addEventListener("abort", () => {
-        this.eventQueue.push(null); // Signal end of stream
-      });
+  /**
+   * Aborts the stream processing.
+   * This will stop any ongoing stream processing and clean up resources.
+   */
+  abort(): void {
+    if (!this.aborted) {
+      this.aborted = true;
+      this.abortController.abort();
+      this.eventQueue.push(null); // Signal end of stream
+      this.ffiStream.onEvent(undefined); // Remove event handler
     }
   }
 
   private async driveToCompletion(): Promise<FunctionResult> {
     try {
-      // Check for early abort
-      if (this.abortSignal?.aborted) {
-        throw new BamlAbortError(
-          "Operation was aborted",
-          this.abortSignal.reason
-        );
-      }
-
       this.ffiStream.onEvent(
         (err: Error | null, data: FunctionResult | null) => {
           if (err) {
-            this.error = err;
             return;
+          } else {
+            // Check if aborted before adding to queue
+            if (!this.aborted) {
+              this.eventQueue.push(data);
+            }
           }
-
-          this.eventQueue.push(data);
         }
       );
-
+      
+      // Set up abort signal handling
+      this.abortController.signal.addEventListener('abort', () => {
+        this.abort();
+      });
+      
       const retval = await this.ffiStream.done(this.ctxManager);
-
-      // Check if we have an error to throw
-      if (this.error) {
-        throw this.error;
-      }
-
       return retval;
     } catch (error) {
-      if (error instanceof BamlAbortError) {
-        this.error = error;
-        this.eventQueue.push(null);
-      }
       throw error;
     } finally {
-      this.eventQueue.push(null);
+      if (!this.eventQueue.includes(null)) {
+        this.eventQueue.push(null);
+      }
       this.ffiStream.onEvent(undefined);
     }
   }
@@ -79,14 +89,19 @@ export class BamlStream<PartialOutputType, FinalOutputType> {
   }
 
   async *[Symbol.asyncIterator](): AsyncIterableIterator<PartialOutputType> {
+    // Check if already aborted before starting
+    if (this.aborted) {
+      throw new AbortError('Stream was aborted');
+    }
+    
     this.driveToCompletionInBg();
 
     while (true) {
-      // Check if we have an error to throw
-      if (this.error) {
-        throw this.error;
+      // Check if aborted during iteration
+      if (this.aborted) {
+        throw new AbortError('Stream was aborted');
       }
-
+      
       const event = this.eventQueue.shift();
 
       if (event === undefined) {
@@ -95,10 +110,6 @@ export class BamlStream<PartialOutputType, FinalOutputType> {
       }
 
       if (event === null) {
-        // Check one more time for any error before ending
-        if (this.error) {
-          throw this.error;
-        }
         break;
       }
 
@@ -109,8 +120,12 @@ export class BamlStream<PartialOutputType, FinalOutputType> {
   }
 
   async getFinalResponse(): Promise<FinalOutputType> {
+    // Check if aborted
+    if (this.aborted) {
+      throw new AbortError('Stream was aborted');
+    }
+    
     const final = await this.driveToCompletionInBg();
-
     return this.finalCoerce(final.parsed(false));
   }
 
@@ -129,9 +144,48 @@ export class BamlStream<PartialOutputType, FinalOutputType> {
     return new ReadableStream({
       async start(controller) {
         try {
+          // Set up abort handling for the ReadableStream
+          stream.signal.addEventListener('abort', () => {
+            controller.enqueue(
+              encoder.encode(JSON.stringify({ 
+                error: { 
+                  type: 'AbortError',
+                  message: 'Stream was aborted by client',
+                  prompt: '',
+                  raw_output: '',
+                } 
+              }))
+            );
+            controller.close();
+          });
+          
           // Stream partials
-          for await (const partial of stream) {
-            controller.enqueue(encoder.encode(JSON.stringify({ partial })));
+          try {
+            for await (const partial of stream) {
+              controller.enqueue(encoder.encode(JSON.stringify({ partial })));
+            }
+          } catch (iterError) {
+            if (iterError instanceof AbortError) {
+              // Handle abort during iteration
+              controller.enqueue(
+                encoder.encode(JSON.stringify({ 
+                  error: { 
+                    type: 'AbortError',
+                    message: 'Stream was aborted by client',
+                    prompt: '',
+                    raw_output: '',
+                  } 
+                }))
+              );
+              controller.close();
+              return;
+            }
+            throw iterError; // Re-throw other errors
+          }
+
+          // If aborted, don't try to get final response
+          if (stream.aborted) {
+            return;
           }
 
           try {
@@ -140,6 +194,11 @@ export class BamlStream<PartialOutputType, FinalOutputType> {
             controller.close();
             return;
           } catch (err: unknown) {
+            // Don't send error if aborted
+            if (stream.aborted) {
+              return;
+            }
+            
             const bamlError = toBamlError(
               err instanceof Error ? err : new Error(String(err))
             );
@@ -150,6 +209,11 @@ export class BamlStream<PartialOutputType, FinalOutputType> {
             return;
           }
         } catch (streamErr: unknown) {
+          // Don't send error if aborted
+          if (stream.aborted) {
+            return;
+          }
+          
           const errorPayload = {
             type: "StreamError",
             message:
@@ -166,6 +230,36 @@ export class BamlStream<PartialOutputType, FinalOutputType> {
           controller.close();
         }
       },
+      
+      cancel() {
+        // Handle stream cancellation by aborting the underlying stream
+        stream.abort();
+      }
     });
+  }
+  
+  /**
+   * Returns the AbortSignal associated with this stream.
+   * This can be used to abort the stream from outside.
+   */
+  get signal(): AbortSignal {
+    return this.abortController.signal;
+  }
+  
+  /**
+   * Returns whether the stream has been aborted.
+   */
+  get isAborted(): boolean {
+    return this.aborted;
+  }
+}
+
+/**
+ * Custom error class for abort errors
+ */
+export class AbortError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'AbortError';
   }
 }

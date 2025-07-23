@@ -61,5 +61,9 @@ export {
   TraceStats,
 } from './native'
 
-export { BamlStream } from './stream'
+export { BamlStream, AbortError } from './stream'
+export { BaseBamlStreamClient, type BamlCallOptions } from './stream_client'
 export { BamlCtxManager } from './async_context_vars'
+
+// Re-export AbortController types for convenience
+export type { AbortSignal, AbortController }
