@@ -30,7 +30,7 @@ export class BamlStream<PartialOutputType, FinalOutputType> {
         // Otherwise listen for abort events
         this.externalSignal.addEventListener('abort', () => {
           this.abort();
-        });
+        }, { once: true });
       }
     }
   }
@@ -66,7 +66,7 @@ export class BamlStream<PartialOutputType, FinalOutputType> {
       // Set up abort signal handling
       this.abortController.signal.addEventListener('abort', () => {
         this.abort();
-      });
+      }, { once: true });
       
       const retval = await this.ffiStream.done(this.ctxManager);
       return retval;
@@ -157,7 +157,7 @@ export class BamlStream<PartialOutputType, FinalOutputType> {
               }))
             );
             controller.close();
-          });
+          }, { once: true });
           
           // Stream partials
           try {

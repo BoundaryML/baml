@@ -115,7 +115,7 @@ async function streamSignalExample() {
   // Listen for abort events
   signal.addEventListener('abort', () => {
     console.log('Stream abort detected via signal');
-  });
+  }, { once: true });
   
   // Set a timeout to abort after 4 seconds
   setTimeout(() => {

@@ -138,7 +138,7 @@ describe("AbortController", () => {
       let signalAborted = false;
       stream.signal.addEventListener("abort", () => {
         signalAborted = true;
-      });
+      }, { once: true });
       
       // Abort the stream
       stream.abort();

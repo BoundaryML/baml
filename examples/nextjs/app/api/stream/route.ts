@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
       request.signal.addEventListener('abort', () => {
         clearTimeout(timeoutId);
         controller.abort();
-      });
+      }, { once: true });
     } else {
       // Method 1: Create a stream without an AbortController
       stream = b.stream.YourFunction(params);
@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
       // Set up abort handling for client disconnects
       request.signal.addEventListener('abort', () => {
         stream.abort();
-      });
+      }, { once: true });
     }
     
     // Convert to a web-compatible stream
