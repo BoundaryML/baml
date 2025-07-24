@@ -76,7 +76,9 @@ fn detect_editor() -> EditorType {
     EditorType::Unknown
 }
 
-fn detect_and_install_extension() {
+// detect the editor based on the environment variables and install the extension
+// the dest_path is the path to the new project, used to copy cursor rules right now.
+fn detect_and_install_extension(dest_path: &std::path::Path) {
     let editor = detect_editor();
 
     match editor {
@@ -87,6 +89,7 @@ fn detect_and_install_extension() {
         EditorType::Cursor => {
             baml_log::info!("Detected Cursor terminal environment");
             install_cursor_extension();
+            copy_cursor_rules(dest_path);
         }
         EditorType::Unknown => {
             // Don't log anything for unknown editors to avoid noise
@@ -222,6 +225,28 @@ fn download_vsix(url: &str, filename: &str) -> Result<PathBuf> {
     Ok(vsix_path)
 }
 
+fn copy_cursor_rules(dest_path: &std::path::Path) {
+    // Check if baml.mdc exists in the sample project
+    if let Some(baml_mdc_file) = SAMPLE_PROJECT.get_file("baml.mdc") {
+        let cursor_rules_dir = dest_path.join(".cursor").join("rules");
+
+        // Create the .cursor/rules directory if it doesn't exist
+        if let Err(e) = fs::create_dir_all(&cursor_rules_dir) {
+            baml_log::info!("Could not create .cursor/rules directory: {}", e);
+            return;
+        }
+
+        let cursor_rules_file = cursor_rules_dir.join("baml.mdc");
+
+        // Write the baml.mdc file
+        if let Err(e) = fs::write(&cursor_rules_file, baml_mdc_file.contents()) {
+            baml_log::info!("Could not copy baml.mdc to .cursor/rules: {}", e);
+        } else {
+            baml_log::info!("Setting up Cursor rules for BAML!");
+        }
+    }
+}
+
 fn install_extension_manually(editor: &str) {
     // Try to download the VSIX file
     let vsix_url = "https://marketplace.visualstudio.com/_apis/public/gallery/publishers/Boundary/vsextensions/baml-extension/latest/vspackage";
@@ -332,7 +357,21 @@ impl InitArgs {
             );
         }
 
-        SAMPLE_PROJECT.extract(&self.dest)?;
+        // Extract only the baml_src directory, not other files like baml.mdc
+        let dest_baml_src = self.dest.join("baml_src");
+        fs::create_dir_all(&dest_baml_src)?;
+
+        // Extract files from baml_src directory only
+        for file in SAMPLE_PROJECT.files() {
+            let file_path = file.path();
+            if let Ok(relative_path) = file_path.strip_prefix("baml_src/") {
+                let dest_file = dest_baml_src.join(relative_path);
+                if let Some(parent) = dest_file.parent() {
+                    fs::create_dir_all(parent)?;
+                }
+                fs::write(&dest_file, file.contents())?;
+            }
+        }
         // Also generate a main.baml file
         let main_baml = std::path::Path::new(&self.dest)
             .join("baml_src")
@@ -384,7 +423,7 @@ impl InitArgs {
         );
 
         // Detect and install VSCode/Cursor extension
-        detect_and_install_extension();
+        detect_and_install_extension(&self.dest);
 
         Ok(())
     }
