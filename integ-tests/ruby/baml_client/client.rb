@@ -2747,6 +2747,31 @@ module BamlClient
       end
       sig {params(
           varargs: T.untyped,
+
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+      ).returns(BamlClient::Types::StreamBugResult)}
+      def StreamBug(
+          *varargs,
+
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("StreamBug may only be called with keyword arguments")
+          end
+
+          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          result = options.call_function_sync(function_name: "StreamBug", args: {
+
+          })
+
+          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          # for sorbet we need to cast to the return type since parsed is now the right value
+          # We just need to tell sorbet that the return type is the right type
+          parsed.cast_to(BamlClient::Types::StreamBugResult)
+      end
+      sig {params(
+          varargs: T.untyped,
           theme: String,length: Integer,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(BamlClient::Types::TwoStoriesOneTitle)}
@@ -7977,6 +8002,31 @@ module BamlClient
           })
 
           Baml::BamlStream[BamlClient::StreamTypes::BigNumbers, BamlClient::Types::BigNumbers].new(
+              ffi_stream: result,
+              ctx_manager: ctx
+          )
+      end
+      sig {params(
+          varargs: T.untyped,
+
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+      ).returns(Baml::BamlStream[BamlClient::StreamTypes::StreamBugResult, BamlClient::Types::StreamBugResult])}
+      def StreamBug(
+          *varargs,
+
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("StreamBug may only be called with keyword arguments")
+          end
+
+          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          ctx, result = options.create_sync_stream(function_name: "StreamBug", args: {
+
+          })
+
+          Baml::BamlStream[BamlClient::StreamTypes::StreamBugResult, BamlClient::Types::StreamBugResult].new(
               ffi_stream: result,
               ctx_manager: ctx
           )

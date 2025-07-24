@@ -841,6 +841,13 @@ class BamlSyncClient:
             "digits": digits,
         })
         return typing.cast(types.BigNumbers, result.cast_to(types, types, stream_types, False, __runtime__))
+    def StreamBug(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> types.StreamBugResult:
+        result = self.__options.merge_options(baml_options).call_function_sync(function_name="StreamBug", args={
+            
+        })
+        return typing.cast(types.StreamBugResult, result.cast_to(types, types, stream_types, False, __runtime__))
     def StreamFailingAssertion(self, theme: str,length: int,
         baml_options: BamlCallOptions = {},
     ) -> types.TwoStoriesOneTitle:
@@ -2853,6 +2860,18 @@ class BamlStreamClient:
           lambda x: typing.cast(types.BigNumbers, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
+    def StreamBug(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[stream_types.StreamBugResult, types.StreamBugResult]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="StreamBug", args={
+            
+        })
+        return baml_py.BamlSyncStream[stream_types.StreamBugResult, types.StreamBugResult](
+          result,
+          lambda x: typing.cast(stream_types.StreamBugResult, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.StreamBugResult, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
     def StreamFailingAssertion(self, theme: str,length: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[stream_types.TwoStoriesOneTitle, types.TwoStoriesOneTitle]:
@@ -4829,6 +4848,13 @@ class BamlHttpRequestClient:
             "digits": digits,
         }, mode="request")
         return result
+    def StreamBug(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="StreamBug", args={
+            
+        }, mode="request")
+        return result
     def StreamFailingAssertion(self, theme: str,length: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -6298,6 +6324,13 @@ class BamlHttpStreamRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="StreamBigNumbers", args={
             "digits": digits,
+        }, mode="stream")
+        return result
+    def StreamBug(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="StreamBug", args={
+            
         }, mode="stream")
         return result
     def StreamFailingAssertion(self, theme: str,length: int,

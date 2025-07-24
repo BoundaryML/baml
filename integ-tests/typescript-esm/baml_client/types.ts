@@ -732,6 +732,11 @@ export interface SomeClassNestedDynamic {
   [key: string]: any;
 }
 
+export interface StreamBugResult {
+  
+  [key: string]: any;
+}
+
 export interface StringToClassEntry {
   word: string
   

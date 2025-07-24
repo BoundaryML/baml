@@ -4803,6 +4803,44 @@ func (u SomeClassNestedDynamic) BamlEncodeName() *cffi.CFFITypeName {
 	}
 }
 
+type StreamBugResult struct {
+	DynamicProperties map[string]any
+}
+
+func (c *StreamBugResult) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
+	typeName := holder.Name
+	if typeName.Namespace != cffi.CFFITypeNamespace_TYPES {
+		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_TYPES, got %s", string(typeName.Namespace.String())))
+	}
+	if typeName.Name != "StreamBugResult" {
+		panic(fmt.Sprintf("expected StreamBugResult, got %s", typeName.Name))
+	}
+
+	for _, field := range holder.DynamicFields {
+		key := field.Key
+		valueHolder := field.Value
+		c.DynamicProperties[key] = baml.Decode(valueHolder)
+	}
+
+}
+
+func (c StreamBugResult) Encode() (*cffi.CFFIValueHolder, error) {
+	fields := map[string]any{}
+
+	return baml.EncodeClass(c.BamlEncodeName, fields, &c.DynamicProperties)
+}
+
+func (c StreamBugResult) BamlTypeName() string {
+	return "StreamBugResult"
+}
+
+func (u StreamBugResult) BamlEncodeName() *cffi.CFFITypeName {
+	return &cffi.CFFITypeName{
+		Namespace: cffi.CFFITypeNamespace_TYPES,
+		Name:      "StreamBugResult",
+	}
+}
+
 type StringToClassEntry struct {
 	Word string `json:"word"`
 }

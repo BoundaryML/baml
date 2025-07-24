@@ -193,6 +193,8 @@ var typeMap = map[string]reflect.Type{
 	"STREAM_TYPES.SmallThing":                    reflect.TypeOf(stream_types.SmallThing{}),
 	"TYPES.SomeClassNestedDynamic":               reflect.TypeOf(types.SomeClassNestedDynamic{}),
 	"STREAM_TYPES.SomeClassNestedDynamic":        reflect.TypeOf(stream_types.SomeClassNestedDynamic{}),
+	"TYPES.StreamBugResult":                      reflect.TypeOf(types.StreamBugResult{}),
+	"STREAM_TYPES.StreamBugResult":               reflect.TypeOf(stream_types.StreamBugResult{}),
 	"TYPES.StringToClassEntry":                   reflect.TypeOf(types.StringToClassEntry{}),
 	"STREAM_TYPES.StringToClassEntry":            reflect.TypeOf(stream_types.StringToClassEntry{}),
 	"TYPES.TestClassAlias":                       reflect.TypeOf(types.TestClassAlias{}),

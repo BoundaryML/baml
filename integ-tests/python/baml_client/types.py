@@ -141,7 +141,7 @@ class TestEnum(str, Enum):
     G = "G"
 
 # #########################################################################
-# Generated classes (99)
+# Generated classes (100)
 # #########################################################################
 
 class AnotherObject(BaseModel):
@@ -532,6 +532,9 @@ class SmallThing(BaseModel):
 class SomeClassNestedDynamic(BaseModel):
     model_config = ConfigDict(extra='allow')
     hi: str
+
+class StreamBugResult(BaseModel):
+    model_config = ConfigDict(extra='allow')
 
 class StringToClassEntry(BaseModel):
     word: str

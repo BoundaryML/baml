@@ -186,7 +186,7 @@ module BamlClient
   end
 
   # #########################################################################
-  # Generated classes (99)
+  # Generated classes (100)
   # #########################################################################
 
 
@@ -825,6 +825,11 @@ module BamlClient
   class SomeClassNestedDynamic < T::Struct
       include Baml::Sorbet::Struct
       const :hi, String
+  end
+
+
+  class StreamBugResult < T::Struct
+      include Baml::Sorbet::Struct
   end
 
 

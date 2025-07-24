@@ -6285,6 +6285,64 @@ func StreamBigNumbers(ctx context.Context, digits int64, opts ...CallOptionFunc)
 	}
 }
 
+func StreamBug(ctx context.Context, opts ...CallOptionFunc) (types.StreamBugResult, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := args.Encode()
+	if err != nil {
+		panic(err)
+	}
+
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "StreamBug", encoded, callOpts.onTick)
+		if err != nil {
+			return types.StreamBugResult{}, err
+		}
+
+		if result.Error != nil {
+			return types.StreamBugResult{}, result.Error
+		}
+
+		casted := (result.Data).(types.StreamBugResult)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "StreamBug", encoded, callOpts.onTick)
+		if err != nil {
+			return types.StreamBugResult{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.StreamBugResult{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.StreamBugResult), nil
+			}
+		}
+
+		return types.StreamBugResult{}, fmt.Errorf("No data returned from stream")
+	}
+}
+
 func StreamFailingAssertion(ctx context.Context, theme string, length int64, opts ...CallOptionFunc) (types.TwoStoriesOneTitle, error) {
 
 	var callOpts callOption

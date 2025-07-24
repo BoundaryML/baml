@@ -186,6 +186,10 @@ module BamlClient
           ClassBuilder.new(@registry, "SomeClassNestedDynamic", Set[ "hi", ])
       end
 
+      def StreamBugResult
+          ClassBuilder.new(@registry, "StreamBugResult", Set[])
+      end
+
 
 
       def Color

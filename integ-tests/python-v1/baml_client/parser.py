@@ -670,6 +670,12 @@ class LlmResponseParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="StreamBigNumbers", llm_response=llm_response, mode="request")
         return typing.cast(types.BigNumbers, result)
 
+    def StreamBug(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> types.StreamBugResult:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="StreamBug", llm_response=llm_response, mode="request")
+        return typing.cast(types.StreamBugResult, result)
+
     def StreamFailingAssertion(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.TwoStoriesOneTitle:
@@ -1931,6 +1937,12 @@ class LlmStreamParser:
     ) -> stream_types.BigNumbers:
         result = self.__options.merge_options(baml_options).parse_response(function_name="StreamBigNumbers", llm_response=llm_response, mode="stream")
         return typing.cast(stream_types.BigNumbers, result)
+
+    def StreamBug(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> stream_types.StreamBugResult:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="StreamBug", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.StreamBugResult, result)
 
     def StreamFailingAssertion(
         self, llm_response: str, baml_options: BamlCallOptions = {},

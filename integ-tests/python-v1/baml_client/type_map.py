@@ -274,6 +274,9 @@ type_map = {
     "types.SomeClassNestedDynamic": types.SomeClassNestedDynamic,
     "stream_types.SomeClassNestedDynamic": stream_types.SomeClassNestedDynamic,
 
+    "types.StreamBugResult": types.StreamBugResult,
+    "stream_types.StreamBugResult": stream_types.StreamBugResult,
+
     "types.StringToClassEntry": types.StringToClassEntry,
     "stream_types.StringToClassEntry": stream_types.StringToClassEntry,
 

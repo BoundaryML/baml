@@ -1586,6 +1586,19 @@ paths:
                 title: StreamBigNumbersResponse
                 $ref: '#/components/schemas/BigNumbers'
       operationId: StreamBigNumbers
+  /call/StreamBug:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/StreamBug'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: StreamBugResponse
+                $ref: '#/components/schemas/StreamBugResult'
+      operationId: StreamBug
   /call/StreamFailingAssertion:
     post:
       requestBody:
@@ -4724,6 +4737,19 @@ components:
             required:
             - digits
             additionalProperties: false
+    StreamBug:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: StreamBugRequest
+            type: object
+            properties:
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required: []
+            additionalProperties: false
     StreamFailingAssertion:
       required: true
       content:
@@ -7793,6 +7819,10 @@ components:
           type: string
       required:
       - hi
+      additionalProperties: false
+    StreamBugResult:
+      type: object
+      required: []
       additionalProperties: false
     StringToClassEntry:
       type: object

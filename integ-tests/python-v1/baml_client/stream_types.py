@@ -24,7 +24,7 @@ class StreamState(GenericModel, typing.Generic[StreamStateValueT]):
     value: StreamStateValueT
     state: typing_extensions.Literal["Pending", "Incomplete", "Complete"]
 # #########################################################################
-# Generated classes (99)
+# Generated classes (100)
 # #########################################################################
 
 class AnotherObject(BaseModel):
@@ -587,6 +587,11 @@ class SomeClassNestedDynamic(BaseModel):
         extra = Extra.allow
         arbitrary_types_allowed = True
     hi: typing.Optional[str] = None
+
+class StreamBugResult(BaseModel):
+    class Config:
+        extra = Extra.allow
+        arbitrary_types_allowed = True
 
 class StringToClassEntry(BaseModel):
     class Config:

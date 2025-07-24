@@ -26,7 +26,7 @@ module BamlClient
       const :state, Symbol
   end
   # #########################################################################
-  # Generated classes (99)
+  # Generated classes (100)
   # #########################################################################
 
 
@@ -665,6 +665,11 @@ module BamlClient
   class SomeClassNestedDynamic < T::Struct
       include Baml::Sorbet::Struct
       const :hi, T.nilable(String)
+  end
+
+
+  class StreamBugResult < T::Struct
+      include Baml::Sorbet::Struct
   end
 
 
