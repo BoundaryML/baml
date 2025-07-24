@@ -3,6 +3,7 @@ use std::time::Duration;
 use lsp_server::ErrorCode;
 use lsp_types::{request, ExecuteCommandParams, MessageType};
 use tokio::time::sleep;
+#[cfg(feature = "playground-server")]
 use webbrowser;
 
 // use crate::server::api::DocumentKey;
@@ -23,6 +24,7 @@ impl RequestHandler for ExecuteCommand {
 }
 
 impl SyncRequestHandler for ExecuteCommand {
+    #[cfg(feature = "playground-server")]
     fn run(
         session: &mut Session,
         notifier: Notifier,
@@ -142,10 +144,32 @@ impl SyncRequestHandler for ExecuteCommand {
             }
         } else {
             return Err(crate::server::api::Error {
-                code: ErrorCode::MethodNotFound,
+                code: ErrorCode::InternalError,
                 error: anyhow::anyhow!("Unknown command: {}", params.command),
             });
         }
         Ok(None)
+    }
+    #[cfg(not(feature = "playground-server"))]
+    fn run(
+        _session: &mut Session,
+        _notifier: Notifier,
+        _requester: &mut Requester,
+        params: ExecuteCommandParams,
+    ) -> Result<Option<serde_json::Value>> {
+        // If the playground-server feature is not enabled, return an error for playground commands
+        if params.command == "openPlayground"
+            || params.command == "baml.changeFunction"
+            || params.command == "baml.runTest"
+        {
+            return Err(crate::server::api::Error {
+                code: ErrorCode::InternalError,
+                error: anyhow::anyhow!("Playground server is not enabled in this build."),
+            });
+        }
+        Err(crate::server::api::Error {
+            code: ErrorCode::InternalError,
+            error: anyhow::anyhow!("Unknown command: {}", params.command),
+        })
     }
 }

@@ -28,17 +28,19 @@ type stream struct{}
 var Stream = &stream{}
 
 type StreamValue[TStream any, TFinal any] struct {
+	IsError   bool
+	Error     error
 	IsFinal   bool
 	as_final  *TFinal
 	as_stream *TStream
 }
 
-func (s *StreamValue[TStream, TFinal]) Final() TFinal {
-	return *s.as_final
+func (s *StreamValue[TStream, TFinal]) Final() *TFinal {
+	return s.as_final
 }
 
-func (s *StreamValue[TStream, TFinal]) Stream() TStream {
-	return *s.as_stream
+func (s *StreamValue[TStream, TFinal]) Stream() *TStream {
+	return s.as_stream
 }
 
 // / Streaming version of TestComplexUnions
@@ -62,7 +64,7 @@ func (*stream) TestComplexUnions(ctx context.Context, input string, opts ...Call
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -71,7 +73,7 @@ func (*stream) TestComplexUnions(ctx context.Context, input string, opts ...Call
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestComplexUnions", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestComplexUnions", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -88,21 +90,26 @@ func (*stream) TestComplexUnions(ctx context.Context, input string, opts ...Call
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.ComplexUnions, types.ComplexUnions]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.ComplexUnions)
+					data := (result.Data).(types.ComplexUnions)
 					channel <- StreamValue[stream_types.ComplexUnions, types.ComplexUnions]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.ComplexUnions)
+					data := (result.StreamData).(stream_types.ComplexUnions)
 					channel <- StreamValue[stream_types.ComplexUnions, types.ComplexUnions]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -135,7 +142,7 @@ func (*stream) TestDiscriminatedUnions(ctx context.Context, input string, opts .
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -144,7 +151,7 @@ func (*stream) TestDiscriminatedUnions(ctx context.Context, input string, opts .
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestDiscriminatedUnions", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestDiscriminatedUnions", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -161,21 +168,26 @@ func (*stream) TestDiscriminatedUnions(ctx context.Context, input string, opts .
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.DiscriminatedUnions, types.DiscriminatedUnions]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.DiscriminatedUnions)
+					data := (result.Data).(types.DiscriminatedUnions)
 					channel <- StreamValue[stream_types.DiscriminatedUnions, types.DiscriminatedUnions]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.DiscriminatedUnions)
+					data := (result.StreamData).(stream_types.DiscriminatedUnions)
 					channel <- StreamValue[stream_types.DiscriminatedUnions, types.DiscriminatedUnions]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -208,7 +220,7 @@ func (*stream) TestPrimitiveUnions(ctx context.Context, input string, opts ...Ca
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -217,7 +229,7 @@ func (*stream) TestPrimitiveUnions(ctx context.Context, input string, opts ...Ca
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestPrimitiveUnions", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestPrimitiveUnions", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -234,21 +246,26 @@ func (*stream) TestPrimitiveUnions(ctx context.Context, input string, opts ...Ca
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.PrimitiveUnions, types.PrimitiveUnions]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.PrimitiveUnions)
+					data := (result.Data).(types.PrimitiveUnions)
 					channel <- StreamValue[stream_types.PrimitiveUnions, types.PrimitiveUnions]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.PrimitiveUnions)
+					data := (result.StreamData).(stream_types.PrimitiveUnions)
 					channel <- StreamValue[stream_types.PrimitiveUnions, types.PrimitiveUnions]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -281,7 +298,7 @@ func (*stream) TestUnionArrays(ctx context.Context, input string, opts ...CallOp
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -290,7 +307,7 @@ func (*stream) TestUnionArrays(ctx context.Context, input string, opts ...CallOp
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestUnionArrays", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestUnionArrays", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -307,21 +324,26 @@ func (*stream) TestUnionArrays(ctx context.Context, input string, opts ...CallOp
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.UnionArrays, types.UnionArrays]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.UnionArrays)
+					data := (result.Data).(types.UnionArrays)
 					channel <- StreamValue[stream_types.UnionArrays, types.UnionArrays]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.UnionArrays)
+					data := (result.StreamData).(stream_types.UnionArrays)
 					channel <- StreamValue[stream_types.UnionArrays, types.UnionArrays]{
 						IsFinal:   false,
 						as_stream: &data,

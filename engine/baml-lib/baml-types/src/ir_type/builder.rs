@@ -8,6 +8,7 @@ impl<T: Default> TypeGeneric<T> {
     pub fn recursive_type_alias<U: AsRef<str>>(name: U) -> Self {
         TypeGeneric::RecursiveTypeAlias {
             name: name.as_ref().to_string(),
+            mode: StreamingMode::Streaming,
             meta: T::default(),
         }
     }
@@ -71,6 +72,14 @@ impl<T: Default> TypeGeneric<T> {
 
     pub fn audio() -> Self {
         TypeGeneric::Primitive(TypeValue::Media(BamlMediaType::Audio), T::default())
+    }
+
+    pub fn pdf() -> Self {
+        TypeGeneric::Primitive(TypeValue::Media(BamlMediaType::Pdf), T::default())
+    }
+
+    pub fn video() -> Self {
+        TypeGeneric::Primitive(TypeValue::Media(BamlMediaType::Video), T::default())
     }
 
     pub fn r#enum(name: &str) -> Self {

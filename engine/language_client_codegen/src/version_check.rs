@@ -101,7 +101,7 @@ pub fn check_version(
             let update_instruction = match generator_language {
                 GeneratorOutputType::OpenApi => format!("use 'npx @boundaryml/baml@{gen_version}'"),
                 GeneratorOutputType::PythonPydantic | GeneratorOutputType::PythonPydanticV1 => {
-                    format!("pip install --upgrade baml-py=={gen_version}")
+                    format!("pip install --upgrade baml-py=={gen_version}, or uv add baml-py=={gen_version}")
                 }
                 GeneratorOutputType::Typescript => {
                     format!("npm install --save-dev @boundaryml/baml@{gen_version}")

@@ -1,7 +1,7 @@
 PATH
   remote: ../../engine/language_client_ruby
   specs:
-    baml (0.90.0)
+    baml (0.201.0)
 
 GEM
   remote: https://rubygems.org/
@@ -26,7 +26,6 @@ GEM
       rbs (>= 3.4.4)
     rbs (3.9.4)
       logger
-    rexml (3.4.1)
     ruby-progressbar (1.13.0)
     sorbet (0.5.12184)
       sorbet-static (= 0.5.12184)
@@ -37,11 +36,10 @@ GEM
     sorbet-static-and-runtime (0.5.12184)
       sorbet (= 0.5.12184)
       sorbet-runtime (= 0.5.12184)
-    spoom (1.6.3)
+    spoom (1.6.1)
       erubi (>= 1.10.0)
       prism (>= 0.28.0)
-      rbi (>= 0.3.3)
-      rexml (>= 3.2.6)
+      rbi (>= 0.2.3)
       sorbet-static-and-runtime (>= 0.5.10187)
       thor (>= 0.19.2)
     tapioca (0.16.11)

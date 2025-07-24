@@ -28,14 +28,12 @@ func getEnvVars(overrides map[string]string) map[string]string {
 		key, value, _ := strings.Cut(env_var, "=")
 		env[key] = value
 	}
-	if overrides != nil {
-		// Since go uses empty strings as zero values for string and not a `null` value, we unset env vars that are empty.
-		for key, value := range overrides {
-			if value != "" {
-				env[key] = value
-			} else {
-				delete(env, key)
-			}
+	// Since go uses empty strings as zero values for string and not a `null` value, we unset env vars that are empty.
+	for key, value := range overrides {
+		if value != "" {
+			env[key] = value
+		} else {
+			delete(env, key)
 		}
 	}
 	return env
@@ -54,6 +52,7 @@ type callOption struct {
 	clientRegistry *baml.ClientRegistry
 	env            map[string]string
 	collectors     []baml.Collector
+	onTick         baml.OnTickCallbackData
 }
 
 type CallOptionFunc func(*callOption)
@@ -79,6 +78,36 @@ func WithCollector(collector baml.Collector) CallOptionFunc {
 			o.collectors = []baml.Collector{}
 		}
 		o.collectors = append(o.collectors, collector)
+	}
+}
+
+type onTickCallbackData struct {
+	collector baml.Collector
+	onTick    baml.TickCallback
+}
+
+func (o *onTickCallbackData) Collector() baml.Collector {
+	return o.collector
+}
+
+func (o *onTickCallbackData) OnTick() baml.TickCallback {
+	return o.onTick
+}
+
+func WithExperimentalOnTick(onTick baml.TickCallback) CallOptionFunc {
+	return func(o *callOption) {
+		collector, err := baml.NewCollector("on-tick-collector")
+		if err != nil {
+			panic(err)
+		}
+		if o.collectors == nil {
+			o.collectors = []baml.Collector{}
+		}
+		o.collectors = append(o.collectors, collector)
+		o.onTick = &onTickCallbackData{
+			collector: collector,
+			onTick:    onTick,
+		}
 	}
 }
 

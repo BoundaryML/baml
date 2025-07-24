@@ -54,6 +54,7 @@ pub fn bench_partials(c: &mut Criterion) {
             "id": 1,
             "name": "test"
         }"#,
+                true,
             )
         })
     });
@@ -71,6 +72,7 @@ pub fn bench_partials(c: &mut Criterion) {
                 "tags": ["tag1", "tag2"]
             }
         }"#,
+                true,
             )
         })
     });
@@ -88,6 +90,7 @@ pub fn bench_partials(c: &mut Criterion) {
             "required_field": "required",
             "list_field": ["item1"]
         }"#,
+                true,
             )
         })
     });
@@ -109,6 +112,7 @@ pub fn bench_partials(c: &mut Criterion) {
                 }
             }
         }"#,
+                true,
             )
         })
     });
@@ -127,6 +131,7 @@ pub fn bench_partials(c: &mut Criterion) {
                 "key3": "value3"
             }
         }"#,
+                true,
             )
         })
     });
@@ -149,6 +154,7 @@ pub fn bench_partials(c: &mut Criterion) {
                 "name": "test"
             }
         }"#,
+                true,
             )
         })
     });

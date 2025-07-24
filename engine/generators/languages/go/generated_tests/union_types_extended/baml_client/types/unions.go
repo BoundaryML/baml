@@ -29,17 +29,17 @@ type Union2BoolOrString struct {
 	variant_String *string
 }
 
-func (u *Union2BoolOrString) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union2BoolOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
 	case "bool":
 		u.variant = "Bool"
-		value := baml.Decode(valueHolder).(bool)
+		value := baml.Decode(valueHolder).Interface().(bool)
 		u.variant_Bool = &value
 	case "string":
 		u.variant = "String"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_String = &value
 
 	default:
@@ -174,17 +174,17 @@ type Union2DataResponseOrErrorResponse struct {
 	variant_ErrorResponse *ErrorResponse
 }
 
-func (u *Union2DataResponseOrErrorResponse) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union2DataResponseOrErrorResponse) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
 	case "DataResponse":
 		u.variant = "DataResponse"
-		value := *baml.Decode(valueHolder).(*DataResponse)
+		value := baml.Decode(valueHolder).Interface().(DataResponse)
 		u.variant_DataResponse = &value
 	case "ErrorResponse":
 		u.variant = "ErrorResponse"
-		value := *baml.Decode(valueHolder).(*ErrorResponse)
+		value := baml.Decode(valueHolder).Interface().(ErrorResponse)
 		u.variant_ErrorResponse = &value
 
 	default:
@@ -319,17 +319,17 @@ type Union2FloatOrInt struct {
 	variant_Float *float64
 }
 
-func (u *Union2FloatOrInt) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union2FloatOrInt) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
 	case "int":
 		u.variant = "Int"
-		value := baml.Decode(valueHolder).(int64)
+		value := baml.Decode(valueHolder).Interface().(int64)
 		u.variant_Int = &value
 	case "float":
 		u.variant = "Float"
-		value := baml.Decode(valueHolder).(float64)
+		value := baml.Decode(valueHolder).Interface().(float64)
 		u.variant_Float = &value
 
 	default:
@@ -464,17 +464,17 @@ type Union2FloatOrString struct {
 	variant_Float *float64
 }
 
-func (u *Union2FloatOrString) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union2FloatOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
 	case "string":
 		u.variant = "String"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_String = &value
 	case "float":
 		u.variant = "Float"
-		value := baml.Decode(valueHolder).(float64)
+		value := baml.Decode(valueHolder).Interface().(float64)
 		u.variant_Float = &value
 
 	default:
@@ -609,17 +609,17 @@ type Union2IntOrString struct {
 	variant_Int *int64
 }
 
-func (u *Union2IntOrString) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union2IntOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
 	case "string":
 		u.variant = "String"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_String = &value
 	case "int":
 		u.variant = "Int"
-		value := baml.Decode(valueHolder).(int64)
+		value := baml.Decode(valueHolder).Interface().(int64)
 		u.variant_Int = &value
 
 	default:
@@ -754,19 +754,17 @@ type Union2ListIntOrString struct {
 	variant_ListInt *[]int64
 }
 
-func (u *Union2ListIntOrString) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union2ListIntOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
 	case "string":
 		u.variant = "String"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_String = &value
 	case "List__int":
 		u.variant = "ListInt"
-		value := baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) int64 {
-			return baml.Decode(inner).(int64)
-		})
+		value := baml.Decode(valueHolder).Interface().([]int64)
 		u.variant_ListInt = &value
 
 	default:
@@ -901,17 +899,17 @@ type Union2ProductOrUser struct {
 	variant_Product *Product
 }
 
-func (u *Union2ProductOrUser) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union2ProductOrUser) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
 	case "User":
 		u.variant = "User"
-		value := *baml.Decode(valueHolder).(*User)
+		value := baml.Decode(valueHolder).Interface().(User)
 		u.variant_User = &value
 	case "Product":
 		u.variant = "Product"
-		value := *baml.Decode(valueHolder).(*Product)
+		value := baml.Decode(valueHolder).Interface().(Product)
 		u.variant_Product = &value
 
 	default:
@@ -1046,17 +1044,17 @@ type Union2RecursiveUnionOrString struct {
 	variant_RecursiveUnion *RecursiveUnion
 }
 
-func (u *Union2RecursiveUnionOrString) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union2RecursiveUnionOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
 	case "string":
 		u.variant = "String"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_String = &value
 	case "RecursiveUnion":
 		u.variant = "RecursiveUnion"
-		value := *baml.Decode(valueHolder).(*RecursiveUnion)
+		value := baml.Decode(valueHolder).Interface().(RecursiveUnion)
 		u.variant_RecursiveUnion = &value
 
 	default:
@@ -1193,21 +1191,21 @@ type Union3AdminOrProductOrUser struct {
 	variant_Admin *Admin
 }
 
-func (u *Union3AdminOrProductOrUser) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union3AdminOrProductOrUser) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
 	case "User":
 		u.variant = "User"
-		value := *baml.Decode(valueHolder).(*User)
+		value := baml.Decode(valueHolder).Interface().(User)
 		u.variant_User = &value
 	case "Product":
 		u.variant = "Product"
-		value := *baml.Decode(valueHolder).(*Product)
+		value := baml.Decode(valueHolder).Interface().(Product)
 		u.variant_Product = &value
 	case "Admin":
 		u.variant = "Admin"
-		value := *baml.Decode(valueHolder).(*Admin)
+		value := baml.Decode(valueHolder).Interface().(Admin)
 		u.variant_Admin = &value
 
 	default:
@@ -1392,21 +1390,21 @@ type Union3ApiErrorOrApiPendingOrApiSuccess struct {
 	variant_ApiPending *ApiPending
 }
 
-func (u *Union3ApiErrorOrApiPendingOrApiSuccess) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union3ApiErrorOrApiPendingOrApiSuccess) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
 	case "ApiSuccess":
 		u.variant = "ApiSuccess"
-		value := *baml.Decode(valueHolder).(*ApiSuccess)
+		value := baml.Decode(valueHolder).Interface().(ApiSuccess)
 		u.variant_ApiSuccess = &value
 	case "ApiError":
 		u.variant = "ApiError"
-		value := *baml.Decode(valueHolder).(*ApiError)
+		value := baml.Decode(valueHolder).Interface().(ApiError)
 		u.variant_ApiError = &value
 	case "ApiPending":
 		u.variant = "ApiPending"
-		value := *baml.Decode(valueHolder).(*ApiPending)
+		value := baml.Decode(valueHolder).Interface().(ApiPending)
 		u.variant_ApiPending = &value
 
 	default:
@@ -1591,21 +1589,21 @@ type Union3BirdOrCatOrDog struct {
 	variant_Bird *Bird
 }
 
-func (u *Union3BirdOrCatOrDog) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union3BirdOrCatOrDog) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
 	case "Dog":
 		u.variant = "Dog"
-		value := *baml.Decode(valueHolder).(*Dog)
+		value := baml.Decode(valueHolder).Interface().(Dog)
 		u.variant_Dog = &value
 	case "Cat":
 		u.variant = "Cat"
-		value := *baml.Decode(valueHolder).(*Cat)
+		value := baml.Decode(valueHolder).Interface().(Cat)
 		u.variant_Cat = &value
 	case "Bird":
 		u.variant = "Bird"
-		value := *baml.Decode(valueHolder).(*Bird)
+		value := baml.Decode(valueHolder).Interface().(Bird)
 		u.variant_Bird = &value
 
 	default:
@@ -1790,21 +1788,21 @@ type Union3CircleOrRectangleOrTriangle struct {
 	variant_Triangle *Triangle
 }
 
-func (u *Union3CircleOrRectangleOrTriangle) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union3CircleOrRectangleOrTriangle) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
 	case "Circle":
 		u.variant = "Circle"
-		value := *baml.Decode(valueHolder).(*Circle)
+		value := baml.Decode(valueHolder).Interface().(Circle)
 		u.variant_Circle = &value
 	case "Rectangle":
 		u.variant = "Rectangle"
-		value := *baml.Decode(valueHolder).(*Rectangle)
+		value := baml.Decode(valueHolder).Interface().(Rectangle)
 		u.variant_Rectangle = &value
 	case "Triangle":
 		u.variant = "Triangle"
-		value := *baml.Decode(valueHolder).(*Triangle)
+		value := baml.Decode(valueHolder).Interface().(Triangle)
 		u.variant_Triangle = &value
 
 	default:
@@ -1989,21 +1987,21 @@ type Union3ErrorOrSuccessOrWarning struct {
 	variant_Error *Error
 }
 
-func (u *Union3ErrorOrSuccessOrWarning) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union3ErrorOrSuccessOrWarning) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
 	case "Success":
 		u.variant = "Success"
-		value := *baml.Decode(valueHolder).(*Success)
+		value := baml.Decode(valueHolder).Interface().(Success)
 		u.variant_Success = &value
 	case "Warning":
 		u.variant = "Warning"
-		value := *baml.Decode(valueHolder).(*Warning)
+		value := baml.Decode(valueHolder).Interface().(Warning)
 		u.variant_Warning = &value
 	case "Error":
 		u.variant = "Error"
-		value := *baml.Decode(valueHolder).(*Error)
+		value := baml.Decode(valueHolder).Interface().(Error)
 		u.variant_Error = &value
 
 	default:
@@ -2188,21 +2186,21 @@ type Union3FloatOrIntOrString struct {
 	variant_Float *float64
 }
 
-func (u *Union3FloatOrIntOrString) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union3FloatOrIntOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
 	case "string":
 		u.variant = "String"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_String = &value
 	case "int":
 		u.variant = "Int"
-		value := baml.Decode(valueHolder).(int64)
+		value := baml.Decode(valueHolder).Interface().(int64)
 		u.variant_Int = &value
 	case "float":
 		u.variant = "Float"
-		value := baml.Decode(valueHolder).(float64)
+		value := baml.Decode(valueHolder).Interface().(float64)
 		u.variant_Float = &value
 
 	default:
@@ -2387,21 +2385,21 @@ type Union3IntOrRecursiveUnionOrString struct {
 	variant_RecursiveUnion *RecursiveUnion
 }
 
-func (u *Union3IntOrRecursiveUnionOrString) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union3IntOrRecursiveUnionOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
 	case "string":
 		u.variant = "String"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_String = &value
 	case "int":
 		u.variant = "Int"
-		value := baml.Decode(valueHolder).(int64)
+		value := baml.Decode(valueHolder).Interface().(int64)
 		u.variant_Int = &value
 	case "RecursiveUnion":
 		u.variant = "RecursiveUnion"
-		value := *baml.Decode(valueHolder).(*RecursiveUnion)
+		value := baml.Decode(valueHolder).Interface().(RecursiveUnion)
 		u.variant_RecursiveUnion = &value
 
 	default:
@@ -2588,25 +2586,25 @@ type Union4BoolOrFloatOrIntOrString struct {
 	variant_Bool *bool
 }
 
-func (u *Union4BoolOrFloatOrIntOrString) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union4BoolOrFloatOrIntOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
 	case "string":
 		u.variant = "String"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_String = &value
 	case "int":
 		u.variant = "Int"
-		value := baml.Decode(valueHolder).(int64)
+		value := baml.Decode(valueHolder).Interface().(int64)
 		u.variant_Int = &value
 	case "float":
 		u.variant = "Float"
-		value := baml.Decode(valueHolder).(float64)
+		value := baml.Decode(valueHolder).Interface().(float64)
 		u.variant_Float = &value
 	case "bool":
 		u.variant = "Bool"
-		value := baml.Decode(valueHolder).(bool)
+		value := baml.Decode(valueHolder).Interface().(bool)
 		u.variant_Bool = &value
 
 	default:

@@ -1,5 +1,6 @@
-use crate::dir_writer::LanguageFeatures;
 use baml_types::{BamlMediaType, TypeValue};
+
+use crate::dir_writer::LanguageFeatures;
 
 #[derive(Default)]
 pub(super) struct TypescriptLanguageFeatures {}
@@ -40,6 +41,8 @@ impl ToTypescript for TypeValue {
             TypeValue::Null => "null",
             TypeValue::Media(BamlMediaType::Image) => "Image",
             TypeValue::Media(BamlMediaType::Audio) => "Audio",
+            TypeValue::Media(BamlMediaType::Pdf) => "Pdf",
+            TypeValue::Media(BamlMediaType::Video) => "Video",
         };
         var_name.to_string()
     }

@@ -7,6 +7,8 @@ use serde::{Deserialize, Serialize};
 pub enum BamlMediaType {
     Image,
     Audio,
+    Pdf,
+    Video,
 }
 
 impl fmt::Display for BamlMediaType {
@@ -14,6 +16,8 @@ impl fmt::Display for BamlMediaType {
         match *self {
             BamlMediaType::Image => write!(f, "image"),
             BamlMediaType::Audio => write!(f, "audio"),
+            BamlMediaType::Pdf => write!(f, "application"),
+            BamlMediaType::Video => write!(f, "video"),
         }
     }
 }
@@ -43,10 +47,19 @@ pub enum BamlMediaContent {
 
 impl BamlMedia {
     pub fn mime_type_as_ok(&self) -> Result<String> {
-        self.mime_type.clone().context(format!(
-            "Please specify a media type for this {}; we could not infer one",
-            self.media_type
-        ))
+        match &self.mime_type {
+            Some(mt) => Ok(mt.clone()),
+            None => {
+                if self.media_type == BamlMediaType::Pdf {
+                    Ok("application/pdf".to_string())
+                } else {
+                    Err(anyhow::anyhow!(
+                        "Please specify a media type for this {}; we could not infer one",
+                        self.media_type
+                    ))
+                }
+            }
+        }
     }
     pub fn file(
         media_type: BamlMediaType,

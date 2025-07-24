@@ -24,12 +24,13 @@ use crate::{
     FunctionResult, RuntimeContext,
 };
 
-pub async fn orchestrate_stream<F>(
+pub async fn orchestrate_stream<F, G>(
     iter: OrchestratorNodeIterator,
     ir: &IntermediateRepr,
     ctx: &RuntimeContext,
     prompt: &PromptRenderer,
     params: &BamlValue,
+    on_tick_fn: Option<G>,
     partial_parse_fn: impl Fn(&str) -> Result<ResponseBamlValue>,
     parse_fn: impl Fn(&str) -> Result<ResponseBamlValue>,
     on_event: Option<F>,
@@ -43,6 +44,7 @@ pub async fn orchestrate_stream<F>(
 )
 where
     F: Fn(FunctionResult),
+    G: Fn(),
 {
     let mut results = Vec::new();
     let mut total_sleep_duration = std::time::Duration::from_secs(0);
@@ -67,23 +69,23 @@ where
         let final_response = match stream_res {
             Ok(response) => response
                 .map(|stream_part| {
+                    if let Some(on_tick) = on_tick_fn.as_ref() {
+                        on_tick();
+                    }
                     if let Some(on_event) = on_event.as_ref() {
                         if let LLMResponse::Success(s) = &stream_part {
                             let response_value = partial_parse_fn(&s.content);
                             // Flags seem to use a ton of memory, so we strip them here.
-                            let response_value_without_flags = match response_value {
-                                Ok(baml_value) => {
-                                    Ok(ResponseBamlValue(baml_value.0.map_meta_owned(|m| {
+                            if let Ok(baml_value) = response_value {
+                                // only success events are sent to the stream
+                                on_event(FunctionResult::new(
+                                    node.scope.clone(),
+                                    LLMResponse::Success(s.clone()),
+                                    Some(Ok(ResponseBamlValue(baml_value.0.map_meta_owned(|m| {
                                         jsonish::ResponseValueMeta(vec![], m.1, m.2, m.3)
-                                    })))
-                                }
-                                Err(e) => Err(e),
-                            };
-                            on_event(FunctionResult::new(
-                                node.scope.clone(),
-                                LLMResponse::Success(s.clone()),
-                                Some(response_value_without_flags),
-                            ));
+                                    })))),
+                                ));
+                            }
                         }
                     }
                     stream_part

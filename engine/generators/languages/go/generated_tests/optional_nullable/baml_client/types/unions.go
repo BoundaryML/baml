@@ -29,17 +29,17 @@ type Union2IntOrString struct {
 	variant_Int *int64
 }
 
-func (u *Union2IntOrString) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union2IntOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
 	case "string":
 		u.variant = "String"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_String = &value
 	case "int":
 		u.variant = "Int"
-		value := baml.Decode(valueHolder).(int64)
+		value := baml.Decode(valueHolder).Interface().(int64)
 		u.variant_Int = &value
 
 	default:
@@ -174,17 +174,17 @@ type Union2ProductOrUser struct {
 	variant_Product *Product
 }
 
-func (u *Union2ProductOrUser) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union2ProductOrUser) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
 	case "User":
 		u.variant = "User"
-		value := *baml.Decode(valueHolder).(*User)
+		value := baml.Decode(valueHolder).Interface().(User)
 		u.variant_User = &value
 	case "Product":
 		u.variant = "Product"
-		value := *baml.Decode(valueHolder).(*Product)
+		value := baml.Decode(valueHolder).Interface().(Product)
 		u.variant_Product = &value
 
 	default:

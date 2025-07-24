@@ -15,6 +15,7 @@ package baml_client
 
 import (
 	"context"
+	"fmt"
 
 	"recursive_types/baml_client/types"
 
@@ -41,28 +42,42 @@ func Foo(ctx context.Context, x int64, opts ...CallOptionFunc) (types.JSON, erro
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "Foo", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	if result.Error != nil {
-		return nil, result.Error
-	}
-
-	casted := func(result any) types.JSON {
-		if result == nil {
-			return nil
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "Foo", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
 		}
-		return (result).(types.JSON)
-	}(result.Data)
 
-	return casted, nil
+		if result.Error != nil {
+			return nil, result.Error
+		}
+
+		casted := (result.Data).(types.JSON)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "Foo", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return nil, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.JSON), nil
+			}
+		}
+
+		return nil, fmt.Errorf("No data returned from stream")
+	}
 }
 
 func JsonInput(ctx context.Context, x types.JSON, opts ...CallOptionFunc) (types.JSON, error) {
@@ -85,26 +100,40 @@ func JsonInput(ctx context.Context, x types.JSON, opts ...CallOptionFunc) (types
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
 	}
 
-	result, err := bamlRuntime.CallFunction(ctx, "JsonInput", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	if result.Error != nil {
-		return nil, result.Error
-	}
-
-	casted := func(result any) types.JSON {
-		if result == nil {
-			return nil
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "JsonInput", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
 		}
-		return (result).(types.JSON)
-	}(result.Data)
 
-	return casted, nil
+		if result.Error != nil {
+			return nil, result.Error
+		}
+
+		casted := (result.Data).(types.JSON)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "JsonInput", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return nil, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.JSON), nil
+			}
+		}
+
+		return nil, fmt.Errorf("No data returned from stream")
+	}
 }

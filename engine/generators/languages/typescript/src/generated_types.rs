@@ -106,7 +106,7 @@ mod class {
 
 ///
 /// ```askama
-/// import type { Image, Audio } from "@boundaryml/baml"
+/// import type { Image, Audio, Pdf, Video } from "@boundaryml/baml"
 /// import type { Checked, Check } from "./types"
 /// import type { {% for t in types %} {{ t }}{% if !loop.last %}, {% endif %}{% endfor %} } from "./types"
 /// import type * as types from "./types"
@@ -221,7 +221,7 @@ mod type_aliases {
 /// A list of types in TS.
 ///
 /// ```askama
-/// import type { Image, Audio } from "@boundaryml/baml"
+/// import type { Image, Audio, Pdf, Video } from "@boundaryml/baml"
 /// /**
 ///  * Recursively partial type that can be null.
 ///  *

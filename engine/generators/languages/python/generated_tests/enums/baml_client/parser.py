@@ -11,8 +11,9 @@
 # baml-cli is available with the baml package.
 
 import typing
+import typing_extensions
 
-from . import types
+from . import stream_types, types
 from .runtime import DoNotUseDirectlyCallManager, BamlCallOptions
 
 class LlmResponseParser:

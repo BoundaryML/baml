@@ -148,6 +148,18 @@ class LlmResponseParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="CustomTask", llm_response=llm_response, mode="request")
         return typing.cast(typing.Union["types.BookOrder", "types.FlightConfirmation", "types.GroceryReceipt"], result)
 
+    def DescribeAudio(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="DescribeAudio", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
+    def DescribeAudio2(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="DescribeAudio2", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
     def DescribeImage(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> str:
@@ -507,6 +519,30 @@ class LlmResponseParser:
     ) -> typing.List[typing.Optional["types.OptionalTest_ReturnType"]]:
         result = self.__options.merge_options(baml_options).parse_response(function_name="OptionalTest_Function", llm_response=llm_response, mode="request")
         return typing.cast(typing.List[typing.Optional["types.OptionalTest_ReturnType"]], result)
+
+    def PdfInput(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="PdfInput", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
+    def PdfInputAnthropic(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="PdfInputAnthropic", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
+    def PdfInputOpenai(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="PdfInputOpenai", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
+    def PdfInputVertex(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="PdfInputVertex", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
 
     def PredictAge(
         self, llm_response: str, baml_options: BamlCallOptions = {},
@@ -1018,6 +1054,90 @@ class LlmResponseParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenAIO1WithMaxTokens", llm_response=llm_response, mode="request")
         return typing.cast(str, result)
 
+    def TestOpenAIProviderWithResponsesType(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenAIProviderWithResponsesType", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
+    def TestOpenAIResponses(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenAIResponses", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
+    def TestOpenAIResponsesAutoType(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenAIResponsesAutoType", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
+    def TestOpenAIResponsesConversation(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenAIResponsesConversation", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
+    def TestOpenAIResponsesCustomURL(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenAIResponsesCustomURL", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
+    def TestOpenAIResponsesDifferentModel(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenAIResponsesDifferentModel", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
+    def TestOpenAIResponsesEndpoint(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenAIResponsesEndpoint", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
+    def TestOpenAIResponsesExplicit(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenAIResponsesExplicit", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
+    def TestOpenAIResponsesFunctionCall(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenAIResponsesFunctionCall", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
+    def TestOpenAIResponsesImageInput(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenAIResponsesImageInput", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
+    def TestOpenAIResponsesReasoning(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenAIResponsesReasoning", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
+    def TestOpenAIResponsesShorthand(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenAIResponsesShorthand", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
+    def TestOpenAIResponsesWebSearch(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenAIResponsesWebSearch", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
+    def TestOpenAIResponsesWithOpenAIResponseType(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenAIResponsesWithOpenAIResponseType", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
     def TestOpenAIShorthand(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> str:
@@ -1131,6 +1251,30 @@ class LlmResponseParser:
     ) -> int:
         result = self.__options.merge_options(baml_options).parse_response(function_name="UseNestedBlockConstraint", llm_response=llm_response, mode="request")
         return typing.cast(int, result)
+
+    def ValidateBasicResponses(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="ValidateBasicResponses", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
+    def ValidateResponseTypes(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="ValidateResponseTypes", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
+    def VideoInputGemini(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="VideoInputGemini", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
+    def VideoInputVertex(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="VideoInputVertex", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
 
     
 
@@ -1265,6 +1409,18 @@ class LlmStreamParser:
     ) -> typing.Union["stream_types.BookOrder", "stream_types.FlightConfirmation", "stream_types.GroceryReceipt"]:
         result = self.__options.merge_options(baml_options).parse_response(function_name="CustomTask", llm_response=llm_response, mode="stream")
         return typing.cast(typing.Union["stream_types.BookOrder", "stream_types.FlightConfirmation", "stream_types.GroceryReceipt"], result)
+
+    def DescribeAudio(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="DescribeAudio", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
+
+    def DescribeAudio2(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="DescribeAudio2", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
 
     def DescribeImage(
         self, llm_response: str, baml_options: BamlCallOptions = {},
@@ -1625,6 +1781,30 @@ class LlmStreamParser:
     ) -> typing.List[typing.Optional["stream_types.OptionalTest_ReturnType"]]:
         result = self.__options.merge_options(baml_options).parse_response(function_name="OptionalTest_Function", llm_response=llm_response, mode="stream")
         return typing.cast(typing.List[typing.Optional["stream_types.OptionalTest_ReturnType"]], result)
+
+    def PdfInput(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="PdfInput", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
+
+    def PdfInputAnthropic(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="PdfInputAnthropic", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
+
+    def PdfInputOpenai(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="PdfInputOpenai", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
+
+    def PdfInputVertex(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="PdfInputVertex", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
 
     def PredictAge(
         self, llm_response: str, baml_options: BamlCallOptions = {},
@@ -2136,6 +2316,90 @@ class LlmStreamParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenAIO1WithMaxTokens", llm_response=llm_response, mode="stream")
         return typing.cast(str, result)
 
+    def TestOpenAIProviderWithResponsesType(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenAIProviderWithResponsesType", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
+
+    def TestOpenAIResponses(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenAIResponses", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
+
+    def TestOpenAIResponsesAutoType(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenAIResponsesAutoType", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
+
+    def TestOpenAIResponsesConversation(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenAIResponsesConversation", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
+
+    def TestOpenAIResponsesCustomURL(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenAIResponsesCustomURL", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
+
+    def TestOpenAIResponsesDifferentModel(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenAIResponsesDifferentModel", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
+
+    def TestOpenAIResponsesEndpoint(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenAIResponsesEndpoint", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
+
+    def TestOpenAIResponsesExplicit(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenAIResponsesExplicit", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
+
+    def TestOpenAIResponsesFunctionCall(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenAIResponsesFunctionCall", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
+
+    def TestOpenAIResponsesImageInput(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenAIResponsesImageInput", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
+
+    def TestOpenAIResponsesReasoning(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenAIResponsesReasoning", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
+
+    def TestOpenAIResponsesShorthand(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenAIResponsesShorthand", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
+
+    def TestOpenAIResponsesWebSearch(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenAIResponsesWebSearch", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
+
+    def TestOpenAIResponsesWithOpenAIResponseType(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenAIResponsesWithOpenAIResponseType", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
+
     def TestOpenAIShorthand(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> str:
@@ -2249,5 +2513,29 @@ class LlmStreamParser:
     ) -> int:
         result = self.__options.merge_options(baml_options).parse_response(function_name="UseNestedBlockConstraint", llm_response=llm_response, mode="stream")
         return typing.cast(int, result)
+
+    def ValidateBasicResponses(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="ValidateBasicResponses", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
+
+    def ValidateResponseTypes(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="ValidateResponseTypes", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
+
+    def VideoInputGemini(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="VideoInputGemini", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
+
+    def VideoInputVertex(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="VideoInputVertex", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
 
     

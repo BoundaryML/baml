@@ -9,6 +9,8 @@ from .baml_py import (
     BamlImagePy as Image,
     BamlAudioPy as Audio,
     invoke_runtime_cli,
+    BamlPdfPy as Pdf,
+    BamlVideoPy as Video,
     ClientRegistry,
     # Collector utilities
     Collector,
@@ -31,6 +33,8 @@ __all__ = [
     "FunctionResultStream",
     "Image",
     "Audio",
+    "Pdf",
+    "Video",
     "invoke_runtime_cli",
     # Collector types
     "Collector",

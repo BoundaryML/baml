@@ -28,17 +28,19 @@ type stream struct{}
 var Stream = &stream{}
 
 type StreamValue[TStream any, TFinal any] struct {
+	IsError   bool
+	Error     error
 	IsFinal   bool
 	as_final  *TFinal
 	as_stream *TStream
 }
 
-func (s *StreamValue[TStream, TFinal]) Final() TFinal {
-	return *s.as_final
+func (s *StreamValue[TStream, TFinal]) Final() *TFinal {
+	return s.as_final
 }
 
-func (s *StreamValue[TStream, TFinal]) Stream() TStream {
-	return *s.as_stream
+func (s *StreamValue[TStream, TFinal]) Stream() *TStream {
+	return s.as_stream
 }
 
 // / Streaming version of TestKitchenSink
@@ -62,7 +64,7 @@ func (*stream) TestKitchenSink(ctx context.Context, input string, opts ...CallOp
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -71,7 +73,7 @@ func (*stream) TestKitchenSink(ctx context.Context, input string, opts ...CallOp
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestKitchenSink", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestKitchenSink", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -88,21 +90,26 @@ func (*stream) TestKitchenSink(ctx context.Context, input string, opts ...CallOp
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.KitchenSink, types.KitchenSink]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.KitchenSink)
+					data := (result.Data).(types.KitchenSink)
 					channel <- StreamValue[stream_types.KitchenSink, types.KitchenSink]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.KitchenSink)
+					data := (result.StreamData).(stream_types.KitchenSink)
 					channel <- StreamValue[stream_types.KitchenSink, types.KitchenSink]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -135,7 +142,7 @@ func (*stream) TestRecursiveComplexity(ctx context.Context, input string, opts .
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -144,7 +151,7 @@ func (*stream) TestRecursiveComplexity(ctx context.Context, input string, opts .
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestRecursiveComplexity", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestRecursiveComplexity", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -161,21 +168,26 @@ func (*stream) TestRecursiveComplexity(ctx context.Context, input string, opts .
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.Node, types.Node]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.Node)
+					data := (result.Data).(types.Node)
 					channel <- StreamValue[stream_types.Node, types.Node]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.Node)
+					data := (result.StreamData).(stream_types.Node)
 					channel <- StreamValue[stream_types.Node, types.Node]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -208,7 +220,7 @@ func (*stream) TestUltraComplex(ctx context.Context, input string, opts ...CallO
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -217,7 +229,7 @@ func (*stream) TestUltraComplex(ctx context.Context, input string, opts ...CallO
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestUltraComplex", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestUltraComplex", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -234,21 +246,26 @@ func (*stream) TestUltraComplex(ctx context.Context, input string, opts ...CallO
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.UltraComplex, types.UltraComplex]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.UltraComplex)
+					data := (result.Data).(types.UltraComplex)
 					channel <- StreamValue[stream_types.UltraComplex, types.UltraComplex]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.UltraComplex)
+					data := (result.StreamData).(stream_types.UltraComplex)
 					channel <- StreamValue[stream_types.UltraComplex, types.UltraComplex]{
 						IsFinal:   false,
 						as_stream: &data,

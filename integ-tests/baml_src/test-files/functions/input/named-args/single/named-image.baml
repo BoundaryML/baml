@@ -30,14 +30,25 @@ test  image_url_with_media_type {
   }
 }
 
+// will not work because the url is actually a web preview of the image
 test image_url_without_media_type {
   functions [TestImageInput, TestImageInputAnthropic]
   args {
     img {
-      url "https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png"
+      url "https://github.com/BoundaryML/baml/blob/canary/integ-tests/baml_src/shrek.png"
     }
   }
 }
+
+test image_url_without_media_type_raw {
+  functions [TestImageInput, TestImageInputAnthropic]
+  args {
+    img {
+      url "https://github.com/BoundaryML/baml/blob/canary/integ-tests/baml_src/shrek.png?raw=true"
+    }
+  }
+}
+
 test image_file {
   functions [TestImageInput, TestImageInputAnthropic]
   args {

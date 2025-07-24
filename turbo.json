@@ -1,0 +1,251 @@
+{
+  "$schema": "./node_modules/turbo/schema.json",
+  "globalPassThroughEnv": [
+    "BAML_LOG",
+    "NODE_ENV",
+    "CI",
+    "npm_lifecycle_event",
+    "TURBO_TEAM",
+    "TURBO_TOKEN",
+    "NODE_ENV",
+    "STAGE",
+    "VERCEL",
+    "VERCEL_ENV",
+    "TARGET",
+    "CMAKE_FRAMEWORK_PATH",
+    "NIX_CC",
+    "NIX_CC_WRAPPER_TARGET_HOST_aarch64_apple_darwin",
+    "NIX_BINTOOLS",
+    "NIX_BINTOOLS_WRAPPER_TARGET_HOST_aarch64_apple_darwin",
+    "CC",
+    "LD",
+    "MACOSX_DEPLOYMENT_TARGET"
+  ],
+  "globalEnv": ["VSCODE_DEBUG_MODE"],
+  "globalDependencies": [
+    "tsconfig.json",
+    ".nvmrc",
+    ".node-version",
+    ".ruby-version",
+    ".python-version",
+    "biome.json"
+  ],
+  "ui": "tui",
+  "concurrency": "20",
+  "tasks": {
+    "//#clean": {
+      "cache": false
+    },
+    "clean": {
+      "cache": false,
+      "dependsOn": ["^clean"]
+    },
+    "dev": {
+      "dependsOn": ["^build"],
+      "cache": false,
+      "persistent": true,
+      "env": [
+        "BOUNDARY_API_*",
+        "DATABASE_URL*",
+        "KV_*",
+        "CLICKHOUSE_*",
+        "PROPELAUTH_*",
+        "CLERK_*",
+        "NEXT_PUBLIC_*",
+        "GOOGLE_CLIENT_*",
+        "AWS_*",
+        "STRIPE_*",
+        "ANTHROPIC_API_KEY",
+        "OPENAI_API_KEY",
+        "DEEPSEEK_*",
+        "GROQ_API_KEY",
+        "OPENROUTER_API_KEY",
+        "HUGGING_FACE_KEY",
+        "E2B_API_KEY",
+        "PINECONE_API_KEY",
+        "MAGIC_PATTERNS_API_KEY"
+      ]
+    },
+    "generate": {
+      "dependsOn": ["@boundaryml/baml#build"],
+      "inputs": ["**/*.baml", "**/*.j2", "**/*.hbs", "**/generators.baml"],
+      "outputs": ["baml_client/**"],
+      "env": ["SKIP_BAML_SRC_CHECK"]
+    },
+    "@baml/playground-common#typecheck": {
+      "dependsOn": ["@gloo-ai/baml-schema-wasm-web#build"]
+    },
+    "typecheck": {
+      "dependsOn": ["^typecheck"],
+      "inputs": [
+        "src/**",
+        "lib/**",
+        "*.ts",
+        "*.tsx",
+        "*.js",
+        "*.jsx",
+        "tsconfig.json",
+        "package.json"
+      ],
+      "outputs": [
+        "dist/**",
+        "node_modules/.cache/tsbuildinfo.json",
+        "npm/**",
+        "artifacts/**"
+      ]
+    },
+    "build": {
+      "dependsOn": ["^build"],
+      "inputs": [
+        "src/**",
+        "lib/**",
+        "*.ts",
+        "*.tsx",
+        "*.js",
+        "*.jsx",
+        "*.py",
+        "*.rb",
+        "*.go",
+        "*.rs",
+        "Cargo.toml",
+        "go.mod",
+        "pyproject.toml",
+        "Gemfile",
+        "package.json",
+        "tsconfig.json",
+        "**/*.css",
+        "**/*.mdx"
+      ],
+      "outputs": [
+        "dist/**",
+        "build/**",
+        ".next/**",
+        "!.next/cache/**",
+        "out/**",
+        "npm/**",
+        "artifacts/**",
+        "lib/**",
+        "*.whl",
+        "*.gem"
+      ],
+      "env": [
+        "BOUNDARY_API_*",
+        "DATABASE_URL*",
+        "SENTRY_AUTH_TOKEN",
+        "NEXT_PUBLIC_*",
+        "CLERK_*",
+        "STRIPE_*",
+        "AWS_*",
+        "GLOO_*",
+        "WORKOS_*",
+        "CREDITS_PER_DOLLAR",
+        "KV_*",
+        "CLICKHOUSE_*",
+        "PROPELAUTH_*",
+        "GOOGLE_API_KEY",
+        "INTEG_TESTS_GOOGLE_APPLICATION_CREDENTIALS_CONTENT"
+      ]
+    },
+    "release": {
+      "dependsOn": ["^release"],
+      "inputs": [
+        "src/**",
+        "lib/**",
+        "*.ts",
+        "*.tsx",
+        "*.js",
+        "*.jsx",
+        "package.json",
+        "tsconfig.json"
+      ],
+      "outputs": [
+        "dist/**",
+        ".next/**",
+        "!.next/cache/**",
+        "npm/**",
+        "artifacts/**"
+      ],
+      "env": [
+        "NPM_TOKEN",
+        "SENTRY_AUTH_TOKEN",
+        "STRIPE_*",
+        "DATABASE_URL*",
+        "BOUNDARY_API_*",
+        "CLERK_*",
+        "NEXT_PUBLIC_*",
+        "AWS_*",
+        "KV_*",
+        "CLICKHOUSE_*"
+      ]
+    },
+    "test": {
+      "dependsOn": ["build"],
+      "inputs": [
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "**/*.test.js",
+        "**/*.test.jsx",
+        "**/*.spec.ts",
+        "**/*.spec.tsx",
+        "**/*.spec.js",
+        "**/*.spec.jsx",
+        "**/test_*.py",
+        "**/*_test.py",
+        "**/test_*.rb",
+        "**/*_test.rb",
+        "**/*_test.go",
+        "**/tests/**",
+        "**/test/**",
+        "**/__tests__/**",
+        "**/jest.config.*",
+        "**/vitest.config.*",
+        "**/pytest.ini",
+        "**/.rspec",
+        "**/Rakefile"
+      ],
+      "outputs": [
+        "coverage/**",
+        ".coverage/**",
+        "junit.xml",
+        "test-results/**"
+      ],
+      "cache": false
+    },
+    "integ-tests": {
+      "dependsOn": ["build"],
+      "inputs": [
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "**/*.test.js",
+        "**/*.test.jsx",
+        "**/*.spec.ts",
+        "**/*.spec.tsx",
+        "**/*.spec.js",
+        "**/*.spec.jsx",
+        "**/test_*.py",
+        "**/*_test.py",
+        "**/test_*.rb",
+        "**/*_test.rb",
+        "**/*_test.go",
+        "**/tests/**",
+        "**/test/**",
+        "**/__tests__/**",
+        "**/baml_src/**"
+      ],
+      "outputs": [
+        "coverage/**",
+        ".coverage/**",
+        "junit.xml",
+        "test-results/**"
+      ],
+      "cache": false,
+      "env": [
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "GOOGLE_API_KEY",
+        "AWS_*",
+        "INTEG_TESTS_*"
+      ]
+    }
+  }
+}

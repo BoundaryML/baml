@@ -25,9 +25,9 @@ import { DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME } from "./
 export default class TypeBuilder {
     private tb: _TypeBuilder;
     
-    Example: ClassViewer<'Example', "a" | "b">;
+    Example: ClassViewer<'Example', "type" | "a" | "b">;
     
-    Example2: ClassViewer<'Example2', "item" | "element" | "element2">;
+    Example2: ClassViewer<'Example2', "type" | "item" | "element" | "element2">;
     
     
 
@@ -43,11 +43,11 @@ export default class TypeBuilder {
         });
         
         this.Example = this.tb.classViewer("Example", [
-          "a","b",
+          "type","a","b",
         ]);
         
         this.Example2 = this.tb.classViewer("Example2", [
-          "item","element","element2",
+          "type","item","element","element2",
         ]);
         
         

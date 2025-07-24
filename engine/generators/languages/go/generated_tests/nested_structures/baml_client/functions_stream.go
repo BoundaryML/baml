@@ -28,17 +28,19 @@ type stream struct{}
 var Stream = &stream{}
 
 type StreamValue[TStream any, TFinal any] struct {
+	IsError   bool
+	Error     error
 	IsFinal   bool
 	as_final  *TFinal
 	as_stream *TStream
 }
 
-func (s *StreamValue[TStream, TFinal]) Final() TFinal {
-	return *s.as_final
+func (s *StreamValue[TStream, TFinal]) Final() *TFinal {
+	return s.as_final
 }
 
-func (s *StreamValue[TStream, TFinal]) Stream() TStream {
-	return *s.as_stream
+func (s *StreamValue[TStream, TFinal]) Stream() *TStream {
+	return s.as_stream
 }
 
 // / Streaming version of TestComplexNested
@@ -62,7 +64,7 @@ func (*stream) TestComplexNested(ctx context.Context, input string, opts ...Call
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -71,7 +73,7 @@ func (*stream) TestComplexNested(ctx context.Context, input string, opts ...Call
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestComplexNested", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestComplexNested", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -88,21 +90,26 @@ func (*stream) TestComplexNested(ctx context.Context, input string, opts ...Call
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.ComplexNested, types.ComplexNested]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.ComplexNested)
+					data := (result.Data).(types.ComplexNested)
 					channel <- StreamValue[stream_types.ComplexNested, types.ComplexNested]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.ComplexNested)
+					data := (result.StreamData).(stream_types.ComplexNested)
 					channel <- StreamValue[stream_types.ComplexNested, types.ComplexNested]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -135,7 +142,7 @@ func (*stream) TestDeeplyNested(ctx context.Context, input string, opts ...CallO
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -144,7 +151,7 @@ func (*stream) TestDeeplyNested(ctx context.Context, input string, opts ...CallO
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestDeeplyNested", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestDeeplyNested", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -161,21 +168,26 @@ func (*stream) TestDeeplyNested(ctx context.Context, input string, opts ...CallO
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.DeeplyNested, types.DeeplyNested]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.DeeplyNested)
+					data := (result.Data).(types.DeeplyNested)
 					channel <- StreamValue[stream_types.DeeplyNested, types.DeeplyNested]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.DeeplyNested)
+					data := (result.StreamData).(stream_types.DeeplyNested)
 					channel <- StreamValue[stream_types.DeeplyNested, types.DeeplyNested]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -208,7 +220,7 @@ func (*stream) TestRecursiveStructure(ctx context.Context, input string, opts ..
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -217,7 +229,7 @@ func (*stream) TestRecursiveStructure(ctx context.Context, input string, opts ..
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestRecursiveStructure", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestRecursiveStructure", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -234,21 +246,26 @@ func (*stream) TestRecursiveStructure(ctx context.Context, input string, opts ..
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.RecursiveStructure, types.RecursiveStructure]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.RecursiveStructure)
+					data := (result.Data).(types.RecursiveStructure)
 					channel <- StreamValue[stream_types.RecursiveStructure, types.RecursiveStructure]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.RecursiveStructure)
+					data := (result.StreamData).(stream_types.RecursiveStructure)
 					channel <- StreamValue[stream_types.RecursiveStructure, types.RecursiveStructure]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -281,7 +298,7 @@ func (*stream) TestSimpleNested(ctx context.Context, input string, opts ...CallO
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -290,7 +307,7 @@ func (*stream) TestSimpleNested(ctx context.Context, input string, opts ...CallO
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestSimpleNested", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestSimpleNested", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -307,21 +324,26 @@ func (*stream) TestSimpleNested(ctx context.Context, input string, opts ...CallO
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[stream_types.SimpleNested, types.SimpleNested]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.SimpleNested)
+					data := (result.Data).(types.SimpleNested)
 					channel <- StreamValue[stream_types.SimpleNested, types.SimpleNested]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*stream_types.SimpleNested)
+					data := (result.StreamData).(stream_types.SimpleNested)
 					channel <- StreamValue[stream_types.SimpleNested, types.SimpleNested]{
 						IsFinal:   false,
 						as_stream: &data,

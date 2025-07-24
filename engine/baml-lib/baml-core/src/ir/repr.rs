@@ -9,7 +9,7 @@ use baml_types::{
     expr::{self, Builtin, Expr, ExprMetadata, Name, VarIndex},
     ir_type::{ArrowGeneric, TypeNonStreaming, TypeStreaming, UnionConstructor},
     type_meta, Arrow, BamlMap, BamlValueWithMeta, Constraint, ConstraintLevel, JinjaExpression,
-    Resolvable, StringOr, TypeIR, TypeValue, UnionType, UnresolvedValue,
+    Resolvable, StreamingMode, StringOr, TypeIR, TypeValue, UnionType, UnresolvedValue,
 };
 use either::Either;
 use indexmap::{IndexMap, IndexSet};
@@ -180,7 +180,7 @@ impl WithRepr<TopLevelAssignment> for TopLevelAssignmentWalker<'_> {
             .identifier
             .name()
             .to_string();
-        let expr = self.top_level_assignment().stmt.body.repr(db)?;
+        let expr = self.top_level_assignment().stmt.expr.repr(db)?;
         Ok(TopLevelAssignment {
             name: Node {
                 elem: name,
@@ -315,12 +315,12 @@ fn convert_function_body(
         stmts.reverse();
         let expr = stmts
             .iter()
-            .fold(fn_body, |acc, stmt| match stmt.body.repr(db) {
+            .fold(fn_body, |acc, stmt| match stmt.body().repr(db) {
                 Ok(stmt_expr) => Expr::Let(
-                    stmt.identifier.name().to_string(),
+                    stmt.identifier().name().to_string(),
                     Arc::new(stmt_expr),
                     Arc::new(acc),
-                    (stmt.body.span().clone(), None),
+                    (stmt.span().clone(), None),
                 ),
                 Err(e) => acc,
             });
@@ -493,21 +493,6 @@ impl WithRepr<Expr<ExprMetadata>> for ast::Expression {
                     else_.map(Arc::new),
                     (span.clone(), None),
                 ))
-            }
-            ast::Expression::ForLoop {
-                identifier,
-                iterator,
-                body,
-                span,
-            } => {
-                let iterator = iterator.repr(db)?;
-                let body = convert_function_body(body.clone(), db)?;
-                Ok(Expr::ForLoop {
-                    item: identifier.to_string(),
-                    iterable: Arc::new(iterator),
-                    body: Arc::new(body),
-                    meta: (span.clone(), None),
-                })
             }
         }
     }
@@ -1603,6 +1588,7 @@ impl WithRepr<TypeIR> for ast::FieldType {
                             // TODO: use resolved in some way
                             TypeIR::RecursiveTypeAlias {
                                 name: alias_walker.name().to_string(),
+                                mode: StreamingMode::Streaming,
                                 meta: Default::default(),
                             }
                         } else {
@@ -3065,12 +3051,12 @@ mod tests {
             // Both fields should have consistent type resolution for Recursive1
             assert_eq!(
                 field1_type.to_string(),
-                "(Recursive1 | int @stream.done | string | null)", // Union3IntOrRecursive1OrString
+                "(Streaming.Recursive1 | int @stream.done | string | null)", // Union3IntOrRecursive1OrString
                 "field1 type resolution is inconsistent"
             );
             assert_eq!(
                 field2_type.to_string(),
-                "(Recursive1 | int @stream.done | string | null)", // Union3IntOrRecursive1OrString
+                "(Streaming.Recursive1 | int @stream.done | string | null)", // Union3IntOrRecursive1OrString
                 "field2 type resolution is inconsistent"
             );
         }
@@ -3104,12 +3090,12 @@ mod tests {
             // Both fields should have consistent type resolution for Recursive1
             assert_eq!(
                 field1_type.to_string(),
-                "(int @stream.done | Recursive1 @stream.not_null[] @stream.not_null | string | null)", // Union3IntOrRecursive1OrString
+                "(int @stream.done | Streaming.Recursive1 @stream.not_null[] @stream.not_null | string | null)", // Union3IntOrRecursive1OrString
                 "field1 type resolution is inconsistent"
             );
             assert_eq!(
                 field2_type.to_string(),
-                "(Recursive1 | int @stream.done | string | null)", // Union3IntOrRecursive1OrString
+                "(Streaming.Recursive1 | int @stream.done | string | null)", // Union3IntOrRecursive1OrString
                 "field2 type resolution is inconsistent"
             );
         }

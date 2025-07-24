@@ -9,14 +9,15 @@ use std::{
     collections::{HashMap, HashSet},
     fmt,
     hash::Hash,
+    ops::DerefMut,
     sync::{Arc, Mutex},
 };
 
 use baml_ids::{FunctionCallId, HttpRequestId};
 use baml_types::{
     tracing::events::{
-        FunctionEnd, FunctionStart, HTTPRequest, HTTPResponse, LoggedLLMRequest, LoggedLLMResponse,
-        TraceData, TraceEvent,
+        FunctionEnd, FunctionStart, HTTPRequest, HTTPResponse, HTTPResponseStream,
+        LoggedLLMRequest, LoggedLLMResponse, SSEEvent, TraceData, TraceEvent,
     },
     HasType,
 };
@@ -239,7 +240,24 @@ fn build_function_log(
             TraceData::RawLLMResponse(http_res) => {
                 let rid = http_res.request_id.clone();
                 let entry = calls_map.entry(rid).or_default();
-                entry.http_responses.push(http_res.clone());
+                entry.http_response = Some(http_res.clone());
+                entry.timestamp_last_seen = Some(time_ms);
+            }
+            TraceData::RawLLMResponseStream(http_res_stream) => {
+                let rid = http_res_stream.request_id.clone();
+                let entry = calls_map.entry(rid.clone()).or_default();
+
+                // find or insert the event
+                match &mut entry.http_response_stream {
+                    Some(stream) => {
+                        stream.lock().unwrap().push(http_res_stream.clone());
+                    }
+                    None => {
+                        entry.http_response_stream =
+                            Some(Arc::new(Mutex::new(vec![http_res_stream.clone()])));
+                    }
+                }
+
                 entry.timestamp_last_seen = Some(time_ms);
             }
             TraceData::SetTags(tags) => {
@@ -266,7 +284,7 @@ fn build_function_log(
         let end_t = call_acc.timestamp_last_seen.unwrap_or(start_t);
         let partial_duration = end_t.saturating_sub(start_t);
 
-        let is_stream = call_acc.http_responses.len() > 1;
+        let is_stream = call_acc.http_response_stream.is_some();
 
         let local_usage = call_acc.usage.unwrap_or_default();
         usage.input_tokens = match (usage.input_tokens, local_usage.input_tokens) {
@@ -290,29 +308,41 @@ fn build_function_log(
                 timing: Timing {
                     start_time_utc_ms: start_t,
                     duration_ms: Some(partial_duration),
-                    time_to_first_parsed_ms: None,
                 },
                 request: call_acc.http_request.clone(),
-                response: call_acc.http_responses.first().cloned(),
+                response: call_acc.http_response.clone(),
                 usage: Some(local_usage),
                 selected: call_acc.llm_response.is_some(),
             }));
         } else {
+            let sse_chunks = call_acc.http_response_stream.and_then(|chunks| {
+                let chunks = chunks.lock().unwrap();
+                let request_id = chunks.first().map(|e| e.request_id.clone())?;
+                Some(Arc::new(LLMHTTPStreamResponse {
+                    request_id,
+                    event: chunks.iter().map(|e| e.event.clone()).collect::<Vec<_>>(),
+                }))
+            });
+
             // Streaming call
             calls.push(LLMCallKind::Stream(LLMStreamCall {
-                client_name: client,
-                provider,
+                llm_call: LLMCall {
+                    client_name: client,
+                    provider,
+                    timing: Timing {
+                        start_time_utc_ms: start_t,
+                        duration_ms: Some(partial_duration),
+                    },
+                    request: call_acc.http_request.clone(),
+                    response: call_acc.http_response.clone(),
+                    usage: Some(local_usage),
+                    selected: call_acc.llm_response.is_some(),
+                },
                 timing: StreamTiming {
                     start_time_utc_ms: start_t,
                     duration_ms: Some(partial_duration),
-                    time_to_first_parsed_ms: None,
-                    time_to_first_token_ms: None,
                 },
-                request: call_acc.http_request.clone(),
-                response: call_acc.http_responses.first().cloned(),
-                usage: Some(local_usage),
-                selected: call_acc.llm_response.is_some(),
-                chunks: Vec::new(),
+                sse_chunks,
             }));
         }
     }
@@ -331,7 +361,6 @@ fn build_function_log(
         timing: Timing {
             start_time_utc_ms: start_ms,
             duration_ms: duration,
-            time_to_first_parsed_ms: None,
         },
         usage,
         calls,
@@ -340,7 +369,8 @@ fn build_function_log(
     };
 
     let new_arc = Arc::new(Mutex::new(function_log_inner));
-    {
+    // only cache if we we've finished the function
+    if function_end_time.is_some() {
         // Insert into the cache
         let mut lock = storage.function_inners.lock().unwrap();
         lock.insert(function_id.clone(), new_arc.clone());
@@ -349,16 +379,45 @@ fn build_function_log(
     Some(new_arc)
 }
 
+#[derive(Debug, Serialize)]
+pub enum HTTPResponseOrStream {
+    Response(Arc<HTTPResponse>),
+    Stream(Arc<HTTPResonseStreamCollection>),
+}
+
+impl HTTPResponseOrStream {
+    pub fn response(&self) -> Option<&HTTPResponse> {
+        match self {
+            HTTPResponseOrStream::Response(resp) => Some(resp),
+            HTTPResponseOrStream::Stream(_) => None,
+        }
+    }
+
+    pub fn stream(&self) -> Option<&HTTPResonseStreamCollection> {
+        match self {
+            HTTPResponseOrStream::Response(_) => None,
+            HTTPResponseOrStream::Stream(stream) => Some(stream),
+        }
+    }
+}
+
 /// A helper structure for building an LLM call from multiple events sharing the same request_id.
 #[derive(Default, Debug)]
 struct CallAccumulator {
     pub llm_request: Option<Arc<LoggedLLMRequest>>,
     pub llm_response: Option<Arc<LoggedLLMResponse>>,
     pub http_request: Option<Arc<HTTPRequest>>,
-    pub http_responses: Vec<Arc<HTTPResponse>>,
+    pub http_response: Option<Arc<HTTPResponse>>,
+    pub http_response_stream: Option<Arc<Mutex<Vec<Arc<HTTPResponseStream>>>>>,
     pub usage: Option<Usage>,
     pub timestamp_first_seen: Option<i64>,
     pub timestamp_last_seen: Option<i64>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct HTTPResonseStreamCollection {
+    pub request_id: HttpRequestId,
+    pub event: Mutex<Vec<Arc<HTTPResponseStream>>>,
 }
 
 fn parse_llm_client_and_provider(req: Option<&Arc<LoggedLLMRequest>>) -> (String, String) {
@@ -495,15 +554,12 @@ pub struct Usage {
 pub struct Timing {
     pub start_time_utc_ms: i64,
     pub duration_ms: Option<i64>,
-    pub time_to_first_parsed_ms: Option<i64>,
 }
 
 #[derive(Debug, Default, Clone, Hash, Eq, PartialEq, Serialize)]
 pub struct StreamTiming {
     pub start_time_utc_ms: i64,
     pub duration_ms: Option<i64>,
-    pub time_to_first_parsed_ms: Option<i64>,
-    pub time_to_first_token_ms: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -518,7 +574,21 @@ impl LLMCallKind {
     pub fn selected(&self) -> bool {
         match self {
             LLMCallKind::Basic(c) => c.selected,
-            LLMCallKind::Stream(c) => c.selected,
+            LLMCallKind::Stream(c) => c.llm_call.selected,
+        }
+    }
+
+    pub fn as_request(&self) -> Option<&LLMCall> {
+        match self {
+            LLMCallKind::Basic(c) => Some(c),
+            LLMCallKind::Stream(c) => None,
+        }
+    }
+
+    pub fn as_stream(&self) -> Option<&LLMStreamCall> {
+        match self {
+            LLMCallKind::Basic(c) => None,
+            LLMCallKind::Stream(c) => Some(c),
         }
     }
 }
@@ -536,14 +606,15 @@ pub struct LLMCall {
 
 #[derive(Debug, Default, Clone, Serialize)]
 pub struct LLMStreamCall {
-    pub client_name: String,
-    pub provider: String,
+    pub llm_call: LLMCall,
     pub timing: StreamTiming,
-    pub request: Option<Arc<HTTPRequest>>,
-    pub response: Option<Arc<HTTPResponse>>,
-    pub usage: Option<Usage>,
-    pub selected: bool,
-    pub chunks: Vec<serde_json::Value>,
+    pub sse_chunks: Option<Arc<LLMHTTPStreamResponse>>,
+}
+
+#[derive(Debug, Default, Clone, Serialize)]
+pub struct LLMHTTPStreamResponse {
+    pub request_id: HttpRequestId,
+    pub event: Vec<Arc<SSEEvent>>,
 }
 
 /// A Collector holds references to multiple FunctionIds in order of insertion.
@@ -582,6 +653,16 @@ impl Collector {
         if guard.swap_remove(fid) {
             BAML_TRACER.lock().unwrap().dec_ref(fid);
         }
+    }
+
+    pub fn clear(&self) -> usize {
+        let mut guard = self.tracked_ids.lock().unwrap();
+        for fid in guard.iter() {
+            BAML_TRACER.lock().unwrap().dec_ref(fid);
+        }
+        let len = guard.len();
+        guard.clear();
+        len
     }
 
     pub fn function_logs(&self) -> Vec<FunctionLog> {

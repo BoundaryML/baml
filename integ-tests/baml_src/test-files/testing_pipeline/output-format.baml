@@ -23,7 +23,7 @@ test MyOutput {
     functions [AaaSamOutputFormat]
     args {
         recipe #"
-            Here's a simple recipe for beef stew:
+Here's a simple recipe for beef stew:
 Ingredients:
 
 2 lbs beef chuck, cut into 1-inch cubes

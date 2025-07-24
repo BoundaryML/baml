@@ -53,7 +53,7 @@ impl ParsingContext<'_> {
             scope: new_scope,
             visited: self.visited.clone(),
             of: self.of,
-            do_not_use_mode: self.do_not_use_mode.clone(),
+            do_not_use_mode: self.do_not_use_mode,
         }
     }
 
@@ -70,7 +70,7 @@ impl ParsingContext<'_> {
             scope: self.scope.clone(),
             visited: new_visited,
             of: self.of,
-            do_not_use_mode: self.do_not_use_mode.clone(),
+            do_not_use_mode: self.do_not_use_mode,
         }
     }
 
@@ -134,6 +134,22 @@ impl ParsingContext<'_> {
     pub(crate) fn error_audio_not_supported(&self) -> ParsingError {
         ParsingError {
             reason: "Audio type is not supported here".to_string(),
+            scope: self.scope.clone(),
+            causes: vec![],
+        }
+    }
+
+    pub(crate) fn error_pdf_not_supported(&self) -> ParsingError {
+        ParsingError {
+            reason: "Pdf type is not supported here".to_string(),
+            scope: self.scope.clone(),
+            causes: vec![],
+        }
+    }
+
+    pub(crate) fn error_video_not_supported(&self) -> ParsingError {
+        ParsingError {
+            reason: "Video type is not supported here".to_string(),
             scope: self.scope.clone(),
             causes: vec![],
         }

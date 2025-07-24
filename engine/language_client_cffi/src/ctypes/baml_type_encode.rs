@@ -2,21 +2,47 @@ use baml_types::{ir_type::TypeGeneric, ToUnionName};
 
 use crate::{
     baml::cffi::*,
-    ctypes::{
-        self,
-        utils::{Encode, WithIr},
-    },
+    ctypes::utils::{Encode, WithIr},
 };
 
-impl<'a, TypeLookups, T> Encode<CffiFieldTypeHolder> for WithIr<'a, TypeGeneric<T>, TypeLookups>
+// impl<'a, TypeLookups, T> Encode<CffiFieldTypeHolder> for WithIr<'a, TypeGeneric<T>, TypeLookups>
+// where
+//     TypeLookups: baml_types::baml_value::TypeLookups + 'a,
+//     T: std::hash::Hash + std::cmp::Eq,
+// {
+//     fn encode(self) -> CffiFieldTypeHolder {
+//         let WithIr { value, lookup } = self;
+
+//         WithIr {
+//             value: &(value, true),
+//             lookup,
+//         }
+//         .encode()
+//     }
+// }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UnionAllowance {
+    Allow,
+    Disallow,
+}
+
+impl<'a, TypeLookups, T> Encode<CffiFieldTypeHolder>
+    for WithIr<'a, (&'a TypeGeneric<T>, UnionAllowance), TypeLookups>
 where
     TypeLookups: baml_types::baml_value::TypeLookups + 'a,
     T: std::hash::Hash + std::cmp::Eq,
 {
     fn encode(self) -> CffiFieldTypeHolder {
-        let WithIr { value, lookup } = self;
+        let WithIr {
+            value,
+            lookup,
+            mode,
+        } = self;
 
         use cffi_field_type_holder::Type as cType;
+
+        let (value, allow_user_defined_unions) = *value;
 
         let type_value = match value {
             TypeGeneric::Primitive(type_value, _) => type_value.encode(),
@@ -37,8 +63,9 @@ where
             }),
             TypeGeneric::List(type_generic, _) => {
                 let element = WithIr {
-                    value: type_generic.as_ref(),
+                    value: &(type_generic.as_ref(), allow_user_defined_unions),
                     lookup,
+                    mode,
                 }
                 .encode();
                 cType::ListType(Box::new(CffiFieldTypeList {
@@ -47,13 +74,15 @@ where
             }
             TypeGeneric::Map(type_generic, type_generic1, _) => {
                 let key = WithIr {
-                    value: type_generic.as_ref(),
+                    value: &(type_generic.as_ref(), allow_user_defined_unions),
                     lookup,
+                    mode,
                 }
                 .encode();
                 let value = WithIr {
-                    value: type_generic1.as_ref(),
+                    value: &(type_generic1.as_ref(), allow_user_defined_unions),
                     lookup,
+                    mode,
                 }
                 .encode();
                 cType::MapType(Box::new(CffiFieldTypeMap {
@@ -61,13 +90,32 @@ where
                     value: Some(Box::new(value)),
                 }))
             }
-            TypeGeneric::RecursiveTypeAlias { name, .. } => {
-                cType::TypeAliasType(CffiFieldTypeTypeAlias { name: name.clone() })
+            TypeGeneric::RecursiveTypeAlias { name, mode, .. } => {
+                cType::TypeAliasType(CffiFieldTypeTypeAlias {
+                    name: Some(CffiTypeName {
+                        namespace: match mode {
+                            baml_types::StreamingMode::NonStreaming => {
+                                CffiTypeNamespace::Types.into()
+                            }
+                            baml_types::StreamingMode::Streaming => {
+                                CffiTypeNamespace::StreamTypes.into()
+                            }
+                        },
+                        name: name.clone(),
+                    }),
+                })
             }
             TypeGeneric::Tuple(type_generics, _) => {
                 let elements = type_generics
                     .iter()
-                    .map(|t| WithIr { value: t, lookup }.encode())
+                    .map(|t| {
+                        WithIr {
+                            value: &(t, allow_user_defined_unions),
+                            lookup,
+                            mode,
+                        }
+                        .encode()
+                    })
                     .collect();
                 cType::TupleType(CffiFieldTypeTuple { elements })
             }
@@ -81,46 +129,93 @@ where
                         cType::NullType(CffiFieldTypeNull {})
                     }
                     baml_types::ir_type::UnionTypeViewGeneric::Optional(type_generic) => {
-                        let inner = WithIr {
-                            value: type_generic,
-                            lookup,
+                        if matches!(allow_user_defined_unions, UnionAllowance::Disallow) {
+                            cType::AnyType(CffiFieldTypeAny::default())
+                        } else {
+                            let inner = WithIr {
+                                value: &(type_generic, allow_user_defined_unions),
+                                lookup,
+                                mode,
+                            }
+                            .encode();
+                            cType::OptionalType(Box::new(CffiFieldTypeOptional {
+                                value: Some(Box::new(inner)),
+                            }))
                         }
-                        .encode();
-                        cType::OptionalType(Box::new(CffiFieldTypeOptional {
-                            value: Some(Box::new(inner)),
-                        }))
                     }
                     baml_types::ir_type::UnionTypeViewGeneric::OneOf(type_generics) => {
-                        let elements = type_generics
-                            .into_iter()
-                            .map(|t| WithIr { value: t, lookup }.encode())
-                            .collect();
-                        cType::UnionVariantType(CffiFieldTypeUnionVariant {
-                            name: Some(CffiTypeName {
-                                namespace: CffiTypeNamespace::Types.into(),
-                                name: value.to_union_name().to_string(),
-                            }),
-                            options: elements,
-                        })
+                        if matches!(allow_user_defined_unions, UnionAllowance::Disallow) {
+                            cType::AnyType(CffiFieldTypeAny::default())
+                        } else {
+                            let elements = type_generics
+                                .into_iter()
+                                .map(|t| {
+                                    WithIr {
+                                        value: &(t, allow_user_defined_unions),
+                                        lookup,
+                                        mode,
+                                    }
+                                    .encode()
+                                })
+                                .collect();
+                            cType::UnionVariantType(CffiFieldTypeUnionVariant {
+                                name: Some(CffiTypeName {
+                                    namespace: match value.mode(&mode, lookup) {
+                                        Ok(baml_types::StreamingMode::NonStreaming) => {
+                                            CffiTypeNamespace::Types.into()
+                                        }
+                                        Ok(baml_types::StreamingMode::Streaming) => {
+                                            CffiTypeNamespace::StreamTypes.into()
+                                        }
+                                        Err(e) => {
+                                            panic!("Failed to get mode for field type: {e}");
+                                        }
+                                    },
+                                    name: value.to_union_name().to_string(),
+                                }),
+                                options: elements,
+                            })
+                        }
                     }
                     baml_types::ir_type::UnionTypeViewGeneric::OneOfOptional(type_generics) => {
-                        let elements = type_generics
-                            .into_iter()
-                            .map(|t| WithIr { value: t, lookup }.encode())
-                            .collect();
-                        let inner = cType::UnionVariantType(CffiFieldTypeUnionVariant {
-                            name: Some(CffiTypeName {
-                                namespace: CffiTypeNamespace::Types.into(),
-                                name: value.to_union_name().to_string(),
-                            }),
-                            options: elements,
-                        });
-                        let inner = CffiFieldTypeHolder {
-                            r#type: Some(inner),
-                        };
-                        cType::OptionalType(Box::new(CffiFieldTypeOptional {
-                            value: Some(Box::new(inner)),
-                        }))
+                        if matches!(allow_user_defined_unions, UnionAllowance::Disallow) {
+                            cType::AnyType(CffiFieldTypeAny::default())
+                        } else {
+                            let elements = type_generics
+                                .into_iter()
+                                .map(|t| {
+                                    WithIr {
+                                        value: &(t, allow_user_defined_unions),
+                                        lookup,
+                                        mode,
+                                    }
+                                    .encode()
+                                })
+                                .collect();
+                            let inner = cType::UnionVariantType(CffiFieldTypeUnionVariant {
+                                name: Some(CffiTypeName {
+                                    namespace: match value.mode(&mode, lookup) {
+                                        Ok(baml_types::StreamingMode::NonStreaming) => {
+                                            CffiTypeNamespace::Types.into()
+                                        }
+                                        Ok(baml_types::StreamingMode::Streaming) => {
+                                            CffiTypeNamespace::StreamTypes.into()
+                                        }
+                                        Err(e) => {
+                                            panic!("Failed to get mode for field type: {e}");
+                                        }
+                                    },
+                                    name: value.to_union_name().to_string(),
+                                }),
+                                options: elements,
+                            });
+                            let inner = CffiFieldTypeHolder {
+                                r#type: Some(inner),
+                            };
+                            cType::OptionalType(Box::new(CffiFieldTypeOptional {
+                                value: Some(Box::new(inner)),
+                            }))
+                        }
                     }
                 }
             }
@@ -154,6 +249,8 @@ impl Encode<CffiFieldTypeMedia> for &baml_types::BamlMediaType {
             media: match self {
                 baml_types::BamlMediaType::Image => MediaTypeEnum::Image,
                 baml_types::BamlMediaType::Audio => MediaTypeEnum::Audio,
+                baml_types::BamlMediaType::Pdf => MediaTypeEnum::Pdf,
+                baml_types::BamlMediaType::Video => MediaTypeEnum::Video,
             }
             .into(),
         }

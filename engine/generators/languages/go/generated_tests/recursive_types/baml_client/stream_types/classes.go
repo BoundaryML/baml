@@ -24,7 +24,7 @@ type UseMyUnion struct {
 	U *Union3IntOrRecursive1OrString `json:"u"`
 }
 
-func (c *UseMyUnion) Decode(holder *cffi.CFFIValueClass) {
+func (c *UseMyUnion) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))
@@ -39,16 +39,7 @@ func (c *UseMyUnion) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "u":
-			c.U = func(param *cffi.CFFIValueHolder) *Union3IntOrRecursive1OrString {
-				decoded := baml.Decode(param)
-				return func(result any) *Union3IntOrRecursive1OrString {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(*Union3IntOrRecursive1OrString)
-					return casted
-				}(decoded)
-			}(valueHolder)
+			c.U = baml.Decode(valueHolder).Interface().(*Union3IntOrRecursive1OrString)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))

@@ -103,7 +103,14 @@ impl FunctionResultStream {
             let ctx_mng = ctx_mng;
             let mut locked = inner.lock().await;
             let (res, _) = locked
-                .run(on_event, &ctx_mng, tb.as_ref(), cb.as_ref(), env_vars)
+                .run(
+                    None::<fn()>,
+                    on_event,
+                    &ctx_mng,
+                    tb.as_ref(),
+                    cb.as_ref(),
+                    env_vars,
+                )
                 .await;
             res.map(FunctionResult::from)
                 .map_err(BamlError::from_anyhow)
@@ -151,7 +158,14 @@ impl SyncFunctionResultStream {
         let env_vars = self.env_vars.clone();
         let ctx_mng = ctx_mng;
         let mut locked = inner.lock().unwrap();
-        let (res, _) = locked.run_sync(on_event, &ctx_mng, tb.as_ref(), cb.as_ref(), env_vars);
+        let (res, _) = locked.run_sync(
+            None::<fn()>,
+            on_event,
+            &ctx_mng,
+            tb.as_ref(),
+            cb.as_ref(),
+            env_vars,
+        );
         res.map(FunctionResult::from)
             .map_err(BamlError::from_anyhow)
     }

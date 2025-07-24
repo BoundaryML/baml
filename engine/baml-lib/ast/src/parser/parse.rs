@@ -16,6 +16,7 @@ use super::{
 use crate::ast::*;
 
 #[cfg(feature = "debug_parser")]
+#[allow(dead_code)]
 fn pretty_print<'a>(pair: pest::iterators::Pair<'a, Rule>, indent_level: usize) {
     // Indentation for the current level
     let indent = "  ".repeat(indent_level);
@@ -446,10 +447,10 @@ mod tests {
                 dbg!(&x);
                 dbg!(&x.stmt);
                 assert_eq!(x.stmt.identifier.name(), "x");
-                match &x.stmt.body {
+                match &x.stmt.expr {
                     Expression::ExprBlock(ExpressionBlock { stmts, expr }, _) => {
                         assert_eq!(stmts.len(), 1);
-                        assert_eq!(stmts[0].identifier.name(), "y");
+                        assert_eq!(stmts[0].identifier().name(), "y");
                         assert!(matches!(expr.as_ref(), Expression::App(_)));
                     }
                     _ => panic!("Expected ExpressionBlock"),

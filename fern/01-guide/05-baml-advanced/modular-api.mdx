@@ -179,7 +179,7 @@ req.body = baml_req.body.raw.pack("C*")
 
 We can use the same modular API with the official SDKs. Here are some examples:
 
-### [OpenAI](https://platform.openai.com/docs/quickstart?api-mode=chat)
+### [OpenAI Chat Completions API](https://platform.openai.com/docs/quickstart?api-mode=chat)
 
 <CodeBlocks>
 ```python Python
@@ -222,6 +222,57 @@ async function run() {
 
   // Fully parsed Resume type.
   console.log(parsed)
+}
+```
+</CodeBlocks>
+
+### [OpenAI Responses API](https://platform.openai.com/docs/api-reference/responses)
+
+The OpenAI Responses API uses the `/v1/responses` endpoint and is designed for enhanced reasoning capabilities. BAML supports this through the `openai-responses` provider:
+
+<CodeBlocks>
+```python Python
+from openai import AsyncOpenAI
+from openai.types.responses import Response
+from baml_client import b
+import typing
+
+async def run():
+  # Initialize the OpenAI client.
+  client = AsyncOpenAI()
+
+  # Get the HTTP request object from a function using openai-responses provider.
+  req = await b.request.ExtractResume("John Doe | Software Engineer | BSc in CS")
+
+  # Use the openai responses API endpoint.
+  res = typing.cast(Response, await client.responses.create(**req.body.json()))
+
+  # Parse the LLM response from the responses API.
+  parsed = b.parse.ExtractResume(res.output_text)
+
+  # Fully parsed Resume type.
+  print(parsed)
+```
+
+```typescript TypeScript
+import OpenAI from 'openai'
+import { b } from 'baml_client'
+
+async function run() {
+  // Initialize the OpenAI client.
+    const client = new OpenAI();
+
+    // Use TestOpenAIResponses from the providers directory
+    const req = await b.request.TestOpenAIResponses("mountains");
+
+    // The openai-responses provider should use the /v1/responses endpoint
+    const res = await client.responses.create(req.body.json()) as any;
+
+    // Parse the response from the responses API (uses output_text instead of choices)
+    const parsed = b.parse.TestOpenAIResponses(res.output_text);
+
+    expect(typeof parsed).toBe("string");
+    expect(parsed.length).toBeGreaterThan(0);
 }
 ```
 </CodeBlocks>

@@ -11,6 +11,7 @@
 # baml-cli is available with the baml package.
 
 import typing
+import typing_extensions
 import baml_py
 
 from . import stream_types, types, type_builder
@@ -119,6 +120,69 @@ class BamlSyncClient:
             "input": input,
         })
         return typing.cast(types.SimpleMaps, result.cast_to(types, types, stream_types, False, __runtime__))
+    def TestTopLevelBoolMap(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> typing.Dict[str, bool]:
+        result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestTopLevelBoolMap", args={
+            "input": input,
+        })
+        return typing.cast(typing.Dict[str, bool], result.cast_to(types, types, stream_types, False, __runtime__))
+    def TestTopLevelEmptyMap(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> typing.Dict[str, str]:
+        result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestTopLevelEmptyMap", args={
+            "input": input,
+        })
+        return typing.cast(typing.Dict[str, str], result.cast_to(types, types, stream_types, False, __runtime__))
+    def TestTopLevelFloatMap(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> typing.Dict[str, float]:
+        result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestTopLevelFloatMap", args={
+            "input": input,
+        })
+        return typing.cast(typing.Dict[str, float], result.cast_to(types, types, stream_types, False, __runtime__))
+    def TestTopLevelIntMap(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> typing.Dict[str, int]:
+        result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestTopLevelIntMap", args={
+            "input": input,
+        })
+        return typing.cast(typing.Dict[str, int], result.cast_to(types, types, stream_types, False, __runtime__))
+    def TestTopLevelMapOfArrays(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> typing.Dict[str, typing.List[int]]:
+        result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestTopLevelMapOfArrays", args={
+            "input": input,
+        })
+        return typing.cast(typing.Dict[str, typing.List[int]], result.cast_to(types, types, stream_types, False, __runtime__))
+    def TestTopLevelMapOfObjects(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> typing.Dict[str, "types.User"]:
+        result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestTopLevelMapOfObjects", args={
+            "input": input,
+        })
+        return typing.cast(typing.Dict[str, "types.User"], result.cast_to(types, types, stream_types, False, __runtime__))
+    def TestTopLevelMapWithNullable(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> typing.Dict[str, typing.Optional[str]]:
+        result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestTopLevelMapWithNullable", args={
+            "input": input,
+        })
+        return typing.cast(typing.Dict[str, typing.Optional[str]], result.cast_to(types, types, stream_types, False, __runtime__))
+    def TestTopLevelNestedMap(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> typing.Dict[str, typing.Dict[str, str]]:
+        result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestTopLevelNestedMap", args={
+            "input": input,
+        })
+        return typing.cast(typing.Dict[str, typing.Dict[str, str]], result.cast_to(types, types, stream_types, False, __runtime__))
+    def TestTopLevelStringMap(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> typing.Dict[str, str]:
+        result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestTopLevelStringMap", args={
+            "input": input,
+        })
+        return typing.cast(typing.Dict[str, str], result.cast_to(types, types, stream_types, False, __runtime__))
     
 
 
@@ -188,6 +252,114 @@ class BamlStreamClient:
           lambda x: typing.cast(types.SimpleMaps, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
+    def TestTopLevelBoolMap(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[typing.Dict[str, bool], typing.Dict[str, bool]]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestTopLevelBoolMap", args={
+            "input": input,
+        })
+        return baml_py.BamlSyncStream[typing.Dict[str, bool], typing.Dict[str, bool]](
+          result,
+          lambda x: typing.cast(typing.Dict[str, bool], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing.Dict[str, bool], x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def TestTopLevelEmptyMap(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[typing.Dict[str, str], typing.Dict[str, str]]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestTopLevelEmptyMap", args={
+            "input": input,
+        })
+        return baml_py.BamlSyncStream[typing.Dict[str, str], typing.Dict[str, str]](
+          result,
+          lambda x: typing.cast(typing.Dict[str, str], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing.Dict[str, str], x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def TestTopLevelFloatMap(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[typing.Dict[str, float], typing.Dict[str, float]]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestTopLevelFloatMap", args={
+            "input": input,
+        })
+        return baml_py.BamlSyncStream[typing.Dict[str, float], typing.Dict[str, float]](
+          result,
+          lambda x: typing.cast(typing.Dict[str, float], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing.Dict[str, float], x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def TestTopLevelIntMap(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[typing.Dict[str, int], typing.Dict[str, int]]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestTopLevelIntMap", args={
+            "input": input,
+        })
+        return baml_py.BamlSyncStream[typing.Dict[str, int], typing.Dict[str, int]](
+          result,
+          lambda x: typing.cast(typing.Dict[str, int], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing.Dict[str, int], x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def TestTopLevelMapOfArrays(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[typing.Dict[str, typing.List[int]], typing.Dict[str, typing.List[int]]]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestTopLevelMapOfArrays", args={
+            "input": input,
+        })
+        return baml_py.BamlSyncStream[typing.Dict[str, typing.List[int]], typing.Dict[str, typing.List[int]]](
+          result,
+          lambda x: typing.cast(typing.Dict[str, typing.List[int]], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing.Dict[str, typing.List[int]], x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def TestTopLevelMapOfObjects(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[typing.Dict[str, "stream_types.User"], typing.Dict[str, "types.User"]]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestTopLevelMapOfObjects", args={
+            "input": input,
+        })
+        return baml_py.BamlSyncStream[typing.Dict[str, "stream_types.User"], typing.Dict[str, "types.User"]](
+          result,
+          lambda x: typing.cast(typing.Dict[str, "stream_types.User"], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing.Dict[str, "types.User"], x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def TestTopLevelMapWithNullable(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[typing.Dict[str, typing.Optional[str]], typing.Dict[str, typing.Optional[str]]]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestTopLevelMapWithNullable", args={
+            "input": input,
+        })
+        return baml_py.BamlSyncStream[typing.Dict[str, typing.Optional[str]], typing.Dict[str, typing.Optional[str]]](
+          result,
+          lambda x: typing.cast(typing.Dict[str, typing.Optional[str]], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing.Dict[str, typing.Optional[str]], x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def TestTopLevelNestedMap(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[typing.Dict[str, typing.Dict[str, str]], typing.Dict[str, typing.Dict[str, str]]]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestTopLevelNestedMap", args={
+            "input": input,
+        })
+        return baml_py.BamlSyncStream[typing.Dict[str, typing.Dict[str, str]], typing.Dict[str, typing.Dict[str, str]]](
+          result,
+          lambda x: typing.cast(typing.Dict[str, typing.Dict[str, str]], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing.Dict[str, typing.Dict[str, str]], x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def TestTopLevelStringMap(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[typing.Dict[str, str], typing.Dict[str, str]]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestTopLevelStringMap", args={
+            "input": input,
+        })
+        return baml_py.BamlSyncStream[typing.Dict[str, str], typing.Dict[str, str]](
+          result,
+          lambda x: typing.cast(typing.Dict[str, str], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing.Dict[str, str], x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
     
 
 class BamlHttpRequestClient:
@@ -231,6 +403,69 @@ class BamlHttpRequestClient:
             "input": input,
         }, mode="request")
         return result
+    def TestTopLevelBoolMap(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelBoolMap", args={
+            "input": input,
+        }, mode="request")
+        return result
+    def TestTopLevelEmptyMap(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelEmptyMap", args={
+            "input": input,
+        }, mode="request")
+        return result
+    def TestTopLevelFloatMap(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelFloatMap", args={
+            "input": input,
+        }, mode="request")
+        return result
+    def TestTopLevelIntMap(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelIntMap", args={
+            "input": input,
+        }, mode="request")
+        return result
+    def TestTopLevelMapOfArrays(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelMapOfArrays", args={
+            "input": input,
+        }, mode="request")
+        return result
+    def TestTopLevelMapOfObjects(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelMapOfObjects", args={
+            "input": input,
+        }, mode="request")
+        return result
+    def TestTopLevelMapWithNullable(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelMapWithNullable", args={
+            "input": input,
+        }, mode="request")
+        return result
+    def TestTopLevelNestedMap(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelNestedMap", args={
+            "input": input,
+        }, mode="request")
+        return result
+    def TestTopLevelStringMap(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelStringMap", args={
+            "input": input,
+        }, mode="request")
+        return result
     
 
 class BamlHttpStreamRequestClient:
@@ -271,6 +506,69 @@ class BamlHttpStreamRequestClient:
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestSimpleMaps", args={
+            "input": input,
+        }, mode="stream")
+        return result
+    def TestTopLevelBoolMap(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelBoolMap", args={
+            "input": input,
+        }, mode="stream")
+        return result
+    def TestTopLevelEmptyMap(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelEmptyMap", args={
+            "input": input,
+        }, mode="stream")
+        return result
+    def TestTopLevelFloatMap(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelFloatMap", args={
+            "input": input,
+        }, mode="stream")
+        return result
+    def TestTopLevelIntMap(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelIntMap", args={
+            "input": input,
+        }, mode="stream")
+        return result
+    def TestTopLevelMapOfArrays(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelMapOfArrays", args={
+            "input": input,
+        }, mode="stream")
+        return result
+    def TestTopLevelMapOfObjects(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelMapOfObjects", args={
+            "input": input,
+        }, mode="stream")
+        return result
+    def TestTopLevelMapWithNullable(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelMapWithNullable", args={
+            "input": input,
+        }, mode="stream")
+        return result
+    def TestTopLevelNestedMap(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelNestedMap", args={
+            "input": input,
+        }, mode="stream")
+        return result
+    def TestTopLevelStringMap(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelStringMap", args={
             "input": input,
         }, mode="stream")
         return result

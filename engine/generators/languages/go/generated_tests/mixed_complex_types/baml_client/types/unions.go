@@ -29,17 +29,17 @@ type Union2ConditionOrSimpleCondition struct {
 	variant_SimpleCondition *SimpleCondition
 }
 
-func (u *Union2ConditionOrSimpleCondition) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union2ConditionOrSimpleCondition) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
 	case "Condition":
 		u.variant = "Condition"
-		value := *baml.Decode(valueHolder).(*Condition)
+		value := baml.Decode(valueHolder).Interface().(Condition)
 		u.variant_Condition = &value
 	case "SimpleCondition":
 		u.variant = "SimpleCondition"
-		value := *baml.Decode(valueHolder).(*SimpleCondition)
+		value := baml.Decode(valueHolder).Interface().(SimpleCondition)
 		u.variant_SimpleCondition = &value
 
 	default:
@@ -174,17 +174,17 @@ type Union2ErrorOrSuccess struct {
 	variant_Error *Error
 }
 
-func (u *Union2ErrorOrSuccess) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union2ErrorOrSuccess) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
 	case "Success":
 		u.variant = "Success"
-		value := *baml.Decode(valueHolder).(*Success)
+		value := baml.Decode(valueHolder).Interface().(Success)
 		u.variant_Success = &value
 	case "Error":
 		u.variant = "Error"
-		value := *baml.Decode(valueHolder).(*Error)
+		value := baml.Decode(valueHolder).Interface().(Error)
 		u.variant_Error = &value
 
 	default:
@@ -319,17 +319,17 @@ type Union2KbranchOrKleaf struct {
 	variant_Kbranch *string
 }
 
-func (u *Union2KbranchOrKleaf) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union2KbranchOrKleaf) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
 	case "string_leaf":
 		u.variant = "Kleaf"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Kleaf = &value
 	case "string_branch":
 		u.variant = "Kbranch"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Kbranch = &value
 
 	default:
@@ -472,17 +472,17 @@ type Union2KerrorOrKsuccess struct {
 	variant_Kerror *string
 }
 
-func (u *Union2KerrorOrKsuccess) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union2KerrorOrKsuccess) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
 	case "string_success":
 		u.variant = "Ksuccess"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Ksuccess = &value
 	case "string_error":
 		u.variant = "Kerror"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Kerror = &value
 
 	default:
@@ -627,21 +627,21 @@ type Union3BoolOrIntOrString struct {
 	variant_Bool *bool
 }
 
-func (u *Union3BoolOrIntOrString) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union3BoolOrIntOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
 	case "string":
 		u.variant = "String"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_String = &value
 	case "int":
 		u.variant = "Int"
-		value := baml.Decode(valueHolder).(int64)
+		value := baml.Decode(valueHolder).Interface().(int64)
 		u.variant_Int = &value
 	case "bool":
 		u.variant = "Bool"
-		value := baml.Decode(valueHolder).(bool)
+		value := baml.Decode(valueHolder).Interface().(bool)
 		u.variant_Bool = &value
 
 	default:
@@ -826,21 +826,21 @@ type Union3DataObjectOrIntOrString struct {
 	variant_DataObject *DataObject
 }
 
-func (u *Union3DataObjectOrIntOrString) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union3DataObjectOrIntOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
 	case "string":
 		u.variant = "String"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_String = &value
 	case "int":
 		u.variant = "Int"
-		value := baml.Decode(valueHolder).(int64)
+		value := baml.Decode(valueHolder).Interface().(int64)
 		u.variant_Int = &value
 	case "DataObject":
 		u.variant = "DataObject"
-		value := *baml.Decode(valueHolder).(*DataObject)
+		value := baml.Decode(valueHolder).Interface().(DataObject)
 		u.variant_DataObject = &value
 
 	default:
@@ -1025,21 +1025,21 @@ type Union3FloatOrIntOrString struct {
 	variant_Float *float64
 }
 
-func (u *Union3FloatOrIntOrString) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union3FloatOrIntOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
 	case "string":
 		u.variant = "String"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_String = &value
 	case "int":
 		u.variant = "Int"
-		value := baml.Decode(valueHolder).(int64)
+		value := baml.Decode(valueHolder).Interface().(int64)
 		u.variant_Int = &value
 	case "float":
 		u.variant = "Float"
-		value := baml.Decode(valueHolder).(float64)
+		value := baml.Decode(valueHolder).Interface().(float64)
 		u.variant_Float = &value
 
 	default:
@@ -1224,21 +1224,21 @@ type Union3KandOrKnotOrKor struct {
 	variant_Knot *string
 }
 
-func (u *Union3KandOrKnotOrKor) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union3KandOrKnotOrKor) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
 	case "string_and":
 		u.variant = "Kand"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Kand = &value
 	case "string_or":
 		u.variant = "Kor"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Kor = &value
 	case "string_not":
 		u.variant = "Knot"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Knot = &value
 
 	default:
@@ -1435,21 +1435,21 @@ type Union3KarchivedOrKdraftOrKpublished struct {
 	variant_Karchived *string
 }
 
-func (u *Union3KarchivedOrKdraftOrKpublished) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union3KarchivedOrKdraftOrKpublished) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
 	case "string_draft":
 		u.variant = "Kdraft"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Kdraft = &value
 	case "string_published":
 		u.variant = "Kpublished"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Kpublished = &value
 	case "string_archived":
 		u.variant = "Karchived"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Karchived = &value
 
 	default:
@@ -1646,21 +1646,21 @@ type Union3KaudioOrKdocumentOrKimage struct {
 	variant_Kdocument *string
 }
 
-func (u *Union3KaudioOrKdocumentOrKimage) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union3KaudioOrKdocumentOrKimage) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
 	case "string_image":
 		u.variant = "Kimage"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Kimage = &value
 	case "string_audio":
 		u.variant = "Kaudio"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Kaudio = &value
 	case "string_document":
 		u.variant = "Kdocument"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Kdocument = &value
 
 	default:
@@ -1857,21 +1857,21 @@ type Union3KflexOrKgridOrKstack struct {
 	variant_Kstack *string
 }
 
-func (u *Union3KflexOrKgridOrKstack) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union3KflexOrKgridOrKstack) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
 	case "string_flex":
 		u.variant = "Kflex"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Kflex = &value
 	case "string_grid":
 		u.variant = "Kgrid"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Kgrid = &value
 	case "string_stack":
 		u.variant = "Kstack"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Kstack = &value
 
 	default:
@@ -2068,21 +2068,21 @@ type Union3KhtmlOrKmarkdownOrKplain struct {
 	variant_Khtml *string
 }
 
-func (u *Union3KhtmlOrKmarkdownOrKplain) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union3KhtmlOrKmarkdownOrKplain) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
 	case "string_plain":
 		u.variant = "Kplain"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Kplain = &value
 	case "string_markdown":
 		u.variant = "Kmarkdown"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Kmarkdown = &value
 	case "string_html":
 		u.variant = "Khtml"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Khtml = &value
 
 	default:
@@ -2281,25 +2281,25 @@ type Union4BoolOrFloatOrIntOrString struct {
 	variant_Bool *bool
 }
 
-func (u *Union4BoolOrFloatOrIntOrString) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union4BoolOrFloatOrIntOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
 	case "string":
 		u.variant = "String"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_String = &value
 	case "int":
 		u.variant = "Int"
-		value := baml.Decode(valueHolder).(int64)
+		value := baml.Decode(valueHolder).Interface().(int64)
 		u.variant_Int = &value
 	case "float":
 		u.variant = "Float"
-		value := baml.Decode(valueHolder).(float64)
+		value := baml.Decode(valueHolder).Interface().(float64)
 		u.variant_Float = &value
 	case "bool":
 		u.variant = "Bool"
-		value := baml.Decode(valueHolder).(bool)
+		value := baml.Decode(valueHolder).Interface().(bool)
 		u.variant_Bool = &value
 
 	default:
@@ -2538,29 +2538,25 @@ type Union4IntOrListNodeOrMapStringKeyNodeValueOrString struct {
 	variant_MapStringKeyNodeValue *map[string]Node
 }
 
-func (u *Union4IntOrListNodeOrMapStringKeyNodeValueOrString) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union4IntOrListNodeOrMapStringKeyNodeValueOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
 	case "string":
 		u.variant = "String"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_String = &value
 	case "int":
 		u.variant = "Int"
-		value := baml.Decode(valueHolder).(int64)
+		value := baml.Decode(valueHolder).Interface().(int64)
 		u.variant_Int = &value
 	case "List__Node":
 		u.variant = "ListNode"
-		value := baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) Node {
-			return *baml.Decode(inner).(*Node)
-		})
+		value := baml.Decode(valueHolder).Interface().([]Node)
 		u.variant_ListNode = &value
 	case "Map__string_Node":
 		u.variant = "MapStringKeyNodeValue"
-		value := baml.DecodeMap(valueHolder, func(inner *cffi.CFFIValueHolder) Node {
-			return *baml.Decode(inner).(*Node)
-		})
+		value := baml.Decode(valueHolder).Interface().(map[string]Node)
 		u.variant_MapStringKeyNodeValue = &value
 
 	default:
@@ -2799,25 +2795,25 @@ type Union4KbuttonOrKcontainerOrKimageOrKtext struct {
 	variant_Kcontainer *string
 }
 
-func (u *Union4KbuttonOrKcontainerOrKimageOrKtext) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union4KbuttonOrKcontainerOrKimageOrKtext) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
 	case "string_button":
 		u.variant = "Kbutton"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Kbutton = &value
 	case "string_text":
 		u.variant = "Ktext"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Ktext = &value
 	case "string_image":
 		u.variant = "Kimage"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Kimage = &value
 	case "string_container":
 		u.variant = "Kcontainer"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Kcontainer = &value
 
 	default:
@@ -3074,29 +3070,29 @@ type Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5 struct {
 	variant_IntK5 *int64
 }
 
-func (u *Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
 	case "int_1":
 		u.variant = "IntK1"
-		value := baml.Decode(valueHolder).(int64)
+		value := baml.Decode(valueHolder).Interface().(int64)
 		u.variant_IntK1 = &value
 	case "int_2":
 		u.variant = "IntK2"
-		value := baml.Decode(valueHolder).(int64)
+		value := baml.Decode(valueHolder).Interface().(int64)
 		u.variant_IntK2 = &value
 	case "int_3":
 		u.variant = "IntK3"
-		value := baml.Decode(valueHolder).(int64)
+		value := baml.Decode(valueHolder).Interface().(int64)
 		u.variant_IntK3 = &value
 	case "int_4":
 		u.variant = "IntK4"
-		value := baml.Decode(valueHolder).(int64)
+		value := baml.Decode(valueHolder).Interface().(int64)
 		u.variant_IntK4 = &value
 	case "int_5":
 		u.variant = "IntK5"
-		value := baml.Decode(valueHolder).(int64)
+		value := baml.Decode(valueHolder).Interface().(int64)
 		u.variant_IntK5 = &value
 
 	default:
@@ -3413,29 +3409,29 @@ type Union5KcontainsOrKeqOrKgtOrKltOrKne struct {
 	variant_Kcontains *string
 }
 
-func (u *Union5KcontainsOrKeqOrKgtOrKltOrKne) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union5KcontainsOrKeqOrKgtOrKltOrKne) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
 	case "string_eq":
 		u.variant = "Keq"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Keq = &value
 	case "string_ne":
 		u.variant = "Kne"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Kne = &value
 	case "string_gt":
 		u.variant = "Kgt"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Kgt = &value
 	case "string_lt":
 		u.variant = "Klt"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Klt = &value
 	case "string_contains":
 		u.variant = "Kcontains"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Kcontains = &value
 
 	default:

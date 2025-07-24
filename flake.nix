@@ -328,6 +328,7 @@
             PATH="${clang}/bin:$PATH";
             RUST_SRC_PATH = pkgs.rustPlatform.rustLibSrc;
             LIBCLANG_PATH = pkgs.libclang.lib + "/lib/";
+            UV_PYTHON = "${pythonEnv}/bin/python3";
             BINDGEN_EXTRA_CLANG_ARGS = if pkgs.stdenv.isDarwin then
               "" # Rely on default includes provided by stdenv.cc + libclang
             else

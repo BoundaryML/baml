@@ -619,7 +619,7 @@ module BamlClient
       const :prop2, T.nilable(T.any(Nested, String))
       const :prop5, T::Array[T.nilable(String)]
       const :prop6, T.nilable(T.any(String, T::Array[Nested]))
-      const :nested_attrs, T::Array[T.any(String, Nested)]
+      const :nested_attrs, T::Array[T.nilable(T.any(String, Nested))]
       const :parens, T.nilable(String)
       const :other_group, T.nilable(T.any(String, Integer))
   end
@@ -777,19 +777,19 @@ module BamlClient
   Currency = T.type_alias{ T.nilable(BamlClient::Types::Checked[Integer]) }
 
 
-  Graph = T.type_alias{ T.nilable(T::Hash[String, T::Array[String]]) }
+  Graph = T.type_alias{ T::Hash[String, T::Array[String]] }
 
 
-  JsonArray = T.type_alias{ T.nilable(T::Array[JsonValue]) }
+  JsonArray = T.type_alias{ T::Array[JsonValue] }
 
 
   JsonEntry = T.type_alias{ T.nilable(T.any(SimpleTag, JsonTemplate)) }
 
 
-  JsonObject = T.type_alias{ T.nilable(T::Hash[String, JsonValue]) }
+  JsonObject = T.type_alias{ T::Hash[String, JsonValue] }
 
 
-  JsonTemplate = T.type_alias{ T.nilable(T::Hash[String, JsonEntry]) }
+  JsonTemplate = T.type_alias{ T::Hash[String, JsonEntry] }
 
 
   JsonValue = T.type_alias{ T.nilable(T.any(Integer, String, T::Boolean, Float, JsonObject, JsonArray)) }
@@ -798,7 +798,7 @@ module BamlClient
   LinkedListAlias = T.type_alias{ T.nilable(LinkedListAliasNode) }
 
 
-  List = T.type_alias{ T.nilable(T::Array[String]) }
+  List = T.type_alias{ T::Array[String] }
 
 
   MultipleAttrs = T.type_alias{ T.nilable(BamlClient::Types::Checked[Integer]) }
@@ -813,16 +813,16 @@ module BamlClient
   RecAliasOne = T.type_alias{ T.nilable(RecAliasTwo) }
 
 
-  RecAliasThree = T.type_alias{ T.nilable(T::Array[RecAliasOne]) }
+  RecAliasThree = T.type_alias{ T::Array[RecAliasOne] }
 
 
   RecAliasTwo = T.type_alias{ T.nilable(RecAliasThree) }
 
 
-  RecursiveListAlias = T.type_alias{ T.nilable(T::Array[T.anything]) }
+  RecursiveListAlias = T.type_alias{ T::Array[T.anything] }
 
 
-  RecursiveMapAlias = T.type_alias{ T.nilable(T::Hash[String, T.anything]) }
+  RecursiveMapAlias = T.type_alias{ T::Hash[String, T.anything] }
 
 
   RecursiveUnion = T.type_alias{ T.nilable(T.any(String, T::Hash[String, T.anything])) }

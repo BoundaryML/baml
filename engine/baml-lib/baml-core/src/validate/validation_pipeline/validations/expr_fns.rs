@@ -78,7 +78,7 @@ pub(super) fn validate_expr_fns(ctx: &mut Context<'_>) {
         scope.extend(taken_names.iter().cloned());
         expr_fn.expr_fn().body.stmts.iter().for_each(|s| {
             validate_stmt(ctx, s, &scope);
-            scope.insert(s.identifier.name().to_string());
+            scope.insert(s.identifier().name().to_string());
         });
         validate_expression(ctx, &expr_fn.expr_fn().body.expr, &scope);
     }
@@ -89,16 +89,34 @@ pub(super) fn validate_expr_fns(ctx: &mut Context<'_>) {
             "Variable assignment is experimental, and will break in the future.".to_string(),
             toplevel_assignment.expr().span().clone(),
         ));
-        validate_stmt(
-            ctx,
-            &toplevel_assignment.top_level_assignment().stmt,
-            &scope,
-        );
+
+        validate_expression(ctx, toplevel_assignment.expr(), &scope);
     }
 }
 
 fn validate_stmt(ctx: &mut Context<'_>, stmt: &Stmt, scope: &HashSet<String>) {
-    validate_expression(ctx, &stmt.body, scope);
+    match stmt {
+        Stmt::Let(stmt) => {
+            validate_expression(ctx, &stmt.expr, scope);
+        }
+        Stmt::ForLoop(stmt) => {
+            // First validate the iterator expression
+            validate_expression(ctx, &stmt.iterator, scope);
+
+            // Create a new scope that includes the loop variable
+            let mut loop_scope = scope.clone();
+            loop_scope.insert(stmt.identifier.name().to_string());
+
+            // Validate statements in the loop body
+            for stmt in &stmt.body.stmts {
+                validate_stmt(ctx, stmt, &loop_scope);
+                loop_scope.insert(stmt.identifier().name().to_string());
+            }
+
+            // Validate the loop body expression
+            validate_expression(ctx, &stmt.body.expr, &loop_scope);
+        }
+    }
 }
 
 fn validate_expression(ctx: &mut Context<'_>, expr: &Expression, scope: &HashSet<String>) {
@@ -190,7 +208,7 @@ fn validate_expression(ctx: &mut Context<'_>, expr: &Expression, scope: &HashSet
             let mut scope = scope.clone();
             for stmt in block.stmts.iter() {
                 validate_stmt(ctx, stmt, &scope);
-                scope.insert(stmt.identifier.name().to_string());
+                scope.insert(stmt.identifier().name().to_string());
             }
             validate_expression(ctx, &block.expr, &scope);
         }
@@ -199,20 +217,6 @@ fn validate_expression(ctx: &mut Context<'_>, expr: &Expression, scope: &HashSet
             validate_expression(ctx, then, scope);
             if let Some(else_) = else_ {
                 validate_expression(ctx, else_, scope);
-            }
-        }
-        Expression::ForLoop {
-            identifier,
-            iterator,
-            body,
-            span,
-        } => {
-            validate_expression(ctx, iterator, scope);
-            let mut body_scope = scope.clone();
-            body_scope.insert(identifier.to_string());
-            for stmt in body.stmts.iter() {
-                validate_stmt(ctx, stmt, &body_scope);
-                validate_expression(ctx, &stmt.body, &body_scope);
             }
         }
     }

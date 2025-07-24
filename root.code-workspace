@@ -59,11 +59,19 @@
     "[typescriptreact]": {
       "editor.defaultFormatter": "biomejs.biome"
     },
+    "[json]": {
+      "editor.defaultFormatter": "biomejs.biome"
+    },
     "files.associations": {
+      "*.toml": "toml",
+      "*.hb": "handlebars",
       "*.baml.j2": "jinja",
       "*.js.j2": "jinja-js",
       "*.ts.j2": "jinja-js",
-      "justfile": "makefile"
+      "justfile": "makefile",
+      "__locale": "c",
+      "string": "c",
+      "string_view": "c"
     },
     "editor.colorDecoratorsLimit": 2000,
     "editor.formatOnSaveMode": "file",
@@ -108,7 +116,34 @@
     "biome.lsp.bin": "typescript/node_modules/@biomejs/biome/bin/biome",
 
     "biome.lspBin": "typescript/node_modules/@biomejs/biome/bin/biome",
-    "terminal.integrated.scrollback": 1e6
+    "terminal.integrated.scrollback": 1e6,
+    "tailwindCSS.experimental.configFile": "typescript/packages/ui/src/styles/globals.css",
+    "tailwindCSS.files.exclude": [
+      "**/node_modules/**",
+      "**/dist/**",
+      "**/build/**",
+      "**/public/**",
+      "**/baml/**"
+    ],
+    "tailwindCSS.experimental.classRegex": [
+      ["clsx\\(([^)]*)\\)", "(?:'|\"|`)([^']*)(?:'|\"|`)"],
+      ["cva\\(([^)]*)\\)", "[\"'`]([^\"'`]*).*?[\"'`]"],
+      ["cn\\(([^)]*)\\)", "[\"'`]([^\"'`]*).*?[\"'`]"],
+      ["cx\\(([^)]*)\\)", "(?:'|\"|`)([^']*)(?:'|\"|`)"],
+      "cn\\(.*?,\\s*['\"]([^'\"]*)['\"]",
+      "cn\\.[^`]+`([^`]*)`",
+      "cn\\(.*?\\).*?`([^`]*)",
+      ["cn\\.[^`]+\\(([^)]*)\\)", "(?:'|\"|`)([^']*)(?:'|\"|`)"],
+      ["cn\\(.*?\\).*?\\(([^)]*)\\)", "(?:'|\"|`)([^']*)(?:'|\"|`)"],
+      "twc\\.[^`]+`([^`]*)`",
+      "twc\\(.*?\\).*?`([^`]*)",
+      ["twc\\.[^`]+\\(([^)]*)\\)", "(?:'|\"|`)([^']*)(?:'|\"|`)"],
+      ["twc\\(.*?\\).*?\\(([^)]*)\\)", "(?:'|\"|`)([^']*)(?:'|\"|`)"],
+      "twx\\.[^`]+`([^`]*)`",
+      "twx\\(.*?\\).*?`([^`]*)",
+      ["twx\\.[^`]+\\(([^)]*)\\)", "(?:'|\"|`)([^']*)(?:'|\"|`)"],
+      ["twx\\(.*?\\).*?\\(([^)]*)\\)", "(?:'|\"|`)([^']*)(?:'|\"|`)"]
+    ]
   },
   "extensions": {
     "recommendations": [

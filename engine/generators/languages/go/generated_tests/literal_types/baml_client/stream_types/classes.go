@@ -18,15 +18,17 @@ import (
 
 	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
+
+	"literal_types/baml_client/types"
 )
 
 type BooleanLiterals struct {
-	AlwaysTrue  *bool                        `json:"alwaysTrue"`
-	AlwaysFalse *bool                        `json:"alwaysFalse"`
-	EitherBool  *Union2BoolKFalseOrBoolKTrue `json:"eitherBool"`
+	AlwaysTrue  *bool                              `json:"alwaysTrue"`
+	AlwaysFalse *bool                              `json:"alwaysFalse"`
+	EitherBool  *types.Union2BoolKFalseOrBoolKTrue `json:"eitherBool"`
 }
 
-func (c *BooleanLiterals) Decode(holder *cffi.CFFIValueClass) {
+func (c *BooleanLiterals) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))
@@ -41,40 +43,13 @@ func (c *BooleanLiterals) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "alwaysTrue":
-			c.AlwaysTrue = func(param *cffi.CFFIValueHolder) *bool {
-				decoded := baml.Decode(param)
-				return func(result any) *bool {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(bool)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.AlwaysTrue = baml.Decode(valueHolder).Interface().(*bool)
 
 		case "alwaysFalse":
-			c.AlwaysFalse = func(param *cffi.CFFIValueHolder) *bool {
-				decoded := baml.Decode(param)
-				return func(result any) *bool {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(bool)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.AlwaysFalse = baml.Decode(valueHolder).Interface().(*bool)
 
 		case "eitherBool":
-			c.EitherBool = func(param *cffi.CFFIValueHolder) *Union2BoolKFalseOrBoolKTrue {
-				decoded := baml.Decode(param)
-				return func(result any) *Union2BoolKFalseOrBoolKTrue {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(*Union2BoolKFalseOrBoolKTrue)
-					return casted
-				}(decoded)
-			}(valueHolder)
+			c.EitherBool = baml.Decode(valueHolder).Interface().(*types.Union2BoolKFalseOrBoolKTrue)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -107,14 +82,14 @@ func (u BooleanLiterals) BamlEncodeName() *cffi.CFFITypeName {
 }
 
 type ComplexLiterals struct {
-	State      *Union4KarchivedOrKdeletedOrKdraftOrKpublished          `json:"state"`
-	RetryCount *Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8 `json:"retryCount"`
-	Response   *Union3KerrorOrKsuccessOrKtimeout                       `json:"response"`
-	Flags      []Union2BoolKFalseOrBoolKTrue                           `json:"flags"`
-	Codes      []Union3IntK200OrIntK404OrIntK500                       `json:"codes"`
+	State      *types.Union4KarchivedOrKdeletedOrKdraftOrKpublished          `json:"state"`
+	RetryCount *types.Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8 `json:"retryCount"`
+	Response   *types.Union3KerrorOrKsuccessOrKtimeout                       `json:"response"`
+	Flags      []types.Union2BoolKFalseOrBoolKTrue                           `json:"flags"`
+	Codes      []types.Union3IntK200OrIntK404OrIntK500                       `json:"codes"`
 }
 
-func (c *ComplexLiterals) Decode(holder *cffi.CFFIValueClass) {
+func (c *ComplexLiterals) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))
@@ -129,50 +104,19 @@ func (c *ComplexLiterals) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "state":
-			c.State = func(param *cffi.CFFIValueHolder) *Union4KarchivedOrKdeletedOrKdraftOrKpublished {
-				decoded := baml.Decode(param)
-				return func(result any) *Union4KarchivedOrKdeletedOrKdraftOrKpublished {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(*Union4KarchivedOrKdeletedOrKdraftOrKpublished)
-					return casted
-				}(decoded)
-			}(valueHolder)
+			c.State = baml.Decode(valueHolder).Interface().(*types.Union4KarchivedOrKdeletedOrKdraftOrKpublished)
 
 		case "retryCount":
-			c.RetryCount = func(param *cffi.CFFIValueHolder) *Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8 {
-				decoded := baml.Decode(param)
-				return func(result any) *Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8 {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(*Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8)
-					return casted
-				}(decoded)
-			}(valueHolder)
+			c.RetryCount = baml.Decode(valueHolder).Interface().(*types.Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8)
 
 		case "response":
-			c.Response = func(param *cffi.CFFIValueHolder) *Union3KerrorOrKsuccessOrKtimeout {
-				decoded := baml.Decode(param)
-				return func(result any) *Union3KerrorOrKsuccessOrKtimeout {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(*Union3KerrorOrKsuccessOrKtimeout)
-					return casted
-				}(decoded)
-			}(valueHolder)
+			c.Response = baml.Decode(valueHolder).Interface().(*types.Union3KerrorOrKsuccessOrKtimeout)
 
 		case "flags":
-			c.Flags = baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) Union2BoolKFalseOrBoolKTrue {
-				return *baml.Decode(inner).(*Union2BoolKFalseOrBoolKTrue)
-			})
+			c.Flags = baml.Decode(valueHolder).Interface().([]types.Union2BoolKFalseOrBoolKTrue)
 
 		case "codes":
-			c.Codes = baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) Union3IntK200OrIntK404OrIntK500 {
-				return *baml.Decode(inner).(*Union3IntK200OrIntK404OrIntK500)
-			})
+			c.Codes = baml.Decode(valueHolder).Interface().([]types.Union3IntK200OrIntK404OrIntK500)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -209,12 +153,12 @@ func (u ComplexLiterals) BamlEncodeName() *cffi.CFFITypeName {
 }
 
 type IntegerLiterals struct {
-	Priority   *Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5           `json:"priority"`
-	HttpStatus *Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500 `json:"httpStatus"`
-	MaxRetries *Union4IntK0OrIntK1OrIntK3OrIntK5                  `json:"maxRetries"`
+	Priority   *types.Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5           `json:"priority"`
+	HttpStatus *types.Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500 `json:"httpStatus"`
+	MaxRetries *types.Union4IntK0OrIntK1OrIntK3OrIntK5                  `json:"maxRetries"`
 }
 
-func (c *IntegerLiterals) Decode(holder *cffi.CFFIValueClass) {
+func (c *IntegerLiterals) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))
@@ -229,40 +173,13 @@ func (c *IntegerLiterals) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "priority":
-			c.Priority = func(param *cffi.CFFIValueHolder) *Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5 {
-				decoded := baml.Decode(param)
-				return func(result any) *Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5 {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(*Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5)
-					return casted
-				}(decoded)
-			}(valueHolder)
+			c.Priority = baml.Decode(valueHolder).Interface().(*types.Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5)
 
 		case "httpStatus":
-			c.HttpStatus = func(param *cffi.CFFIValueHolder) *Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500 {
-				decoded := baml.Decode(param)
-				return func(result any) *Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500 {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(*Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500)
-					return casted
-				}(decoded)
-			}(valueHolder)
+			c.HttpStatus = baml.Decode(valueHolder).Interface().(*types.Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500)
 
 		case "maxRetries":
-			c.MaxRetries = func(param *cffi.CFFIValueHolder) *Union4IntK0OrIntK1OrIntK3OrIntK5 {
-				decoded := baml.Decode(param)
-				return func(result any) *Union4IntK0OrIntK1OrIntK3OrIntK5 {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(*Union4IntK0OrIntK1OrIntK3OrIntK5)
-					return casted
-				}(decoded)
-			}(valueHolder)
+			c.MaxRetries = baml.Decode(valueHolder).Interface().(*types.Union4IntK0OrIntK1OrIntK3OrIntK5)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -295,14 +212,14 @@ func (u IntegerLiterals) BamlEncodeName() *cffi.CFFITypeName {
 }
 
 type MixedLiterals struct {
-	Id         *int64                       `json:"id"`
-	Type       *Union3KadminOrKguestOrKuser `json:"type"`
-	Level      *Union3IntK1OrIntK2OrIntK3   `json:"level"`
-	IsActive   *Union2BoolKFalseOrBoolKTrue `json:"isActive"`
-	ApiVersion *Union3Kv1OrKv2OrKv3         `json:"apiVersion"`
+	Id         *int64                             `json:"id"`
+	Type       *types.Union3KadminOrKguestOrKuser `json:"type"`
+	Level      *types.Union3IntK1OrIntK2OrIntK3   `json:"level"`
+	IsActive   *types.Union2BoolKFalseOrBoolKTrue `json:"isActive"`
+	ApiVersion *types.Union3Kv1OrKv2OrKv3         `json:"apiVersion"`
 }
 
-func (c *MixedLiterals) Decode(holder *cffi.CFFIValueClass) {
+func (c *MixedLiterals) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))
@@ -317,64 +234,19 @@ func (c *MixedLiterals) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "id":
-			c.Id = func(param *cffi.CFFIValueHolder) *int64 {
-				decoded := baml.Decode(param)
-				return func(result any) *int64 {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(int64)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Id = baml.Decode(valueHolder).Interface().(*int64)
 
 		case "type":
-			c.Type = func(param *cffi.CFFIValueHolder) *Union3KadminOrKguestOrKuser {
-				decoded := baml.Decode(param)
-				return func(result any) *Union3KadminOrKguestOrKuser {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(*Union3KadminOrKguestOrKuser)
-					return casted
-				}(decoded)
-			}(valueHolder)
+			c.Type = baml.Decode(valueHolder).Interface().(*types.Union3KadminOrKguestOrKuser)
 
 		case "level":
-			c.Level = func(param *cffi.CFFIValueHolder) *Union3IntK1OrIntK2OrIntK3 {
-				decoded := baml.Decode(param)
-				return func(result any) *Union3IntK1OrIntK2OrIntK3 {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(*Union3IntK1OrIntK2OrIntK3)
-					return casted
-				}(decoded)
-			}(valueHolder)
+			c.Level = baml.Decode(valueHolder).Interface().(*types.Union3IntK1OrIntK2OrIntK3)
 
 		case "isActive":
-			c.IsActive = func(param *cffi.CFFIValueHolder) *Union2BoolKFalseOrBoolKTrue {
-				decoded := baml.Decode(param)
-				return func(result any) *Union2BoolKFalseOrBoolKTrue {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(*Union2BoolKFalseOrBoolKTrue)
-					return casted
-				}(decoded)
-			}(valueHolder)
+			c.IsActive = baml.Decode(valueHolder).Interface().(*types.Union2BoolKFalseOrBoolKTrue)
 
 		case "apiVersion":
-			c.ApiVersion = func(param *cffi.CFFIValueHolder) *Union3Kv1OrKv2OrKv3 {
-				decoded := baml.Decode(param)
-				return func(result any) *Union3Kv1OrKv2OrKv3 {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(*Union3Kv1OrKv2OrKv3)
-					return casted
-				}(decoded)
-			}(valueHolder)
+			c.ApiVersion = baml.Decode(valueHolder).Interface().(*types.Union3Kv1OrKv2OrKv3)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -411,12 +283,12 @@ func (u MixedLiterals) BamlEncodeName() *cffi.CFFITypeName {
 }
 
 type StringLiterals struct {
-	Status      *Union3KactiveOrKinactiveOrKpending `json:"status"`
-	Environment *Union3KdevOrKprodOrKstaging        `json:"environment"`
-	Method      *Union4KDELETEOrKGETOrKPOSTOrKPUT   `json:"method"`
+	Status      *types.Union3KactiveOrKinactiveOrKpending `json:"status"`
+	Environment *types.Union3KdevOrKprodOrKstaging        `json:"environment"`
+	Method      *types.Union4KDELETEOrKGETOrKPOSTOrKPUT   `json:"method"`
 }
 
-func (c *StringLiterals) Decode(holder *cffi.CFFIValueClass) {
+func (c *StringLiterals) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))
@@ -431,40 +303,13 @@ func (c *StringLiterals) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "status":
-			c.Status = func(param *cffi.CFFIValueHolder) *Union3KactiveOrKinactiveOrKpending {
-				decoded := baml.Decode(param)
-				return func(result any) *Union3KactiveOrKinactiveOrKpending {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(*Union3KactiveOrKinactiveOrKpending)
-					return casted
-				}(decoded)
-			}(valueHolder)
+			c.Status = baml.Decode(valueHolder).Interface().(*types.Union3KactiveOrKinactiveOrKpending)
 
 		case "environment":
-			c.Environment = func(param *cffi.CFFIValueHolder) *Union3KdevOrKprodOrKstaging {
-				decoded := baml.Decode(param)
-				return func(result any) *Union3KdevOrKprodOrKstaging {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(*Union3KdevOrKprodOrKstaging)
-					return casted
-				}(decoded)
-			}(valueHolder)
+			c.Environment = baml.Decode(valueHolder).Interface().(*types.Union3KdevOrKprodOrKstaging)
 
 		case "method":
-			c.Method = func(param *cffi.CFFIValueHolder) *Union4KDELETEOrKGETOrKPOSTOrKPUT {
-				decoded := baml.Decode(param)
-				return func(result any) *Union4KDELETEOrKGETOrKPOSTOrKPUT {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(*Union4KDELETEOrKGETOrKPOSTOrKPUT)
-					return casted
-				}(decoded)
-			}(valueHolder)
+			c.Method = baml.Decode(valueHolder).Interface().(*types.Union4KDELETEOrKGETOrKPOSTOrKPUT)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))

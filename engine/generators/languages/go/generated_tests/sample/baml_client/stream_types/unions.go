@@ -29,17 +29,17 @@ type Union2ExampleOrExample2 struct {
 	variant_Example2 *Example2
 }
 
-func (u *Union2ExampleOrExample2) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union2ExampleOrExample2) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
 	case "Example":
 		u.variant = "Example"
-		value := *baml.Decode(valueHolder).(*Example)
+		value := baml.Decode(valueHolder).Interface().(Example)
 		u.variant_Example = &value
 	case "Example2":
 		u.variant = "Example2"
-		value := *baml.Decode(valueHolder).(*Example2)
+		value := baml.Decode(valueHolder).Interface().(Example2)
 		u.variant_Example2 = &value
 
 	default:

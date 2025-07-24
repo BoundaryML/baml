@@ -18,7 +18,7 @@ crate::lang_wrapper!(
     clone_safe
 );
 
-use super::{HTTPRequest, HTTPResponse};
+use super::{HTTPRequest, HTTPResponse, SSEResponse};
 
 #[pymethods]
 impl Collector {
@@ -129,7 +129,7 @@ impl FunctionLog {
     /// pyi: @property def log_type -> Literal["call", "stream"]
     #[getter]
     pub fn log_type(&self) -> String {
-        self.inner.lock().unwrap().log_type().to_string()
+        self.inner.lock().unwrap().log_type()
     }
 
     #[getter]
@@ -146,7 +146,7 @@ impl FunctionLog {
         }
     }
 
-    /// pyi: @property def calls -> List[LLMCall] (or union with LLMStreamCall)
+    /// pyi: @property def calls -> List[LLMCall | LLMStreamCall]
     #[getter]
     pub fn calls(&self) -> PyResult<Vec<Either<LLMCall, LLMStreamCall>>> {
         let calls = self.inner.lock().unwrap().calls();
@@ -203,7 +203,7 @@ impl FunctionLog {
                 }
             }
             baml_runtime::tracingv2::storage::storage::LLMCallKind::Stream(inner) => {
-                if inner.selected {
+                if inner.llm_call.selected {
                     Some(Either::Right(LLMStreamCall { inner }))
                 } else {
                     None
@@ -307,6 +307,7 @@ impl LLMStreamCall {
     #[getter]
     pub fn http_request(&self) -> Option<HTTPRequest> {
         self.inner
+            .llm_call
             .request
             .clone()
             .map(|req| HTTPRequest { inner: req })
@@ -315,6 +316,7 @@ impl LLMStreamCall {
     #[getter]
     pub fn http_response(&self) -> Option<HTTPResponse> {
         self.inner
+            .llm_call
             .response
             .clone()
             .map(|resp| HTTPResponse { inner: resp })
@@ -323,22 +325,26 @@ impl LLMStreamCall {
     // TODO: use python subclassing
     #[getter]
     pub fn provider(&self) -> String {
-        self.inner.provider.clone()
+        self.inner.llm_call.provider.clone()
     }
 
     #[getter]
     pub fn client_name(&self) -> String {
-        self.inner.client_name.clone()
+        self.inner.llm_call.client_name.clone()
     }
 
     #[getter]
     pub fn selected(&self) -> bool {
-        self.inner.selected
+        self.inner.llm_call.selected
     }
 
     #[getter]
     pub fn usage(&self) -> Option<Usage> {
-        self.inner.usage.clone().map(|u| Usage { inner: u })
+        self.inner
+            .llm_call
+            .usage
+            .clone()
+            .map(|u| Usage { inner: u })
     }
 
     #[getter]
@@ -346,6 +352,18 @@ impl LLMStreamCall {
         StreamTiming {
             inner: self.inner.timing.clone(),
         }
+    }
+
+    pub fn sse_responses(&self) -> Option<Vec<SSEResponse>> {
+        self.inner.sse_chunks.as_ref().map(|sse_chunks| {
+            sse_chunks
+                .event
+                .iter()
+                .map(|event| SSEResponse {
+                    inner: event.clone(),
+                })
+                .collect()
+        })
     }
 }
 
@@ -411,14 +429,11 @@ impl Usage {
 impl Timing {
     pub fn __repr__(&self) -> String {
         format!(
-            "Timing(start_time_utc_ms={}, duration_ms={}, time_to_first_parsed_ms={})",
+            "Timing(start_time_utc_ms={}, duration_ms={})",
             self.inner.start_time_utc_ms,
             self.inner
                 .duration_ms
                 .map_or("None".to_string(), |v| v.to_string()),
-            self.inner
-                .time_to_first_parsed_ms
-                .map_or("None".to_string(), |v| v.to_string())
         )
     }
 
@@ -431,35 +446,27 @@ impl Timing {
     pub fn duration_ms(&self) -> Option<i64> {
         self.inner.duration_ms
     }
-
-    #[getter]
-    pub fn time_to_first_parsed_ms(&self) -> Option<i64> {
-        self.inner.time_to_first_parsed_ms
-    }
 }
 
 #[pymethods]
 impl StreamTiming {
     pub fn __repr__(&self) -> String {
         format!(
-            "StreamTiming(start_time_utc_ms={}, duration_ms={}, time_to_first_parsed_ms={}, time_to_first_token_ms={})",
+            "StreamTiming(start_time_utc_ms={}, duration_ms={})",
             self.inner.start_time_utc_ms,
             self.inner
                 .duration_ms
                 .map_or("None".to_string(), |v| v.to_string()),
-            self.inner
-                .time_to_first_parsed_ms
-                .map_or("None".to_string(), |v| v.to_string()),
-            self.inner
-                .time_to_first_token_ms
-                .map_or("None".to_string(), |v| v.to_string())
         )
     }
+
+    #[getter]
+    pub fn start_time_utc_ms(&self) -> i64 {
+        self.inner.start_time_utc_ms
+    }
+
+    #[getter]
+    pub fn duration_ms(&self) -> Option<i64> {
+        self.inner.duration_ms
+    }
 }
-// impl Drop for FunctionLog {
-//     fn drop(&mut self) {
-//         BAML_TRACER
-//             .blocking_lock()
-//             .dec_function_id(&FunctionId(self.id.clone()));
-//     }
-// }

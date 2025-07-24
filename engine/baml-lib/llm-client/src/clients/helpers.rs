@@ -332,13 +332,14 @@ impl<Meta: Clone> PropertyHandler<Meta> {
                 if let StringOr::Value(value) = value {
                     Some(match value.as_str() {
                         "openai" => UnresolvedResponseType::OpenAI,
+                        "openai-responses" => UnresolvedResponseType::OpenAIResponses,
                         "anthropic" => UnresolvedResponseType::Anthropic,
                         "google" => UnresolvedResponseType::Google,
                         "vertex" => UnresolvedResponseType::Vertex,
                         other => {
                             self.push_error(
                                 format!(
-                                    "client_response_type must be one of \"openai\", \"anthropic\", \"google\", or \"vertex\". Got: {other}"
+                                    "client_response_type must be one of \"openai\", \"openai-responses\", \"anthropic\", \"google\", or \"vertex\". Got: {other}"
                                 ),
                                 key_span,
                             );
@@ -347,7 +348,7 @@ impl<Meta: Clone> PropertyHandler<Meta> {
                     })
                 } else {
                     self.push_error(
-                        "client_response_type must be one of \"openai\", \"anthropic\", \"google\", or \"vertex\" and not an environment variable",
+                        "client_response_type must be one of \"openai\", \"openai-responses\", \"anthropic\", \"google\", or \"vertex\" and not an environment variable",
                         key_span,
                     );
                     None

@@ -40,12 +40,12 @@ and [testing image inputs](/guide/baml-basics/testing-functions#test-image-input
 
 <Accordion title="Implementation details: runtime and security considerations">
   BAML's multimodal types are designed for ease of use: we have deliberately made it
-  easy for you to construct a `image` or `audio` instance from a URL. Under the
-  hood, depending on the model you're using, BAML may need to download the image
+  easy for you to construct an `image`, `audio`, `pdf`, or `video` instance from a URL. Under the
+  hood, depending on the model you're using, BAML may need to download the file
   and transcode it (usually as base64) for the model to consume.
 
   This ease-of-use does come with some tradeoffs; namely, if you construct
-  an `image` or `audio` instance using untrusted user input, you may be exposing
+  a multimodal instance using untrusted user input, you may be exposing
   yourself to [server-side request forgery (SSRF) attacks][ssrf]. Attackers may be
   able to fetch files on your internal network, on external networks using your
   application's identity, or simply excessively drive up your cloud network
@@ -232,6 +232,142 @@ def test_audio_input
   audio_b64 = "iVBORw0K...."
   res = b.TestAudioInput(
     audio: Audio.from_base64("audio/mp3", audio_b64)
+  )
+end
+```
+</CodeBlocks>
+
+### `pdf`
+
+Example
+```rust
+function AnalyzePdf(myPdf: pdf) -> string {
+  client GPT4Turbo
+  prompt #"
+    {{ _.role("user")}}
+    Summarize the main points of this Pdf:
+    {{ myPdf }}
+  "#
+}
+```
+> **Note** Pdf inputs must be provided as Base64 data using `Pdf.from_base64`. URL-based inputs are not currently supported.
+
+<CodeBlocks>
+```python Python
+from baml_py import Pdf
+from baml_client import b
+
+async def run():
+  # Base64 data
+  b64 = "JVBERi0K...."
+  res = await b.TestPdfInput(
+    pdf=Pdf.from_base64("application/pdf", b64)
+  )
+```
+
+```typescript TypeScript
+import { b } from '../baml_client'
+import { Pdf } from "@boundaryml/baml"
+...
+
+  // Base64
+  const pdf_base64 = ".."
+  let res = await b.TestPdfInput(
+    Pdf.fromBase64('application/pdf', pdf_base64),
+  )
+  
+```
+
+```ruby Ruby
+# Pdf inputs must be provided as Base64. URL support is currently unavailable.
+require_relative "baml_client/client"
+
+b = Baml.Client
+Pdf = Baml::Pdf
+
+def test_pdf_input
+  # Base64 Pdf
+  pdf_b64 = "JVBERi0K...."
+  res = b.TestPdfInput(
+    pdf: Pdf.from_base64("application/pdf", pdf_b64)
+  )
+end
+```
+</CodeBlocks>
+
+### `video`
+
+Example
+```rust
+function DescribeVideo(myVideo: video) -> string {
+  client GPT4Turbo
+  prompt #"
+    {{ _.role("user")}}
+    Describe what happens in this video:
+    {{ myVideo }}
+  "#
+}
+```
+Calling functions that have `video` types.
+
+> **Note** When you provide a `Video` via URL the URL is passed directly to the model. Some models cannot download external media; in that case convert the video to Base64 first.
+
+<CodeBlocks>
+```python Python
+from baml_py import Video
+from baml_client import b
+
+async def run():
+  # from URL
+  res = await b.TestVideoInput(
+      video=Video.from_url(
+          "https://example.com/sample.mp4"
+      )
+  )
+
+  # Base64
+  b64 = "AAAAGGZ0eXBpc29t...."
+  res = await b.TestVideoInput(
+    video=Video.from_base64("video/mp4", b64)
+  )
+```
+
+```typescript TypeScript
+import { b } from '../baml_client'
+import { Video } from "@boundaryml/baml"
+...
+
+  // URL
+  let res = await b.TestVideoInput(
+    Video.fromUrl('https://example.com/sample.mp4'),
+  )
+
+  // Base64
+  const video_base64 = ".."
+  let res = await b.TestVideoInput(
+    Video.fromBase64('video/mp4', video_base64),
+  )
+  
+```
+
+```ruby Ruby
+require_relative "baml_client/client"
+
+b = Baml.Client
+Video = Baml::Video
+
+def test_video_input
+  # from URL
+  res = b.TestVideoInput(
+      video: Video.from_url(
+          "https://example.com/sample.mp4"
+      )
+  )
+
+  # Base64 video
+  video_b64 = "AAAAGGZ0eXBpc29t...."
+  res = b.TestVideoInput(
+    video: Video.from_base64("video/mp4", video_b64)
   )
 end
 ```

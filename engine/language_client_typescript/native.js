@@ -363,8 +363,10 @@ if (!nativeBinding) {
 
 module.exports.BamlAudio = nativeBinding.BamlAudio
 module.exports.BamlImage = nativeBinding.BamlImage
+module.exports.BamlPdf = nativeBinding.BamlPdf
 module.exports.BamlRuntime = nativeBinding.BamlRuntime
 module.exports.BamlSpan = nativeBinding.BamlSpan
+module.exports.BamlVideo = nativeBinding.BamlVideo
 module.exports.ClassBuilder = nativeBinding.ClassBuilder
 module.exports.ClassPropertyBuilder = nativeBinding.ClassPropertyBuilder
 module.exports.ClientRegistry = nativeBinding.ClientRegistry
@@ -386,6 +388,8 @@ module.exports.LLMCall = nativeBinding.LLMCall
 module.exports.LlmStreamCall = nativeBinding.LlmStreamCall
 module.exports.LLMStreamCall = nativeBinding.LLMStreamCall
 module.exports.RuntimeContextManager = nativeBinding.RuntimeContextManager
+module.exports.SseResponse = nativeBinding.SseResponse
+module.exports.SSEResponse = nativeBinding.SSEResponse
 module.exports.StreamTiming = nativeBinding.StreamTiming
 module.exports.Timing = nativeBinding.Timing
 module.exports.TraceStats = nativeBinding.TraceStats

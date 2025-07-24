@@ -1,7 +1,7 @@
 use baml_types::{
     baml_value::TypeLookups,
     ir_type::{TypeNonStreaming, TypeStreaming},
-    type_meta::{self, base::TypeMeta, stream::TypeMetaStreaming},
+    type_meta::{self, stream::TypeMetaStreaming},
     BamlMediaType, ConstraintLevel, TypeValue,
 };
 
@@ -297,6 +297,8 @@ impl From<&BamlMediaType> for MediaTypeTS {
         match baml_media_type {
             BamlMediaType::Image => MediaTypeTS::Image,
             BamlMediaType::Audio => MediaTypeTS::Audio,
+            BamlMediaType::Pdf => MediaTypeTS::Pdf,
+            BamlMediaType::Video => MediaTypeTS::Video,
         }
     }
 }

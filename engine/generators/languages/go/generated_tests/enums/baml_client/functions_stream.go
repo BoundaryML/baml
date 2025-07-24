@@ -27,17 +27,19 @@ type stream struct{}
 var Stream = &stream{}
 
 type StreamValue[TStream any, TFinal any] struct {
+	IsError   bool
+	Error     error
 	IsFinal   bool
 	as_final  *TFinal
 	as_stream *TStream
 }
 
-func (s *StreamValue[TStream, TFinal]) Final() TFinal {
-	return *s.as_final
+func (s *StreamValue[TStream, TFinal]) Final() *TFinal {
+	return s.as_final
 }
 
-func (s *StreamValue[TStream, TFinal]) Stream() TStream {
-	return *s.as_stream
+func (s *StreamValue[TStream, TFinal]) Stream() *TStream {
+	return s.as_stream
 }
 
 // / Streaming version of ConsumeTestEnum
@@ -61,7 +63,7 @@ func (*stream) ConsumeTestEnum(ctx context.Context, input types.TestEnum, opts .
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -70,7 +72,7 @@ func (*stream) ConsumeTestEnum(ctx context.Context, input types.TestEnum, opts .
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "ConsumeTestEnum", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "ConsumeTestEnum", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -87,21 +89,26 @@ func (*stream) ConsumeTestEnum(ctx context.Context, input types.TestEnum, opts .
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[types.TestEnum, types.TestEnum]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.TestEnum)
+					data := (result.Data).(types.TestEnum)
 					channel <- StreamValue[types.TestEnum, types.TestEnum]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*types.TestEnum)
+					data := (result.StreamData).(types.TestEnum)
 					channel <- StreamValue[types.TestEnum, types.TestEnum]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -134,7 +141,7 @@ func (*stream) FnTestAliasedEnumOutput(ctx context.Context, input string, opts .
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeArgs(args)
+	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -143,7 +150,7 @@ func (*stream) FnTestAliasedEnumOutput(ctx context.Context, input string, opts .
 	}
 
 	internal_ctx := context.Background()
-	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "FnTestAliasedEnumOutput", encoded)
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "FnTestAliasedEnumOutput", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}
@@ -160,21 +167,26 @@ func (*stream) FnTestAliasedEnumOutput(ctx context.Context, input string, opts .
 				return
 			case result, ok := <-internal_channel:
 				if !ok {
+					// channel closed for some reason
 					close(channel)
 					return
 				}
 				if result.Error != nil {
+					channel <- StreamValue[types.TestEnum, types.TestEnum]{
+						IsError: true,
+						Error:   result.Error,
+					}
 					close(channel)
 					return
 				}
 				if result.HasData {
-					data := *(result.Data).(*types.TestEnum)
+					data := (result.Data).(types.TestEnum)
 					channel <- StreamValue[types.TestEnum, types.TestEnum]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(*types.TestEnum)
+					data := (result.StreamData).(types.TestEnum)
 					channel <- StreamValue[types.TestEnum, types.TestEnum]{
 						IsFinal:   false,
 						as_stream: &data,

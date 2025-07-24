@@ -877,8 +877,8 @@ enum BookmarkType {
     Paragraph @alias("paragraph")
   }
   
-  enum PDFType {
-    PDF @alias("pdf")
+  enum PdfType {
+    Pdf @alias("pdf")
   }
   
   enum QuoteType {

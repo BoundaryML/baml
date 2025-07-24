@@ -24,7 +24,7 @@ pub fn bench_unions(c: &mut Criterion) {
     // let of = Builder::new(target.clone()).build();
 
     group.bench_function("text_content", |b| {
-        b.iter(|| from_str(&of, &target, r#"{"text": "Hello World"}"#))
+        b.iter(|| from_str(&of, &target, r#"{"text": "Hello World"}"#, true))
     });
 
     group.bench_function("image_content", |b| {
@@ -33,15 +33,17 @@ pub fn bench_unions(c: &mut Criterion) {
                 &of,
                 &target,
                 r#"{"url": "https://example.com/img.jpg", "width": 800, "height": 600}"#,
+                true,
             )
         })
     });
 
     group.bench_function("video_content_jsonish_only", |b| {
         b.iter(|| {
-            internal_jsonish::parse_func(
+            internal_jsonish::parse(
                 r#"{"url": "https://example.com/video.mp4", "duration": 120}"#,
                 internal_jsonish::ParseOptions::default(),
+                true,
             )
         })
     });
@@ -52,6 +54,7 @@ pub fn bench_unions(c: &mut Criterion) {
                 &of,
                 &target,
                 r#"{"url": "https://example.com/video.mp4", "duration": 120}"#,
+                true,
             )
         })
     });
@@ -67,15 +70,16 @@ pub fn bench_unions(c: &mut Criterion) {
 
     group.bench_function("json_value_jsonish_only", |b| {
         b.iter(|| {
-            internal_jsonish::parse_func(
+            internal_jsonish::parse(
                 jsonish::helpers::common::JSON_STRING,
                 internal_jsonish::ParseOptions::default(),
+                true,
             )
         })
     });
 
     group.bench_function("json_value", |b| {
-        b.iter(|| from_str(&of, &target, jsonish::helpers::common::JSON_STRING))
+        b.iter(|| from_str(&of, &target, jsonish::helpers::common::JSON_STRING, true))
     });
 
     group.finish();

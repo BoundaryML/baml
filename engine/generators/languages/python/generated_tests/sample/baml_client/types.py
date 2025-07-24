@@ -12,11 +12,13 @@
 
 import typing
 import typing_extensions
+from enum import Enum
 
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
+import baml_py
 
 CheckT = typing_extensions.TypeVar('CheckT')
 CheckName = typing_extensions.TypeVar('CheckName', bound=str)
@@ -43,10 +45,12 @@ def all_succeeded(checks: typing.Dict[CheckName, Check]) -> bool:
 # #########################################################################
 
 class Example(BaseModel):
+    type: typing_extensions.Literal['example_1']
     a: int
     b: str
 
 class Example2(BaseModel):
+    type: typing_extensions.Literal['example_2']
     item: "Example"
     element: str
     element2: str

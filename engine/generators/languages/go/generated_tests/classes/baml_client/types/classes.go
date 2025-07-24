@@ -25,7 +25,7 @@ type SimpleClass struct {
 	Words  string `json:"words"`
 }
 
-func (c *SimpleClass) Decode(holder *cffi.CFFIValueClass) {
+func (c *SimpleClass) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_TYPES, got %s", string(typeName.Namespace.String())))
@@ -40,10 +40,10 @@ func (c *SimpleClass) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "digits":
-			c.Digits = baml.Decode(valueHolder).(int64)
+			c.Digits = baml.Decode(valueHolder).Interface().(int64)
 
 		case "words":
-			c.Words = baml.Decode(valueHolder).(string)
+			c.Words = baml.Decode(valueHolder).Interface().(string)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))

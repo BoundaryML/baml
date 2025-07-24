@@ -18,6 +18,8 @@ import (
 
 	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
+
+	"nested_structures/baml_client/types"
 )
 
 type Address struct {
@@ -29,7 +31,7 @@ type Address struct {
 	Coordinates *Coordinates `json:"coordinates"`
 }
 
-func (c *Address) Decode(holder *cffi.CFFIValueClass) {
+func (c *Address) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))
@@ -44,76 +46,22 @@ func (c *Address) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "street":
-			c.Street = func(param *cffi.CFFIValueHolder) *string {
-				decoded := baml.Decode(param)
-				return func(result any) *string {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(string)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Street = baml.Decode(valueHolder).Interface().(*string)
 
 		case "city":
-			c.City = func(param *cffi.CFFIValueHolder) *string {
-				decoded := baml.Decode(param)
-				return func(result any) *string {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(string)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.City = baml.Decode(valueHolder).Interface().(*string)
 
 		case "state":
-			c.State = func(param *cffi.CFFIValueHolder) *string {
-				decoded := baml.Decode(param)
-				return func(result any) *string {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(string)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.State = baml.Decode(valueHolder).Interface().(*string)
 
 		case "country":
-			c.Country = func(param *cffi.CFFIValueHolder) *string {
-				decoded := baml.Decode(param)
-				return func(result any) *string {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(string)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Country = baml.Decode(valueHolder).Interface().(*string)
 
 		case "postalCode":
-			c.PostalCode = func(param *cffi.CFFIValueHolder) *string {
-				decoded := baml.Decode(param)
-				return func(result any) *string {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(string)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.PostalCode = baml.Decode(valueHolder).Interface().(*string)
 
 		case "coordinates":
-			c.Coordinates = func(param *cffi.CFFIValueHolder) *Coordinates {
-				decoded := baml.Decode(param)
-				return func(result any) *Coordinates {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(*Coordinates)
-					return casted
-				}(decoded)
-			}(valueHolder)
+			c.Coordinates = baml.Decode(valueHolder).Interface().(*Coordinates)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -158,7 +106,7 @@ type Approval struct {
 	Notes    *string  `json:"notes"`
 }
 
-func (c *Approval) Decode(holder *cffi.CFFIValueClass) {
+func (c *Approval) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))
@@ -173,52 +121,16 @@ func (c *Approval) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "approver":
-			c.Approver = func(param *cffi.CFFIValueHolder) *string {
-				decoded := baml.Decode(param)
-				return func(result any) *string {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(string)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Approver = baml.Decode(valueHolder).Interface().(*string)
 
 		case "date":
-			c.Date = func(param *cffi.CFFIValueHolder) *string {
-				decoded := baml.Decode(param)
-				return func(result any) *string {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(string)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Date = baml.Decode(valueHolder).Interface().(*string)
 
 		case "amount":
-			c.Amount = func(param *cffi.CFFIValueHolder) *float64 {
-				decoded := baml.Decode(param)
-				return func(result any) *float64 {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(float64)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Amount = baml.Decode(valueHolder).Interface().(*float64)
 
 		case "notes":
-			c.Notes = func(param *cffi.CFFIValueHolder) *string {
-				decoded := baml.Decode(param)
-				return func(result any) *string {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(string)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Notes = baml.Decode(valueHolder).Interface().(*string)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -259,7 +171,7 @@ type Budget struct {
 	Approvals  []Approval         `json:"approvals"`
 }
 
-func (c *Budget) Decode(holder *cffi.CFFIValueClass) {
+func (c *Budget) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))
@@ -274,38 +186,16 @@ func (c *Budget) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "total":
-			c.Total = func(param *cffi.CFFIValueHolder) *float64 {
-				decoded := baml.Decode(param)
-				return func(result any) *float64 {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(float64)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Total = baml.Decode(valueHolder).Interface().(*float64)
 
 		case "spent":
-			c.Spent = func(param *cffi.CFFIValueHolder) *float64 {
-				decoded := baml.Decode(param)
-				return func(result any) *float64 {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(float64)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Spent = baml.Decode(valueHolder).Interface().(*float64)
 
 		case "categories":
-			c.Categories = baml.DecodeMap(valueHolder, func(inner *cffi.CFFIValueHolder) float64 {
-				return baml.Decode(inner).(float64)
-			})
+			c.Categories = baml.Decode(valueHolder).Interface().(map[string]float64)
 
 		case "approvals":
-			c.Approvals = baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) Approval {
-				return *baml.Decode(inner).(*Approval)
-			})
+			c.Approvals = baml.Decode(valueHolder).Interface().([]Approval)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -347,7 +237,7 @@ type Company struct {
 	Metadata    *CompanyMetadata `json:"metadata"`
 }
 
-func (c *Company) Decode(holder *cffi.CFFIValueClass) {
+func (c *Company) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))
@@ -362,57 +252,19 @@ func (c *Company) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "id":
-			c.Id = func(param *cffi.CFFIValueHolder) *int64 {
-				decoded := baml.Decode(param)
-				return func(result any) *int64 {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(int64)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Id = baml.Decode(valueHolder).Interface().(*int64)
 
 		case "name":
-			c.Name = func(param *cffi.CFFIValueHolder) *string {
-				decoded := baml.Decode(param)
-				return func(result any) *string {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(string)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Name = baml.Decode(valueHolder).Interface().(*string)
 
 		case "address":
-			c.Address = func(param *cffi.CFFIValueHolder) *Address {
-				decoded := baml.Decode(param)
-				return func(result any) *Address {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(*Address)
-					return casted
-				}(decoded)
-			}(valueHolder)
+			c.Address = baml.Decode(valueHolder).Interface().(*Address)
 
 		case "departments":
-			c.Departments = baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) Department {
-				return *baml.Decode(inner).(*Department)
-			})
+			c.Departments = baml.Decode(valueHolder).Interface().([]Department)
 
 		case "metadata":
-			c.Metadata = func(param *cffi.CFFIValueHolder) *CompanyMetadata {
-				decoded := baml.Decode(param)
-				return func(result any) *CompanyMetadata {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(*CompanyMetadata)
-					return casted
-				}(decoded)
-			}(valueHolder)
+			c.Metadata = baml.Decode(valueHolder).Interface().(*CompanyMetadata)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -449,14 +301,14 @@ func (u Company) BamlEncodeName() *cffi.CFFITypeName {
 }
 
 type CompanyMetadata struct {
-	Founded        *string                                     `json:"founded"`
-	Industry       *string                                     `json:"industry"`
-	Size           *Union4KenterpriseOrKlargeOrKmediumOrKsmall `json:"size"`
-	Certifications []string                                    `json:"certifications"`
-	Partnerships   *[]Company                                  `json:"partnerships"`
+	Founded        *string                                           `json:"founded"`
+	Industry       *string                                           `json:"industry"`
+	Size           *types.Union4KenterpriseOrKlargeOrKmediumOrKsmall `json:"size"`
+	Certifications []string                                          `json:"certifications"`
+	Partnerships   *[]Company                                        `json:"partnerships"`
 }
 
-func (c *CompanyMetadata) Decode(holder *cffi.CFFIValueClass) {
+func (c *CompanyMetadata) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))
@@ -471,57 +323,19 @@ func (c *CompanyMetadata) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "founded":
-			c.Founded = func(param *cffi.CFFIValueHolder) *string {
-				decoded := baml.Decode(param)
-				return func(result any) *string {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(string)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Founded = baml.Decode(valueHolder).Interface().(*string)
 
 		case "industry":
-			c.Industry = func(param *cffi.CFFIValueHolder) *string {
-				decoded := baml.Decode(param)
-				return func(result any) *string {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(string)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Industry = baml.Decode(valueHolder).Interface().(*string)
 
 		case "size":
-			c.Size = func(param *cffi.CFFIValueHolder) *Union4KenterpriseOrKlargeOrKmediumOrKsmall {
-				decoded := baml.Decode(param)
-				return func(result any) *Union4KenterpriseOrKlargeOrKmediumOrKsmall {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(*Union4KenterpriseOrKlargeOrKmediumOrKsmall)
-					return casted
-				}(decoded)
-			}(valueHolder)
+			c.Size = baml.Decode(valueHolder).Interface().(*types.Union4KenterpriseOrKlargeOrKmediumOrKsmall)
 
 		case "certifications":
-			c.Certifications = baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) string {
-				return baml.Decode(inner).(string)
-			})
+			c.Certifications = baml.Decode(valueHolder).Interface().([]string)
 
 		case "partnerships":
-			c.Partnerships = func(param *cffi.CFFIValueHolder) *[]Company {
-				decoded := baml.Decode(param)
-				return func(result any) *[]Company {
-					if result == nil {
-						return nil
-					}
-					casted := (result).([]Company)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Partnerships = baml.Decode(valueHolder).Interface().(*[]Company)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -563,7 +377,7 @@ type ComplexNested struct {
 	Projects  []Project  `json:"projects"`
 }
 
-func (c *ComplexNested) Decode(holder *cffi.CFFIValueClass) {
+func (c *ComplexNested) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))
@@ -578,26 +392,13 @@ func (c *ComplexNested) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "company":
-			c.Company = func(param *cffi.CFFIValueHolder) *Company {
-				decoded := baml.Decode(param)
-				return func(result any) *Company {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(*Company)
-					return casted
-				}(decoded)
-			}(valueHolder)
+			c.Company = baml.Decode(valueHolder).Interface().(*Company)
 
 		case "employees":
-			c.Employees = baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) Employee {
-				return *baml.Decode(inner).(*Employee)
-			})
+			c.Employees = baml.Decode(valueHolder).Interface().([]Employee)
 
 		case "projects":
-			c.Projects = baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) Project {
-				return *baml.Decode(inner).(*Project)
-			})
+			c.Projects = baml.Decode(valueHolder).Interface().([]Project)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -636,7 +437,7 @@ type Contact struct {
 	Email        *string `json:"email"`
 }
 
-func (c *Contact) Decode(holder *cffi.CFFIValueClass) {
+func (c *Contact) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))
@@ -651,52 +452,16 @@ func (c *Contact) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "name":
-			c.Name = func(param *cffi.CFFIValueHolder) *string {
-				decoded := baml.Decode(param)
-				return func(result any) *string {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(string)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Name = baml.Decode(valueHolder).Interface().(*string)
 
 		case "relationship":
-			c.Relationship = func(param *cffi.CFFIValueHolder) *string {
-				decoded := baml.Decode(param)
-				return func(result any) *string {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(string)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Relationship = baml.Decode(valueHolder).Interface().(*string)
 
 		case "phone":
-			c.Phone = func(param *cffi.CFFIValueHolder) *string {
-				decoded := baml.Decode(param)
-				return func(result any) *string {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(string)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Phone = baml.Decode(valueHolder).Interface().(*string)
 
 		case "email":
-			c.Email = func(param *cffi.CFFIValueHolder) *string {
-				decoded := baml.Decode(param)
-				return func(result any) *string {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(string)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Email = baml.Decode(valueHolder).Interface().(*string)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -735,7 +500,7 @@ type Coordinates struct {
 	Longitude *float64 `json:"longitude"`
 }
 
-func (c *Coordinates) Decode(holder *cffi.CFFIValueClass) {
+func (c *Coordinates) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))
@@ -750,28 +515,10 @@ func (c *Coordinates) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "latitude":
-			c.Latitude = func(param *cffi.CFFIValueHolder) *float64 {
-				decoded := baml.Decode(param)
-				return func(result any) *float64 {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(float64)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Latitude = baml.Decode(valueHolder).Interface().(*float64)
 
 		case "longitude":
-			c.Longitude = func(param *cffi.CFFIValueHolder) *float64 {
-				decoded := baml.Decode(param)
-				return func(result any) *float64 {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(float64)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Longitude = baml.Decode(valueHolder).Interface().(*float64)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -805,7 +552,7 @@ type DeeplyNested struct {
 	Level1 *Level1 `json:"level1"`
 }
 
-func (c *DeeplyNested) Decode(holder *cffi.CFFIValueClass) {
+func (c *DeeplyNested) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))
@@ -820,16 +567,7 @@ func (c *DeeplyNested) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "level1":
-			c.Level1 = func(param *cffi.CFFIValueHolder) *Level1 {
-				decoded := baml.Decode(param)
-				return func(result any) *Level1 {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(*Level1)
-					return casted
-				}(decoded)
-			}(valueHolder)
+			c.Level1 = baml.Decode(valueHolder).Interface().(*Level1)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -866,7 +604,7 @@ type Department struct {
 	Projects []Project  `json:"projects"`
 }
 
-func (c *Department) Decode(holder *cffi.CFFIValueClass) {
+func (c *Department) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))
@@ -881,62 +619,22 @@ func (c *Department) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "id":
-			c.Id = func(param *cffi.CFFIValueHolder) *int64 {
-				decoded := baml.Decode(param)
-				return func(result any) *int64 {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(int64)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Id = baml.Decode(valueHolder).Interface().(*int64)
 
 		case "name":
-			c.Name = func(param *cffi.CFFIValueHolder) *string {
-				decoded := baml.Decode(param)
-				return func(result any) *string {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(string)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Name = baml.Decode(valueHolder).Interface().(*string)
 
 		case "manager":
-			c.Manager = func(param *cffi.CFFIValueHolder) *Employee {
-				decoded := baml.Decode(param)
-				return func(result any) *Employee {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(*Employee)
-					return casted
-				}(decoded)
-			}(valueHolder)
+			c.Manager = baml.Decode(valueHolder).Interface().(*Employee)
 
 		case "members":
-			c.Members = baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) Employee {
-				return *baml.Decode(inner).(*Employee)
-			})
+			c.Members = baml.Decode(valueHolder).Interface().([]Employee)
 
 		case "budget":
-			c.Budget = func(param *cffi.CFFIValueHolder) *float64 {
-				decoded := baml.Decode(param)
-				return func(result any) *float64 {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(float64)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Budget = baml.Decode(valueHolder).Interface().(*float64)
 
 		case "projects":
-			c.Projects = baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) Project {
-				return *baml.Decode(inner).(*Project)
-			})
+			c.Projects = baml.Decode(valueHolder).Interface().([]Project)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -975,12 +673,12 @@ func (u Department) BamlEncodeName() *cffi.CFFITypeName {
 }
 
 type DisplaySettings struct {
-	FontSize    *int64              `json:"fontSize"`
-	ColorScheme *string             `json:"colorScheme"`
-	Layout      *Union2KgridOrKlist `json:"layout"`
+	FontSize    *int64                    `json:"fontSize"`
+	ColorScheme *string                   `json:"colorScheme"`
+	Layout      *types.Union2KgridOrKlist `json:"layout"`
 }
 
-func (c *DisplaySettings) Decode(holder *cffi.CFFIValueClass) {
+func (c *DisplaySettings) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))
@@ -995,40 +693,13 @@ func (c *DisplaySettings) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "fontSize":
-			c.FontSize = func(param *cffi.CFFIValueHolder) *int64 {
-				decoded := baml.Decode(param)
-				return func(result any) *int64 {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(int64)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.FontSize = baml.Decode(valueHolder).Interface().(*int64)
 
 		case "colorScheme":
-			c.ColorScheme = func(param *cffi.CFFIValueHolder) *string {
-				decoded := baml.Decode(param)
-				return func(result any) *string {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(string)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.ColorScheme = baml.Decode(valueHolder).Interface().(*string)
 
 		case "layout":
-			c.Layout = func(param *cffi.CFFIValueHolder) *Union2KgridOrKlist {
-				decoded := baml.Decode(param)
-				return func(result any) *Union2KgridOrKlist {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(*Union2KgridOrKlist)
-					return casted
-				}(decoded)
-			}(valueHolder)
+			c.Layout = baml.Decode(valueHolder).Interface().(*types.Union2KgridOrKlist)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -1071,7 +742,7 @@ type Employee struct {
 	EmergencyContact *Contact `json:"emergencyContact"`
 }
 
-func (c *Employee) Decode(holder *cffi.CFFIValueClass) {
+func (c *Employee) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))
@@ -1086,93 +757,28 @@ func (c *Employee) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "id":
-			c.Id = func(param *cffi.CFFIValueHolder) *int64 {
-				decoded := baml.Decode(param)
-				return func(result any) *int64 {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(int64)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Id = baml.Decode(valueHolder).Interface().(*int64)
 
 		case "name":
-			c.Name = func(param *cffi.CFFIValueHolder) *string {
-				decoded := baml.Decode(param)
-				return func(result any) *string {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(string)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Name = baml.Decode(valueHolder).Interface().(*string)
 
 		case "email":
-			c.Email = func(param *cffi.CFFIValueHolder) *string {
-				decoded := baml.Decode(param)
-				return func(result any) *string {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(string)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Email = baml.Decode(valueHolder).Interface().(*string)
 
 		case "role":
-			c.Role = func(param *cffi.CFFIValueHolder) *string {
-				decoded := baml.Decode(param)
-				return func(result any) *string {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(string)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Role = baml.Decode(valueHolder).Interface().(*string)
 
 		case "department":
-			c.Department = func(param *cffi.CFFIValueHolder) *string {
-				decoded := baml.Decode(param)
-				return func(result any) *string {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(string)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Department = baml.Decode(valueHolder).Interface().(*string)
 
 		case "skills":
-			c.Skills = baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) string {
-				return baml.Decode(inner).(string)
-			})
+			c.Skills = baml.Decode(valueHolder).Interface().([]string)
 
 		case "address":
-			c.Address = func(param *cffi.CFFIValueHolder) *Address {
-				decoded := baml.Decode(param)
-				return func(result any) *Address {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(*Address)
-					return casted
-				}(decoded)
-			}(valueHolder)
+			c.Address = baml.Decode(valueHolder).Interface().(*Address)
 
 		case "emergencyContact":
-			c.EmergencyContact = func(param *cffi.CFFIValueHolder) *Contact {
-				decoded := baml.Decode(param)
-				return func(result any) *Contact {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(*Contact)
-					return casted
-				}(decoded)
-			}(valueHolder)
+			c.EmergencyContact = baml.Decode(valueHolder).Interface().(*Contact)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -1219,7 +825,7 @@ type Level1 struct {
 	Level2 *Level2 `json:"level2"`
 }
 
-func (c *Level1) Decode(holder *cffi.CFFIValueClass) {
+func (c *Level1) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))
@@ -1234,28 +840,10 @@ func (c *Level1) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "data":
-			c.Data = func(param *cffi.CFFIValueHolder) *string {
-				decoded := baml.Decode(param)
-				return func(result any) *string {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(string)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Data = baml.Decode(valueHolder).Interface().(*string)
 
 		case "level2":
-			c.Level2 = func(param *cffi.CFFIValueHolder) *Level2 {
-				decoded := baml.Decode(param)
-				return func(result any) *Level2 {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(*Level2)
-					return casted
-				}(decoded)
-			}(valueHolder)
+			c.Level2 = baml.Decode(valueHolder).Interface().(*Level2)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -1290,7 +878,7 @@ type Level2 struct {
 	Level3 *Level3 `json:"level3"`
 }
 
-func (c *Level2) Decode(holder *cffi.CFFIValueClass) {
+func (c *Level2) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))
@@ -1305,28 +893,10 @@ func (c *Level2) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "data":
-			c.Data = func(param *cffi.CFFIValueHolder) *string {
-				decoded := baml.Decode(param)
-				return func(result any) *string {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(string)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Data = baml.Decode(valueHolder).Interface().(*string)
 
 		case "level3":
-			c.Level3 = func(param *cffi.CFFIValueHolder) *Level3 {
-				decoded := baml.Decode(param)
-				return func(result any) *Level3 {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(*Level3)
-					return casted
-				}(decoded)
-			}(valueHolder)
+			c.Level3 = baml.Decode(valueHolder).Interface().(*Level3)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -1361,7 +931,7 @@ type Level3 struct {
 	Level4 *Level4 `json:"level4"`
 }
 
-func (c *Level3) Decode(holder *cffi.CFFIValueClass) {
+func (c *Level3) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))
@@ -1376,28 +946,10 @@ func (c *Level3) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "data":
-			c.Data = func(param *cffi.CFFIValueHolder) *string {
-				decoded := baml.Decode(param)
-				return func(result any) *string {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(string)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Data = baml.Decode(valueHolder).Interface().(*string)
 
 		case "level4":
-			c.Level4 = func(param *cffi.CFFIValueHolder) *Level4 {
-				decoded := baml.Decode(param)
-				return func(result any) *Level4 {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(*Level4)
-					return casted
-				}(decoded)
-			}(valueHolder)
+			c.Level4 = baml.Decode(valueHolder).Interface().(*Level4)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -1432,7 +984,7 @@ type Level4 struct {
 	Level5 *Level5 `json:"level5"`
 }
 
-func (c *Level4) Decode(holder *cffi.CFFIValueClass) {
+func (c *Level4) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))
@@ -1447,28 +999,10 @@ func (c *Level4) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "data":
-			c.Data = func(param *cffi.CFFIValueHolder) *string {
-				decoded := baml.Decode(param)
-				return func(result any) *string {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(string)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Data = baml.Decode(valueHolder).Interface().(*string)
 
 		case "level5":
-			c.Level5 = func(param *cffi.CFFIValueHolder) *Level5 {
-				decoded := baml.Decode(param)
-				return func(result any) *Level5 {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(*Level5)
-					return casted
-				}(decoded)
-			}(valueHolder)
+			c.Level5 = baml.Decode(valueHolder).Interface().(*Level5)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -1504,7 +1038,7 @@ type Level5 struct {
 	Mapping map[string]int64 `json:"mapping"`
 }
 
-func (c *Level5) Decode(holder *cffi.CFFIValueClass) {
+func (c *Level5) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))
@@ -1519,26 +1053,13 @@ func (c *Level5) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "data":
-			c.Data = func(param *cffi.CFFIValueHolder) *string {
-				decoded := baml.Decode(param)
-				return func(result any) *string {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(string)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Data = baml.Decode(valueHolder).Interface().(*string)
 
 		case "items":
-			c.Items = baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) string {
-				return baml.Decode(inner).(string)
-			})
+			c.Items = baml.Decode(valueHolder).Interface().([]string)
 
 		case "mapping":
-			c.Mapping = baml.DecodeMap(valueHolder, func(inner *cffi.CFFIValueHolder) int64 {
-				return baml.Decode(inner).(int64)
-			})
+			c.Mapping = baml.Decode(valueHolder).Interface().(map[string]int64)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -1578,7 +1099,7 @@ type Metadata struct {
 	Attributes map[string]string `json:"attributes"`
 }
 
-func (c *Metadata) Decode(holder *cffi.CFFIValueClass) {
+func (c *Metadata) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))
@@ -1593,50 +1114,19 @@ func (c *Metadata) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "createdAt":
-			c.CreatedAt = func(param *cffi.CFFIValueHolder) *string {
-				decoded := baml.Decode(param)
-				return func(result any) *string {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(string)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.CreatedAt = baml.Decode(valueHolder).Interface().(*string)
 
 		case "updatedAt":
-			c.UpdatedAt = func(param *cffi.CFFIValueHolder) *string {
-				decoded := baml.Decode(param)
-				return func(result any) *string {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(string)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.UpdatedAt = baml.Decode(valueHolder).Interface().(*string)
 
 		case "version":
-			c.Version = func(param *cffi.CFFIValueHolder) *int64 {
-				decoded := baml.Decode(param)
-				return func(result any) *int64 {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(int64)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Version = baml.Decode(valueHolder).Interface().(*int64)
 
 		case "tags":
-			c.Tags = baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) string {
-				return baml.Decode(inner).(string)
-			})
+			c.Tags = baml.Decode(valueHolder).Interface().([]string)
 
 		case "attributes":
-			c.Attributes = baml.DecodeMap(valueHolder, func(inner *cffi.CFFIValueHolder) string {
-				return baml.Decode(inner).(string)
-			})
+			c.Attributes = baml.Decode(valueHolder).Interface().(map[string]string)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -1680,7 +1170,7 @@ type Milestone struct {
 	Tasks     []Task  `json:"tasks"`
 }
 
-func (c *Milestone) Decode(holder *cffi.CFFIValueClass) {
+func (c *Milestone) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))
@@ -1695,57 +1185,19 @@ func (c *Milestone) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "id":
-			c.Id = func(param *cffi.CFFIValueHolder) *int64 {
-				decoded := baml.Decode(param)
-				return func(result any) *int64 {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(int64)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Id = baml.Decode(valueHolder).Interface().(*int64)
 
 		case "name":
-			c.Name = func(param *cffi.CFFIValueHolder) *string {
-				decoded := baml.Decode(param)
-				return func(result any) *string {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(string)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Name = baml.Decode(valueHolder).Interface().(*string)
 
 		case "dueDate":
-			c.DueDate = func(param *cffi.CFFIValueHolder) *string {
-				decoded := baml.Decode(param)
-				return func(result any) *string {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(string)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.DueDate = baml.Decode(valueHolder).Interface().(*string)
 
 		case "completed":
-			c.Completed = func(param *cffi.CFFIValueHolder) *bool {
-				decoded := baml.Decode(param)
-				return func(result any) *bool {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(bool)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Completed = baml.Decode(valueHolder).Interface().(*bool)
 
 		case "tasks":
-			c.Tasks = baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) Task {
-				return *baml.Decode(inner).(*Task)
-			})
+			c.Tasks = baml.Decode(valueHolder).Interface().([]Task)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -1782,13 +1234,13 @@ func (u Milestone) BamlEncodeName() *cffi.CFFITypeName {
 }
 
 type NotificationSettings struct {
-	Email     *bool                              `json:"email"`
-	Push      *bool                              `json:"push"`
-	Sms       *bool                              `json:"sms"`
-	Frequency *Union3KdailyOrKimmediateOrKweekly `json:"frequency"`
+	Email     *bool                                    `json:"email"`
+	Push      *bool                                    `json:"push"`
+	Sms       *bool                                    `json:"sms"`
+	Frequency *types.Union3KdailyOrKimmediateOrKweekly `json:"frequency"`
 }
 
-func (c *NotificationSettings) Decode(holder *cffi.CFFIValueClass) {
+func (c *NotificationSettings) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))
@@ -1803,52 +1255,16 @@ func (c *NotificationSettings) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "email":
-			c.Email = func(param *cffi.CFFIValueHolder) *bool {
-				decoded := baml.Decode(param)
-				return func(result any) *bool {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(bool)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Email = baml.Decode(valueHolder).Interface().(*bool)
 
 		case "push":
-			c.Push = func(param *cffi.CFFIValueHolder) *bool {
-				decoded := baml.Decode(param)
-				return func(result any) *bool {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(bool)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Push = baml.Decode(valueHolder).Interface().(*bool)
 
 		case "sms":
-			c.Sms = func(param *cffi.CFFIValueHolder) *bool {
-				decoded := baml.Decode(param)
-				return func(result any) *bool {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(bool)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Sms = baml.Decode(valueHolder).Interface().(*bool)
 
 		case "frequency":
-			c.Frequency = func(param *cffi.CFFIValueHolder) *Union3KdailyOrKimmediateOrKweekly {
-				decoded := baml.Decode(param)
-				return func(result any) *Union3KdailyOrKimmediateOrKweekly {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(*Union3KdailyOrKimmediateOrKweekly)
-					return casted
-				}(decoded)
-			}(valueHolder)
+			c.Frequency = baml.Decode(valueHolder).Interface().(*types.Union3KdailyOrKimmediateOrKweekly)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -1883,12 +1299,12 @@ func (u NotificationSettings) BamlEncodeName() *cffi.CFFITypeName {
 }
 
 type Preferences struct {
-	Theme         *Union2KdarkOrKlight  `json:"theme"`
-	Language      *string               `json:"language"`
-	Notifications *NotificationSettings `json:"notifications"`
+	Theme         *types.Union2KdarkOrKlight `json:"theme"`
+	Language      *string                    `json:"language"`
+	Notifications *NotificationSettings      `json:"notifications"`
 }
 
-func (c *Preferences) Decode(holder *cffi.CFFIValueClass) {
+func (c *Preferences) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))
@@ -1903,40 +1319,13 @@ func (c *Preferences) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "theme":
-			c.Theme = func(param *cffi.CFFIValueHolder) *Union2KdarkOrKlight {
-				decoded := baml.Decode(param)
-				return func(result any) *Union2KdarkOrKlight {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(*Union2KdarkOrKlight)
-					return casted
-				}(decoded)
-			}(valueHolder)
+			c.Theme = baml.Decode(valueHolder).Interface().(*types.Union2KdarkOrKlight)
 
 		case "language":
-			c.Language = func(param *cffi.CFFIValueHolder) *string {
-				decoded := baml.Decode(param)
-				return func(result any) *string {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(string)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Language = baml.Decode(valueHolder).Interface().(*string)
 
 		case "notifications":
-			c.Notifications = func(param *cffi.CFFIValueHolder) *NotificationSettings {
-				decoded := baml.Decode(param)
-				return func(result any) *NotificationSettings {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(*NotificationSettings)
-					return casted
-				}(decoded)
-			}(valueHolder)
+			c.Notifications = baml.Decode(valueHolder).Interface().(*NotificationSettings)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -1969,12 +1358,12 @@ func (u Preferences) BamlEncodeName() *cffi.CFFITypeName {
 }
 
 type PrivacySettings struct {
-	ProfileVisibility *Union3KfriendsOrKprivateOrKpublic `json:"profileVisibility"`
-	ShowEmail         *bool                              `json:"showEmail"`
-	ShowPhone         *bool                              `json:"showPhone"`
+	ProfileVisibility *types.Union3KfriendsOrKprivateOrKpublic `json:"profileVisibility"`
+	ShowEmail         *bool                                    `json:"showEmail"`
+	ShowPhone         *bool                                    `json:"showPhone"`
 }
 
-func (c *PrivacySettings) Decode(holder *cffi.CFFIValueClass) {
+func (c *PrivacySettings) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))
@@ -1989,40 +1378,13 @@ func (c *PrivacySettings) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "profileVisibility":
-			c.ProfileVisibility = func(param *cffi.CFFIValueHolder) *Union3KfriendsOrKprivateOrKpublic {
-				decoded := baml.Decode(param)
-				return func(result any) *Union3KfriendsOrKprivateOrKpublic {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(*Union3KfriendsOrKprivateOrKpublic)
-					return casted
-				}(decoded)
-			}(valueHolder)
+			c.ProfileVisibility = baml.Decode(valueHolder).Interface().(*types.Union3KfriendsOrKprivateOrKpublic)
 
 		case "showEmail":
-			c.ShowEmail = func(param *cffi.CFFIValueHolder) *bool {
-				decoded := baml.Decode(param)
-				return func(result any) *bool {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(bool)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.ShowEmail = baml.Decode(valueHolder).Interface().(*bool)
 
 		case "showPhone":
-			c.ShowPhone = func(param *cffi.CFFIValueHolder) *bool {
-				decoded := baml.Decode(param)
-				return func(result any) *bool {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(bool)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.ShowPhone = baml.Decode(valueHolder).Interface().(*bool)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -2061,7 +1423,7 @@ type Profile struct {
 	Preferences *Preferences `json:"preferences"`
 }
 
-func (c *Profile) Decode(holder *cffi.CFFIValueClass) {
+func (c *Profile) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))
@@ -2076,52 +1438,16 @@ func (c *Profile) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "bio":
-			c.Bio = func(param *cffi.CFFIValueHolder) *string {
-				decoded := baml.Decode(param)
-				return func(result any) *string {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(string)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Bio = baml.Decode(valueHolder).Interface().(*string)
 
 		case "avatar":
-			c.Avatar = func(param *cffi.CFFIValueHolder) *string {
-				decoded := baml.Decode(param)
-				return func(result any) *string {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(string)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Avatar = baml.Decode(valueHolder).Interface().(*string)
 
 		case "social":
-			c.Social = func(param *cffi.CFFIValueHolder) *SocialLinks {
-				decoded := baml.Decode(param)
-				return func(result any) *SocialLinks {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(*SocialLinks)
-					return casted
-				}(decoded)
-			}(valueHolder)
+			c.Social = baml.Decode(valueHolder).Interface().(*SocialLinks)
 
 		case "preferences":
-			c.Preferences = func(param *cffi.CFFIValueHolder) *Preferences {
-				decoded := baml.Decode(param)
-				return func(result any) *Preferences {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(*Preferences)
-					return casted
-				}(decoded)
-			}(valueHolder)
+			c.Preferences = baml.Decode(valueHolder).Interface().(*Preferences)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -2156,16 +1482,16 @@ func (u Profile) BamlEncodeName() *cffi.CFFITypeName {
 }
 
 type Project struct {
-	Id          *int64                                            `json:"id"`
-	Name        *string                                           `json:"name"`
-	Description *string                                           `json:"description"`
-	Status      *Union4KactiveOrKcancelledOrKcompletedOrKplanning `json:"status"`
-	Team        []Employee                                        `json:"team"`
-	Milestones  []Milestone                                       `json:"milestones"`
-	Budget      *Budget                                           `json:"budget"`
+	Id          *int64                                                  `json:"id"`
+	Name        *string                                                 `json:"name"`
+	Description *string                                                 `json:"description"`
+	Status      *types.Union4KactiveOrKcancelledOrKcompletedOrKplanning `json:"status"`
+	Team        []Employee                                              `json:"team"`
+	Milestones  []Milestone                                             `json:"milestones"`
+	Budget      *Budget                                                 `json:"budget"`
 }
 
-func (c *Project) Decode(holder *cffi.CFFIValueClass) {
+func (c *Project) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))
@@ -2180,74 +1506,25 @@ func (c *Project) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "id":
-			c.Id = func(param *cffi.CFFIValueHolder) *int64 {
-				decoded := baml.Decode(param)
-				return func(result any) *int64 {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(int64)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Id = baml.Decode(valueHolder).Interface().(*int64)
 
 		case "name":
-			c.Name = func(param *cffi.CFFIValueHolder) *string {
-				decoded := baml.Decode(param)
-				return func(result any) *string {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(string)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Name = baml.Decode(valueHolder).Interface().(*string)
 
 		case "description":
-			c.Description = func(param *cffi.CFFIValueHolder) *string {
-				decoded := baml.Decode(param)
-				return func(result any) *string {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(string)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Description = baml.Decode(valueHolder).Interface().(*string)
 
 		case "status":
-			c.Status = func(param *cffi.CFFIValueHolder) *Union4KactiveOrKcancelledOrKcompletedOrKplanning {
-				decoded := baml.Decode(param)
-				return func(result any) *Union4KactiveOrKcancelledOrKcompletedOrKplanning {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(*Union4KactiveOrKcancelledOrKcompletedOrKplanning)
-					return casted
-				}(decoded)
-			}(valueHolder)
+			c.Status = baml.Decode(valueHolder).Interface().(*types.Union4KactiveOrKcancelledOrKcompletedOrKplanning)
 
 		case "team":
-			c.Team = baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) Employee {
-				return *baml.Decode(inner).(*Employee)
-			})
+			c.Team = baml.Decode(valueHolder).Interface().([]Employee)
 
 		case "milestones":
-			c.Milestones = baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) Milestone {
-				return *baml.Decode(inner).(*Milestone)
-			})
+			c.Milestones = baml.Decode(valueHolder).Interface().([]Milestone)
 
 		case "budget":
-			c.Budget = func(param *cffi.CFFIValueHolder) *Budget {
-				decoded := baml.Decode(param)
-				return func(result any) *Budget {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(*Budget)
-					return casted
-				}(decoded)
-			}(valueHolder)
+			c.Budget = baml.Decode(valueHolder).Interface().(*Budget)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -2288,14 +1565,14 @@ func (u Project) BamlEncodeName() *cffi.CFFITypeName {
 }
 
 type RecursiveStructure struct {
-	Id       *int64                             `json:"id"`
-	Name     *string                            `json:"name"`
-	Children []RecursiveStructure               `json:"children"`
-	Parent   *RecursiveStructure                `json:"parent"`
-	Metadata map[string]Union3BoolOrIntOrString `json:"metadata"`
+	Id       *int64                                   `json:"id"`
+	Name     *string                                  `json:"name"`
+	Children []RecursiveStructure                     `json:"children"`
+	Parent   *RecursiveStructure                      `json:"parent"`
+	Metadata map[string]types.Union3BoolOrIntOrString `json:"metadata"`
 }
 
-func (c *RecursiveStructure) Decode(holder *cffi.CFFIValueClass) {
+func (c *RecursiveStructure) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))
@@ -2310,50 +1587,19 @@ func (c *RecursiveStructure) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "id":
-			c.Id = func(param *cffi.CFFIValueHolder) *int64 {
-				decoded := baml.Decode(param)
-				return func(result any) *int64 {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(int64)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Id = baml.Decode(valueHolder).Interface().(*int64)
 
 		case "name":
-			c.Name = func(param *cffi.CFFIValueHolder) *string {
-				decoded := baml.Decode(param)
-				return func(result any) *string {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(string)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Name = baml.Decode(valueHolder).Interface().(*string)
 
 		case "children":
-			c.Children = baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) RecursiveStructure {
-				return *baml.Decode(inner).(*RecursiveStructure)
-			})
+			c.Children = baml.Decode(valueHolder).Interface().([]RecursiveStructure)
 
 		case "parent":
-			c.Parent = func(param *cffi.CFFIValueHolder) *RecursiveStructure {
-				decoded := baml.Decode(param)
-				return func(result any) *RecursiveStructure {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(*RecursiveStructure)
-					return casted
-				}(decoded)
-			}(valueHolder)
+			c.Parent = baml.Decode(valueHolder).Interface().(*RecursiveStructure)
 
 		case "metadata":
-			c.Metadata = baml.DecodeMap(valueHolder, func(inner *cffi.CFFIValueHolder) Union3BoolOrIntOrString {
-				return *baml.Decode(inner).(*Union3BoolOrIntOrString)
-			})
+			c.Metadata = baml.Decode(valueHolder).Interface().(map[string]types.Union3BoolOrIntOrString)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -2395,7 +1641,7 @@ type SimpleNested struct {
 	Metadata *Metadata `json:"metadata"`
 }
 
-func (c *SimpleNested) Decode(holder *cffi.CFFIValueClass) {
+func (c *SimpleNested) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))
@@ -2410,40 +1656,13 @@ func (c *SimpleNested) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "user":
-			c.User = func(param *cffi.CFFIValueHolder) *User {
-				decoded := baml.Decode(param)
-				return func(result any) *User {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(*User)
-					return casted
-				}(decoded)
-			}(valueHolder)
+			c.User = baml.Decode(valueHolder).Interface().(*User)
 
 		case "address":
-			c.Address = func(param *cffi.CFFIValueHolder) *Address {
-				decoded := baml.Decode(param)
-				return func(result any) *Address {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(*Address)
-					return casted
-				}(decoded)
-			}(valueHolder)
+			c.Address = baml.Decode(valueHolder).Interface().(*Address)
 
 		case "metadata":
-			c.Metadata = func(param *cffi.CFFIValueHolder) *Metadata {
-				decoded := baml.Decode(param)
-				return func(result any) *Metadata {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(*Metadata)
-					return casted
-				}(decoded)
-			}(valueHolder)
+			c.Metadata = baml.Decode(valueHolder).Interface().(*Metadata)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -2482,7 +1701,7 @@ type SocialLinks struct {
 	Website  *string `json:"website"`
 }
 
-func (c *SocialLinks) Decode(holder *cffi.CFFIValueClass) {
+func (c *SocialLinks) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))
@@ -2497,52 +1716,16 @@ func (c *SocialLinks) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "twitter":
-			c.Twitter = func(param *cffi.CFFIValueHolder) *string {
-				decoded := baml.Decode(param)
-				return func(result any) *string {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(string)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Twitter = baml.Decode(valueHolder).Interface().(*string)
 
 		case "github":
-			c.Github = func(param *cffi.CFFIValueHolder) *string {
-				decoded := baml.Decode(param)
-				return func(result any) *string {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(string)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Github = baml.Decode(valueHolder).Interface().(*string)
 
 		case "linkedin":
-			c.Linkedin = func(param *cffi.CFFIValueHolder) *string {
-				decoded := baml.Decode(param)
-				return func(result any) *string {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(string)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Linkedin = baml.Decode(valueHolder).Interface().(*string)
 
 		case "website":
-			c.Website = func(param *cffi.CFFIValueHolder) *string {
-				decoded := baml.Decode(param)
-				return func(result any) *string {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(string)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Website = baml.Decode(valueHolder).Interface().(*string)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -2577,16 +1760,16 @@ func (u SocialLinks) BamlEncodeName() *cffi.CFFITypeName {
 }
 
 type Task struct {
-	Id          *int64                            `json:"id"`
-	Title       *string                           `json:"title"`
-	Description *string                           `json:"description"`
-	Assignee    *string                           `json:"assignee"`
-	Priority    *Union3KhighOrKlowOrKmedium       `json:"priority"`
-	Status      *Union3KdoneOrKin_progressOrKtodo `json:"status"`
-	Subtasks    *[]Task                           `json:"subtasks"`
+	Id          *int64                                  `json:"id"`
+	Title       *string                                 `json:"title"`
+	Description *string                                 `json:"description"`
+	Assignee    *string                                 `json:"assignee"`
+	Priority    *types.Union3KhighOrKlowOrKmedium       `json:"priority"`
+	Status      *types.Union3KdoneOrKin_progressOrKtodo `json:"status"`
+	Subtasks    *[]Task                                 `json:"subtasks"`
 }
 
-func (c *Task) Decode(holder *cffi.CFFIValueClass) {
+func (c *Task) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))
@@ -2601,88 +1784,25 @@ func (c *Task) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "id":
-			c.Id = func(param *cffi.CFFIValueHolder) *int64 {
-				decoded := baml.Decode(param)
-				return func(result any) *int64 {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(int64)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Id = baml.Decode(valueHolder).Interface().(*int64)
 
 		case "title":
-			c.Title = func(param *cffi.CFFIValueHolder) *string {
-				decoded := baml.Decode(param)
-				return func(result any) *string {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(string)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Title = baml.Decode(valueHolder).Interface().(*string)
 
 		case "description":
-			c.Description = func(param *cffi.CFFIValueHolder) *string {
-				decoded := baml.Decode(param)
-				return func(result any) *string {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(string)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Description = baml.Decode(valueHolder).Interface().(*string)
 
 		case "assignee":
-			c.Assignee = func(param *cffi.CFFIValueHolder) *string {
-				decoded := baml.Decode(param)
-				return func(result any) *string {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(string)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Assignee = baml.Decode(valueHolder).Interface().(*string)
 
 		case "priority":
-			c.Priority = func(param *cffi.CFFIValueHolder) *Union3KhighOrKlowOrKmedium {
-				decoded := baml.Decode(param)
-				return func(result any) *Union3KhighOrKlowOrKmedium {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(*Union3KhighOrKlowOrKmedium)
-					return casted
-				}(decoded)
-			}(valueHolder)
+			c.Priority = baml.Decode(valueHolder).Interface().(*types.Union3KhighOrKlowOrKmedium)
 
 		case "status":
-			c.Status = func(param *cffi.CFFIValueHolder) *Union3KdoneOrKin_progressOrKtodo {
-				decoded := baml.Decode(param)
-				return func(result any) *Union3KdoneOrKin_progressOrKtodo {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(*Union3KdoneOrKin_progressOrKtodo)
-					return casted
-				}(decoded)
-			}(valueHolder)
+			c.Status = baml.Decode(valueHolder).Interface().(*types.Union3KdoneOrKin_progressOrKtodo)
 
 		case "subtasks":
-			c.Subtasks = func(param *cffi.CFFIValueHolder) *[]Task {
-				decoded := baml.Decode(param)
-				return func(result any) *[]Task {
-					if result == nil {
-						return nil
-					}
-					casted := (result).([]Task)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Subtasks = baml.Decode(valueHolder).Interface().(*[]Task)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -2729,7 +1849,7 @@ type User struct {
 	Settings *UserSettings `json:"settings"`
 }
 
-func (c *User) Decode(holder *cffi.CFFIValueClass) {
+func (c *User) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))
@@ -2744,52 +1864,16 @@ func (c *User) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "id":
-			c.Id = func(param *cffi.CFFIValueHolder) *int64 {
-				decoded := baml.Decode(param)
-				return func(result any) *int64 {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(int64)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Id = baml.Decode(valueHolder).Interface().(*int64)
 
 		case "name":
-			c.Name = func(param *cffi.CFFIValueHolder) *string {
-				decoded := baml.Decode(param)
-				return func(result any) *string {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(string)
-					return &casted
-				}(decoded)
-			}(valueHolder)
+			c.Name = baml.Decode(valueHolder).Interface().(*string)
 
 		case "profile":
-			c.Profile = func(param *cffi.CFFIValueHolder) *Profile {
-				decoded := baml.Decode(param)
-				return func(result any) *Profile {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(*Profile)
-					return casted
-				}(decoded)
-			}(valueHolder)
+			c.Profile = baml.Decode(valueHolder).Interface().(*Profile)
 
 		case "settings":
-			c.Settings = func(param *cffi.CFFIValueHolder) *UserSettings {
-				decoded := baml.Decode(param)
-				return func(result any) *UserSettings {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(*UserSettings)
-					return casted
-				}(decoded)
-			}(valueHolder)
+			c.Settings = baml.Decode(valueHolder).Interface().(*UserSettings)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -2829,7 +1913,7 @@ type UserSettings struct {
 	Advanced map[string]string `json:"advanced"`
 }
 
-func (c *UserSettings) Decode(holder *cffi.CFFIValueClass) {
+func (c *UserSettings) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 	typeName := holder.Name
 	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
 		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))
@@ -2844,33 +1928,13 @@ func (c *UserSettings) Decode(holder *cffi.CFFIValueClass) {
 		switch key {
 
 		case "privacy":
-			c.Privacy = func(param *cffi.CFFIValueHolder) *PrivacySettings {
-				decoded := baml.Decode(param)
-				return func(result any) *PrivacySettings {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(*PrivacySettings)
-					return casted
-				}(decoded)
-			}(valueHolder)
+			c.Privacy = baml.Decode(valueHolder).Interface().(*PrivacySettings)
 
 		case "display":
-			c.Display = func(param *cffi.CFFIValueHolder) *DisplaySettings {
-				decoded := baml.Decode(param)
-				return func(result any) *DisplaySettings {
-					if result == nil {
-						return nil
-					}
-					casted := (result).(*DisplaySettings)
-					return casted
-				}(decoded)
-			}(valueHolder)
+			c.Display = baml.Decode(valueHolder).Interface().(*DisplaySettings)
 
 		case "advanced":
-			c.Advanced = baml.DecodeMap(valueHolder, func(inner *cffi.CFFIValueHolder) string {
-				return baml.Decode(inner).(string)
-			})
+			c.Advanced = baml.Decode(valueHolder).Interface().(map[string]string)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))

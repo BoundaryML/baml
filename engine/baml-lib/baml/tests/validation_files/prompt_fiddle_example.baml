@@ -171,7 +171,7 @@ client<llm> GPT4 {
     model gpt-4
     api_key env.OPENAI_API_KEY
   }
-} 
+}
 
 client<llm> GPT4o {
   provider openai
@@ -180,7 +180,7 @@ client<llm> GPT4o {
     model gpt-4o
     api_key env.OPENAI_API_KEY
   }
-} 
+}
 
 retry_policy CustomRetry {
   max_retries 3
@@ -376,8 +376,6 @@ test TestURLAudioInput{
   }  
 }
 
-
-
 // BAML supports multi-modal inputs! Check the raw cURL request toggle in the playground to see the prompt is transformed into an API call
 
 // How to call this BAML function in python or Typescript: https://docs.boundaryml.com/docs/snippets/supported-types#image
@@ -407,6 +405,55 @@ test ImageTest {
   }
 }
 
+// BAML supports multi-modal inputs including Pdfs!
+
+// How to call this BAML function in python or Typescript: https://docs.boundaryml.com/docs/snippets/supported-types#pdf
+
+function PdfInput(pdfInput: pdf) -> string {
+  client GPT4o
+  prompt #"
+    {{ _.role("user") }}
+
+    Get the title of the pdfs
+    
+    {{ pdfInput }}
+  "#
+}
+
+test TestFilePdfInput {
+  functions [PdfInput]
+  args {
+    pdfInput { 
+      url "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf"
+      media_type "application/pdf"
+    }
+  }  
+} 
+// BAML supports multi-modal inputs including videos!
+
+// How to call this BAML function in python or Typescript: https://docs.boundaryml.com/docs/snippets/supported-types#video
+// Note: Video input only works with Google models (Gemini)
+
+function VideoInput(videoInput: video) -> string {
+  client Gemini
+  prompt #"
+    {{ _.role("user") }}
+
+    Describe what happens in this video in 5 words or less.
+    
+    {{ videoInput }}
+  "#
+}
+
+test TestFileVideoInput {
+  functions [VideoInput]
+  args {
+    videoInput { 
+      url "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+      media_type "video/mp4"
+    }
+  }  
+} 
 class OResume {
   name string
   education OEducation[] @description("Extract in the same order listed")

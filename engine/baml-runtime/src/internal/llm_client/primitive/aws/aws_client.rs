@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{collections::HashMap, ops::Deref, sync::Arc, time::Duration};
 
 use anyhow::{Context, Result};
 use aws_config::{
@@ -22,7 +22,10 @@ use aws_smithy_runtime_api::{client::result::SdkError, http::Headers};
 use aws_smithy_types::{Blob, Document};
 use baml_ids::HttpRequestId;
 use baml_types::{
-    tracing::events::{HTTPBody, HTTPRequest, HTTPResponse, TraceData, TraceEvent},
+    tracing::events::{
+        ClientDetails, HTTPBody, HTTPRequest, HTTPResponse, HTTPResponseStream, SSEEvent,
+        TraceData, TraceEvent,
+    },
     ApiKeyWithProvenance, BamlMap, BamlMedia, BamlMediaContent, BamlMediaType,
 };
 use futures::stream;
@@ -129,16 +132,23 @@ fn serde_json_to_aws_document(value: serde_json::Value) -> Document {
 struct CollectorInterceptor {
     call_stack: Vec<baml_ids::FunctionCallId>,
     http_request_id: baml_ids::HttpRequestId,
+    client_details: ClientDetails,
 }
 
 impl CollectorInterceptor {
     pub fn new(
         call_stack: Vec<baml_ids::FunctionCallId>,
         http_request_id: baml_ids::HttpRequestId,
+        resolved_properties: &ResolvedAwsBedrock,
     ) -> Self {
         Self {
             call_stack,
             http_request_id,
+            client_details: ClientDetails {
+                name: resolved_properties.model.clone(),
+                provider: "aws".to_string(),
+                options: resolved_properties.client_options(),
+            },
         }
     }
 }
@@ -198,6 +208,7 @@ impl aws_smithy_runtime_api::client::interceptors::Intercept for CollectorInterc
                 response.status().as_u16(),
                 Some(smithy_json_headers(response.headers())),
                 HTTPBody::new(response.body().bytes().unwrap_or_default().to_vec()),
+                self.client_details.clone(),
             );
 
             let event =
@@ -253,6 +264,7 @@ impl AwsClient {
                 provider: client.provider.to_string(),
                 default_role: properties.default_role(),
                 allowed_roles: properties.allowed_roles(),
+                options: properties.client_options(),
             },
             features: ModelFeatures {
                 chat: true,
@@ -260,6 +272,8 @@ impl AwsClient {
                 max_one_system_prompt: true,
                 resolve_audio_urls: ResolveMediaUrls::Always,
                 resolve_image_urls: ResolveMediaUrls::Always,
+                resolve_pdf_urls: ResolveMediaUrls::Always,
+                resolve_video_urls: ResolveMediaUrls::Never,
                 allowed_metadata: properties.allowed_role_metadata.clone(),
             },
             retry_policy: client.retry_policy.as_ref().map(String::to_owned),
@@ -277,6 +291,7 @@ impl AwsClient {
                 provider: client.elem().provider.to_string(),
                 default_role: properties.default_role(),
                 allowed_roles: properties.allowed_roles(),
+                options: properties.client_options(),
             },
             features: ModelFeatures {
                 chat: true,
@@ -284,6 +299,8 @@ impl AwsClient {
                 max_one_system_prompt: true,
                 resolve_audio_urls: ResolveMediaUrls::Always,
                 resolve_image_urls: ResolveMediaUrls::Always,
+                resolve_pdf_urls: ResolveMediaUrls::Always,
+                resolve_video_urls: ResolveMediaUrls::Never,
                 allowed_metadata: properties.allowed_role_metadata.clone(),
             },
             retry_policy: client.elem().retry_policy_id.as_ref().map(String::to_owned),
@@ -394,6 +411,7 @@ impl AwsClient {
             .interceptor(CollectorInterceptor::new(
                 call_stack,
                 http_request_id.clone(),
+                &self.properties,
             ))
             .build();
         Ok(BedrockRuntimeClient::from_conf(bedrock_config))
@@ -684,6 +702,9 @@ impl WithStreamChat for AwsClient {
             }
         };
 
+        let call_id_stack = Arc::new(ctx.runtime_context().call_id_stack.clone());
+        let http_request_id = Arc::new(ctx.http_request_id().clone());
+
         let stream = stream::unfold(
             (
                 Some(LLMCompleteResponse {
@@ -705,11 +726,26 @@ impl WithStreamChat for AwsClient {
                 response,
             ),
             move |(initial_state, mut response)| {
+                let call_id_stack = call_id_stack.clone();
+                let http_request_id = http_request_id.clone();
                 async move {
                     let mut new_state = initial_state?;
                     match response.stream.recv().await {
                         Ok(Some(message)) => {
                             log::trace!("Received message: {message:#?}");
+                            {
+                                let trace_event = TraceEvent::new_raw_llm_response_stream(
+                                    call_id_stack.deref().clone(),
+                                    std::sync::Arc::new(HTTPResponseStream::new(
+                                        http_request_id.deref().clone(),
+                                        SSEEvent::new("".into(), "{}".into(), "".into()),
+                                    )),
+                                );
+                                BAML_TRACER
+                                    .lock()
+                                    .unwrap()
+                                    .put(std::sync::Arc::new(trace_event));
+                            }
                             match message {
                                 bedrock::types::ConverseStreamOutput::ContentBlockDelta(
                                     content_block_delta,
@@ -792,41 +828,121 @@ impl AwsClient {
         &self,
         media: &baml_types::BamlMedia,
     ) -> Result<bedrock::types::ContentBlock> {
-        if media.media_type != BamlMediaType::Image {
-            anyhow::bail!(
-                "AWS supports images, but does not support this media type: {:#?}",
-                media
-            )
-        }
-        match &media.content {
-            BamlMediaContent::File(_) => {
-                anyhow::bail!(
-                    "BAML internal error (AWSBedrock): file should have been resolved to base64"
-                )
-            }
-            BamlMediaContent::Url(_) => {
-                anyhow::bail!(
-                    "BAML internal error (AWSBedrock): media URL should have been resolved to base64"
-                )
-            }
-            BamlMediaContent::Base64(b64_media) => Ok(bedrock::types::ContentBlock::Image(
-                bedrock::types::ImageBlock::builder()
-                    .set_format(Some(bedrock::types::ImageFormat::from(
-                        {
-                            let mime_type = media.mime_type_as_ok()?;
-                            match mime_type.strip_prefix("image/") {
-                                Some(s) => s.to_string(),
-                                None => mime_type,
+        match media.media_type {
+            BamlMediaType::Image => match &media.content {
+                BamlMediaContent::File(_) => {
+                    anyhow::bail!(
+                            "BAML internal error (AWSBedrock): file should have been resolved to base64"
+                        )
+                }
+                BamlMediaContent::Url(_) => {
+                    anyhow::bail!(
+                            "BAML internal error (AWSBedrock): media URL should have been resolved to base64"
+                        )
+                }
+                BamlMediaContent::Base64(b64_media) => Ok(bedrock::types::ContentBlock::Image(
+                    bedrock::types::ImageBlock::builder()
+                        .set_format(Some(bedrock::types::ImageFormat::from(
+                            {
+                                let mime_type = media.mime_type_as_ok()?;
+                                match mime_type.strip_prefix("image/") {
+                                    Some(s) => s.to_string(),
+                                    None => mime_type,
+                                }
                             }
-                        }
-                        .as_str(),
-                    )))
-                    .set_source(Some(bedrock::types::ImageSource::Bytes(Blob::new(
-                        aws_smithy_types::base64::decode(b64_media.base64.clone())?,
-                    ))))
-                    .build()
-                    .context("Failed to build image block")?,
-            )),
+                            .as_str(),
+                        )))
+                        .set_source(Some(bedrock::types::ImageSource::Bytes(Blob::new(
+                            aws_smithy_types::base64::decode(b64_media.base64.clone())?,
+                        ))))
+                        .build()
+                        .context("Failed to build image block")?,
+                )),
+            },
+            BamlMediaType::Pdf => {
+                match &media.content {
+                    BamlMediaContent::File(_) => {
+                        anyhow::bail!(
+                            "BAML internal error (AWSBedrock): Pdf file should have been resolved to base64"
+                        )
+                    }
+                    BamlMediaContent::Url(url_media) => {
+                        // AWS Bedrock supports Pdf as document type via URL
+                        Ok(bedrock::types::ContentBlock::Document(
+                            bedrock::types::DocumentBlock::builder()
+                                .set_format(Some(bedrock::types::DocumentFormat::Pdf))
+                                .set_name(Some("document.pdf".to_string())) // Default name for URL-based Pdfs
+                                .set_source(Some(bedrock::types::DocumentSource::Bytes(Blob::new(
+                                    url_media.url.as_bytes().to_vec(),
+                                ))))
+                                .build()
+                                .context("Failed to build Pdf document block")?,
+                        ))
+                    }
+                    BamlMediaContent::Base64(b64_media) => {
+                        // AWS Bedrock supports Pdf as document type via Base64
+                        Ok(bedrock::types::ContentBlock::Document(
+                            bedrock::types::DocumentBlock::builder()
+                                .set_format(Some(bedrock::types::DocumentFormat::Pdf))
+                                .set_name(Some("document.pdf".to_string())) // Default name for Base64 Pdfs
+                                .set_source(Some(bedrock::types::DocumentSource::Bytes(Blob::new(
+                                    aws_smithy_types::base64::decode(b64_media.base64.clone())?,
+                                ))))
+                                .build()
+                                .context("Failed to build Pdf document block")?,
+                        ))
+                    }
+                }
+            }
+            BamlMediaType::Video => {
+                match &media.content {
+                    BamlMediaContent::File(_) => {
+                        anyhow::bail!(
+                            "BAML internal error (AWSBedrock): video file should have been resolved to base64"
+                        )
+                    }
+                    BamlMediaContent::Url(_) => {
+                        anyhow::bail!(
+                            "BAML internal error (AWSBedrock): video URL should have been resolved to base64"
+                        )
+                    }
+                    BamlMediaContent::Base64(b64_media) => {
+                        // AWS Bedrock supports video for Nova models with specific format
+                        let mime_type = media.mime_type_as_ok()?;
+                        let format = match mime_type.as_str() {
+                            "video/mp4" => bedrock::types::VideoFormat::Mp4,
+                            "video/mpeg" => bedrock::types::VideoFormat::Mpeg,
+                            "video/mov" => bedrock::types::VideoFormat::Mov,
+                            // "video/avi" => bedrock::types::VideoFormat::Avi,
+                            "video/x-flv" => bedrock::types::VideoFormat::Flv,
+                            "video/mkv" => bedrock::types::VideoFormat::Mkv,
+                            "video/webm" => bedrock::types::VideoFormat::Webm,
+                            _ => {
+                                anyhow::bail!(
+                                    "AWS Bedrock video format not supported: {}. Supported formats: mp4, mpeg, mov, flv, mkv, webm",
+                                    mime_type
+                                );
+                            }
+                        };
+
+                        Ok(bedrock::types::ContentBlock::Video(
+                            bedrock::types::VideoBlock::builder()
+                                .set_format(Some(format))
+                                .set_source(Some(bedrock::types::VideoSource::Bytes(Blob::new(
+                                    aws_smithy_types::base64::decode(b64_media.base64.clone())?,
+                                ))))
+                                .build()
+                                .context("Failed to build video block")?,
+                        ))
+                    }
+                }
+            }
+            BamlMediaType::Audio => {
+                anyhow::bail!(
+                    "AWS Bedrock does not support audio media type: {:#?}",
+                    media
+                )
+            }
         }
     }
 

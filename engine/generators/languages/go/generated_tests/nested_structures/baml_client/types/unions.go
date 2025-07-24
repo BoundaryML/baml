@@ -29,17 +29,17 @@ type Union2KdarkOrKlight struct {
 	variant_Kdark *string
 }
 
-func (u *Union2KdarkOrKlight) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union2KdarkOrKlight) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
 	case "string_light":
 		u.variant = "Klight"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Klight = &value
 	case "string_dark":
 		u.variant = "Kdark"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Kdark = &value
 
 	default:
@@ -182,17 +182,17 @@ type Union2KgridOrKlist struct {
 	variant_Klist *string
 }
 
-func (u *Union2KgridOrKlist) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union2KgridOrKlist) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
 	case "string_grid":
 		u.variant = "Kgrid"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Kgrid = &value
 	case "string_list":
 		u.variant = "Klist"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Klist = &value
 
 	default:
@@ -337,21 +337,21 @@ type Union3BoolOrIntOrString struct {
 	variant_Bool *bool
 }
 
-func (u *Union3BoolOrIntOrString) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union3BoolOrIntOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
 	case "string":
 		u.variant = "String"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_String = &value
 	case "int":
 		u.variant = "Int"
-		value := baml.Decode(valueHolder).(int64)
+		value := baml.Decode(valueHolder).Interface().(int64)
 		u.variant_Int = &value
 	case "bool":
 		u.variant = "Bool"
-		value := baml.Decode(valueHolder).(bool)
+		value := baml.Decode(valueHolder).Interface().(bool)
 		u.variant_Bool = &value
 
 	default:
@@ -536,21 +536,21 @@ type Union3KdailyOrKimmediateOrKweekly struct {
 	variant_Kweekly *string
 }
 
-func (u *Union3KdailyOrKimmediateOrKweekly) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union3KdailyOrKimmediateOrKweekly) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
 	case "string_immediate":
 		u.variant = "Kimmediate"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Kimmediate = &value
 	case "string_daily":
 		u.variant = "Kdaily"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Kdaily = &value
 	case "string_weekly":
 		u.variant = "Kweekly"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Kweekly = &value
 
 	default:
@@ -747,21 +747,21 @@ type Union3KdoneOrKin_progressOrKtodo struct {
 	variant_Kdone *string
 }
 
-func (u *Union3KdoneOrKin_progressOrKtodo) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union3KdoneOrKin_progressOrKtodo) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
 	case "string_todo":
 		u.variant = "Ktodo"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Ktodo = &value
 	case "string_in_progress":
 		u.variant = "Kin_progress"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Kin_progress = &value
 	case "string_done":
 		u.variant = "Kdone"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Kdone = &value
 
 	default:
@@ -958,21 +958,21 @@ type Union3KfriendsOrKprivateOrKpublic struct {
 	variant_Kfriends *string
 }
 
-func (u *Union3KfriendsOrKprivateOrKpublic) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union3KfriendsOrKprivateOrKpublic) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
 	case "string_public":
 		u.variant = "Kpublic"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Kpublic = &value
 	case "string_private":
 		u.variant = "Kprivate"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Kprivate = &value
 	case "string_friends":
 		u.variant = "Kfriends"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Kfriends = &value
 
 	default:
@@ -1169,21 +1169,21 @@ type Union3KhighOrKlowOrKmedium struct {
 	variant_Khigh *string
 }
 
-func (u *Union3KhighOrKlowOrKmedium) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union3KhighOrKlowOrKmedium) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
 	case "string_low":
 		u.variant = "Klow"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Klow = &value
 	case "string_medium":
 		u.variant = "Kmedium"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Kmedium = &value
 	case "string_high":
 		u.variant = "Khigh"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Khigh = &value
 
 	default:
@@ -1382,25 +1382,25 @@ type Union4KactiveOrKcancelledOrKcompletedOrKplanning struct {
 	variant_Kcancelled *string
 }
 
-func (u *Union4KactiveOrKcancelledOrKcompletedOrKplanning) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union4KactiveOrKcancelledOrKcompletedOrKplanning) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
 	case "string_planning":
 		u.variant = "Kplanning"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Kplanning = &value
 	case "string_active":
 		u.variant = "Kactive"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Kactive = &value
 	case "string_completed":
 		u.variant = "Kcompleted"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Kcompleted = &value
 	case "string_cancelled":
 		u.variant = "Kcancelled"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Kcancelled = &value
 
 	default:
@@ -1655,25 +1655,25 @@ type Union4KenterpriseOrKlargeOrKmediumOrKsmall struct {
 	variant_Kenterprise *string
 }
 
-func (u *Union4KenterpriseOrKlargeOrKmediumOrKsmall) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union4KenterpriseOrKlargeOrKmediumOrKsmall) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
 	case "string_small":
 		u.variant = "Ksmall"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Ksmall = &value
 	case "string_medium":
 		u.variant = "Kmedium"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Kmedium = &value
 	case "string_large":
 		u.variant = "Klarge"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Klarge = &value
 	case "string_enterprise":
 		u.variant = "Kenterprise"
-		value := baml.Decode(valueHolder).(string)
+		value := baml.Decode(valueHolder).Interface().(string)
 		u.variant_Kenterprise = &value
 
 	default:

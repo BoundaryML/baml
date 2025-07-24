@@ -1,14 +1,30 @@
-use std::{collections::HashMap, path::PathBuf, sync::Arc};
+use std::{
+    collections::HashMap,
+    fs,
+    io::Cursor,
+    path::{Path, PathBuf},
+    sync::Arc,
+    time::Duration,
+};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
+use dirs::home_dir;
+use flate2::read::GzDecoder;
 use futures_util::{SinkExt, StreamExt};
 use include_dir::{include_dir, Dir};
 use mime_guess::from_path;
-use tokio::sync::RwLock;
-use warp::{http::Response, ws::Message, Filter};
+use reqwest::Client;
+use serde_json::Value;
+use sha2::{Digest, Sha256};
+use tar::Archive;
+use tokio::{fs as async_fs, sync::RwLock};
+use warp::{http, http::Response, ws::Message, Filter, Rejection, Reply};
 
 use crate::{
-    playground::definitions::{FrontendMessage, PlaygroundState},
+    playground::{
+        definitions::{FrontendMessage, PlaygroundState},
+        playground_server_rpc::handle_rpc_websocket,
+    },
     session::Session,
 };
 
@@ -70,6 +86,8 @@ pub async fn start_client_connection(
         let buffered_events = st.drain_event_buffer();
         for event in buffered_events.clone() {
             let _ = ws_tx.send(Message::text(event)).await;
+            // Add configurable delay between buffered events
+            tokio::time::sleep(tokio::time::Duration::from_millis(400)).await;
         }
         tracing::info!("Sent {} buffered events", buffered_events.len());
         st.mark_first_client_connected();
@@ -110,48 +128,98 @@ pub async fn start_client_connection(
 
 /// Adds a "/" route which servers the static files of the frontend
 /// and a "/ws" route which handles the websocket connection.
+/// If dist_dir is None, serves an error page indicating playground is unavailable.
 pub fn create_server_routes(
     state: Arc<RwLock<PlaygroundState>>,
     session: Arc<Session>,
+    dist_dir: Option<std::path::PathBuf>,
 ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
     // WebSocket handler with error handling
+    let ws_state = state.clone();
+    let ws_session = session.clone();
     let ws_route = warp::path("ws")
         .and(warp::ws())
         .map(move |ws: warp::ws::Ws| {
-            let state = state.clone();
-            let session = session.clone();
+            let state = ws_state.clone();
+            let session = ws_session.clone();
             ws.on_upgrade(move |socket| async move {
                 start_client_connection(socket, state, session).await;
             })
         });
 
-    // Static file serving needed to serve the frontend files
-    let spa =
-        warp::path::full()
-            .and(warp::get())
-            .and_then(|full: warp::path::FullPath| async move {
-                let path = full.as_str().trim_start_matches('/');
-                let file = if path.is_empty() { "index.html" } else { path };
-                // match STATIC_DIR.get_file(file) {
-                //     Some(f) => {
-                //         let body = f.contents();
-                //         let mime = from_path(file).first_or_octet_stream();
-                //         Ok::<_, warp::Rejection>(
-                //             Response::builder()
-                //                 .header("content-type", mime.as_ref())
-                //                 .body(body.to_vec()),
-                //         )
-                //     }
-                //     None => Ok::<_, warp::Rejection>(
-                //         Response::builder().status(404).body(b"Not Found".to_vec()),
-                //     ),
-                // }
-                Ok::<_, warp::Rejection>(
-                    Response::builder().status(404).body(b"Not Found".to_vec()),
-                )
-            });
+    tracing::info!("Setting up RPC websocket...");
+    // RPC WebSocket handler
+    let rpc_session = session.clone();
+    let rpc_route = warp::path("rpc")
+        .and(warp::ws())
+        .map(move |ws: warp::ws::Ws| {
+            let session = rpc_session.clone();
+            ws.on_upgrade(move |socket| async move {
+                handle_rpc_websocket(socket, session).await;
+            })
+        });
 
-    ws_route.or(spa).with(warp::log("playground-server"))
+    // Static file serving for user files (e.g., images, data)
+    let static_files = warp::path("static").and(warp::fs::dir("."));
+
+    // Static file serving - either real files or error page
+    let spa = warp::path::full()
+        .and(warp::get())
+        .and_then(move |full: warp::path::FullPath| {
+            let dist_dir = dist_dir.clone();
+            async move {
+                match dist_dir {
+                    Some(dir) => {
+                        // Normal file serving
+                        let path = full.as_str().trim_start_matches('/');
+                        let file = if path.is_empty() { "index.html" } else { path };
+                        let file_path = dir.join(file);
+                        match tokio::fs::read(&file_path).await {
+                            Ok(body) => {
+                                let mut mime = from_path(file).first_or_octet_stream();
+
+                                // Ensure .mjs files are served with correct MIME type for ES modules
+                                if file.ends_with(".mjs") {
+                                    mime = "application/javascript".parse().unwrap_or(mime);
+                                }
+
+                                Ok::<_, warp::Rejection>(
+                                    Response::builder()
+                                        .header("content-type", mime.as_ref())
+                                        .body(body)
+                                        .unwrap(),
+                                )
+                            }
+                            Err(_) => {
+                                // File not found, serve error page
+                                Ok::<_, warp::Rejection>(serve_error_page())
+                            }
+                        }
+                    }
+                    None => {
+                        // No dist directory available, serve error page
+                        Ok::<_, warp::Rejection>(serve_error_page())
+                    }
+                }
+            }
+        });
+
+    ws_route
+        .or(rpc_route)
+        .or(static_files)
+        .or(spa)
+        .with(warp::log("playground-server"))
+}
+
+/// Creates a nice HTML error page when playground assets are not available
+fn serve_error_page() -> Response<Vec<u8>> {
+    let error_html = include_str!("error_page.html");
+
+    Response::builder()
+        .header("content-type", "text/html; charset=utf-8")
+        .status(503) // Service Unavailable
+        .body(error_html.as_bytes().to_vec())
+        .unwrap()
 }
 
 // Helper function to broadcast project updates with better error handling
@@ -217,4 +285,199 @@ pub async fn broadcast_test_run(
         tracing::error!("Failed to broadcast test run: {}", e);
     }
     Ok(())
+}
+
+/// Verifies the SHA256 checksum of a downloaded file against the expected checksum
+async fn verify_sha256_checksum(
+    file_bytes: &[u8],
+    checksum_url: &str,
+    client: &Client,
+) -> anyhow::Result<()> {
+    tracing::info!("Downloading SHA256 checksum from: {}", checksum_url);
+
+    // Download the checksum file
+    tracing::info!("Downloading checksum file...");
+    let checksum_resp = client
+        .get(checksum_url)
+        .header("User-Agent", "baml-playground-server")
+        .send()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to download checksum file: {e}"))?;
+
+    if !checksum_resp.status().is_success() {
+        return Err(anyhow::anyhow!(
+            "Checksum download failed with status: {}",
+            checksum_resp.status()
+        ));
+    }
+
+    let checksum_text = checksum_resp.text().await?;
+
+    // Parse the expected checksum (format: "hash filename" or just "hash")
+    let expected_checksum = checksum_text
+        .split_whitespace()
+        .next()
+        .ok_or_else(|| anyhow::anyhow!("Invalid checksum file format"))?
+        .to_lowercase();
+
+    // Calculate actual checksum
+    let mut hasher = Sha256::new();
+    hasher.update(file_bytes);
+    let actual_checksum = format!("{:x}", hasher.finalize());
+
+    // Verify checksums match
+    if actual_checksum != expected_checksum {
+        return Err(anyhow::anyhow!(
+            "SHA256 checksum verification failed. Expected: {}, Actual: {}",
+            expected_checksum,
+            actual_checksum
+        ));
+    }
+
+    tracing::info!("SHA256 checksum verification passed");
+    Ok(())
+}
+
+/// Downloads and extracts the playground frontend from the baml GitHub release.
+/// Uses the provided version for both asset name construction and release tag lookup.
+/// Returns the path to the directory containing the static files to serve (may be a nested 'dist' directory).
+pub async fn get_playground_dist(github_repo: &str, version: &str) -> anyhow::Result<String> {
+    // Construct versioned asset names
+    let web_panel_asset_name = format!("playground-dist-{version}.tar.gz");
+    let checksum_asset_name = format!("playground-dist-{version}.tar.gz.sha256");
+
+    // Build the GitHub API URL using the version as the release tag
+    let api_url = format!("https://api.github.com/repos/{github_repo}/releases/tags/{version}");
+    tracing::info!("Fetching web-panel release metadata from: {}", api_url);
+
+    // Fetch release metadata with timeout
+    let client = Client::builder()
+        .timeout(Duration::from_secs(30))
+        .connect_timeout(Duration::from_secs(10))
+        .build()
+        .map_err(|e| anyhow::anyhow!("Failed to create HTTP client: {e}"))?;
+
+    tracing::info!("Sending request to GitHub API...");
+    let resp = client
+        .get(&api_url)
+        .header("User-Agent", "baml-playground-server")
+        .send()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to fetch release metadata: {e}"))?;
+
+    tracing::info!("Received response with status: {}", resp.status());
+
+    // Check if the response is successful
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let body = resp
+            .text()
+            .await
+            .unwrap_or_else(|_| "Failed to read response body".to_string());
+        return Err(anyhow::anyhow!(
+            "GitHub API request failed with status {}: {}",
+            status,
+            body
+        ));
+    }
+
+    tracing::info!("Parsing JSON response...");
+    let release: serde_json::Value = resp
+        .json()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to parse JSON response: {e}"))?;
+
+    // Find the main asset
+    let assets = release["assets"]
+        .as_array()
+        .ok_or_else(|| anyhow::anyhow!("No assets in release metadata"))?;
+    let asset = assets
+        .iter()
+        .find(|a| a["name"].as_str() == Some(&web_panel_asset_name))
+        .ok_or_else(|| anyhow::anyhow!("No asset named '{}' in release", web_panel_asset_name))?;
+    let download_url = asset["browser_download_url"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("No download URL for asset"))?;
+
+    // Find the checksum asset
+    let checksum_asset = assets
+        .iter()
+        .find(|a| a["name"].as_str() == Some(&checksum_asset_name))
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "No checksum asset named '{}' in release",
+                checksum_asset_name
+            )
+        })?;
+    let checksum_url = checksum_asset["browser_download_url"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("No download URL for checksum asset"))?;
+
+    tracing::info!(
+        "Found assets - main: {}, checksum: {}",
+        download_url,
+        checksum_url
+    );
+
+    // Compute extraction directory using the provided version
+    let home = home_dir().ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?;
+    let extract_root: PathBuf = home
+        .join(".baml/playground")
+        .join(format!("web-panel-dist-{version}"));
+    let dist_dir = extract_root.join("dist");
+
+    // If already extracted, return the correct directory
+    if dist_dir.exists() && dist_dir.read_dir()?.next().is_some() {
+        tracing::info!("Web panel already extracted at: {}", dist_dir.display());
+        return Ok(dist_dir.to_string_lossy().to_string());
+    } else if extract_root.exists() {
+        fs::remove_dir_all(&extract_root).with_context(|| {
+            format!(
+                "Failed to remove old extraction directory: {}",
+                extract_root.display()
+            )
+        })?;
+    }
+    fs::create_dir_all(&extract_root).with_context(|| {
+        format!(
+            "Failed to create extraction directory: {}",
+            extract_root.display()
+        )
+    })?;
+
+    // Download the tar.gz asset
+    tracing::info!("Downloading web-panel asset from: {}", download_url);
+    let resp = client
+        .get(download_url)
+        .header("User-Agent", "baml-playground-server")
+        .send()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to download asset: {e}"))?;
+    let bytes = resp.bytes().await?;
+
+    // Verify SHA256 checksum
+    verify_sha256_checksum(&bytes, checksum_url, &client).await?;
+
+    // Extract the verified archive
+    let tar = GzDecoder::new(Cursor::new(bytes));
+    let mut archive = Archive::new(tar);
+    archive
+        .unpack(&extract_root)
+        .with_context(|| format!("Failed to extract archive to: {}", extract_root.display()))?;
+
+    // Return the path to the actual dist directory if it exists, else the extraction root
+    if dist_dir.exists() && dist_dir.read_dir()?.next().is_some() {
+        Ok(dist_dir.to_string_lossy().to_string())
+    } else {
+        Ok(extract_root.to_string_lossy().to_string())
+    }
+}
+
+/// Returns the expected extraction directory for a given version (not the nested dist directory)
+pub fn web_panel_extract_root(version: &str) -> String {
+    let home = home_dir().expect("Could not determine home directory");
+    home.join(".baml/playground")
+        .join(format!("web-panel-dist-{version}"))
+        .to_string_lossy()
+        .to_string()
 }

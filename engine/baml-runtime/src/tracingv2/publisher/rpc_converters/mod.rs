@@ -64,6 +64,9 @@ impl<'a, T: HasType<type_meta::NonStreaming>> IntoRpcEvent<'a, baml_rpc::runtime
                     logged_llmresponse.to_rpc_event(lookup),
                 )
             }
+            TraceData::RawLLMResponseStream(httpresponse) => {
+                baml_rpc::runtime_api::TraceData::Intermediate(httpresponse.to_rpc_event(lookup))
+            }
             TraceData::SetTags(tags) => baml_rpc::runtime_api::TraceData::Intermediate(
                 baml_rpc::runtime_api::IntermediateData::SetTags(
                     tags.clone().into_iter().collect(),

@@ -262,4 +262,21 @@ describe("Modular API Tests", () => {
 
     expect(received).toEqual(expected);
   });
+
+  it("modular openai responses", async () => {
+    // Test openai-responses provider using the modular API
+    const client = new OpenAI();
+
+    // Use TestOpenAIResponses from the providers directory
+    const req = await b.request.TestOpenAIResponses("mountains");
+
+    // The openai-responses provider should use the /v1/responses endpoint
+    const res = await client.responses.create(req.body.json()) as any;
+
+    // Parse the response from the responses API (uses output_text instead of choices)
+    const parsed = b.parse.TestOpenAIResponses(res.output_text);
+
+    expect(typeof parsed).toBe("string");
+    expect(parsed.length).toBeGreaterThan(0);
+  });
 });

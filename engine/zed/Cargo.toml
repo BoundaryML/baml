@@ -1,10 +1,8 @@
 [package]
-name = "zed"
+name = "zed_baml"
 edition = "2024"
-version.workspace = true
-authors.workspace = true
-description.workspace = true
-license-file.workspace = true
+version = "0.0.1"
+description = "BAML language support for Zed"
 
 [lib]
 crate-type = ["cdylib"]
