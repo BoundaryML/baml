@@ -176,7 +176,7 @@ impl InitUI {
                         Line::from(vec![
                             Span::raw("  "),
                             Span::styled(
-                                format!("{} ", icon),
+                                format!("{icon} "),
                                 Style::default().fg(icon_color).add_modifier(Modifier::BOLD),
                             ),
                             Span::styled(&step.message, Style::default().fg(text_color)),
@@ -185,11 +185,11 @@ impl InitUI {
                         // Pending/in-progress steps - show dot animation
                         Line::from(vec![
                             Span::styled(
-                                format!(" {} ", dot_anim),
+                                format!(" {dot_anim} "),
                                 Style::default().fg(PURPLE_COLOR),
                             ),
                             Span::styled(
-                                format!("{} ", icon),
+                                format!("{icon} "),
                                 Style::default().fg(icon_color).add_modifier(Modifier::BOLD),
                             ),
                             Span::styled(&step.message, Style::default().fg(text_color)),

@@ -369,7 +369,7 @@ fn install_extension_manually(editor: &str) {
 impl InitArgs {
     pub fn run(&self, defaults: super::RuntimeCliDefaults) -> Result<()> {
         // Initialize UI context
-        let mut ui_context = InitUIContext::new(!env::var("BAML_NO_UI").is_ok())?;
+        let mut ui_context = InitUIContext::new(env::var("BAML_NO_UI").is_err())?;
         let output_type = self.client_type.unwrap_or(defaults.output_type);
 
         // If the destination directory already contains a baml_src directory, we don't want to overwrite it.
@@ -479,9 +479,9 @@ impl InitArgs {
             client_type_str
         ));
 
-        ui_context.add_completion_message(&format!(
-            "📚 Follow instructions at https://docs.boundaryml.com/ref/overview to get started!"
-        ));
+        ui_context.add_completion_message(
+            "📚 Follow instructions at https://docs.boundaryml.com/ref/overview to get started!",
+        );
 
         // Finish UI
         ui_context.finish()?;
