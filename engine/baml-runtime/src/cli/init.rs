@@ -1,9 +1,11 @@
-use std::{env, fs, io::Write, path::PathBuf, process::Command};
+use std::{env, fs, io::Write, path::PathBuf, process::Command, time::Duration};
 
 use anyhow::Result;
 use baml_types::GeneratorOutputType;
 use include_dir::include_dir;
 use which::which;
+
+use crate::cli::init_ui::{show_error, InitUIContext, StepStatus};
 
 const BAML_EXTENSION_ID: &str = "boundary.baml-extension";
 
@@ -78,23 +80,55 @@ fn detect_editor() -> EditorType {
 
 // detect the editor based on the environment variables and install the extension
 // the dest_path is the path to the new project, used to copy cursor rules right now.
-fn detect_and_install_extension(dest_path: &std::path::Path) {
-    let editor = detect_editor();
+fn detect_and_install_extension(
+    dest_path: &std::path::Path,
+    ui_context: &mut InitUIContext,
+    editor: EditorType,
+) {
+    // Step 4: Detect editor
+    ui_context.set_step_status(3, StepStatus::InProgress);
+    // Add multiple render calls to show animation
+    for _ in 0..6 {
+        ui_context.render_current();
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    ui_context.complete_step();
 
+    // Step 5: Install extension
+    ui_context.set_step_status(4, StepStatus::InProgress);
     match editor {
         EditorType::VSCode => {
-            baml_log::info!("Detected VSCode terminal environment");
             install_vscode_extension();
         }
         EditorType::Cursor => {
-            baml_log::info!("Detected Cursor terminal environment");
             install_cursor_extension();
-            copy_cursor_rules(dest_path);
         }
         EditorType::Unknown => {
             // Don't log anything for unknown editors to avoid noise
         }
     }
+    // Show animation during installation
+    for _ in 0..10 {
+        ui_context.render_current();
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    ui_context.complete_step();
+
+    // Step 6: Setup editor rules/settings
+    ui_context.set_step_status(5, StepStatus::InProgress);
+    match editor {
+        EditorType::Cursor => {
+            copy_cursor_rules(dest_path);
+        }
+        _ => {
+            // VSCode uses settings.json, Unknown gets generic finalization
+            for _ in 0..4 {
+                ui_context.render_current();
+                std::thread::sleep(Duration::from_millis(50));
+            }
+        }
+    }
+    ui_context.complete_step();
 }
 
 fn is_extension_installed(editor: &str) -> bool {
@@ -124,11 +158,8 @@ fn install_vscode_extension() {
     if which("code").is_ok() {
         // First check if extension is already installed
         if is_extension_installed("code") {
-            baml_log::info!("BAML VSCode extension is already installed");
             return;
         }
-
-        baml_log::info!("Installing BAML VSCode extension...");
 
         match Command::new("code")
             .args(["--install-extension", BAML_EXTENSION_ID])
@@ -139,23 +170,20 @@ fn install_vscode_extension() {
                 let stderr = String::from_utf8_lossy(&output.stderr);
 
                 if output.status.success() {
-                    baml_log::info!("Successfully installed BAML VSCode extension!");
+                    // Successfully installed
                 } else if stderr.contains("already installed")
                     || stdout.contains("already installed")
                 {
-                    baml_log::info!("BAML VSCode extension is already installed");
+                    // Already installed
                 } else {
-                    baml_log::info!("Attempting manual installation...");
                     install_extension_manually("code");
                 }
             }
             Err(_) => {
-                baml_log::info!("Attempting manual installation...");
                 install_extension_manually("code");
             }
         }
     } else {
-        baml_log::info!("VSCode 'code' command not found in PATH. Attempting to download and install extension manually...");
         install_extension_manually("code");
     }
 }
@@ -165,11 +193,8 @@ fn install_cursor_extension() {
     if which("cursor").is_ok() {
         // First check if extension is already installed
         if is_extension_installed("cursor") {
-            baml_log::info!("BAML Cursor extension is already installed");
             return;
         }
-
-        baml_log::info!("Installing BAML Cursor extension...");
 
         match Command::new("cursor")
             .args(["--install-extension", BAML_EXTENSION_ID])
@@ -180,23 +205,20 @@ fn install_cursor_extension() {
                 let stderr = String::from_utf8_lossy(&output.stderr);
 
                 if output.status.success() {
-                    baml_log::info!("Successfully installed BAML Cursor extension!");
+                    // Successfully installed
                 } else if stderr.contains("already installed")
                     || stdout.contains("already installed")
                 {
-                    baml_log::info!("BAML Cursor extension is already installed");
+                    // Already installed
                 } else {
-                    baml_log::info!("Attempting manual installation...");
                     install_extension_manually("cursor");
                 }
             }
             Err(_) => {
-                baml_log::info!("Attempting manual installation...");
                 install_extension_manually("cursor");
             }
         }
     } else {
-        baml_log::info!("Cursor command not found in PATH. Attempting to download and install extension manually...");
         install_extension_manually("cursor");
     }
 }
@@ -242,7 +264,7 @@ fn copy_cursor_rules(dest_path: &std::path::Path) {
         if let Err(e) = fs::write(&cursor_rules_file, baml_mdc_file.contents()) {
             baml_log::info!("Could not copy baml.mdc to .cursor/rules: {}", e);
         } else {
-            baml_log::info!("Setting up Cursor rules for BAML!");
+            // Successfully set up cursor rules
         }
     }
 }
@@ -346,16 +368,51 @@ fn install_extension_manually(editor: &str) {
 
 impl InitArgs {
     pub fn run(&self, defaults: super::RuntimeCliDefaults) -> Result<()> {
+        // Initialize UI context
+        let mut ui_context = InitUIContext::new(!env::var("BAML_NO_UI").is_ok())?;
         let output_type = self.client_type.unwrap_or(defaults.output_type);
 
         // If the destination directory already contains a baml_src directory, we don't want to overwrite it.
         let baml_src = self.dest.join("baml_src");
         if baml_src.exists() {
-            anyhow::bail!(
-                "Destination directory already contains a baml_src directory: {}",
-                baml_src.display()
-            );
+            show_error(&format!(
+                "Looks like you already have a BAML project at {}",
+                self.dest.display()
+            ))?;
+            anyhow::bail!("BAML project already exists");
         }
+
+        // Detect editor early to customize messages
+        let editor = detect_editor();
+
+        // Add initialization steps
+        ui_context.add_step("Checking project structure");
+        ui_context.add_step("Creating BAML project files");
+        ui_context.add_step("Generating configuration");
+        ui_context.add_step("Detecting editor environment");
+
+        // Add editor-specific steps
+        match editor {
+            EditorType::VSCode => {
+                ui_context.add_step("Getting BAML VSCode extension");
+                ui_context.add_step("Finishing VSCode setup");
+            }
+            EditorType::Cursor => {
+                ui_context.add_step("Getting BAML Cursor extension");
+                ui_context.add_step("Copying Cursor rules");
+            }
+            EditorType::Unknown => {
+                ui_context.add_step("Checking for editor extensions");
+                ui_context.add_step("Finalizing setup");
+            }
+        }
+
+        // Step 1: Check project structure
+        ui_context.set_step_status(0, StepStatus::InProgress);
+        ui_context.complete_step();
+
+        // Step 2: Create BAML project files
+        ui_context.set_step_status(1, StepStatus::InProgress);
 
         // Extract only the baml_src directory, not other files like baml.mdc
         let dest_baml_src = self.dest.join("baml_src");
@@ -372,6 +429,10 @@ impl InitArgs {
                 fs::write(&dest_file, file.contents())?;
             }
         }
+        ui_context.complete_step();
+        // Step 3: Generate configuration
+        ui_context.set_step_status(2, StepStatus::InProgress);
+
         // Also generate a main.baml file
         let main_baml = std::path::Path::new(&self.dest)
             .join("baml_src")
@@ -392,38 +453,38 @@ impl InitArgs {
             self.openapi_client_type.as_deref(),
         );
         std::fs::write(main_baml, main_baml_content)?;
-
-        baml_log::info!(
-            "Created new BAML project in {} for {}",
-            baml_src.display(),
-            match output_type {
-                GeneratorOutputType::PythonPydanticV1 | GeneratorOutputType::PythonPydantic =>
-                    "Python clients".to_string(),
-                GeneratorOutputType::Typescript => "TypeScript clients".to_string(),
-                GeneratorOutputType::RubySorbet => "Ruby clients".to_string(),
-                GeneratorOutputType::OpenApi => match &self.openapi_client_type {
-                    Some(s) => format!("{s} clients via OpenAPI"),
-                    None => "REST clients".to_string(),
-                },
-                GeneratorOutputType::TypescriptReact => "TypeScript React clients".to_string(),
-                GeneratorOutputType::Go => "Go clients".to_string(),
-            }
-        );
-        baml_log::info!(
-            "Follow instructions at https://docs.boundaryml.com/docs/get-started/quickstart/{}",
-            match output_type {
-                GeneratorOutputType::PythonPydanticV1 | GeneratorOutputType::PythonPydantic =>
-                    "python",
-                GeneratorOutputType::Typescript => "typescript",
-                GeneratorOutputType::RubySorbet => "ruby",
-                GeneratorOutputType::OpenApi => "openapi",
-                GeneratorOutputType::TypescriptReact => "typescript-react",
-                GeneratorOutputType::Go => "go",
-            }
-        );
+        ui_context.complete_step();
 
         // Detect and install VSCode/Cursor extension
-        detect_and_install_extension(&self.dest);
+        detect_and_install_extension(&self.dest, &mut ui_context, editor);
+
+        // Add completion messages to UI
+        let client_type_str = match output_type {
+            GeneratorOutputType::PythonPydanticV1 | GeneratorOutputType::PythonPydantic => {
+                "Python clients".to_string()
+            }
+            GeneratorOutputType::Typescript => "TypeScript clients".to_string(),
+            GeneratorOutputType::RubySorbet => "Ruby clients".to_string(),
+            GeneratorOutputType::OpenApi => match &self.openapi_client_type {
+                Some(s) => format!("{s} clients via OpenAPI"),
+                None => "REST clients".to_string(),
+            },
+            GeneratorOutputType::TypescriptReact => "TypeScript React clients".to_string(),
+            GeneratorOutputType::Go => "Go clients".to_string(),
+        };
+
+        ui_context.add_completion_message(&format!(
+            "✨ Created new BAML project in {} for {}",
+            baml_src.display(),
+            client_type_str
+        ));
+
+        ui_context.add_completion_message(&format!(
+            "📚 Follow instructions at https://docs.boundaryml.com/ref/overview to get started!"
+        ));
+
+        // Finish UI
+        ui_context.finish()?;
 
         Ok(())
     }
