@@ -10,6 +10,7 @@ use futures::{StreamExt, TryStreamExt};
 use internal_baml_jinja::RenderedChatMessage;
 use reqwest::Response;
 use serde::de::DeserializeOwned;
+use tokio_util::sync::CancellationToken;
 
 use super::{
     anthropic::response_handler::scan_anthropic_response_stream,
@@ -36,9 +37,17 @@ pub async fn make_stream_request(
     model_name: Option<String>,
     response_type: ResponseType,
     runtime_context: &impl HttpContext,
+    cancellation_token: Option<CancellationToken>,
 ) -> StreamResponse {
     let (start_time_system, start_time_instant, built_req) =
-        build_and_log_outbound_request(client, prompt, true, true, runtime_context).await?;
+        build_and_log_outbound_request(
+            client, 
+            prompt, 
+            true, 
+            true, 
+            runtime_context,
+            cancellation_token.clone()
+        ).await?;
 
     let resp = match execute_request(
         client,
@@ -48,6 +57,8 @@ pub async fn make_stream_request(
         start_time_instant,
         runtime_context,
         false,
+        cancellation_token.clone(),
+    ).await {
     )
     .await?
     {

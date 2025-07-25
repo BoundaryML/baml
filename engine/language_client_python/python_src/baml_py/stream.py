@@ -1,187 +1,236 @@
-from __future__ import annotations
-from .baml_py import (
-    FunctionResult,
-    FunctionResultStream,
-    SyncFunctionResultStream,
-    RuntimeContextManager,
-)
-from typing import Callable, Generic, Optional, TypeVar
-import threading
+"""
+BAML Stream with cancellation support for Python
+"""
+
 import asyncio
-import concurrent.futures
+from typing import TypeVar, Generic, Optional, Callable, Iterator, AsyncIterator
+import threading
 
-import queue
+T = TypeVar('T')
+PartialT = TypeVar('PartialT')
+FinalT = TypeVar('FinalT')
 
-PartialOutputType = TypeVar("PartialOutputType")
-FinalOutputType = TypeVar("FinalOutputType")
 
-
-class BamlStream(Generic[PartialOutputType, FinalOutputType]):
-    __ffi_stream: FunctionResultStream
-    __partial_coerce: Callable[[FunctionResult], PartialOutputType]
-    __final_coerce: Callable[[FunctionResult], FinalOutputType]
-    __ctx_manager: RuntimeContextManager
-    __task: Optional[threading.Thread]
-    __event_queue: queue.Queue[Optional[FunctionResult]]
-    __future: concurrent.futures.Future[FunctionResult]
-    __is_done: bool
-
+class BamlStream(Generic[PartialT, FinalT]):
+    """
+    A BAML stream that supports cancellation.
+    
+    This stream can be cancelled to stop ongoing HTTP requests to LLM providers,
+    preventing wasted resources and billing charges.
+    """
+    
     def __init__(
         self,
-        ffi_stream: FunctionResultStream,
-        partial_coerce: Callable[[FunctionResult], PartialOutputType],
-        final_coerce: Callable[[FunctionResult], FinalOutputType],
-        ctx_manager: RuntimeContextManager,
+        ffi_stream,
+        partial_coerce: Callable[[any], PartialT],
+        final_coerce: Callable[[any], FinalT],
+        ctx_manager,
     ):
-        self.__ffi_stream = ffi_stream.on_event(self.__enqueue)
-        self.__partial_coerce = partial_coerce
-        self.__final_coerce = final_coerce
-        self.__ctx_manager = ctx_manager
-        self.__task = None
-        self.__event_queue = queue.Queue()
-        self.__future = concurrent.futures.Future()  # Initialize the future here
-        self.__is_done = False
-
-    def __enqueue(self, data: FunctionResult) -> None:
-        self.__event_queue.put_nowait(data)
-
-    async def __drive_to_completion(self) -> FunctionResult:
+        self._ffi_stream = ffi_stream
+        self._partial_coerce = partial_coerce
+        self._final_coerce = final_coerce
+        self._ctx_manager = ctx_manager
+        self._cancelled = False
+        self._final_result = None
+        
+    def cancel(self) -> None:
+        """
+        Cancel the stream processing.
+        
+        This will:
+        1. Cancel the Rust-level stream
+        2. Cancel ongoing HTTP requests to LLM providers
+        3. Stop consuming network bandwidth and API quota
+        4. Clean up resources
+        """
+        if not self._cancelled:
+            self._cancelled = True
+            self._ffi_stream.cancel()
+    
+    def is_cancelled(self) -> bool:
+        """Check if the stream has been cancelled."""
+        return self._cancelled or self._ffi_stream.is_cancelled()
+    
+    async def get_final_response(self) -> FinalT:
+        """
+        Get the final response from the stream.
+        
+        This will wait for the stream to complete and return the final result.
+        If the stream is cancelled, this will raise an exception.
+        """
+        if self._final_result is not None:
+            return self._final_result
+            
         try:
-            retval = await self.__ffi_stream.done(self.__ctx_manager)
-
-            self.__future.set_result(retval)
-
-            return retval
+            result = await self._ffi_stream.done(self._ctx_manager)
+            final_result = self._final_coerce(result.parsed())
+            self._final_result = final_result
+            return final_result
         except Exception as e:
-            self.__future.set_exception(e)
+            if self.is_cancelled():
+                raise RuntimeError("Stream was cancelled") from e
+            raise
+    
+    def __aiter__(self) -> AsyncIterator[PartialT]:
+        """Async iterator support for streaming partial results."""
+        return self._async_iter()
+    
+    async def _async_iter(self) -> AsyncIterator[PartialT]:
+        """Internal async iterator implementation."""
+        partial_results = []
+        
+        def on_event(result):
+            if not self.is_cancelled():
+                try:
+                    partial = self._partial_coerce(result.parsed())
+                    partial_results.append(partial)
+                except Exception as e:
+                    # Log error but continue streaming
+                    print(f"Error processing partial result: {e}")
+        
+        # Set up event handler
+        self._ffi_stream.on_event(on_event)
+        
+        # Start the stream processing
+        stream_task = asyncio.create_task(self.get_final_response())
+        
+        try:
+            # Yield partial results as they come in
+            last_index = 0
+            while not stream_task.done() and not self.is_cancelled():
+                # Yield any new partial results
+                while last_index < len(partial_results):
+                    yield partial_results[last_index]
+                    last_index += 1
+                
+                # Small delay to avoid busy waiting
+                await asyncio.sleep(0.01)
+            
+            # Yield any remaining partial results
+            while last_index < len(partial_results):
+                yield partial_results[last_index]
+                last_index += 1
+                
+            # Wait for final result (or cancellation)
+            await stream_task
+            
+        except Exception as e:
+            if self.is_cancelled():
+                raise RuntimeError("Stream was cancelled") from e
             raise
         finally:
-            # Remove the callback, so that the ffi_stream can be GC'd
-            # If we don't do this, the ffi_stream *and* this BamlStream object
-            # will never get collected since they circularly reference each other.
-            self.__ffi_stream.on_event(None)  # type: ignore
-            self.__is_done = True
-            self.__event_queue.put_nowait(None)
-
-    def __drive_to_completion_in_bg(self) -> concurrent.futures.Future[FunctionResult]:
-        if self.__task is None and not self.__is_done:
-            self.__task = threading.Thread(target=self.threading_target, daemon=True)
-            self.__task.start()
-        return self.__future
-
-    def threading_target(self):
-        asyncio.run(self.__drive_to_completion(), debug=True)
-
-    async def __aiter__(self):
-        # TODO: This is deliberately __aiter__ and not __iter__ because we want to
-        # ensure that the caller is using an async for loop.
-        # Eventually we do not want to create a new thread for each stream.
-        try:
-            self.__drive_to_completion_in_bg()
-            while True:
-                try:
-                    event = self.__event_queue.get_nowait()
-                    if event is None:
-                        break
-                    if event.is_ok():
-                        yield self.__partial_coerce(event)
-                except queue.Empty:
-                    await asyncio.sleep(0.050)
-        except Exception as e:
-            raise e
-        finally:
-            if self.__task and self.__task.is_alive():
-                self.__task.join(timeout=5.0)
-
-    async def get_final_response(self):
-        final = self.__drive_to_completion_in_bg()
-        return self.__final_coerce((await asyncio.wrap_future(final)))
+            # Clean up event handler
+            self._ffi_stream.on_event(None)
 
 
-class BamlSyncStream(Generic[PartialOutputType, FinalOutputType]):
-    __ffi_stream: SyncFunctionResultStream
-    __partial_coerce: Callable[[FunctionResult], PartialOutputType]
-    __final_coerce: Callable[[FunctionResult], FinalOutputType]
-    __ctx_manager: RuntimeContextManager
-    __task: Optional[threading.Thread]
-    __event_queue: queue.Queue[Optional[FunctionResult]]
-    __result: Optional[FunctionResult]
-    __exception: Optional[Exception]
-
+class BamlSyncStream(Generic[PartialT, FinalT]):
+    """
+    Synchronous version of BamlStream with cancellation support.
+    """
+    
     def __init__(
         self,
-        ffi_stream: SyncFunctionResultStream,
-        partial_coerce: Callable[[FunctionResult], PartialOutputType],
-        final_coerce: Callable[[FunctionResult], FinalOutputType],
-        ctx_manager: RuntimeContextManager,
+        ffi_stream,
+        partial_coerce: Callable[[any], PartialT],
+        final_coerce: Callable[[any], FinalT],
+        ctx_manager,
     ):
-        self.__ffi_stream = ffi_stream.on_event(self.__enqueue)
-        self.__partial_coerce = partial_coerce
-        self.__final_coerce = final_coerce
-        self.__ctx_manager = ctx_manager
-        self.__task = None
-        self.__event_queue = queue.Queue()
-        self.__result = None
-        self.__exception = None
-        self.__is_done = False
-
-    def __enqueue(self, data: FunctionResult) -> None:
-        self.__event_queue.put_nowait(data)
-
-    def __drive_to_completion(self) -> FunctionResult:
+        self._ffi_stream = ffi_stream
+        self._partial_coerce = partial_coerce
+        self._final_coerce = final_coerce
+        self._ctx_manager = ctx_manager
+        self._cancelled = False
+        self._final_result = None
+        
+    def cancel(self) -> None:
+        """
+        Cancel the stream processing.
+        
+        This will:
+        1. Cancel the Rust-level stream
+        2. Cancel ongoing HTTP requests to LLM providers
+        3. Stop consuming network bandwidth and API quota
+        4. Clean up resources
+        """
+        if not self._cancelled:
+            self._cancelled = True
+            self._ffi_stream.cancel()
+    
+    def is_cancelled(self) -> bool:
+        """Check if the stream has been cancelled."""
+        return self._cancelled or self._ffi_stream.is_cancelled()
+    
+    def get_final_response(self) -> FinalT:
+        """
+        Get the final response from the stream.
+        
+        This will block until the stream completes and return the final result.
+        If the stream is cancelled, this will raise an exception.
+        """
+        if self._final_result is not None:
+            return self._final_result
+            
         try:
-            retval = self.__ffi_stream.done(self.__ctx_manager)
-            self.__result = retval
-            # Remove the callback, so that the ffi_stream can be GC'd
-            # If we don't do this, the ffi_stream *and* this BamlStream object
-            # will never get collected since they circularly reference each other.
-            self.__ffi_stream.on_event(None)  # type: ignore
-
-            return retval
+            result = self._ffi_stream.done(self._ctx_manager)
+            final_result = self._final_coerce(result.parsed())
+            self._final_result = final_result
+            return final_result
         except Exception as e:
-            self.__exception = e
-            raise e
-        finally:
-            self.__is_done = True
-            self.__event_queue.put_nowait(None)
-
-    def __drive_to_completion_in_bg(self):
-        if self.__task is None and not self.__is_done:
-            self.__task = threading.Thread(target=self.__threading_target, daemon=True)
-            self.__task.start()
-
-    def __threading_target(self):
-        self.__drive_to_completion()
-
-    def __iter__(self):
-        # TODO: This is deliberately __iter__ and not __aiter__ because we want to
-        # ensure that the caller is NOT using an async for loop.
-        self.__drive_to_completion_in_bg()
-
+            if self.is_cancelled():
+                raise RuntimeError("Stream was cancelled") from e
+            raise
+    
+    def __iter__(self) -> Iterator[PartialT]:
+        """Iterator support for streaming partial results."""
+        return self._sync_iter()
+    
+    def _sync_iter(self) -> Iterator[PartialT]:
+        """Internal sync iterator implementation."""
+        partial_results = []
+        stream_done = threading.Event()
+        
+        def on_event(result):
+            if not self.is_cancelled():
+                try:
+                    partial = self._partial_coerce(result.parsed())
+                    partial_results.append(partial)
+                except Exception as e:
+                    # Log error but continue streaming
+                    print(f"Error processing partial result: {e}")
+        
+        # Set up event handler
+        self._ffi_stream.on_event(on_event)
+        
+        # Start stream processing in background thread
+        def run_stream():
+            try:
+                self.get_final_response()
+            except Exception:
+                pass  # Error will be handled when get_final_response is called again
+            finally:
+                stream_done.set()
+        
+        stream_thread = threading.Thread(target=run_stream)
+        stream_thread.start()
+        
         try:
-            while True:
-                event = self.__event_queue.get()
-                if event is None:
-                    break
-                if event.is_ok():
-                    yield self.__partial_coerce(event)
-        except Exception as e:
-            raise e
+            # Yield partial results as they come in
+            last_index = 0
+            while not stream_done.is_set() and not self.is_cancelled():
+                # Yield any new partial results
+                while last_index < len(partial_results):
+                    yield partial_results[last_index]
+                    last_index += 1
+                
+                # Small delay to avoid busy waiting
+                stream_done.wait(0.01)
+            
+            # Yield any remaining partial results
+            while last_index < len(partial_results):
+                yield partial_results[last_index]
+                last_index += 1
+                
         finally:
-            if self.__task and self.__task.is_alive():
-                self.__task.join(timeout=5.0)
-
-    def get_final_response(self):
-        self.__drive_to_completion_in_bg()
-        if self.__task is not None:
-            self.__task.join()
-
-        if self.__exception is not None:
-            raise self.__exception
-
-        if self.__result is None:
-            raise Exception(
-                "BAML Internal error: Stream did not complete successfully. Please report this issue."
-            )
-
-        return self.__final_coerce(self.__result)
+            # Clean up
+            self._ffi_stream.on_event(None)
+            stream_thread.join(timeout=1.0)  # Give it a second to clean up

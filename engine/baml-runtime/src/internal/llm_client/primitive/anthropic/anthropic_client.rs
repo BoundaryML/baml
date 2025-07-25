@@ -112,6 +112,7 @@ impl WithStreamChat for AnthropicClient {
         &self,
         ctx: &impl HttpContext,
         prompt: &[RenderedChatMessage],
+        cancellation_token: Option<tokio_util::sync::CancellationToken>,
     ) -> StreamResponse {
         let model_name = self
             .request_options()
@@ -124,6 +125,7 @@ impl WithStreamChat for AnthropicClient {
             model_name,
             ResponseType::Anthropic,
             ctx,
+            cancellation_token,
         )
         .await
     }
@@ -231,6 +233,7 @@ impl RequestBuilder for AnthropicClient {
         allow_proxy: bool,
         stream: bool,
         expose_secrets: bool,
+        _cancellation_token: Option<tokio_util::sync::CancellationToken>,
     ) -> Result<reqwest::RequestBuilder> {
         let destination_url = if allow_proxy {
             self.properties

@@ -2,30 +2,31 @@ use std::collections::HashMap;
 
 use pyo3::{
     prelude::{pymethods, PyResult},
-    PyErr, PyObject, PyRefMut, Python,
+    PyObject, PyRefMut, Python,
 };
+use tokio_util::sync::CancellationToken;
 
 use super::{function_results::FunctionResult, runtime_ctx_manager::RuntimeContextManager};
 use crate::errors::BamlError;
 
 crate::lang_wrapper!(
     FunctionResultStream,
-    baml_runtime::FunctionResultStream, optional,
+    baml_runtime::FunctionResultStream, thread_safe,
     on_event: Option<PyObject>,
     tb: Option<baml_runtime::type_builder::TypeBuilder>,
     cb: Option<baml_runtime::client_registry::ClientRegistry>,
     env_vars: HashMap<String, String>,
-    on_tick: Option<PyObject>
+    cancellation_token: CancellationToken
 );
 
 crate::lang_wrapper!(
     SyncFunctionResultStream,
-    baml_runtime::FunctionResultStream, optional,
+    baml_runtime::FunctionResultStream, sync_thread_safe,
     on_event: Option<PyObject>,
     tb: Option<baml_runtime::type_builder::TypeBuilder>,
     cb: Option<baml_runtime::client_registry::ClientRegistry>,
     env_vars: HashMap<String, String>,
-    on_tick: Option<PyObject>
+    cancellation_token: CancellationToken
 );
 
 impl FunctionResultStream {
@@ -35,15 +36,14 @@ impl FunctionResultStream {
         tb: Option<baml_runtime::type_builder::TypeBuilder>,
         cb: Option<baml_runtime::client_registry::ClientRegistry>,
         env_vars: HashMap<String, String>,
-        on_tick: Option<PyObject>,
     ) -> Self {
         Self {
-            inner: Some(inner),
+            inner: std::sync::Arc::new(tokio::sync::Mutex::new(inner)),
             on_event: event,
             tb,
             cb,
             env_vars,
-            on_tick,
+            cancellation_token: CancellationToken::new(),
         }
     }
 }
@@ -55,15 +55,179 @@ impl SyncFunctionResultStream {
         tb: Option<baml_runtime::type_builder::TypeBuilder>,
         cb: Option<baml_runtime::client_registry::ClientRegistry>,
         env_vars: HashMap<String, String>,
-        on_tick: Option<PyObject>,
     ) -> Self {
         Self {
-            inner: Some(inner),
+            inner: std::sync::Arc::new(std::sync::Mutex::new(inner)),
             on_event: event,
             tb,
             cb,
             env_vars,
-            on_tick,
+            cancellation_token: CancellationToken::new(),
+        }
+    }
+}
+
+#[pymethods]
+impl FunctionResultStream {
+    /// Cancel the stream processing.
+    /// This will stop any ongoing stream processing and clean up resources.
+    /// Also cancels the underlying Rust HTTP requests.
+    fn cancel(&self) -> PyResult<()> {
+        self.cancellation_token.cancel();
+        
+        // Also cancel the underlying Rust stream
+        let inner = self.inner.clone();
+        let token = self.cancellation_token.clone();
+        tokio::spawn(async move {
+            if let Ok(mut stream) = inner.try_lock() {
+                stream.set_cancellation_token(token);
+                stream.cancel();
+            }
+        });
+        
+        Ok(())
+    }
+
+    /// Check if the stream has been cancelled
+    fn is_cancelled(&self) -> bool {
+        self.cancellation_token.is_cancelled()
+    }
+
+    fn on_event(&mut self, py: Python, func: Option<PyObject>) -> PyResult<()> {
+        self.on_event = func;
+        Ok(())
+    }
+
+    fn done(&self, py: Python, ctx_manager: &RuntimeContextManager) -> PyResult<PyObject> {
+        let inner = self.inner.clone();
+        let cancellation_token = self.cancellation_token.clone();
+
+        let on_event = self.on_event.clone();
+        let tb = self.tb.clone();
+        let cb = self.cb.clone();
+        let env_vars = self.env_vars.clone();
+        let ctx_manager = ctx_manager.inner.clone();
+
+        pyo3_asyncio::tokio::future_into_py(py, async move {
+            // Set the cancellation token on the stream
+            if let Ok(mut stream) = inner.try_lock() {
+                stream.set_cancellation_token(cancellation_token);
+            }
+
+            let on_event_fn = on_event.map(|callback| {
+                move |result: baml_runtime::FunctionResult| {
+                    Python::with_gil(|py| {
+                        let py_result = FunctionResult::from(result);
+                        if let Err(e) = callback.call1(py, (py_result,)) {
+                            eprintln!("Error calling Python callback: {:?}", e);
+                        }
+                    });
+                }
+            });
+
+            let result = inner
+                .lock()
+                .await
+                .run(
+                    None::<fn()>,
+                    on_event_fn,
+                    &ctx_manager,
+                    tb.as_ref(),
+                    cb.as_ref(),
+                    env_vars,
+                )
+                .await;
+
+            Python::with_gil(|py| {
+                result
+                    .0
+                    .map(FunctionResult::from)
+                    .map_err(BamlError::from_anyhow)
+                    .map(|r| r.into_py(py))
+            })
+        })
+    }
+}
+
+#[pymethods]
+impl SyncFunctionResultStream {
+    /// Cancel the stream processing (sync version).
+    fn cancel(&self) -> PyResult<()> {
+        self.cancellation_token.cancel();
+        
+        // Also cancel the underlying Rust stream
+        if let Ok(mut stream) = self.inner.try_lock() {
+            stream.set_cancellation_token(self.cancellation_token.clone());
+            stream.cancel();
+        }
+        
+        Ok(())
+    }
+
+    /// Check if the stream has been cancelled
+    fn is_cancelled(&self) -> bool {
+        self.cancellation_token.is_cancelled()
+    }
+
+    fn on_event(&mut self, py: Python, func: Option<PyObject>) -> PyResult<()> {
+        self.on_event = func;
+        Ok(())
+    }
+
+    fn done(&self, py: Python, ctx_manager: &RuntimeContextManager) -> PyResult<FunctionResult> {
+        let inner = self.inner.clone();
+        let cancellation_token = self.cancellation_token.clone();
+
+        let on_event = self.on_event.clone();
+        let tb = self.tb.clone();
+        let cb = self.cb.clone();
+        let env_vars = self.env_vars.clone();
+        let ctx_manager = ctx_manager.inner.clone();
+
+        // Set the cancellation token on the stream
+        if let Ok(mut stream) = inner.try_lock() {
+            stream.set_cancellation_token(cancellation_token);
+        }
+
+        let on_event_fn = on_event.map(|callback| {
+            move |result: baml_runtime::FunctionResult| {
+                Python::with_gil(|py| {
+                    let py_result = FunctionResult::from(result);
+                    if let Err(e) = callback.call1(py, (py_result,)) {
+                        eprintln!("Error calling Python callback: {:?}", e);
+                    }
+                });
+            }
+        });
+
+        let result = inner
+            .lock()
+            .unwrap()
+            .run_sync(
+                None::<fn()>,
+                on_event_fn,
+                &ctx_manager,
+                tb.as_ref(),
+                cb.as_ref(),
+                env_vars,
+            );
+
+        result
+            .0
+            .map(FunctionResult::from)
+            .map_err(BamlError::from_anyhow)
+    }
+}
+        tb: Option<baml_runtime::type_builder::TypeBuilder>,
+        cb: Option<baml_runtime::client_registry::ClientRegistry>,
+        env_vars: HashMap<String, String>,
+    ) -> Self {
+        Self {
+            inner: std::sync::Arc::new(std::sync::Mutex::new(inner)),
+            on_event: event,
+            tb,
+            cb,
+            env_vars,
         }
     }
 }
@@ -83,15 +247,12 @@ impl FunctionResultStream {
         on_event_cb: PyObject,
     ) -> PyRefMut<'p, Self> {
         slf.on_event = Some(on_event_cb.clone_ref(py));
+
         slf
     }
 
-    fn done(&mut self, py: Python<'_>, ctx: &RuntimeContextManager) -> PyResult<PyObject> {
-        let Some(inner) = self.inner.take() else {
-            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
-                "Stream already finished",
-            ));
-        };
+    fn done(&self, py: Python<'_>, ctx: &RuntimeContextManager) -> PyResult<PyObject> {
+        let inner = self.inner.clone();
 
         let on_event = self.on_event.as_ref().map(|cb| {
             let cb = cb.clone_ref(py);
@@ -104,28 +265,16 @@ impl FunctionResultStream {
             }
         });
 
-        let on_tick_callback = self.on_tick.as_ref().map(|tick_cb| {
-            let tick_cb = tick_cb.clone_ref(py);
-            move || {
-                Python::with_gil(|py| {
-                    let res = tick_cb.call0(py);
-                    if let Err(e) = res {
-                        e.display(py);
-                    }
-                });
-            }
-        });
-
         let ctx_mng = ctx.inner.clone();
         let tb = self.tb.clone();
         let cb = self.cb.clone();
         let env_vars = self.env_vars.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let ctx_mng = ctx_mng;
-            let mut inner = inner;
-            let (res, _) = inner
+            let mut locked = inner.lock().await;
+            let (res, _) = locked
                 .run(
-                    on_tick_callback,
+                    None::<fn()>,
                     on_event,
                     &ctx_mng,
                     tb.as_ref(),
@@ -159,12 +308,8 @@ impl SyncFunctionResultStream {
         slf
     }
 
-    fn done(&mut self, ctx: &RuntimeContextManager) -> PyResult<FunctionResult> {
-        let Some(inner) = self.inner.take() else {
-            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
-                "Stream already finished",
-            ));
-        };
+    fn done(&self, ctx: &RuntimeContextManager) -> PyResult<FunctionResult> {
+        let inner = self.inner.clone();
 
         let on_event = self.on_event.as_ref().map(|cb| {
             let cb = Python::with_gil(|py| cb.clone_ref(py));
@@ -177,25 +322,14 @@ impl SyncFunctionResultStream {
             }
         });
 
-        let on_tick_callback = self.on_tick.as_ref().map(|tick_cb| {
-            let tick_cb = Python::with_gil(|py| tick_cb.clone_ref(py));
-            move || {
-                Python::with_gil(|py| {
-                    // For now, we pass "Unknown" as the reason
-                    // In a full implementation, we'd get the last event from the collector
-                    tick_cb.call1(py, ("Unknown", py.None())).ok();
-                });
-            }
-        });
-
         let ctx_mng = ctx.inner.clone();
         let tb = self.tb.clone();
         let cb = self.cb.clone();
         let env_vars = self.env_vars.clone();
         let ctx_mng = ctx_mng;
-        let mut inner = inner;
-        let (res, _) = inner.run_sync(
-            on_tick_callback,
+        let mut locked = inner.lock().unwrap();
+        let (res, _) = locked.run_sync(
+            None::<fn()>,
             on_event,
             &ctx_mng,
             tb.as_ref(),

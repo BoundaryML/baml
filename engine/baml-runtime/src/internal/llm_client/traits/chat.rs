@@ -31,6 +31,7 @@ pub trait WithStreamChat: Sync + Send {
         &self,
         ctx: &impl HttpContext,
         prompt: &[RenderedChatMessage],
+        cancellation_token: Option<tokio_util::sync::CancellationToken>,
     ) -> StreamResponse;
 }
 
@@ -51,7 +52,12 @@ where
     T: WithNoChat + Send + Sync,
 {
     #[allow(async_fn_in_trait)]
-    async fn stream_chat(&self, _: &impl HttpContext, _: &[RenderedChatMessage]) -> StreamResponse {
+    async fn stream_chat(
+        &self, 
+        _: &impl HttpContext, 
+        _: &[RenderedChatMessage],
+        _cancellation_token: Option<tokio_util::sync::CancellationToken>,
+    ) -> StreamResponse {
         Err(LLMResponse::InternalFailure(
             "Chat prompts are not supported by this provider".to_string(),
         ))

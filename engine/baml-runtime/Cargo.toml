@@ -82,6 +82,7 @@ tokio = { version = "1", default-features = false, features = [
   "time",
 ] }
 tokio-stream = "0.1.15"
+tokio-util = "0.7"
 # NOTE(sam): adding this caused a build error, I suspect because tower uses nightly features or something
 # tower = "0.5.0"
 uuid.workspace = true

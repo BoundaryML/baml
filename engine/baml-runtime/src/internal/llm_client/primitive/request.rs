@@ -64,6 +64,7 @@ pub trait RequestBuilder {
         allow_proxy: bool,
         stream: bool,
         expose_secrets: bool,
+        cancellation_token: Option<tokio_util::sync::CancellationToken>,
     ) -> Result<reqwest::RequestBuilder>;
 
     fn request_options(&self) -> &BamlMap<String, serde_json::Value>;
@@ -150,12 +151,13 @@ pub(crate) async fn build_and_log_outbound_request(
     allow_proxy: bool,
     stream: bool,
     runtime_context: &impl HttpContext,
+    cancellation_token: Option<tokio_util::sync::CancellationToken>,
 ) -> Result<(web_time::SystemTime, web_time::Instant, reqwest::Request), LLMResponse> {
     let system_now = web_time::SystemTime::now();
     let instant_now = web_time::Instant::now();
 
     let req_builder = client
-        .build_request(prompt, allow_proxy, stream, true)
+        .build_request(prompt, allow_proxy, stream, true, cancellation_token)
         .await
         .context("Failed to build request")
         .map_err(|e| {
@@ -218,8 +220,35 @@ pub async fn execute_request(
     instant_now: web_time::Instant,
     runtime_context: &impl HttpContext,
     consume_body: bool,
+    cancellation_token: Option<tokio_util::sync::CancellationToken>,
 ) -> Result<(EitherResponse, web_time::SystemTime, web_time::Instant), LLMResponse> {
-    let response = match client.http_client().execute(built_req).await {
+    let http_client = client.http_client();
+    
+    // Create a future for the HTTP request
+    let request_future = http_client.execute(built_req);
+    
+    // Race the request against cancellation
+    let response = if let Some(token) = cancellation_token {
+        tokio::select! {
+            result = request_future => result,
+            _ = token.cancelled() => {
+                return Err(LLMResponse::LLMFailure(LLMErrorResponse {
+                    client: client.context().name.to_string(),
+                    model: None,
+                    prompt: to_prompt(prompt),
+                    start_time: system_now,
+                    latency: instant_now.elapsed(),
+                    request_options: client.request_options().clone(),
+                    message: "Request was cancelled".to_string(),
+                    code: crate::internal::llm_client::ErrorCode::Other(499), // 499 = Client Closed Request
+                }));
+            }
+        }
+    } else {
+        request_future.await
+    };
+
+    let response = match response {
         Ok(resp) => resp,
         Err(e) => {
             log_http_response(

@@ -38,12 +38,16 @@ export class BamlStream<PartialOutputType, FinalOutputType> {
   /**
    * Aborts the stream processing.
    * This will stop any ongoing stream processing and clean up resources.
+   * Now also cancels the underlying Rust HTTP requests.
    */
   abort(): void {
     if (!this.aborted) {
       this.aborted = true;
       this.abortController.abort();
       this.eventQueue.push(null); // Signal end of stream
+      
+      // NEW: Cancel the Rust-level stream and HTTP requests
+      this.ffiStream.cancel();
       this.ffiStream.onEvent(undefined); // Remove event handler
     }
   }

@@ -45,6 +45,7 @@ napi-derive = "2"
 serde.workspace = true
 serde_json.workspace = true
 tokio = { version = "1", features = ["full"] }
+tokio-util = "0.7"
 tracing-subscriber = { version = "0.3.18", features = [
   "json",
   "env-filter",

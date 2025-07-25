@@ -13,7 +13,12 @@ pub trait WithCompletion: Sync + Send {
 
 pub trait WithStreamCompletion: Sync + Send {
     #[allow(async_fn_in_trait)]
-    async fn stream_completion(&self, ctx: &impl HttpContext, prompt: &str) -> StreamResponse;
+    async fn stream_completion(
+        &self, 
+        ctx: &impl HttpContext, 
+        prompt: &str,
+        cancellation_token: Option<tokio_util::sync::CancellationToken>,
+    ) -> StreamResponse;
 }
 
 pub trait WithNoCompletion {}
@@ -37,7 +42,12 @@ where
     T: WithNoCompletion + Send + Sync,
 {
     #[allow(async_fn_in_trait)]
-    async fn stream_completion(&self, _: &impl HttpContext, _: &str) -> StreamResponse {
+    async fn stream_completion(
+        &self, 
+        _: &impl HttpContext, 
+        _: &str,
+        _cancellation_token: Option<tokio_util::sync::CancellationToken>,
+    ) -> StreamResponse {
         Err(LLMResponse::InternalFailure(
             "Completion prompts are not supported by this provider".to_string(),
         ))

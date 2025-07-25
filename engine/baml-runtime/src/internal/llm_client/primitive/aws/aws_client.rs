@@ -780,6 +780,7 @@ impl WithStreamChat for AwsClient {
         &self,
         ctx: &impl HttpContext,
         chat_messages: &[RenderedChatMessage],
+        _cancellation_token: Option<tokio_util::sync::CancellationToken>,
     ) -> StreamResponse {
         let client = self.context.name.to_string();
         let model = Some(self.properties.model.clone());

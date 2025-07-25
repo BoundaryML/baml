@@ -104,6 +104,7 @@ impl WithStreamChat for GoogleAIClient {
         &self,
         ctx: &impl HttpContext,
         prompt: &[RenderedChatMessage],
+        cancellation_token: Option<tokio_util::sync::CancellationToken>,
     ) -> StreamResponse {
         let model_name = self.properties.model.clone();
         //incomplete, streaming response object is returned
@@ -113,6 +114,7 @@ impl WithStreamChat for GoogleAIClient {
             Some(model_name),
             ResponseType::Google,
             ctx,
+            cancellation_token,
         )
         .await
     }
@@ -188,6 +190,7 @@ impl RequestBuilder for GoogleAIClient {
         allow_proxy: bool,
         stream: bool,
         expose_secrets: bool,
+        _cancellation_token: Option<tokio_util::sync::CancellationToken>,
     ) -> Result<reqwest::RequestBuilder> {
         let mut should_stream = "generateContent";
         if stream {

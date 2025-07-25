@@ -8,7 +8,7 @@ use baml_types::{
 };
 use internal_baml_core::ir::repr::IntermediateRepr;
 use serde_json::json;
-use stream_cancel::Tripwire;
+use tokio_util::sync::CancellationToken;
 
 use crate::{
     client_registry::ClientRegistry,
@@ -19,7 +19,7 @@ use crate::{
     tracing::BamlTracer,
     tracingv2::storage::storage::{Collector, BAML_TRACER},
     type_builder::TypeBuilder,
-    FunctionResult, IntoBamlError, PreparedFunctionArgs, RuntimeContextManager, TripWire,
+    FunctionResult, IntoBamlError, PreparedFunctionArgs, RuntimeContextManager,
 };
 
 /// Wrapper that holds a stream of responses from a BAML function call.
@@ -37,7 +37,7 @@ pub struct FunctionResultStream {
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) tokio_runtime: Arc<tokio::runtime::Runtime>,
     pub(crate) collectors: Vec<Arc<Collector>>,
-    pub(crate) cancel_tripwire: Arc<TripWire>,
+    pub(crate) cancellation_token: Option<CancellationToken>,
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -64,6 +64,26 @@ first.scope.clone();
 */
 
 impl FunctionResultStream {
+    /// Set the cancellation token for this stream
+    pub fn set_cancellation_token(&mut self, token: CancellationToken) {
+        self.cancellation_token = Some(token);
+    }
+
+    /// Cancel the stream
+    pub fn cancel(&self) {
+        if let Some(token) = &self.cancellation_token {
+            token.cancel();
+        }
+    }
+
+    /// Check if the stream has been cancelled
+    pub fn is_cancelled(&self) -> bool {
+        self.cancellation_token
+            .as_ref()
+            .map(|token| token.is_cancelled())
+            .unwrap_or(false)
+    }
+
     #[cfg(not(target_arch = "wasm32"))]
     pub fn run_sync<F, G>(
         &mut self,
@@ -96,11 +116,17 @@ impl FunctionResultStream {
         F: Fn(FunctionResult),
         G: Fn(),
     {
+        // Check for cancellation before starting
+        if self.is_cancelled() {
+            let call_id = baml_ids::FunctionCallId::new();
+            return (
+                Err(anyhow::anyhow!("Stream was cancelled before execution")),
+                call_id,
+            );
+        }
+
         let mut local_orchestrator = Vec::new();
         std::mem::swap(&mut local_orchestrator, &mut self.orchestrator);
-
-        // let mut local_params = crate::BamlMap::new();
-        // std::mem::swap(&mut local_params, &mut self.params);
 
         let call = self.tracer.start_call(
             &self.function_name,
@@ -113,7 +139,8 @@ impl FunctionResultStream {
         let rctx = ctx.create_ctx(tb, cb, env_vars, call.new_call_id_stack.clone());
         let res = match rctx {
             Ok(rctx) => {
-                async {
+                // Use tokio::select! to race between stream execution and cancellation
+                let stream_future = async {
                     let (history, _) = orchestrate_stream(
                         local_orchestrator,
                         self.ir.as_ref(),
@@ -124,13 +151,23 @@ impl FunctionResultStream {
                         |content| self.renderer.parse(self.ir.as_ref(), &rctx, content, true),
                         |content| self.renderer.parse(self.ir.as_ref(), &rctx, content, false),
                         on_event,
-                        self.cancel_tripwire.trip_wire(),
+                        self.cancellation_token.clone(),
                     )
                     .await;
 
                     FunctionResult::new_chain(history)
+                };
+
+                if let Some(token) = &self.cancellation_token {
+                    tokio::select! {
+                        result = stream_future => result,
+                        _ = token.cancelled() => {
+                            Err(anyhow::anyhow!("Stream was cancelled during execution"))
+                        }
+                    }
+                } else {
+                    stream_future.await
                 }
-                .await
             }
             Err(e) => Err(e),
         };

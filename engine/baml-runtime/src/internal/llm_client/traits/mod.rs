@@ -361,7 +361,12 @@ pub type StreamResponse =
 pub trait WithStreamable {
     /// Retries are not supported for streaming calls.
     #[allow(async_fn_in_trait)]
-    async fn stream(&self, ctx: &impl HttpContext, prompt: &RenderedPrompt) -> StreamResponse;
+    async fn stream(
+        &self, 
+        ctx: &impl HttpContext, 
+        prompt: &RenderedPrompt,
+        cancellation_token: Option<tokio_util::sync::CancellationToken>,
+    ) -> StreamResponse;
 }
 
 impl<T> WithStreamable for T
@@ -374,7 +379,12 @@ where
         + WithCompletion,
 {
     #[allow(async_fn_in_trait)]
-    async fn stream(&self, ctx: &impl HttpContext, prompt: &RenderedPrompt) -> StreamResponse {
+    async fn stream(
+        &self, 
+        ctx: &impl HttpContext, 
+        prompt: &RenderedPrompt,
+        cancellation_token: Option<tokio_util::sync::CancellationToken>,
+    ) -> StreamResponse {
         let prompt = {
             if let RenderedPrompt::Chat(ref chat) = prompt {
                 match process_media_urls(
@@ -404,7 +414,7 @@ where
         match prompt {
             RenderedPrompt::Chat(p) => {
                 if self.supports_streaming() {
-                    self.stream_chat(ctx, p).await
+                    self.stream_chat(ctx, p, cancellation_token).await
                 } else {
                     let res = self.chat(ctx, p).await;
                     Ok(Box::pin(futures::stream::once(async move { res })))
@@ -412,7 +422,7 @@ where
             }
             RenderedPrompt::Completion(p) => {
                 if self.supports_streaming() {
-                    self.stream_completion(ctx, p).await
+                    self.stream_completion(ctx, p, cancellation_token).await
                 } else {
                     let res = self.completion(ctx, p).await;
                     Ok(Box::pin(futures::stream::once(async move { res })))

@@ -126,6 +126,7 @@ impl WithStreamChat for VertexClient {
         &self,
         ctx: &impl HttpContext,
         prompt: &[RenderedChatMessage],
+        cancellation_token: Option<tokio_util::sync::CancellationToken>,
     ) -> StreamResponse {
         //incomplete, streaming response object is returned
         make_stream_request(
@@ -134,6 +135,7 @@ impl WithStreamChat for VertexClient {
             Some(self.properties.model.clone()),
             ResponseType::Vertex,
             ctx,
+            cancellation_token,
         )
         .await
     }
@@ -211,6 +213,7 @@ impl RequestBuilder for VertexClient {
         // There are no leakable secrets in the Vertex request because
         // VertexAuth can not be built in the WASM environment.
         _expose_secrets: bool,
+        _cancellation_token: Option<tokio_util::sync::CancellationToken>,
     ) -> Result<reqwest::RequestBuilder> {
         let vertex_auth =
             super::auth::VertexAuth::get_or_create(&self.properties.auth_strategy).await?;

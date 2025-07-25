@@ -26,6 +26,7 @@ internal-baml-core.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tokio = { version = "1", features = ["full"] }
+tokio-util = "0.7"
 tokio-util = { version = "0.7", features = ["full"] }
 once_cell.workspace = true
 anyhow.workspace = true

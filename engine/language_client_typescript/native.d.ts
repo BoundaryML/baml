@@ -130,6 +130,7 @@ export declare class FunctionResult {
 export declare class FunctionResultStream {
   onEvent(func?: ((err: any, param: FunctionResult) => void) | undefined): void
   done(rctx: RuntimeContextManager): Promise<FunctionResult>
+  cancel(): void
 }
 
 export declare class HttpBody {
