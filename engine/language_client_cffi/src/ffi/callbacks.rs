@@ -53,72 +53,74 @@ pub fn safe_trigger_callback(
         .expect("expected error callback function to be set. Did you call register_callbacks?");
 
     match result {
-        Ok(result) => match result.parsed() {
-            Some(Ok(content)) => {
-                let buf_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    if is_done {
-                        let meta = content.0.map_meta(|f| EncodeMeta {
-                            field_type: f.3.to_non_streaming_type(runtime.inner.ir.as_ref()),
-                            checks: &f.1,
-                        });
-
-                        meta.encode_to_c_buffer(
-                            runtime.inner.ir.as_ref(),
-                            baml_types::StreamingMode::NonStreaming,
-                        )
-                    } else {
-                        // Top level types in streaming always have `not_null` set to true.
-                        let mut content = content.0.clone();
-                        content.meta_mut().3.meta_mut().streaming_behavior.needed = true;
-                        let meta = content.map_meta(|f| EncodeMeta {
-                            field_type: f.3.to_streaming_type(runtime.inner.ir.as_ref()),
-                            checks: &f.1,
-                        });
-                        meta.encode_to_c_buffer(
-                            runtime.inner.ir.as_ref(),
-                            baml_types::StreamingMode::Streaming,
-                        )
-                    }
-                }));
-
-                match buf_result {
-                    Ok(buf) => {
-                        let is_done_int = if is_done { 1 } else { 0 };
-                        callback_fn(id, is_done_int, buf.as_ptr() as *const i8, buf.len());
-                    }
-                    Err(panic_info) => {
-                        let error_msg = if let Some(s) = panic_info.downcast_ref::<&str>() {
-                            format!("Buffer encoding panicked: {s}")
-                        } else if let Some(s) = panic_info.downcast_ref::<String>() {
-                            format!("Buffer encoding panicked: {s}")
-                        } else {
-                            "Buffer encoding panicked with unknown error".to_string()
-                        };
-
+        Ok(result) => {
+            match result.parsed() {
+                Some(Ok(content)) => {
+                    let buf_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                         if is_done {
-                            // For final results, send error via callback
-                            error_callback_fn(
-                                id,
-                                1,
-                                error_msg.as_ptr() as *const i8,
-                                error_msg.len(),
-                            );
+                            let meta = content.0.map_meta(|f| EncodeMeta {
+                                field_type: f.3.to_non_streaming_type(runtime.inner.ir.as_ref()),
+                                checks: &f.1,
+                            });
+
+                            meta.encode_to_c_buffer(
+                                runtime.inner.ir.as_ref(),
+                                baml_types::StreamingMode::NonStreaming,
+                            )
                         } else {
-                            // For streaming events, just log and drop the event
-                            baml_log::error!("Encoding error: {}", error_msg);
+                            // Top level types in streaming always have `not_null` set to true.
+                            let mut content = content.0.clone();
+                            content.meta_mut().3.meta_mut().streaming_behavior.needed = true;
+                            let meta = content.map_meta(|f| EncodeMeta {
+                                field_type: f.3.to_streaming_type(runtime.inner.ir.as_ref()),
+                                checks: &f.1,
+                            });
+                            meta.encode_to_c_buffer(
+                                runtime.inner.ir.as_ref(),
+                                baml_types::StreamingMode::Streaming,
+                            )
+                        }
+                    }));
+
+                    match buf_result {
+                        Ok(buf) => {
+                            let is_done_int = if is_done { 1 } else { 0 };
+                            callback_fn(id, is_done_int, buf.as_ptr() as *const i8, buf.len());
+                        }
+                        Err(panic_info) => {
+                            let error_msg = if let Some(s) = panic_info.downcast_ref::<&str>() {
+                                format!("Buffer encoding panicked: {s}")
+                            } else if let Some(s) = panic_info.downcast_ref::<String>() {
+                                format!("Buffer encoding panicked: {s}")
+                            } else {
+                                "Buffer encoding panicked with unknown error".to_string()
+                            };
+
+                            if is_done {
+                                // For final results, send error via callback
+                                error_callback_fn(
+                                    id,
+                                    1,
+                                    error_msg.as_ptr() as *const i8,
+                                    error_msg.len(),
+                                );
+                            } else {
+                                // For streaming events, just log and drop the event
+                                baml_log::error!("Encoding error: {}", error_msg);
+                            }
                         }
                     }
                 }
+                Some(Err(e)) => {
+                    let message = e.to_string();
+                    error_callback_fn(id, 1, message.as_ptr() as *const i8, message.len());
+                }
+                None => {
+                    let message = "No result from baml - Please report this error to our team with BAML_LOG=info enabled so we can improve this error message".to_string();
+                    error_callback_fn(id, 1, message.as_ptr() as *const i8, message.len());
+                }
             }
-            Some(Err(e)) => {
-                let message = e.to_string();
-                error_callback_fn(id, 1, message.as_ptr() as *const i8, message.len());
-            }
-            None => {
-                let message = "No result from baml".to_string();
-                error_callback_fn(id, 1, message.as_ptr() as *const i8, message.len());
-            }
-        },
+        }
         Err(e) => {
             let message = format!("Error: {e}");
             error_callback_fn(id, 1, message.as_ptr() as *const i8, message.len());

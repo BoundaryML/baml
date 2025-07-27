@@ -35,6 +35,14 @@ func decodeRawObjectImpl(cRaw *cffi.CFFIRawObject) (raw_objects.RawPointer, erro
 		return newTiming(obj.Timing.Pointer), nil
 	case *cffi.CFFIRawObject_Usage:
 		return newUsage(obj.Usage.Pointer), nil
+	case *cffi.CFFIRawObject_MediaImage:
+		return newMedia(obj.MediaImage.Pointer, MediaType_Image), nil
+	case *cffi.CFFIRawObject_MediaAudio:
+		return newMedia(obj.MediaAudio.Pointer, MediaType_Audio), nil
+	case *cffi.CFFIRawObject_MediaPdf:
+		return newMedia(obj.MediaPdf.Pointer, MediaType_PDF), nil
+	case *cffi.CFFIRawObject_MediaVideo:
+		return newMedia(obj.MediaVideo.Pointer, MediaType_Video), nil
 	default:
 		return nil, fmt.Errorf("unexpected raw object type")
 	}

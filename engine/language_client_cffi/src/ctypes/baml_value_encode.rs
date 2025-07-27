@@ -11,6 +11,7 @@ use crate::{
         baml_type_encode::UnionAllowance,
         utils::{Encode, WithIr},
     },
+    raw_ptr_wrapper::RawPtrWrapper,
 };
 
 impl<'a, TypeLookups> Encode<CffiValueHolder> for WithIr<'a, BamlValue, TypeLookups>
@@ -89,8 +90,14 @@ where
                     values,
                 })
             }
-            BamlValue::Media(_) => {
-                panic!("Unsupported BamlValue::Media is not supported")
+            BamlValue::Media(media) => {
+                let media_object = crate::raw_ptr_wrapper::RawPtrType::Media(
+                    RawPtrWrapper::from_object(media.clone()),
+                );
+                let media_object = crate::raw_ptr_wrapper::RawPtrType::encode(media_object);
+                cValue::MediaValue(crate::baml::cffi::CffiValueMedia {
+                    media_object: Some(media_object),
+                })
             }
             BamlValue::Enum(name, value) => cValue::EnumValue(CffiValueEnum {
                 name: Some(CffiTypeName {

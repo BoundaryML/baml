@@ -81,8 +81,8 @@ message CFFIValueEnum {
 }
 
 message CFFIValueMedia {
-  CFFIFieldTypeMedia media_type = 1;
-  CFFIMediaValue media_value = 2;
+  // only media objects are allowed here
+  CFFIRawObject media_object = 1;
 }
 
 message CFFIValueTuple { repeated CFFIValueHolder values = 1; }
@@ -112,21 +112,6 @@ enum MediaTypeEnum {
   AUDIO = 1;
   PDF = 2;
   VIDEO = 3;
-}
-
-message CFFIMediaContentUrl { string url = 1; }
-
-message CFFIMediaContentBase64 { string data = 1; }
-
-message CFFIMediaContentFile { string path = 1; }
-
-message CFFIMediaValue {
-  oneof content {
-    CFFIMediaContentUrl url_content = 1;
-    CFFIMediaContentBase64 base64_content = 2;
-    CFFIMediaContentFile file_content = 3;
-  }
-  optional string mime_type = 4;
 }
 
 // -----------------------------------------------------------------------------
@@ -273,6 +258,10 @@ enum CFFIObjectType {
   OBJECT_HTTP_RESPONSE = 9;
   OBJECT_HTTP_BODY = 10;
   OBJECT_SSE_RESPONSE = 11;
+  OBJECT_MEDIA_IMAGE = 12;
+  OBJECT_MEDIA_AUDIO = 13;
+  OBJECT_MEDIA_PDF = 14;
+  OBJECT_MEDIA_VIDEO = 15;
 }
 
 // Raw object with type information
@@ -289,6 +278,10 @@ message CFFIRawObject {
     CFFIPointerType http_response = 9;
     CFFIPointerType http_body = 10;
     CFFIPointerType sse_response = 11;
+    CFFIPointerType media_image = 12;
+    CFFIPointerType media_audio = 13;
+    CFFIPointerType media_pdf = 14;
+    CFFIPointerType media_video = 15;
   }
 }
 
