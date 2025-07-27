@@ -24,13 +24,13 @@ import (
 type Union4AudioOrImageOrPdfOrVideo struct {
 	variant string
 
-	variant_Image *baml.Image
+	variant_Image *Image
 
-	variant_Audio *baml.Audio
+	variant_Audio *Audio
 
-	variant_Pdf *baml.PDF
+	variant_Pdf *Pdf
 
-	variant_Video *baml.Video
+	variant_Video *Video
 }
 
 func (u *Union4AudioOrImageOrPdfOrVideo) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
@@ -39,19 +39,19 @@ func (u *Union4AudioOrImageOrPdfOrVideo) Decode(holder *cffi.CFFIValueUnionVaria
 	switch variantName {
 	case "image":
 		u.variant = "Image"
-		value := baml.Decode(valueHolder).Interface().(baml.Image)
+		value := baml.Decode(valueHolder).Interface().(Image)
 		u.variant_Image = &value
 	case "audio":
 		u.variant = "Audio"
-		value := baml.Decode(valueHolder).Interface().(baml.Audio)
+		value := baml.Decode(valueHolder).Interface().(Audio)
 		u.variant_Audio = &value
 	case "pdf":
 		u.variant = "Pdf"
-		value := baml.Decode(valueHolder).Interface().(baml.PDF)
+		value := baml.Decode(valueHolder).Interface().(Pdf)
 		u.variant_Pdf = &value
 	case "video":
 		u.variant = "Video"
-		value := baml.Decode(valueHolder).Interface().(baml.Video)
+		value := baml.Decode(valueHolder).Interface().(Video)
 		u.variant_Video = &value
 
 	default:
@@ -150,7 +150,7 @@ func (u *Union4AudioOrImageOrPdfOrVideo) UnmarshalJSON(data []byte) error {
 	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
-func Union4AudioOrImageOrPdfOrVideo__NewImage(v baml.Image) Union4AudioOrImageOrPdfOrVideo {
+func Union4AudioOrImageOrPdfOrVideo__NewImage(v Image) Union4AudioOrImageOrPdfOrVideo {
 
 	return Union4AudioOrImageOrPdfOrVideo{
 		variant:       "Image",
@@ -158,7 +158,7 @@ func Union4AudioOrImageOrPdfOrVideo__NewImage(v baml.Image) Union4AudioOrImageOr
 	}
 }
 
-func (u *Union4AudioOrImageOrPdfOrVideo) SetImage(v baml.Image) {
+func (u *Union4AudioOrImageOrPdfOrVideo) SetImage(v Image) {
 
 	u.variant = "Image"
 	u.variant_Image = &v
@@ -175,14 +175,14 @@ func (u *Union4AudioOrImageOrPdfOrVideo) IsImage() bool {
 	return u.variant == "Image"
 }
 
-func (u *Union4AudioOrImageOrPdfOrVideo) Image() *baml.Image {
+func (u *Union4AudioOrImageOrPdfOrVideo) Image() *Image {
 	if u.variant != "Image" {
 		return nil
 	}
 	return u.variant_Image
 }
 
-func Union4AudioOrImageOrPdfOrVideo__NewAudio(v baml.Audio) Union4AudioOrImageOrPdfOrVideo {
+func Union4AudioOrImageOrPdfOrVideo__NewAudio(v Audio) Union4AudioOrImageOrPdfOrVideo {
 
 	return Union4AudioOrImageOrPdfOrVideo{
 		variant:       "Audio",
@@ -190,7 +190,7 @@ func Union4AudioOrImageOrPdfOrVideo__NewAudio(v baml.Audio) Union4AudioOrImageOr
 	}
 }
 
-func (u *Union4AudioOrImageOrPdfOrVideo) SetAudio(v baml.Audio) {
+func (u *Union4AudioOrImageOrPdfOrVideo) SetAudio(v Audio) {
 
 	u.variant = "Audio"
 	u.variant_Audio = &v
@@ -207,14 +207,14 @@ func (u *Union4AudioOrImageOrPdfOrVideo) IsAudio() bool {
 	return u.variant == "Audio"
 }
 
-func (u *Union4AudioOrImageOrPdfOrVideo) Audio() *baml.Audio {
+func (u *Union4AudioOrImageOrPdfOrVideo) Audio() *Audio {
 	if u.variant != "Audio" {
 		return nil
 	}
 	return u.variant_Audio
 }
 
-func Union4AudioOrImageOrPdfOrVideo__NewPdf(v baml.PDF) Union4AudioOrImageOrPdfOrVideo {
+func Union4AudioOrImageOrPdfOrVideo__NewPdf(v Pdf) Union4AudioOrImageOrPdfOrVideo {
 
 	return Union4AudioOrImageOrPdfOrVideo{
 		variant:     "Pdf",
@@ -222,7 +222,7 @@ func Union4AudioOrImageOrPdfOrVideo__NewPdf(v baml.PDF) Union4AudioOrImageOrPdfO
 	}
 }
 
-func (u *Union4AudioOrImageOrPdfOrVideo) SetPdf(v baml.PDF) {
+func (u *Union4AudioOrImageOrPdfOrVideo) SetPdf(v Pdf) {
 
 	u.variant = "Pdf"
 	u.variant_Pdf = &v
@@ -239,14 +239,14 @@ func (u *Union4AudioOrImageOrPdfOrVideo) IsPdf() bool {
 	return u.variant == "Pdf"
 }
 
-func (u *Union4AudioOrImageOrPdfOrVideo) Pdf() *baml.PDF {
+func (u *Union4AudioOrImageOrPdfOrVideo) Pdf() *Pdf {
 	if u.variant != "Pdf" {
 		return nil
 	}
 	return u.variant_Pdf
 }
 
-func Union4AudioOrImageOrPdfOrVideo__NewVideo(v baml.Video) Union4AudioOrImageOrPdfOrVideo {
+func Union4AudioOrImageOrPdfOrVideo__NewVideo(v Video) Union4AudioOrImageOrPdfOrVideo {
 
 	return Union4AudioOrImageOrPdfOrVideo{
 		variant:       "Video",
@@ -254,7 +254,7 @@ func Union4AudioOrImageOrPdfOrVideo__NewVideo(v baml.Video) Union4AudioOrImageOr
 	}
 }
 
-func (u *Union4AudioOrImageOrPdfOrVideo) SetVideo(v baml.Video) {
+func (u *Union4AudioOrImageOrPdfOrVideo) SetVideo(v Video) {
 
 	u.variant = "Video"
 	u.variant_Video = &v
@@ -271,7 +271,7 @@ func (u *Union4AudioOrImageOrPdfOrVideo) IsVideo() bool {
 	return u.variant == "Video"
 }
 
-func (u *Union4AudioOrImageOrPdfOrVideo) Video() *baml.Video {
+func (u *Union4AudioOrImageOrPdfOrVideo) Video() *Video {
 	if u.variant != "Video" {
 		return nil
 	}

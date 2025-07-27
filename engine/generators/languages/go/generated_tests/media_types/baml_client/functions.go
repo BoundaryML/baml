@@ -22,7 +22,7 @@ import (
 	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 )
 
-func TestMediaArrayInputs(ctx context.Context, imageArray []baml.Image, textInput string, opts ...CallOptionFunc) (types.MediaArrayAnalysisResult, error) {
+func TestMediaArrayInputs(ctx context.Context, imageArray []types.Image, textInput string, opts ...CallOptionFunc) (types.MediaArrayAnalysisResult, error) {
 
 	var callOpts callOption
 	for _, opt := range opts {

@@ -44,7 +44,7 @@ func (s *StreamValue[TStream, TFinal]) Stream() *TStream {
 }
 
 // / Streaming version of TestMediaArrayInputs
-func (*stream) TestMediaArrayInputs(ctx context.Context, imageArray []baml.Image, textInput string, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.MediaArrayAnalysisResult, types.MediaArrayAnalysisResult], error) {
+func (*stream) TestMediaArrayInputs(ctx context.Context, imageArray []types.Image, textInput string, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.MediaArrayAnalysisResult, types.MediaArrayAnalysisResult], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {

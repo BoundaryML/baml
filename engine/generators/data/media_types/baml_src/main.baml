@@ -38,6 +38,9 @@ class MixedMediaAnalysisResult {
 function TestMediaInput(media: image | audio | pdf | video, textInput: string) -> MediaAnalysisResult {
   client "openai/gpt-4o-mini"
   prompt #"
+
+    Describe what is provided.
+
     {{ ctx.output_format }}
 
 

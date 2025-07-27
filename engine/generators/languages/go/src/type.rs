@@ -389,10 +389,10 @@ impl SerializeType for TypeGo {
 impl SerializeType for MediaTypeGo {
     fn serialize_type(&self, pkg: &CurrentRenderPackage) -> String {
         match self {
-            MediaTypeGo::Image => format!("{}Image", Package::imported_base().relative_from(pkg)),
-            MediaTypeGo::Audio => format!("{}Audio", Package::imported_base().relative_from(pkg)),
-            MediaTypeGo::Pdf => format!("{}PDF", Package::imported_base().relative_from(pkg)),
-            MediaTypeGo::Video => format!("{}Video", Package::imported_base().relative_from(pkg)),
+            MediaTypeGo::Image => format!("{}Image", Package::types().relative_from(pkg)),
+            MediaTypeGo::Audio => format!("{}Audio", Package::types().relative_from(pkg)),
+            MediaTypeGo::Pdf => format!("{}Pdf", Package::types().relative_from(pkg)),
+            MediaTypeGo::Video => format!("{}Video", Package::types().relative_from(pkg)),
         }
     }
 }

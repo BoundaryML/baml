@@ -50,7 +50,7 @@ func TestAudioInput(t *testing.T) {
 
 	union := types.Union4AudioOrImageOrPdfOrVideo__NewAudio(audioMedia)
 
-	result, err := baml_client.TestMediaInput(ctx, union, "Analyze this audio", baml_client.WithClientRegistry(&cr))
+	result, err := baml_client.TestMediaInput(ctx, union, "This is music used for an intro", baml_client.WithClientRegistry(&cr))
 	if err != nil {
 		t.Fatalf("Error testing audio input: %v", err)
 	}
@@ -131,7 +131,7 @@ func TestImageArrayInput(t *testing.T) {
 		t.Fatalf("Error creating second image: %v", err)
 	}
 
-	imageArray := []baml.Image{image1, image2}
+	imageArray := []types.Image{image1, image2}
 
 	result, err := baml_client.TestMediaArrayInputs(ctx, imageArray, "Analyze these images")
 	if err != nil {
