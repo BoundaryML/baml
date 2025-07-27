@@ -136,10 +136,10 @@ fn create_media_object(
         (Some(url), None) => BamlMedia::url(media_type, url, mime_type),
         (None, Some(base64)) => BamlMedia::base64(media_type, base64, mime_type),
         (Some(_), Some(_)) => {
-            return Err(format!("Only one of url or base64 can be provided"));
+            return Err("Only one of url or base64 can be provided".to_string());
         }
         (None, None) => {
-            return Err(format!("Must provide either url or base64"));
+            return Err("Must provide either url or base64".to_string());
         }
     };
 
