@@ -11,11 +11,6 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-typedef struct Buffer {
-  const int8_t *ptr;
-  size_t len;
-} Buffer;
-
 typedef void (*CallbackFn)(uint32_t call_id,
                            int32_t is_done,
                            const int8_t *content,
@@ -23,15 +18,14 @@ typedef void (*CallbackFn)(uint32_t call_id,
 
 typedef void (*OnTickCallbackFn)(uint32_t call_id);
 
-const char *version(void);
+typedef struct Buffer {
+  const int8_t *ptr;
+  size_t len;
+} Buffer;
 
-const void *create_baml_runtime(const char *root_path,
-                                const char *src_files_json,
-                                const char *env_vars_json);
-
-void destroy_baml_runtime(const void *runtime);
-
-int invoke_runtime_cli(const char *const *args);
+void register_callbacks(CallbackFn callback_fn,
+                        CallbackFn error_callback_fn,
+                        OnTickCallbackFn on_tick_callback_fn);
 
 /**
  * Extern "C" function that returns immediately, scheduling the async call.
@@ -59,6 +53,12 @@ void free_buffer(struct Buffer buf);
 
 struct Buffer call_object_method(const char *encoded_args, uintptr_t length);
 
-void register_callbacks(CallbackFn callback_fn,
-                        CallbackFn error_callback_fn,
-                        OnTickCallbackFn on_tick_callback_fn);
+const char *version(void);
+
+const void *create_baml_runtime(const char *root_path,
+                                const char *src_files_json,
+                                const char *env_vars_json);
+
+void destroy_baml_runtime(const void *runtime);
+
+int invoke_runtime_cli(const char *const *args);
