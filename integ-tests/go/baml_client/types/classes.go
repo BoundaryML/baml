@@ -669,7 +669,7 @@ func (u ClassWithBlockDone) BamlEncodeName() *cffi.CFFITypeName {
 }
 
 type ClassWithImage struct {
-	MyImage    any       `json:"myImage"`
+	MyImage    Image     `json:"myImage"`
 	Param2     string    `json:"param2"`
 	Fake_image FakeImage `json:"fake_image"`
 }
@@ -689,7 +689,7 @@ func (c *ClassWithImage) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMa
 		switch key {
 
 		case "myImage":
-			c.MyImage = baml.Decode(valueHolder).Interface().(any)
+			c.MyImage = baml.Decode(valueHolder).Interface().(Image)
 
 		case "param2":
 			c.Param2 = baml.Decode(valueHolder).Interface().(string)
