@@ -40,7 +40,6 @@
     "@react-hook/debounce": "4.0.0",
     "@shikijs/rehype": "1.24.4",
     "@smithy/types": "4.3.1",
-    "@typescript/vfs": "1.6.1",
     "@uiw/codemirror-extensions-hyper-link": "4.23.13",
     "@uiw/codemirror-extensions-langs": "4.23.13",
     "@uiw/codemirror-theme-vscode": "4.23.13",

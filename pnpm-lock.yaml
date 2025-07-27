@@ -768,9 +768,6 @@ importers:
       '@smithy/types':
         specifier: 4.3.1
         version: 4.3.1
-      '@typescript/vfs':
-        specifier: 1.6.1
-        version: 1.6.1(typescript@5.8.3)
       '@uiw/codemirror-extensions-hyper-link':
         specifier: 4.23.13
         version: 4.23.13(@codemirror/state@6.5.2)(@codemirror/view@6.37.2)
@@ -5041,11 +5038,6 @@ packages:
 
   '@types/yargs@17.0.33':
     resolution: {integrity: sha512-WpxBCKWPLr4xSsHgz511rFJAM+wS28w2zEO1QDNY5zM/S8ok70NNfztH0xwhqKyaK0OHCbN98LDAZuy1ctxDkA==}
-
-  '@typescript/vfs@1.6.1':
-    resolution: {integrity: sha512-JwoxboBh7Oz1v38tPbkrZ62ZXNHAk9bJ7c9x0eI5zBfBnBYGhURdbnh7Z4smN/MV48Y5OCcZb58n972UtbazsA==}
-    peerDependencies:
-      typescript: '*'
 
   '@typespec/ts-http-runtime@0.2.3':
     resolution: {integrity: sha512-oRhjSzcVjX8ExyaF8hC0zzTqxlVuRlgMHL/Bh4w3xB9+wjbm0FpXylVU/lBrn+kgphwYTrOk3tp+AVShGmlYCg==}
@@ -15703,13 +15695,6 @@ snapshots:
   '@types/yargs@17.0.33':
     dependencies:
       '@types/yargs-parser': 21.0.3
-
-  '@typescript/vfs@1.6.1(typescript@5.8.3)':
-    dependencies:
-      debug: 4.4.1(supports-color@8.1.1)
-      typescript: 5.8.3
-    transitivePeerDependencies:
-      - supports-color
 
   '@typespec/ts-http-runtime@0.2.3':
     dependencies:
