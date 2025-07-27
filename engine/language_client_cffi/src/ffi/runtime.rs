@@ -27,30 +27,30 @@ pub extern "C" fn create_baml_runtime(
         let src_files_str = unsafe {
             CStr::from_ptr(src_files_json)
                 .to_str()
-                .map_err(|e| format!("Invalid UTF-8 in src_files_json: {}", e))?
+                .map_err(|e| format!("Invalid UTF-8 in src_files_json: {e}"))?
         };
         let src_files = serde_json::from_str::<HashMap<String, String>>(src_files_str)
-            .map_err(|e| format!("Failed to parse src_files JSON: {}", e))?;
+            .map_err(|e| format!("Failed to parse src_files JSON: {e}"))?;
 
         // Parse env_vars JSON
         let env_vars_str = unsafe {
             CStr::from_ptr(env_vars_json)
                 .to_str()
-                .map_err(|e| format!("Invalid UTF-8 in env_vars_json: {}", e))?
+                .map_err(|e| format!("Invalid UTF-8 in env_vars_json: {e}"))?
         };
         let env_vars = serde_json::from_str::<HashMap<String, String>>(env_vars_str)
-            .map_err(|e| format!("Failed to parse env_vars JSON: {}", e))?;
+            .map_err(|e| format!("Failed to parse env_vars JSON: {e}"))?;
 
         // Parse root_path
         let root_path_str = unsafe {
             CStr::from_ptr(root_path)
                 .to_str()
-                .map_err(|e| format!("Invalid UTF-8 in root_path: {}", e))?
+                .map_err(|e| format!("Invalid UTF-8 in root_path: {e}"))?
         };
 
         // Create runtime
         let runtime = BamlRuntime::from_file_content(root_path_str, &src_files, env_vars)
-            .map_err(|e| format!("Failed to create BAML runtime: {}", e))?;
+            .map_err(|e| format!("Failed to create BAML runtime: {e}"))?;
 
         Ok(Box::into_raw(Box::new(runtime)) as *const libc::c_void)
     })

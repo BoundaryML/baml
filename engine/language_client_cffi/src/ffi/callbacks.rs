@@ -88,9 +88,9 @@ pub fn safe_trigger_callback(
                     }
                     Err(panic_info) => {
                         let error_msg = if let Some(s) = panic_info.downcast_ref::<&str>() {
-                            format!("Buffer encoding panicked: {}", s)
+                            format!("Buffer encoding panicked: {s}")
                         } else if let Some(s) = panic_info.downcast_ref::<String>() {
-                            format!("Buffer encoding panicked: {}", s)
+                            format!("Buffer encoding panicked: {s}")
                         } else {
                             "Buffer encoding panicked with unknown error".to_string()
                         };

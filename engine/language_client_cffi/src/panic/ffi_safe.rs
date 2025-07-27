@@ -3,9 +3,9 @@ use std::panic::{catch_unwind, AssertUnwindSafe};
 /// Extract meaningful message from panic info
 pub fn extract_panic_message(panic_info: Box<dyn std::any::Any + Send>) -> String {
     if let Some(s) = panic_info.downcast_ref::<&str>() {
-        format!("Panic: {}", s)
+        format!("Panic: {s}")
     } else if let Some(s) = panic_info.downcast_ref::<String>() {
-        format!("Panic: {}", s)
+        format!("Panic: {s}")
     } else {
         "Panic with unknown error".to_string()
     }
@@ -19,12 +19,12 @@ where
     match catch_unwind(AssertUnwindSafe(f)) {
         Ok(Ok(result)) => result,
         Ok(Err(e)) => {
-            eprintln!("FFI function error: {}", e);
+            eprintln!("FFI function error: {e}");
             std::ptr::null()
         }
         Err(panic_info) => {
             let error_msg = extract_panic_message(panic_info);
-            eprintln!("FFI function panicked: {}", error_msg);
+            eprintln!("FFI function panicked: {error_msg}");
             std::ptr::null()
         }
     }
@@ -38,12 +38,12 @@ where
     match catch_unwind(AssertUnwindSafe(f)) {
         Ok(Ok(result)) => result,
         Ok(Err(e)) => {
-            eprintln!("FFI function error: {}", e);
+            eprintln!("FFI function error: {e}");
             create_fallback_cstring("error")
         }
         Err(panic_info) => {
             let error_msg = extract_panic_message(panic_info);
-            eprintln!("FFI function panicked: {}", error_msg);
+            eprintln!("FFI function panicked: {error_msg}");
             create_fallback_cstring("panic")
         }
     }

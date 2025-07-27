@@ -77,9 +77,9 @@ fn call_function_from_c_inner(
             Err(panic_info) => {
                 // Handle the panic case - create an error result
                 let error_msg = if let Some(s) = panic_info.downcast_ref::<&str>() {
-                    format!("Function panicked: {}", s)
+                    format!("Function panicked: {s}")
                 } else if let Some(s) = panic_info.downcast_ref::<String>() {
-                    format!("Function panicked: {}", s)
+                    format!("Function panicked: {s}")
                 } else {
                     "Function panicked with unknown error".to_string()
                 };
@@ -177,9 +177,9 @@ fn call_function_stream_from_c_inner(
             Err(panic_info) => {
                 // Handle the panic case - create an error result
                 let error_msg = if let Some(s) = panic_info.downcast_ref::<&str>() {
-                    format!("Stream function panicked: {}", s)
+                    format!("Stream function panicked: {s}")
                 } else if let Some(s) = panic_info.downcast_ref::<String>() {
-                    format!("Stream function panicked: {}", s)
+                    format!("Stream function panicked: {s}")
                 } else {
                     "Stream function panicked with unknown error".to_string()
                 };

@@ -47,14 +47,14 @@ pub extern "C" fn call_object_constructor(
         Ok(buf) => buf,
         Err(panic_info) => {
             let error_msg = if let Some(s) = panic_info.downcast_ref::<&str>() {
-                format!("Object constructor encoding panicked: {}", s)
+                format!("Object constructor encoding panicked: {s}")
             } else if let Some(s) = panic_info.downcast_ref::<String>() {
-                format!("Object constructor encoding panicked: {}", s)
+                format!("Object constructor encoding panicked: {s}")
             } else {
                 "Object constructor encoding panicked with unknown error".to_string()
             };
 
-            eprintln!("Error: {}", error_msg);
+            eprintln!("Error: {error_msg}");
             // Return a simple error message as bytes without going through encode_to_c_buffer
             error_msg.into_bytes()
         }
@@ -98,14 +98,14 @@ pub extern "C" fn call_object_method(encoded_args: *const libc::c_char, length: 
         Ok(buf) => buf,
         Err(panic_info) => {
             let error_msg = if let Some(s) = panic_info.downcast_ref::<&str>() {
-                format!("Object method encoding panicked: {}", s)
+                format!("Object method encoding panicked: {s}")
             } else if let Some(s) = panic_info.downcast_ref::<String>() {
-                format!("Object method encoding panicked: {}", s)
+                format!("Object method encoding panicked: {s}")
             } else {
                 "Object method encoding panicked with unknown error".to_string()
             };
 
-            eprintln!("Error: {}", error_msg);
+            eprintln!("Error: {error_msg}");
             // Return a simple error message as bytes without going through encode_to_c_buffer
             error_msg.into_bytes()
         }
