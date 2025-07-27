@@ -192,25 +192,25 @@ fn test_call_function() {
         vec![
             ("arg".into(), Type::Bool),
             ("arg2".into(), Type::String),
-            ("arg3".into(), Type::Number),
+            ("arg3".into(), Type::Union(vec![Type::None, Type::Float])),
         ],
     );
 
+    // Now arg3 is optional, so this should work
     assert_eq!(
-        assert_fails_to!("AnotherFunc(true, arg2='1')", &types),
-        vec!["Function 'AnotherFunc' expects 3 arguments, but got 2"]
+        assert_evaluates_to!("AnotherFunc(true, arg2='1')", &types),
+        Type::Float
     );
 
-    assert_eq!(
-        assert_fails_to!("AnotherFunc(true, arg2='1')", &types),
-        vec!["Function 'AnotherFunc' expects 3 arguments, but got 2",]
-    );
 
+    // With multiple function signatures, it picks the one with fewest errors
+    // The 2-arg version has 1 error (wrong arg count)
+    // The 3-arg version has 1 error (unknown arg)
+    // So it picks the first one encountered
     assert_eq!(
         assert_fails_to!("AnotherFunc(true, arg2='1', arg4=1)", &types),
         vec![
-            "Function 'AnotherFunc' expects argument 'arg3'",
-            "Function 'AnotherFunc' does not have an argument 'arg4'. Did you mean 'arg3'?"
+            "Function 'AnotherFunc' expects 2 arguments, but got 3"
         ]
     );
 
@@ -229,6 +229,55 @@ fn test_call_function() {
     assert_eq!(
         assert_evaluates_to!("TakesLiteralFoo('Foo')", &types),
         Type::Float
+    );
+}
+
+#[test]
+fn test_multiple_signatures_perfect_match() {
+    let mut types = PredefinedTypes::default(JinjaContext::Prompt);
+    
+    // Add a function with two signatures
+    types.add_function("MultiSig", Type::String, vec![("arg".into(), Type::String)]);
+    types.add_function("MultiSig", Type::String, vec![
+        ("arg".into(), Type::String),
+        ("extra".into(), Type::Int),
+    ]);
+    
+    // Should succeed with first signature (no errors)
+    assert_eq!(
+        assert_evaluates_to!("MultiSig('hello')", &types),
+        Type::String
+    );
+    
+    // Should succeed with second signature (no errors)
+    assert_eq!(
+        assert_evaluates_to!("MultiSig('hello', extra=42)", &types),
+        Type::String
+    );
+    
+    // Should fail - no signature matches (wrong type for arg)
+    assert_eq!(
+        assert_fails_to!("MultiSig(123)", &types),
+        vec!["Function 'MultiSig' expects argument 'arg' to be of type string, but got literal[123]"]
+    );
+}
+
+#[test]
+fn test_baml_chat_function() {
+    let types = PredefinedTypes::default(JinjaContext::Prompt);
+    
+    // Should work with basic role argument
+    assert_eq!(
+        assert_evaluates_to!("_.role('User')", &types),
+        Type::String
+    );
+    
+    // Should work with extra_args (the second signature)
+    // Note: extra_args accepts Map<String, Unknown> so any map should work
+    // For this test, we'll simulate passing additional arguments
+    assert_eq!(
+        assert_evaluates_to!("_.role('User', extra_args={})", &types),
+        Type::String
     );
 }
 

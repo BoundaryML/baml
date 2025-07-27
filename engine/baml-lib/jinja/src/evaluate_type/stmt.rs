@@ -264,6 +264,7 @@ pub fn truthy(ty: &Type) -> Option<Type> {
         },
         Type::ClassRef(_) => None,
         Type::FunctionRef(_) => None,
+        Type::Arrow { .. } => None,
         Type::Alias { resolved, .. } => truthy(resolved),
         Type::RecursiveTypeAlias(_) => None,
         Type::Image => None,

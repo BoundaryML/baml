@@ -34,6 +34,10 @@ pub enum Type {
     Both(Box<Type>, Box<Type>),
     ClassRef(String),
     FunctionRef(String),
+    Arrow {
+        parameters: Vec<(String, Type)>,
+        ret: Box<Type>,
+    },
     /// TODO: This should be `AliasRef(String)` but functions like
     /// [`Self::is_subtype_of`] or [`Self::bitor`] don't have access to the
     /// [`PredefinedTypes`] instance, so we can't grab type resolutions from
@@ -108,6 +112,7 @@ impl Type {
 
             (Type::ClassRef(_), _) => false,
             (Type::FunctionRef(_), _) => false,
+            (Type::Arrow { .. }, _) => false,
             (Type::Alias { resolved, .. }, _) => resolved.is_subtype_of(other),
             (Type::RecursiveTypeAlias(_), _) => false,
             (Type::Image, _) => false,
@@ -165,6 +170,14 @@ impl Type {
             Type::Both(l, r) => format!("{} & {}", l.name(), r.name()),
             Type::ClassRef(name) => format!("class {name}"),
             Type::FunctionRef(name) => format!("function {name}"),
+            Type::Arrow { parameters, ret } => {
+                let params = parameters
+                    .iter()
+                    .map(|(name, t)| format!("{}: {}", name, t.name()))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!("({}) -> {}", params, ret.name())
+            }
             Type::Alias { name, resolved, .. } => {
                 format!("type alias {name} (resolves to {})", resolved.name())
             }
@@ -239,7 +252,7 @@ enum Scope {
 
 #[derive(Debug)]
 pub struct PredefinedTypes {
-    functions: IndexMap<String, (Type, Vec<(String, Type)>)>,
+    functions: IndexMap<String, Vec<Type>>,
     classes: HashMap<String, IndexMap<String, Type>>,
     /// TODO: See the comment for [`Type::AliasRef`].
     ///
@@ -280,13 +293,24 @@ impl PredefinedTypes {
             functions: IndexMap::from([
                 (
                     "baml::Chat".into(),
-                    (Type::String, vec![("role".into(), Type::String)]),
+                    vec![
+                    Type::Arrow {
+                        parameters: vec![
+                            ("role".into(), Type::String),
+                            ("cache_control".into(), Type::Map(Box::new(Type::String), Box::new(Type::Unknown))),
+                        ],
+                        ret: Box::new(Type::String),
+                    },
+                    Type::Arrow {
+                        parameters: vec![("role".into(), Type::String)],
+                        ret: Box::new(Type::String),
+                    },
+                    ],
                 ),
                 (
                     "baml::OutputFormat".into(),
-                    (
-                        Type::String,
-                        vec![
+                    vec![Type::Arrow {
+                        parameters: vec![
                             ("prefix".into(), Type::merge(vec![Type::String, Type::None])),
                             (
                                 "or_splitter".into(),
@@ -314,7 +338,8 @@ impl PredefinedTypes {
                                 ]),
                             ),
                         ],
-                    ),
+                        ret: Box::new(Type::String),
+                    }],
                 ),
             ]),
             classes: HashMap::from([
@@ -473,12 +498,19 @@ impl PredefinedTypes {
         self.classes.get(name)
     }
 
-    pub fn as_function(&self, name: &str) -> Option<&(Type, Vec<(String, Type)>)> {
+    pub fn as_function(&self, name: &str) -> Option<&Vec<Type>> {
         self.functions.get(name)
     }
 
     pub fn add_function(&mut self, name: &str, ret: Type, args: Vec<(String, Type)>) {
-        self.functions.insert(name.to_string(), (ret, args));
+        let arrow = Type::Arrow {
+            parameters: args,
+            ret: Box::new(ret),
+        };
+        self.functions
+            .entry(name.to_string())
+            .or_insert_with(Vec::new)
+            .push(arrow);
     }
 
     pub fn add_class(&mut self, name: &str, fields: IndexMap<String, Type>) {
@@ -539,8 +571,8 @@ impl PredefinedTypes {
         kwargs: &IndexMap<&str, Type>,
     ) -> (Type, Vec<TypeError>) {
         let span = expr.span();
-        let val = self.as_function(func);
-        if val.is_none() {
+        let function_types = self.as_function(func);
+        if function_types.is_none() {
             return (
                 Type::Unknown,
                 vec![TypeError::new_invalid_type(
@@ -551,74 +583,108 @@ impl PredefinedTypes {
                 )],
             );
         }
-        let (ret, args) = val.unwrap();
-        let mut errors = Vec::new();
-
-        // Check how many args are required.
-        let mut optional_args = vec![];
-        for (name, t) in args.iter().rev() {
-            if !t.is_optional() {
-                break;
-            }
-            optional_args.push(name);
-        }
-        let required_args = args.len() - optional_args.len();
-
-        // Check count
-        if positional_args.len() + kwargs.len() < required_args
-            || (positional_args.len() + kwargs.len()) > args.len()
-        {
-            errors.push(TypeError::new_wrong_arg_count(
-                func,
-                span,
-                args.len(),
-                positional_args.len() + kwargs.len(),
-            ));
-        } else {
-            let mut unused_args = args.iter().map(|(name, _)| name).collect::<HashSet<_>>();
-            // Check types
-            for (i, (name, t)) in args.iter().enumerate() {
-                if i < positional_args.len() {
-                    unused_args.remove(name);
-                    let arg_t = &positional_args[i];
-                    if !arg_t.is_subtype_of(t) {
-                        errors.push(TypeError::new_wrong_arg_type(
+        let function_types = function_types.unwrap();
+        
+        // Try each function signature
+        let mut first_errors: Option<Vec<TypeError>> = None;
+        
+        for arrow_type in function_types.iter() {
+            match arrow_type {
+                Type::Arrow { parameters, ret } => {
+                    let mut errors = Vec::new();
+                    
+                    // Check how many args are required.
+                    let mut optional_args = vec![];
+                    for (name, t) in parameters.iter().rev() {
+                        if !t.is_optional() {
+                            break;
+                        }
+                        optional_args.push(name);
+                    }
+                    let required_args = parameters.len() - optional_args.len();
+                    
+                    // Check count
+                    if positional_args.len() + kwargs.len() < required_args
+                        || (positional_args.len() + kwargs.len()) > parameters.len()
+                    {
+                        errors.push(TypeError::new_wrong_arg_count(
                             func,
                             span,
-                            name,
-                            span,
-                            t.clone(),
-                            arg_t.clone(),
+                            parameters.len(),
+                            positional_args.len() + kwargs.len(),
                         ));
+                    } else {
+                        let mut unused_args = parameters.iter().map(|(name, _)| name).collect::<HashSet<_>>();
+                        // Check types
+                        for (i, (name, t)) in parameters.iter().enumerate() {
+                            if i < positional_args.len() {
+                                unused_args.remove(name);
+                                let arg_t = &positional_args[i];
+                                if !arg_t.is_subtype_of(t) {
+                                    errors.push(TypeError::new_wrong_arg_type(
+                                        func,
+                                        span,
+                                        name,
+                                        span,
+                                        t.clone(),
+                                        arg_t.clone(),
+                                    ));
+                                }
+                            } else if let Some(arg_t) = kwargs.get(name.as_str()) {
+                                unused_args.remove(name);
+                                if !arg_t.is_subtype_of(t) {
+                                    errors.push(TypeError::new_wrong_arg_type(
+                                        func,
+                                        span,
+                                        name,
+                                        span,
+                                        t.clone(),
+                                        arg_t.clone(),
+                                    ));
+                                }
+                            } else if !optional_args.contains(&name) {
+                                errors.push(TypeError::new_missing_arg(func, span, name));
+                            }
+                        }
+                        
+                        kwargs.iter().for_each(|(name, _)| {
+                            if !parameters.iter().any(|(arg_name, _)| arg_name == name) {
+                                errors.push(TypeError::new_unknown_arg(
+                                    func,
+                                    span,
+                                    name,
+                                    unused_args.clone(),
+                                ));
+                            }
+                        });
                     }
-                } else if let Some(arg_t) = kwargs.get(name.as_str()) {
-                    unused_args.remove(name);
-                    if !arg_t.is_subtype_of(t) {
-                        errors.push(TypeError::new_wrong_arg_type(
+                    
+                    // If we found a perfect match (no errors), return immediately
+                    if errors.is_empty() {
+                        return ((**ret).clone(), vec![]);
+                    }
+                    
+                    // Store the first set of errors
+                    if first_errors.is_none() {
+                        first_errors = Some(errors);
+                    }
+                }
+                _ => {
+                    // This shouldn't happen with proper construction
+                    return (
+                        Type::Unknown,
+                        vec![TypeError::new_invalid_type(
+                            &expr.expr,
+                            &Type::Unknown,
                             func,
                             span,
-                            name,
-                            span,
-                            t.clone(),
-                            arg_t.clone(),
-                        ));
-                    }
-                } else if !optional_args.contains(&name) {
-                    errors.push(TypeError::new_missing_arg(func, span, name));
+                        )],
+                    );
                 }
             }
-
-            kwargs.iter().for_each(|(name, _)| {
-                if !args.iter().any(|(arg_name, _)| arg_name == name) {
-                    errors.push(TypeError::new_unknown_arg(
-                        func,
-                        span,
-                        name,
-                        unused_args.clone(),
-                    ));
-                }
-            });
         }
-        (ret.clone(), errors)
+        
+        // If no perfect match was found, return the first set of errors
+        (Type::Unknown, first_errors.unwrap_or_default())
     }
 }
