@@ -22,7 +22,7 @@ func TestImageInput(t *testing.T) {
 		t.Fatalf("Error creating image: %v", err)
 	}
 
-	union := types.Union4AudioOrImageOrPdfOrVideo__NewImage(imageMedia)
+	union := types.Union4AudioOrImageOrPDFOrVideo__NewImage(imageMedia)
 
 	result, err := baml_client.TestMediaInput(ctx, union, "Analyze this image")
 	if err != nil {
@@ -48,7 +48,7 @@ func TestAudioInput(t *testing.T) {
 		t.Fatalf("Error creating audio: %v", err)
 	}
 
-	union := types.Union4AudioOrImageOrPdfOrVideo__NewAudio(audioMedia)
+	union := types.Union4AudioOrImageOrPDFOrVideo__NewAudio(audioMedia)
 
 	result, err := baml_client.TestMediaInput(ctx, union, "This is music used for an intro", baml_client.WithClientRegistry(&cr))
 	if err != nil {
@@ -72,7 +72,7 @@ func TestPdfInput(t *testing.T) {
 		t.Fatalf("Error creating PDF: %v", err)
 	}
 
-	union := types.Union4AudioOrImageOrPdfOrVideo__NewPdf(pdfMedia)
+	union := types.Union4AudioOrImageOrPDFOrVideo__NewPDF(pdfMedia)
 
 	result, err := baml_client.TestMediaInput(ctx, union, "Analyze this PDF")
 	if err != nil {
@@ -96,7 +96,7 @@ func TestVideoInput(t *testing.T) {
 		t.Fatalf("Error creating video: %v", err)
 	}
 
-	union := types.Union4AudioOrImageOrPdfOrVideo__NewVideo(videoMedia)
+	union := types.Union4AudioOrImageOrPDFOrVideo__NewVideo(videoMedia)
 
 	cr := baml.ClientRegistry{}
 	cr.SetPrimaryClient("google-ai/gemini-2.5-flash")

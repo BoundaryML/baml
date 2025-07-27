@@ -80,7 +80,7 @@ func TestMediaArrayInputs(ctx context.Context, imageArray []types.Image, textInp
 	}
 }
 
-func TestMediaInput(ctx context.Context, media types.Union4AudioOrImageOrPdfOrVideo, textInput string, opts ...CallOptionFunc) (types.MediaAnalysisResult, error) {
+func TestMediaInput(ctx context.Context, media types.Union4AudioOrImageOrPDFOrVideo, textInput string, opts ...CallOptionFunc) (types.MediaAnalysisResult, error) {
 
 	var callOpts callOption
 	for _, opt := range opts {

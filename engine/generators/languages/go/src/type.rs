@@ -172,7 +172,7 @@ impl TypeGo {
             TypeGo::Media(media_type_go, _) => match media_type_go {
                 MediaTypeGo::Image => "Image".to_string(),
                 MediaTypeGo::Audio => "Audio".to_string(),
-                MediaTypeGo::Pdf => "Pdf".to_string(),
+                MediaTypeGo::Pdf => "PDF".to_string(),
                 MediaTypeGo::Video => "Video".to_string(),
             },
             TypeGo::TypeAlias { name, .. } => name.clone(),
@@ -391,7 +391,7 @@ impl SerializeType for MediaTypeGo {
         match self {
             MediaTypeGo::Image => format!("{}Image", Package::types().relative_from(pkg)),
             MediaTypeGo::Audio => format!("{}Audio", Package::types().relative_from(pkg)),
-            MediaTypeGo::Pdf => format!("{}Pdf", Package::types().relative_from(pkg)),
+            MediaTypeGo::Pdf => format!("{}PDF", Package::types().relative_from(pkg)),
             MediaTypeGo::Video => format!("{}Video", Package::types().relative_from(pkg)),
         }
     }

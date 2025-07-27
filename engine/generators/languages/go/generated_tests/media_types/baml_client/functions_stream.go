@@ -122,7 +122,7 @@ func (*stream) TestMediaArrayInputs(ctx context.Context, imageArray []types.Imag
 }
 
 // / Streaming version of TestMediaInput
-func (*stream) TestMediaInput(ctx context.Context, media types.Union4AudioOrImageOrPdfOrVideo, textInput string, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.MediaAnalysisResult, types.MediaAnalysisResult], error) {
+func (*stream) TestMediaInput(ctx context.Context, media types.Union4AudioOrImageOrPDFOrVideo, textInput string, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.MediaAnalysisResult, types.MediaAnalysisResult], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
