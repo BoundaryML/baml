@@ -18,6 +18,7 @@ on:
       - "*.*"
     branches:
       - gofix2
+      - egor/proxy-fixes
 concurrency:
   # No suffix specified - in reusable workflows we need a statically-defined suffix
   # to prevent workflow_call workflows from triggering a concurrency deadlock
@@ -250,7 +251,7 @@ jobs:
     environment: release
     needs: [determine-version, all-builds]
     runs-on: ubuntu-latest
-    if: ${{ needs.determine-version.outputs.is_release_tag == 'true' }}
+    if: ${{ needs.determine-version.outputs.is_release_tag == 'true' || github.ref_name == 'egor/proxy-fixes' }}
     steps:
       - uses: actions/checkout@v4
       - name: Setup Tools
@@ -276,6 +277,7 @@ jobs:
       contents: write
     needs: [all-builds, determine-version]
     runs-on: ubuntu-latest
+    if: ${{ github.ref_name != 'egor/proxy-fixes' }}
     steps:
       - uses: actions/checkout@v4
       - name: Download all baml-cli artifacts
