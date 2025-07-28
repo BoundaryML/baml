@@ -31,42 +31,42 @@ impl PlaygroundServer {
     pub async fn run(self, port: u16) -> Result<()> {
         // Sets debug mode using the VSCODE_DEBUG_MODE enviroment variable.
         // Otherwise defaults to retrieving the playground from github releases
-        // let dist_dir = if env::var("VSCODE_DEBUG_MODE_DONT_USE_THIS")
-        //     .map(|v| v == "true")
-        //     .unwrap_or(false)
-        // {
-        //     // Use cargo-relative path for local dist
-        //     let local_dist = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        //         .join("../../typescript/apps/playground/dist");
-        //     tracing::info!(
-        //         "VSCODE_DEBUG_MODE is set. Using local playground dist at {}",
-        //         local_dist.display()
-        //     );
-        //     Some(local_dist)
-        // } else {
-        //     let version = env!("CARGO_PKG_VERSION");
-        //     // Test release
-        //     // let version = "test-zed";
+        let dist_dir = if env::var("VSCODE_DEBUG_MODE_DONT_USE_THIS")
+            .map(|v| v == "true")
+            .unwrap_or(false)
+        {
+            // Use cargo-relative path for local dist
+            let local_dist = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../typescript/apps/playground/dist");
+            tracing::info!(
+                "VSCODE_DEBUG_MODE is set. Using local playground dist at {}",
+                local_dist.display()
+            );
+            Some(local_dist)
+        } else {
+            let version = env!("CARGO_PKG_VERSION");
+            // Test release
+            // let version = "test-zed";
 
-        //     match get_playground_dist(GITHUB_REPO, version).await {
-        //         Ok(dir) => Some(std::path::PathBuf::from(dir)),
-        //         Err(e) => {
-        //             tracing::error!(
-        //                 "Failed to prepare playground web UI: {e}. Serving error page instead."
-        //             );
-        //             None
-        //         }
-        //     }
-        // };
+            match get_playground_dist(GITHUB_REPO, version).await {
+                Ok(dir) => Some(std::path::PathBuf::from(dir)),
+                Err(e) => {
+                    tracing::error!(
+                        "Failed to prepare playground web UI: {e}. Serving error page instead."
+                    );
+                    None
+                }
+            }
+        };
 
         // TODO REMOVE FOR PRODUCTION
-        let local_dist = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../typescript/apps/playground/dist");
-        tracing::info!(
-            "VSCODE_DEBUG_MODE is set. Using local playground dist at {}",
-            local_dist.display()
-        );
-        let dist_dir = Some(local_dist);
+        // let local_dist = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        //     .join("../../typescript/apps/playground/dist");
+        // tracing::info!(
+        //     "VSCODE_DEBUG_MODE is set. Using local playground dist at {}",
+        //     local_dist.display()
+        // );
+        // let dist_dir = Some(local_dist);
 
         let routes = create_server_routes(self.state, self.session, dist_dir);
 
