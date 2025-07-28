@@ -30,7 +30,17 @@ pub async fn handle_rpc_websocket(ws: WebSocket, session: Arc<Session>) {
                     }
                     "GET_WEBVIEW_URI" => {
                         let path = data["path"].as_str().unwrap_or("");
-                        let port = session.baml_settings.playground_port.unwrap_or(3030);
+                        let port = session.get_session_playground_port().unwrap_or_else(|| {
+                            session.baml_settings.playground_port.unwrap_or(3030)
+                        });
+                        let proxy_port = port + 1; // Proxy server runs on port + 1
+
+                        tracing::info!(
+                            "GET_WEBVIEW_URI: playground_port={}, proxy_port={}, path={}",
+                            port,
+                            proxy_port,
+                            path
+                        );
 
                         // Convert absolute path to relative path for /static/ URI
                         let rel_path = std::env::current_dir()
@@ -39,7 +49,7 @@ pub async fn handle_rpc_websocket(ws: WebSocket, session: Arc<Session>) {
                             .map(|p| p.to_string_lossy().replace('\\', "/"))
                             .unwrap_or_else(|| path.to_string());
 
-                        let uri = format!("http://localhost:{port}/static/{rel_path}");
+                        let uri = format!("http://localhost:{proxy_port}/static/{rel_path}");
                         let mut response_data = serde_json::json!({ "uri": uri });
 
                         // For non-image files, include contents as base64
@@ -59,7 +69,13 @@ pub async fn handle_rpc_websocket(ws: WebSocket, session: Arc<Session>) {
                         let _ = ws_tx.send(Message::text(response.to_string())).await;
                     }
                     "GET_PLAYGROUND_PORT" => {
-                        let playground_port = session.baml_settings.playground_port.unwrap_or(3030);
+                        let playground_port =
+                            session.get_session_playground_port().unwrap_or_else(|| {
+                                session.baml_settings.playground_port.unwrap_or(3030)
+                            });
+
+                        tracing::info!("GET_PLAYGROUND_PORT: returning port={}", playground_port);
+
                         let response = serde_json::json!({
                             "rpcMethod": "GET_PLAYGROUND_PORT",
                             "rpcId": rpc_id,

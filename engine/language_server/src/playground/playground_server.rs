@@ -60,7 +60,6 @@ impl PlaygroundServer {
         };
 
         // TODO REMOVE FOR PRODUCTION
-
         // let local_dist = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         //     .join("../../typescript/apps/playground/dist");
         // tracing::info!(
@@ -88,7 +87,7 @@ impl PlaygroundServer {
         warp::serve(routes).try_bind(([127, 0, 0, 1], port)).await;
 
         // If we get here, the main server has stopped
-        tracing::info!("Main playground server stopped");
+        tracing::info!("Main playground server has stopped");
 
         Ok(())
     }

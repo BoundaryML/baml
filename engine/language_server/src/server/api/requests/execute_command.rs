@@ -32,8 +32,11 @@ impl SyncRequestHandler for ExecuteCommand {
         params: ExecuteCommandParams,
     ) -> Result<Option<serde_json::Value>> {
         if params.command == "openPlayground" {
-            // Get the playground port from session settings
-            let port = session.baml_settings.playground_port.unwrap_or(3030);
+            // Get the actual playground port from session (determined by server after availability check)
+            // Fall back to configured port if actual port not set yet
+            let port = session
+                .get_session_playground_port()
+                .unwrap_or_else(|| session.baml_settings.playground_port.unwrap_or(3030));
 
             // Construct the URL
             let url = format!("http://localhost:{port}");
