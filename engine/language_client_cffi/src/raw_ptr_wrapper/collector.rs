@@ -49,13 +49,13 @@ impl CollectorWrapper {
         // Parse the function_id string to FunctionCallId
         let function_id = match baml_ids::FunctionCallId::from_str(function_id) {
             Ok(id) => id,
-            Err(e) => return Err(format!("Invalid id: {}", e)),
+            Err(e) => return Err(format!("Invalid id: {e}")),
         };
 
         let function_log = self
             .inner
             .function_log_by_id(&function_id)
-            .ok_or_else(|| format!("ID not found: {}", function_id))?;
+            .ok_or_else(|| format!("ID not found: {function_id}"))?;
         Ok(function_log)
     }
 }
@@ -287,10 +287,10 @@ impl LLMStreamCallWrapper {
 
     #[export_baml_fn]
     fn sse_chunks(&self) -> Option<Vec<std::sync::Arc<SSEEvent>>> {
-        match &self.inner.sse_chunks {
-            Some(chunks) => Some(chunks.event.iter().cloned().collect()),
-            None => None,
-        }
+        self.inner
+            .sse_chunks
+            .as_ref()
+            .map(|chunks| chunks.event.to_vec())
     }
 }
 

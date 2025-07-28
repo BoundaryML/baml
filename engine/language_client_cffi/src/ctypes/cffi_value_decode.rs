@@ -7,24 +7,18 @@ impl Decode for Value {
         use crate::baml::cffi::cffi_value_holder::Value as cValue;
         Ok(match from.value {
             Some(value) => match value {
-                cValue::NullValue(_) => Value::Null(Default::default()),
-                cValue::StringValue(cffi_value_string) => {
-                    Value::String(cffi_value_string, Default::default())
-                }
-                cValue::IntValue(cffi_value_int) => Value::Int(cffi_value_int, Default::default()),
-                cValue::FloatValue(cffi_value_float) => {
-                    Value::Float(cffi_value_float, Default::default())
-                }
-                cValue::BoolValue(cffi_value_bool) => {
-                    Value::Bool(cffi_value_bool, Default::default())
-                }
+                cValue::NullValue(_) => Value::Null(()),
+                cValue::StringValue(cffi_value_string) => Value::String(cffi_value_string, ()),
+                cValue::IntValue(cffi_value_int) => Value::Int(cffi_value_int, ()),
+                cValue::FloatValue(cffi_value_float) => Value::Float(cffi_value_float, ()),
+                cValue::BoolValue(cffi_value_bool) => Value::Bool(cffi_value_bool, ()),
                 cValue::ListValue(cffi_value_list) => Value::List(
                     cffi_value_list
                         .values
                         .into_iter()
                         .map(Value::decode)
                         .collect::<Result<_, _>>()?,
-                    Default::default(),
+                    (),
                 ),
                 cValue::MapValue(cffi_value_map) => Value::Map(
                     cffi_value_map
@@ -32,7 +26,7 @@ impl Decode for Value {
                         .into_iter()
                         .map(from_cffi_map_entry)
                         .collect::<Result<_, _>>()?,
-                    Default::default(),
+                    (),
                 ),
                 cValue::ClassValue(cffi_value_class) => {
                     let class_name = cffi_value_class
@@ -46,7 +40,7 @@ impl Decode for Value {
                         .map(from_cffi_map_entry)
                         .collect::<Result<_, _>>()?;
 
-                    Value::Class(class_name, fields, Default::default())
+                    Value::Class(class_name, fields, ())
                 }
                 cValue::EnumValue(cffi_value_enum) => {
                     let enum_name = cffi_value_enum
@@ -61,7 +55,7 @@ impl Decode for Value {
                 cValue::MediaValue(cffi_value_media) => {
                     let inner = cffi_value_media.media_object.unwrap();
                     let media_object = crate::raw_ptr_wrapper::RawPtrType::decode(inner)?;
-                    Value::RawPtr(media_object, Default::default())
+                    Value::RawPtr(media_object, ())
                 }
                 cValue::TupleValue(cffi_value_tuple) => {
                     let values = cffi_value_tuple
@@ -71,7 +65,7 @@ impl Decode for Value {
                         .collect::<Result<_, _>>()?;
 
                     // Convert tuple to list since Value doesn't have a Tuple variant
-                    Value::List(values, Default::default())
+                    Value::List(values, ())
                 }
                 cValue::UnionVariantValue(cffi_value_union_variant) => {
                     // For union variants, we just extract the inner value
@@ -88,7 +82,7 @@ impl Decode for Value {
                     anyhow::bail!("Streaming state value is not supported in Value::decode")
                 }
             },
-            None => Value::Null(Default::default()),
+            None => Value::Null(()),
         })
     }
 }

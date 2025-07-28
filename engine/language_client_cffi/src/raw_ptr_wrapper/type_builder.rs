@@ -62,6 +62,7 @@ impl TypeBuilderWrapper {
     }
 
     #[export_baml_fn]
+    #[allow(clippy::ptr_arg)]
     fn union(&self, types: &Vec<TypeWrapper>) -> TypeIR {
         TypeIR::union(types.iter().map(|t| t.as_ref().clone()).collect())
     }
