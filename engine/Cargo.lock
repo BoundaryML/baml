@@ -1406,6 +1406,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "boundary-udf"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "baml-types",
+ "chrono",
+ "indexmap 2.9.0",
+ "insta",
+ "internal-baml-core",
+ "internal-baml-jinja",
+ "log",
+ "minijinja",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "thiserror 2.0.12",
+]
+
+[[package]]
 name = "bstd"
 version = "0.202.0"
 dependencies = [
@@ -3438,6 +3457,7 @@ checksum = "154934ea70c58054b556dd430b99a98c2a7ff5309ac9891597e339b5c28f4371"
 dependencies = [
  "console",
  "once_cell",
+ "serde",
  "similar",
 ]
 

@@ -1,0 +1,8 @@
+---
+source: boundary-udf/src/eval.rs
+expression: result
+---
+{
+    "total_cost",
+    "completion_cost",
+}
