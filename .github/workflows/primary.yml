@@ -160,23 +160,38 @@ jobs:
       - name: Setup Rust
         uses: ./.github/actions/setup-rust
         with:
-          enable-wasm: true
+          enable-wasm: false
+          enable-cross: false
+          cache-on-failure: true
 
       - name: Setup Go
         uses: ./.github/actions/setup-go
+        with:
+          install-goimports: true
+          install-protoc-gen-go: false
 
-      - name: Setup Python
-        uses: ./.github/actions/setup-python
-
-      - name: Build Node
-        run: pnpm build:debug
-        working-directory: engine/language_client_typescript
-
-      - name: Test Generators
+      - name: Test Generators (1 of 3)
         run: |
-          pnpm generate --force || (echo "::error:: merge canary and run codegen again" && exit 1)
+          pnpm generate --force --filter=@boundaryml/baml || (echo "::error:: merge canary and run codegen again" && exit 1)
 
-      - name: Ensure No Changes
+      - name: Ensure No Changes (1 of 3)
+        run: |
+          git diff --exit-code || (echo "::error:: merge canary and run codegen again" && exit 1)
+
+
+      - name: Test Generators (2 of 3)
+        run: |
+          pnpm generate --force --filter=@boundaryml/baml || (echo "::error:: merge canary and run codegen again" && exit 1)
+
+      - name: Ensure No Changes (2 of 3)
+        run: |
+          git diff --exit-code || (echo "::error:: merge canary and run codegen again" && exit 1)
+
+      - name: Test Generators (3 of 3)
+        run: |
+          pnpm generate --force --filter=@boundaryml/baml || (echo "::error:: merge canary and run codegen again" && exit 1)
+
+      - name: Ensure No Changes (3 of 3)
         run: |
           git diff --exit-code || (echo "::error:: merge canary and run codegen again" && exit 1)
 

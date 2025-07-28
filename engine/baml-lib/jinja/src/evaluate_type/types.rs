@@ -280,7 +280,19 @@ impl PredefinedTypes {
             functions: IndexMap::from([
                 (
                     "baml::Chat".into(),
-                    (Type::String, vec![("role".into(), Type::String)]),
+                    (
+                        Type::String,
+                        vec![
+                            ("role".into(), Type::String),
+                            (
+                                "cache_control".into(),
+                                Type::merge(vec![
+                                    Type::Map(Box::new(Type::String), Box::new(Type::Unknown)),
+                                    Type::None,
+                                ]),
+                            ),
+                        ],
+                    ),
                 ),
                 (
                     "baml::OutputFormat".into(),
