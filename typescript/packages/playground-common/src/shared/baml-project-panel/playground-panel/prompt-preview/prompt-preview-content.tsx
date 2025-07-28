@@ -3,6 +3,7 @@ import { atom, useAtomValue, useSetAtom } from 'jotai';
 import { useState } from 'react';
 import { useCallback } from 'react';
 import useSWR from 'swr';
+import React, { useMemo } from 'react';
 import {
   ctxAtom,
   diagnosticsAtom,
@@ -14,7 +15,7 @@ import {
   selectionAtom,
 } from '../atoms';
 import { Loader } from './components';
-import { ErrorMessage } from './components';
+import { EnhancedErrorRenderer } from './test-panel/components/EnhancedErrorRenderer';
 import { findMediaFile } from './media-utils';
 import { RenderPrompt } from './render-prompt';
 import { apiKeysAtom } from '../../../../components/api-keys-dialog/atoms';
@@ -29,7 +30,9 @@ export const PromptPreviewContent = () => {
   const diagnostics = useAtomValue(diagnosticsAtom);
   const setPromptData = useSetAtom(renderedPromptAtom);
   const areTestsRunning = useAtomValue(areTestsRunningAtom);
-  const generatePreview = async () => {
+  
+  // Memoize the generatePreview function to prevent unnecessary re-renders
+  const generatePreview = useMemo(() => async () => {
     if (
       rt === undefined ||
       ctx === undefined ||
@@ -48,7 +51,7 @@ export const PromptPreviewContent = () => {
     setLastKnownPreview(newPreview);
     setPromptData(newPreview);
     return newPreview;
-  };
+  }, [rt, ctx, selectedFn, selectedTc, apiKeys, setPromptData]);
 
   const [lastKnownPreview, setLastKnownPreview] = useState<
     WasmPrompt | undefined
@@ -59,9 +62,23 @@ export const PromptPreviewContent = () => {
     error,
     isLoading,
   } = useSWR(
-    // areTestsRunning is added here since generatePreview iwll fail until the tests are done running. So we want this to re-run post-test-run. It fails because of WASM async issues (can't use the runtime while it's already in use. TBD how to fix)
-    [rt, ctx, selectedFn, selectedTc, areTestsRunning],
+    // Remove areTestsRunning to prevent constant re-renders
+    // The key should be stable and only change when actual dependencies change
+    rt && ctx && selectedFn && selectedTc 
+      ? [
+          'prompt-preview',
+          selectedFn.name, 
+          selectedTc.name, 
+          JSON.stringify(apiKeys)
+        ]
+      : null,
     generatePreview,
+    {
+      // Add configuration to prevent unnecessary refreshes
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+      dedupingInterval: 1000, // Prevent duplicate requests within 1 second
+    }
   );
 
   if (isLoading && !preview) {
@@ -73,36 +90,27 @@ export const PromptPreviewContent = () => {
 
   if (error) {
     return (
-      <ErrorMessage
-        error={error instanceof Error ? error.message : 'Unknown Error'}
+      <EnhancedErrorRenderer
+        errorMessage={error instanceof Error ? error.message : 'Unknown Error'}
       />
     );
   }
 
   if (diagnostics.length > 0 && diagnostics.some((d) => d.type === 'error')) {
+    const errorMessages = diagnostics
+      .filter((d: WasmError) => d.type === 'error')
+      .map((d) => `- ${d.message}`)
+      .join('\n');
+    
+    const fullErrorMessage = `${diagnostics.filter((d: WasmError) => d.type === 'error').length} error(s):\n${errorMessages}`;
+    
     return (
       <div className="relative">
         {/* todo: maybe keep rendering the last known prompt? And make this a more condensed error banner in absolute position? */}
         <div className="p-3">
-          <div className="mb-2 text-sm font-medium text-red-500">
-            Syntax Error
-          </div>
-          <pre className="px-2 py-1 font-mono text-sm text-red-500 whitespace-pre-wrap rounded-lg">
-            <div className="space-y-2">
-              <div>
-                {
-                  diagnostics.filter((d: WasmError) => d.type === 'error')
-                    .length
-                }{' '}
-                error(s):
-              </div>
-              {diagnostics
-                .filter((d: WasmError) => d.type === 'error')
-                .map((d) => (
-                  <div key={d.message}>- {d.message}</div>
-                ))}
-            </div>
-          </pre>
+          <EnhancedErrorRenderer
+            errorMessage={fullErrorMessage}
+          />
         </div>
       </div>
     );

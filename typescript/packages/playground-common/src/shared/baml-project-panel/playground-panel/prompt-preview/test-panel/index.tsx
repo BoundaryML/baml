@@ -61,7 +61,7 @@ const TestPanel = () => {
             // Reset any state that may have caused the error
             window.location.reload()
           }}
-          resetKeys={[viewType, currentRun]}
+          resetKeys={[viewType, currentRun?.timestamp]}
         >
           <TestMenu />
         </ErrorBoundary>
@@ -77,7 +77,7 @@ const TestPanel = () => {
             // Reset any state that may have caused the error
             window.location.reload()
           }}
-          resetKeys={[viewType, currentRun]}
+          resetKeys={[viewType, currentRun?.timestamp]}
         >
           {renderView()}
         </ErrorBoundary>

@@ -5,6 +5,7 @@ use futures_util::{SinkExt, StreamExt};
 use mime_guess::from_path;
 use serde_json::Value;
 use warp::ws::{Message, WebSocket};
+use webbrowser;
 
 use crate::{playground::definitions::PlaygroundState, session::Session};
 
@@ -104,6 +105,35 @@ pub async fn handle_rpc_websocket(ws: WebSocket, session: Arc<Session>) {
                             "rpcMethod": "LOAD_GCP_CREDS",
                             "rpcId": rpc_id,
                             "data": { "ok": true }
+                        });
+                        let _ = ws_tx.send(Message::text(response.to_string())).await;
+                    }
+                    "OPEN_PLAYGROUND" => {
+                        // Get the actual playground port from session (determined by server after availability check)
+                        // Fall back to configured port if actual port not set yet
+                        let port = session.get_session_playground_port().unwrap_or_else(|| {
+                            session.baml_settings.playground_port.unwrap_or(3030)
+                        });
+
+                        // Construct the URL
+                        let url = format!("http://localhost:{port}");
+
+                        // Open the browser
+                        let success = match webbrowser::open(&url) {
+                            Ok(_) => {
+                                tracing::info!("Successfully opened playground at: {}", url);
+                                true
+                            }
+                            Err(e) => {
+                                tracing::error!("Failed to open browser: {}", e);
+                                false
+                            }
+                        };
+
+                        let response = serde_json::json!({
+                            "rpcMethod": "OPEN_PLAYGROUND",
+                            "rpcId": rpc_id,
+                            "data": { "success": success, "url": url }
                         });
                         let _ = ws_tx.send(Message::text(response.to_string())).await;
                     }
