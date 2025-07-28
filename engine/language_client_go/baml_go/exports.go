@@ -16,6 +16,10 @@ import (
 import "C"
 
 func CreateBamlRuntime(rootPath string, srcFilesJson string, envVarsJson string) (unsafe.Pointer, error) {
+	if initErr != nil {
+		return nil, fmt.Errorf("BAML library not initialized: %w", initErr)
+	}
+	
 	cRootPath := C.CString(rootPath)
 	defer C.free(unsafe.Pointer(cRootPath))
 
@@ -42,17 +46,29 @@ func BamlVersion() string {
 }
 
 func InvokeRuntimeCli(args []string) (int, error) {
-	arg_c_strings := make([]*C.char, len(args))
+	// Log the invocation for debugging
+	logger.Debug("InvokeRuntimeCli called", "argCount", len(args), "args", args)
+	
+	// Create array with extra slot for NULL terminator  
+	arg_c_strings := make([]*C.char, len(args)+1)
 	for i, arg := range args {
 		arg_c_strings[i] = C.CString(arg)
 	}
+	// arg_c_strings[len(args)] is automatically nil (NULL terminator)
+	
+	logger.Debug("Created NULL-terminated C string array", "arraySize", len(arg_c_strings), "nullTerminated", true)
+	
 	defer func() {
-		for _, arg_c_string := range arg_c_strings {
-			C.free(unsafe.Pointer(arg_c_string))
+		// Only free the actual string pointers, not the NULL terminator
+		for i := 0; i < len(args); i++ {
+			C.free(unsafe.Pointer(arg_c_strings[i]))
 		}
+		logger.Debug("Freed C string array memory")
 	}()
 
+	logger.Debug("Calling C function WrapInvokeRuntimeCli")
 	result := C.WrapInvokeRuntimeCli((**C.char)(unsafe.Pointer(&arg_c_strings[0])))
+	logger.Debug("C function completed", "result", int(result))
 
 	return int(result), nil
 }
