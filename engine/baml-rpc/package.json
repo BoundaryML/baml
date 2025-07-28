@@ -7,11 +7,11 @@
     "./*": "./bindings/*.ts"
   },
   "scripts": {
-    "build": "cargo test export_bindings && tsc",
-    "release": "cargo test export_bindings && tsc",
-    "typecheck": "cargo test export_bindings && tsc --noEmit --emitDeclarationOnly false",
+    "build": "cargo test export_bindings --package baml-rpc && tsc",
+    "release": "cargo test export_bindings --package baml-rpc && tsc",
+    "typecheck": "cargo test export_bindings --package baml-rpc && tsc --noEmit --emitDeclarationOnly false",
     "clean": "git clean -xdf .turbo node_modules target",
-    "dev.skip": "cargo watch -x 'test export_bindings' -s 'tsc'",
+    "dev.skip": "cargo watch -x 'test export_bindings --package baml-rpc' -s 'tsc'",
     "dev": "pnpm run build"
   },
   "devDependencies": {
