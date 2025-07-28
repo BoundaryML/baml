@@ -87,8 +87,14 @@ pub extern "C" fn free_buffer(buf: Buffer) {
 }
 
 #[no_mangle]
-pub extern "C" fn call_object_method(encoded_args: *const libc::c_char, length: usize) -> Buffer {
-    let result = call_object_method_impl(encoded_args, length);
+pub extern "C" fn call_object_method(
+    runtime: *const libc::c_void,
+    encoded_args: *const libc::c_char,
+    length: usize,
+) -> Buffer {
+    let runtime = unsafe { &*(runtime as *const baml_runtime::BamlRuntime) };
+
+    let result = call_object_method_impl(runtime, encoded_args, length);
 
     let buf_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         result.encode_to_c_buffer(&BasicLookup, baml_types::StreamingMode::NonStreaming)
@@ -114,7 +120,11 @@ pub extern "C" fn call_object_method(encoded_args: *const libc::c_char, length: 
     Buffer::from(buf)
 }
 
-fn call_object_method_impl(encoded_args: *const libc::c_char, length: usize) -> BamlObjectResponse {
+fn call_object_method_impl(
+    runtime: &baml_runtime::BamlRuntime,
+    encoded_args: *const libc::c_char,
+    length: usize,
+) -> BamlObjectResponse {
     let BamlMethodArguments {
         object,
         method_name,
@@ -126,7 +136,7 @@ fn call_object_method_impl(encoded_args: *const libc::c_char, length: usize) -> 
         }
     };
     baml_log::trace!("{}::{}({:?})", object.name(), method_name, kwargs);
-    let result = object.call_method(method_name.as_str(), &kwargs);
+    let result = object.call_method(runtime, method_name.as_str(), &kwargs);
     baml_log::trace!("-> {:?}", result);
     result
 }

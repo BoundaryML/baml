@@ -1296,9 +1296,11 @@ version = "0.202.1"
 dependencies = [
  "anyhow",
  "baml-cli",
+ "baml-ids",
  "baml-log",
  "baml-runtime",
  "baml-types",
+ "baml_cffi_macros",
  "cbindgen",
  "env_logger",
  "internal-baml-codegen",
@@ -1312,6 +1314,15 @@ dependencies = [
  "serde_json",
  "tokio",
  "tokio-util",
+]
+
+[[package]]
+name = "baml_cffi_macros"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.104",
 ]
 
 [[package]]

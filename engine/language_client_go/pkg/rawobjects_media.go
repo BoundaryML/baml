@@ -2,9 +2,9 @@ package baml
 
 import (
 	"fmt"
+	"unsafe"
 
 	"github.com/boundaryml/baml/engine/language_client_go/baml_go/raw_objects"
-	"github.com/boundaryml/baml/engine/language_client_go/baml_go/serde"
 	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
 )
 
@@ -188,8 +188,8 @@ func (m *mediaHolder) AsBase64() (*string, error) {
 	return &as_base64, nil
 }
 
-func newMedia(ptr int64, mediaType MediaType) media {
-	media := mediaHolder{raw_objects.FromPointer(ptr), mediaType}
+func newMedia(ptr int64, rt unsafe.Pointer, mediaType MediaType) media {
+	media := mediaHolder{raw_objects.FromPointer(ptr, rt), mediaType}
 	switch mediaType {
 	case MediaType_Image:
 		return &imageHolder{media}
@@ -202,80 +202,4 @@ func newMedia(ptr int64, mediaType MediaType) media {
 	default:
 		panic(fmt.Sprintf("invalid media type: '%s'", mediaType))
 	}
-}
-
-func newMediaFromUrl(mediaType MediaType, url string, mimeType *string) (media, error) {
-	kwargs, err := serde.EncodeMapEntries(map[string]any{
-		"mime_type": mimeType,
-		"url":       url,
-	}, "media constructor args")
-	if err != nil {
-		return nil, fmt.Errorf("failed to encode kwargs: %w", err)
-	}
-
-	ptr, err := raw_objects.NewRawObject(mediaType.objectType(), kwargs)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create media: %w", err)
-	}
-
-	as_media, ok := ptr.(media)
-	if !ok {
-		return nil, fmt.Errorf("unexpected type for media creation: %T", ptr)
-	}
-
-	return as_media, nil
-}
-
-func NewImageFromUrl(url string, mimeType *string) (Image, error) {
-	return newMediaFromUrl(MediaType_Image, url, mimeType)
-}
-
-func NewAudioFromUrl(url string, mimeType *string) (Audio, error) {
-	return newMediaFromUrl(MediaType_Audio, url, mimeType)
-}
-
-func NewPDFFromUrl(url string, mimeType *string) (PDF, error) {
-	return newMediaFromUrl(MediaType_PDF, url, mimeType)
-}
-
-func NewVideoFromUrl(url string, mimeType *string) (Video, error) {
-	return newMediaFromUrl(MediaType_Video, url, mimeType)
-}
-
-func newMediaFromBase64(mediaType MediaType, base64 string, mimeType *string) (media, error) {
-	kwargs, err := serde.EncodeMapEntries(map[string]any{
-		"mime_type": mimeType,
-		"base64":    base64,
-	}, "media constructor args")
-	if err != nil {
-		return nil, fmt.Errorf("failed to encode kwargs: %w", err)
-	}
-
-	ptr, err := raw_objects.NewRawObject(mediaType.objectType(), kwargs)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create media: %w", err)
-	}
-
-	as_media, ok := ptr.(media)
-	if !ok {
-		return nil, fmt.Errorf("unexpected type for media creation: %T", ptr)
-	}
-
-	return as_media, nil
-}
-
-func NewImageFromBase64(base64 string, mimeType *string) (Image, error) {
-	return newMediaFromBase64(MediaType_Image, base64, mimeType)
-}
-
-func NewAudioFromBase64(base64 string, mimeType *string) (Audio, error) {
-	return newMediaFromBase64(MediaType_Audio, base64, mimeType)
-}
-
-func NewPDFFromBase64(base64 string, mimeType *string) (PDF, error) {
-	return newMediaFromBase64(MediaType_PDF, base64, mimeType)
-}
-
-func NewVideoFromBase64(base64 string, mimeType *string) (Video, error) {
-	return newMediaFromBase64(MediaType_Video, base64, mimeType)
 }

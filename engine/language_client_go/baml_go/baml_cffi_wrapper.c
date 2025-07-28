@@ -24,6 +24,6 @@ DEFINE_WRAPPER_FUNCTIONS(int, InvokeRuntimeCli, (const char *const *args), (args
 DEFINE_WRAPPER_FUNCTIONS(void, RegisterCallbacks, (CallbackFn callback_fn, CallbackFn error_callback_fn, OnTickCallbackFn on_tick_callback_fn), (callback_fn, error_callback_fn, on_tick_callback_fn), )
 DEFINE_WRAPPER_FUNCTIONS(const void *, CallFunctionFromC, (const void *runtime, const char *function_name, const char *encoded_args, uintptr_t length, uint32_t id), (runtime, function_name, encoded_args, length, id), NULL)
 DEFINE_WRAPPER_FUNCTIONS(const void *, CallFunctionStreamFromC, (const void *runtime, const char *function_name, const char *encoded_args, uintptr_t length, uint32_t id), (runtime, function_name, encoded_args, length, id), NULL)
-DEFINE_WRAPPER_FUNCTIONS(Buffer, CallObjectMethodFunction, (const char *encoded_args, uintptr_t length), (encoded_args, length), zero_buffer)
+DEFINE_WRAPPER_FUNCTIONS(Buffer, CallObjectMethodFunction, (const void *runtime, const char *encoded_args, uintptr_t length), (runtime, encoded_args, length), zero_buffer)
 DEFINE_WRAPPER_FUNCTIONS(Buffer, CallObjectConstructor, (const char *encoded_args, uintptr_t length), (encoded_args, length), zero_buffer)
 DEFINE_WRAPPER_FUNCTIONS(void, FreeBuffer, (Buffer buffer), (buffer), )

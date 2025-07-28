@@ -15,6 +15,7 @@ crate-type = ["cdylib"]
 [dependencies]
 libc = "0.2.2"
 baml-cli.workspace = true
+baml-ids.workspace = true
 baml-log.workspace = true
 baml-types.workspace = true
 baml-runtime = { path = "../baml-runtime", default-features = false, features = [
@@ -29,6 +30,7 @@ once_cell.workspace = true
 anyhow.workspace = true
 env_logger.workspace = true
 prost = "0.14"
+baml_cffi_macros = { path = "../baml_cffi_macros" }
 
 [build-dependencies]
 cbindgen = "0.28.0"

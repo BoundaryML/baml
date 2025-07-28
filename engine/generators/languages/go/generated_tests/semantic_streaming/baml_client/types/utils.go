@@ -22,4 +22,4 @@ type Checked[T any] baml.Checked[T]
 type Image baml.Image
 type Audio baml.Audio
 type Video baml.Video
-type Pdf baml.PDF
+type PDF baml.PDF

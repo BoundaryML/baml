@@ -262,6 +262,8 @@ enum CFFIObjectType {
   OBJECT_MEDIA_AUDIO = 13;
   OBJECT_MEDIA_PDF = 14;
   OBJECT_MEDIA_VIDEO = 15;
+  OBJECT_TYPE_BUILDER = 16;
+  OBJECT_TYPE = 17;
 }
 
 // Raw object with type information
@@ -282,6 +284,8 @@ message CFFIRawObject {
     CFFIPointerType media_audio = 13;
     CFFIPointerType media_pdf = 14;
     CFFIPointerType media_video = 15;
+    CFFIPointerType type_builder = 16;
+    CFFIPointerType type = 17;
   }
 }
 
