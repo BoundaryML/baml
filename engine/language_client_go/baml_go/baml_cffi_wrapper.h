@@ -32,7 +32,7 @@ void SetCallObjectConstructorFn(void *fn);
 Buffer WrapCallObjectConstructor(const char *encoded_args, uintptr_t length);
 
 void SetCallObjectMethodFunctionFn(void *fn);
-Buffer WrapCallObjectMethodFunction(const char *encoded_args, uintptr_t length);
+Buffer WrapCallObjectMethodFunction(const void *runtime, const char *encoded_args, uintptr_t length);
 
 void SetFreeBufferFn(void *fn);
 void WrapFreeBuffer(Buffer buffer);

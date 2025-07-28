@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"media_types/baml_client"
+	b "media_types/baml_client"
 	"testing"
 
 	"media_types/baml_client/types"
@@ -14,7 +15,7 @@ func TestImageInput(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 
-	imageMedia, err := baml.NewImageFromUrl(
+	imageMedia, err := b.NewImageFromUrl(
 		"https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png",
 		nil,
 	)
@@ -40,7 +41,7 @@ func TestAudioInput(t *testing.T) {
 	cr := baml.ClientRegistry{}
 	cr.SetPrimaryClient("openai/gpt-4o-audio-preview")
 
-	audioMedia, err := baml.NewAudioFromUrl(
+	audioMedia, err := b.NewAudioFromUrl(
 		"https://download.samplelib.com/mp3/sample-3s.mp3",
 		nil,
 	)
@@ -64,7 +65,7 @@ func TestPdfInput(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 
-	pdfMedia, err := baml.NewPDFFromUrl(
+	pdfMedia, err := b.NewPDFFromUrl(
 		"https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
 		nil,
 	)
@@ -88,7 +89,7 @@ func TestVideoInput(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 
-	videoMedia, err := baml.NewVideoFromUrl(
+	videoMedia, err := b.NewVideoFromUrl(
 		"https://www.youtube.com/watch?v=1O0yazhqaxs",
 		nil,
 	)
@@ -115,7 +116,7 @@ func TestImageArrayInput(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 
-	image1, err := baml.NewImageFromUrl(
+	image1, err := b.NewImageFromUrl(
 		"https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png",
 		nil,
 	)
@@ -123,7 +124,7 @@ func TestImageArrayInput(t *testing.T) {
 		t.Fatalf("Error creating first image: %v", err)
 	}
 
-	image2, err := baml.NewImageFromUrl(
+	image2, err := b.NewImageFromUrl(
 		"https://upload.wikimedia.org/wikipedia/commons/thumb/a/a7/React-icon.svg/1200px-React-icon.svg.png",
 		nil,
 	)

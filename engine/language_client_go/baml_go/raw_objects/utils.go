@@ -21,19 +21,21 @@ import (
 */
 import "C"
 
-var _decodeRawObjectImpl func(cRaw *cffi.CFFIRawObject) (RawPointer, error)
+var _decodeRawObjectImpl func(rt unsafe.Pointer, cRaw *cffi.CFFIRawObject) (RawPointer, error)
 
-func SetDecodeRawObjectImpl(impl func(cRaw *cffi.CFFIRawObject) (RawPointer, error)) {
+func SetDecodeRawObjectImpl(impl func(rt unsafe.Pointer, cRaw *cffi.CFFIRawObject) (RawPointer, error)) {
 	_decodeRawObjectImpl = impl
 }
 
 type RawPointer interface {
 	ObjectType() cffi.CFFIObjectType
 	pointer() int64
+	Runtime() unsafe.Pointer
 }
 
 type RawObject struct {
 	ptr int64     // pointer to the raw object in C
+	baml_runtime unsafe.Pointer
 	_   [0]func() // prevents copying
 }
 
@@ -45,12 +47,16 @@ func (r *RawObject) pointer() int64 {
 	return r.ptr
 }
 
-func FromPointer(ptr int64) *RawObject {
-	return &RawObject{ptr: ptr}
+func (r *RawObject) Runtime() unsafe.Pointer {
+	return r.baml_runtime
+}
+
+func FromPointer(ptr int64, rt unsafe.Pointer) *RawObject {
+	return &RawObject{ptr: ptr, baml_runtime: rt}
 }
 
 // newRawObject creates a new refcounted rawObject
-func NewRawObject(objectType cffi.CFFIObjectType, kwargs []*cffi.CFFIMapEntry) (any, error) {
+func NewRawObject(rt unsafe.Pointer, objectType cffi.CFFIObjectType, kwargs []*cffi.CFFIMapEntry) (any, error) {
 	args := cffi.CFFIObjectConstructorArgs{
 		Type:   objectType,
 		Kwargs: kwargs,
@@ -79,7 +85,7 @@ func NewRawObject(objectType cffi.CFFIObjectType, kwargs []*cffi.CFFIMapEntry) (
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal content bytes: %w", err)
 	}
-	parsed, err := decodeObjectResponse(&content_holder)
+	parsed, err := decodeObjectResponse(rt, &content_holder)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode object response: %w", err)
 	}
@@ -118,7 +124,7 @@ func CallMethod(object RawPointer, method_name string, kwargs map[string]any) (a
 	}
 	cEncodedArgs := (*C.char)(unsafe.Pointer(&encodedArgs[0]))
 
-	cBuf := C.WrapCallObjectMethodFunction(cEncodedArgs, C.uintptr_t(len(encodedArgs)))
+	cBuf := C.WrapCallObjectMethodFunction(object.Runtime(), cEncodedArgs, C.uintptr_t(len(encodedArgs)))
 
 	content_bytes := C.GoBytes(unsafe.Pointer(cBuf.ptr), C.int32_t(cBuf.len))
 	C.WrapFreeBuffer(cBuf) // Free the buffer after use
@@ -135,7 +141,7 @@ func CallMethod(object RawPointer, method_name string, kwargs map[string]any) (a
 		return nil, fmt.Errorf("failed to unmarshal content bytes: %w", err)
 	}
 
-	parsed, err := decodeObjectResponse(&content_holder)
+	parsed, err := decodeObjectResponse(object.Runtime(), &content_holder)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode object response: %w", err)
 	}
@@ -143,7 +149,7 @@ func CallMethod(object RawPointer, method_name string, kwargs map[string]any) (a
 	return parsed, nil
 }
 
-func decodeObjectResponse(response *cffi.CFFIObjectResponse) (any, error) {
+func decodeObjectResponse(rt unsafe.Pointer, response *cffi.CFFIObjectResponse) (any, error) {
 	if response == nil {
 		return nil, fmt.Errorf("nil response")
 	}
@@ -156,12 +162,12 @@ func decodeObjectResponse(response *cffi.CFFIObjectResponse) (any, error) {
 		switch success.Result.(type) {
 		case *cffi.CFFIObjectResponseSuccess_Object:
 			object := success.GetObject()
-			return decodeRawObject(object)
+			return decodeRawObject(rt, object)
 		case *cffi.CFFIObjectResponseSuccess_Objects:
 			objects := success.GetObjects()
 			parsed := make([]RawPointer, len(objects.Objects))
 			for i, obj := range objects.Objects {
-				decoded, err := decodeRawObject(obj)
+				decoded, err := decodeRawObject(rt, obj)
 				if err != nil {
 					return nil, fmt.Errorf("failed to decode object at index %d: %w", i, err)
 				}
@@ -181,12 +187,12 @@ func decodeObjectResponse(response *cffi.CFFIObjectResponse) (any, error) {
 	}
 }
 
-func decodeRawObject(cRaw *cffi.CFFIRawObject) (RawPointer, error) {
+func decodeRawObject(rt unsafe.Pointer, cRaw *cffi.CFFIRawObject) (RawPointer, error) {
 	if _decodeRawObjectImpl == nil {
 		return nil, fmt.Errorf("decodeRawObjectImpl is not set. Please call SetDecodeRawObjectImpl() before using this function")
 	}
 
-	raw, err := _decodeRawObjectImpl(cRaw)
+	raw, err := _decodeRawObjectImpl(rt, cRaw)
 	if err != nil {
 		return nil, err
 	}
