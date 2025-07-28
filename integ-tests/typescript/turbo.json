@@ -3,7 +3,7 @@
   "extends": ["//"],
   "tasks": {
     "generate": {
-        "dependsOn": [ "@baml/cli#build" ]
+        "dependsOn": [ "@baml/cli#build", "@boundaryml/baml#build" ]
     }
   }
 }

@@ -67,7 +67,7 @@
       ]
     },
     "generate": {
-      "dependsOn": ["@boundaryml/baml#build"],
+      "dependsOn": ["@baml/integ-tests-typescript#generate"],
       "inputs": ["**/*.baml", "**/*.j2", "**/*.hbs", "**/generators.baml"],
       "outputs": ["baml_client/**"],
       "env": ["SKIP_BAML_SRC_CHECK"]
