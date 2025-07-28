@@ -64,10 +64,10 @@ impl SyncRequestHandler for CodeActionHandler {
             .unwrap_or_else(|| session.baml_settings.playground_port.unwrap_or(3030));
 
         let action = CodeActionOrCommand::CodeAction(CodeAction {
-            title: format!("Open Playground Localhost:{}", port),
+            title: format!("Open Playground Localhost:{port}"),
             kind: Some(CodeActionKind::EMPTY),
             command: Some(Command {
-                title: format!("Open Playground Localhost:{}", port),
+                title: format!("Open Playground Localhost:{port}"),
                 command: "openPlayground".to_string(),
                 arguments: function_name.map(|name| vec![Value::String(name)]),
             }),

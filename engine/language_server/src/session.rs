@@ -85,7 +85,7 @@ impl Clone for Session {
             resolved_client_capabilities: self.resolved_client_capabilities.clone(),
             baml_settings: self.baml_settings.clone(),
             #[cfg(feature = "playground-server")]
-            playground_port: self.playground_port.clone(),
+            playground_port: self.playground_port,
             #[cfg(feature = "playground-server")]
             playground_state: self.playground_state.clone(),
             #[cfg(feature = "playground-server")]

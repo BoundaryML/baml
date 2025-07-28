@@ -202,15 +202,15 @@ async fn serve_static_file(path_str: &str) -> Result<BinaryResponse, Rejection> 
             let (status, message) = match err.kind() {
                 std::io::ErrorKind::NotFound => (
                     http::StatusCode::NOT_FOUND,
-                    format!("File not found: {}", file_path),
+                    format!("File not found: {file_path}"),
                 ),
                 std::io::ErrorKind::PermissionDenied => (
                     http::StatusCode::FORBIDDEN,
-                    format!("Permission denied: {}", file_path),
+                    format!("Permission denied: {file_path}"),
                 ),
                 _ => (
                     http::StatusCode::INTERNAL_SERVER_ERROR,
-                    format!("Error reading file: {}", file_path),
+                    format!("Error reading file: {file_path}"),
                 ),
             };
 
