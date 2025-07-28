@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.202.1](https://github.com/boundaryml/baml/compare/0.202.0..0.202.1) - 2025-07-18
+
+
+### Bug fixes
+- apply suggestions by cargo fix to reduce warnings (#2158) - ([4a851dc](https://github.com/boundaryml/baml/commit/4a851dca4f7fb3161602589bc6214d11fd845aee)) - Rahul Tiwari
+- [feat] merge union types in go whenever possible (#2160) - ([73f0c36](https://github.com/boundaryml/baml/commit/73f0c36dbe9d087acc2213374e3d14bd4ea750af)) - hellovai
+- Bump version to 0.202.1 - ([4ff6a02](https://github.com/boundaryml/baml/commit/4ff6a02148d516cf3af9505a8aaa168b88ca2168)) - Aaron Villalpando
+
 ## [0.202.0](https://github.com/boundaryml/baml/compare/0.201.0..0.202.0) - 2025-07-16
 
 ### Bug Fixes

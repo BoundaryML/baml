@@ -9,20 +9,24 @@ crate::lang_wrapper!(BamlPdf, baml_types::BamlMedia);
 #[napi]
 impl BamlPdf {
     #[napi(ts_return_type = "BamlPdf")]
-    pub fn from_url(url: String, media_type: Option<String>) -> External<BamlPdf> {
+    pub fn from_url(url: String) -> External<BamlPdf> {
         let pdf = BamlPdf {
-            inner: baml_types::BamlMedia::url(baml_types::BamlMediaType::Pdf, url, media_type),
+            inner: baml_types::BamlMedia::url(
+                baml_types::BamlMediaType::Pdf,
+                url,
+                Some("application/pdf".to_string()),
+            ),
         };
         External::new(pdf)
     }
 
     #[napi(ts_return_type = "BamlPdf")]
-    pub fn from_base64(media_type: String, base64: String) -> External<BamlPdf> {
+    pub fn from_base64(base64: String) -> External<BamlPdf> {
         let pdf = BamlPdf {
             inner: baml_types::BamlMedia::base64(
                 baml_types::BamlMediaType::Pdf,
                 base64,
-                Some(media_type),
+                Some("application/pdf".to_string()),
             ),
         };
         External::new(pdf)
@@ -54,7 +58,10 @@ impl BamlPdf {
         match &self.inner.content {
             baml_types::BamlMediaContent::Base64(base64) => Ok(vec![
                 base64.base64.clone(),
-                self.inner.mime_type.clone().unwrap_or("".to_string()),
+                self.inner
+                    .mime_type
+                    .clone()
+                    .unwrap_or("application/pdf".to_string()),
             ]),
             _ => Err(invalid_argument_error("Pdf is not base64")),
         }

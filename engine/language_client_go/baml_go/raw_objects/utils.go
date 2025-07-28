@@ -272,6 +272,30 @@ func EncodeRawObject(object RawPointer) *cffi.CFFIRawObject {
 				Usage: pointer,
 			},
 		}
+	case cffi.CFFIObjectType_OBJECT_MEDIA_IMAGE:
+		return &cffi.CFFIRawObject{
+			Object: &cffi.CFFIRawObject_MediaImage{
+				MediaImage: pointer,
+			},
+		}
+	case cffi.CFFIObjectType_OBJECT_MEDIA_AUDIO:
+		return &cffi.CFFIRawObject{
+			Object: &cffi.CFFIRawObject_MediaAudio{
+				MediaAudio: pointer,
+			},
+		}
+	case cffi.CFFIObjectType_OBJECT_MEDIA_PDF:
+		return &cffi.CFFIRawObject{
+			Object: &cffi.CFFIRawObject_MediaPdf{
+				MediaPdf: pointer,
+			},
+		}
+	case cffi.CFFIObjectType_OBJECT_MEDIA_VIDEO:
+		return &cffi.CFFIRawObject{
+			Object: &cffi.CFFIRawObject_MediaVideo{
+				MediaVideo: pointer,
+			},
+		}
 	case cffi.CFFIObjectType_OBJECT_UNSPECIFIED:
 		panic("unexpected cffi.CFFIObjectType_OBJECT_UNSPECIFIED")
 	default:

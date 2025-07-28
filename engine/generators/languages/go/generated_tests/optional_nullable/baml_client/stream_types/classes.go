@@ -18,6 +18,8 @@ import (
 
 	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
+
+	"optional_nullable/baml_client/types"
 )
 
 type ComplexOptional struct {
@@ -471,8 +473,8 @@ func (u OptionalItem) BamlEncodeName() *cffi.CFFITypeName {
 }
 
 type OptionalValue struct {
-	Data     *Union2IntOrString `json:"data"`
-	Optional *string            `json:"optional"`
+	Data     *types.Union2IntOrString `json:"data"`
+	Optional *string                  `json:"optional"`
 }
 
 func (c *OptionalValue) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -490,7 +492,7 @@ func (c *OptionalValue) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap
 		switch key {
 
 		case "data":
-			c.Data = baml.Decode(valueHolder).Interface().(*Union2IntOrString)
+			c.Data = baml.Decode(valueHolder).Interface().(*types.Union2IntOrString)
 
 		case "optional":
 			c.Optional = baml.Decode(valueHolder).Interface().(*string)
@@ -583,10 +585,10 @@ func (u Product) BamlEncodeName() *cffi.CFFITypeName {
 }
 
 type UnionWithNull struct {
-	SimpleUnion   *Union2IntOrString   `json:"simpleUnion"`
-	NullableUnion *Union2IntOrString   `json:"nullableUnion"`
-	OptionalUnion *Union2IntOrString   `json:"optionalUnion"`
-	ComplexUnion  *Union2ProductOrUser `json:"complexUnion"`
+	SimpleUnion   *types.Union2IntOrString `json:"simpleUnion"`
+	NullableUnion *types.Union2IntOrString `json:"nullableUnion"`
+	OptionalUnion *types.Union2IntOrString `json:"optionalUnion"`
+	ComplexUnion  *Union2ProductOrUser     `json:"complexUnion"`
 }
 
 func (c *UnionWithNull) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -604,13 +606,13 @@ func (c *UnionWithNull) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap
 		switch key {
 
 		case "simpleUnion":
-			c.SimpleUnion = baml.Decode(valueHolder).Interface().(*Union2IntOrString)
+			c.SimpleUnion = baml.Decode(valueHolder).Interface().(*types.Union2IntOrString)
 
 		case "nullableUnion":
-			c.NullableUnion = baml.Decode(valueHolder).Interface().(*Union2IntOrString)
+			c.NullableUnion = baml.Decode(valueHolder).Interface().(*types.Union2IntOrString)
 
 		case "optionalUnion":
-			c.OptionalUnion = baml.Decode(valueHolder).Interface().(*Union2IntOrString)
+			c.OptionalUnion = baml.Decode(valueHolder).Interface().(*types.Union2IntOrString)
 
 		case "complexUnion":
 			c.ComplexUnion = baml.Decode(valueHolder).Interface().(*Union2ProductOrUser)

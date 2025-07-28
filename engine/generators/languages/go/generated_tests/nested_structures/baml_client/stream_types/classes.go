@@ -18,6 +18,8 @@ import (
 
 	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
+
+	"nested_structures/baml_client/types"
 )
 
 type Address struct {
@@ -299,11 +301,11 @@ func (u Company) BamlEncodeName() *cffi.CFFITypeName {
 }
 
 type CompanyMetadata struct {
-	Founded        *string                                     `json:"founded"`
-	Industry       *string                                     `json:"industry"`
-	Size           *Union4KenterpriseOrKlargeOrKmediumOrKsmall `json:"size"`
-	Certifications []string                                    `json:"certifications"`
-	Partnerships   *[]Company                                  `json:"partnerships"`
+	Founded        *string                                           `json:"founded"`
+	Industry       *string                                           `json:"industry"`
+	Size           *types.Union4KenterpriseOrKlargeOrKmediumOrKsmall `json:"size"`
+	Certifications []string                                          `json:"certifications"`
+	Partnerships   *[]Company                                        `json:"partnerships"`
 }
 
 func (c *CompanyMetadata) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -327,7 +329,7 @@ func (c *CompanyMetadata) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeM
 			c.Industry = baml.Decode(valueHolder).Interface().(*string)
 
 		case "size":
-			c.Size = baml.Decode(valueHolder).Interface().(*Union4KenterpriseOrKlargeOrKmediumOrKsmall)
+			c.Size = baml.Decode(valueHolder).Interface().(*types.Union4KenterpriseOrKlargeOrKmediumOrKsmall)
 
 		case "certifications":
 			c.Certifications = baml.Decode(valueHolder).Interface().([]string)
@@ -671,9 +673,9 @@ func (u Department) BamlEncodeName() *cffi.CFFITypeName {
 }
 
 type DisplaySettings struct {
-	FontSize    *int64              `json:"fontSize"`
-	ColorScheme *string             `json:"colorScheme"`
-	Layout      *Union2KgridOrKlist `json:"layout"`
+	FontSize    *int64                    `json:"fontSize"`
+	ColorScheme *string                   `json:"colorScheme"`
+	Layout      *types.Union2KgridOrKlist `json:"layout"`
 }
 
 func (c *DisplaySettings) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -697,7 +699,7 @@ func (c *DisplaySettings) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeM
 			c.ColorScheme = baml.Decode(valueHolder).Interface().(*string)
 
 		case "layout":
-			c.Layout = baml.Decode(valueHolder).Interface().(*Union2KgridOrKlist)
+			c.Layout = baml.Decode(valueHolder).Interface().(*types.Union2KgridOrKlist)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -1232,10 +1234,10 @@ func (u Milestone) BamlEncodeName() *cffi.CFFITypeName {
 }
 
 type NotificationSettings struct {
-	Email     *bool                              `json:"email"`
-	Push      *bool                              `json:"push"`
-	Sms       *bool                              `json:"sms"`
-	Frequency *Union3KdailyOrKimmediateOrKweekly `json:"frequency"`
+	Email     *bool                                    `json:"email"`
+	Push      *bool                                    `json:"push"`
+	Sms       *bool                                    `json:"sms"`
+	Frequency *types.Union3KdailyOrKimmediateOrKweekly `json:"frequency"`
 }
 
 func (c *NotificationSettings) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -1262,7 +1264,7 @@ func (c *NotificationSettings) Decode(holder *cffi.CFFIValueClass, typeMap baml.
 			c.Sms = baml.Decode(valueHolder).Interface().(*bool)
 
 		case "frequency":
-			c.Frequency = baml.Decode(valueHolder).Interface().(*Union3KdailyOrKimmediateOrKweekly)
+			c.Frequency = baml.Decode(valueHolder).Interface().(*types.Union3KdailyOrKimmediateOrKweekly)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -1297,9 +1299,9 @@ func (u NotificationSettings) BamlEncodeName() *cffi.CFFITypeName {
 }
 
 type Preferences struct {
-	Theme         *Union2KdarkOrKlight  `json:"theme"`
-	Language      *string               `json:"language"`
-	Notifications *NotificationSettings `json:"notifications"`
+	Theme         *types.Union2KdarkOrKlight `json:"theme"`
+	Language      *string                    `json:"language"`
+	Notifications *NotificationSettings      `json:"notifications"`
 }
 
 func (c *Preferences) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -1317,7 +1319,7 @@ func (c *Preferences) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) 
 		switch key {
 
 		case "theme":
-			c.Theme = baml.Decode(valueHolder).Interface().(*Union2KdarkOrKlight)
+			c.Theme = baml.Decode(valueHolder).Interface().(*types.Union2KdarkOrKlight)
 
 		case "language":
 			c.Language = baml.Decode(valueHolder).Interface().(*string)
@@ -1356,9 +1358,9 @@ func (u Preferences) BamlEncodeName() *cffi.CFFITypeName {
 }
 
 type PrivacySettings struct {
-	ProfileVisibility *Union3KfriendsOrKprivateOrKpublic `json:"profileVisibility"`
-	ShowEmail         *bool                              `json:"showEmail"`
-	ShowPhone         *bool                              `json:"showPhone"`
+	ProfileVisibility *types.Union3KfriendsOrKprivateOrKpublic `json:"profileVisibility"`
+	ShowEmail         *bool                                    `json:"showEmail"`
+	ShowPhone         *bool                                    `json:"showPhone"`
 }
 
 func (c *PrivacySettings) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -1376,7 +1378,7 @@ func (c *PrivacySettings) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeM
 		switch key {
 
 		case "profileVisibility":
-			c.ProfileVisibility = baml.Decode(valueHolder).Interface().(*Union3KfriendsOrKprivateOrKpublic)
+			c.ProfileVisibility = baml.Decode(valueHolder).Interface().(*types.Union3KfriendsOrKprivateOrKpublic)
 
 		case "showEmail":
 			c.ShowEmail = baml.Decode(valueHolder).Interface().(*bool)
@@ -1480,13 +1482,13 @@ func (u Profile) BamlEncodeName() *cffi.CFFITypeName {
 }
 
 type Project struct {
-	Id          *int64                                            `json:"id"`
-	Name        *string                                           `json:"name"`
-	Description *string                                           `json:"description"`
-	Status      *Union4KactiveOrKcancelledOrKcompletedOrKplanning `json:"status"`
-	Team        []Employee                                        `json:"team"`
-	Milestones  []Milestone                                       `json:"milestones"`
-	Budget      *Budget                                           `json:"budget"`
+	Id          *int64                                                  `json:"id"`
+	Name        *string                                                 `json:"name"`
+	Description *string                                                 `json:"description"`
+	Status      *types.Union4KactiveOrKcancelledOrKcompletedOrKplanning `json:"status"`
+	Team        []Employee                                              `json:"team"`
+	Milestones  []Milestone                                             `json:"milestones"`
+	Budget      *Budget                                                 `json:"budget"`
 }
 
 func (c *Project) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -1513,7 +1515,7 @@ func (c *Project) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.Description = baml.Decode(valueHolder).Interface().(*string)
 
 		case "status":
-			c.Status = baml.Decode(valueHolder).Interface().(*Union4KactiveOrKcancelledOrKcompletedOrKplanning)
+			c.Status = baml.Decode(valueHolder).Interface().(*types.Union4KactiveOrKcancelledOrKcompletedOrKplanning)
 
 		case "team":
 			c.Team = baml.Decode(valueHolder).Interface().([]Employee)
@@ -1563,11 +1565,11 @@ func (u Project) BamlEncodeName() *cffi.CFFITypeName {
 }
 
 type RecursiveStructure struct {
-	Id       *int64                             `json:"id"`
-	Name     *string                            `json:"name"`
-	Children []RecursiveStructure               `json:"children"`
-	Parent   *RecursiveStructure                `json:"parent"`
-	Metadata map[string]Union3BoolOrIntOrString `json:"metadata"`
+	Id       *int64                                   `json:"id"`
+	Name     *string                                  `json:"name"`
+	Children []RecursiveStructure                     `json:"children"`
+	Parent   *RecursiveStructure                      `json:"parent"`
+	Metadata map[string]types.Union3BoolOrIntOrString `json:"metadata"`
 }
 
 func (c *RecursiveStructure) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -1597,7 +1599,7 @@ func (c *RecursiveStructure) Decode(holder *cffi.CFFIValueClass, typeMap baml.Ty
 			c.Parent = baml.Decode(valueHolder).Interface().(*RecursiveStructure)
 
 		case "metadata":
-			c.Metadata = baml.Decode(valueHolder).Interface().(map[string]Union3BoolOrIntOrString)
+			c.Metadata = baml.Decode(valueHolder).Interface().(map[string]types.Union3BoolOrIntOrString)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -1758,13 +1760,13 @@ func (u SocialLinks) BamlEncodeName() *cffi.CFFITypeName {
 }
 
 type Task struct {
-	Id          *int64                            `json:"id"`
-	Title       *string                           `json:"title"`
-	Description *string                           `json:"description"`
-	Assignee    *string                           `json:"assignee"`
-	Priority    *Union3KhighOrKlowOrKmedium       `json:"priority"`
-	Status      *Union3KdoneOrKin_progressOrKtodo `json:"status"`
-	Subtasks    *[]Task                           `json:"subtasks"`
+	Id          *int64                                  `json:"id"`
+	Title       *string                                 `json:"title"`
+	Description *string                                 `json:"description"`
+	Assignee    *string                                 `json:"assignee"`
+	Priority    *types.Union3KhighOrKlowOrKmedium       `json:"priority"`
+	Status      *types.Union3KdoneOrKin_progressOrKtodo `json:"status"`
+	Subtasks    *[]Task                                 `json:"subtasks"`
 }
 
 func (c *Task) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -1794,10 +1796,10 @@ func (c *Task) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.Assignee = baml.Decode(valueHolder).Interface().(*string)
 
 		case "priority":
-			c.Priority = baml.Decode(valueHolder).Interface().(*Union3KhighOrKlowOrKmedium)
+			c.Priority = baml.Decode(valueHolder).Interface().(*types.Union3KhighOrKlowOrKmedium)
 
 		case "status":
-			c.Status = baml.Decode(valueHolder).Interface().(*Union3KdoneOrKin_progressOrKtodo)
+			c.Status = baml.Decode(valueHolder).Interface().(*types.Union3KdoneOrKin_progressOrKtodo)
 
 		case "subtasks":
 			c.Subtasks = baml.Decode(valueHolder).Interface().(*[]Task)

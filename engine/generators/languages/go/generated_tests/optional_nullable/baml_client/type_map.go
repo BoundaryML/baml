@@ -41,8 +41,8 @@ var typeMap = map[string]reflect.Type{
 	"TYPES.User":                         reflect.TypeOf(types.User{}),
 	"STREAM_TYPES.User":                  reflect.TypeOf(stream_types.User{}),
 
-	"TYPES.Union__int__string":          reflect.TypeOf(types.Union2IntOrString{}),
-	"STREAM_TYPES.Union__int__string":   reflect.TypeOf(stream_types.Union2IntOrString{}),
-	"TYPES.Union__Product__User":        reflect.TypeOf(types.Union2ProductOrUser{}),
+	"TYPES.Union__int__string":   reflect.TypeOf(types.Union2IntOrString{}),
+	"TYPES.Union__Product__User": reflect.TypeOf(types.Union2ProductOrUser{}),
+
 	"STREAM_TYPES.Union__Product__User": reflect.TypeOf(stream_types.Union2ProductOrUser{}),
 }

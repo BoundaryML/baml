@@ -15,7 +15,7 @@ export const runtimeStateAtom: Atom<{
   stale: boolean;
 }> = atom((get) => {
   const { rt, lastValidRt } = get(runtimeAtom);
-  console.log('rt', rt);
+  console.debug('rt', rt);
   if (rt === undefined) {
     if (lastValidRt === undefined) {
       return { functions: [], stale: false };
@@ -146,7 +146,7 @@ export const selectionAtom = atom((get) => {
       console.error('Function not found', selectedFunction);
     }
   } else {
-    console.log('No function selected');
+    console.debug('No function selected');
   }
 
   let selectedTc = selectedFn?.test_cases.at(0);

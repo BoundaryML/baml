@@ -11,7 +11,15 @@
     "STAGE",
     "VERCEL",
     "VERCEL_ENV",
-    "TARGET"
+    "TARGET",
+    "CMAKE_FRAMEWORK_PATH",
+    "NIX_CC",
+    "NIX_CC_WRAPPER_TARGET_HOST_aarch64_apple_darwin",
+    "NIX_BINTOOLS",
+    "NIX_BINTOOLS_WRAPPER_TARGET_HOST_aarch64_apple_darwin",
+    "CC",
+    "LD",
+    "MACOSX_DEPLOYMENT_TARGET"
   ],
   "globalEnv": ["VSCODE_DEBUG_MODE"],
   "globalDependencies": [
@@ -23,7 +31,7 @@
     "biome.json"
   ],
   "ui": "tui",
-  "concurrency": "15",
+  "concurrency": "20",
   "tasks": {
     "//#clean": {
       "cache": false
@@ -59,36 +67,8 @@
       ]
     },
     "generate": {
-      "dependsOn": [
-        "@baml/cli#build",
-        "@boundaryml/baml#build",
-        "@baml/language-client-python#build",
-        "@baml/language-client-ruby#build",
-        "@baml/language-client-go#build"
-      ],
-      "inputs": [
-        "**/*.baml",
-        "**/*.j2",
-        "**/*.pest",
-        "**/*.ts",
-        "**/*.tsx",
-        "**/*.js",
-        "**/*.jsx",
-        "**/*.mjs",
-        "**/*.cjs",
-        "**/*.py",
-        "**/pyproject.toml",
-        "**/requirements.txt",
-        "**/uv.lock",
-        "**/*.rb",
-        "**/Gemfile",
-        "**/Gemfile.lock",
-        "**/*.go",
-        "**/go.mod",
-        "**/go.sum",
-        "**/package.json",
-        "**/tsconfig.json"
-      ],
+      "dependsOn": ["@boundaryml/baml#build"],
+      "inputs": ["**/*.baml", "**/*.j2", "**/*.hbs", "**/generators.baml"],
       "outputs": ["baml_client/**"],
       "env": ["SKIP_BAML_SRC_CHECK"]
     },
@@ -98,24 +78,14 @@
     "typecheck": {
       "dependsOn": ["^typecheck"],
       "inputs": [
-        "**/*.baml",
-        "**/*.j2",
-        "**/*.pest",
-        "**/*.ts",
-        "**/*.tsx",
-        "**/*.js",
-        "**/*.jsx",
-        "**/*.mjs",
-        "**/*.cjs",
-        "**/*.d.ts",
-        "**/package.json",
-        "**/tsconfig.json",
-        "**/*.py",
-        "**/pyproject.toml",
-        "**/uv.lock",
-        "**/*.pyi",
-        "**/*.go",
-        "**/go.mod"
+        "src/**",
+        "lib/**",
+        "*.ts",
+        "*.tsx",
+        "*.js",
+        "*.jsx",
+        "tsconfig.json",
+        "package.json"
       ],
       "outputs": [
         "dist/**",
@@ -127,33 +97,24 @@
     "build": {
       "dependsOn": ["^build"],
       "inputs": [
-        "**/*.baml",
-        "**/*.j2",
-        "**/*.pest",
-        "**/*.ts",
-        "**/*.tsx",
-        "**/*.js",
-        "**/*.jsx",
-        "**/*.mjs",
-        "**/*.cjs",
+        "src/**",
+        "lib/**",
+        "*.ts",
+        "*.tsx",
+        "*.js",
+        "*.jsx",
+        "*.py",
+        "*.rb",
+        "*.go",
+        "*.rs",
+        "Cargo.toml",
+        "go.mod",
+        "pyproject.toml",
+        "Gemfile",
+        "package.json",
+        "tsconfig.json",
         "**/*.css",
-        "**/*.json",
-        "**/*.yaml",
-        "**/*.yml",
-        "**/*.mdx",
-        "**/*.md",
-        "**/package.json",
-        "**/tsconfig.json",
-        "**/*.py",
-        "**/pyproject.toml",
-        "**/requirements.txt",
-        "**/uv.lock",
-        "**/*.rb",
-        "**/Gemfile",
-        "**/Gemfile.lock",
-        "**/*.go",
-        "**/go.mod",
-        "**/go.sum"
+        "**/*.mdx"
       ],
       "outputs": [
         "dist/**",
@@ -188,13 +149,14 @@
     "release": {
       "dependsOn": ["^release"],
       "inputs": [
-        "**/*.baml",
-        "**/*.j2",
-        "**/*.pest",
-        "**/*.ts",
-        "**/*.tsx",
-        "**/*.js",
-        "**/*.jsx"
+        "src/**",
+        "lib/**",
+        "*.ts",
+        "*.tsx",
+        "*.js",
+        "*.jsx",
+        "package.json",
+        "tsconfig.json"
       ],
       "outputs": [
         "dist/**",
@@ -249,8 +211,8 @@
       ],
       "cache": false
     },
-    "integ-test": {
-      "dependsOn": ["build", "generate"],
+    "integ-tests": {
+      "dependsOn": ["build"],
       "inputs": [
         "**/*.test.ts",
         "**/*.test.tsx",

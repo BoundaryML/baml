@@ -44,6 +44,9 @@ const ShareButton = ({
       onClick={async () => {
         setLoading(true);
         try {
+          if (typeof window === 'undefined') {
+            return;
+          }
           let urlId = pathname?.split('/')[1];
           // if (!urlId || urlId === 'new-project') {
           //   console.log('creating url')

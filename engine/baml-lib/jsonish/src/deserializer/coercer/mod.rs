@@ -53,7 +53,7 @@ impl ParsingContext<'_> {
             scope: new_scope,
             visited: self.visited.clone(),
             of: self.of,
-            do_not_use_mode: self.do_not_use_mode.clone(),
+            do_not_use_mode: self.do_not_use_mode,
         }
     }
 
@@ -70,7 +70,7 @@ impl ParsingContext<'_> {
             scope: self.scope.clone(),
             visited: new_visited,
             of: self.of,
-            do_not_use_mode: self.do_not_use_mode.clone(),
+            do_not_use_mode: self.do_not_use_mode,
         }
     }
 

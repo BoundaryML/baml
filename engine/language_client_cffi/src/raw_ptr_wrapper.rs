@@ -8,7 +8,7 @@ use baml_runtime::tracingv2::storage::storage::{
 };
 use baml_types::{
     tracing::events::{HTTPBody, HTTPRequest, HTTPResponse, SSEEvent},
-    BamlValue,
+    BamlMedia, BamlValue,
 };
 
 use crate::{
@@ -98,6 +98,7 @@ pub type HTTPRequestWrapper = RawPtrWrapper<HTTPRequest>;
 pub type HTTPResponseWrapper = RawPtrWrapper<HTTPResponse>;
 pub type HTTPBodyWrapper = RawPtrWrapper<HTTPBody>;
 pub type SSEEventWrapper = RawPtrWrapper<SSEEvent>;
+pub type MediaWrapper = RawPtrWrapper<BamlMedia>;
 
 #[derive(Debug, Clone)]
 pub enum RawPtrType {
@@ -112,6 +113,37 @@ pub enum RawPtrType {
     HTTPResponse(HTTPResponseWrapper),
     HTTPBody(HTTPBodyWrapper),
     SSEEvent(SSEEventWrapper),
+    Media(MediaWrapper),
+}
+
+fn create_media_object(
+    media_type: baml_types::BamlMediaType,
+    kwargs: &baml_types::BamlMap<String, baml_types::BamlValue>,
+) -> Result<MediaWrapper, String> {
+    let mime_type = kwargs
+        .get("mime_type")
+        .and_then(|n| n.as_str())
+        .map(|n| n.to_string());
+    let url = kwargs
+        .get("url")
+        .and_then(|n| n.as_str())
+        .map(|n| n.to_string());
+    let base64 = kwargs
+        .get("base64")
+        .and_then(|n| n.as_str())
+        .map(|n| n.to_string());
+    let media = match (url, base64) {
+        (Some(url), None) => BamlMedia::url(media_type, url, mime_type),
+        (None, Some(base64)) => BamlMedia::base64(media_type, base64, mime_type),
+        (Some(_), Some(_)) => {
+            return Err("Only one of url or base64 can be provided".to_string());
+        }
+        (None, None) => {
+            return Err("Must provide either url or base64".to_string());
+        }
+    };
+
+    Ok(MediaWrapper::from_object(media))
 }
 
 impl RawPtrType {
@@ -128,6 +160,30 @@ impl RawPtrType {
                 Ok(BamlObjectResponseSuccess::new_object(
                     RawPtrType::Collector(CollectorWrapper::from_object(Collector::new(name))),
                 ))
+            }
+            cffi::CffiObjectType::ObjectMediaImage => {
+                let media = create_media_object(baml_types::BamlMediaType::Image, kwargs)?;
+                Ok(BamlObjectResponseSuccess::new_object(RawPtrType::Media(
+                    media,
+                )))
+            }
+            cffi::CffiObjectType::ObjectMediaAudio => {
+                let media = create_media_object(baml_types::BamlMediaType::Audio, kwargs)?;
+                Ok(BamlObjectResponseSuccess::new_object(RawPtrType::Media(
+                    media,
+                )))
+            }
+            cffi::CffiObjectType::ObjectMediaPdf => {
+                let media = create_media_object(baml_types::BamlMediaType::Pdf, kwargs)?;
+                Ok(BamlObjectResponseSuccess::new_object(RawPtrType::Media(
+                    media,
+                )))
+            }
+            cffi::CffiObjectType::ObjectMediaVideo => {
+                let media = create_media_object(baml_types::BamlMediaType::Video, kwargs)?;
+                Ok(BamlObjectResponseSuccess::new_object(RawPtrType::Media(
+                    media,
+                )))
             }
             _ => Err(format!(
                 "Cannot create object of type {}",
@@ -179,6 +235,12 @@ impl RawPtrType {
             RawPtrType::HTTPResponse(_) => "HTTPResponse",
             RawPtrType::HTTPBody(_) => "HTTPBody",
             RawPtrType::SSEEvent(_) => "SSEEvent",
+            RawPtrType::Media(m) => match m.media_type {
+                baml_types::BamlMediaType::Image => "Image",
+                baml_types::BamlMediaType::Audio => "Audio",
+                baml_types::BamlMediaType::Pdf => "PDF",
+                baml_types::BamlMediaType::Video => "Video",
+            },
         }
     }
 }
@@ -215,6 +277,7 @@ impl CallMethod for RawPtrType {
             }
             RawPtrType::HTTPBody(http_body) => http_body.call_method(method_name, kwargs),
             RawPtrType::SSEEvent(sse_event) => sse_event.call_method(method_name, kwargs),
+            RawPtrType::Media(media) => media.call_method(method_name, kwargs),
         }
     }
 }
@@ -719,6 +782,52 @@ impl CallMethod for SSEEventWrapper {
             },
             _ => Err(format!(
                 "Failed to call function: \"{method_name}\" on object type: SSEEvent"
+            )),
+        }
+    }
+}
+
+impl CallMethod for MediaWrapper {
+    fn call_method(
+        &self,
+        method_name: &str,
+        _kwargs: &baml_types::BamlMap<String, baml_types::BamlValue>,
+    ) -> BamlObjectResponse {
+        match method_name {
+            "~destructor" => {
+                self.clone().destroy();
+                Ok(BamlObjectResponseSuccess::new_value(BamlValue::Null))
+            }
+            "media_type" => Ok(BamlObjectResponseSuccess::new_value(BamlValue::Enum(
+                "MediaType".into(),
+                self.media_type.to_string(),
+            ))),
+            "mime_type" => Ok(BamlObjectResponseSuccess::new_value(
+                self.mime_type.as_ref().map_or_else(
+                    || BamlValue::Null,
+                    |mime_type| BamlValue::String(mime_type.to_string()),
+                ),
+            )),
+            "as_url" => match &self.content {
+                baml_types::BamlMediaContent::Url(media_url) => Ok(
+                    BamlObjectResponseSuccess::new_value(BamlValue::String(media_url.url.clone())),
+                ),
+                baml_types::BamlMediaContent::File(_) | baml_types::BamlMediaContent::Base64(_) => {
+                    Ok(BamlObjectResponseSuccess::new_value(BamlValue::Null))
+                }
+            },
+            "as_base64" => match &self.content {
+                baml_types::BamlMediaContent::Base64(media_base64) => {
+                    Ok(BamlObjectResponseSuccess::new_value(BamlValue::String(
+                        media_base64.base64.clone(),
+                    )))
+                }
+                baml_types::BamlMediaContent::File(_) | baml_types::BamlMediaContent::Url(_) => {
+                    Ok(BamlObjectResponseSuccess::new_value(BamlValue::Null))
+                }
+            },
+            _ => Err(format!(
+                "Failed to call function: \"{method_name}\" on object type: Media"
             )),
         }
     }

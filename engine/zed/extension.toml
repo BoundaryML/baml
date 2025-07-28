@@ -4,7 +4,7 @@ description = "Baml support."
 version = "0.0.1"
 schema_version = 1
 authors = ["Boundary <contact@boundaryml.com>"]
-repository = "https://github.com/BoundaryML/baml/tree/canary/engine/zed"
+repository = "https://github.com/BoundaryML/zed-baml"
 
 [language_servers.baml-language-server]
 name = "Baml Language Server"

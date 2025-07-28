@@ -4,13 +4,14 @@
 # Core languages
 rust = "1.88.0"
 go = "1.23.11"
-python = "3.12"  # Will use uv for Python package management
+python = "3.13"  # Will use uv for Python package management
 ruby = "3.2.2"
 node = "lts"     # For pnpm
 
 # Rust tools
 "cargo:wasm-pack" = "0.13.1"
 "cargo:cross" = "latest"
+"cargo:cargo-watch" = "latest"
 
 # Go tools
 # "go:google.golang.org/protobuf/cmd/protoc-gen-go" = "v1.36.6"

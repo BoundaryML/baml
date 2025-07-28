@@ -48,6 +48,9 @@
   --animation-duration-normal: 0.3s;
   --animation-duration-slow: 0.5s;
   --animation-duration-very-slow: 0.8s;
+  /* Monospace font fallback for preview window */
+  --vscode-editor-font-family: ui-monospace, SFMono-Regular, Menlo, Monaco,
+    Consolas, Liberation Mono, monospace;
 }
 
 .dark {
@@ -67,6 +70,7 @@
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.704 0.191 22.216);
   --border: oklch(1 0 0 / 10%);
+
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.541 0.281 293.009);
   --chart-1: oklch(0.488 0.243 264.376);
@@ -167,6 +171,55 @@
   --color-chart-3: var(--vscode-charts-gray, var(--chart-3));
   --color-chart-4: var(--vscode-charts-yellow, var(--chart-4));
   --color-chart-5: var(--vscode-charts-red, var(--chart-5));
+
+  /* Additional VSCode variables with fallbacks for standalone use */
+
+  /* Panel and UI borders */
+  --vscode-panel-border: var(--border);
+  --vscode-input-border: var(--border);
+  --vscode-focus-border: var(--ring);
+  --vscode-notifications-border: var(--border);
+  --vscode-sideBar-border: var(--border);
+
+  /* Text and foreground colors */
+  --vscode-foreground: var(--foreground);
+  --vscode-editor-foreground: var(--foreground);
+  --vscode-description-foreground: var(--muted-foreground);
+  --vscode-descriptionForeground: var(--muted-foreground);
+  --vscode-button-foreground: var(--primary-foreground);
+  --vscode-dropdown-foreground: var(--foreground);
+  --vscode-menu-selection-foreground: var(--accent-foreground);
+  --vscode-panelTitle-activeForeground: var(--card-foreground);
+  --vscode-list-activeSelectionForeground: var(--accent-foreground);
+  --vscode-list-hoverForeground: var(--sidebar-accent-foreground);
+  --vscode-sideBar-foreground: var(--sidebar-foreground);
+  --vscode-sideBarSectionHeader-foreground: var(--sidebar-primary-foreground);
+  --vscode-text-separator-foreground: var(--border);
+
+  /* Background colors */
+  --vscode-editor-background: var(--background);
+  --vscode-panel-background: var(--card);
+  --vscode-sideBar-background: var(--accent);
+  --vscode-dropdown-background: var(--muted);
+  --vscode-button-background: var(--primary);
+  --vscode-button-secondaryBackground: var(--secondary);
+  --vscode-button-hover-background: color-mix(
+    in srgb,
+    var(--primary) 90%,
+    transparent
+  );
+  --vscode-button-hoverBackground: color-mix(
+    in srgb,
+    var(--primary) 90%,
+    transparent
+  );
+  --vscode-notifications-background: var(--card);
+  --vscode-input-background: var(--input);
+  --vscode-menu-selection-background: var(--accent);
+  --vscode-list-hoverBackground: var(--sidebar-accent);
+  --vscode-sideBarSectionHeader-background: var(--sidebar-primary);
+  --vscode-editorWidget-background: var(--popover);
+  --vscode-editorWidget-foreground: var(--popover-foreground);
 
   @keyframes accordion-down {
     from {
@@ -276,7 +329,6 @@ body {
 
 /* controls dropdown styling on rsjf */
 
-
 .field-array {
   @apply w-full;
 }
@@ -284,7 +336,6 @@ body {
 /* .checkbox {
   @apply bg-vscode-checkbox-background text-vscode-checkbox-foreground flex flex-row items-center gap-x-1;
 } */
-
 
 /* .array-item-remove::after {
   content: 'Remove';
@@ -529,6 +580,35 @@ button.woot-elements--right:nth-child(2) {
   @apply fixed inset-0 w-full h-full z-[9999] overflow-y-auto;
 }
 
+/* Custom scrollbar styling using VSCode colors */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--vscode-editor-background);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--vscode-panel-border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--vscode-description-foreground);
+}
+
+::-webkit-scrollbar-corner {
+  background: var(--vscode-editor-background);
+}
+
+/* Firefox scrollbar styling */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--vscode-panel-border) var(--vscode-editor-background);
+}
+
 /* Text component */
 .text-component {
   @apply flex flex-col gap-5 p-5;
@@ -539,5 +619,5 @@ button.woot-elements--right:nth-child(2) {
 }
 
 /* input:focus { */
-  /* @apply outline-none; */
+/* @apply outline-none; */
 /* } */

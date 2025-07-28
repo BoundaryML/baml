@@ -18,6 +18,8 @@ import (
 
 	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
+
+	"union_types_extended/baml_client/types"
 )
 
 type Admin struct {
@@ -800,11 +802,11 @@ func (u ErrorResponse) BamlEncodeName() *cffi.CFFITypeName {
 }
 
 type PrimitiveUnions struct {
-	StringOrInt   *Union2IntOrString              `json:"stringOrInt"`
-	StringOrFloat *Union2FloatOrString            `json:"stringOrFloat"`
-	IntOrFloat    *Union2FloatOrInt               `json:"intOrFloat"`
-	BoolOrString  *Union2BoolOrString             `json:"boolOrString"`
-	AnyPrimitive  *Union4BoolOrFloatOrIntOrString `json:"anyPrimitive"`
+	StringOrInt   *types.Union2IntOrString              `json:"stringOrInt"`
+	StringOrFloat *types.Union2FloatOrString            `json:"stringOrFloat"`
+	IntOrFloat    *types.Union2FloatOrInt               `json:"intOrFloat"`
+	BoolOrString  *types.Union2BoolOrString             `json:"boolOrString"`
+	AnyPrimitive  *types.Union4BoolOrFloatOrIntOrString `json:"anyPrimitive"`
 }
 
 func (c *PrimitiveUnions) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -822,19 +824,19 @@ func (c *PrimitiveUnions) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeM
 		switch key {
 
 		case "stringOrInt":
-			c.StringOrInt = baml.Decode(valueHolder).Interface().(*Union2IntOrString)
+			c.StringOrInt = baml.Decode(valueHolder).Interface().(*types.Union2IntOrString)
 
 		case "stringOrFloat":
-			c.StringOrFloat = baml.Decode(valueHolder).Interface().(*Union2FloatOrString)
+			c.StringOrFloat = baml.Decode(valueHolder).Interface().(*types.Union2FloatOrString)
 
 		case "intOrFloat":
-			c.IntOrFloat = baml.Decode(valueHolder).Interface().(*Union2FloatOrInt)
+			c.IntOrFloat = baml.Decode(valueHolder).Interface().(*types.Union2FloatOrInt)
 
 		case "boolOrString":
-			c.BoolOrString = baml.Decode(valueHolder).Interface().(*Union2BoolOrString)
+			c.BoolOrString = baml.Decode(valueHolder).Interface().(*types.Union2BoolOrString)
 
 		case "anyPrimitive":
-			c.AnyPrimitive = baml.Decode(valueHolder).Interface().(*Union4BoolOrFloatOrIntOrString)
+			c.AnyPrimitive = baml.Decode(valueHolder).Interface().(*types.Union4BoolOrFloatOrIntOrString)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))
@@ -1048,8 +1050,8 @@ func (u RecursiveUnion) BamlEncodeName() *cffi.CFFITypeName {
 }
 
 type Result struct {
-	Value    *Union3FloatOrIntOrString `json:"value"`
-	Metadata map[string]string         `json:"metadata"`
+	Value    *types.Union3FloatOrIntOrString `json:"value"`
+	Metadata map[string]string               `json:"metadata"`
 }
 
 func (c *Result) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -1067,7 +1069,7 @@ func (c *Result) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 		switch key {
 
 		case "value":
-			c.Value = baml.Decode(valueHolder).Interface().(*Union3FloatOrIntOrString)
+			c.Value = baml.Decode(valueHolder).Interface().(*types.Union3FloatOrIntOrString)
 
 		case "metadata":
 			c.Metadata = baml.Decode(valueHolder).Interface().(map[string]string)
@@ -1219,10 +1221,10 @@ func (u Triangle) BamlEncodeName() *cffi.CFFITypeName {
 }
 
 type UnionArrays struct {
-	MixedArray       []Union2IntOrString     `json:"mixedArray"`
-	NullableItems    []*string               `json:"nullableItems"`
-	ObjectArray      []Union2ProductOrUser   `json:"objectArray"`
-	NestedUnionArray []Union2ListIntOrString `json:"nestedUnionArray"`
+	MixedArray       []types.Union2IntOrString     `json:"mixedArray"`
+	NullableItems    []*string                     `json:"nullableItems"`
+	ObjectArray      []Union2ProductOrUser         `json:"objectArray"`
+	NestedUnionArray []types.Union2ListIntOrString `json:"nestedUnionArray"`
 }
 
 func (c *UnionArrays) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -1240,7 +1242,7 @@ func (c *UnionArrays) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) 
 		switch key {
 
 		case "mixedArray":
-			c.MixedArray = baml.Decode(valueHolder).Interface().([]Union2IntOrString)
+			c.MixedArray = baml.Decode(valueHolder).Interface().([]types.Union2IntOrString)
 
 		case "nullableItems":
 			c.NullableItems = baml.Decode(valueHolder).Interface().([]*string)
@@ -1249,7 +1251,7 @@ func (c *UnionArrays) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) 
 			c.ObjectArray = baml.Decode(valueHolder).Interface().([]Union2ProductOrUser)
 
 		case "nestedUnionArray":
-			c.NestedUnionArray = baml.Decode(valueHolder).Interface().([]Union2ListIntOrString)
+			c.NestedUnionArray = baml.Decode(valueHolder).Interface().([]types.Union2ListIntOrString)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))

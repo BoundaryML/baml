@@ -391,8 +391,14 @@ fn relevant_data_models<'a>(
                         .chain(new_fields)
                         .map(|field| {
                             let (name, t, desc, needed) = field?;
-                            let t = if partialize && !metadata.streaming_behavior.done {
-                                t.to_streaming_type(ir).to_ir_type()
+                            let t = if partialize {
+                                if metadata.streaming_behavior.done {
+                                    let mut t = t;
+                                    t.meta_mut().streaming_behavior.needed = true;
+                                    t
+                                } else {
+                                    t.to_streaming_type(ir).to_ir_type()
+                                }
                             } else {
                                 t
                             };

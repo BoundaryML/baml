@@ -20,7 +20,7 @@ members = [
   "generators/utils/*",
   "generators/languages/*",
   "sandbox",
-  "zed", "llm-response-parser",
+  "llm-response-parser",
 ]
 default-members = [
   "baml-compiler",
@@ -48,8 +48,6 @@ default-members = [
 ]
 
 [workspace.dependencies]
-lsp-server = { version = "0.7.6" }
-lsp-types = { version = "0.95.0" }
 anyhow = "1.0"
 askama = { version = "0.14.0", features = ["code-in-doc"] }
 baml-cli = { path = "cli" }
@@ -79,7 +77,6 @@ internal-baml-codegen = { path = "language_client_codegen" }
 internal-baml-core = { path = "baml-lib/baml-core" }
 internal-baml-jinja = { path = "baml-lib/jinja-runtime" }
 internal-llm-client = { path = "baml-lib/llm-client" }
-baml-lsp-types = { path = "baml-lsp-types" }
 jsonish = { path = "baml-lib/jsonish" }
 log = "0.4.20"
 # TODO: disable imports, etc
@@ -134,7 +131,7 @@ tokio = { version = "1", default-features = false, features = [
 ] }
 
 [workspace.package]
-version = "0.202.0"
+version = "0.202.1"
 authors = ["Boundary <contact@boundaryml.com>"]
 
 description = "BAML Toolchain"

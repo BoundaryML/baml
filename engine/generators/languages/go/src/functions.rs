@@ -166,6 +166,8 @@ struct FunctionStreamTemplate<'a> {
 /// {% endfor %}
 /// {% for union_ in unions -%}
 ///     "TYPES.{{ union_.cffi_name }}": reflect.TypeOf(types.{{ union_.name }}{}),
+/// {% endfor %}
+/// {% for union_ in stream_unions -%}
 ///     "STREAM_TYPES.{{ union_.cffi_name }}": reflect.TypeOf(stream_types.{{ union_.name }}{}),
 /// {% endfor %}
 /// {% for type_alias in type_aliases -%}
@@ -182,16 +184,19 @@ struct TypeMap<'a> {
     classes: &'a [ClassGo<'a>],
     enums: &'a [EnumGo<'a>],
     unions: &'a [UnionGo<'a>],
+    stream_unions: &'a [UnionGo<'a>],
     type_aliases: &'a [TypeAliasGo<'a>],
     stream_type_aliases: &'a [TypeAliasGo<'a>],
     go_mod_name: &'a str,
     pkg: &'a CurrentRenderPackage,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn render_type_map(
     classes: &[ClassGo],
     enums: &[EnumGo],
     unions: &[UnionGo],
+    stream_unions: &[UnionGo],
     type_aliases: &[TypeAliasGo],
     stream_type_aliases: &[TypeAliasGo],
     go_mod_name: &str,
@@ -201,6 +206,7 @@ pub fn render_type_map(
         classes,
         enums,
         unions,
+        stream_unions,
         type_aliases,
         stream_type_aliases,
         go_mod_name,

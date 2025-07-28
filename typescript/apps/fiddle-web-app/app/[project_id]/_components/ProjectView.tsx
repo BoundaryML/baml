@@ -64,7 +64,7 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
 
   return (
     // firefox wont apply the background color for some reason so we forcefully set it.
-    <div className="flex relative flex-row w-full h-full main-panel overflow-x-clip overflow-y-clip">
+    <div className="flex relative flex-col w-full h-full main-panel overflow-x-clip overflow-y-auto">
       <CustomErrorBoundary message="Error loading project">
         <EventListener />
         {isMobile && (
@@ -149,7 +149,7 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
                       defaultSize={50}
                       className="tour-playground"
                     >
-                      <div className="flex flex-row h-full">
+                      <div className="flex flex-row h-full overflow-y-auto">
                         <PlaygroundView />
                       </div>
                     </ResizablePanel>

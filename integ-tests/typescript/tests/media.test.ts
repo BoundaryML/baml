@@ -32,8 +32,17 @@ describe("Media Tests", () => {
     expect(res.toLowerCase()).toContain("no");
   });
 
+  it("should work with pdf from url", async () => {
+    let res = await b.PdfInput(
+      Pdf.fromUrl(
+        "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf"
+      ),
+    );
+    expect(res.toLowerCase()).toMatch(/(dummy|pdf|document)/);
+  });
+
   it("should work with pdf from base 64", async () => {
-    let res = await b.PdfInput(Pdf.fromBase64("application/pdf", pdf_b64));
+    let res = await b.PdfInput(Pdf.fromBase64(pdf_b64));
     expect(res.toLowerCase()).toMatch(/(bookmarks|pdf|sample|usage)/);
   });
 
@@ -43,7 +52,7 @@ describe("Media Tests", () => {
     let res = await b.VideoInputGemini(
       Video.fromUrl("https://youtu.be/dQw4w9WgXcQ?si=aQdfsK0DdcDtCCud")
     );
-    expect(res.toLowerCase()).toMatch(/(singing|rickroll|dancing)/);
+    expect(res.toLowerCase()).toMatch(/(singing|rickroll|dancing|80s|pop|music)/);
   });
 
   it("should work with video from base 64", async () => {

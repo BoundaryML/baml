@@ -3,8 +3,8 @@ use crate::{
     ctypes::utils::{Decode, Encode},
     raw_ptr_wrapper::{
         CollectorWrapper, FunctionLogWrapper, HTTPBodyWrapper, HTTPRequestWrapper,
-        HTTPResponseWrapper, LLMCallWrapper, LLMStreamCallWrapper, RawPtrType, RawPtrWrapper,
-        SSEEventWrapper, StreamTimingWrapper, TimingWrapper, UsageWrapper,
+        HTTPResponseWrapper, LLMCallWrapper, LLMStreamCallWrapper, MediaWrapper, RawPtrType,
+        RawPtrWrapper, SSEEventWrapper, StreamTimingWrapper, TimingWrapper, UsageWrapper,
     },
 };
 
@@ -47,6 +47,18 @@ impl Decode for RawPtrType {
             Some(Object::SseResponse(pointer)) => {
                 Ok(RawPtrType::SSEEvent(SSEEventWrapper::decode(pointer)?))
             }
+            Some(Object::MediaImage(pointer)) => {
+                Ok(RawPtrType::Media(MediaWrapper::decode(pointer)?))
+            }
+            Some(Object::MediaAudio(pointer)) => {
+                Ok(RawPtrType::Media(MediaWrapper::decode(pointer)?))
+            }
+            Some(Object::MediaPdf(pointer)) => {
+                Ok(RawPtrType::Media(MediaWrapper::decode(pointer)?))
+            }
+            Some(Object::MediaVideo(pointer)) => {
+                Ok(RawPtrType::Media(MediaWrapper::decode(pointer)?))
+            }
             None => Err(anyhow::anyhow!("Invalid object type")),
         }
     }
@@ -66,6 +78,7 @@ impl Encode<CffiRawObject> for RawPtrType {
             RawPtrType::HTTPResponse(raw_ptr_wrapper) => raw_ptr_wrapper.encode(),
             RawPtrType::HTTPBody(raw_ptr_wrapper) => raw_ptr_wrapper.encode(),
             RawPtrType::SSEEvent(raw_ptr_wrapper) => raw_ptr_wrapper.encode(),
+            RawPtrType::Media(raw_ptr_wrapper) => raw_ptr_wrapper.encode(),
         }
     }
 }
@@ -120,3 +133,28 @@ impl_encode_decode_for_wrapper!(HttpRequest, HTTPRequestWrapper);
 impl_encode_decode_for_wrapper!(HttpResponse, HTTPResponseWrapper);
 impl_encode_decode_for_wrapper!(HttpBody, HTTPBodyWrapper);
 impl_encode_decode_for_wrapper!(SseResponse, SSEEventWrapper);
+
+impl Decode for MediaWrapper {
+    type From = CffiPointerType;
+
+    fn decode(from: Self::From) -> Result<Self, anyhow::Error>
+    where
+        Self: Sized,
+    {
+        Ok(MediaWrapper::from_raw(
+            from.pointer as *const libc::c_void,
+            true,
+        ))
+    }
+}
+
+impl ObjectType for MediaWrapper {
+    fn object_type(&self) -> Object {
+        match self.media_type {
+            baml_types::BamlMediaType::Image => Object::MediaImage(self.pointer()),
+            baml_types::BamlMediaType::Audio => Object::MediaAudio(self.pointer()),
+            baml_types::BamlMediaType::Pdf => Object::MediaPdf(self.pointer()),
+            baml_types::BamlMediaType::Video => Object::MediaVideo(self.pointer()),
+        }
+    }
+}

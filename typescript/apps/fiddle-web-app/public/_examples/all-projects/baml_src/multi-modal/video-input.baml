@@ -18,7 +18,7 @@ test TestFileVideoInput {
   functions [VideoInput]
   args {
     videoInput { 
-      file "../../../../../integ-tests/baml_src/sample-5s.mp4"
+      url "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
       media_type "video/mp4"
     }
   }  

@@ -823,7 +823,7 @@ func (*stream) AssertFn(ctx context.Context, a int64, opts ...CallOptionFunc) (<
 }
 
 // / Streaming version of AudioInput
-func (*stream) AudioInput(ctx context.Context, aud any, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+func (*stream) AudioInput(ctx context.Context, aud types.Audio, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -901,7 +901,7 @@ func (*stream) AudioInput(ctx context.Context, aud any, opts ...CallOptionFunc) 
 }
 
 // / Streaming version of AudioInputOpenai
-func (*stream) AudioInputOpenai(ctx context.Context, aud any, prompt string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+func (*stream) AudioInputOpenai(ctx context.Context, aud types.Audio, prompt string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -1681,7 +1681,7 @@ func (*stream) CustomTask(ctx context.Context, input string, opts ...CallOptionF
 }
 
 // / Streaming version of DescribeAudio
-func (*stream) DescribeAudio(ctx context.Context, audio any, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+func (*stream) DescribeAudio(ctx context.Context, audio types.Audio, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -1759,7 +1759,7 @@ func (*stream) DescribeAudio(ctx context.Context, audio any, opts ...CallOptionF
 }
 
 // / Streaming version of DescribeAudio2
-func (*stream) DescribeAudio2(ctx context.Context, audio any, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+func (*stream) DescribeAudio2(ctx context.Context, audio types.Audio, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -1837,7 +1837,7 @@ func (*stream) DescribeAudio2(ctx context.Context, audio any, opts ...CallOption
 }
 
 // / Streaming version of DescribeImage
-func (*stream) DescribeImage(ctx context.Context, img any, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+func (*stream) DescribeImage(ctx context.Context, img types.Image, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -1915,7 +1915,7 @@ func (*stream) DescribeImage(ctx context.Context, img any, opts ...CallOptionFun
 }
 
 // / Streaming version of DescribeImage2
-func (*stream) DescribeImage2(ctx context.Context, classWithImage types.ClassWithImage, img2 any, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+func (*stream) DescribeImage2(ctx context.Context, classWithImage types.ClassWithImage, img2 types.Image, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -1993,7 +1993,7 @@ func (*stream) DescribeImage2(ctx context.Context, classWithImage types.ClassWit
 }
 
 // / Streaming version of DescribeImage3
-func (*stream) DescribeImage3(ctx context.Context, classWithImage types.ClassWithImage, img2 any, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+func (*stream) DescribeImage3(ctx context.Context, classWithImage types.ClassWithImage, img2 types.Image, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -2071,7 +2071,7 @@ func (*stream) DescribeImage3(ctx context.Context, classWithImage types.ClassWit
 }
 
 // / Streaming version of DescribeImage4
-func (*stream) DescribeImage4(ctx context.Context, classWithImage types.ClassWithImage, img2 any, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+func (*stream) DescribeImage4(ctx context.Context, classWithImage types.ClassWithImage, img2 types.Image, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -2149,7 +2149,7 @@ func (*stream) DescribeImage4(ctx context.Context, classWithImage types.ClassWit
 }
 
 // / Streaming version of DescribeMedia1599
-func (*stream) DescribeMedia1599(ctx context.Context, img any, client_sector string, client_name string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+func (*stream) DescribeMedia1599(ctx context.Context, img types.Image, client_sector string, client_name string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -3163,7 +3163,7 @@ func (*stream) ExtractReceiptInfo(ctx context.Context, email string, reason type
 }
 
 // / Streaming version of ExtractResume
-func (*stream) ExtractResume(ctx context.Context, resume string, img *any, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.Resume, types.Resume], error) {
+func (*stream) ExtractResume(ctx context.Context, resume string, img *types.Image, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.Resume, types.Resume], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -5191,7 +5191,7 @@ func (*stream) InOutEnumMapKey(ctx context.Context, i1 map[types.MapKey]string, 
 }
 
 // / Streaming version of InOutLiteralStringUnionMapKey
-func (*stream) InOutLiteralStringUnionMapKey(ctx context.Context, i1 map[types.Union4KfourOrKoneOrKthreeOrKtwo]string, i2 map[types.Union4KfourOrKoneOrKthreeOrKtwo]string, opts ...CallOptionFunc) (<-chan StreamValue[map[stream_types.Union4KfourOrKoneOrKthreeOrKtwo]string, map[types.Union4KfourOrKoneOrKthreeOrKtwo]string], error) {
+func (*stream) InOutLiteralStringUnionMapKey(ctx context.Context, i1 map[types.Union4KfourOrKoneOrKthreeOrKtwo]string, i2 map[types.Union4KfourOrKoneOrKthreeOrKtwo]string, opts ...CallOptionFunc) (<-chan StreamValue[map[types.Union4KfourOrKoneOrKthreeOrKtwo]string, map[types.Union4KfourOrKoneOrKthreeOrKtwo]string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -5225,7 +5225,7 @@ func (*stream) InOutLiteralStringUnionMapKey(ctx context.Context, i1 map[types.U
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[map[stream_types.Union4KfourOrKoneOrKthreeOrKtwo]string, map[types.Union4KfourOrKoneOrKthreeOrKtwo]string])
+	channel := make(chan StreamValue[map[types.Union4KfourOrKoneOrKthreeOrKtwo]string, map[types.Union4KfourOrKoneOrKthreeOrKtwo]string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -5242,7 +5242,7 @@ func (*stream) InOutLiteralStringUnionMapKey(ctx context.Context, i1 map[types.U
 					return
 				}
 				if result.Error != nil {
-					channel <- StreamValue[map[stream_types.Union4KfourOrKoneOrKthreeOrKtwo]string, map[types.Union4KfourOrKoneOrKthreeOrKtwo]string]{
+					channel <- StreamValue[map[types.Union4KfourOrKoneOrKthreeOrKtwo]string, map[types.Union4KfourOrKoneOrKthreeOrKtwo]string]{
 						IsError: true,
 						Error:   result.Error,
 					}
@@ -5251,13 +5251,13 @@ func (*stream) InOutLiteralStringUnionMapKey(ctx context.Context, i1 map[types.U
 				}
 				if result.HasData {
 					data := (result.Data).(map[types.Union4KfourOrKoneOrKthreeOrKtwo]string)
-					channel <- StreamValue[map[stream_types.Union4KfourOrKoneOrKthreeOrKtwo]string, map[types.Union4KfourOrKoneOrKthreeOrKtwo]string]{
+					channel <- StreamValue[map[types.Union4KfourOrKoneOrKthreeOrKtwo]string, map[types.Union4KfourOrKoneOrKthreeOrKtwo]string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(map[stream_types.Union4KfourOrKoneOrKthreeOrKtwo]string)
-					channel <- StreamValue[map[stream_types.Union4KfourOrKoneOrKthreeOrKtwo]string, map[types.Union4KfourOrKoneOrKthreeOrKtwo]string]{
+					data := (result.StreamData).(map[types.Union4KfourOrKoneOrKthreeOrKtwo]string)
+					channel <- StreamValue[map[types.Union4KfourOrKoneOrKthreeOrKtwo]string, map[types.Union4KfourOrKoneOrKthreeOrKtwo]string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -5503,7 +5503,7 @@ func (*stream) LLMEcho(ctx context.Context, input string, opts ...CallOptionFunc
 }
 
 // / Streaming version of LiteralUnionsTest
-func (*stream) LiteralUnionsTest(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.Union3BoolKTrueOrIntK1OrKstring_output, types.Union3BoolKTrueOrIntK1OrKstring_output], error) {
+func (*stream) LiteralUnionsTest(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[types.Union3BoolKTrueOrIntK1OrKstring_output, types.Union3BoolKTrueOrIntK1OrKstring_output], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -5537,7 +5537,7 @@ func (*stream) LiteralUnionsTest(ctx context.Context, input string, opts ...Call
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[stream_types.Union3BoolKTrueOrIntK1OrKstring_output, types.Union3BoolKTrueOrIntK1OrKstring_output])
+	channel := make(chan StreamValue[types.Union3BoolKTrueOrIntK1OrKstring_output, types.Union3BoolKTrueOrIntK1OrKstring_output])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -5554,7 +5554,7 @@ func (*stream) LiteralUnionsTest(ctx context.Context, input string, opts ...Call
 					return
 				}
 				if result.Error != nil {
-					channel <- StreamValue[stream_types.Union3BoolKTrueOrIntK1OrKstring_output, types.Union3BoolKTrueOrIntK1OrKstring_output]{
+					channel <- StreamValue[types.Union3BoolKTrueOrIntK1OrKstring_output, types.Union3BoolKTrueOrIntK1OrKstring_output]{
 						IsError: true,
 						Error:   result.Error,
 					}
@@ -5563,13 +5563,13 @@ func (*stream) LiteralUnionsTest(ctx context.Context, input string, opts ...Call
 				}
 				if result.HasData {
 					data := (result.Data).(types.Union3BoolKTrueOrIntK1OrKstring_output)
-					channel <- StreamValue[stream_types.Union3BoolKTrueOrIntK1OrKstring_output, types.Union3BoolKTrueOrIntK1OrKstring_output]{
+					channel <- StreamValue[types.Union3BoolKTrueOrIntK1OrKstring_output, types.Union3BoolKTrueOrIntK1OrKstring_output]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(stream_types.Union3BoolKTrueOrIntK1OrKstring_output)
-					channel <- StreamValue[stream_types.Union3BoolKTrueOrIntK1OrKstring_output, types.Union3BoolKTrueOrIntK1OrKstring_output]{
+					data := (result.StreamData).(types.Union3BoolKTrueOrIntK1OrKstring_output)
+					channel <- StreamValue[types.Union3BoolKTrueOrIntK1OrKstring_output, types.Union3BoolKTrueOrIntK1OrKstring_output]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -6205,7 +6205,7 @@ func (*stream) MyFunc(ctx context.Context, input string, opts ...CallOptionFunc)
 }
 
 // / Streaming version of NestedAlias
-func (*stream) NestedAlias(ctx context.Context, c types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString, types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString], error) {
+func (*stream) NestedAlias(ctx context.Context, c types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString, opts ...CallOptionFunc) (<-chan StreamValue[types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString, types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -6239,7 +6239,7 @@ func (*stream) NestedAlias(ctx context.Context, c types.Union6BoolOrFloatOrIntOr
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[stream_types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString, types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString])
+	channel := make(chan StreamValue[types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString, types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -6256,7 +6256,7 @@ func (*stream) NestedAlias(ctx context.Context, c types.Union6BoolOrFloatOrIntOr
 					return
 				}
 				if result.Error != nil {
-					channel <- StreamValue[stream_types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString, types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString]{
+					channel <- StreamValue[types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString, types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString]{
 						IsError: true,
 						Error:   result.Error,
 					}
@@ -6265,13 +6265,13 @@ func (*stream) NestedAlias(ctx context.Context, c types.Union6BoolOrFloatOrIntOr
 				}
 				if result.HasData {
 					data := (result.Data).(types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString)
-					channel <- StreamValue[stream_types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString, types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString]{
+					channel <- StreamValue[types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString, types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(stream_types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString)
-					channel <- StreamValue[stream_types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString, types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString]{
+					data := (result.StreamData).(types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString)
+					channel <- StreamValue[types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString, types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -6517,7 +6517,7 @@ func (*stream) OptionalTest_Function(ctx context.Context, input string, opts ...
 }
 
 // / Streaming version of PdfInput
-func (*stream) PdfInput(ctx context.Context, pdf any, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+func (*stream) PdfInput(ctx context.Context, pdf types.PDF, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -6595,7 +6595,7 @@ func (*stream) PdfInput(ctx context.Context, pdf any, opts ...CallOptionFunc) (<
 }
 
 // / Streaming version of PdfInputAnthropic
-func (*stream) PdfInputAnthropic(ctx context.Context, pdf any, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+func (*stream) PdfInputAnthropic(ctx context.Context, pdf types.PDF, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -6673,7 +6673,7 @@ func (*stream) PdfInputAnthropic(ctx context.Context, pdf any, opts ...CallOptio
 }
 
 // / Streaming version of PdfInputOpenai
-func (*stream) PdfInputOpenai(ctx context.Context, pdf any, prompt string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+func (*stream) PdfInputOpenai(ctx context.Context, pdf types.PDF, prompt string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -6751,7 +6751,7 @@ func (*stream) PdfInputOpenai(ctx context.Context, pdf any, prompt string, opts 
 }
 
 // / Streaming version of PdfInputVertex
-func (*stream) PdfInputVertex(ctx context.Context, pdf any, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+func (*stream) PdfInputVertex(ctx context.Context, pdf types.PDF, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -6985,7 +6985,7 @@ func (*stream) PredictAgeBare(ctx context.Context, inp string, opts ...CallOptio
 }
 
 // / Streaming version of PrimitiveAlias
-func (*stream) PrimitiveAlias(ctx context.Context, p types.Union4BoolOrFloatOrIntOrString, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.Union4BoolOrFloatOrIntOrString, types.Union4BoolOrFloatOrIntOrString], error) {
+func (*stream) PrimitiveAlias(ctx context.Context, p types.Union4BoolOrFloatOrIntOrString, opts ...CallOptionFunc) (<-chan StreamValue[types.Union4BoolOrFloatOrIntOrString, types.Union4BoolOrFloatOrIntOrString], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -7019,7 +7019,7 @@ func (*stream) PrimitiveAlias(ctx context.Context, p types.Union4BoolOrFloatOrIn
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[stream_types.Union4BoolOrFloatOrIntOrString, types.Union4BoolOrFloatOrIntOrString])
+	channel := make(chan StreamValue[types.Union4BoolOrFloatOrIntOrString, types.Union4BoolOrFloatOrIntOrString])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -7036,7 +7036,7 @@ func (*stream) PrimitiveAlias(ctx context.Context, p types.Union4BoolOrFloatOrIn
 					return
 				}
 				if result.Error != nil {
-					channel <- StreamValue[stream_types.Union4BoolOrFloatOrIntOrString, types.Union4BoolOrFloatOrIntOrString]{
+					channel <- StreamValue[types.Union4BoolOrFloatOrIntOrString, types.Union4BoolOrFloatOrIntOrString]{
 						IsError: true,
 						Error:   result.Error,
 					}
@@ -7045,13 +7045,13 @@ func (*stream) PrimitiveAlias(ctx context.Context, p types.Union4BoolOrFloatOrIn
 				}
 				if result.HasData {
 					data := (result.Data).(types.Union4BoolOrFloatOrIntOrString)
-					channel <- StreamValue[stream_types.Union4BoolOrFloatOrIntOrString, types.Union4BoolOrFloatOrIntOrString]{
+					channel <- StreamValue[types.Union4BoolOrFloatOrIntOrString, types.Union4BoolOrFloatOrIntOrString]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(stream_types.Union4BoolOrFloatOrIntOrString)
-					channel <- StreamValue[stream_types.Union4BoolOrFloatOrIntOrString, types.Union4BoolOrFloatOrIntOrString]{
+					data := (result.StreamData).(types.Union4BoolOrFloatOrIntOrString)
+					channel <- StreamValue[types.Union4BoolOrFloatOrIntOrString, types.Union4BoolOrFloatOrIntOrString]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -8701,7 +8701,7 @@ func (*stream) StreamOneBigNumber(ctx context.Context, digits int64, opts ...Cal
 }
 
 // / Streaming version of StreamUnionIntegers
-func (*stream) StreamUnionIntegers(ctx context.Context, digits int64, opts ...CallOptionFunc) (<-chan StreamValue[[]stream_types.Union2IntOrString, []types.Union2IntOrString], error) {
+func (*stream) StreamUnionIntegers(ctx context.Context, digits int64, opts ...CallOptionFunc) (<-chan StreamValue[[]types.Union2IntOrString, []types.Union2IntOrString], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -8735,7 +8735,7 @@ func (*stream) StreamUnionIntegers(ctx context.Context, digits int64, opts ...Ca
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[[]stream_types.Union2IntOrString, []types.Union2IntOrString])
+	channel := make(chan StreamValue[[]types.Union2IntOrString, []types.Union2IntOrString])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -8752,7 +8752,7 @@ func (*stream) StreamUnionIntegers(ctx context.Context, digits int64, opts ...Ca
 					return
 				}
 				if result.Error != nil {
-					channel <- StreamValue[[]stream_types.Union2IntOrString, []types.Union2IntOrString]{
+					channel <- StreamValue[[]types.Union2IntOrString, []types.Union2IntOrString]{
 						IsError: true,
 						Error:   result.Error,
 					}
@@ -8761,13 +8761,13 @@ func (*stream) StreamUnionIntegers(ctx context.Context, digits int64, opts ...Ca
 				}
 				if result.HasData {
 					data := (result.Data).([]types.Union2IntOrString)
-					channel <- StreamValue[[]stream_types.Union2IntOrString, []types.Union2IntOrString]{
+					channel <- StreamValue[[]types.Union2IntOrString, []types.Union2IntOrString]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).([]stream_types.Union2IntOrString)
-					channel <- StreamValue[[]stream_types.Union2IntOrString, []types.Union2IntOrString]{
+					data := (result.StreamData).([]types.Union2IntOrString)
+					channel <- StreamValue[[]types.Union2IntOrString, []types.Union2IntOrString]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -11977,7 +11977,7 @@ func (*stream) TestGroq(ctx context.Context, input string, opts ...CallOptionFun
 }
 
 // / Streaming version of TestImageInput
-func (*stream) TestImageInput(ctx context.Context, img any, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+func (*stream) TestImageInput(ctx context.Context, img types.Image, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -12055,7 +12055,7 @@ func (*stream) TestImageInput(ctx context.Context, img any, opts ...CallOptionFu
 }
 
 // / Streaming version of TestImageInputAnthropic
-func (*stream) TestImageInputAnthropic(ctx context.Context, img any, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+func (*stream) TestImageInputAnthropic(ctx context.Context, img types.Image, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -12133,7 +12133,7 @@ func (*stream) TestImageInputAnthropic(ctx context.Context, img any, opts ...Cal
 }
 
 // / Streaming version of TestImageListInput
-func (*stream) TestImageListInput(ctx context.Context, imgs []any, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+func (*stream) TestImageListInput(ctx context.Context, imgs []types.Image, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -16189,7 +16189,7 @@ func (*stream) ValidateResponseTypes(ctx context.Context, input string, opts ...
 }
 
 // / Streaming version of VideoInputGemini
-func (*stream) VideoInputGemini(ctx context.Context, vid any, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+func (*stream) VideoInputGemini(ctx context.Context, vid types.Video, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -16267,7 +16267,7 @@ func (*stream) VideoInputGemini(ctx context.Context, vid any, opts ...CallOption
 }
 
 // / Streaming version of VideoInputVertex
-func (*stream) VideoInputVertex(ctx context.Context, vid any, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+func (*stream) VideoInputVertex(ctx context.Context, vid types.Video, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {

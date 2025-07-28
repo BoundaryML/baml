@@ -39,7 +39,7 @@ pub trait EncodeToBuffer<As, Lookup>
 where
     As: prost::Message,
 {
-    fn encode_to_c_buffer(&self, lookup: &Lookup) -> Vec<u8>;
+    fn encode_to_c_buffer(&self, lookup: &Lookup, mode: baml_types::StreamingMode) -> Vec<u8>;
     // Higher-ranked bound: *for any* borrow `'a` of `lookup`,
     // the IR wrapper knows how to `Encode` into our prost type.
 }
@@ -52,11 +52,12 @@ where
     Lookup: baml_types::baml_value::TypeLookups,
     for<'a> WithIr<'a, Item, Lookup>: Encode<As>,
 {
-    fn encode_to_c_buffer(&self, lookup: &Lookup) -> Vec<u8> {
+    fn encode_to_c_buffer(&self, lookup: &Lookup, mode: baml_types::StreamingMode) -> Vec<u8> {
         // 1. Build the IR & convert to the prost message --------------------
         let msg: As = WithIr {
             value: self,
             lookup,
+            mode,
         }
         .encode();
 
@@ -68,4 +69,5 @@ where
 pub(super) struct WithIr<'a, T, TypeLookups: baml_types::baml_value::TypeLookups> {
     pub value: &'a T,
     pub lookup: &'a TypeLookups,
+    pub mode: baml_types::StreamingMode,
 }

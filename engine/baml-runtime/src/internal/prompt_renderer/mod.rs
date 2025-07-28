@@ -49,7 +49,7 @@ impl PromptRenderer {
         Ok(PromptRenderer {
             function_name: function.name().into(),
             client_spec: match &ctx.client_overrides {
-                Some((Some(client), _)) => ClientSpec::Named(client.clone()),
+                Some((Some(client), _)) => ClientSpec::new_from_id(client)?,
                 _ => config.client.clone(),
             },
             non_streaming: TypeDefinitionWrapper {

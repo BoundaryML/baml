@@ -539,7 +539,7 @@ mod responses_tests {
 
         if let LLMResponse::Success(actual_result) = result {
             assert_eq!(actual_result.content, "");
-            assert_eq!(actual_result.metadata.baml_is_complete, true);
+            assert!(actual_result.metadata.baml_is_complete);
             assert_eq!(
                 actual_result.metadata.finish_reason,
                 Some("completed".to_string())
@@ -575,7 +575,7 @@ mod responses_tests {
         );
 
         if let LLMResponse::Success(actual_result) = result {
-            assert_eq!(actual_result.metadata.baml_is_complete, false);
+            assert!(!actual_result.metadata.baml_is_complete);
             assert_eq!(
                 actual_result.metadata.finish_reason,
                 Some("failed".to_string())
