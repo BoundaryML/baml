@@ -47,11 +47,11 @@ pub fn export_baml_fn(_attr: TokenStream, item: TokenStream) -> TokenStream {
                         let param_name_str = param_name.to_string();
 
                         // Skip runtime parameters as they're injected automatically
-                        if param_name_str == "runtime" && is_runtime_type(&*pat_type.ty) {
+                        if param_name_str == "runtime" && is_runtime_type(&pat_type.ty) {
                             return None;
                         }
 
-                        return Some((param_name, param_name_str, &*pat_type.ty));
+                        return Some((param_name, param_name_str, &pat_type.ty));
                     }
                 }
                 None
@@ -304,7 +304,7 @@ pub fn export_baml_fn(_attr: TokenStream, item: TokenStream) -> TokenStream {
                                                     Ok(BamlObjectResponseSuccess::new_value(BamlValue::List((#method_call).into_iter().map(|item| item.into()).collect())))
                                                 }
                                             }
-                                        } else if let Type::Reference(inner_type_ref) = inner_type {
+                                        } else if let Type::Reference(_inner_type_ref) = inner_type {
                                             // Handle Vec<&str>
                                             quote! {
                                                 Ok(BamlObjectResponseSuccess::new_value(BamlValue::List((#method_call).into_iter().map(|item| BamlValue::String(item.to_string())).collect())))
@@ -389,7 +389,7 @@ pub fn export_baml_fn(_attr: TokenStream, item: TokenStream) -> TokenStream {
                                                     }
                                                 }
                                             }
-                                        } else if let Type::Reference(inner_type_ref) = inner_type {
+                                        } else if let Type::Reference(_inner_type_ref) = inner_type {
                                             // Handle Option<&str>
                                             quote! {
                                                 match #method_call {
@@ -472,7 +472,7 @@ pub fn export_baml_fn(_attr: TokenStream, item: TokenStream) -> TokenStream {
                                 Ok(BamlObjectResponseSuccess::new_value((#method_call).into()))
                             }
                         }
-                    } else if let Type::Reference(type_ref) = &**ty {
+                    } else if let Type::Reference(_type_ref) = &**ty {
                         // Handle &str
                         quote! {
                             Ok(BamlObjectResponseSuccess::new_value(BamlValue::String((#method_call).to_string())))
@@ -565,24 +565,6 @@ fn is_result_type(ty: &Type) -> bool {
     if let Type::Path(type_path) = ty {
         if let Some(segment) = type_path.path.segments.last() {
             return segment.ident == "Result";
-        }
-    }
-    false
-}
-
-fn is_vec_type(ty: &Type) -> bool {
-    if let Type::Path(type_path) = ty {
-        if let Some(segment) = type_path.path.segments.last() {
-            return segment.ident == "Vec";
-        }
-    }
-    false
-}
-
-fn is_option_type(ty: &Type) -> bool {
-    if let Type::Path(type_path) = ty {
-        if let Some(segment) = type_path.path.segments.last() {
-            return segment.ident == "Option";
         }
     }
     false
@@ -813,11 +795,11 @@ fn is_vec_rawptrtype(ty: &Type) -> bool {
         if let Some(segment) = type_path.path.segments.last() {
             if segment.ident == "Vec" {
                 if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
-                    if let Some(syn::GenericArgument::Type(inner_type)) = args.args.first() {
-                        if let Type::Path(inner_type_path) = inner_type {
-                            if let Some(inner_segment) = inner_type_path.path.segments.last() {
-                                return inner_segment.ident == "RawPtrType";
-                            }
+                    if let Some(syn::GenericArgument::Type(Type::Path(inner_type_path))) =
+                        args.args.first()
+                    {
+                        if let Some(inner_segment) = inner_type_path.path.segments.last() {
+                            return inner_segment.ident == "RawPtrType";
                         }
                     }
                 }
@@ -832,11 +814,11 @@ fn is_option_rawptrtype(ty: &Type) -> bool {
         if let Some(segment) = type_path.path.segments.last() {
             if segment.ident == "Option" {
                 if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
-                    if let Some(syn::GenericArgument::Type(inner_type)) = args.args.first() {
-                        if let Type::Path(inner_type_path) = inner_type {
-                            if let Some(inner_segment) = inner_type_path.path.segments.last() {
-                                return inner_segment.ident == "RawPtrType";
-                            }
+                    if let Some(syn::GenericArgument::Type(Type::Path(inner_type_path))) =
+                        args.args.first()
+                    {
+                        if let Some(inner_segment) = inner_type_path.path.segments.last() {
+                            return inner_segment.ident == "RawPtrType";
                         }
                     }
                 }
@@ -851,11 +833,11 @@ fn is_result_bamlvalue(ty: &Type) -> bool {
         if let Some(segment) = type_path.path.segments.last() {
             if segment.ident == "Result" {
                 if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
-                    if let Some(syn::GenericArgument::Type(first_arg)) = args.args.first() {
-                        if let Type::Path(result_type) = first_arg {
-                            if let Some(result_segment) = result_type.path.segments.last() {
-                                return result_segment.ident == "BamlValue";
-                            }
+                    if let Some(syn::GenericArgument::Type(Type::Path(result_type))) =
+                        args.args.first()
+                    {
+                        if let Some(result_segment) = result_type.path.segments.last() {
+                            return result_segment.ident == "BamlValue";
                         }
                     }
                 }
@@ -870,10 +852,10 @@ fn is_result_unit(ty: &Type) -> bool {
         if let Some(segment) = type_path.path.segments.last() {
             if segment.ident == "Result" {
                 if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
-                    if let Some(syn::GenericArgument::Type(first_arg)) = args.args.first() {
-                        if let Type::Tuple(tuple_type) = first_arg {
-                            return tuple_type.elems.is_empty(); // () is an empty tuple
-                        }
+                    if let Some(syn::GenericArgument::Type(Type::Tuple(tuple_type))) =
+                        args.args.first()
+                    {
+                        return tuple_type.elems.is_empty(); // () is an empty tuple
                     }
                 }
             }
@@ -887,11 +869,11 @@ fn is_result_rawptrtype(ty: &Type) -> bool {
         if let Some(segment) = type_path.path.segments.last() {
             if segment.ident == "Result" {
                 if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
-                    if let Some(syn::GenericArgument::Type(first_arg)) = args.args.first() {
-                        if let Type::Path(result_type) = first_arg {
-                            if let Some(result_segment) = result_type.path.segments.last() {
-                                return result_segment.ident == "RawPtrType";
-                            }
+                    if let Some(syn::GenericArgument::Type(Type::Path(result_type))) =
+                        args.args.first()
+                    {
+                        if let Some(result_segment) = result_type.path.segments.last() {
+                            return result_segment.ident == "RawPtrType";
                         }
                     }
                 }
@@ -906,23 +888,22 @@ fn is_result_vec_rawptrtype(ty: &Type) -> bool {
         if let Some(segment) = type_path.path.segments.last() {
             if segment.ident == "Result" {
                 if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
-                    if let Some(syn::GenericArgument::Type(first_arg)) = args.args.first() {
-                        if let Type::Path(result_type) = first_arg {
-                            if let Some(result_segment) = result_type.path.segments.last() {
-                                if result_segment.ident == "Vec" {
-                                    if let syn::PathArguments::AngleBracketed(vec_args) =
-                                        &result_segment.arguments
+                    if let Some(syn::GenericArgument::Type(Type::Path(result_type))) =
+                        args.args.first()
+                    {
+                        if let Some(result_segment) = result_type.path.segments.last() {
+                            if result_segment.ident == "Vec" {
+                                if let syn::PathArguments::AngleBracketed(vec_args) =
+                                    &result_segment.arguments
+                                {
+                                    if let Some(syn::GenericArgument::Type(Type::Path(
+                                        vec_inner_type,
+                                    ))) = vec_args.args.first()
                                     {
-                                        if let Some(syn::GenericArgument::Type(vec_type)) =
-                                            vec_args.args.first()
+                                        if let Some(vec_inner_segment) =
+                                            vec_inner_type.path.segments.last()
                                         {
-                                            if let Type::Path(vec_inner_type) = vec_type {
-                                                if let Some(vec_inner_segment) =
-                                                    vec_inner_type.path.segments.last()
-                                                {
-                                                    return vec_inner_segment.ident == "RawPtrType";
-                                                }
-                                            }
+                                            return vec_inner_segment.ident == "RawPtrType";
                                         }
                                     }
                                 }
@@ -941,24 +922,22 @@ fn is_result_option_rawptrtype(ty: &Type) -> bool {
         if let Some(segment) = type_path.path.segments.last() {
             if segment.ident == "Result" {
                 if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
-                    if let Some(syn::GenericArgument::Type(first_arg)) = args.args.first() {
-                        if let Type::Path(result_type) = first_arg {
-                            if let Some(result_segment) = result_type.path.segments.last() {
-                                if result_segment.ident == "Option" {
-                                    if let syn::PathArguments::AngleBracketed(option_args) =
-                                        &result_segment.arguments
+                    if let Some(syn::GenericArgument::Type(Type::Path(result_type))) =
+                        args.args.first()
+                    {
+                        if let Some(result_segment) = result_type.path.segments.last() {
+                            if result_segment.ident == "Option" {
+                                if let syn::PathArguments::AngleBracketed(option_args) =
+                                    &result_segment.arguments
+                                {
+                                    if let Some(syn::GenericArgument::Type(Type::Path(
+                                        option_inner_type,
+                                    ))) = option_args.args.first()
                                     {
-                                        if let Some(syn::GenericArgument::Type(option_type)) =
-                                            option_args.args.first()
+                                        if let Some(option_inner_segment) =
+                                            option_inner_type.path.segments.last()
                                         {
-                                            if let Type::Path(option_inner_type) = option_type {
-                                                if let Some(option_inner_segment) =
-                                                    option_inner_type.path.segments.last()
-                                                {
-                                                    return option_inner_segment.ident
-                                                        == "RawPtrType";
-                                                }
-                                            }
+                                            return option_inner_segment.ident == "RawPtrType";
                                         }
                                     }
                                 }
@@ -977,24 +956,22 @@ fn is_result_option_bamlvalue(ty: &Type) -> bool {
         if let Some(segment) = type_path.path.segments.last() {
             if segment.ident == "Result" {
                 if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
-                    if let Some(syn::GenericArgument::Type(first_arg)) = args.args.first() {
-                        if let Type::Path(result_type) = first_arg {
-                            if let Some(result_segment) = result_type.path.segments.last() {
-                                if result_segment.ident == "Option" {
-                                    if let syn::PathArguments::AngleBracketed(option_args) =
-                                        &result_segment.arguments
+                    if let Some(syn::GenericArgument::Type(Type::Path(result_type))) =
+                        args.args.first()
+                    {
+                        if let Some(result_segment) = result_type.path.segments.last() {
+                            if result_segment.ident == "Option" {
+                                if let syn::PathArguments::AngleBracketed(option_args) =
+                                    &result_segment.arguments
+                                {
+                                    if let Some(syn::GenericArgument::Type(Type::Path(
+                                        option_inner_type,
+                                    ))) = option_args.args.first()
                                     {
-                                        if let Some(syn::GenericArgument::Type(option_type)) =
-                                            option_args.args.first()
+                                        if let Some(option_inner_segment) =
+                                            option_inner_type.path.segments.last()
                                         {
-                                            if let Type::Path(option_inner_type) = option_type {
-                                                if let Some(option_inner_segment) =
-                                                    option_inner_type.path.segments.last()
-                                                {
-                                                    return option_inner_segment.ident
-                                                        == "BamlValue";
-                                                }
-                                            }
+                                            return option_inner_segment.ident == "BamlValue";
                                         }
                                     }
                                 }
@@ -1013,46 +990,35 @@ fn is_result_option_vec_rawptrtype(ty: &Type) -> bool {
         if let Some(segment) = type_path.path.segments.last() {
             if segment.ident == "Result" {
                 if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
-                    if let Some(syn::GenericArgument::Type(first_arg)) = args.args.first() {
-                        if let Type::Path(result_type) = first_arg {
-                            if let Some(result_segment) = result_type.path.segments.last() {
-                                if result_segment.ident == "Option" {
-                                    if let syn::PathArguments::AngleBracketed(option_args) =
-                                        &result_segment.arguments
+                    if let Some(syn::GenericArgument::Type(Type::Path(result_type))) =
+                        args.args.first()
+                    {
+                        if let Some(result_segment) = result_type.path.segments.last() {
+                            if result_segment.ident == "Option" {
+                                if let syn::PathArguments::AngleBracketed(option_args) =
+                                    &result_segment.arguments
+                                {
+                                    if let Some(syn::GenericArgument::Type(Type::Path(
+                                        option_inner_type,
+                                    ))) = option_args.args.first()
                                     {
-                                        if let Some(syn::GenericArgument::Type(option_type)) =
-                                            option_args.args.first()
+                                        if let Some(option_inner_segment) =
+                                            option_inner_type.path.segments.last()
                                         {
-                                            if let Type::Path(option_inner_type) = option_type {
-                                                if let Some(option_inner_segment) =
-                                                    option_inner_type.path.segments.last()
+                                            if option_inner_segment.ident == "Vec" {
+                                                if let syn::PathArguments::AngleBracketed(
+                                                    vec_args,
+                                                ) = &option_inner_segment.arguments
                                                 {
-                                                    if option_inner_segment.ident == "Vec" {
-                                                        if let syn::PathArguments::AngleBracketed(
-                                                            vec_args,
-                                                        ) = &option_inner_segment.arguments
+                                                    if let Some(syn::GenericArgument::Type(
+                                                        Type::Path(vec_inner_type),
+                                                    )) = vec_args.args.first()
+                                                    {
+                                                        if let Some(vec_inner_segment) =
+                                                            vec_inner_type.path.segments.last()
                                                         {
-                                                            if let Some(
-                                                                syn::GenericArgument::Type(
-                                                                    vec_type,
-                                                                ),
-                                                            ) = vec_args.args.first()
-                                                            {
-                                                                if let Type::Path(vec_inner_type) =
-                                                                    vec_type
-                                                                {
-                                                                    if let Some(vec_inner_segment) =
-                                                                        vec_inner_type
-                                                                            .path
-                                                                            .segments
-                                                                            .last()
-                                                                    {
-                                                                        return vec_inner_segment
-                                                                            .ident
-                                                                            == "RawPtrType";
-                                                                    }
-                                                                }
-                                                            }
+                                                            return vec_inner_segment.ident
+                                                                == "RawPtrType";
                                                         }
                                                     }
                                                 }
@@ -1172,37 +1138,36 @@ fn generate_param_extraction(
                 if let Some(vec_segment) = vec_path.path.segments.last() {
                     if vec_segment.ident == "Vec" {
                         if let syn::PathArguments::AngleBracketed(args) = &vec_segment.arguments {
-                            if let Some(syn::GenericArgument::Type(inner_type)) = args.args.first()
+                            if let Some(syn::GenericArgument::Type(Type::Path(inner_path))) =
+                                args.args.first()
                             {
-                                if let Type::Path(inner_path) = inner_type {
-                                    if let Some(inner_segment) = inner_path.path.segments.last() {
-                                        let inner_type_name = inner_segment.ident.to_string();
-                                        if inner_type_name.ends_with("Wrapper") {
-                                            return quote! {
-                                                let #param_name = &{
-                                                    _kwargs
-                                                        .get(#param_name_str)
-                                                        .and_then(|v| match v {
-                                                            crate::ffi::Value::List(list, _) => {
-                                                                let extracted_wrappers: Result<Vec<_>, String> = list.iter()
-                                                                    .map(|item| match item {
-                                                                        crate::ffi::Value::RawPtr(raw_ptr_type, _) => {
-                                                                            match raw_ptr_type {
-                                                                                crate::raw_ptr_wrapper::RawPtrType::TypeDef(wrapper) => Ok(wrapper.clone()),
-                                                                                _ => Err(format!("List item is not a {} object", #inner_type_name)),
-                                                                            }
+                                if let Some(inner_segment) = inner_path.path.segments.last() {
+                                    let inner_type_name = inner_segment.ident.to_string();
+                                    if inner_type_name.ends_with("Wrapper") {
+                                        return quote! {
+                                            let #param_name = &{
+                                                _kwargs
+                                                    .get(#param_name_str)
+                                                    .and_then(|v| match v {
+                                                        crate::ffi::Value::List(list, _) => {
+                                                            let extracted_wrappers: Result<Vec<_>, String> = list.iter()
+                                                                .map(|item| match item {
+                                                                    crate::ffi::Value::RawPtr(raw_ptr_type, _) => {
+                                                                        match raw_ptr_type {
+                                                                            crate::raw_ptr_wrapper::RawPtrType::TypeDef(wrapper) => Ok(wrapper.clone()),
+                                                                            _ => Err(format!("List item is not a {} object", #inner_type_name)),
                                                                         }
-                                                                        _ => Err(format!("List item is not a {} object", #inner_type_name)),
-                                                                    })
-                                                                    .collect();
-                                                                extracted_wrappers.ok()
-                                                            }
-                                                            _ => None,
-                                                        })
-                                                        .ok_or_else(|| format!("Parameter '{}' must be a list of {} objects", #param_name_str, #inner_type_name))?
-                                                };
+                                                                    }
+                                                                    _ => Err(format!("List item is not a {} object", #inner_type_name)),
+                                                                })
+                                                                .collect();
+                                                            extracted_wrappers.ok()
+                                                        }
+                                                        _ => None,
+                                                    })
+                                                    .ok_or_else(|| format!("Parameter '{}' must be a list of {} objects", #param_name_str, #inner_type_name))?
                                             };
-                                        }
+                                        };
                                     }
                                 }
                             }
@@ -1406,7 +1371,7 @@ pub fn define_raw_ptr_types(input: TokenStream) -> TokenStream {
 
     let call_method_arms: Vec<_> = input.types.iter().map(|type_def| {
         let variant_name = &type_def.variant_name;
-        let field_name = format!("{}", variant_name.to_string().to_lowercase());
+        let field_name = variant_name.to_string().to_lowercase();
         let field_ident = syn::Ident::new(&field_name, variant_name.span());
         quote! {
             RawPtrType::#variant_name(#field_ident) => #field_ident.call_method(runtime, method_name, kwargs)
@@ -1490,7 +1455,7 @@ pub fn generate_encode_decode_impls(input: TokenStream) -> TokenStream {
         .iter()
         .map(|type_def| {
             let variant_name = &type_def.variant_name;
-            let field_name = format!("{}", variant_name.to_string().to_lowercase());
+            let field_name = variant_name.to_string().to_lowercase();
             let field_ident = syn::Ident::new(&field_name, variant_name.span());
 
             quote! {
@@ -1626,7 +1591,7 @@ impl syn::parse::Parse for RawPtrTypeDefinitions {
 
                 // Generate conventional names
                 let variant_name = inner_type.clone();
-                let wrapper_type = Ident::new(&format!("{}Wrapper", type_name), inner_type.span());
+                let wrapper_type = Ident::new(&format!("{type_name}Wrapper"), inner_type.span());
                 let display_name = type_name.clone();
 
                 // Generate conventional object variant
@@ -1700,7 +1665,7 @@ pub fn export_baml_new_fn(_attr: TokenStream, item: TokenStream) -> TokenStream 
                 if let syn::Pat::Ident(pat_ident) = &*pat_type.pat {
                     let param_name = &pat_ident.ident;
                     let param_name_str = param_name.to_string();
-                    return Some(generate_constructor_param_extraction(param_name, &param_name_str, &*pat_type.ty));
+                    return Some(generate_constructor_param_extraction(param_name, &param_name_str, &pat_type.ty));
                 }
             }
             None
