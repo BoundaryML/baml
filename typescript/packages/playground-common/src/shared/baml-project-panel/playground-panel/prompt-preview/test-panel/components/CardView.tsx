@@ -81,7 +81,7 @@ const TestResult = ({ testId, historicalResponse }: TestResultProps) => {
       <div className='flex gap-2 justify-between items-center'>
         <div className='flex gap-2 items-center'>
           <TooltipProvider>
-            <Tooltip delayDuration={0}>
+            <Tooltip >
               <TooltipTrigger asChild>
                 <Button
                   variant='ghost'

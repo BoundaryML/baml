@@ -1,11 +1,8 @@
-import { useAtomValue, useSetAtom } from 'jotai';
-import { atom } from 'jotai';
-import { ChevronRight, FlaskConical, FunctionSquare, ChevronDown, Check } from 'lucide-react';
-import { useMemo, useState } from 'react';
-import { vscode } from '../vscode';
-import { functionObjectAtom, testcaseObjectAtom, runtimeStateAtom, selectedItemAtom } from './atoms';
-import { cn } from '@baml/ui/lib/utils';
-import { Breadcrumb, BreadcrumbList, BreadcrumbItem, BreadcrumbSeparator } from '@baml/ui/breadcrumb';
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbList,
+} from '@baml/ui/breadcrumb';
 import { Button } from '@baml/ui/button';
 import {
   Command,
@@ -15,12 +12,21 @@ import {
   CommandItem,
   CommandList,
 } from '@baml/ui/command';
+import { cn } from '@baml/ui/lib/utils';
+import { Popover, PopoverContent, PopoverTrigger } from '@baml/ui/popover';
+import { useSidebar } from '@baml/ui/sidebar';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@baml/ui/tooltip';
+import { useAtomValue, useSetAtom } from 'jotai';
+import { atom } from 'jotai';
+import { Check, ChevronDown, FlaskConical, FunctionSquare } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { vscode } from '../vscode';
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@baml/ui/popover';
-import { Tooltip, TooltipTrigger, TooltipContent } from '@baml/ui/tooltip';
+  functionObjectAtom,
+  runtimeStateAtom,
+  selectedItemAtom,
+  testcaseObjectAtom,
+} from './atoms';
 
 interface FunctionTestNameProps {
   functionName: string;
@@ -52,6 +58,7 @@ export const FunctionTestName: React.FC<FunctionTestNameProps> = ({
 }) => {
   const [functionOpen, setFunctionOpen] = useState(false);
   const [testOpen, setTestOpen] = useState(false);
+  const { open: isSidebarOpen } = useSidebar();
 
   const functionAtom = useMemo(
     () => functionObjectAtom(functionName),
@@ -78,19 +85,30 @@ export const FunctionTestName: React.FC<FunctionTestNameProps> = ({
     value: `${span.file_path.split('/').pop() ?? '<file>.baml'}:${span.start_line + 1}`,
   });
 
-  const currentFunction = functions.find(f => f.name === functionName);
+  const currentFunction = functions.find((f) => f.name === functionName);
   const availableTests = currentFunction?.tests || [];
+
+  // Adjust max-width based on sidebar state
+  const getMaxWidthClass = () => {
+    if (isSidebarOpen) {
+      return 'max-w-[80px] sm:max-w-[120px] md:max-w-[150px]';
+    }
+    return 'max-w-[120px] sm:max-w-[240px] md:max-w-[300px]';
+  };
 
   return (
     <Breadcrumb>
       <BreadcrumbList className="flex flex-nowrap overflow-x-auto">
         <BreadcrumbItem className="flex items-center gap-1">
-          <div className="flex items-center gap-1 min-w-0 max-w-[120px] sm:max-w-[240px] md:max-w-[300px] shrink">
+          <div
+            className={`flex items-center gap-1 min-w-0 ${getMaxWidthClass()} shrink`}
+          >
             <FunctionSquare className="size-4 mr-2 shrink-0" />
             <Tooltip>
               <TooltipTrigger asChild>
-                <span
-                  className="truncate min-w-0 whitespace-nowrap cursor-pointer hover:text-primary"
+                <button
+                  type="button"
+                  className="truncate min-w-0 whitespace-nowrap cursor-pointer hover:text-primary bg-transparent border-none p-0 text-left"
                   onClick={() => {
                     if (fn?.span) {
                       vscode.postMessage({
@@ -101,24 +119,22 @@ export const FunctionTestName: React.FC<FunctionTestNameProps> = ({
                   }}
                 >
                   {functionName}
-                </span>
+                </button>
               </TooltipTrigger>
-              <TooltipContent>
-                {functionName}
-              </TooltipContent>
+              <TooltipContent>{functionName}</TooltipContent>
             </Tooltip>
             <Popover open={functionOpen} onOpenChange={setFunctionOpen}>
               <PopoverTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                >
+                <Button variant="ghost" size="sm">
                   <ChevronDown className="h-4 w-4" />
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="min-w-fit p-0">
                 <Command>
-                  <CommandInput placeholder="Search functions..." className="!outline-none focus:!outline-none" />
+                  <CommandInput
+                    placeholder="Search functions..."
+                    className="!outline-none focus:!outline-none"
+                  />
                   <CommandList>
                     <CommandEmpty>No function found.</CommandEmpty>
                     <CommandGroup>
@@ -136,13 +152,13 @@ export const FunctionTestName: React.FC<FunctionTestNameProps> = ({
                         >
                           <Check
                             className={cn(
-                              "mr-2 h-4 w-4",
+                              'mr-2 h-4 w-4',
                               functionName === func.name
-                                ? "opacity-100"
-                                : "opacity-0"
+                                ? 'opacity-100'
+                                : 'opacity-0',
                             )}
                           />
-                          {func.name}
+                          <span className="text-sm truncate">{func.name}</span>
                         </CommandItem>
                       ))}
                     </CommandGroup>
@@ -154,12 +170,15 @@ export const FunctionTestName: React.FC<FunctionTestNameProps> = ({
         </BreadcrumbItem>
         {/* <BreadcrumbSeparator>/</BreadcrumbSeparator> */}
         <BreadcrumbItem className="flex items-center gap-1">
-          <div className="flex items-center gap-1 min-w-0 max-w-[120px] sm:max-w-[240px] md:max-w-[300px] shrink">
+          <div
+            className={`flex items-center gap-1 min-w-0 ${getMaxWidthClass()} shrink`}
+          >
             <FlaskConical className="size-4 mr-2 shrink-0" />
             <Tooltip>
               <TooltipTrigger asChild>
-                <span
-                  className="truncate min-w-0 whitespace-nowrap cursor-pointer hover:text-primary"
+                <button
+                  type="button"
+                  className="truncate min-w-0 whitespace-nowrap cursor-pointer hover:text-primary bg-transparent border-none p-0 text-left"
                   onClick={() => {
                     if (tc?.span) {
                       vscode.postMessage({
@@ -170,24 +189,22 @@ export const FunctionTestName: React.FC<FunctionTestNameProps> = ({
                   }}
                 >
                   {testName}
-                </span>
+                </button>
               </TooltipTrigger>
-              <TooltipContent>
-                {testName}
-              </TooltipContent>
+              <TooltipContent>{testName}</TooltipContent>
             </Tooltip>
             <Popover open={testOpen} onOpenChange={setTestOpen}>
               <PopoverTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                >
+                <Button variant="ghost" size="sm">
                   <ChevronDown className="h-4 w-4" />
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="min-w-fit p-0">
                 <Command>
-                  <CommandInput placeholder="Search tests..." className="!outline-none focus:!outline-none" />
+                  <CommandInput
+                    placeholder="Search tests..."
+                    className="!outline-none focus:!outline-none"
+                  />
                   <CommandList>
                     <CommandEmpty>No test found.</CommandEmpty>
                     <CommandGroup>
@@ -202,13 +219,11 @@ export const FunctionTestName: React.FC<FunctionTestNameProps> = ({
                         >
                           <Check
                             className={cn(
-                              "mr-2 h-4 w-4",
-                              testName === test
-                                ? "opacity-100"
-                                : "opacity-0"
+                              'mr-2 h-4 w-4',
+                              testName === test ? 'opacity-100' : 'opacity-0',
                             )}
                           />
-                          {test}
+                          <span className="text-sm truncate">{test}</span>
                         </CommandItem>
                       ))}
                     </CommandGroup>

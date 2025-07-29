@@ -20,7 +20,7 @@ function App() {
       {/* <DevTools /> */}
       <Suspense fallback={<div>Loading...</div>}>
 
-        <div className="relative min-h-screen bg-background text-foreground p-2">
+        <div className="relative min-h-screen bg-background text-foreground">
           <ThemeProvider
             attribute="class"
             defaultTheme="dark"

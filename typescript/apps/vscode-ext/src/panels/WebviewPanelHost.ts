@@ -252,12 +252,12 @@ export class WebviewPanelHost {
       `img-src ${webview.cspSource} https: data:`
     ];
 
-    // Don't add CSP for now until we test more.
     return /*html*/ `<!DOCTYPE html>
     <html lang="en">
       <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta http-equiv="Content-Security-Policy" content="${csp.join('; ')}">
         <link rel="stylesheet" type="text/css" href="${stylesUri}">
         <title>BAML Playground</title>
         <style>
