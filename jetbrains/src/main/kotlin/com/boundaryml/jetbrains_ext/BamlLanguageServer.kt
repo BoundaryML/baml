@@ -10,19 +10,19 @@ class BamlLanguageServer(private val project: Project) : OSProcessStreamConnecti
 
     init {
         // UNCOMMENT FOR DEBUGGING LOCALLY
-//        val commandLine = GeneralCommandLine(
-//            Path.of(System.getProperty("user.home"),
-//                "/Documents/baml/engine/target/debug", "baml-cli").toString(), "lsp")
-//        super.setCommandLine(commandLine)
+        val commandLine = GeneralCommandLine(
+            Path.of(System.getProperty("user.home"),
+                "/Documents/boundary/baml-main/baml/engine/target/debug", "baml-cli").toString(), "lsp")
+        super.setCommandLine(commandLine)
 
-        val cacheDir = Path.of(System.getProperty("user.home"), ".baml/jetbrains")
-        val version  = Files.readString(cacheDir.resolve("baml-cli-installed.txt")).trim()
-
-        val (arch, platform, _) = BamlLanguageServerInstaller.getPlatformTriple()
-        val exe = if (platform == "pc-windows-msvc") "baml-cli.exe" else "baml-cli"
-        val cli = cacheDir.resolve("baml-cli-$version-$arch-$platform").resolve(exe)
-
-        super.setCommandLine(GeneralCommandLine(cli.toString(), "lsp"))
+//        val cacheDir = Path.of(System.getProperty("user.home"), ".baml/jetbrains")
+//        val version  = Files.readString(cacheDir.resolve("baml-cli-installed.txt")).trim()
+//
+//        val (arch, platform, _) = BamlLanguageServerInstaller.getPlatformTriple()
+//        val exe = if (platform == "pc-windows-msvc") "baml-cli.exe" else "baml-cli"
+//        val cli = cacheDir.resolve("baml-cli-$version-$arch-$platform").resolve(exe)
+//
+//        super.setCommandLine(GeneralCommandLine(cli.toString(), "lsp"))
 
     }
 

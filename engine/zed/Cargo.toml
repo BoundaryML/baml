@@ -16,3 +16,6 @@ debug = []
 
 [dependencies]
 zed_extension_api = "0.1.0"
+
+[workspace]
+# Empty workspace table to make this package standalone

@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "dev": "npx fern docs dev",
+    "dev": "npx fern docs dev --port 3096 --backend-port 3097",
     "preview": "npx fern generate --preview --docs"
   },
   "devDependencies": {
