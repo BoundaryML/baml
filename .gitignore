@@ -160,6 +160,7 @@ artifacts
 .direnv
 .rollup.cache
 typescript/apps/vscode-ext/dist/playground
+typescript/vscode-ext/packages/vscode/server/baml-cli
 
 # mise
 .mise.local.toml
