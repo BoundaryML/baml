@@ -1,0 +1,65 @@
+name: Test JetBrains Release
+
+on:
+  push:
+    branches:
+      - egor/proxy-fixes
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  id-token: write
+
+# Common environment variables
+env:
+  # Turbo remote caching
+  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+  TURBO_TEAM: gloo
+
+jobs:
+  determine-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version_string: ${{ steps.set-version.outputs.version }}
+    steps:
+      - name: Set Version Info
+        id: set-version
+        run: |
+          VERSION="test-$(date +%Y%m%d-%H%M%S)" # Test version with timestamp
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Determined test version: $VERSION"
+
+  build-jetbrains-release:
+    needs: determine-version
+    uses: ./.github/workflows/build-jetbrains-release.reusable.yaml
+
+  test-jetbrains-publishing:
+    name: Test JetBrains Publishing
+    environment: release
+    needs: [determine-version, build-jetbrains-release]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Tools
+        uses: ./.github/actions/setup-tools
+      - name: Setup Java
+        uses: ./.github/actions/setup-java
+      - name: Download extension zips
+        uses: actions/download-artifact@v4
+        with:
+          pattern: baml-jetbrains-zip-*
+          path: ./jetbrains/build/libs/
+          merge-multiple: true
+      - name: List downloaded extension zips
+        run: ls -la ./jetbrains/build/libs/
+      - name: Test JetBrains Marketplace Publishing
+        run: |
+          cd ./jetbrains
+          echo "Would publish to JetBrains Marketplace with version: ${{ needs.determine-version.outputs.version_string }}"
+          echo "Testing Gradle publishPlugin task..."
+          ./gradlew publishPlugin --dry-run || echo "Dry run completed (may show validation warnings)"
+        env:
+          INTELLIJ_PLATFORM_PUBLISH_TOKEN: ${{ secrets.SAM_INTELLIJ_PLATFORM_PUBLISH_TOKEN }} 

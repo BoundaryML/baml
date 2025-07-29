@@ -77,7 +77,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: baml-jetbrains-zip
-          path: ./build/distributions/*
+          path: ./build/libs/*
 
   # # Run tests and upload a code coverage report
   # test:

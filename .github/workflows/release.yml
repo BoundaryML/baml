@@ -18,7 +18,6 @@ on:
       - "*.*"
     branches:
       - gofix2
-      - egor/proxy-fixes
 concurrency:
   # No suffix specified - in reusable workflows we need a statically-defined suffix
   # to prevent workflow_call workflows from triggering a concurrency deadlock
@@ -70,99 +69,99 @@ jobs:
           echo "Determined version: $VERSION"
           echo "Is release tag: $IS_RELEASE"
 
-  # build-python-release:
-  #   uses: ./.github/workflows/build-python-release.reusable.yaml
+  build-python-release:
+    uses: ./.github/workflows/build-python-release.reusable.yaml
 
-  # build-typescript-release:
-  #   uses: ./.github/workflows/build-typescript-release.reusable.yaml
+  build-typescript-release:
+    uses: ./.github/workflows/build-typescript-release.reusable.yaml
 
-  # build-cli:
-  #   needs: determine-version
-  #   uses: ./.github/workflows/build-cli-release.reusable.yaml
-  #   with:
-  #     version: ${{ needs.determine-version.outputs.version_string }}
-  #     package_for_release: true
+  build-cli:
+    needs: determine-version
+    uses: ./.github/workflows/build-cli-release.reusable.yaml
+    with:
+      version: ${{ needs.determine-version.outputs.version_string }}
+      package_for_release: true
 
-  # build-vscode-reusable:
-  #   needs: [determine-version, build-cli]
-  #   uses: ./.github/workflows/build-vscode-release.reusable.yaml
-  #   with:
-  #     version: ${{ needs.determine-version.outputs.version_string }}
-  #     is_release_build: ${{ needs.determine-version.outputs.is_release_tag == 'true' }}
+  build-vscode-reusable:
+    needs: [determine-version, build-cli]
+    uses: ./.github/workflows/build-vscode-release.reusable.yaml
+    with:
+      version: ${{ needs.determine-version.outputs.version_string }}
+      is_release_build: ${{ needs.determine-version.outputs.is_release_tag == 'true' }}
 
   build-jetbrains-release:
     uses: ./.github/workflows/build-jetbrains-release.reusable.yaml
 
-  # integ-tests:
-  #   uses: ./.github/workflows/integ-tests.yml
+  integ-tests:
+    uses: ./.github/workflows/integ-tests.yml
 
   all-builds:
     name: Assert all builds passed
     runs-on: ubuntu-latest
     needs:
       - determine-version
-      # - build-python-release
-      # - build-typescript-release
-      # - build-cli
-      # - build-vscode-reusable
+      - build-python-release
+      - build-typescript-release
+      - build-cli
+      - build-vscode-reusable
       - build-jetbrains-release
     steps:
       - run: echo "::do-nothing::" >/dev/null
 
-  # publish-to-pypi:
-  #   environment: release
-  #   needs: [all-builds]
-  #   if: ${{ startsWith(github.ref, 'refs/tags/') }}
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: actions/setup-python@v5
-  #       with:
-  #         python-version: "3.8"
-  #     - uses: actions/download-artifact@v4
-  #       with:
-  #         pattern: wheels-*
-  #         path: dist
-  #         merge-multiple: true
-  #     - name: Verify wheel count
-  #       run: |
-  #         set -euo pipefail
-  #         ls dist/
-  #         wheel_count=$(ls dist/*.whl 2>/dev/null | wc -l)
-  #         if [ "$wheel_count" -lt 8 ]; then
-  #           echo "Error: Expected at least 8 wheels, but found $wheel_count"
-  #           exit 1
-  #         fi
-  #         echo "Found $wheel_count wheels"
-  #     - name: Publish package to PyPI
-  #       uses: PyO3/maturin-action@v1
-  #       with:
-  #         command: upload
-  #         args: dist/*
+  publish-to-pypi:
+    environment: release
+    needs: [all-builds]
+    if: ${{ startsWith(github.ref, 'refs/tags/') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.8"
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: wheels-*
+          path: dist
+          merge-multiple: true
+      - name: Verify wheel count
+        run: |
+          set -euo pipefail
+          ls dist/
+          wheel_count=$(ls dist/*.whl 2>/dev/null | wc -l)
+          if [ "$wheel_count" -lt 8 ]; then
+            echo "Error: Expected at least 8 wheels, but found $wheel_count"
+            exit 1
+          fi
+          echo "Found $wheel_count wheels"
+      - name: Publish package to PyPI
+        uses: PyO3/maturin-action@v1
+        with:
+          command: upload
+          args: dist/*
 
-  # publish-to-npm:
-  #   environment: release
-  #   needs: [all-builds]
-  #   if: ${{ startsWith(github.ref, 'refs/tags/') }}
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - name: Setup Tools
-  #       uses: ./.github/actions/setup-tools
-  #     - name: Setup Node.js
-  #       uses: ./.github/actions/setup-node
-  #       with:
-  #         registry-url: "https://registry.npmjs.org"
-  #         npm-token: ${{ secrets.NPM_TOKEN }}
-  #     - uses: actions/download-artifact@v4
-  #       with:
-  #         pattern: bindings-*
-  #         path: engine/language_client_typescript/artifacts
+  publish-to-npm:
+    environment: release
+    needs: [all-builds]
+    if: ${{ startsWith(github.ref, 'refs/tags/') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Tools
+        uses: ./.github/actions/setup-tools
+      - name: Setup Node.js
+        uses: ./.github/actions/setup-node
+        with:
+          registry-url: "https://registry.npmjs.org"
+          npm-token: ${{ secrets.NPM_TOKEN }}
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: bindings-*
+          path: engine/language_client_typescript/artifacts
 
-  #     - name: Publish to NPM
-  #       # This reads the credential from .npmrc, which is written by the setup-node step.
-  #       # It does not use the NODE_AUTH_TOKEN environment variable.
-  #       run: pnpm --filter=@boundaryml/baml publish --access public --no-git-checks
+      - name: Publish to NPM
+        # This reads the credential from .npmrc, which is written by the setup-node step.
+        # It does not use the NODE_AUTH_TOKEN environment variable.
+        run: pnpm --filter=@boundaryml/baml publish --access public --no-git-checks
 
   # publish-to-rubygems:
   #   environment: release
@@ -193,65 +192,65 @@ jobs:
   #           gem push $i
   #         done
 
-  # publish-to-open-vsx:
-  #   environment: release
-  #   needs: [determine-version, all-builds]
-  #   runs-on: ubuntu-latest
-  #   if: ${{ (needs.determine-version.outputs.is_release_tag == 'true') || inputs.force_publish_vscode }}
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - name: Setup Tools
-  #       uses: ./.github/actions/setup-tools
-  #     - name: Setup Node.js
-  #       uses: ./.github/actions/setup-node
-  #       with:
-  #         install_dependencies: false
-  #         npm-token: ${{ secrets.NPM_TOKEN }}
-  #     - name: Download VSIX artifacts
-  #       uses: actions/download-artifact@v4
-  #       with:
-  #         pattern: baml-vscode-vsix-*
-  #         path: vsix-artifacts
-  #         merge-multiple: true
-  #     - name: List downloaded VSIXs
-  #       run: ls -l vsix-artifacts/
-  #     - name: Publish to Open VSX
-  #       run: npx ovsx publish --packagePath ./vsix-artifacts/*.vsix
-  #       env:
-  #         OVSX_PAT: ${{ secrets.OVSX_PAT }}
+  publish-to-open-vsx:
+    environment: release
+    needs: [determine-version, all-builds]
+    runs-on: ubuntu-latest
+    if: ${{ (needs.determine-version.outputs.is_release_tag == 'true') || inputs.force_publish_vscode }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Tools
+        uses: ./.github/actions/setup-tools
+      - name: Setup Node.js
+        uses: ./.github/actions/setup-node
+        with:
+          install_dependencies: false
+          npm-token: ${{ secrets.NPM_TOKEN }}
+      - name: Download VSIX artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: baml-vscode-vsix-*
+          path: vsix-artifacts
+          merge-multiple: true
+      - name: List downloaded VSIXs
+        run: ls -l vsix-artifacts/
+      - name: Publish to Open VSX
+        run: npx ovsx publish --packagePath ./vsix-artifacts/*.vsix
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
 
-  # publish-to-vscode-marketplace:
-  #   environment: release
-  #   needs: [determine-version, all-builds]
-  #   runs-on: ubuntu-latest
-  #   if: ${{ (needs.determine-version.outputs.is_release_tag == 'true') || inputs.force_publish_vscode }}
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - name: Setup Tools
-  #       uses: ./.github/actions/setup-tools
-  #     - name: Setup Node.js
-  #       uses: ./.github/actions/setup-node
-  #       with:
-  #         install_dependencies: false
-  #         npm-token: ${{ secrets.NPM_TOKEN }}
-  #     - name: Download VSIX artifacts
-  #       uses: actions/download-artifact@v4
-  #       with:
-  #         pattern: baml-vscode-vsix-*
-  #         path: vsix-artifacts
-  #         merge-multiple: true
-  #     - name: List downloaded VSIXs
-  #       run: ls -la vsix-artifacts/
-  #     - name: Publish to VSCode Marketplace
-  #       run: npx @vscode/vsce publish --packagePath ./vsix-artifacts/*.vsix
-  #       env:
-  #         VSCE_PAT: ${{ secrets.VSCODE_PAT }}
+  publish-to-vscode-marketplace:
+    environment: release
+    needs: [determine-version, all-builds]
+    runs-on: ubuntu-latest
+    if: ${{ (needs.determine-version.outputs.is_release_tag == 'true') || inputs.force_publish_vscode }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Tools
+        uses: ./.github/actions/setup-tools
+      - name: Setup Node.js
+        uses: ./.github/actions/setup-node
+        with:
+          install_dependencies: false
+          npm-token: ${{ secrets.NPM_TOKEN }}
+      - name: Download VSIX artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: baml-vscode-vsix-*
+          path: vsix-artifacts
+          merge-multiple: true
+      - name: List downloaded VSIXs
+        run: ls -la vsix-artifacts/
+      - name: Publish to VSCode Marketplace
+        run: npx @vscode/vsce publish --packagePath ./vsix-artifacts/*.vsix
+        env:
+          VSCE_PAT: ${{ secrets.VSCODE_PAT }}
 
   publish-to-jetbrains-marketplace:
     environment: release
     needs: [determine-version, all-builds]
     runs-on: ubuntu-latest
-    if: ${{ needs.determine-version.outputs.is_release_tag == 'true' || github.ref_name == 'egor/proxy-fixes' }}
+    if: ${{ needs.determine-version.outputs.is_release_tag == 'true' }}
     steps:
       - uses: actions/checkout@v4
       - name: Setup Tools
@@ -262,10 +261,10 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           pattern: baml-jetbrains-zip-*
-          path: ./jetbrains/build/distributions/
+          path: ./jetbrains/build/libs/
           merge-multiple: true
       - name: List downloaded extension zips
-        run: ls -la ./jetbrains/build/distributions/
+        run: ls -la ./jetbrains/build/libs/
       - name: Publish to JetBrains Marketplace
         run: cd ./jetbrains && ./gradlew publishPlugin
         env:
@@ -277,7 +276,6 @@ jobs:
       contents: write
     needs: [all-builds, determine-version]
     runs-on: ubuntu-latest
-    if: ${{ github.ref_name != 'egor/proxy-fixes' }}
     steps:
       - uses: actions/checkout@v4
       - name: Download all baml-cli artifacts
