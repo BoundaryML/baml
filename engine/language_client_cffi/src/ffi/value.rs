@@ -12,7 +12,9 @@ pub enum ValueBase<T> {
     List(Vec<ValueBase<T>>, T),
     Null(T),
     RawPtr(RawPtrType, T),
+    #[allow(dead_code)]
     Class(String, BamlMap<String, ValueBase<T>>, T),
+    #[allow(dead_code)]
     Enum(String, String, T),
 }
 
