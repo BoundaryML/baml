@@ -3,7 +3,7 @@
 #ifndef BAML_CFFI_WRAPPER_H
 #define BAML_CFFI_WRAPPER_H
 
-#include "baml_cffi_generated.h"
+#include "../pkg/cffi/baml_cffi_generated.h"
 
 // Function declarations for the wrapper functions
 

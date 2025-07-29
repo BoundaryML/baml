@@ -12,7 +12,7 @@ import (
 )
 
 /*
-#cgo CFLAGS: -I${SRCDIR}/../../include
+#cgo CFLAGS: -I${SRCDIR}/..
 #cgo CFLAGS: -O3 -g
 #include <../baml_cffi_wrapper.h>
 #include <stdlib.h>

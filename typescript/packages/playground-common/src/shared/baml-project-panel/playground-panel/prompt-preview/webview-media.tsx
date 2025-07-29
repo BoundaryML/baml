@@ -2,7 +2,7 @@
 import type { WasmChatMessagePartMedia } from '@gloo-ai/baml-schema-wasm-web';
 /* eslint-disable @typescript-eslint/require-await */
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
-import { ExternalLinkIcon, ImageIcon, Music, FileText, Video, Copy, Check, X, ChevronDown, ChevronUp } from 'lucide-react';
+import { ExternalLinkIcon, ImageIcon, Music, FileText, Video, Copy, Check, X, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import useSWR from 'swr';
 import { Button } from '@baml/ui/button';
@@ -11,6 +11,7 @@ import { showTokensAtom } from './render-text';
 import { imageStatsMapAtom } from './image-stats-atom';
 import { mediaCollapsedMapAtom } from './media-collapsed-atom';
 import { PdfViewer } from './pdf-viewer';
+import { vscode } from '../../vscode';
 
 interface WebviewMediaProps {
   bamlMediaType: 'image' | 'audio' | 'pdf' | 'video';
@@ -110,7 +111,7 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
 }) => {
   const wasm = useAtomValue(wasmAtom);
   const isDebugMode = useAtomValue(showTokensAtom);
-  const setImageStatsMap = useSetAtom(imageStatsMapAtom);
+  const [imageStatsMap, setImageStatsMap] = useAtom(imageStatsMapAtom);
   const [mediaCollapsedMap, setMediaCollapsedMap] = useAtom(mediaCollapsedMapAtom);
   const [imageStats, setImageStats] = useState<{
     width: number;
@@ -162,7 +163,7 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
     },
   );
 
-  // Create optimized URL when mediaUrl changes
+  // Create optimized URL when mediaUrl changes and restore stored stats
   useEffect(() => {
     if (!mediaUrl) {
       setOptimizedMediaUrl(null);
@@ -187,7 +188,19 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
     } else {
       setOptimizedMediaUrl(mediaUrl);
     }
-  }, [mediaUrl, bamlMediaType]);
+
+    // Restore image stats from stored map if available
+    if (bamlMediaType === 'image' && imageStatsMap.has(mediaUrl)) {
+      const storedStats = imageStatsMap.get(mediaUrl);
+      if (storedStats) {
+        setImageStats({
+          width: storedStats.width,
+          height: storedStats.height,
+          size: storedStats.size
+        });
+      }
+    }
+  }, [mediaUrl, bamlMediaType, imageStatsMap]);
 
 
 
@@ -276,10 +289,21 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
   const renderMediaContent = () => {
     switch (bamlMediaType) {
       case 'image':
+        const imageUrl = optimizedMediaUrl || '';
+        if (!imageUrl) {
+          return (
+            <div className="relative w-full flex items-center justify-center">
+              <div className="text-center p-4">
+                <ImageIcon className="w-8 h-8 mx-auto text-[var(--vscode-description-foreground)] mb-2" />
+                <p className="text-sm text-[var(--vscode-description-foreground)]">Image not available</p>
+              </div>
+            </div>
+          );
+        }
         return (
           <div className="relative w-full flex items-center justify-center">
             <img
-              src={optimizedMediaUrl || ''}
+              src={imageUrl}
               // biome-ignore lint/a11y/noRedundantAlt: not correct
               alt={'Image Not Found'}
               className="max-w-full h-auto rounded object-contain border border-[var(--vscode-panel-border)]"
@@ -294,6 +318,21 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
           </div>
         );
       case 'audio':
+        const audioUrl = optimizedMediaUrl || '';
+        if (!audioUrl) {
+          return (
+            <div className="w-full max-w-2xl mx-auto bg-[var(--vscode-editor-background)] border border-[var(--vscode-panel-border)] rounded-lg shadow-sm p-4">
+              <div className="flex items-center gap-3 mb-3">
+                <Music className="w-5 h-5 text-[var(--vscode-description-foreground)]" />
+                <span className="text-sm font-medium text-[var(--vscode-foreground)]">Audio Player</span>
+              </div>
+              <div className="text-center p-4">
+                <Music className="w-8 h-8 mx-auto text-[var(--vscode-description-foreground)] mb-2" />
+                <p className="text-sm text-[var(--vscode-description-foreground)]">Audio not available</p>
+              </div>
+            </div>
+          );
+        }
         return (
           <div className="w-full max-w-2xl mx-auto bg-[var(--vscode-editor-background)] border border-[var(--vscode-panel-border)] rounded-lg shadow-sm p-4">
             <div className="flex items-center gap-3 mb-3">
@@ -302,13 +341,24 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
             </div>
             {/* biome-ignore lint/a11y/useMediaCaption: not correct */}
             <audio controls className="w-full">
-              <source src={optimizedMediaUrl || ''} />
+              <source src={audioUrl} />
               Your browser does not support the audio element.
             </audio>
           </div>
         );
       case 'pdf':
-        return renderPdfContent(optimizedMediaUrl || mediaUrl || '');
+        const pdfUrl = optimizedMediaUrl || mediaUrl || '';
+        if (!pdfUrl) {
+          return (
+            <div className="w-full max-w-2xl mx-auto bg-[var(--vscode-editor-background)] border border-[var(--vscode-panel-border)] rounded-lg shadow-sm p-4">
+              <div className="text-center p-4">
+                <FileText className="w-8 h-8 mx-auto text-[var(--vscode-description-foreground)] mb-2" />
+                <p className="text-sm text-[var(--vscode-description-foreground)]">PDF not available</p>
+              </div>
+            </div>
+          );
+        }
+        return renderPdfContent(pdfUrl);
       case 'video':
         return renderVideoContent(mediaUrl || '');
       default:
@@ -412,10 +462,80 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
 
     // Check if it's a direct video file
     if (isDirectVideoFile(url)) {
+      // In non-VSCode environments (like JetBrains), video playback may not be supported
+      const isNonVSCode = !vscode.isVscode();
+      
+      if (isNonVSCode) {
+        return (
+          <div className="w-full max-w-3xl mx-auto border border-[var(--vscode-panel-border)] rounded-lg bg-[var(--vscode-editor-background)] p-6">
+            <div className="text-center space-y-4">
+              <div className="flex justify-center">
+                <div className="p-3 bg-orange-100 dark:bg-orange-900/20 rounded-full">
+                  <Video className="w-8 h-8 text-orange-600 dark:text-orange-400" />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-lg font-medium text-[var(--vscode-foreground)]">
+                  Video Playback Not Supported
+                </h3>
+                <p className="text-sm text-[var(--vscode-description-foreground)] max-w-md mx-auto">
+                  You can open a working video preview by opening this playground in your browser.
+                </p>
+              </div>
+              <Button
+                onClick={async () => {
+                  try {
+                    const response = await vscode.openPlayground();
+                    if (!response.success) {
+                      console.error('Failed to open playground:', response.error);
+                    }
+                  } catch (error) {
+                    console.error('Failed to open playground via RPC:', error);
+                  }
+                }}
+                variant="outline"
+                size="sm"
+                className="inline-flex items-center gap-2"
+              >
+                <ExternalLink className="w-4 h-4" />
+                Open in Browser Playground
+              </Button>
+            </div>
+          </div>
+        );
+      }
+      
+      // For VSCode, try normal video element with error handling
       return (
         <div className="w-full max-w-3xl mx-auto border border-[var(--vscode-panel-border)] rounded overflow-hidden bg-black">
           {/* biome-ignore lint/a11y/useMediaCaption: not correct */}
-          <video controls className="w-full h-auto max-h-[50vh] object-contain">
+          <video 
+            controls 
+            className="w-full h-auto max-h-[50vh] object-contain"
+            onError={(e) => {
+              // If video fails to load even in VSCode, show error
+              const target = e.target as HTMLVideoElement;
+              target.style.display = 'none';
+              const container = target.parentElement;
+              if (container) {
+                container.innerHTML = `
+                  <div class="flex h-[30vh] items-center justify-center text-center p-6">
+                    <div class="space-y-2">
+                      <div class="text-red-400">⚠️</div>
+                      <p class="text-sm text-[var(--vscode-errorForeground)]">Failed to load video</p>
+                      <p class="text-xs text-[var(--vscode-description-foreground)]">This video format may not be supported</p>
+                      <button 
+                        onclick="window.open('${url}', '_blank')"
+                        class="mt-2 px-3 py-1 bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] text-xs rounded hover:bg-[var(--vscode-button-hoverBackground)]"
+                      >
+                        Open Externally
+                      </button>
+                    </div>
+                  </div>
+                `;
+              }
+            }}
+          >
             <source src={url} />
             Your browser does not support the video element.
           </video>
@@ -471,7 +591,7 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
 
   return (
     <div className="w-full flex justify-center p-4 bg-[var(--vscode-sideBar-background)]">
-      <div className={`border border-[var(--vscode-panel-border)] rounded bg-[var(--vscode-editor-background)] space-y-3 ${
+      <div className={`border-2 border-[var(--vscode-panel-border)] rounded bg-[var(--vscode-editor-background)] space-y-3 ${
         bamlMediaType === 'image' ? 'w-fit max-w-[90vw] min-w-80' : 'max-w-lg w-full'
       }`}>
         {/* Header with file type icon and link/copy */}
@@ -510,21 +630,20 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
               </div>
             </div>
             {/* Button area, right-aligned, compact, no overflow */}
-            <div className="flex items-center ml-2 flex-nowrap gap-1 h-7" onClick={e => e.stopPropagation()} style={{maxWidth: 'calc(100% - 2rem)'}}>
+            <div className="flex items-center ml-2 flex-nowrap gap-1 h-7" onClick={e => e.stopPropagation()}>
             {isBase64 ? (
               <Button
                 onClick={handleCopyToClipboard}
                 disabled={copyStatus === 'copying'}
                 variant="outline"
                 size="xs"
-                className={`flex gap-1 items-center text-xs px-2 py-0 rounded flex-shrink-0 h-7 transition-all duration-200
+                className={`flex gap-1 items-center text-xs px-2 py-0 rounded h-7 transition-all duration-200
                   ${copyStatus === 'success'
                     ? 'border-[var(--vscode-charts-green)] text-[var(--vscode-charts-green)] bg-[var(--vscode-editor-background)]'
                     : copyStatus === 'error'
                     ? 'border-[var(--vscode-charts-red)] text-[var(--vscode-charts-red)] bg-[var(--vscode-editor-background)]'
                     : ''
                   }`}
-                style={{minWidth: 0, maxWidth: 140}}
               >
                 {copyStatus === 'copying' && (
                   <div className="w-3 h-3 border border-[var(--vscode-button-foreground)] border-t-transparent rounded-full animate-spin" />
@@ -532,7 +651,7 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
                 {copyStatus === 'success' && <Check className="w-3 h-3" />}
                 {copyStatus === 'error' && <X className="w-3 h-3" />}
                 {copyStatus === 'idle' && <Copy className="w-3 h-3" />}
-                <span className="truncate">
+                <span>
                   {copyStatus === 'copying' && `Copying...`}
                   {copyStatus === 'success' && `Copied!`}
                   {copyStatus === 'error' && `Failed`}
@@ -544,40 +663,26 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
                 asChild
                 variant="outline"
                 size="xs"
-                className="flex gap-1 items-center text-xs px-2 py-0 rounded border flex-shrink-0 h-7 transition-all duration-200"
-                style={{minWidth: 0, maxWidth: 140}}
+                className="flex gap-1 items-center text-xs px-2 py-0 rounded h-7"
               >
                 <a
                   href={mediaUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex gap-1 items-center w-full h-full truncate"
-                  style={{maxWidth: 120}}
+                  className="flex gap-1 items-center"
                 >
                   <ExternalLinkIcon className="w-3 h-3" />
-                  <span className="truncate">
-                    {(() => {
-                      const url = mediaUrl || '';
-                      const urlParts = url.split('/');
-                      const filename = urlParts[urlParts.length - 1];
-                      const cleanFilename = filename?.split('?')[0]?.split('#')[0];
-                      if (cleanFilename && cleanFilename.length > 0 && cleanFilename.includes('.')) {
-                        return `Open ${cleanFilename.length > 20 ? cleanFilename.substring(0, 17) + '...' : cleanFilename}`;
-                      }
-                      return 'Open Link';
-                    })()}
-                  </span>
+                  <span>Open Link</span>
                 </a>
               </Button>
             )}
-            {/* Collapse/Expand Button (rightmost) */}
+            {/* Collapse/Expand Button */}
             <Button
               onClick={e => { e.stopPropagation(); setCollapsed(!collapsed); }}
               aria-label={collapsed ? 'Expand media' : 'Collapse media'}
               variant="outline"
               size="xs"
-              className="ml-1 flex items-center justify-center px-1.5 py-0 h-7 transition-colors duration-150 flex-shrink-0"
-              style={{ outline: 'none', minWidth: 0 }}
+              className="flex items-center justify-center px-1.5 py-0 h-7 transition-colors duration-150"
               tabIndex={0}
             >
               {collapsed ? (

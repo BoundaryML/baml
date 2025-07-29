@@ -712,9 +712,9 @@ impl BamlRuntime {
                             call_id_stack.clone(),
                             match &result {
                                 Ok(result) => match result.result_with_constraints_content() {
-                                    Ok(value) => Ok(value.0.map_meta(|f| {
-                                        f.3.to_non_streaming_type(self.internal().ir())
-                                    })),
+                                    Ok(value) => Ok(value
+                                        .0
+                                        .map_meta(|f| f.3.to_non_streaming_type(self.inner.ir()))),
                                     Err(e) => Err((&e).to_baml_error()), // None => Err(baml_types::tracing::errors::BamlError::Base {
                                                                          //     message: format!(
                                                                          //         "No parsed result found for function: {}",
