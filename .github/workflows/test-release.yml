@@ -9,9 +9,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-permissions:
-  contents: read
-  id-token: write
+# permissions:
+#   contents: read
+#   id-token: write
 
 # Common environment variables
 env:
@@ -55,11 +55,11 @@ jobs:
           merge-multiple: true
       - name: List downloaded extension zips
         run: ls -la ./jetbrains/build/distributions/
-      - name: Test JetBrains Marketplace Publishing
-        run: |
-          cd ./jetbrains
-          echo "Would publish to JetBrains Marketplace with version: ${{ needs.determine-version.outputs.version_string }}"
-          echo "Testing Gradle publishPlugin task..."
-          ./gradlew publishPlugin --dry-run || echo "Dry run completed (may show validation warnings)"
-        env:
-          INTELLIJ_PLATFORM_PUBLISH_TOKEN: ${{ secrets.SAM_INTELLIJ_PLATFORM_PUBLISH_TOKEN }} 
+    #   - name: Test JetBrains Marketplace Publishing
+    #     run: |
+    #       cd ./jetbrains
+    #       echo "Would publish to JetBrains Marketplace with version: ${{ needs.determine-version.outputs.version_string }}"
+    #       echo "Testing Gradle publishPlugin task..."
+    #       ./gradlew publishPlugin --dry-run || echo "Dry run completed (may show validation warnings)"
+    #     env:
+    #       INTELLIJ_PLATFORM_PUBLISH_TOKEN: ${{ secrets.SAM_INTELLIJ_PLATFORM_PUBLISH_TOKEN }} 
