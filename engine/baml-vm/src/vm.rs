@@ -544,12 +544,25 @@ impl Vm {
         }
     }
 
-    pub fn fulfil_future(&mut self, future: usize, value: Value) {
-        let Object::Future(future) = &mut self.objects[future] else {
-            panic!("expect future, got {:?}", self.objects[future]);
+    pub fn fulfil_future(&mut self, future_index: usize, value: Value) {
+        let Object::Future(future) = &mut self.objects[future_index] else {
+            panic!("expect future, got {:?}", self.objects[future_index]);
         };
 
         *future = Future::Ready(value);
+
+        // At any given moment, the VM can only await a single future, because
+        // we can only call the AWAIT instruction on a future on top of the
+        // stack. If that future being await is fulfilled, we need to replace
+        // the future on the stack with the ready value so that the next
+        // instruction that the VM runs can use the value, not the future
+        // object.
+        if let Some(Value::Object(index)) = self.stack.last() {
+            if *index == future_index {
+                self.stack.pop();
+                self.stack.push(value);
+            }
+        }
     }
 
     pub fn object(&self, index: usize) -> &Object {
@@ -928,9 +941,18 @@ impl Vm {
                         }));
                     };
 
-                    // Can't do nothing, handle control flow back to embedder.
-                    if let Future::Pending { .. } = awaiting {
-                        return Ok(VmExecState::Await(*index));
+                    match awaiting {
+                        // Can't do nothing, handle control flow back to embedder.
+                        Future::Pending(_) => {
+                            return Ok(VmExecState::Await(*index));
+                        }
+
+                        // Replace the future on the eval stack with the ready
+                        // value.
+                        Future::Ready(value) => {
+                            self.stack.pop();
+                            self.stack.push(*value);
+                        }
                     }
                 }
 

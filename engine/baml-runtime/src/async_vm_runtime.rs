@@ -22,7 +22,15 @@ use jsonish::{ResponseBamlValue, ResponseValueMeta};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::on_log_event::LogEventCallbackSync;
 use crate::{
-    client_registry::ClientRegistry, internal::llm_client::{orchestrator::OrchestrationScope, LLMResponse}, runtime::InternalBamlRuntime, runtime_interface::ExperimentalTracingInterface, tracing::TracingCall, tracingv2::storage::storage::Collector, type_builder::TypeBuilder, BamlRuntime as LlmRuntime, BamlSrcReader, FunctionResult, FunctionResultStream, InnerTraceStats, InternalRuntimeInterface, RuntimeContextManager
+    client_registry::ClientRegistry,
+    internal::llm_client::{orchestrator::OrchestrationScope, LLMResponse},
+    runtime::InternalBamlRuntime,
+    runtime_interface::ExperimentalTracingInterface,
+    tracing::TracingCall,
+    tracingv2::storage::storage::Collector,
+    type_builder::TypeBuilder,
+    BamlRuntime as LlmRuntime, BamlSrcReader, FunctionResult, FunctionResultStream,
+    InnerTraceStats, InternalRuntimeInterface, RuntimeContextManager,
 };
 
 /// Async VM runtime.
@@ -170,38 +178,42 @@ impl BamlAsyncVmRuntime {
 
         let result = loop {
             match vm.exec() {
-                Ok(VmExecState::Await(idx)) => loop {
-                    let (ready_idx, (result, call_id)) = futures_rx
-                        .recv()
-                        .await
-                        .expect("failed to receive result from channel");
+                Ok(VmExecState::Await(idx)) => {
+                    let mut fulfilled = false;
 
-                    let fn_result =
-                        result.unwrap_or_else(|e| panic!("failed to get function result: {e}"));
+                    // Fulfil completed futures without blocking, if any.
+                    // TODO: Handle errors.
+                    while let Ok((ready_idx, (result, call_id))) = futures_rx.try_recv() {
+                        let vm_value = vm_value_from_function_result(&vm, result);
 
-                    // TODO: I don't know what the fuck this is.
-                    let baml_value = fn_result
-                        .parsed()
-                        .as_ref()
-                        .unwrap()
-                        .as_ref()
-                        .unwrap()
-                        .clone()
-                        .0
-                        .value();
+                        vm.fulfil_future(ready_idx, vm_value);
 
-                    let vm_value = try_vm_value_from_baml_value(&vm, &baml_value)
-                        .unwrap_or_else(|e| panic!("failed to convert result to vm value: {e}"));
-
-                    vm.fulfil_future(ready_idx, vm_value);
-
-                    if ready_idx == idx {
-                        break;
+                        if ready_idx == idx {
+                            fulfilled = true;
+                        }
                     }
 
-                    // TODO: Logic to handle multiple results in the channel,
-                    // pending futures, etc.
-                },
+                    // Now we do have to wait until the future is ready. Let
+                    // Tokio take care of it.
+                    while !fulfilled {
+                        // TODO: Handle errors.
+                        let (ready_idx, (result, call_id)) = futures_rx
+                            .recv()
+                            .await
+                            .expect("failed to receive result from channel");
+
+                        let vm_value = vm_value_from_function_result(&vm, result);
+
+                        vm.fulfil_future(ready_idx, vm_value);
+
+                        // After this one we don't have to wait for more futures
+                        // even if they are running in the background, because
+                        // the VM has not "awaited" them yet.
+                        if ready_idx == idx {
+                            fulfilled = true;
+                        }
+                    }
+                }
 
                 Ok(VmExecState::SpawnFuture(idx)) => {
                     let pending_future = vm.pending_future(idx);
@@ -210,8 +222,8 @@ impl BamlAsyncVmRuntime {
                         .llm_runtime
                         .internal()
                         .ir()
-                        .find_function(&function_name)
-                        .unwrap_or_else(|_| panic!("LLM function not found: {function_name}"));
+                        .find_function(&pending_future.llm_function)
+                        .unwrap_or_else(|_| panic!("LLM function not found: {}", pending_future.llm_function));
 
                     let llm_args = pending_future
                         .args
@@ -230,11 +242,15 @@ impl BamlAsyncVmRuntime {
                         let ctx = ctx.clone();
                         let tb = tb.cloned();
                         let cb = cb.cloned();
-                        let collectors = collectors.clone();
+
+                        // TODO: Collectors are not supported yet.
+                        // let collectors = collectors.clone();
                         let env_vars = env_vars.clone();
 
                         let futures_tx = futures_tx.clone();
 
+                        // Spanwed future basically awaits the LLM call and
+                        // sends the result to the futures channel.
                         async move {
                             let result = llm_runtime
                                 .call_function(
@@ -243,7 +259,7 @@ impl BamlAsyncVmRuntime {
                                     &ctx,
                                     tb.as_ref(),
                                     cb.as_ref(),
-                                    collectors,
+                                    None,
                                     env_vars,
                                 )
                                 .await;
@@ -466,4 +482,27 @@ fn try_vm_value_from_baml_value(vm: &Vm, value: &BamlValue) -> anyhow::Result<ba
         BamlValue::Float(f) => Ok(baml_vm::Value::Float(*f)),
         _ => todo!("handle strings and objects"),
     }
+}
+
+fn vm_value_from_function_result(
+    vm: &Vm,
+    result: anyhow::Result<FunctionResult>,
+) -> baml_vm::Value {
+    let fn_result = result.unwrap_or_else(|e| panic!("failed to get function result: {e}"));
+
+    // TODO: I don't know what the fuck this is.
+    let baml_value = fn_result
+        .parsed()
+        .as_ref()
+        .unwrap()
+        .as_ref()
+        .unwrap()
+        .clone()
+        .0
+        .value();
+
+    let vm_value = try_vm_value_from_baml_value(&vm, &baml_value)
+        .unwrap_or_else(|e| panic!("failed to convert result to vm value: {e}"));
+
+    vm_value
 }
