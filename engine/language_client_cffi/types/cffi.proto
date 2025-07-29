@@ -264,6 +264,10 @@ enum CFFIObjectType {
   OBJECT_MEDIA_VIDEO = 15;
   OBJECT_TYPE_BUILDER = 16;
   OBJECT_TYPE = 17;
+  OBJECT_ENUM_BUILDER = 18;
+  OBJECT_ENUM_VALUE_BUILDER = 19;
+  OBJECT_CLASS_BUILDER = 20;
+  OBJECT_CLASS_PROPERTY_BUILDER = 21;
 }
 
 // Raw object with type information
@@ -286,6 +290,10 @@ message CFFIRawObject {
     CFFIPointerType media_video = 15;
     CFFIPointerType type_builder = 16;
     CFFIPointerType type = 17;
+    CFFIPointerType enum_builder = 18;
+    CFFIPointerType enum_value_builder = 19;
+    CFFIPointerType class_builder = 20;
+    CFFIPointerType class_property_builder = 21;
   }
 }
 

@@ -10,10 +10,10 @@ pub enum ValueBase<T> {
     Bool(bool, T),
     Map(BamlMap<String, ValueBase<T>>, T),
     List(Vec<ValueBase<T>>, T),
-    Enum(String, String),
-    Class(String, BamlMap<String, ValueBase<T>>, T),
     Null(T),
     RawPtr(RawPtrType, T),
+    Class(String, BamlMap<String, ValueBase<T>>, T),
+    Enum(String, String, T),
 }
 
 pub type Value = ValueBase<()>;

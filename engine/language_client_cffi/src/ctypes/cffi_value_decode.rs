@@ -50,7 +50,7 @@ impl Decode for Value {
 
                     let enum_value = cffi_value_enum.value;
 
-                    Value::Enum(enum_name, enum_value)
+                    Value::Enum(enum_name, enum_value, ())
                 }
                 cValue::MediaValue(cffi_value_media) => {
                     let inner = cffi_value_media.media_object.unwrap();

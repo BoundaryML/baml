@@ -60,13 +60,14 @@ impl Default for TypeBuilder {
 impl TypeBuilder {
     #[napi(constructor)]
     pub fn new() -> Self {
-        type_builder::TypeBuilder::new().into()
+        let tb = type_builder::TypeBuilder::new();
+        tb.into()
     }
 
     #[napi]
     pub fn get_enum(&self, name: String) -> EnumBuilder {
         EnumBuilder {
-            inner: self.inner.r#enum(&name),
+            inner: self.inner.upsert_enum(&name),
             name,
         }
     }
@@ -74,7 +75,7 @@ impl TypeBuilder {
     #[napi]
     pub fn get_class(&self, name: String) -> ClassBuilder {
         ClassBuilder {
-            inner: self.inner.class(&name),
+            inner: self.inner.upsert_class(&name),
             name,
         }
     }
@@ -179,7 +180,7 @@ impl FieldType {
 impl EnumBuilder {
     #[napi]
     pub fn value(&self, name: String) -> EnumValueBuilder {
-        self.inner.lock().unwrap().value(&name).into()
+        self.inner.lock().unwrap().upsert_value(&name).into()
     }
 
     #[napi]
@@ -242,7 +243,7 @@ impl ClassBuilder {
 
     #[napi]
     pub fn property(&self, name: String) -> ClassPropertyBuilder {
-        self.inner.lock().unwrap().property(&name).into()
+        self.inner.lock().unwrap().upsert_property(&name).into()
     }
 }
 
