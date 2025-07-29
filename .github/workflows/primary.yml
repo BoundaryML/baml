@@ -81,7 +81,7 @@ jobs:
         run: |
           # Ensure rustfmt is installed for the mise-managed toolchain
           rustup component add rustfmt || true
-          cargo fmt --check
+          cargo fmt --check -- --config imports_granularity=Crate --config group_imports=StdExternalCrate
         working-directory: engine
 
       - name: Run Rust lint (Clippy)
@@ -307,38 +307,38 @@ jobs:
         run: |
           # Change to the source directory
           cd main-repo/engine/zed
-          
+
           # Create a temporary directory for filtered content
           mkdir -p /tmp/zed-sync
-          
+
           # Copy files respecting gitignore
           rsync -av \
             --exclude-from=.gitignore \
             --exclude='.git' \
             --exclude='.gitignore' \
             ./ /tmp/zed-sync/
-          
+
           # Copy the gitignore file separately (we want it in the target repo)
           cp .gitignore /tmp/zed-sync/
 
       - name: Update zed-baml repository
         run: |
           cd zed-baml-repo
-          
+
           # Remove all existing content except .git
           find . -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
-          
+
           # Copy new content
           cp -r /tmp/zed-sync/* .
           cp /tmp/zed-sync/.gitignore . 2>/dev/null || true
-          
+
           # Configure git
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
-          
+
           # Add and commit changes
           git add .
-          
+
           # Check if there are changes to commit
           if ! git diff --staged --quiet; then
             git commit -m "Sync from main repository - $(date -u '+%Y-%m-%d %H:%M:%S UTC')"

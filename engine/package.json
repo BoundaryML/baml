@@ -8,9 +8,9 @@
     "typecheck": "cargo check --workspace",
 		"release": "cargo build --release --workspace",
 		"dev": "cargo build --workspace",
-		"format": "cargo fmt --workspace",
-    "format:check": "cargo fmt --check --workspace",
-    "format:fix": "cargo fmt --workspace",
+		"format": "cargo fmt --workspace -- --config imports_granularity=Crate --config group_imports=StdExternalCrate",
+    "format:check": "cargo fmt --check --workspace -- --config imports_granularity=Crate --config group_imports=StdExternalCrate",
+    "format:fix": "cargo fmt --workspace -- --config imports_granularity=Crate --config group_imports=StdExternalCrate",
 		"lint": "cargo clippy --workspace -- -D warnings",
     "test": "cargo test --workspace --lib"
   }
