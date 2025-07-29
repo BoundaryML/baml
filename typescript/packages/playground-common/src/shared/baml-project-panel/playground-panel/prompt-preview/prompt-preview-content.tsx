@@ -1,17 +1,16 @@
 import type { WasmError, WasmPrompt } from '@gloo-ai/baml-schema-wasm-web';
 import { atom, useAtomValue, useSetAtom } from 'jotai';
 import { useState } from 'react';
-import { useCallback } from 'react';
 import useSWR from 'swr';
 import React, { useMemo } from 'react';
 import {
   ctxAtom,
   diagnosticsAtom,
   runtimeAtom,
+  filesAtom,
 } from '../../atoms';
 import {
   areTestsRunningAtom,
-  functionTestSnippetAtom,
   selectionAtom,
 } from '../atoms';
 import { Loader } from './components';
@@ -26,6 +25,7 @@ export const PromptPreviewContent = () => {
   const { rt } = useAtomValue(runtimeAtom);
   const apiKeys = useAtomValue(apiKeysAtom);
   const ctx = useAtomValue(ctxAtom);
+  const files = useAtomValue(filesAtom);
   const { selectedFn, selectedTc } = useAtomValue(selectionAtom);
   const diagnostics = useAtomValue(diagnosticsAtom);
   const setPromptData = useSetAtom(renderedPromptAtom);
@@ -51,7 +51,7 @@ export const PromptPreviewContent = () => {
     setLastKnownPreview(newPreview);
     setPromptData(newPreview);
     return newPreview;
-  }, [rt, ctx, selectedFn, selectedTc, apiKeys, setPromptData]);
+  }, [rt, ctx, selectedFn, selectedTc, apiKeys, files, setPromptData]);
 
   const [lastKnownPreview, setLastKnownPreview] = useState<
     WasmPrompt | undefined
@@ -62,22 +62,22 @@ export const PromptPreviewContent = () => {
     error,
     isLoading,
   } = useSWR(
-    // Remove areTestsRunning to prevent constant re-renders
-    // The key should be stable and only change when actual dependencies change
+    // Include file content in the key so updates trigger when typing
     rt && ctx && selectedFn && selectedTc 
       ? [
           'prompt-preview',
           selectedFn.name, 
           selectedTc.name, 
-          JSON.stringify(apiKeys)
+          JSON.stringify(apiKeys),
+          JSON.stringify(files), // Add file content to trigger updates on typing
         ]
       : null,
     generatePreview,
     {
-      // Add configuration to prevent unnecessary refreshes
+      // Less aggressive caching to allow instant updates
       revalidateOnFocus: false,
       revalidateOnReconnect: false,
-      dedupingInterval: 1000, // Prevent duplicate requests within 1 second
+      dedupingInterval: 100, // Reduced from 1000ms to 100ms for more responsiveness
     }
   );
 
@@ -124,35 +124,27 @@ export const PromptPreviewContent = () => {
 
 export const NoTestsContent = () => {
   const { selectedFn } = useAtomValue(selectionAtom);
-  const testSnippet = useAtomValue(
-    functionTestSnippetAtom(selectedFn?.name ?? ''),
-  );
-  const [copied, setCopied] = useState(false);
 
-  const handleCopy = useCallback(() => {
-    void navigator.clipboard.writeText(testSnippet ?? '');
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }, [testSnippet]);
+  // Check if the function has any valid test cases
+  const hasValidTestCases = selectedFn?.test_cases && selectedFn.test_cases.length > 0;
+
+  const message = hasValidTestCases 
+    ? "Add a test to see the preview!"
+    : "This function has no active test cases. Add one to see the preview!";
 
   return (
-    <div className="flex flex-col justify-center items-center">
-      <div className="mb-4 text-sm font-medium text-muted-foreground">
-        Add a test to see the preview!
-      </div>
-      <div className="relative w-full max-w-2xl rounded-lg border border-border bg-muted">
-        <div className="absolute top-2 right-2">
-          <button
-            onClick={handleCopy}
-            type="button"
-            className="px-2 py-1 text-xs font-medium rounded shadow-xs bg-background text-muted-foreground hover:bg-muted focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2"
-          >
-            {copied ? 'Copied!' : 'Copy'}
-          </button>
+    <div className="flex flex-col gap-y-4">
+      <div className="relative border-l-4 pl-2 rounded border-chart-3">
+        <div className="flex w-full items-center justify-between p-3 bg-accent rounded">
+          <div className="flex flex-col items-start gap-1 flex-1 overflow-hidden min-w-0 w-full">
+            <div className="text-xs text-muted-foreground font-mono">
+              No Test Selected
+            </div>
+            <div className="text-sm text-muted-foreground mt-1">
+              {message}
+            </div>
+          </div>
         </div>
-        <pre className="overflow-x-auto p-4 text-sm text-balance text-foreground">
-          {testSnippet}
-        </pre>
       </div>
     </div>
   );

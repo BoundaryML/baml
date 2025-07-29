@@ -1,7 +1,7 @@
 import { useAtomValue } from 'jotai';
 import { atom } from 'jotai';
 import { loadable } from 'jotai/utils';
-import { ctxAtom, runtimeAtom } from '../../atoms';
+import { ctxAtom, runtimeAtom, filesAtom } from '../../atoms';
 import { apiKeysAtom } from '../../../../components/api-keys-dialog/atoms';
 import { selectionAtom } from '../atoms';
 import { Loader } from './components';
@@ -17,6 +17,7 @@ const baseCurlAtom = atom<Promise<CurlResult>>(async (get) => {
   const rt = get(runtimeAtom).rt;
   const ctx = get(ctxAtom);
   const envVars = get(apiKeysAtom);
+  const files = get(filesAtom); // Add files dependency to track content changes
   const { selectedFn, selectedTc } = get(selectionAtom);
 
   if (!selectedFn || !rt || !selectedTc || !ctx) {

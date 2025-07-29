@@ -528,6 +528,19 @@ async fn process_media(
                 .await
                 .context(format!("Failed to read file {media_path:#}"))?;
 
+            // ENFORCEMENT: For video files, prevent embedding large files as base64 to avoid performance issues
+            if part.media_type == BamlMediaType::Video {
+                const MAX_VIDEO_SIZE_BYTES: usize = 3 * 1024 * 1024; // 3MB
+                if bytes.len() > MAX_VIDEO_SIZE_BYTES {
+                    let size_mb = bytes.len() as f64 / (1024.0 * 1024.0);
+                    anyhow::bail!(
+                        "Video file '{}' is too large ({:.2} MB) to embed as base64. Files larger than 3MB can cause significant performance issues. Consider using a URL reference instead or reducing the file size.",
+                        media_path,
+                        size_mb
+                    );
+                }
+            }
+
             let mut mime_type = part.mime_type.clone();
 
             if mime_type.is_none() {
