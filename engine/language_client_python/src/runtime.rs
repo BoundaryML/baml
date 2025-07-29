@@ -34,21 +34,11 @@ use crate::{
     },
 };
 
-// OLD RUNTIME, uncomment below to use the old one.
+// Switch between runtimes here by importing the one you want to use.
 
 // pub use baml_runtime::BamlRuntime as CoreBamlRuntime;
-// crate::lang_wrapper!(
-//     BamlRuntime,
-//     CoreBamlRuntime,
-//     clone_safe,
-//     root_path: String = String::new(),
-//     env_vars: HashMap<String, String> = HashMap::new(),
-//     files: HashMap<String, String> = HashMap::new()
-// );
-
-// New Async VM Runtime
-
 pub use baml_runtime::async_vm_runtime::BamlAsyncVmRuntime as CoreBamlRuntime;
+
 crate::lang_wrapper!(
     BamlRuntime,
     CoreBamlRuntime,
