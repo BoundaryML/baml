@@ -524,3 +524,22 @@ async def test_referencing_existing_class_types():
     tb = TypeBuilder()
     # useful for adding dynamic tools for example
     tb.Person.add_property("props", tb.union([tb.Resume.type(), tb.Hobby.type()]))
+
+
+def test_typebuilder_and_fieldtype_imports():
+    """Test that both TypeBuilder and FieldType can be imported from baml_client.type_builder"""
+    # Test importing both from the same module
+    from baml_client.type_builder import TypeBuilder, FieldType
+    
+    # Verify TypeBuilder works
+    tb = TypeBuilder()
+    assert tb is not None
+    assert isinstance(tb, TypeBuilder)
+    
+    # Verify FieldType is available
+    assert FieldType is not None
+    
+    # Test that TypeBuilder methods return FieldType instances
+    string_type = tb.string()
+    assert isinstance(string_type, FieldType)
+
