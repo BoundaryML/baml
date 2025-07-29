@@ -351,6 +351,27 @@ test_deserializer!(
     }
 );
 
+test_deserializer!(
+  test_aliases_with_capitalized_key,
+  CLASS_WITH_ALIASES,
+  // Key21 is now capitalized, but we should still be able to parse it.
+  r#"{
+      "key-dash": "This is a value with a dash",
+      "Key21": "This is a value for key21",
+      "key with space": "This is a value with space",
+      "key4": "This is a value for key4",
+      "key.with.punctuation/123": "This is a value with punctuation and numbers"
+    }"#,
+  TypeIR::class("TestClassAlias"),
+  {
+      "key": "This is a value with a dash",
+      "key2": "This is a value for key21",
+      "key3": "This is a value with space",
+      "key4": "This is a value for key4",
+      "key5": "This is a value with punctuation and numbers"
+  }
+);
+
 const CLASS_SIMPLE: &str = r#"
 class SimpleTest {
     answer Answer
@@ -371,6 +392,18 @@ test_deserializer!(
             "content": 78.54
         }
     }
+);
+
+test_deserializer!(
+  test_class_with_capitalization,
+  CLASS_SIMPLE,
+  r#"{"Answer": {" content ": 78.54}}"#,
+  TypeIR::class("SimpleTest"),
+  {
+      "answer": {
+          "content": 78.54
+      }
+  }
 );
 
 const CLASS_WITH_NESTED_CLASS_LIST: &str = r#"
