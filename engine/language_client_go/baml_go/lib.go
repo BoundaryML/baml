@@ -20,7 +20,7 @@ import (
 )
 
 /*
-#cgo CFLAGS: -I${SRCDIR}/../include
+#cgo CFLAGS: -I${SRCDIR}
 #cgo CFLAGS: -O3 -g
 #cgo LDFLAGS: -ldl
 #include <dlfcn.h>

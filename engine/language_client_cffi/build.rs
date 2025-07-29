@@ -372,8 +372,9 @@ fn main() -> std::io::Result<()> {
     let crate_dir = std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set");
 
     {
+        // Generate header to pkg/cffi directory for better vendoring support
         let out_path =
-            Path::new(&crate_dir).join("../language_client_go/include/baml_cffi_generated.h");
+            Path::new(&crate_dir).join("../language_client_go/pkg/cffi/baml_cffi_generated.h");
         let outpath_content =
             std::fs::read_to_string(&out_path).unwrap_or_else(|_| String::from(""));
         let res = cbindgen::Builder::new()
