@@ -17,6 +17,7 @@ pub mod test_constraints;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod test_executor;
 
+pub mod async_vm_runtime;
 mod runtime_methods;
 pub mod tracing;
 pub mod tracingv2;
@@ -660,6 +661,26 @@ impl BamlRuntime {
         res
     }
 
+    /// TODO: this is a placeholder since expr fns are not LLM calls. So this is a dummy.
+    pub fn dummy_llm_placeholder_for_expr_fn() -> LLMResponse {
+        LLMResponse::Success(LLMCompleteResponse {
+            client: "openai".to_string(),
+            model: "gpt-3.5-turbo".to_string(),
+            prompt: RenderedPrompt::Completion("Sample raw response".to_string()),
+            request_options: BamlMap::new(),
+            content: "Sample raw response".to_string(),
+            start_time: SystemTime::now(),
+            latency: Duration::from_millis(2025),
+            metadata: LLMCompleteResponseMetadata {
+                baml_is_complete: true,
+                finish_reason: Some("stop".to_string()),
+                prompt_tokens: Some(50),
+                output_tokens: Some(50),
+                total_tokens: Some(100),
+            },
+        })
+    }
+
     pub async fn call_function_with_expr_events(
         &self,
         function_name: String,
@@ -807,26 +828,9 @@ impl BamlRuntime {
                                 })
                             })
                             .transpose();
-                        // TODO: this is a placeholder since this is an expr fn, and there was no llm call. So this is a dummy.
-                        let llm_response = LLMResponse::Success(LLMCompleteResponse {
-                            client: "openai".to_string(),
-                            model: "gpt-3.5-turbo".to_string(),
-                            prompt: RenderedPrompt::Completion("Sample raw response".to_string()),
-                            request_options: BamlMap::new(),
-                            content: "Sample raw response".to_string(),
-                            start_time: SystemTime::now(),
-                            latency: Duration::from_millis(2025),
-                            metadata: LLMCompleteResponseMetadata {
-                                baml_is_complete: true,
-                                finish_reason: Some("stop".to_string()),
-                                prompt_tokens: Some(50),
-                                output_tokens: Some(50),
-                                total_tokens: Some(100),
-                            },
-                        });
                         Ok(FunctionResult::new(
                             OrchestrationScope { scope: vec![] },
-                            llm_response,
+                            Self::dummy_llm_placeholder_for_expr_fn(),
                             res,
                         ))
                     }

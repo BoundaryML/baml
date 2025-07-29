@@ -1,0 +1,471 @@
+//! Implementation of the new asynchronous runtime.
+//!
+//! The VM is completely standalone and doesn't care about futures, it just
+//! delegates future scheduling to an "embedder". This is the embedder. The
+//! async runtime acts both as a future scheduler and a VM driver.
+//!
+//! This architecture is inspired by Deno, which contains a Rust Tokio runtime
+//! that wraps the V8 machine and schedules JS promises.
+
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
+
+use baml_compiler::{self};
+use baml_ids::FunctionCallId;
+use baml_types::{tracing::events::HTTPRequest, BamlMap, BamlValue, BamlValueWithMeta, Completion};
+use baml_vm::{FunctionKind, Vm, VmExecState};
+use internal_baml_core::ir::IRHelper;
+use jsonish::{ResponseBamlValue, ResponseValueMeta};
+
+#[cfg(not(target_arch = "wasm32"))]
+use crate::on_log_event::LogEventCallbackSync;
+use crate::{
+    client_registry::ClientRegistry,
+    internal::llm_client::{orchestrator::OrchestrationScope, LLMResponse},
+    runtime_interface::ExperimentalTracingInterface,
+    tracing::TracingCall,
+    tracingv2::storage::storage::Collector,
+    type_builder::TypeBuilder,
+    BamlRuntime as LlmRuntime, BamlSrcReader, FunctionResult, FunctionResultStream,
+    InnerTraceStats, InternalRuntimeInterface, RuntimeContextManager,
+};
+
+/// Async VM runtime.
+///
+/// This is an async wrapper over our synchronous, single-threaded VM. The VM
+/// yields control flow to this struct when futures have to be created and when
+/// it's blocked awaiting a future. From there, the async runtime schedules
+/// Tokio futures or awaits them, respectively. After that control flow goes
+/// back to the VM and bytecode execution continues.
+pub struct BamlAsyncVmRuntime {
+    /// Old Baml runtime.
+    ///
+    /// This now acts as some sort of "LLM function executor" or just LLM
+    /// runtime for simplicity. Here it's only used to run LLM functions.
+    llm_runtime: Arc<LlmRuntime>,
+
+    /// Async runtime to schedule futures.
+    async_runtime: Arc<tokio::runtime::Runtime>,
+
+    /// Baml virtual machine.
+    ///
+    /// TODO: @antonio Wrapped in a Mutex because we need mutability, but in
+    /// theory only one thread at a time will ever drive the VM even if we're
+    /// running in multi-threaded Tokio runtime. So it might be possible to drop
+    /// this somehow. Once acquired, the runtime will not release until the
+    /// entire VM call is finished, so no blocking during execution, but still
+    /// we could probably avoid blocking to start the execution as well.
+    vm: Mutex<Vm>,
+
+    /// Maps function names to function IDs in the VM.
+    ///
+    /// We use this to set entry points, VM doesn't care about names.
+    resolved_function_names: HashMap<String, (usize, FunctionKind)>,
+}
+
+impl TryFrom<LlmRuntime> for BamlAsyncVmRuntime {
+    type Error = anyhow::Error;
+
+    fn try_from(llm_runtime: LlmRuntime) -> Result<Self, Self::Error> {
+        let async_runtime = Arc::clone(&llm_runtime.async_runtime);
+
+        let (objects, globals, resolved_function_names) =
+            baml_compiler::compile(&llm_runtime.inner.db)?;
+
+        let vm = Mutex::new(Vm::new(objects, globals));
+
+        Ok(Self {
+            llm_runtime: Arc::new(llm_runtime),
+            async_runtime,
+            vm,
+            resolved_function_names,
+        })
+    }
+}
+
+impl BamlAsyncVmRuntime {
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn from_directory<T: AsRef<str>>(
+        path: &std::path::Path,
+        env_vars: HashMap<T, T>,
+    ) -> anyhow::Result<Self> {
+        Self::try_from(LlmRuntime::from_directory(path, env_vars)?)
+    }
+
+    pub fn from_file_content<T: AsRef<str> + std::fmt::Debug, U: AsRef<str>>(
+        root_path: &str,
+        files: &HashMap<T, T>,
+        env_vars: HashMap<U, U>,
+    ) -> anyhow::Result<Self> {
+        Self::try_from(LlmRuntime::from_file_content(root_path, files, env_vars)?)
+    }
+
+    pub fn create_ctx_manager(
+        &self,
+        language: BamlValue,
+        baml_src_reader: BamlSrcReader,
+    ) -> RuntimeContextManager {
+        self.llm_runtime
+            .create_ctx_manager(language, baml_src_reader)
+    }
+
+    pub async fn call_function(
+        &self,
+        function_name: String,
+        params: &BamlMap<String, BamlValue>,
+        ctx: &RuntimeContextManager,
+        tb: Option<&TypeBuilder>,
+        cb: Option<&ClientRegistry>,
+        collectors: Option<Vec<Arc<Collector>>>,
+        env_vars: HashMap<String, String>,
+    ) -> (anyhow::Result<FunctionResult>, FunctionCallId) {
+        // TODO: Proper error handling. Refactor the API to return a Result.
+        let (function_index, function_kind) = self
+            .resolved_function_names
+            .get(&function_name)
+            .unwrap_or_else(|| {
+                todo!("function '{function_name}' not found, add proper error handling for this")
+            });
+
+        // If we're not running an expression function, then just delegate the
+        // call to the LLM runtime.
+        if matches!(function_kind, FunctionKind::Llm) {
+            return self
+                .llm_runtime
+                .call_function(function_name, params, ctx, tb, cb, collectors, env_vars)
+                .await;
+        }
+
+        let current_call_id = self
+            .llm_runtime
+            .tracer_wrapper
+            .get_or_create_tracer(&env_vars)
+            .start_call(&function_name, ctx, params, true, false, collectors.clone())
+            .curr_call_id();
+
+        let output_type = self
+            .llm_runtime
+            .internal()
+            .ir()
+            .expr_fns
+            .iter()
+            .find(|f| f.elem.name == function_name)
+            .unwrap_or_else(|| panic!("expr function not found: {function_name}"))
+            .elem
+            .output
+            .clone();
+
+        // Fun begins here. Drive the VM boy :)
+        let mut vm = self
+            .vm
+            .lock()
+            .unwrap_or_else(|_| todo!("failed to lock VM, add proper error handling here"));
+
+        vm.set_entry_point(*function_index);
+
+        let (futures_tx, mut futures_rx) = tokio::sync::mpsc::unbounded_channel::<(
+            usize,
+            (anyhow::Result<FunctionResult>, FunctionCallId),
+        )>();
+
+        let result = loop {
+            match vm.exec() {
+                Ok(VmExecState::Await(idx)) => loop {
+                    let (ready_idx, (result, call_id)) = futures_rx
+                        .recv()
+                        .await
+                        .expect("failed to receive result from channel");
+
+                    let fn_result =
+                        result.unwrap_or_else(|e| panic!("failed to get function result: {e}"));
+
+                    // TODO: I don't know what the fuck this is.
+                    let baml_value = fn_result
+                        .parsed()
+                        .as_ref()
+                        .unwrap()
+                        .as_ref()
+                        .unwrap()
+                        .clone()
+                        .0
+                        .value();
+
+                    let vm_value = try_vm_value_from_baml_value(&vm, &baml_value)
+                        .unwrap_or_else(|e| panic!("failed to convert result to vm value: {e}"));
+
+                    vm.fulfil_future(ready_idx, vm_value);
+
+                    if ready_idx == idx {
+                        break;
+                    }
+
+                    // TODO: Logic to handle multiple results in the channel,
+                    // pending futures, etc.
+                },
+
+                Ok(VmExecState::SpawnFuture(idx)) => {
+                    let pending_future = vm.pending_future(idx);
+
+                    let llm_fn = self
+                        .llm_runtime
+                        .internal()
+                        .ir()
+                        .find_function(&function_name)
+                        .unwrap_or_else(|_| panic!("LLM function not found: {function_name}"));
+
+                    let llm_args = pending_future
+                        .args
+                        .iter()
+                        .map(|v| try_baml_value_from_vm_value(&vm, v))
+                        .collect::<Result<Vec<_>, _>>()
+                        .unwrap_or_else(|e| panic!("failed to convert vm args to baml values: {e}"))
+                        .into_iter()
+                        .zip(llm_fn.inputs().iter().map(|(name, _)| name.to_owned()))
+                        .map(|(arg, param_name)| (param_name, arg))
+                        .collect::<BamlMap<_, _>>();
+
+                    self.async_runtime.spawn({
+                        let llm_runtime = Arc::clone(&self.llm_runtime);
+                        let llm_fn_name = llm_fn.name().to_owned();
+                        let ctx = ctx.clone();
+                        let tb = tb.cloned();
+                        let cb = cb.cloned();
+                        let collectors = collectors.clone();
+                        let env_vars = env_vars.clone();
+
+                        let futures_tx = futures_tx.clone();
+
+                        async move {
+                            let result = llm_runtime
+                                .call_function(
+                                    llm_fn_name,
+                                    &llm_args,
+                                    &ctx,
+                                    tb.as_ref(),
+                                    cb.as_ref(),
+                                    collectors,
+                                    env_vars,
+                                )
+                                .await;
+
+                            // TODO: Handle panic somehow.
+                            futures_tx.send((idx, result)).unwrap_or_else(|e| {
+                                panic!("failed to send result to channel: {e}")
+                            });
+                        }
+                    });
+                }
+
+                // VM completed execution, get the final result.
+                Ok(VmExecState::Complete(value)) => break Ok(value),
+
+                // VM error, stop execution.
+                Err(e) => break Err(e),
+            }
+        };
+
+        let baml_value = try_baml_value_from_vm_value(
+            &vm,
+            &result.unwrap_or_else(|e| panic!("failed to get vm result: {e}")),
+        )
+        .unwrap_or_else(|e| panic!("failed to convert vm result to baml value: {e}"));
+
+        let response_baml_value = ResponseBamlValue(BamlValueWithMeta::with_const_meta(
+            &baml_value,
+            ResponseValueMeta(vec![], vec![], Completion::default(), output_type),
+        ));
+
+        let final_result = Ok(FunctionResult::new(
+            OrchestrationScope { scope: vec![] },
+            LlmRuntime::dummy_llm_placeholder_for_expr_fn(),
+            Some(Ok(response_baml_value)),
+        ));
+
+        (final_result, current_call_id)
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn call_function_sync(
+        &self,
+        function_name: String,
+        params: &BamlMap<String, BamlValue>,
+        ctx: &RuntimeContextManager,
+        tb: Option<&TypeBuilder>,
+        cb: Option<&ClientRegistry>,
+        collectors: Option<Vec<Arc<Collector>>>,
+        env_vars: HashMap<String, String>,
+    ) -> (anyhow::Result<FunctionResult>, FunctionCallId) {
+        self.async_runtime.block_on(self.call_function(
+            function_name,
+            params,
+            ctx,
+            tb,
+            cb,
+            collectors,
+            env_vars,
+        ))
+    }
+
+    pub fn stream_function(
+        &self,
+        function_name: String,
+        params: &BamlMap<String, BamlValue>,
+        ctx: &RuntimeContextManager,
+        tb: Option<&TypeBuilder>,
+        cb: Option<&ClientRegistry>,
+        collectors: Option<Vec<Arc<Collector>>>,
+        env_vars: HashMap<String, String>,
+    ) -> anyhow::Result<FunctionResultStream> {
+        self.llm_runtime
+            .stream_function(function_name, params, ctx, tb, cb, collectors, env_vars)
+    }
+
+    pub async fn build_request(
+        &self,
+        function_name: String,
+        params: &BamlMap<String, BamlValue>,
+        context_manager: &RuntimeContextManager,
+        tb: Option<&TypeBuilder>,
+        cb: Option<&ClientRegistry>,
+        env_vars: HashMap<String, String>,
+        stream: bool,
+    ) -> anyhow::Result<HTTPRequest> {
+        self.llm_runtime
+            .build_request(
+                function_name,
+                params,
+                context_manager,
+                tb,
+                cb,
+                env_vars,
+                stream,
+            )
+            .await
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn build_request_sync(
+        &self,
+        function_name: String,
+        params: &BamlMap<String, BamlValue>,
+        context_manager: &RuntimeContextManager,
+        tb: Option<&TypeBuilder>,
+        cb: Option<&ClientRegistry>,
+        stream: bool,
+        env_vars: HashMap<String, String>,
+    ) -> anyhow::Result<HTTPRequest> {
+        self.llm_runtime.build_request_sync(
+            function_name,
+            params,
+            context_manager,
+            tb,
+            cb,
+            stream,
+            env_vars,
+        )
+    }
+
+    pub fn parse_llm_response(
+        &self,
+        function_name: String,
+        llm_response: String,
+        allow_partials: bool,
+        ctx: &RuntimeContextManager,
+        tb: Option<&TypeBuilder>,
+        cb: Option<&ClientRegistry>,
+        env_vars: HashMap<String, String>,
+    ) -> anyhow::Result<ResponseBamlValue> {
+        self.llm_runtime.parse_llm_response(
+            function_name,
+            llm_response,
+            allow_partials,
+            ctx,
+            tb,
+            cb,
+            env_vars,
+        )
+    }
+}
+
+impl ExperimentalTracingInterface for BamlAsyncVmRuntime {
+    fn start_call(
+        &self,
+        function_name: &str,
+        params: &BamlMap<String, BamlValue>,
+        ctx: &RuntimeContextManager,
+        env_vars: &std::collections::HashMap<String, String>,
+    ) -> TracingCall {
+        self.llm_runtime
+            .start_call(function_name, params, ctx, env_vars)
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn finish_function_call(
+        &self,
+        call: TracingCall,
+        result: &anyhow::Result<FunctionResult>,
+        ctx: &RuntimeContextManager,
+        env_vars: &std::collections::HashMap<String, String>,
+    ) -> anyhow::Result<uuid::Uuid> {
+        self.llm_runtime
+            .finish_function_call(call, result, ctx, env_vars)
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn finish_call(
+        &self,
+        call: TracingCall,
+        result: Option<BamlValue>,
+        ctx: &RuntimeContextManager,
+        env_vars: &std::collections::HashMap<String, String>,
+    ) -> anyhow::Result<uuid::Uuid> {
+        self.llm_runtime.finish_call(call, result, ctx, env_vars)
+    }
+
+    fn flush(&self) -> anyhow::Result<()> {
+        self.llm_runtime.flush()
+    }
+
+    fn drain_stats(&self) -> InnerTraceStats {
+        self.llm_runtime.drain_stats()
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn set_log_event_callback(
+        &self,
+        log_event_callback: Option<LogEventCallbackSync>,
+    ) -> anyhow::Result<()> {
+        self.llm_runtime.set_log_event_callback(log_event_callback)
+    }
+}
+
+fn try_baml_value_from_vm_value(vm: &Vm, value: &baml_vm::Value) -> anyhow::Result<BamlValue> {
+    match value {
+        baml_vm::Value::Null => Ok(BamlValue::Null),
+        baml_vm::Value::Bool(b) => Ok(BamlValue::Bool(*b)),
+        baml_vm::Value::Int(n) => Ok(BamlValue::Int(*n)),
+        baml_vm::Value::Float(f) => Ok(BamlValue::Float(*f)),
+
+        baml_vm::Value::Object(o) => match vm.object(*o) {
+            baml_vm::Object::String(s) => Ok(BamlValue::String(s.clone())),
+            baml_vm::Object::Array(a) => Ok(BamlValue::List(
+                a.iter()
+                    .map(|v| try_baml_value_from_vm_value(vm, v))
+                    .collect::<Result<Vec<_>, _>>()?,
+            )),
+            _ => anyhow::bail!("unsupported object: {:?}", o),
+        },
+    }
+}
+
+fn try_vm_value_from_baml_value(vm: &Vm, value: &BamlValue) -> anyhow::Result<baml_vm::Value> {
+    match value {
+        BamlValue::Null => Ok(baml_vm::Value::Null),
+        BamlValue::Bool(b) => Ok(baml_vm::Value::Bool(*b)),
+        BamlValue::Int(n) => Ok(baml_vm::Value::Int(*n)),
+        BamlValue::Float(f) => Ok(baml_vm::Value::Float(*f)),
+        _ => todo!("handle strings and objects"),
+    }
+}

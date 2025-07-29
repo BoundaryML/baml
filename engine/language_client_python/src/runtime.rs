@@ -1,7 +1,8 @@
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use baml_runtime::{
-    runtime_interface::ExperimentalTracingInterface, BamlRuntime as CoreBamlRuntime,
+    async_vm_runtime::BamlAsyncVmRuntime as CoreBamlRuntime,
+    runtime_interface::ExperimentalTracingInterface,
 };
 use pyo3::{
     prelude::{pymethods, PyResult},
@@ -33,7 +34,28 @@ use crate::{
     },
 };
 
-crate::lang_wrapper!(BamlRuntime, CoreBamlRuntime, clone_safe, root_path: String = String::new(), env_vars: HashMap<String, String> = HashMap::new(), files: HashMap<String, String> = HashMap::new());
+// OLD RUNTIME, import the old one to use this.
+
+// use baml_runtime::BamlRuntime as CoreBamlRuntime;
+
+// crate::lang_wrapper!(
+//     BamlRuntime,
+//     CoreBamlRuntime,
+//     clone_safe,
+//     root_path: String = String::new(),
+//     env_vars: HashMap<String, String> = HashMap::new(),
+//     files: HashMap<String, String> = HashMap::new()
+// );
+
+// New Async VM Runtime
+crate::lang_wrapper!(
+    BamlRuntime,
+    CoreBamlRuntime,
+    clone_safe,
+    root_path: String = String::new(),
+    env_vars: HashMap<String, String> = HashMap::new(),
+    files: HashMap<String, String> = HashMap::new()
+);
 
 #[derive(Debug, Clone)]
 #[pyclass]

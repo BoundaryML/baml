@@ -580,7 +580,13 @@ impl<'g> Compiler<'g> {
 /// to run. First, it returns the object pool or object arena, which contains
 /// all the functions, then it returns the globals pool (functions are basically
 /// global "variables").
-pub fn compile(ast: ParserDatabase) -> anyhow::Result<(Vec<Object>, Vec<Value>)> {
+pub fn compile(
+    ast: &ParserDatabase,
+) -> anyhow::Result<(
+    Vec<Object>,
+    Vec<Value>,
+    HashMap<String, (usize, FunctionKind)>,
+)> {
     // eprintln!("{:#?}", ast.ast);
 
     // Name -> Index
@@ -674,7 +680,18 @@ pub fn compile(ast: ParserDatabase) -> anyhow::Result<(Vec<Object>, Vec<Value>)>
         objects.push(object);
     }
 
-    Ok((objects, globals))
+    let resolved_function_names =
+        HashMap::from_iter(resolved_globals.iter().map(|(name, index)| {
+            let kind = if llm_functions.contains(name) {
+                FunctionKind::Llm
+            } else {
+                FunctionKind::Exec
+            };
+
+            (name.clone(), (*index, kind))
+        }));
+
+    Ok((objects, globals, resolved_function_names))
 }
 
 /// For tests.
@@ -708,7 +725,7 @@ mod tests {
     /// instructions.
     fn assert_compiles(input: Program) -> anyhow::Result<()> {
         let ast = ast(input.source)?;
-        let (objects, globals) = compile(ast)?;
+        let (objects, globals, _) = compile(&ast)?;
 
         // Create a map of function name to function for easy lookup
         let functions: std::collections::HashMap<&str, &baml_vm::Function> = objects

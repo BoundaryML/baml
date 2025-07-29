@@ -4,13 +4,15 @@
 //! why they're not placed in the source vm module.
 
 use baml_compiler::ast;
-use baml_vm::{Bytecode, Frame, Function, FunctionKind, Instruction, Object, Value, Vm};
+use baml_vm::{
+    Bytecode, Frame, Function, FunctionKind, Instruction, Object, Value, Vm, VmExecState,
+};
 
 /// Helper struct for testing VM execution.
 struct Program {
     source: &'static str,
     function: &'static str,
-    expected: Value,
+    expected: VmExecState,
 }
 
 /// Unified helper function for VM execution with optional inspection.
@@ -40,17 +42,16 @@ fn assert_vm_executes_with_inspection(
     // TODO: The VM needs to boostrap itself. Add some function in the VM
     // that does that.
     let mut vm = Vm {
-        frames: vec![],
+        frames: vec![Frame {
+            function: target_function_index,
+            instruction_ptr: 0,
+            locals_offset: 0,
+        }],
         stack: vec![Value::Object(target_function_index)],
+        runtime_allocs_offset: objects.len(),
         objects,
         globals,
     };
-
-    vm.frames.push(Frame {
-        function: target_function_index,
-        instruction_ptr: 0,
-        locals_offset: 0,
-    });
 
     let result = vm.exec()?;
 
@@ -71,7 +72,7 @@ struct BytecodeProgram {
     arity: usize,
     instructions: Vec<Instruction>,
     constants: Vec<Value>,
-    expected: Value,
+    expected: VmExecState,
 }
 
 /// Helper function for VM execution with direct bytecode.
@@ -82,7 +83,7 @@ fn assert_vm_executes_bytecode(input: BytecodeProgram) -> anyhow::Result<()> {
 /// Helper function for VM execution with direct bytecode and custom inspection.
 fn assert_vm_executes_bytecode_with_inspection(
     input: BytecodeProgram,
-    inspect: impl FnOnce(&Vm, Value) -> anyhow::Result<()>,
+    inspect: impl FnOnce(&Vm, VmExecState) -> anyhow::Result<()>,
 ) -> anyhow::Result<()> {
     // Create function from bytecode
     let function = Function {
@@ -113,6 +114,7 @@ fn assert_vm_executes_bytecode_with_inspection(
             locals_offset: 0,
         }],
         stack: vec![Value::Object(0)],
+        runtime_allocs_offset: objects.len(),
         objects,
         globals,
     };
@@ -145,7 +147,7 @@ fn function_call_without_parameters() -> anyhow::Result<()> {
             }
         ",
         function: "main",
-        expected: Value::Int(2),
+        expected: VmExecState::Complete(Value::Int(2)),
     })
 }
 
@@ -163,7 +165,7 @@ fn function_call_with_parameters() -> anyhow::Result<()> {
             }
         ",
         function: "main",
-        expected: Value::Int(1),
+        expected: VmExecState::Complete(Value::Int(1)),
     })
 }
 
@@ -189,7 +191,7 @@ fn exec_if_branch() -> anyhow::Result<()> {
             }
         ",
         function: "main",
-        expected: Value::Int(1),
+        expected: VmExecState::Complete(Value::Int(1)),
     })
 }
 
@@ -207,7 +209,7 @@ fn exec_else_branch() -> anyhow::Result<()> {
             }
         ",
         function: "main",
-        expected: Value::Int(2),
+        expected: VmExecState::Complete(Value::Int(2)),
     })
 }
 
@@ -227,7 +229,7 @@ fn array_constructor() -> anyhow::Result<()> {
                 }
             ",
             function: "main",
-            expected: Value::Object(1),
+            expected: VmExecState::Complete(Value::Object(1)),
         },
         |vm| {
             let Object::Array(array) = &vm.objects[1] else {
@@ -258,7 +260,7 @@ fn class_constructor() -> anyhow::Result<()> {
                 }
             ",
             function: "main",
-            expected: Value::Object(2),
+            expected: VmExecState::Complete(Value::Object(2)),
         },
         |vm| {
             let Object::Instance(instance) = &vm.objects[2] else {
@@ -294,7 +296,7 @@ fn class_constructor_with_spread_operator() -> anyhow::Result<()> {
                 }
             ",
             function: "main",
-            expected: Value::Object(3),
+            expected: VmExecState::Complete(Value::Object(3)),
         },
         |vm| {
             let Object::Instance(instance) = &vm.objects[3] else {
@@ -322,7 +324,7 @@ fn for_loop_simple() -> anyhow::Result<()> {
             }
         ",
         function: "main",
-        expected: Value::Int(42),
+        expected: VmExecState::Complete(Value::Int(42)),
     })
 }
 
@@ -340,7 +342,7 @@ fn nested_for_loop() -> anyhow::Result<()> {
             }
         ",
         function: "main",
-        expected: Value::Int(42),
+        expected: VmExecState::Complete(Value::Int(42)),
     })
 }
 
@@ -360,7 +362,7 @@ fn for_loop_with_expressions() -> anyhow::Result<()> {
             }
         ",
         function: "main",
-        expected: Value::Int(42),
+        expected: VmExecState::Complete(Value::Int(42)),
     })
 }
 
@@ -374,7 +376,7 @@ fn function_returning_string() -> anyhow::Result<()> {
                 }
             ",
             function: "main",
-            expected: Value::Object(0),
+            expected: VmExecState::Complete(Value::Object(0)),
         },
         |vm| {
             let Object::String(string) = &vm.objects[0] else {
@@ -404,7 +406,7 @@ fn multiple_strings() -> anyhow::Result<()> {
                 }
             "#,
             function: "main",
-            expected: Value::Object(0), // "Hello" should be the first string object
+            expected: VmExecState::Complete(Value::Object(0)), // "Hello" should be the first string object
         },
         |vm| {
             // Check that we have the expected strings in the objects pool
@@ -439,7 +441,7 @@ fn block_expr() -> anyhow::Result<()> {
             }
         ",
         function: "main",
-        expected: Value::Int(1),
+        expected: VmExecState::Complete(Value::Int(1)),
     })
 }
 
@@ -457,10 +459,10 @@ fn create_iterator_instruction() -> anyhow::Result<()> {
                 Instruction::CreateIterator, // Create iterator
                 Instruction::Return,         // Return the iterator object
             ],
-            expected: Value::Object(2), // Should return iterator object at index 2
+            expected: VmExecState::Complete(Value::Object(2)), // Should return iterator object at index 2
         },
         |vm, result| {
-            let Value::Object(index) = result else {
+            let VmExecState::Complete(Value::Object(index)) = result else {
                 panic!("expected Object, got {result:?}");
             };
 
@@ -491,6 +493,6 @@ fn iter_next_instruction() -> anyhow::Result<()> {
             Instruction::Pop,            // Remove has_next boolean
             Instruction::Return,         // Return the element
         ],
-        expected: Value::Int(10), // Should return first element
+        expected: VmExecState::Complete(Value::Int(10)), // Should return first element
     })
 }

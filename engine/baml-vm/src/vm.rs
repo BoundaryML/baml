@@ -127,8 +127,19 @@ pub enum Object {
 }
 
 #[derive(Clone, Debug)]
+pub struct LlmFuture {
+    pub llm_function: String,
+    pub args: Vec<Value>,
+}
+
+#[derive(Clone, Debug)]
 pub enum Future {
-    Pending,
+    /// Pending future.
+    ///
+    /// Only LLM calls for now.
+    Pending(LlmFuture),
+
+    /// Ready value for the future.
     Ready(Value),
 }
 
@@ -158,7 +169,7 @@ impl std::fmt::Display for Object {
                 write!(f, "<iterator iterable={iterable} index={index}>")
             }
             Object::Future(future) => match future {
-                Future::Pending => write!(f, "<pending>"),
+                Future::Pending(llm_future) => write!(f, "<pending: {}>", llm_future.llm_function),
                 Future::Ready(value) => write!(f, "<ready: {value}>"),
             },
         }
@@ -454,6 +465,17 @@ pub struct Vm {
     pub runtime_allocs_offset: usize,
 }
 
+/// VM execution state.
+///
+/// The virtual machine cannot deal with futures, so when when it stumbles upon
+/// future creation instructions, it returns control flow to the embedder,
+/// expecting the embedder to schedule the future and yield back the control
+/// flow to the VM.
+///
+/// Similarly, when the VM encounters an await point, it returns control flow to
+/// the embedder, expecting the embedder to await the future and fulfil it with
+/// the final result before yielding back control flow to the VM.
+#[derive(Debug, PartialEq)]
 pub enum VmExecState {
     /// VM cannot proceed. It is awaiting a pending future to complete.
     Await(usize),
@@ -469,12 +491,69 @@ pub enum VmExecState {
 }
 
 impl Vm {
+    pub fn new(objects: Vec<Object>, globals: Vec<Value>) -> Self {
+        Self {
+            frames: Vec::new(),
+            stack: Vec::new(),
+            runtime_allocs_offset: objects.len(),
+            objects,
+            globals,
+        }
+    }
+
+    /// Bootstraps the VM preparing the given function to run.
+    pub fn set_entry_point(&mut self, function: usize) {
+        debug_assert!(
+            matches!(self.objects[function], Object::Function(_)),
+            "expect function as entry point, got {:?}",
+            self.objects[function]
+        );
+
+        debug_assert!(
+            self.objects.len() == self.runtime_allocs_offset,
+            "garbage collection did not run before setting a new entry point"
+        );
+
+        self.stack.push(Value::Object(function));
+
+        self.frames.push(Frame {
+            function,
+            instruction_ptr: 0,
+            locals_offset: 0,
+        });
+    }
+
+    /// Restores the VM state and prepares it for the next execution.
+    ///
+    /// This is used to clear the stack and frames after execution.
+    pub fn finalize(&mut self) {
+        // If the VM returns correctly with VmExecState::Complete, the eval
+        // stack and call stack should be empty.
+        self.stack.clear();
+        self.frames.clear();
+        self.collect_garbage();
+    }
+
+    /// Returns a reference to the pending future.
+    ///
+    /// Panics if the future is not pending.
+    pub fn pending_future(&self, future: usize) -> &LlmFuture {
+        match &self.objects[future] {
+            Object::Future(Future::Pending(llm_future)) => llm_future,
+            _ => panic!("expect pending future, got {:?}", self.objects[future]),
+        }
+    }
+
     pub fn fulfil_future(&mut self, future: usize, value: Value) {
         let Object::Future(future) = &mut self.objects[future] else {
             panic!("expect future, got {:?}", self.objects[future]);
         };
 
         *future = Future::Ready(value);
+    }
+
+    pub fn object(&self, index: usize) -> &Object {
+        &self.objects[index]
     }
 
     /// Keeps only compile time necessary objects.
@@ -784,14 +863,13 @@ impl Vm {
                 }
 
                 Instruction::CreateFuture(arg_count) => {
-                    let locals_offset =
-                        self.stack.len().saturating_sub(arg_count).saturating_sub(1);
+                    let args_offset = self.stack.len().saturating_sub(arg_count).saturating_sub(1);
 
                     // Get the function object from the stack.
-                    let Value::Object(index) = &self.stack[locals_offset] else {
+                    let Value::Object(index) = &self.stack[args_offset] else {
                         return Err(VmError::from(InternalError::TypeError {
                             expected: Type::Object,
-                            got: Type::of(&self.stack[locals_offset]),
+                            got: Type::of(&self.stack[args_offset]),
                         }));
                     };
 
@@ -817,19 +895,24 @@ impl Vm {
                         }));
                     }
 
-                    let llm_fn_name = llm_function.name.clone();
+                    // Collect the LLM function call args and cleanup the LLM
+                    // call.
+                    let llm_args = self.stack.drain(args_offset..).skip(1).collect();
 
-                    // TODO @antonio: Convert VM values to Runtime values.
-                    let llm_args = baml_types::BamlValue::Map(baml_types::BamlMap::new());
+                    // Create the pending future.
+                    let llm_future = LlmFuture {
+                        llm_function: llm_function.name.clone(),
+                        args: llm_args,
+                    };
 
-                    self.objects.push(Object::Future(Future::Pending));
+                    // Allocate the future.
+                    self.objects
+                        .push(Object::Future(Future::Pending(llm_future)));
 
-                    // Drop parameters and LLM call.
-                    self.stack.drain(locals_offset..);
-
-                    // Push future on top of the stack.
+                    // Now leave the future on top of the stack.
                     self.stack.push(Value::Object(self.objects.len() - 1));
 
+                    // Yield control flow back to the embedder.
                     return Ok(VmExecState::SpawnFuture(self.objects.len() - 1));
                 }
 
@@ -846,7 +929,7 @@ impl Vm {
                     };
 
                     // Can't do nothing, handle control flow back to embedder.
-                    if let Future::Pending = awaiting {
+                    if let Future::Pending { .. } = awaiting {
                         return Ok(VmExecState::Await(*index));
                     }
                 }
