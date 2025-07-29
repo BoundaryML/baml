@@ -151,12 +151,11 @@ struct MatchedFunction<'a> {
 #[cfg(test)]
 mod tests {
 
+    use super::*;
     use crate::{
         config::gather_all_outputs,
         tests::{data, load_sample_udf},
     };
-
-    use super::*;
 
     #[test]
     fn parse_yaml_file() {

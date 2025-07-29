@@ -50,11 +50,11 @@ pub fn rebuild_with_known_constants<'search, 'src>(
 #[cfg(test)]
 mod tests {
 
-    use crate::yaml2jinja::compile_returns_to_jinja;
     use crate::{
         config::gather_all_outputs,
         eval::{eval_return, CompileContext, FunctionResults},
         tests::{data, load_sample_udf},
+        yaml2jinja::compile_returns_to_jinja,
     };
 
     #[test]
