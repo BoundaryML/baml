@@ -1,6 +1,10 @@
-import React, { useMemo, useCallback } from 'react';
-import { AlertCircle, RefreshCw, ExternalLink, WifiOff, ChevronDown, ChevronUp, Copy, Check, X } from 'lucide-react';
+import React, { useMemo, useCallback, useState } from 'react';
+import { AlertCircle, RefreshCw, ExternalLink, WifiOff, ChevronDown, ChevronUp, Copy, Check, X, List } from 'lucide-react';
 import { Button } from '@baml/ui/button';
+import { useAtomValue } from 'jotai';
+import { ErrorWarningDialog } from '../../../../../../components/ErrorWarningDialog';
+import { diagnosticsAtom } from '@baml/playground-common';
+
 
 // Type definitions for error handlers
 export interface ErrorContext {
@@ -63,7 +67,7 @@ const CopyErrorButton: React.FC<{ errorMessage: string }> = ({ errorMessage }) =
       disabled={copyStatus === 'copying'}
       variant="outline"
       size="xs"
-      className="flex gap-1 items-center text-xs px-2 py-0 rounded h-7 transition-all duration-200 border-[var(--vscode-panel-border)] text-[var(--vscode-charts-red)] bg-[var(--vscode-editor-background)]"
+      className="flex gap-1 items-center text-xs px-2 py-0 rounded h-7 transition-all duration-200 border-[var(--vscode-panel-border)] text-[var(--vscode-charts-red)] bg-[var(--vscode-editor-background)] cursor-pointer hover:opacity-80 disabled:cursor-not-allowed"
       style={getButtonStyle()}
     >
       {copyStatus === 'copying' && (
@@ -93,7 +97,7 @@ const ErrorDetails: React.FC<{ errorMessage: string }> = ({ errorMessage }) => {
         aria-label={isExpanded ? 'Hide full error details' : 'Show full error details'}
         variant="outline"
         size="xs"
-        className="flex items-center gap-1 text-xs px-2 py-0 h-7 transition-colors duration-150 border-[var(--vscode-panel-border)] text-[var(--vscode-charts-red)] bg-[var(--vscode-editor-background)]"
+        className="flex items-center gap-1 text-xs px-2 py-0 h-7 transition-colors duration-150 border-[var(--vscode-panel-border)] text-[var(--vscode-charts-red)] bg-[var(--vscode-editor-background)] cursor-pointer hover:opacity-80"
         style={{
           color: '#dc2626',
           background: 'var(--vscode-editor-background)',
@@ -204,6 +208,41 @@ const ErrorFooter: React.FC<{
   </div>
 );
 
+// Component to show error/warning count and access all errors
+const AllErrorsButton: React.FC = () => {
+  const [showDialog, setShowDialog] = useState(false);
+  const diagnostics = useAtomValue(diagnosticsAtom) as Array<any>;
+  const errors = diagnostics.filter((d) => d.type === 'error');
+  const warnings = diagnostics.filter((d) => d.type === 'warning');
+  
+  if (errors.length === 0 && warnings.length === 0) {
+    return null;
+  }
+
+  return (
+    <>
+      <Button
+        variant="outline"
+        size="xs"
+        onClick={() => setShowDialog(true)}
+        className="h-7 px-2 text-xs border-[var(--vscode-panel-border)] text-[var(--vscode-charts-red)] hover:bg-[var(--vscode-editor-background)] cursor-pointer hover:opacity-80"
+        style={{ 
+          color: '#dc2626',
+          borderColor: 'rgba(220, 38, 38, 0.3)',
+          background: 'var(--vscode-editor-background)',
+        }}
+        title={`View all ${errors.length + warnings.length} issue(s)`}
+      >
+        <List className="w-3 h-3 mr-1" />
+        {errors.length > 0 && `${errors.length} error${errors.length > 1 ? 's' : ''}`}
+        {errors.length > 0 && warnings.length > 0 && ', '}
+        {warnings.length > 0 && `${warnings.length} warning${warnings.length > 1 ? 's' : ''}`}
+      </Button>
+      <ErrorWarningDialog open={showDialog} onOpenChange={setShowDialog} />
+    </>
+  );
+};
+
 // Default fallback error renderer
 const DefaultErrorRenderer: React.FC<{ context: ErrorContext }> = ({ context }) => (
   <ErrorAlert variant="destructive">
@@ -230,7 +269,7 @@ const DefaultErrorRenderer: React.FC<{ context: ErrorContext }> = ({ context }) 
             variant="outline"
             size="xs"
             onClick={context.onRetry}
-            className="h-7 px-2 text-xs border-[var(--vscode-panel-border)] text-[var(--vscode-charts-red)] hover:bg-[var(--vscode-editor-background)]"
+            className="h-7 px-2 text-xs border-[var(--vscode-panel-border)] text-[var(--vscode-charts-red)] hover:bg-[var(--vscode-editor-background)] cursor-pointer hover:opacity-80"
             style={{ 
               color: '#dc2626',
               borderColor: 'rgba(220, 38, 38, 0.3)',
@@ -242,6 +281,7 @@ const DefaultErrorRenderer: React.FC<{ context: ErrorContext }> = ({ context }) 
           </Button>
         )}
         <CopyErrorButton errorMessage={context.errorMessage} />
+        <AllErrorsButton />
       </ErrorFooter>
     </ErrorAlertDescription>
   </ErrorAlert>
@@ -292,7 +332,7 @@ const MediaFetchErrorRenderer: CustomErrorRenderer = {
                 variant="outline"
                 size="xs"
                 onClick={context.onRetry}
-                className="h-7 px-2 text-xs border-[var(--vscode-panel-border)] text-[var(--vscode-charts-red)] hover:bg-[var(--vscode-editor-background)]"
+                className="h-7 px-2 text-xs border-[var(--vscode-panel-border)] text-[var(--vscode-charts-red)] hover:bg-[var(--vscode-editor-background)] cursor-pointer hover:opacity-80"
                 style={{ 
                   color: '#dc2626',
                   borderColor: 'rgba(220, 38, 38, 0.3)',
@@ -309,7 +349,7 @@ const MediaFetchErrorRenderer: CustomErrorRenderer = {
                 asChild
                 variant="outline"
                 size="xs"
-                className="h-7 px-2 text-xs gap-1 border-[var(--vscode-panel-border)] text-[var(--vscode-charts-red)] hover:bg-[var(--vscode-editor-background)]"
+                className="h-7 px-2 text-xs gap-1 border-[var(--vscode-panel-border)] text-[var(--vscode-charts-red)] hover:bg-[var(--vscode-editor-background)] cursor-pointer hover:opacity-80"
                 style={{ 
                   color: '#dc2626',
                   borderColor: 'rgba(220, 38, 38, 0.3)',
@@ -320,7 +360,7 @@ const MediaFetchErrorRenderer: CustomErrorRenderer = {
                   href={url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex gap-1 items-center"
+                  className="flex gap-1 items-center cursor-pointer"
                   title={url}
                 >
                   <ExternalLink className="w-3 h-3" />
@@ -328,6 +368,7 @@ const MediaFetchErrorRenderer: CustomErrorRenderer = {
                 </a>
               </Button>
             )}
+            <AllErrorsButton />
             {lines.length > 1 && (
               <ErrorDetails errorMessage={context.errorMessage} />
             )}
