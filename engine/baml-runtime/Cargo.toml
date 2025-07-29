@@ -137,7 +137,7 @@ colored = { version = "2.1.0", default-features = false, features = [
 ] }
 futures-timer = { version = "3.0.3", features = ["wasm-bindgen"] }
 js-sys = "=0.3.69"
-reqwest = { version = "0.12.22", features = [
+reqwest = { version = "0.12.12", features = [
   "stream",
   "json",
   "native-tls-vendored",
@@ -189,8 +189,6 @@ walkdir = "2.5.0"
 which = "6.0.3"
 indicatif = "0.17"
 junit-report = "0.8.3"
-ratatui = "0.29"
-crossterm = "0.28"
 
 
 [features]
