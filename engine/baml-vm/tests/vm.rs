@@ -26,17 +26,10 @@ fn assert_vm_executes_with_inspection(
     inspect: impl FnOnce(&Vm) -> anyhow::Result<()>,
 ) -> anyhow::Result<()> {
     let ast = ast(input.source)?;
-    let (objects, globals) = baml_compiler::compile(ast)?;
+    let (objects, globals, resolved_function_names) = baml_compiler::compile(&ast)?;
 
     // Find the target function index by name
-    let target_function_index = objects
-        .iter()
-        .enumerate()
-        .find_map(|(i, obj)| match obj {
-            Object::Function(f) if f.name == input.function => Some(i),
-            _ => None,
-        })
-        .ok_or_else(|| anyhow::anyhow!("function '{}' not found", input.function))?;
+    let (target_function_index, _) = resolved_function_names[input.function];
 
     // Create and run the VM.
     // TODO: The VM needs to boostrap itself. Add some function in the VM

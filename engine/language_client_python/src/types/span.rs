@@ -17,7 +17,7 @@ use crate::{
 crate::lang_wrapper!(BamlSpan,
   Option<baml_runtime::tracing::TracingCall>,
   no_from,
-  rt: std::sync::Arc<baml_runtime::BamlRuntime>
+  rt: std::sync::Arc<baml_runtime::async_vm_runtime::BamlAsyncVmRuntime>
 );
 
 #[pymethods]

@@ -22,14 +22,7 @@ use jsonish::{ResponseBamlValue, ResponseValueMeta};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::on_log_event::LogEventCallbackSync;
 use crate::{
-    client_registry::ClientRegistry,
-    internal::llm_client::{orchestrator::OrchestrationScope, LLMResponse},
-    runtime_interface::ExperimentalTracingInterface,
-    tracing::TracingCall,
-    tracingv2::storage::storage::Collector,
-    type_builder::TypeBuilder,
-    BamlRuntime as LlmRuntime, BamlSrcReader, FunctionResult, FunctionResultStream,
-    InnerTraceStats, InternalRuntimeInterface, RuntimeContextManager,
+    client_registry::ClientRegistry, internal::llm_client::{orchestrator::OrchestrationScope, LLMResponse}, runtime::InternalBamlRuntime, runtime_interface::ExperimentalTracingInterface, tracing::TracingCall, tracingv2::storage::storage::Collector, type_builder::TypeBuilder, BamlRuntime as LlmRuntime, BamlSrcReader, FunctionResult, FunctionResultStream, InnerTraceStats, InternalRuntimeInterface, RuntimeContextManager
 };
 
 /// Async VM runtime.
@@ -49,15 +42,9 @@ pub struct BamlAsyncVmRuntime {
     /// Async runtime to schedule futures.
     async_runtime: Arc<tokio::runtime::Runtime>,
 
-    /// Baml virtual machine.
-    ///
-    /// TODO: @antonio Wrapped in a Mutex because we need mutability, but in
-    /// theory only one thread at a time will ever drive the VM even if we're
-    /// running in multi-threaded Tokio runtime. So it might be possible to drop
-    /// this somehow. Once acquired, the runtime will not release until the
-    /// entire VM call is finished, so no blocking during execution, but still
-    /// we could probably avoid blocking to start the execution as well.
-    vm: Mutex<Vm>,
+    // Compiler generated objects.
+    objects: Vec<baml_vm::Object>,
+    globals: Vec<baml_vm::Value>,
 
     /// Maps function names to function IDs in the VM.
     ///
@@ -74,18 +61,21 @@ impl TryFrom<LlmRuntime> for BamlAsyncVmRuntime {
         let (objects, globals, resolved_function_names) =
             baml_compiler::compile(&llm_runtime.inner.db)?;
 
-        let vm = Mutex::new(Vm::new(objects, globals));
-
         Ok(Self {
             llm_runtime: Arc::new(llm_runtime),
             async_runtime,
-            vm,
+            objects,
+            globals,
             resolved_function_names,
         })
     }
 }
 
 impl BamlAsyncVmRuntime {
+    pub fn internal(&self) -> &Arc<InternalBamlRuntime> {
+        self.llm_runtime.internal()
+    }
+
     #[cfg(not(target_arch = "wasm32"))]
     pub fn from_directory<T: AsRef<str>>(
         path: &std::path::Path,
@@ -158,10 +148,18 @@ impl BamlAsyncVmRuntime {
             .clone();
 
         // Fun begins here. Drive the VM boy :)
-        let mut vm = self
-            .vm
-            .lock()
-            .unwrap_or_else(|_| todo!("failed to lock VM, add proper error handling here"));
+
+        // First create an "execution context". Each function call needs  new
+        // VM. Imagine this in Python:
+        //
+        // asyncio.gather(b.FnA(), b.FnB())
+        //
+        // Those function calls are not sharing the same VM obviously. So we
+        // instantiate a new one for each function call.
+        //
+        // TODO: This is expensive for big programs, figure out how to share
+        // compiler produced objects betweeen VMs. We know they are read only.
+        let mut vm = Vm::new(self.objects.clone(), self.globals.clone());
 
         vm.set_entry_point(*function_index);
 
