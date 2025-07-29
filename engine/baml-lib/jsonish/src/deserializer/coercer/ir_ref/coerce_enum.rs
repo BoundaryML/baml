@@ -49,7 +49,7 @@ impl TypeCoercer for Enum {
             .find_enum(self.name.real_name())
             .map_or(vec![], |class| class.constraints.clone());
 
-        let variant_match = match_string(ctx, target, value, &enum_match_candidates(self))?;
+        let variant_match = match_string(ctx, target, value, &enum_match_candidates(self), true)?;
         let enum_match = apply_constraints(
             target,
             vec![],
