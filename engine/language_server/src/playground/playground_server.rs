@@ -31,7 +31,7 @@ impl PlaygroundServer {
     pub async fn run(self, port: u16) -> Result<()> {
         // Sets debug mode using the VSCODE_DEBUG_MODE enviroment variable.
         // Otherwise defaults to retrieving the playground from github releases
-        let dist_dir = if env::var("VSCODE_DEBUG_MODE_DONT_USE_THIS")
+        let dist_dir = if env::var("VSCODE_DEBUG_MODE")
             .map(|v| v == "true")
             .unwrap_or(false)
         {
