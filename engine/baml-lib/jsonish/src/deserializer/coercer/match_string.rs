@@ -29,7 +29,7 @@ pub(super) fn matches_string_to_string(
             raw_value.to_string(),
             baml_types::CompletionState::Complete,
         )),
-        &[(&parse_into, vec![parse_into.to_string()])],
+        &[(parse_into, vec![parse_into.to_string()])],
         false,
     )
     .is_ok()
@@ -156,102 +156,6 @@ fn remove_accents(s: &str) -> String {
     s.nfkd()
         .filter(|c| !unicode_normalization::char::is_combining_mark(*c))
         .collect()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_remove_accents_etude() {
-        assert_eq!(remove_accents("étude"), "etude");
-    }
-
-    #[test]
-    fn test_remove_accents_francais() {
-        assert_eq!(remove_accents("français"), "francais");
-    }
-
-    #[test]
-    fn test_remove_accents_espanol() {
-        assert_eq!(remove_accents("Español"), "Espanol");
-    }
-
-    #[test]
-    fn test_remove_accents_portugues() {
-        assert_eq!(remove_accents("português"), "portugues");
-    }
-
-    #[test]
-    fn test_remove_accents_medium() {
-        assert_eq!(remove_accents("médium"), "medium");
-    }
-
-    #[test]
-    fn test_remove_accents_grun() {
-        assert_eq!(remove_accents("Grün"), "Grun");
-    }
-
-    #[test]
-    fn test_remove_accents_uber() {
-        assert_eq!(remove_accents("Über"), "Uber");
-    }
-
-    #[test]
-    fn test_remove_accents_strasse() {
-        assert_eq!(remove_accents("Straße"), "Strasse");
-    }
-
-    #[test]
-    fn test_remove_accents_stadt() {
-        assert_eq!(remove_accents("Stadt"), "Stadt");
-    }
-
-    #[test]
-    fn test_remove_accents_ae_ligature() {
-        assert_eq!(remove_accents("æ"), "ae");
-        assert_eq!(remove_accents("Æ"), "AE");
-    }
-
-    #[test]
-    fn test_remove_accents_o_ligature() {
-        assert_eq!(remove_accents("ø"), "o");
-        assert_eq!(remove_accents("Ø"), "O");
-    }
-
-    #[test]
-    fn test_remove_accents_oe_ligature() {
-        assert_eq!(remove_accents("œ"), "oe");
-        assert_eq!(remove_accents("Œ"), "OE");
-    }
-
-    #[test]
-    fn test_remove_accents_danish_word() {
-        assert_eq!(remove_accents("København"), "Kobenhavn");
-    }
-
-    #[test]
-    fn test_remove_accents_french_word() {
-        assert_eq!(remove_accents("cœur"), "coeur");
-        assert_eq!(remove_accents("œuvre"), "oeuvre");
-    }
-
-    #[test]
-    fn test_remove_accents_mixed_ligatures() {
-        assert_eq!(
-            remove_accents("Straße ældre øl œuvre"),
-            "Strasse aeldre ol oeuvre"
-        );
-    }
-
-    #[test]
-    fn test_remove_accents_non_alphanumeric() {
-        // It correctly leaves non-alphanumeric ASCII and other scripts alone, but converts ligatures
-        assert_eq!(
-            remove_accents("ß, æ, ø, œ, こんにちは, 🦄"),
-            "ss, ae, o, oe, こんにちは, 🦄"
-        );
-    }
 }
 
 /// Helper function to return a single string match result.
@@ -421,4 +325,100 @@ fn string_match_strategy<'c>(
 
     // No match found.
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_remove_accents_etude() {
+        assert_eq!(remove_accents("étude"), "etude");
+    }
+
+    #[test]
+    fn test_remove_accents_francais() {
+        assert_eq!(remove_accents("français"), "francais");
+    }
+
+    #[test]
+    fn test_remove_accents_espanol() {
+        assert_eq!(remove_accents("Español"), "Espanol");
+    }
+
+    #[test]
+    fn test_remove_accents_portugues() {
+        assert_eq!(remove_accents("português"), "portugues");
+    }
+
+    #[test]
+    fn test_remove_accents_medium() {
+        assert_eq!(remove_accents("médium"), "medium");
+    }
+
+    #[test]
+    fn test_remove_accents_grun() {
+        assert_eq!(remove_accents("Grün"), "Grun");
+    }
+
+    #[test]
+    fn test_remove_accents_uber() {
+        assert_eq!(remove_accents("Über"), "Uber");
+    }
+
+    #[test]
+    fn test_remove_accents_strasse() {
+        assert_eq!(remove_accents("Straße"), "Strasse");
+    }
+
+    #[test]
+    fn test_remove_accents_stadt() {
+        assert_eq!(remove_accents("Stadt"), "Stadt");
+    }
+
+    #[test]
+    fn test_remove_accents_ae_ligature() {
+        assert_eq!(remove_accents("æ"), "ae");
+        assert_eq!(remove_accents("Æ"), "AE");
+    }
+
+    #[test]
+    fn test_remove_accents_o_ligature() {
+        assert_eq!(remove_accents("ø"), "o");
+        assert_eq!(remove_accents("Ø"), "O");
+    }
+
+    #[test]
+    fn test_remove_accents_oe_ligature() {
+        assert_eq!(remove_accents("œ"), "oe");
+        assert_eq!(remove_accents("Œ"), "OE");
+    }
+
+    #[test]
+    fn test_remove_accents_danish_word() {
+        assert_eq!(remove_accents("København"), "Kobenhavn");
+    }
+
+    #[test]
+    fn test_remove_accents_french_word() {
+        assert_eq!(remove_accents("cœur"), "coeur");
+        assert_eq!(remove_accents("œuvre"), "oeuvre");
+    }
+
+    #[test]
+    fn test_remove_accents_mixed_ligatures() {
+        assert_eq!(
+            remove_accents("Straße ældre øl œuvre"),
+            "Strasse aeldre ol oeuvre"
+        );
+    }
+
+    #[test]
+    fn test_remove_accents_non_alphanumeric() {
+        // It correctly leaves non-alphanumeric ASCII and other scripts alone, but converts ligatures
+        assert_eq!(
+            remove_accents("ß, æ, ø, œ, こんにちは, 🦄"),
+            "ss, ae, o, oe, こんにちは, 🦄"
+        );
+    }
 }
