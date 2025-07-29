@@ -152,6 +152,21 @@ client<llm> Gemini {
   }
 }
 
+client<llm> Gemini25ProThinking {
+  provider google-ai
+  retry_policy Constant
+  options {
+    model "gemini-2.5-pro"
+    api_key env.GOOGLE_API_KEY
+    generationConfig {
+      thinkingConfig {
+          thinkingBudget 1024
+          includeThoughts true
+      }
+    }
+  }
+}
+
 client<llm> GeminiOpenAiGeneric {
   provider "openai-generic"
   options {

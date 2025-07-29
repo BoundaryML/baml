@@ -30,6 +30,20 @@ function TestGeminiOpenAiGeneric() -> string {
   "#
 }
 
+function TestGeminiThinking(input: string) -> string {
+  client Gemini25ProThinking
+  prompt #"
+    Analyze this product and tell me what it is: {{ input }}
+  "#
+}
+
+test TestGeminiThinking {
+  functions [TestGeminiThinking]
+  args {
+    input "A mesh barrier with mounting points designed for vehicle cargo areas"
+  }
+}
+
 test TestName {
   functions [TestGeminiSystem]
   args {

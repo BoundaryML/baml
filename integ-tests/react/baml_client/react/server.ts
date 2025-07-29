@@ -2793,6 +2793,24 @@ export const TestGeminiSystemAsChat = async (
 };
 
 /**
+ * Executes the "TestGeminiThinking" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestGeminiThinking"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestGeminiThinking = async (
+  input: string,
+): Promise<string> => {
+  return b.TestGeminiThinking(
+    input,
+  );
+};
+
+/**
  * Executes the "TestGroq" BAML action.
  *
  * This server action calls the underlying BAML function "TestGroq"

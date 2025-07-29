@@ -1537,3 +1537,27 @@ async def test_thinking_streaming():
     assert len(res.title) > 0, "title should be non-empty"
     assert len(res.content) > 0, "content should be non-empty"
     assert len(res.characters) > 0, "characters should be non-empty"
+
+
+@pytest.mark.asyncio
+async def test_gemini_thinking():
+    """Test Gemini 2.5 Pro with thinking configuration enabled"""
+    # Skip test if Google API key is not set
+    if not os.environ.get("GOOGLE_API_KEY"):
+        pytest.skip("GOOGLE_API_KEY not set")
+    
+    try:
+        result = await b.TestGeminiThinking(
+            "A mesh barrier with mounting points designed for vehicle cargo areas"
+        )
+        
+        # The response should contain information about a dog cargo guard or similar
+        assert isinstance(result, str)
+        assert len(result) > 0
+        # Check that the response mentions something related to cargo/vehicle/barrier
+        assert any(word in result.lower() for word in ["cargo", "vehicle", "barrier", "dog", "guard", "car"])
+        
+    except Exception as e:
+        # If it fails with the thinking config, ensure it's not due to parsing multiple non-thought parts
+        assert "Too many matches" not in str(e), f"Parsing error with thinking response: {e}"
+        raise
