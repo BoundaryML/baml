@@ -91,8 +91,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: baml-jetbrains-zip
-          path: |
-            ./build/distributions/*.zip
+          path: ./build/distributions/BAML Playground-*.zip
           if-no-files-found: error
 
   # # Run tests and upload a code coverage report
