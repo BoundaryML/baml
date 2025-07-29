@@ -1,5 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
-use std::{path::PathBuf};
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use baml_runtime::{
     runtime_interface::ExperimentalTracingInterface, BamlRuntime as CoreBamlRuntime,
