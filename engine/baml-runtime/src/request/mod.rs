@@ -14,11 +14,14 @@ fn builder() -> reqwest::ClientBuilder {
                 .connect_timeout(Duration::from_secs(10))
                 .danger_accept_invalid_certs(danger_accept_invalid_certs)
                 .http2_keep_alive_interval(Some(Duration::from_secs(10)))
-                // We don't want to keep idle connections around due to sometimes
-                // causing a stall in the connection pool across FFI boundaries
+                // To prevent stalling in python, we set the pool to 0 and idle timeout to 0.
+                // See:
                 // https://github.com/seanmonstar/reqwest/issues/600
+                // https://github.com/denoland/deno/issues/28853
+                // https://github.com/hyperium/hyper/issues/2312
+                // https://github.com/Azure/azure-sdk-for-rust/pull/1550
                 .pool_max_idle_per_host(0)
-
+                .pool_idle_timeout(std::time::Duration::from_nanos(1))
         }
     }
 }
