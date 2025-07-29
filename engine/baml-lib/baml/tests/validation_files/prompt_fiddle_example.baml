@@ -376,8 +376,6 @@ test TestURLAudioInput{
   }  
 }
 
-
-
 // BAML supports multi-modal inputs! Check the raw cURL request toggle in the playground to see the prompt is transformed into an API call
 
 // How to call this BAML function in python or Typescript: https://docs.boundaryml.com/docs/snippets/supported-types#image
@@ -426,8 +424,7 @@ test TestFilePdfInput {
   functions [PdfInput]
   args {
     pdfInput { 
-      file "../../../../../integ-tests/baml_src/dummy.pdf"
-      media_type "application/pdf"
+      url "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf"
     }
   }  
 } 
@@ -451,7 +448,7 @@ test TestFileVideoInput {
   functions [VideoInput]
   args {
     videoInput { 
-      file "../../../../../integ-tests/baml_src/sample-5s.mp4"
+      url "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
       media_type "video/mp4"
     }
   }  

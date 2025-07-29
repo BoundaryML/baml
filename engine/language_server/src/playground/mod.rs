@@ -1,6 +1,8 @@
 pub mod definitions;
 pub mod playground_server;
 pub mod playground_server_helpers;
+pub mod playground_server_rpc;
+pub mod proxy;
 
 pub use definitions::{FrontendMessage, PlaygroundState};
 pub use playground_server::PlaygroundServer;

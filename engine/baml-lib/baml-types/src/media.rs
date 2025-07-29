@@ -47,10 +47,19 @@ pub enum BamlMediaContent {
 
 impl BamlMedia {
     pub fn mime_type_as_ok(&self) -> Result<String> {
-        self.mime_type.clone().context(format!(
-            "Please specify a media type for this {}; we could not infer one",
-            self.media_type
-        ))
+        match &self.mime_type {
+            Some(mt) => Ok(mt.clone()),
+            None => {
+                if self.media_type == BamlMediaType::Pdf {
+                    Ok("application/pdf".to_string())
+                } else {
+                    Err(anyhow::anyhow!(
+                        "Please specify a media type for this {}; we could not infer one",
+                        self.media_type
+                    ))
+                }
+            }
+        }
     }
     pub fn file(
         media_type: BamlMediaType,

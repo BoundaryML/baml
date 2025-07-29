@@ -18,3 +18,8 @@ import (
 )
 
 type Checked[T any] baml.Checked[T]
+
+type Image baml.Image
+type Audio baml.Audio
+type Video baml.Video
+type PDF baml.PDF

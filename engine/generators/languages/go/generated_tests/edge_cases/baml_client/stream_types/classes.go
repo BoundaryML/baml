@@ -18,6 +18,8 @@ import (
 
 	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
+
+	"edge_cases/baml_client/types"
 )
 
 type AllNullable struct {
@@ -636,7 +638,7 @@ type MixedEdgeCases struct {
 	SingleChar         *string                                 `json:"singleChar"`
 	VeryLongArray      []string                                `json:"veryLongArray"`
 	DeeplyNestedMap    map[string]map[string]map[string]string `json:"deeplyNestedMap"`
-	MixedTypeArray     []Union3BoolOrIntOrString               `json:"mixedTypeArray"`
+	MixedTypeArray     []*types.Union3BoolOrIntOrString        `json:"mixedTypeArray"`
 	OptionalEverything *OptionalEverything                     `json:"optionalEverything"`
 }
 
@@ -667,7 +669,7 @@ func (c *MixedEdgeCases) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMa
 			c.DeeplyNestedMap = baml.Decode(valueHolder).Interface().(map[string]map[string]map[string]string)
 
 		case "mixedTypeArray":
-			c.MixedTypeArray = baml.Decode(valueHolder).Interface().([]Union3BoolOrIntOrString)
+			c.MixedTypeArray = baml.Decode(valueHolder).Interface().([]*types.Union3BoolOrIntOrString)
 
 		case "optionalEverything":
 			c.OptionalEverything = baml.Decode(valueHolder).Interface().(*OptionalEverything)

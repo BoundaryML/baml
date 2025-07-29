@@ -18,6 +18,8 @@ import (
 
 	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
+
+	"map_types/baml_client/types"
 )
 
 type ComplexMaps struct {
@@ -151,10 +153,10 @@ func (u Config) BamlEncodeName() *cffi.CFFITypeName {
 }
 
 type EdgeCaseMaps struct {
-	EmptyMap       map[string]string                  `json:"emptyMap"`
-	NullableValues map[string]*string                 `json:"nullableValues"`
-	OptionalValues map[string]*string                 `json:"optionalValues"`
-	UnionValues    map[string]Union3BoolOrIntOrString `json:"unionValues"`
+	EmptyMap       map[string]string                        `json:"emptyMap"`
+	NullableValues map[string]*string                       `json:"nullableValues"`
+	OptionalValues map[string]*string                       `json:"optionalValues"`
+	UnionValues    map[string]types.Union3BoolOrIntOrString `json:"unionValues"`
 }
 
 func (c *EdgeCaseMaps) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -181,7 +183,7 @@ func (c *EdgeCaseMaps) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap)
 			c.OptionalValues = baml.Decode(valueHolder).Interface().(map[string]*string)
 
 		case "unionValues":
-			c.UnionValues = baml.Decode(valueHolder).Interface().(map[string]Union3BoolOrIntOrString)
+			c.UnionValues = baml.Decode(valueHolder).Interface().(map[string]types.Union3BoolOrIntOrString)
 
 		default:
 			panic(fmt.Sprintf("unexpected field: %s", key))

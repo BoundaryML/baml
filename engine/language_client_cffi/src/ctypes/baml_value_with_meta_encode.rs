@@ -45,12 +45,13 @@ fn maybe_wrap_union_impl<TypeLookups, T>(
     holder: CffiValueHolder,
     lookup: &TypeLookups,
     get_target_type: impl Fn(&TypeGeneric<T>) -> TypeGeneric<T>,
-    get_namespace: impl Fn(&TypeGeneric<T>) -> CffiTypeNamespace,
+    mode: baml_types::StreamingMode,
 ) -> CffiValueHolder
 where
     TypeLookups: baml_types::baml_value::TypeLookups,
     for<'a> BamlValueWithMeta<Meta<'a, T>>: HasType<T> + TypeQuery<T>,
     T: std::hash::Hash + std::cmp::Eq,
+    TypeGeneric<T>: std::fmt::Display,
 {
     let target_type = &get_target_type(value.field_type());
 
@@ -79,7 +80,11 @@ where
         let union_variant = CffiValueUnionVariant {
             name: Some(create_cffi_type_name(
                 target_type.to_union_name().as_str(),
-                get_namespace(value.field_type()),
+                match value.field_type().mode(&mode, lookup) {
+                    Ok(baml_types::StreamingMode::NonStreaming) => CffiTypeNamespace::Types,
+                    Ok(baml_types::StreamingMode::Streaming) => CffiTypeNamespace::StreamTypes,
+                    Err(e) => panic!("Failed to get mode for field type: {e}"),
+                },
             )),
             variant_name,
             field_types: options
@@ -88,6 +93,7 @@ where
                     WithIr {
                         value: &(t, UnionAllowance::Allow),
                         lookup,
+                        mode,
                     }
                     .encode()
                 })
@@ -101,6 +107,7 @@ where
                 WithIr {
                     value: &(target_type, UnionAllowance::Allow),
                     lookup,
+                    mode,
                 }
                 .encode(),
             ),
@@ -130,7 +137,7 @@ where
                     .to_non_streaming_type(lookup),
                 other => other.clone(),
             },
-            |_| CffiTypeNamespace::Types,
+            baml_types::StreamingMode::NonStreaming,
         )
     }
 
@@ -159,13 +166,7 @@ where
                     .to_streaming_type(lookup),
                 other => other.clone(),
             },
-            |field_type| match field_type {
-                TypeGeneric::Class { mode, .. } => match mode {
-                    baml_types::StreamingMode::NonStreaming => CffiTypeNamespace::Types,
-                    baml_types::StreamingMode::Streaming => CffiTypeNamespace::StreamTypes,
-                },
-                _ => CffiTypeNamespace::StreamTypes,
-            },
+            baml_types::StreamingMode::Streaming,
         )
     }
 
@@ -202,7 +203,11 @@ where
 {
     fn encode(self) -> CffiValueHolder {
         use cffi_value_holder::Value;
-        let WithIr { value, lookup } = self;
+        let WithIr {
+            value,
+            lookup,
+            mode,
+        } = self;
 
         let holder = {
             let encoded_value = match value {
@@ -220,13 +225,21 @@ where
                             .iter()
                             .map(|(key, value)| CffiMapEntry {
                                 key: key.clone(),
-                                value: Some(WithIr { value, lookup }.encode()),
+                                value: Some(
+                                    WithIr {
+                                        value,
+                                        lookup,
+                                        mode,
+                                    }
+                                    .encode(),
+                                ),
                             })
                             .collect(),
                         key_type: Some(
                             WithIr {
                                 value: &(key_type.as_ref(), UnionAllowance::Allow),
                                 lookup,
+                                mode,
                             }
                             .encode(),
                         ),
@@ -234,6 +247,7 @@ where
                             WithIr {
                                 value: &(value_type.as_ref(), UnionAllowance::Allow),
                                 lookup,
+                                mode,
                             }
                             .encode(),
                         ),
@@ -248,6 +262,7 @@ where
                     let value_type = WithIr {
                         value: &(value_type.as_ref(), UnionAllowance::Allow),
                         lookup,
+                        mode,
                     }
                     .encode();
 
@@ -259,6 +274,7 @@ where
                                 WithIr {
                                     value: item,
                                     lookup,
+                                    mode,
                                 }
                                 .encode()
                             })
@@ -294,7 +310,14 @@ where
                             .iter()
                             .map(|(key, value)| CffiMapEntry {
                                 key: key.clone(),
-                                value: Some(WithIr { value, lookup }.encode()),
+                                value: Some(
+                                    WithIr {
+                                        value,
+                                        lookup,
+                                        mode,
+                                    }
+                                    .encode(),
+                                ),
                             })
                             .collect(),
                         dynamic_fields: vec![],
@@ -307,6 +330,7 @@ where
                     WithIr {
                         value: &(value.field_type(), UnionAllowance::Allow),
                         lookup,
+                        mode,
                     }
                     .encode(),
                 ),

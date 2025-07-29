@@ -72,9 +72,6 @@ jobs:
   build-python-release:
     uses: ./.github/workflows/build-python-release.reusable.yaml
 
-  # build-ruby-release:
-  #   uses: ./.github/workflows/build-ruby-release.reusable.yaml
-
   build-typescript-release:
     uses: ./.github/workflows/build-typescript-release.reusable.yaml
 
@@ -85,35 +82,28 @@ jobs:
       version: ${{ needs.determine-version.outputs.version_string }}
       package_for_release: true
 
-  # This job now calls the reusable workflow which contains the matrix strategy
-  build-vscode-reusable: # Renamed job for clarity
+  build-vscode-reusable:
     needs: [determine-version, build-cli]
     uses: ./.github/workflows/build-vscode-release.reusable.yaml
     with:
-      # No artifact_name needed here anymore
       version: ${{ needs.determine-version.outputs.version_string }}
-      # Pass the boolean output directly
       is_release_build: ${{ needs.determine-version.outputs.is_release_tag == 'true' }}
 
   build-jetbrains-release:
     uses: ./.github/workflows/build-jetbrains-release.reusable.yaml
 
-  # Kick off integration tests when we build everything.
-  # This does not yet succeed/pass consistently, or even run everything, but it's a good start.
   integ-tests:
     uses: ./.github/workflows/integ-tests.yml
 
-  # placeholder fan-in step
   all-builds:
     name: Assert all builds passed
     runs-on: ubuntu-latest
     needs:
       - determine-version
       - build-python-release
-      # - build-ruby-release
       - build-typescript-release
       - build-cli
-      - build-vscode-reusable # Depends on the job calling the reusable workflow
+      - build-vscode-reusable
       - build-jetbrains-release
     steps:
       - run: echo "::do-nothing::" >/dev/null
@@ -133,8 +123,6 @@ jobs:
           pattern: wheels-*
           path: dist
           merge-multiple: true
-
-      # Verify we have the expected number of wheels
       - name: Verify wheel count
         run: |
           set -euo pipefail
@@ -145,9 +133,6 @@ jobs:
             exit 1
           fi
           echo "Found $wheel_count wheels"
-
-      # authz is managed via OIDC configured at https://pypi.org/manage/project/baml-py/settings/publishing/
-      # it is pinned to this github actions filename, so renaming this file is not safe!!
       - name: Publish package to PyPI
         uses: PyO3/maturin-action@v1
         with:
@@ -161,16 +146,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - name: Setup Tools
         uses: ./.github/actions/setup-tools
-
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
         with:
           registry-url: "https://registry.npmjs.org"
           npm-token: ${{ secrets.NPM_TOKEN }}
-
       - uses: actions/download-artifact@v4
         with:
           pattern: bindings-*
@@ -217,10 +199,8 @@ jobs:
     if: ${{ (needs.determine-version.outputs.is_release_tag == 'true') || inputs.force_publish_vscode }}
     steps:
       - uses: actions/checkout@v4
-
       - name: Setup Tools
         uses: ./.github/actions/setup-tools
-
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
         with:
@@ -232,10 +212,8 @@ jobs:
           pattern: baml-vscode-vsix-*
           path: vsix-artifacts
           merge-multiple: true
-
       - name: List downloaded VSIXs
         run: ls -l vsix-artifacts/
-
       - name: Publish to Open VSX
         run: npx ovsx publish --packagePath ./vsix-artifacts/*.vsix
         env:
@@ -248,10 +226,8 @@ jobs:
     if: ${{ (needs.determine-version.outputs.is_release_tag == 'true') || inputs.force_publish_vscode }}
     steps:
       - uses: actions/checkout@v4
-
       - name: Setup Tools
         uses: ./.github/actions/setup-tools
-
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
         with:
@@ -263,10 +239,8 @@ jobs:
           pattern: baml-vscode-vsix-*
           path: vsix-artifacts
           merge-multiple: true
-
       - name: List downloaded VSIXs
         run: ls -la vsix-artifacts/
-
       - name: Publish to VSCode Marketplace
         run: npx @vscode/vsce publish --packagePath ./vsix-artifacts/*.vsix
         env:
@@ -278,26 +252,19 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ needs.determine-version.outputs.is_release_tag == 'true' }}
     steps:
-      # We need checkout, java, and gradle because there's no CLI for publishing
-      # to JetBrains Marketplace, just a gradle task in the project.
       - uses: actions/checkout@v4
-
       - name: Setup Tools
         uses: ./.github/actions/setup-tools
-
       - name: Setup Java
         uses: ./.github/actions/setup-java
-
       - name: Download extension zips
         uses: actions/download-artifact@v4
         with:
           pattern: baml-jetbrains-zip-*
           path: ./jetbrains/build/distributions/
           merge-multiple: true
-
       - name: List downloaded extension zips
         run: ls -la ./jetbrains/build/distributions/
-
       - name: Publish to JetBrains Marketplace
         run: cd ./jetbrains && ./gradlew publishPlugin
         env:
@@ -310,39 +277,39 @@ jobs:
     needs: [all-builds, determine-version]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4 # Checkout needed for CHANGELOG.md
-
-      # Download all CLI artifacts
+      - uses: actions/checkout@v4
       - name: Download all baml-cli artifacts
         uses: actions/download-artifact@v4
         with:
           pattern: baml-cli-*
           path: cli-artifacts
           merge-multiple: true
-
       - name: Download all libbaml-cffi artifacts
         uses: actions/download-artifact@v4
         with:
           pattern: libbaml-cffi-*
           path: cffi-artifacts
           merge-multiple: true
-
+      - name: Download playground artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: playground-dist-*
+          path: playground-artifacts
+          merge-multiple: true
       - name: List downloaded artifacts
         run: |
           echo "CLI artifacts:"
           ls -R cli-artifacts/
           echo "\nCFFI artifacts:"
           ls -R cffi-artifacts/
-
-      # Prepare changelog
+          echo "\nPlayground artifacts:"
+          ls -R playground-artifacts/
       - name: Prepare changelog
         run: |
           touch CHANGELOG.txt
           if [[ "${{ needs.determine-version.outputs.is_release_tag }}" == "true" ]]; then
-            # Extract the latest changelog section
             awk '/^## \[/{if (p) exit; if ($2 == "[${{ needs.determine-version.outputs.version_string }}]") p=1} p' CHANGELOG.md | sed '1d' > CHANGELOG.txt
           fi
-
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -354,6 +321,8 @@ jobs:
           files: |
             cli-artifacts/**/*
             cffi-artifacts/**/*
+            playground-artifacts/playground-dist-*.tar.gz
+            playground-artifacts/playground-dist-*.tar.gz.sha256
           fail_on_unmatched_files: true
           token: ${{ secrets.GITHUB_TOKEN }}
           generate_release_notes: false

@@ -22,6 +22,9 @@ const TestPanel = () => {
           <ErrorBoundary
             fallback={<div>Error rendering</div>}
             onReset={() => {
+              if (typeof window === 'undefined') {
+                return;
+              }
               window.location.reload()
             }}
             resetKeys={[viewType]}
@@ -58,7 +61,7 @@ const TestPanel = () => {
             // Reset any state that may have caused the error
             window.location.reload()
           }}
-          resetKeys={[viewType, currentRun]}
+          resetKeys={[viewType, currentRun?.timestamp]}
         >
           <TestMenu />
         </ErrorBoundary>
@@ -74,7 +77,7 @@ const TestPanel = () => {
             // Reset any state that may have caused the error
             window.location.reload()
           }}
-          resetKeys={[viewType, currentRun]}
+          resetKeys={[viewType, currentRun?.timestamp]}
         >
           {renderView()}
         </ErrorBoundary>

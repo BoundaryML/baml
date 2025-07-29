@@ -38,8 +38,10 @@ pub enum TypeOpenApi {
     AnyValue {
         #[serde(flatten)]
         meta: OpenApiMeta,
-        #[serde(rename = "AnyValue")]
-        any_value: IndexMap<String, TypeOpenApi>,
+        #[serde(rename = "type")]
+        type_: String,
+        #[serde(rename = "additionalProperties")]
+        additional_properties: bool,
     },
 }
 
@@ -256,8 +258,9 @@ pub fn convert_ir_type(ir: &IntermediateRepr, ty: &TypeNonStreaming) -> TypeOpen
         },
         TypeNonStreaming::Tuple(..) => panic!("Tuple types are not supported in code generation"),
         TypeNonStreaming::RecursiveTypeAlias { .. } => TypeOpenApi::AnyValue {
-            any_value: IndexMap::new(),
+            type_: "object".to_string(),
             meta: meta_copy,
+            additional_properties: true,
         },
     };
 
@@ -594,8 +597,13 @@ mod tests {
         let openapi_recursive = convert_ir_type(&ir, &recursive_type);
 
         match openapi_recursive {
-            TypeOpenApi::AnyValue { any_value, .. } => {
-                assert!(any_value.is_empty());
+            TypeOpenApi::AnyValue {
+                type_,
+                additional_properties,
+                ..
+            } => {
+                assert_eq!(type_, "object");
+                assert!(additional_properties);
             }
             _ => panic!("Expected AnyValue type for recursive type alias"),
         }
@@ -1047,7 +1055,7 @@ mod tests {
                         TypeOpenApi::Ref { r#ref, .. } => {
                             assert_eq!(r#ref, expected_ref);
                         }
-                        _ => panic!("Expected class reference at position {}", i),
+                        _ => panic!("Expected class reference at position {i}"),
                     }
                 }
             }

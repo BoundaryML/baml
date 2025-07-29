@@ -39,6 +39,5 @@ var typeMap = map[string]reflect.Type{
 
 	"TYPES.Status": reflect.TypeOf(types.Status("")),
 
-	"TYPES.Union__bool__int__string":        reflect.TypeOf(types.Union3BoolOrIntOrString{}),
-	"STREAM_TYPES.Union__bool__int__string": reflect.TypeOf(stream_types.Union3BoolOrIntOrString{}),
+	"TYPES.Union__bool__int__string": reflect.TypeOf(types.Union3BoolOrIntOrString{}),
 }

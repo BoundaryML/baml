@@ -2,6 +2,7 @@ package baml
 
 import (
 	"fmt"
+	"unsafe"
 
 	"github.com/boundaryml/baml/engine/language_client_go/baml_go/raw_objects"
 	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
@@ -11,8 +12,8 @@ type timing struct {
 	*raw_objects.RawObject
 }
 
-func newTiming(ptr int64) Timing {
-	return &timing{raw_objects.FromPointer(ptr)}
+func newTiming(ptr int64, rt unsafe.Pointer) Timing {
+	return &timing{raw_objects.FromPointer(ptr, rt)}
 }
 
 func (t *timing) ObjectType() cffi.CFFIObjectType {

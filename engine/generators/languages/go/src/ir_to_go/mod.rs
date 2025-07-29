@@ -16,9 +16,9 @@ pub mod functions;
 pub mod type_aliases;
 pub mod unions;
 
-pub(crate) fn stream_type_to_go(field: &TypeStreaming, _lookup: &impl TypeLookups) -> TypeGo {
+pub(crate) fn stream_type_to_go(field: &TypeStreaming, lookup: &impl TypeLookups) -> TypeGo {
     use TypeStreaming as T;
-    let recursive_fn = |field| stream_type_to_go(field, _lookup);
+    let recursive_fn = |field| stream_type_to_go(field, lookup);
     let meta = stream_meta_to_go(field.meta());
 
     let types_pkg: Package = Package::types();
@@ -65,7 +65,7 @@ pub(crate) fn stream_type_to_go(field: &TypeStreaming, _lookup: &impl TypeLookup
             meta: alias_meta,
             ..
         } => {
-            if _lookup.expand_recursive_type(name).is_err() {
+            if lookup.expand_recursive_type(name).is_err() {
                 TypeGo::Any {
                     reason: format!("Recursive type alias {name} is not supported in Go"),
                     meta,
@@ -119,7 +119,16 @@ pub(crate) fn stream_type_to_go(field: &TypeStreaming, _lookup: &impl TypeLookup
                 name.sort();
                 let name = name.join("Or");
                 TypeGo::Union {
-                    package: stream_pkg.clone(),
+                    package: match field.mode(&baml_types::StreamingMode::Streaming, lookup) {
+                        Ok(baml_types::StreamingMode::NonStreaming) => types_pkg.clone(),
+                        Ok(baml_types::StreamingMode::Streaming) => stream_pkg.clone(),
+                        Err(e) => {
+                            return TypeGo::Any {
+                                reason: format!("Failed to get mode for field type: {e}"),
+                                meta,
+                            }
+                        }
+                    },
                     name: format!("Union{num_options}{name}"),
                     meta,
                 }
@@ -136,9 +145,15 @@ pub(crate) fn stream_type_to_go(field: &TypeStreaming, _lookup: &impl TypeLookup
                 let mut meta = meta;
                 meta.make_optional();
                 TypeGo::Union {
-                    package: match union_meta.streaming_behavior.done {
-                        true => types_pkg.clone(),
-                        false => stream_pkg.clone(),
+                    package: match field.mode(&baml_types::StreamingMode::Streaming, lookup) {
+                        Ok(baml_types::StreamingMode::NonStreaming) => types_pkg.clone(),
+                        Ok(baml_types::StreamingMode::Streaming) => stream_pkg.clone(),
+                        Err(e) => {
+                            return TypeGo::Any {
+                                reason: format!("Failed to get mode for field type: {e}"),
+                                meta,
+                            }
+                        }
                     },
                     name: format!("Union{num_options}{name}"),
                     meta,

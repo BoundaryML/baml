@@ -161,6 +161,16 @@ export interface InitializedResponse {
   ack: true;
 }
 
+export interface OpenPlaygroundRequest {
+  vscodeCommand: 'OPEN_PLAYGROUND';
+}
+
+export interface OpenPlaygroundResponse {
+  success: boolean;
+  url?: string;
+  error?: string;
+}
+
 type ApiPairs = [
   // Echo is included here as an example of what a request/response pair looks like
   [EchoRequest, EchoResponse],
@@ -172,6 +182,7 @@ type ApiPairs = [
   [LoadAwsCredsRequest, LoadAwsCredsResponse],
   [LoadGcpCredsRequest, LoadGcpCredsResponse],
   [InitializedRequest, InitializedResponse],
+  [OpenPlaygroundRequest, OpenPlaygroundResponse],
 ];
 
 // Serialization for binary data (like images)

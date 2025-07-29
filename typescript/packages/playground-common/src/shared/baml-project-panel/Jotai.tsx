@@ -16,7 +16,16 @@ import type { SyncStorage } from 'jotai/vanilla/utils/atomWithStorage';
 // );
 
 export const vscodeLocalStorageStore: SyncStorage<any> = createJSONStorage(
-  () => window.localStorage,
+  () => {
+    if (typeof window === 'undefined') {
+      return {
+        getItem: () => null,
+        setItem: () => {},
+        removeItem: () => {},
+      };
+    }
+    return window.localStorage;
+  },
 );
 
 export default function JotaiProvider({

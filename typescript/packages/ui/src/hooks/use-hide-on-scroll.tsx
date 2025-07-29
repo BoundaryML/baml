@@ -12,6 +12,9 @@ export function useHideOnScroll(props: {
   const [scrollUpDistance, setScrollUpDistance] = useState(0);
 
   useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
     const handleScroll = () => {
       setScrollDelta((previous) => {
         const newY = window.scrollY;

@@ -177,7 +177,7 @@ impl Builder {
             classes: Arc::new(
                 self.classes
                     .into_iter()
-                    .map(|c| ((c.name.name.clone(), c.namespace.clone()), c))
+                    .map(|c| ((c.name.name.clone(), c.namespace), c))
                     .collect(),
             ),
             recursive_classes: Arc::new(self.recursive_classes.into_iter().collect()),
@@ -682,7 +682,7 @@ impl OutputFormatContent {
             TypeIR::Class {
                 name: cls, mode, ..
             } => {
-                let Some(class) = self.classes.get(&(cls.clone(), mode.clone())) else {
+                let Some(class) = self.classes.get(&(cls.clone(), *mode)) else {
                     return Err(minijinja::Error::new(
                         minijinja::ErrorKind::BadSerialization,
                         format!("Class {cls} not found"),
@@ -987,7 +987,7 @@ impl OutputFormatContent {
 
     pub fn find_class(&self, mode: &baml_types::StreamingMode, name: &str) -> Result<&Class> {
         self.classes
-            .get(&(name.to_string(), mode.clone()))
+            .get(&(name.to_string(), *mode))
             .ok_or_else(|| anyhow::anyhow!("Class {name} not found"))
     }
 

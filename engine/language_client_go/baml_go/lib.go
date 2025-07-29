@@ -20,7 +20,7 @@ import (
 )
 
 /*
-#cgo CFLAGS: -I${SRCDIR}/../include
+#cgo CFLAGS: -I${SRCDIR}
 #cgo CFLAGS: -O3 -g
 #cgo LDFLAGS: -ldl
 #include <dlfcn.h>
@@ -33,7 +33,7 @@ import (
 import "C"
 
 const (
-	VERSION            = "0.202.0"
+	VERSION            = "0.202.1"
 	githubRepo         = "boundaryml/baml"
 	bamlCacheDirEnvVar = "BAML_CACHE_DIR"
 	bamlLibraryPathEnv = "BAML_LIBRARY_PATH"

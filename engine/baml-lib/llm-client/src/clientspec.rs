@@ -27,7 +27,7 @@ impl ClientSpec {
 
     pub fn new_from_id(arg: &str) -> Result<Self, anyhow::Error> {
         if arg.contains("/") {
-            let (provider, model) = arg.split_once("/").unwrap();
+            let (provider, model) = arg.split_once("/").expect("Already checked for '/'");
             Ok(ClientSpec::Shorthand(provider.parse()?, model.to_string()))
         } else {
             Ok(ClientSpec::Named(arg.into()))
@@ -465,7 +465,7 @@ mod tests {
             ClientProvider::OpenAI(OpenAIClientProviderVariant::Responses) => {
                 // Success!
             }
-            _ => panic!("Expected OpenAI Responses variant, got {:?}", provider),
+            _ => panic!("Expected OpenAI Responses variant, got {provider:?}"),
         }
     }
 

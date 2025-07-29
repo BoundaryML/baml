@@ -4,6 +4,9 @@ import { useEffect } from 'react';
 
 export function useKeybindingOverrides() {
   useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
     const handleKeyDown = (event: any) => {
       // Check if either Ctrl+S or Command+S is pressed
       if (

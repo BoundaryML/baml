@@ -1,6 +1,43 @@
 package baml
 
-import "github.com/boundaryml/baml/engine/language_client_go/baml_go/raw_objects"
+import (
+	"github.com/boundaryml/baml/engine/language_client_go/baml_go/raw_objects"
+	"github.com/boundaryml/baml/engine/language_client_go/baml_go/serde"
+)
+
+type MediaType string
+
+const (
+	MediaType_Image MediaType = "Image"
+	MediaType_Audio MediaType = "Audio"
+	MediaType_PDF   MediaType = "PDF"
+	MediaType_Video MediaType = "Video"
+)
+
+type media interface {
+	raw_objects.RawPointer
+	serde.InternalBamlSerializer
+	MediaType() (MediaType, error)
+	MimeType() (*string, error)
+	AsUrl() (*string, error)
+	AsBase64() (*string, error)
+}
+
+type Image interface {
+	media
+}
+
+type Audio interface {
+	media
+}
+
+type PDF interface {
+	media
+}
+
+type Video interface {
+	media
+}
 
 type Collector interface {
 	raw_objects.RawPointer

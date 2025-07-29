@@ -11,7 +11,15 @@
     "STAGE",
     "VERCEL",
     "VERCEL_ENV",
-    "TARGET"
+    "TARGET",
+    "CMAKE_FRAMEWORK_PATH",
+    "NIX_CC",
+    "NIX_CC_WRAPPER_TARGET_HOST_aarch64_apple_darwin",
+    "NIX_BINTOOLS",
+    "NIX_BINTOOLS_WRAPPER_TARGET_HOST_aarch64_apple_darwin",
+    "CC",
+    "LD",
+    "MACOSX_DEPLOYMENT_TARGET"
   ],
   "globalEnv": ["VSCODE_DEBUG_MODE"],
   "globalDependencies": [
@@ -23,7 +31,7 @@
     "biome.json"
   ],
   "ui": "tui",
-  "concurrency": "15",
+  "concurrency": "20",
   "tasks": {
     "//#clean": {
       "cache": false
@@ -59,13 +67,7 @@
       ]
     },
     "generate": {
-      "dependsOn": [
-        "@baml/cli#build",
-        "@boundaryml/baml#build",
-        "@baml/language-client-python#build",
-        "@baml/language-client-ruby#build",
-        "@baml/language-client-go#build"
-      ],
+      "dependsOn": ["@baml/integ-tests-typescript#generate"],
       "inputs": ["**/*.baml", "**/*.j2", "**/*.hbs", "**/generators.baml"],
       "outputs": ["baml_client/**"],
       "env": ["SKIP_BAML_SRC_CHECK"]

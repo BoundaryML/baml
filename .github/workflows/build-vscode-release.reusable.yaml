@@ -85,15 +85,12 @@ jobs:
         with:
           name: baml-cli-${{ matrix.rust-target }}
           path: cli-artifact-${{ matrix.code-target }}
-          # Unique path per job
-        # Add error handling if the specific artifact isn't found
 
       - name: List downloaded artifact content
         run: |
           echo "Contents of cli-artifact-${{ matrix.code-target }} directory:"
           ls -R cli-artifact-${{ matrix.code-target }}
 
-      # This step extracts and copies ONLY the single downloaded binary for the current matrix target
       - name: Extract and copy binary for ${{ matrix.code-target }}
         shell: bash
         run: |
@@ -222,18 +219,34 @@ jobs:
           if-no-files-found: error
 
       # Build/Upload Playground only once
-      # - name: Build & Upload VSCode Playground Artifact (conditional)
-      #   if: matrix.code-target == 'linux-x64' # Run only on one matrix job
-      #   run: |
-      #     echo "Building playground..."
-      #     # Ensure filter/path is correct relative to execution dir (root)
-      #     pnpm --filter @baml/playground build
-      #     echo "Uploading playground artifact..."
-      #   working-directory: typescript/
-      # - name: Upload Playground Artifact (conditional)
-      #   if: matrix.code-target == 'linux-x64'
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: vscode-playground
-      #     path: typescript/vscode-ext/packages/web-panel/dist
-      #     if-no-files-found: error
+      - name: Build & Upload Playground Artifact (conditional)
+        if: matrix.code-target == 'linux-x64' # Run only on one matrix job
+        run: |
+          echo "Building playground..."
+          # Ensure filter/path is correct relative to execution dir (root)
+          pnpm --filter @baml/playground build
+          echo "Creating playground tarball..."
+          VERSION="${{ inputs.version }}"
+          TARBALL_NAME="playground-dist-${VERSION}.tar.gz"
+          CHECKSUM_NAME="playground-dist-${VERSION}.tar.gz.sha256"
+          
+          echo "Creating tarball: $TARBALL_NAME"
+          cd typescript/apps/playground
+          tar -czf "../../../$TARBALL_NAME" dist/
+          cd ../../..
+          
+          echo "Creating checksum: $CHECKSUM_NAME"
+          sha256sum "$TARBALL_NAME" > "$CHECKSUM_NAME"
+          
+          echo "Generated files:"
+          ls -la "$TARBALL_NAME" "$CHECKSUM_NAME"
+        working-directory: .
+      - name: Upload Playground Artifact (conditional)
+        if: matrix.code-target == 'linux-x64'
+        uses: actions/upload-artifact@v4
+        with:
+          name: playground-dist-${{ inputs.version }}
+          path: |
+            playground-dist-${{ inputs.version }}.tar.gz
+            playground-dist-${{ inputs.version }}.tar.gz.sha256
+          if-no-files-found: error

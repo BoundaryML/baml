@@ -9,6 +9,8 @@ import {
   type LoadAwsCredsResponse,
   type LoadGcpCredsRequest,
   type LoadGcpCredsResponse,
+  type OpenPlaygroundRequest,
+  type OpenPlaygroundResponse,
   type SetProxySettingsRequest,
   decodeBuffer,
 } from './vscode-rpc';
@@ -57,6 +59,10 @@ class VSCodeAPIWrapper {
 
   private rpcTable: Map<number, { resolve: (resp: unknown) => void }>;
   private rpcId: number;
+  private wsRpc: WebSocket | null = null;
+  private wsConnecting: Promise<WebSocket> | null = null;
+  public isConnected: boolean = false;
+  public onOpen?: () => void;
 
   constructor() {
     // Check if the acquireVsCodeApi function exists in the current development
@@ -70,12 +76,80 @@ class VSCodeAPIWrapper {
     this.rpcId = 0;
   }
 
+  private async ensureWebSocketRpcConnection(): Promise<WebSocket> {
+    if (this.wsRpc && this.wsRpc.readyState === WebSocket.OPEN) {
+      return this.wsRpc;
+    }
+
+    // If already connecting, wait for that connection
+    if (this.wsConnecting) {
+      return this.wsConnecting;
+    }
+
+    this.wsConnecting = new Promise((resolve, reject) => {
+      const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
+      const ws = new WebSocket(`${scheme}://${window.location.host}/rpc`);
+
+      ws.onopen = () => {
+        console.log('RPC WebSocket Opened');
+        this.wsRpc = ws;
+        this.isConnected = true;
+        this.wsConnecting = null;
+        if (this.onOpen) this.onOpen();
+        resolve(ws);
+      };
+
+      ws.onerror = (error) => {
+        console.error('RPC WebSocket error', error);
+        this.isConnected = false;
+        this.wsConnecting = null;
+        reject(new Error('Failed to connect to language server RPC WebSocket'));
+      };
+
+      ws.onclose = () => {
+        console.log('RPC WebSocket Closed');
+        this.isConnected = false;
+        this.wsRpc = null;
+        this.wsConnecting = null;
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const response = JSON.parse(event.data);
+          if (response.rpcId && this.rpcTable.has(response.rpcId)) {
+            const entry = this.rpcTable.get(response.rpcId);
+            if (entry) {
+              entry.resolve(response.data);
+              this.rpcTable.delete(response.rpcId);
+            }
+          }
+        } catch (e) {
+          console.error('Error parsing WebSocket RPC response:', e);
+        }
+      };
+
+      // Timeout for connection
+      setTimeout(() => {
+        if (ws.readyState !== WebSocket.OPEN) {
+          ws.close();
+          this.wsConnecting = null;
+          reject(new Error('WebSocket RPC connection timeout'));
+        }
+      }, 5000);
+    });
+
+    return this.wsConnecting;
+  }
+
   public isVscode() {
     return this.vsCodeApi !== undefined
   }
 
   public async readFile(path: string): Promise<Uint8Array> {
     const uri = await this.readLocalFile('', path);
+
+    // Debug logging to understand the response structure
+    console.log('readFile response for path:', path, 'response:', uri);
 
     if (uri.readError) {
       throw new Error(`Failed to read file: ${path}\n${uri.readError}`);
@@ -85,7 +159,14 @@ class VSCodeAPIWrapper {
       return decodeBuffer(contents);
     }
 
-    throw new Error(`Unknown error: '${path}'`);
+    // Handle malformed response - if we have a uri but no contents or readError,
+    // it likely means the file doesn't exist or couldn't be read
+    if (uri.uri) {
+      throw new Error(`File not found or unable to read: '${path}'`);
+    }
+
+    // More detailed error message with response info for completely malformed responses
+    throw new Error(`Malformed response for file: '${path}'. Response received: ${JSON.stringify(uri)}`);
   }
 
   async readLocalFile(
@@ -154,8 +235,18 @@ class VSCodeAPIWrapper {
     }
   }
 
+  public async openPlayground() {
+    const resp = await this.rpc<
+      OpenPlaygroundRequest,
+      OpenPlaygroundResponse
+    >({
+      vscodeCommand: 'OPEN_PLAYGROUND',
+    });
+    return resp;
+  }
+
   public rpc<TRequest, TResponse>(data: TRequest): Promise<TResponse> {
-    return new Promise((resolve, reject) => {
+    return new Promise(async (resolve, reject) => {
       const rpcId = this.rpcId++;
       this.rpcTable.set(rpcId, { resolve: resolve as (resp: unknown) => void });
 
@@ -164,7 +255,21 @@ class VSCodeAPIWrapper {
         rpcId,
         data,
       };
-      this.postMessage(message);
+
+      try {
+        if (this.isVscode()) {
+          // Use VSCode webview messaging
+          this.postMessage(message);
+        } else {
+          // Use WebSocket RPC for other editors (like Zed)
+          const ws = await this.ensureWebSocketRpcConnection();
+          ws.send(JSON.stringify(message));
+        }
+      } catch (error) {
+        this.rpcTable.delete(rpcId);
+        reject(error);
+        return;
+      }
 
       // Timeout to prevent hanging requests
       setTimeout(() => {
@@ -172,7 +277,7 @@ class VSCodeAPIWrapper {
           this.rpcTable.delete(rpcId);
           reject(
             new Error(
-              `VSCode RPC request timed out after ${RPC_TIMEOUT_MS}ms: ${(data as any).vscodeCommand}`,
+              `${this.isVscode() ? 'VSCode' : 'WebSocket'} RPC request timed out after ${RPC_TIMEOUT_MS}ms: ${(data as any).vscodeCommand}`,
             ),
           );
         }

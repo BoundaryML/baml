@@ -76,11 +76,12 @@ cargo install cross || true
 rustup target add wasm32-unknown-unknown
 
 # Now navigate to the baml-schema-wasm directory for building
-cd engine/baml-schema-wasm
+cd engine/baml-schema-wasm/web
 export OPENSSL_NO_VENDOR=1
+pnpm build
 
 # Go back to root directory
-cd ../../
+cd ../../../
 
 # Run the build
 echo "Building fiddle-web-app..."

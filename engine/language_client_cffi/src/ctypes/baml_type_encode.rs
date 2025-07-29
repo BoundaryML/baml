@@ -34,7 +34,11 @@ where
     T: std::hash::Hash + std::cmp::Eq,
 {
     fn encode(self) -> CffiFieldTypeHolder {
-        let WithIr { value, lookup } = self;
+        let WithIr {
+            value,
+            lookup,
+            mode,
+        } = self;
 
         use cffi_field_type_holder::Type as cType;
 
@@ -61,6 +65,7 @@ where
                 let element = WithIr {
                     value: &(type_generic.as_ref(), allow_user_defined_unions),
                     lookup,
+                    mode,
                 }
                 .encode();
                 cType::ListType(Box::new(CffiFieldTypeList {
@@ -71,11 +76,13 @@ where
                 let key = WithIr {
                     value: &(type_generic.as_ref(), allow_user_defined_unions),
                     lookup,
+                    mode,
                 }
                 .encode();
                 let value = WithIr {
                     value: &(type_generic1.as_ref(), allow_user_defined_unions),
                     lookup,
+                    mode,
                 }
                 .encode();
                 cType::MapType(Box::new(CffiFieldTypeMap {
@@ -105,6 +112,7 @@ where
                         WithIr {
                             value: &(t, allow_user_defined_unions),
                             lookup,
+                            mode,
                         }
                         .encode()
                     })
@@ -127,6 +135,7 @@ where
                             let inner = WithIr {
                                 value: &(type_generic, allow_user_defined_unions),
                                 lookup,
+                                mode,
                             }
                             .encode();
                             cType::OptionalType(Box::new(CffiFieldTypeOptional {
@@ -144,13 +153,24 @@ where
                                     WithIr {
                                         value: &(t, allow_user_defined_unions),
                                         lookup,
+                                        mode,
                                     }
                                     .encode()
                                 })
                                 .collect();
                             cType::UnionVariantType(CffiFieldTypeUnionVariant {
                                 name: Some(CffiTypeName {
-                                    namespace: CffiTypeNamespace::Types.into(),
+                                    namespace: match value.mode(&mode, lookup) {
+                                        Ok(baml_types::StreamingMode::NonStreaming) => {
+                                            CffiTypeNamespace::Types.into()
+                                        }
+                                        Ok(baml_types::StreamingMode::Streaming) => {
+                                            CffiTypeNamespace::StreamTypes.into()
+                                        }
+                                        Err(e) => {
+                                            panic!("Failed to get mode for field type: {e}");
+                                        }
+                                    },
                                     name: value.to_union_name().to_string(),
                                 }),
                                 options: elements,
@@ -167,13 +187,24 @@ where
                                     WithIr {
                                         value: &(t, allow_user_defined_unions),
                                         lookup,
+                                        mode,
                                     }
                                     .encode()
                                 })
                                 .collect();
                             let inner = cType::UnionVariantType(CffiFieldTypeUnionVariant {
                                 name: Some(CffiTypeName {
-                                    namespace: CffiTypeNamespace::Types.into(),
+                                    namespace: match value.mode(&mode, lookup) {
+                                        Ok(baml_types::StreamingMode::NonStreaming) => {
+                                            CffiTypeNamespace::Types.into()
+                                        }
+                                        Ok(baml_types::StreamingMode::Streaming) => {
+                                            CffiTypeNamespace::StreamTypes.into()
+                                        }
+                                        Err(e) => {
+                                            panic!("Failed to get mode for field type: {e}");
+                                        }
+                                    },
                                     name: value.to_union_name().to_string(),
                                 }),
                                 options: elements,

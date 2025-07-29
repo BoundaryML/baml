@@ -209,6 +209,136 @@ export class BamlAudio {
   }
 }
 
+export class BamlPdf {
+  private constructor(
+    private readonly type: 'url' | 'base64',
+    private readonly content: string,
+    private readonly mediaType?: string,
+  ) {}
+
+  static fromUrl(url: string, mediaType?: string): BamlPdf {
+    return new BamlPdf('url', url, mediaType);
+  }
+
+  static fromBase64(mediaType: string, base64: string): BamlPdf {
+    return new BamlPdf('base64', base64, mediaType);
+  }
+
+  static async fromFile(file: File): Promise<BamlPdf> {
+    return BamlPdf.fromBlob(file, file.type);
+  }
+
+  static async fromBlob(blob: Blob, mediaType?: string): Promise<BamlPdf> {
+    const base64 = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+    const base64Data = base64.replace(/^data:.*?;base64,/, '');
+    return BamlPdf.fromBase64(mediaType || blob.type, base64Data);
+  }
+
+  static async fromUrlToBase64(url: string): Promise<BamlPdf> {
+    const response = await fetch(url);
+    const blob = await response.blob();
+    return BamlPdf.fromBlob(blob);
+  }
+
+  isUrl(): boolean {
+    return this.type === 'url';
+  }
+
+  asUrl(): string {
+    if (!this.isUrl()) {
+      throw new Error('Pdf is not a URL');
+    }
+    return this.content;
+  }
+
+  asBase64(): [string, string] {
+    if (this.type !== 'base64') {
+      throw new Error('Pdf is not base64');
+    }
+    return [this.content, this.mediaType || ''];
+  }
+
+  toJSON(): { url: string } | { base64: string; media_type: string } {
+    if (this.type === 'url') {
+      return { url: this.content };
+    }
+    return {
+      base64: this.content,
+      media_type: this.mediaType || '',
+    };
+  }
+}
+
+export class BamlVideo {
+  private constructor(
+    private readonly type: 'url' | 'base64',
+    private readonly content: string,
+    private readonly mediaType?: string,
+  ) {}
+
+  static fromUrl(url: string, mediaType?: string): BamlVideo {
+    return new BamlVideo('url', url, mediaType);
+  }
+
+  static fromBase64(mediaType: string, base64: string): BamlVideo {
+    return new BamlVideo('base64', base64, mediaType);
+  }
+
+  static async fromFile(file: File): Promise<BamlVideo> {
+    return BamlVideo.fromBlob(file, file.type);
+  }
+
+  static async fromBlob(blob: Blob, mediaType?: string): Promise<BamlVideo> {
+    const base64 = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+    const base64Data = base64.replace(/^data:.*?;base64,/, '');
+    return BamlVideo.fromBase64(mediaType || blob.type, base64Data);
+  }
+
+  static async fromUrlToBase64(url: string): Promise<BamlVideo> {
+    const response = await fetch(url);
+    const blob = await response.blob();
+    return BamlVideo.fromBlob(blob);
+  }
+
+  isUrl(): boolean {
+    return this.type === 'url';
+  }
+
+  asUrl(): string {
+    if (!this.isUrl()) {
+      throw new Error('Video is not a URL');
+    }
+    return this.content;
+  }
+
+  asBase64(): [string, string] {
+    if (this.type !== 'base64') {
+      throw new Error('Video is not base64');
+    }
+    return [this.content, this.mediaType || ''];
+  }
+
+  toJSON(): { url: string } | { base64: string; media_type: string } {
+    if (this.type === 'url') {
+      return { url: this.content };
+    }
+    return {
+      base64: this.content,
+      media_type: this.mediaType || '',
+    };
+  }
+}
+
 // Detect if we're in server-side rendering environment
 const isSSR = typeof window === 'undefined';
 
@@ -237,13 +367,24 @@ const AudioImpl = new Proxy(
   BamlAudio,
   createSSRProxyHandler<typeof BamlAudio>('Audio'),
 );
+const PdfImpl = new Proxy(
+  BamlPdf,
+  createSSRProxyHandler<typeof BamlPdf>('Pdf'),
+);
+const VideoImpl = new Proxy(
+  BamlVideo,
+  createSSRProxyHandler<typeof BamlVideo>('Video'),
+);
 
 // Now export everything properly
 // First, define the type alias
 export type Image = BamlImageType;
 export type Audio = BamlAudioType;
+export type Pdf = BamlPdf;
+export type Video = BamlVideo;
 
 // Then export the implementations
 export { ImageImpl as Image, AudioImpl as Audio };
+export { PdfImpl as Pdf, VideoImpl as Video };
 
 
