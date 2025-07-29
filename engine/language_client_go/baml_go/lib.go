@@ -70,20 +70,14 @@ func init() {
 	initSlog() // Initialize the logger first
 	initOnce.Do(func() {
 		initErr = initializeBaml()
-		// Don't panic on initialization failure - let calling code handle it
 		if initErr != nil {
-			logger.Error("Failed to initialize BAML library", "error", initErr)
+			panic(initErr)
 		}
 	})
 }
 
 func GetInitError() error {
 	return initErr
-}
-
-// IsInitialized returns true if the BAML library was successfully initialized
-func IsInitialized() bool {
-	return initErr == nil
 }
 
 func initializeBaml() error {

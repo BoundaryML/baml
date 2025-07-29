@@ -16,10 +16,6 @@ import (
 import "C"
 
 func CreateBamlRuntime(rootPath string, srcFilesJson string, envVarsJson string) (unsafe.Pointer, error) {
-	if initErr != nil {
-		return nil, fmt.Errorf("BAML library not initialized: %w", initErr)
-	}
-	
 	cRootPath := C.CString(rootPath)
 	defer C.free(unsafe.Pointer(cRootPath))
 
@@ -46,7 +42,6 @@ func BamlVersion() string {
 }
 
 func InvokeRuntimeCli(args []string) (int, error) {
-	// Create array with extra slot for NULL terminator, C likes null terminated strings
 	arg_c_strings := make([]*C.char, len(args)+1)
 	for i, arg := range args {
 		arg_c_strings[i] = C.CString(arg)

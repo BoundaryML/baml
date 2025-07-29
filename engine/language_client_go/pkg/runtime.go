@@ -53,9 +53,6 @@ func CreateRuntime(
 	src_files map[string]string,
 	env_vars map[string]string,
 ) (BamlRuntime, error) {
-	if initErr := baml_go.GetInitError(); initErr != nil {
-		return BamlRuntime{}, fmt.Errorf("BAML library not initialized: %w", initErr)
-	}
 
 	src_files_json, err := json.Marshal(src_files)
 	if err != nil {
@@ -80,11 +77,6 @@ func CreateRuntime(
 }
 
 func (r *BamlRuntime) CallFunction(ctx context.Context, functionName string, encoded_args []byte, onTick OnTickCallbackData) (*ResultCallback, error) {
-	// Check for initialization and callback registration errors
-	if initErr := baml_go.GetInitError(); initErr != nil {
-		return nil, fmt.Errorf("BAML library not initialized: %w", initErr)
-	}
-	
 	callback_id, callback := create_unique_id(ctx, onTick)
 	return_channel := make(chan ResultCallback)
 	go func() {
@@ -122,11 +114,6 @@ func (r *BamlRuntime) CallFunction(ctx context.Context, functionName string, enc
 }
 
 func (r *BamlRuntime) CallFunctionStream(ctx context.Context, functionName string, encoded_args []byte, onTick OnTickCallbackData) (<-chan ResultCallback, error) {
-	// Check for initialization and callback registration errors
-	if initErr := baml_go.GetInitError(); initErr != nil {
-		return nil, fmt.Errorf("BAML library not initialized: %w", initErr)
-	}
-	
 	callback_id, callback := create_unique_id(ctx, onTick)
 
 	result, err := baml_go.CallFunctionStreamFromC(r.runtime, functionName, encoded_args, callback_id)
