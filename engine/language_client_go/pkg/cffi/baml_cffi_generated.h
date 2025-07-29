@@ -23,16 +23,6 @@ typedef struct Buffer {
   size_t len;
 } Buffer;
 
-const char *version(void);
-
-const void *create_baml_runtime(const char *root_path,
-                                const char *src_files_json,
-                                const char *env_vars_json);
-
-void destroy_baml_runtime(const void *runtime);
-
-int invoke_runtime_cli(const char *const *args);
-
 void register_callbacks(CallbackFn callback_fn,
                         CallbackFn error_callback_fn,
                         OnTickCallbackFn on_tick_callback_fn);
@@ -61,4 +51,14 @@ struct Buffer call_object_constructor(const char *encoded_args, uintptr_t length
 
 void free_buffer(struct Buffer buf);
 
-struct Buffer call_object_method(const char *encoded_args, uintptr_t length);
+struct Buffer call_object_method(const void *runtime, const char *encoded_args, uintptr_t length);
+
+const char *version(void);
+
+const void *create_baml_runtime(const char *root_path,
+                                const char *src_files_json,
+                                const char *env_vars_json);
+
+void destroy_baml_runtime(const void *runtime);
+
+int invoke_runtime_cli(const char *const *args);

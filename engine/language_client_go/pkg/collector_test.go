@@ -5,8 +5,13 @@ import (
 )
 
 func TestCollectorAPI(t *testing.T) {
+	rt, err := CreateRuntime(".", map[string]string{}, map[string]string{})
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+
 	// Test creating a collector
-	collector, err := NewCollector("test-collector")
+	collector, err := rt.NewCollector("test-collector")
 	if err != nil {
 		t.Fatalf("Failed to create collector: %v", err)
 	}
@@ -56,8 +61,13 @@ func TestCollectorAPI(t *testing.T) {
 }
 
 func TestCollectorNoName(t *testing.T) {
+	rt, err := CreateRuntime(".", map[string]string{}, map[string]string{})
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+
 	// Test creating a collector without a name
-	collector, err := NewCollector("")
+	collector, err := rt.NewCollector("")
 	if err != nil {
 		t.Errorf("Failed to create collector: %v", err)
 	}
@@ -73,8 +83,13 @@ func TestCollectorNoName(t *testing.T) {
 }
 
 func TestCollectorCallsAPI(t *testing.T) {
+	rt, err := CreateRuntime(".", map[string]string{}, map[string]string{})
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+
 	// Test creating a collector
-	collector, err := NewCollector("calls-test-collector")
+	collector, err := rt.NewCollector("calls-test-collector")
 	if err != nil {
 		t.Errorf("Failed to create collector: %v", err)
 		return
@@ -135,8 +150,13 @@ func TestCollectorCallsAPI(t *testing.T) {
 }
 
 func TestCollectorClearAPI(t *testing.T) {
+	rt, err := CreateRuntime(".", map[string]string{}, map[string]string{})
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+
 	// Test creating a collector
-	collector, err := NewCollector("clear-test-collector")
+	collector, err := rt.NewCollector("clear-test-collector")
 	if err != nil {
 		t.Errorf("Failed to create collector: %v", err)
 		return

@@ -1,16 +1,16 @@
-use baml_types::BamlValue;
-
-use crate::{baml::cffi::CffiObjectType, ctypes::utils::Decode, raw_ptr_wrapper::RawPtrType};
+use crate::{
+    baml::cffi::CffiObjectType, ctypes::utils::Decode, ffi::Value, raw_ptr_wrapper::RawPtrType,
+};
 
 pub struct BamlMethodArguments {
     pub object: RawPtrType,
     pub method_name: String,
-    pub kwargs: baml_types::BamlMap<String, BamlValue>,
+    pub kwargs: baml_types::BamlMap<String, crate::ffi::Value>,
 }
 
 pub struct BamlObjectConstructorArgs {
     pub object_type: CffiObjectType,
-    pub kwargs: baml_types::BamlMap<String, BamlValue>,
+    pub kwargs: baml_types::BamlMap<String, crate::ffi::Value>,
 }
 
 impl Decode for BamlMethodArguments {
@@ -29,7 +29,7 @@ impl Decode for BamlMethodArguments {
                 .kwargs
                 .into_iter()
                 .map(|v| match v.value {
-                    Some(value) => Ok((v.key, BamlValue::decode(value)?)),
+                    Some(value) => Ok((v.key, Value::decode(value)?)),
                     None => Err(anyhow::anyhow!("Failed to decode BamlValue")),
                 })
                 .collect::<Result<_, _>>()?,
@@ -47,8 +47,8 @@ impl Decode for BamlObjectConstructorArgs {
                 .kwargs
                 .into_iter()
                 .map(|v| match v.value {
-                    Some(value) => Ok((v.key, BamlValue::decode(value)?)),
-                    None => Err(anyhow::anyhow!("Failed to decode BamlValue")),
+                    Some(value) => Ok((v.key, Value::decode(value)?)),
+                    None => Err(anyhow::anyhow!("Failed to decode Value")),
                 })
                 .collect::<Result<_, _>>()?,
         })

@@ -2,6 +2,7 @@ package baml
 
 import (
 	"fmt"
+	"unsafe"
 
 	"github.com/boundaryml/baml/engine/language_client_go/baml_go/raw_objects"
 	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
@@ -11,8 +12,8 @@ type llmCall struct {
 	*raw_objects.RawObject
 }
 
-func newLLMCall(ptr int64) LLMCall {
-	return &llmCall{raw_objects.FromPointer(ptr)}
+func newLLMCall(ptr int64, rt unsafe.Pointer) LLMCall {
+	return &llmCall{raw_objects.FromPointer(ptr, rt)}
 }
 
 func (l *llmCall) ObjectType() cffi.CFFIObjectType {

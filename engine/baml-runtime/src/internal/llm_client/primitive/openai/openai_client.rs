@@ -534,20 +534,17 @@ impl ToProviderMessage for OpenAIClient {
                 match &media.content {
                     BamlMediaContent::Base64(b64_media) => {
                         let mime_type_str = media.mime_type_as_ok()?;
-                        let format_str = match mime_type_str.as_str() {
-                            "audio/wav" | "wav" => "wav",
-                            "audio/mp3" | "mp3" => "mp3",
-                            "audio/mpeg" | "mpeg" => "mp3",
-                            // "audio/ogg" | "ogg" => "ogg",
-                            // "audio/webm" | "webm" => "webm",
-                            // "audio/flac" | "flac" => "flac",
-                            // "audio/m4a" | "m4a" => "m4a",
-                            // "audio/x-m4a" | "x-m4a" => "x-m4a",
-                            // Add other supported formats here if needed in the future
-                            _ => anyhow::bail!(
-                                "Unsupported audio format for input_audio: '{}'. OpenAI currently supports 'wav' and 'mp3' for this structure.",
-                                mime_type_str
-                            ),
+                        // remove "audio/" from the start of the mime type if it exists
+                        let mime_type_str = mime_type_str
+                            .strip_prefix("audio/")
+                            .unwrap_or(mime_type_str.as_str());
+
+                        // note: openai only supports mp3/wav for audio input
+                        // but we can still send other formats and allow openai to handle
+                        // the conversion
+                        let format_str = match mime_type_str {
+                            "mpeg" => "mp3",
+                            other => other,
                         };
                         content.insert(
                             payload_key.into(),

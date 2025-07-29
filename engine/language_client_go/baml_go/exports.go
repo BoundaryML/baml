@@ -6,7 +6,7 @@ import (
 )
 
 /*
-#cgo CFLAGS: -I${SRCDIR}/../include
+#cgo CFLAGS: -I${SRCDIR}
 #cgo CFLAGS: -O3 -g
 #include <baml_cffi_wrapper.h>
 #include <stdlib.h>
@@ -42,13 +42,14 @@ func BamlVersion() string {
 }
 
 func InvokeRuntimeCli(args []string) (int, error) {
-	arg_c_strings := make([]*C.char, len(args))
+	arg_c_strings := make([]*C.char, len(args)+1)
 	for i, arg := range args {
 		arg_c_strings[i] = C.CString(arg)
 	}
+	
 	defer func() {
-		for _, arg_c_string := range arg_c_strings {
-			C.free(unsafe.Pointer(arg_c_string))
+		for i := 0; i < len(args); i++ {
+			C.free(unsafe.Pointer(arg_c_strings[i]))
 		}
 	}()
 

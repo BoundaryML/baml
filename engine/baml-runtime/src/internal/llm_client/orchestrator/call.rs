@@ -67,11 +67,12 @@ pub async fn orchestrate(
                 results.push((
                     node.scope,
                     LLMResponse::InternalFailure(e.to_string()),
-                    None,
+                    Some(Err(anyhow::anyhow!(e.to_string()))),
                 ));
                 continue;
             }
         };
+
         let ctx = CtxWithHttpRequestId::from(ctx);
         let response = node.single_call(&ctx, &prompt).await;
         let parsed_response = match &response {
@@ -100,7 +101,9 @@ pub async fn orchestrate(
             }) => {
                 match code {
                     // This is some internal BAML error, so handle it like any other error
-                    crate::internal::llm_client::ErrorCode::Other(2) => None,
+                    crate::internal::llm_client::ErrorCode::Other(2) => {
+                        Some(Err(anyhow::anyhow!(message.clone())))
+                    }
                     _ => Some(Err(anyhow::anyhow!(
                         crate::errors::ExposedError::ClientHttpError {
                             client_name: client.clone(),

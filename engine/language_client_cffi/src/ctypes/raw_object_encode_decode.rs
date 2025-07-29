@@ -1,97 +1,31 @@
+use baml_cffi_macros::generate_encode_decode_impls;
+
 use crate::{
     baml::cffi::{cffi_raw_object::Object, CffiPointerType, CffiRawObject},
     ctypes::utils::{Decode, Encode},
     raw_ptr_wrapper::{
         CollectorWrapper, FunctionLogWrapper, HTTPBodyWrapper, HTTPRequestWrapper,
-        HTTPResponseWrapper, LLMCallWrapper, LLMStreamCallWrapper, RawPtrType, RawPtrWrapper,
-        SSEEventWrapper, StreamTimingWrapper, TimingWrapper, UsageWrapper,
+        HTTPResponseWrapper, LLMCallWrapper, LLMStreamCallWrapper, MediaWrapper, RawPtrType,
+        RawPtrWrapper, SSEEventWrapper, StreamTimingWrapper, TimingWrapper, TypeBuilderWrapper,
+        TypeWrapper, UsageWrapper,
     },
 };
 
-impl Decode for RawPtrType {
-    type From = CffiRawObject;
-
-    fn decode(from: Self::From) -> Result<Self, anyhow::Error>
-    where
-        Self: Sized,
-    {
-        match from.object {
-            Some(Object::Collector(pointer)) => {
-                Ok(RawPtrType::Collector(CollectorWrapper::decode(pointer)?))
-            }
-            Some(Object::Usage(pointer)) => Ok(RawPtrType::Usage(UsageWrapper::decode(pointer)?)),
-            Some(Object::FunctionLog(pointer)) => Ok(RawPtrType::FunctionLog(
-                FunctionLogWrapper::decode(pointer)?,
-            )),
-            Some(Object::Timing(pointer)) => {
-                Ok(RawPtrType::Timing(TimingWrapper::decode(pointer)?))
-            }
-            Some(Object::StreamTiming(pointer)) => Ok(RawPtrType::StreamTiming(
-                StreamTimingWrapper::decode(pointer)?,
-            )),
-            Some(Object::LlmCall(pointer)) => {
-                Ok(RawPtrType::LLMCall(LLMCallWrapper::decode(pointer)?))
-            }
-            Some(Object::LlmStreamCall(pointer)) => Ok(RawPtrType::LLMStreamCall(
-                LLMStreamCallWrapper::decode(pointer)?,
-            )),
-            Some(Object::HttpRequest(pointer)) => Ok(RawPtrType::HTTPRequest(
-                HTTPRequestWrapper::decode(pointer)?,
-            )),
-            Some(Object::HttpResponse(pointer)) => Ok(RawPtrType::HTTPResponse(
-                HTTPResponseWrapper::decode(pointer)?,
-            )),
-            Some(Object::HttpBody(pointer)) => {
-                Ok(RawPtrType::HTTPBody(HTTPBodyWrapper::decode(pointer)?))
-            }
-            Some(Object::SseResponse(pointer)) => {
-                Ok(RawPtrType::SSEEvent(SSEEventWrapper::decode(pointer)?))
-            }
-            None => Err(anyhow::anyhow!("Invalid object type")),
-        }
-    }
-}
-
-impl Encode<CffiRawObject> for RawPtrType {
-    fn encode(self) -> CffiRawObject {
-        match self {
-            RawPtrType::Collector(raw_ptr_wrapper) => raw_ptr_wrapper.encode(),
-            RawPtrType::Usage(raw_ptr_wrapper) => raw_ptr_wrapper.encode(),
-            RawPtrType::FunctionLog(raw_ptr_wrapper) => raw_ptr_wrapper.encode(),
-            RawPtrType::Timing(raw_ptr_wrapper) => raw_ptr_wrapper.encode(),
-            RawPtrType::StreamTiming(raw_ptr_wrapper) => raw_ptr_wrapper.encode(),
-            RawPtrType::LLMCall(raw_ptr_wrapper) => raw_ptr_wrapper.encode(),
-            RawPtrType::LLMStreamCall(raw_ptr_wrapper) => raw_ptr_wrapper.encode(),
-            RawPtrType::HTTPRequest(raw_ptr_wrapper) => raw_ptr_wrapper.encode(),
-            RawPtrType::HTTPResponse(raw_ptr_wrapper) => raw_ptr_wrapper.encode(),
-            RawPtrType::HTTPBody(raw_ptr_wrapper) => raw_ptr_wrapper.encode(),
-            RawPtrType::SSEEvent(raw_ptr_wrapper) => raw_ptr_wrapper.encode(),
-        }
-    }
-}
-
-macro_rules! impl_encode_decode_for_wrapper {
-    ($object_type:ident, $wrapper_type:ident) => {
-        impl Decode for $wrapper_type {
-            type From = CffiPointerType;
-
-            fn decode(from: Self::From) -> Result<Self, anyhow::Error>
-            where
-                Self: Sized,
-            {
-                Ok($wrapper_type::from_raw(
-                    from.pointer as *const libc::c_void,
-                    true,
-                ))
-            }
-        }
-
-        impl ObjectType for $wrapper_type {
-            fn object_type(&self) -> Object {
-                Object::$object_type(self.pointer())
-            }
-        }
-    };
+generate_encode_decode_impls! {
+    Collector => Collector as CollectorWrapper: "Collector" (Object::Collector),
+    Usage => Usage as UsageWrapper: "Usage" (Object::Usage),
+    FunctionLog => FunctionLog as FunctionLogWrapper: "FunctionLog" (Object::FunctionLog),
+    Timing => Timing as TimingWrapper: "Timing" (Object::Timing),
+    StreamTiming => StreamTiming as StreamTimingWrapper: "StreamTiming" (Object::StreamTiming),
+    LLMCall => LLMCall as LLMCallWrapper: "LLMCall" (Object::LlmCall),
+    LLMStreamCall => LLMStreamCall as LLMStreamCallWrapper: "LLMStreamCall" (Object::LlmStreamCall),
+    HTTPRequest => HTTPRequest as HTTPRequestWrapper: "HTTPRequest" (Object::HttpRequest),
+    HTTPResponse => HTTPResponse as HTTPResponseWrapper: "HTTPResponse" (Object::HttpResponse),
+    HTTPBody => HTTPBody as HTTPBodyWrapper: "HTTPBody" (Object::HttpBody),
+    SSEEvent => SSEEvent as SSEEventWrapper: "SSEEvent" (Object::SseResponse),
+    BamlMedia => Media as MediaWrapper: "Media" (Object::MediaImage, Object::MediaAudio, Object::MediaPdf, Object::MediaVideo),
+    TypeBuilder => TypeBuilder as TypeBuilderWrapper: "TypeBuilder" (Object::TypeBuilder),
+    TypeIR => TypeDef as TypeWrapper: "Type" (Object::Type)
 }
 
 trait ObjectType {
@@ -109,14 +43,27 @@ where
     }
 }
 
-impl_encode_decode_for_wrapper!(Collector, CollectorWrapper);
-impl_encode_decode_for_wrapper!(Usage, UsageWrapper);
-impl_encode_decode_for_wrapper!(FunctionLog, FunctionLogWrapper);
-impl_encode_decode_for_wrapper!(Timing, TimingWrapper);
-impl_encode_decode_for_wrapper!(StreamTiming, StreamTimingWrapper);
-impl_encode_decode_for_wrapper!(LlmCall, LLMCallWrapper);
-impl_encode_decode_for_wrapper!(LlmStreamCall, LLMStreamCallWrapper);
-impl_encode_decode_for_wrapper!(HttpRequest, HTTPRequestWrapper);
-impl_encode_decode_for_wrapper!(HttpResponse, HTTPResponseWrapper);
-impl_encode_decode_for_wrapper!(HttpBody, HTTPBodyWrapper);
-impl_encode_decode_for_wrapper!(SseResponse, SSEEventWrapper);
+impl Decode for MediaWrapper {
+    type From = CffiPointerType;
+
+    fn decode(from: Self::From) -> Result<Self, anyhow::Error>
+    where
+        Self: Sized,
+    {
+        Ok(MediaWrapper::from_raw(
+            from.pointer as *const libc::c_void,
+            true,
+        ))
+    }
+}
+
+impl ObjectType for MediaWrapper {
+    fn object_type(&self) -> Object {
+        match self.media_type {
+            baml_types::BamlMediaType::Image => Object::MediaImage(self.pointer()),
+            baml_types::BamlMediaType::Audio => Object::MediaAudio(self.pointer()),
+            baml_types::BamlMediaType::Pdf => Object::MediaPdf(self.pointer()),
+            baml_types::BamlMediaType::Video => Object::MediaVideo(self.pointer()),
+        }
+    }
+}

@@ -894,7 +894,7 @@ func (u *Union2FloatOrInt) Float() *float64 {
 type Union2ImageOrString struct {
 	variant string
 
-	variant_Image *any
+	variant_Image *Image
 
 	variant_String *string
 }
@@ -905,7 +905,7 @@ func (u *Union2ImageOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap
 	switch variantName {
 	case "image":
 		u.variant = "Image"
-		value := baml.Decode(valueHolder).Interface().(any)
+		value := baml.Decode(valueHolder).Interface().(Image)
 		u.variant_Image = &value
 	case "string":
 		u.variant = "String"
@@ -980,7 +980,7 @@ func (u *Union2ImageOrString) UnmarshalJSON(data []byte) error {
 	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
-func Union2ImageOrString__NewImage(v any) Union2ImageOrString {
+func Union2ImageOrString__NewImage(v Image) Union2ImageOrString {
 
 	return Union2ImageOrString{
 		variant:       "Image",
@@ -988,7 +988,7 @@ func Union2ImageOrString__NewImage(v any) Union2ImageOrString {
 	}
 }
 
-func (u *Union2ImageOrString) SetImage(v any) {
+func (u *Union2ImageOrString) SetImage(v Image) {
 
 	u.variant = "Image"
 	u.variant_Image = &v
@@ -1001,7 +1001,7 @@ func (u *Union2ImageOrString) IsImage() bool {
 	return u.variant == "Image"
 }
 
-func (u *Union2ImageOrString) Image() *any {
+func (u *Union2ImageOrString) Image() *Image {
 	if u.variant != "Image" {
 		return nil
 	}
