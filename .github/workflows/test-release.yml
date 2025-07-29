@@ -9,9 +9,8 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# permissions:
-#   contents: read
-#   id-token: write
+permissions:
+  contents: read
 
 # Common environment variables
 env:
