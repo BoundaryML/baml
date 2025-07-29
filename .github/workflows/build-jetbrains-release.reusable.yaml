@@ -73,26 +73,11 @@ jobs:
       - name: Build plugin
         run: ./gradlew buildPlugin
 
-      - name: Debug - List build directory contents
-        run: |
-          echo "Contents of ./build/:"
-          ls -la ./build/ || echo "build directory doesn't exist"
-          echo ""
-          echo "Contents of ./build/libs/:"
-          ls -la ./build/libs/ || echo "libs directory doesn't exist"
-          echo ""
-          echo "Contents of ./build/distributions/:"
-          ls -la ./build/distributions/ || echo "distributions directory doesn't exist"
-          echo ""
-          echo "All .jar and .zip files in build directory:"
-          find ./build -name "*.jar" -o -name "*.zip" -type f || echo "No JAR or ZIP files found"
-
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: baml-jetbrains-zip
-          path: ./build/distributions/BAML Playground-*.zip
-          if-no-files-found: error
+          name: baml-jetbrains-zip-${{ steps.properties.outputs.version }}
+          path: ./jetbrains/build/distributions/*
 
   # # Run tests and upload a code coverage report
   # test:

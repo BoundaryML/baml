@@ -50,8 +50,9 @@ jobs:
       - name: Download extension zips
         uses: actions/download-artifact@v4
         with:
-          name: baml-jetbrains-zip
+          pattern: baml-jetbrains-zip-*
           path: ./jetbrains/build/distributions/
+          merge-multiple: true
       - name: List downloaded extension zips
         run: ls -la ./jetbrains/build/distributions/
       - name: Test JetBrains Marketplace Publishing

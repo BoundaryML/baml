@@ -261,10 +261,10 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           pattern: baml-jetbrains-zip-*
-          path: ./jetbrains/build/libs/
+          path: ./jetbrains/build/distributions/
           merge-multiple: true
       - name: List downloaded extension zips
-        run: ls -la ./jetbrains/build/libs/
+        run: ls -la ./jetbrains/build/distributions/
       - name: Publish to JetBrains Marketplace
         run: cd ./jetbrains && ./gradlew publishPlugin
         env:
