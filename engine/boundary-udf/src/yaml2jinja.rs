@@ -12,8 +12,7 @@ use minijinja::machinery::ast;
 use crate::{
     config::{Constant, Function, OutputExpression},
     eval::CompileContext,
-    IntrusiveStack,
-    HashByPtr,
+    HashByPtr, IntrusiveStack,
 };
 
 pub fn compile_returns_to_jinja<'udf>(
@@ -423,7 +422,6 @@ impl<'ast, 'src> core::ops::Deref for PreOrderTraversal<'ast, 'src> {
         &self.0
     }
 }
-
 
 fn rebuild_from_flattened<'search, 'src>(
     flattened: &PreOrderTraversal<'_, 'src>,

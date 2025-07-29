@@ -25,9 +25,8 @@ pub fn get_env<'s>() -> minijinja::Environment<'s> {
 #[derive(Clone, Copy)]
 pub struct HashByPtr<'a, T: ?Sized>(pub &'a T);
 
-impl <T: ?Sized + std::fmt::Debug> std::fmt::Debug for HashByPtr<'_, T> {
+impl<T: ?Sized + std::fmt::Debug> std::fmt::Debug for HashByPtr<'_, T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-
         // add the pointer address to the debug output
         write!(f, "(@{:p}) {:?}", self.0 as *const _, self.0)
     }
