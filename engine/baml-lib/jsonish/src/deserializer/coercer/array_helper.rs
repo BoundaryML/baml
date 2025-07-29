@@ -94,13 +94,13 @@ pub(super) fn pick_best(
                         ) = (a_val, b_val)
                         {
                             // Prefer lists with properly parsed content over lists containing raw markdown strings
-                            let a_has_markdown_string = items_a.get(0).map_or(false, |item| {
+                            let a_has_markdown_string = items_a.first().is_some_and(|item| {
                                 item.conditions()
                                     .flags
                                     .iter()
                                     .any(|f| matches!(f, Flag::ObjectFromMarkdown(_)))
                             });
-                            let b_has_markdown_string = items_b.get(0).map_or(false, |item| {
+                            let b_has_markdown_string = items_b.first().is_some_and(|item| {
                                 item.conditions()
                                     .flags
                                     .iter()
