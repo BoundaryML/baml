@@ -9,7 +9,7 @@
     "build": "pnpm run release",
     "release": "pnpm run pack --release",
     "pack": "wasm-pack build ../ --target bundler --out-dir ./web/dist",
-    "dev.skip": "cargo watch -C .. -w ./src -s 'cargo build --manifest-path ../Cargo.toml && pnpm run release'",
+    "dev.skip": "cargo watch -C ../ -w ./src -s 'cargo build --package baml-schema-build && pnpm run pack --dev'",
     "dev": "pnpm run build"
   },
   "exports": {
