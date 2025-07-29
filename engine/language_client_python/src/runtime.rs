@@ -1,9 +1,9 @@
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use baml_runtime::{
-    async_vm_runtime::BamlAsyncVmRuntime as CoreBamlRuntime,
     runtime_interface::ExperimentalTracingInterface,
 };
+
 use pyo3::{
     prelude::{pymethods, PyResult},
     pyclass,
@@ -34,10 +34,9 @@ use crate::{
     },
 };
 
-// OLD RUNTIME, import the old one to use this.
+// OLD RUNTIME, uncomment below to use the old one.
 
-// use baml_runtime::BamlRuntime as CoreBamlRuntime;
-
+// pub use baml_runtime::BamlRuntime as CoreBamlRuntime;
 // crate::lang_wrapper!(
 //     BamlRuntime,
 //     CoreBamlRuntime,
@@ -48,6 +47,8 @@ use crate::{
 // );
 
 // New Async VM Runtime
+
+pub use baml_runtime::async_vm_runtime::BamlAsyncVmRuntime as CoreBamlRuntime;
 crate::lang_wrapper!(
     BamlRuntime,
     CoreBamlRuntime,
