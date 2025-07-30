@@ -257,7 +257,7 @@ pub fn from_str(
     // Determine the best way to get the desired schema from the parsed schema.
 
     // Lets try to now coerce the value into the expected schema.
-    let parsed_value: BamlValueWithFlags = match target.coerce(&ctx, target, Some(&value)) {
+    let mut parsed_value: BamlValueWithFlags = match target.coerce(&ctx, target, Some(&value)) {
         Ok(v) => {
             if v.conditions()
                 .flags()
@@ -274,9 +274,10 @@ pub fn from_str(
 
     log::debug!("Parsed JSONish (step 2 of parsing): {parsed_value:#?}");
 
-    let value: BamlValue = parsed_value.clone().into();
+    // let value: BamlValue = parsed_value.clone().into();
     // println!("from_str value: {value}");
     // println!("-------------------------------------------------");
+    // parsed_value.clear_flags();
 
     Ok(parsed_value)
 }

@@ -12,6 +12,13 @@ use crate::{
     jsonish,
 };
 
+pub(super) fn try_cast_map(
+    map_target: &TypeIR,
+    value: Option<&jsonish::Value>,
+) -> Option<BamlValueWithFlags> {
+    None
+}
+
 pub(super) fn coerce_map(
     ctx: &ParsingContext,
     map_target: &TypeIR,

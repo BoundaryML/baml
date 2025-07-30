@@ -4,6 +4,13 @@ use internal_baml_core::ir::TypeIR;
 use super::{ParsingContext, ParsingError, TypeCoercer};
 use crate::deserializer::types::BamlValueWithFlags;
 
+pub fn try_cast_alias(
+    alias_target: &TypeIR,
+    value: Option<&crate::jsonish::Value>,
+) -> Option<BamlValueWithFlags> {
+    None
+}
+
 pub fn coerce_alias(
     ctx: &ParsingContext,
     target: &TypeIR,

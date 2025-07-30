@@ -4,6 +4,13 @@ use internal_baml_core::ir::TypeIR;
 use super::{ParsingContext, ParsingError, TypeCoercer};
 use crate::deserializer::{coercer::array_helper, types::BamlValueWithFlags};
 
+pub(super) fn try_cast_union(
+    union_target: &TypeIR,
+    value: Option<&crate::jsonish::Value>,
+) -> Option<BamlValueWithFlags> {
+    None
+}
+
 pub(super) fn coerce_union(
     ctx: &ParsingContext,
     union_target: &TypeIR,

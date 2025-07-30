@@ -8,6 +8,13 @@ use crate::deserializer::{
     types::BamlValueWithFlags,
 };
 
+pub(super) fn try_cast_array(
+    array_target: &TypeIR,
+    value: Option<&crate::jsonish::Value>,
+) -> Option<BamlValueWithFlags> {
+    None
+}
+
 pub(super) fn coerce_array(
     ctx: &ParsingContext,
     list_target: &TypeIR,
