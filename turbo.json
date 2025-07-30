@@ -74,6 +74,19 @@
     "@baml/playground-common#typecheck": {
       "dependsOn": ["@gloo-ai/baml-schema-wasm-web#build"]
     },
+    "@baml/playground-common#dev": {
+      "dependsOn": ["@gloo-ai/baml-schema-wasm-web#build"],
+      "cache": false,
+      "persistent": true
+    },
+    "@baml/playground#dev": {
+      "dependsOn": [
+        "@gloo-ai/baml-schema-wasm-web#build",
+        "@baml/playground#build"
+      ],
+      "cache": false,
+      "persistent": true
+    },
     "typecheck": {
       "dependsOn": ["^typecheck"],
       "inputs": [

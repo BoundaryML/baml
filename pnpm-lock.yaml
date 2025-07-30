@@ -47,8 +47,6 @@ importers:
 
   engine/baml-schema-wasm/nodejs: {}
 
-  engine/baml-schema-wasm/pkg: {}
-
   engine/baml-schema-wasm/web: {}
 
   engine/cli: {}

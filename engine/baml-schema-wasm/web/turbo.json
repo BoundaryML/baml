@@ -2,6 +2,15 @@
   "$schema": "https://turbo.build/schema.json",
   "extends": ["//"],
   "tasks": {
+    "build": {
+      "inputs": [
+        "../src/**",
+        "src/**"
+      ],
+      "outputs": [
+        "dist/**"
+      ]
+    },
     "dev": {
       "persistent": true,
       "interruptible": true
