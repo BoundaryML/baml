@@ -484,7 +484,7 @@ pub enum VmExecState {
     ///
     /// Bytecode execution continues when control flow is handled back to the
     /// VM.
-    SpawnFuture(usize),
+    ScheduleFuture(usize),
 
     /// VM has completed the execution of all available bytecode.
     Complete(Value),
@@ -613,27 +613,27 @@ impl Vm {
             frame.instruction_ptr += 1;
 
             // Runtime debugging information.
-            #[cfg(debug_assertions)]
-            {
-                let stack = self
-                    .stack
-                    .iter()
-                    .map(|v| crate::debug::display_value(v, &self.objects))
-                    .collect::<Vec<_>>()
-                    .join(", ");
+            // #[cfg(debug_assertions)]
+            // {
+            //     let stack = self
+            //         .stack
+            //         .iter()
+            //         .map(|v| crate::debug::display_value(v, &self.objects))
+            //         .collect::<Vec<_>>()
+            //         .join(", ");
 
-                eprintln!("[{stack}]");
+            //     eprintln!("[{stack}]");
 
-                let (instruction, metadata) = crate::debug::display_instruction(
-                    instruction_ptr,
-                    function,
-                    &self.stack,
-                    &self.objects,
-                    &self.globals,
-                );
+            //     let (instruction, metadata) = crate::debug::display_instruction(
+            //         instruction_ptr,
+            //         function,
+            //         &self.stack,
+            //         &self.objects,
+            //         &self.globals,
+            //     );
 
-                eprintln!("{instruction} {metadata}");
-            }
+            //     eprintln!("{instruction} {metadata}");
+            // }
 
             match function.bytecode.instructions[instruction_ptr as usize] {
                 Instruction::LoadConst(index) => {
@@ -876,7 +876,7 @@ impl Vm {
                     function = self.objects[frame.function].as_function()?;
                 }
 
-                Instruction::CreateFuture(arg_count) => {
+                Instruction::DispatchFuture(arg_count) => {
                     let args_offset = self.stack.len().saturating_sub(arg_count).saturating_sub(1);
 
                     // Get the function object from the stack.
@@ -927,7 +927,7 @@ impl Vm {
                     self.stack.push(Value::Object(self.objects.len() - 1));
 
                     // Yield control flow back to the embedder.
-                    return Ok(VmExecState::SpawnFuture(self.objects.len() - 1));
+                    return Ok(VmExecState::ScheduleFuture(self.objects.len() - 1));
                 }
 
                 Instruction::Await => {

@@ -113,6 +113,10 @@ impl BamlRuntime {
         Ok((cls.getattr("_create_from_state")?.into(), args))
     }
 
+    fn disassemble(&self, function_name: String) {
+        self.inner.disassemble(&function_name);
+    }
+
     /// Static method to recreate BamlRuntime from pickle state
     #[staticmethod]
     fn _create_from_state(

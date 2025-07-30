@@ -84,6 +84,22 @@ impl BamlAsyncVmRuntime {
         self.llm_runtime.internal()
     }
 
+    pub fn disassemble(&self, function_name: &str) {
+        let Some(index) = self
+            .resolved_function_names
+            .get(function_name)
+            .map(|(index, _)| *index)
+        else {
+            return println!("function not found: {function_name}");
+        };
+
+        let Some(baml_vm::Object::Function(function)) = self.objects.get(index) else {
+            return println!("not a function: {function_name}");
+        };
+
+        baml_vm::debug::disassemble(function, &[], &self.objects, &self.globals);
+    }
+
     #[cfg(not(target_arch = "wasm32"))]
     pub fn from_directory<T: AsRef<str>>(
         path: &std::path::Path,
@@ -223,7 +239,7 @@ impl BamlAsyncVmRuntime {
                     }
                 }
 
-                Ok(VmExecState::SpawnFuture(idx)) => {
+                Ok(VmExecState::ScheduleFuture(idx)) => {
                     let pending_future = vm.pending_future(idx);
 
                     let llm_fn = self

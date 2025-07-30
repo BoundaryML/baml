@@ -513,7 +513,7 @@ impl<'g> Compiler<'g> {
 
                 // Either async LLM call or regular function call.
                 if self.llm_functions.contains(app.name.name()) {
-                    self.emit(Instruction::CreateFuture(app.args.len()));
+                    self.emit(Instruction::DispatchFuture(app.args.len()));
                     self.emit(Instruction::Await);
                 } else {
                     self.emit(Instruction::Call(app.args.len()));
@@ -624,7 +624,10 @@ pub fn compile(
                 llm_functions.insert(llm_function.name().to_string());
             }
 
-            _ => eprintln!("name resolution: unhandled Top variant: {}", top.get_type()),
+            _ => {
+                // eprintln!("name resolution: unhandled Top variant: {}", top.get_type());
+                continue;
+            }
         }
     }
 
@@ -674,7 +677,7 @@ pub fn compile(
             }),
 
             _ => {
-                eprintln!("compilation: unhandled Top variant: {}", top.get_type());
+                // eprintln!("compilation: unhandled Top variant: {}", top.get_type());
                 continue;
             }
         };
@@ -745,7 +748,7 @@ mod tests {
 
             eprintln!(
                 "---- fn {function_name}() ----\n{}",
-                baml_vm::debug::display_bytecode(function, &[], &objects, &globals)
+                baml_vm::debug::display_bytecode(function, &[], &objects, &globals, true)
             );
 
             assert_eq!(

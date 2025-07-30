@@ -1578,11 +1578,39 @@ class BamlAsyncClient:
             
         })
         return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
-    async def CallLlmReturnNumber(self, n: int,
+    async def StoreFnCallInLocalVar(self, n: int,
         baml_options: BamlCallOptions = {},
     ) -> int:
-        result = await self.__options.merge_options(baml_options).call_function_async(function_name="CallLlmReturnNumber", args={
+        result = await self.__options.merge_options(baml_options).call_function_async(function_name="StoreFnCallInLocalVar", args={
             "n": n,
+        })
+        return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def BoolToIntWithIfElse(self, b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = await self.__options.merge_options(baml_options).call_function_async(function_name="BoolToIntWithIfElse", args={
+            "b": b,
+        })
+        return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def ReturnNumberCallingLlm(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = await self.__options.merge_options(baml_options).call_function_async(function_name="ReturnNumberCallingLlm", args={
+            "n": n,
+        })
+        return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def StoreLlmCallInLocalVar(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = await self.__options.merge_options(baml_options).call_function_async(function_name="StoreLlmCallInLocalVar", args={
+            "n": n,
+        })
+        return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def BoolToIntWithIfElseCallingLlm(self, b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = await self.__options.merge_options(baml_options).call_function_async(function_name="BoolToIntWithIfElseCallingLlm", args={
+            "b": b,
         })
         return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
     
@@ -4174,11 +4202,59 @@ class BamlStreamClient:
           lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
-    def CallLlmReturnNumber(self, n: int,
+    def StoreFnCallInLocalVar(self, n: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[typing.Optional[int], int]:
-        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="CallLlmReturnNumber", args={
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="StoreFnCallInLocalVar", args={
             "n": n,
+        })
+        return baml_py.BamlStream[typing.Optional[int], int](
+          result,
+          lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def BoolToIntWithIfElse(self, b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.Optional[int], int]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="BoolToIntWithIfElse", args={
+            "b": b,
+        })
+        return baml_py.BamlStream[typing.Optional[int], int](
+          result,
+          lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def ReturnNumberCallingLlm(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.Optional[int], int]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="ReturnNumberCallingLlm", args={
+            "n": n,
+        })
+        return baml_py.BamlStream[typing.Optional[int], int](
+          result,
+          lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def StoreLlmCallInLocalVar(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.Optional[int], int]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="StoreLlmCallInLocalVar", args={
+            "n": n,
+        })
+        return baml_py.BamlStream[typing.Optional[int], int](
+          result,
+          lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def BoolToIntWithIfElseCallingLlm(self, b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.Optional[int], int]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="BoolToIntWithIfElseCallingLlm", args={
+            "b": b,
         })
         return baml_py.BamlStream[typing.Optional[int], int](
           result,
@@ -5699,11 +5775,39 @@ class BamlHttpRequestClient:
             
         }, mode="request")
         return result
-    async def CallLlmReturnNumber(self, n: int,
+    async def StoreFnCallInLocalVar(self, n: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="CallLlmReturnNumber", args={
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="StoreFnCallInLocalVar", args={
             "n": n,
+        }, mode="request")
+        return result
+    async def BoolToIntWithIfElse(self, b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="BoolToIntWithIfElse", args={
+            "b": b,
+        }, mode="request")
+        return result
+    async def ReturnNumberCallingLlm(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ReturnNumberCallingLlm", args={
+            "n": n,
+        }, mode="request")
+        return result
+    async def StoreLlmCallInLocalVar(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="StoreLlmCallInLocalVar", args={
+            "n": n,
+        }, mode="request")
+        return result
+    async def BoolToIntWithIfElseCallingLlm(self, b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="BoolToIntWithIfElseCallingLlm", args={
+            "b": b,
         }, mode="request")
         return result
     
@@ -7219,11 +7323,39 @@ class BamlHttpStreamRequestClient:
             
         }, mode="stream")
         return result
-    async def CallLlmReturnNumber(self, n: int,
+    async def StoreFnCallInLocalVar(self, n: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="CallLlmReturnNumber", args={
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="StoreFnCallInLocalVar", args={
             "n": n,
+        }, mode="stream")
+        return result
+    async def BoolToIntWithIfElse(self, b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="BoolToIntWithIfElse", args={
+            "b": b,
+        }, mode="stream")
+        return result
+    async def ReturnNumberCallingLlm(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ReturnNumberCallingLlm", args={
+            "n": n,
+        }, mode="stream")
+        return result
+    async def StoreLlmCallInLocalVar(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="StoreLlmCallInLocalVar", args={
+            "n": n,
+        }, mode="stream")
+        return result
+    async def BoolToIntWithIfElseCallingLlm(self, b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="BoolToIntWithIfElseCallingLlm", args={
+            "b": b,
         }, mode="stream")
         return result
     

@@ -116,7 +116,7 @@ pub fn display_instruction(
         | Instruction::AllocArray(_)
         | Instruction::CreateIterator
         | Instruction::IterNext
-        | Instruction::CreateFuture(_)
+        | Instruction::DispatchFuture(_)
         | Instruction::Await
         | Instruction::Call(_)
         | Instruction::Return => String::new(),
@@ -174,7 +174,7 @@ fn instruction_color(instruction: &Instruction) -> Color {
         Instruction::Call(_) => Color::Magenta,
 
         // Return instructions.
-        Instruction::Return => Color::Red,
+        Instruction::Return | Instruction::Pop | Instruction::EndBlock(_) => Color::Red,
 
         // Alloc instructions.
         Instruction::AllocInstance(_)
@@ -182,10 +182,7 @@ fn instruction_color(instruction: &Instruction) -> Color {
         | Instruction::CreateIterator => Color::Cyan,
 
         // Async instructions.
-        Instruction::CreateFuture(_) | Instruction::Await => Color::BrightGreen,
-
-        // Pop from stack instructions.
-        Instruction::Pop | Instruction::EndBlock(_) => Color::BrightBlack,
+        Instruction::DispatchFuture(_) | Instruction::Await => Color::BrightGreen,
     }
 }
 
@@ -240,6 +237,7 @@ pub fn display_bytecode(
     stack: &[Value],
     objects: &[Object],
     globals: &[Value],
+    use_colors: bool,
 ) -> String {
     if function.bytecode.instructions.is_empty() {
         return String::new();
@@ -291,11 +289,6 @@ pub fn display_bytecode(
 
     let mut table = String::new();
 
-    // Check if stdout is a TTY to determine whether to use colors.
-    // TODO: Create struct Dissassembler and pass this as parameter.
-    // This function returns a string, it doesn't directly print anything.
-    let use_colors = std::io::stdout().is_terminal();
-
     // Print the table.
     for (i, row) in rows.iter().enumerate() {
         // Separate bytecode instructions by source line numbers. This checks
@@ -321,10 +314,10 @@ pub fn display_bytecode(
             // Apply color based on column, only if output is to a TTY
             if use_colors {
                 colored_text = match j {
-                    0 => col.text.bright_black(),          // Line numbers in gray
-                    1 => col.text.white(),                 // IP in white
-                    2 => col.text.color(col.color).bold(), // Instruction with type-based color
-                    3 => col.text.bright_cyan(),           // Metadata in cyan
+                    0 => col.text.bright_black(),   // Line numbers in gray
+                    1 => col.text.white(),          // IP in white
+                    2 => col.text.color(col.color), // Instruction with type-based color
+                    3 => col.text.bright_cyan(),    // Metadata in cyan
                     _ => col.text.normal(),
                 }
             }
@@ -342,4 +335,13 @@ pub fn display_bytecode(
     }
 
     table
+}
+
+/// Prints the dissassembly of a function.
+pub fn disassemble(function: &Function, stack: &[Value], objects: &[Object], globals: &[Value]) {
+    let use_colors = std::io::stdout().is_terminal();
+
+    let disassembly = display_bytecode(function, stack, objects, globals, use_colors);
+
+    println!("{disassembly}");
 }

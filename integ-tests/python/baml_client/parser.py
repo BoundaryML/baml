@@ -1312,10 +1312,34 @@ class LlmResponseParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="ChainedCalls", llm_response=llm_response, mode="request")
         return typing.cast(int, result)
 
-    def CallLlmReturnNumber(
+    def StoreFnCallInLocalVar(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> int:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="CallLlmReturnNumber", llm_response=llm_response, mode="request")
+        result = self.__options.merge_options(baml_options).parse_response(function_name="StoreFnCallInLocalVar", llm_response=llm_response, mode="request")
+        return typing.cast(int, result)
+
+    def BoolToIntWithIfElse(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="BoolToIntWithIfElse", llm_response=llm_response, mode="request")
+        return typing.cast(int, result)
+
+    def ReturnNumberCallingLlm(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="ReturnNumberCallingLlm", llm_response=llm_response, mode="request")
+        return typing.cast(int, result)
+
+    def StoreLlmCallInLocalVar(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="StoreLlmCallInLocalVar", llm_response=llm_response, mode="request")
+        return typing.cast(int, result)
+
+    def BoolToIntWithIfElseCallingLlm(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="BoolToIntWithIfElseCallingLlm", llm_response=llm_response, mode="request")
         return typing.cast(int, result)
 
     
@@ -2616,10 +2640,34 @@ class LlmStreamParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="ChainedCalls", llm_response=llm_response, mode="stream")
         return typing.cast(typing.Optional[int], result)
 
-    def CallLlmReturnNumber(
+    def StoreFnCallInLocalVar(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Optional[int]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="CallLlmReturnNumber", llm_response=llm_response, mode="stream")
+        result = self.__options.merge_options(baml_options).parse_response(function_name="StoreFnCallInLocalVar", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[int], result)
+
+    def BoolToIntWithIfElse(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional[int]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="BoolToIntWithIfElse", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[int], result)
+
+    def ReturnNumberCallingLlm(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional[int]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="ReturnNumberCallingLlm", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[int], result)
+
+    def StoreLlmCallInLocalVar(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional[int]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="StoreLlmCallInLocalVar", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[int], result)
+
+    def BoolToIntWithIfElseCallingLlm(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional[int]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="BoolToIntWithIfElseCallingLlm", llm_response=llm_response, mode="stream")
         return typing.cast(typing.Optional[int], result)
 
     
