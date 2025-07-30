@@ -929,6 +929,7 @@ dependencies = [
  "internal-baml-core",
  "internal-baml-diagnostics",
  "internal-baml-parser-database",
+ "pretty",
 ]
 
 [[package]]

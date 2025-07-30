@@ -1,6 +1,6 @@
 pub mod dev;
 mod dotenv;
-mod dump_intermediate;
+pub mod dump_intermediate;
 pub mod generate;
 pub mod init;
 pub mod serve;

@@ -12,3 +12,4 @@ internal-baml-diagnostics = { path = "../baml-lib/diagnostics" }
 internal-baml-parser-database = { path = "../baml-lib/parser-database" }
 baml-vm = { path = "../baml-vm" }
 anyhow = { workspace = true }
+pretty = { workspace = true }
