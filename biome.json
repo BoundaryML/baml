@@ -25,6 +25,7 @@
       "**/coverage/**",
       "engine/**",
       "integ-tests/**",
+      "typescript/**",
       "tools/**",
       "patches/**",
       "jetbrains/**",

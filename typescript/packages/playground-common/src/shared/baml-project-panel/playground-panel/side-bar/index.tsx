@@ -18,6 +18,7 @@ import {
   SidebarMenuItem,
   SidebarMenuSub,
   SidebarRail,
+  SidebarSeparator,
 } from '@baml/ui/sidebar';
 import { useAtomValue } from 'jotai';
 import {
@@ -115,7 +116,7 @@ export function TestingSidebar() {
                   <FlaskConical className="size-4" />
                 </div>
                 <div className="flex flex-col gap-0.5 leading-none">
-                  <span className="font-medium">Run BAML Tests</span>
+                  <span className="font-medium">BAML Tests</span>
                 </div>
               </div>
             </SidebarMenuItem>
@@ -124,6 +125,13 @@ export function TestingSidebar() {
         </SidebarHeader>
         <SidebarContent>
           <div className="flex-1 min-h-0 overflow-y-auto">
+            {filteredFunctions.length === 0 && (
+              <div className="flex flex-col items-center justify-center mt-4">
+                <span className="text-muted-foreground">
+                  No functions found
+                </span>
+              </div>
+            )}
             {filteredFunctions.length > 0 && (
               <SidebarGroup>
                 <SidebarMenu>
@@ -136,6 +144,13 @@ export function TestingSidebar() {
                       <Play className="w-3 h-3" />
                     </SidebarMenuButton>
                   </SidebarMenuItem>
+                </SidebarMenu>
+              </SidebarGroup>
+            )}
+            {filteredFunctions.length > 0 && <SidebarSeparator />}
+            <SidebarGroup>
+              <SidebarMenu>
+                {filteredFunctions.length > 0 && (
                   <SidebarMenuItem>
                     <SidebarMenuButton
                       onClick={handleToggleAll}
@@ -152,11 +167,7 @@ export function TestingSidebar() {
                       )}
                     </SidebarMenuButton>
                   </SidebarMenuItem>
-                </SidebarMenu>
-              </SidebarGroup>
-            )}
-            <SidebarGroup>
-              <SidebarMenu>
+                )}
                 {filteredFunctions.map((func) => (
                   <Collapsible
                     key={func.name}
@@ -165,7 +176,10 @@ export function TestingSidebar() {
                     className="group/collapsible"
                   >
                     <SidebarMenuItem>
-                      <FunctionItem functionName={func.name} tests={func.tests} />
+                      <FunctionItem
+                        functionName={func.name}
+                        tests={func.tests}
+                      />
                       {func.tests?.length > 0 && (
                         <>
                           <CollapsibleTrigger asChild>

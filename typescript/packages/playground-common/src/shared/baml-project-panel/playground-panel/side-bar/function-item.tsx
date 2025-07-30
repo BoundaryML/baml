@@ -1,7 +1,7 @@
 import { SidebarMenuButton } from '@baml/ui/sidebar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@baml/ui/tooltip';
 import { useAtomValue } from 'jotai';
-import { FunctionSquare, CheckCircle2, XCircle, AlertTriangle } from 'lucide-react';
+import { CheckCircle2, FunctionSquare, XCircle } from 'lucide-react';
 import * as React from 'react';
 import { vscode } from '../../vscode';
 import { functionObjectAtom } from '../atoms';
@@ -50,11 +50,13 @@ export function FunctionItem({ functionName, tests }: FunctionItemProps) {
         passedCount: 0,
         failedCount: 0,
         totalCount: tests.length,
-        lastRunTime: null
+        lastRunTime: null,
       };
     }
 
-    const functionTests = currentRun.tests.filter(test => test.functionName === functionName);
+    const functionTests = currentRun.tests.filter(
+      (test) => test.functionName === functionName,
+    );
 
     if (functionTests.length === 0) {
       return {
@@ -65,7 +67,7 @@ export function FunctionItem({ functionName, tests }: FunctionItemProps) {
         passedCount: 0,
         failedCount: 0,
         totalCount: tests.length,
-        lastRunTime: null
+        lastRunTime: null,
       };
     }
 
@@ -91,7 +93,13 @@ export function FunctionItem({ functionName, tests }: FunctionItemProps) {
         const finalState = getStatus(test.response);
         if (finalState === 'passed') {
           passedCount++;
-        } else if (finalState === 'failed' || finalState === 'constraints_failed') {
+        } else if (
+          finalState === 'llm_failed' ||
+          finalState === 'parse_failed' ||
+          finalState === 'constraints_failed' ||
+          finalState === 'assert_failed' ||
+          finalState === 'error'
+        ) {
           failedCount++;
         }
       }
@@ -107,7 +115,7 @@ export function FunctionItem({ functionName, tests }: FunctionItemProps) {
         passedCount: 0,
         failedCount: 0,
         totalCount: tests.length,
-        lastRunTime: currentRun.timestamp
+        lastRunTime: currentRun.timestamp,
       };
     }
 
@@ -123,11 +131,13 @@ export function FunctionItem({ functionName, tests }: FunctionItemProps) {
         passedCount: 0,
         failedCount: 0,
         totalCount: tests.length,
-        lastRunTime: currentRun.timestamp
+        lastRunTime: currentRun.timestamp,
       };
     }
 
-    const allPassed = passedCount === functionTests.length && failedCount === 0;
+    // Check if all completed tests passed (not all tests in the function)
+    const allPassed =
+      totalProcessed > 0 && passedCount === totalProcessed && failedCount === 0;
     const anyFailed = failedCount > 0;
 
     return {
@@ -138,9 +148,9 @@ export function FunctionItem({ functionName, tests }: FunctionItemProps) {
       passedCount,
       failedCount,
       totalCount: tests.length,
-      lastRunTime: currentRun.timestamp
+      lastRunTime: currentRun.timestamp,
     };
-  }, [currentRun, functionName, tests.length]);
+  }, [currentRun?.tests, functionName, tests.length]);
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -157,7 +167,7 @@ export function FunctionItem({ functionName, tests }: FunctionItemProps) {
       <Tooltip>
         <TooltipTrigger asChild>
           <div className="flex items-center gap-2 truncate cursor-pointer">
-            {functionTestsStatus.hasRunning ? (
+            {/* {functionTestsStatus.hasRunning ? (
               <Loader className="size-4" />
             ) : functionTestsStatus.allPassed ? (
               <CheckCircle2 className="size-4 text-green-500" />
@@ -165,8 +175,11 @@ export function FunctionItem({ functionName, tests }: FunctionItemProps) {
               <XCircle className="size-4 text-red-500" />
             ) : (
               <FunctionSquare className="size-4" />
-            )}
-            <span className="truncate hover:text-primary hover:underline">{functionName}</span>
+            )} */}
+            <FunctionSquare className="size-4" />
+            <span className="truncate hover:text-primary hover:underline">
+              {functionName}
+            </span>
           </div>
         </TooltipTrigger>
         <TooltipContent className="max-w-xs">
@@ -183,23 +196,30 @@ export function FunctionItem({ functionName, tests }: FunctionItemProps) {
                   <span>{functionTestsStatus.totalCount}</span>
                 </div>
 
+
+
                 {functionTestsStatus.hasRunning ? (
                   <div className="flex items-center gap-1 text-blue-500">
                     <Loader className="size-3" />
                     <span>Running tests...</span>
                   </div>
-                ) : functionTestsStatus.passedCount > 0 || functionTestsStatus.failedCount > 0 ? (
+                ) : functionTestsStatus.passedCount > 0 ||
+                  functionTestsStatus.failedCount > 0 ? (
                   <>
                     {functionTestsStatus.passedCount > 0 && (
                       <div className="flex justify-between items-center">
                         <span className="text-green-500">Passed:</span>
-                        <span className="text-green-500">{functionTestsStatus.passedCount}</span>
+                        <span className="text-green-500">
+                          {functionTestsStatus.passedCount}
+                        </span>
                       </div>
                     )}
                     {functionTestsStatus.failedCount > 0 && (
                       <div className="flex justify-between items-center">
                         <span className="text-red-500">Failed:</span>
-                        <span className="text-red-500">{functionTestsStatus.failedCount}</span>
+                        <span className="text-red-500">
+                          {functionTestsStatus.failedCount}
+                        </span>
                       </div>
                     )}
                   </>
@@ -211,14 +231,18 @@ export function FunctionItem({ functionName, tests }: FunctionItemProps) {
                   <div className="flex justify-between items-center pt-1 border-t border-border">
                     <span className="text-muted-foreground">Last run:</span>
                     <span className="text-muted-foreground">
-                      {new Date(functionTestsStatus.lastRunTime).toLocaleTimeString()}
+                      {new Date(
+                        functionTestsStatus.lastRunTime,
+                      ).toLocaleTimeString()}
                     </span>
                   </div>
                 )}
               </div>
             ) : (
               <div className="text-xs text-muted-foreground">
-                {tests.length === 0 ? 'No tests defined' : 'Click to navigate to function'}
+                {tests.length === 0
+                  ? 'No tests defined'
+                  : 'Click to navigate to function'}
               </div>
             )}
           </div>

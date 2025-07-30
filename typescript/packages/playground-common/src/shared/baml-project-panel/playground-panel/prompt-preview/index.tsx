@@ -24,7 +24,7 @@ export const NoTestsContent = () => {
 
   const message = hasValidTestCases
     ? 'Add a test to see the preview!'
-    : 'This function has no active test cases. Add one to see the preview!';
+    : 'This function has no active test cases. Copy the template to create a test case.';
 
   return (
     <div className="flex flex-col gap-y-4">
@@ -41,28 +41,25 @@ export const NoTestsContent = () => {
 
       {testSnippet && (
         <div className="relative border-l-4 pl-2 rounded border-chart-3">
-          <div className="flex w-full items-center justify-between p-3 bg-accent rounded">
-            <div className="flex flex-col items-start gap-1 flex-1 overflow-hidden min-w-0 w-full">
-              <div className="text-xs text-muted-foreground font-mono">
-                Generated Test Template
-              </div>
-            </div>
-          </div>
           <div className="relative">
-            <pre className="rounded-md p-4 text-sm font-mono overflow-x-auto mt-2 bg-accent">
-              <code style={{ backgroundColor: 'transparent' }}>
+            <pre className="rounded-md p-4 text-sm font-mono overflow-x-auto bg-accent">
+              <code
+                style={{ backgroundColor: 'transparent', fontSize: '12px' }}
+              >
                 {testSnippet}
               </code>
+              <div className="flex mt-4">
+                <CopyButton
+                  text={testSnippet}
+                  size="sm"
+                  variant="outline"
+                  className="flex items-center gap-2"
+                  showToast={false}
+                >
+                  Copy Test
+                </CopyButton>
+              </div>
             </pre>
-            <div className="absolute top-2 right-2">
-              <CopyButton
-                text={testSnippet}
-                size="sm"
-                variant="outline"
-                className="flex items-center gap-2 text-muted-foreground/70 hover:text-foreground"
-                showToast={false}
-              />
-            </div>
           </div>
         </div>
       )}

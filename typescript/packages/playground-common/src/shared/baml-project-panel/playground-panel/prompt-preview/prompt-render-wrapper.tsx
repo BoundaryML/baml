@@ -2,6 +2,7 @@ import { Button } from '@baml/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@baml/ui/tabs';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@baml/ui/tooltip';
 import { TooltipProvider } from '@baml/ui/tooltip';
+import { useSidebar } from '@baml/ui/sidebar';
 import { useAtom, useAtomValue } from 'jotai';
 import { BarChart2, Check, Copy, Server } from 'lucide-react';
 import React from 'react';
@@ -17,11 +18,20 @@ import { ClientGraphView } from './test-panel/components/ClientGraphView';
 const FunctionMetadata: React.FC = () => {
   const { selectedFn } = useAtomValue(selectionAtom);
   const { rt } = useAtomValue(runtimeAtom);
+  const { open: isSidebarOpen } = useSidebar();
 
   if (!selectedFn) return null;
   if (!rt) return null;
 
   const clientName = selectedFn?.client_name(rt);
+
+  // Hide text when sidebar is open or on smaller screens
+  const getButtonTextClass = () => {
+    if (isSidebarOpen) {
+      return 'font-mono text-xs hidden truncate max-w-48';
+    }
+    return 'font-mono text-xs hidden md:inline truncate max-w-48';
+  };
 
   const metadataItems = [];
 
@@ -32,7 +42,7 @@ const FunctionMetadata: React.FC = () => {
           <TooltipTrigger asChild>
             <div className="flex items-center gap-1 px-2 py-1.5 bg-muted/50 rounded-md border">
               <Server className="size-4" />
-              <span className="font-mono text-xs hidden md:inline truncate max-w-48">
+              <span className={getButtonTextClass()}>
                 {clientName}
               </span>
             </div>
@@ -73,6 +83,15 @@ export const PromptRenderWrapper = () => {
   const [displaySettings, setDisplaySettings] = useAtom(displaySettingsAtom);
   const renderedPrompt = useAtomValue(renderedPromptAtom);
   const [showCopied, setShowCopied] = React.useState(false);
+  const { open: isSidebarOpen } = useSidebar();
+
+  // Hide text when sidebar is open or on smaller screens
+  const getButtonTextClass = () => {
+    if (isSidebarOpen) {
+      return 'text-sm hidden whitespace-nowrap';
+    }
+    return 'text-sm hidden md:block whitespace-nowrap';
+  };
 
   const handleCopy = () => {
     if (!renderedPrompt) return;
@@ -110,7 +129,7 @@ export const PromptRenderWrapper = () => {
             ) : (
               <Copy className="size-4 flex-shrink-0" />
             )}
-            <span className="text-sm hidden md:block">
+            <span className={getButtonTextClass()}>
               {showCopied ? 'Copied!' : 'Copy Prompt'}
             </span>
           </Button>
@@ -129,7 +148,7 @@ export const PromptRenderWrapper = () => {
             }
           >
             <BarChart2 className="size-4" />
-            <span className="text-sm hidden md:block">
+            <span className={getButtonTextClass()}>
               {displaySettings.showTokens ? 'Hide Tokens' : 'Show Tokens'}
             </span>
           </Button>
