@@ -6,7 +6,7 @@ use crate::bytecode::{Bytecode, Instruction};
 const MAX_FRAMES: usize = 256;
 
 /// Function type.
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum FunctionKind {
     /// Regular executable function.
     ///

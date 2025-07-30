@@ -28,6 +28,10 @@ fn assert_vm_executes_with_inspection(
     let ast = ast(input.source)?;
     let (objects, globals, resolved_function_names) = baml_compiler::compile(&ast)?;
 
+    eprintln!("objects: {:#?}", objects);
+    eprintln!("globals: {:#?}", globals);
+    eprintln!("resolved_function_names: {:#?}", resolved_function_names);
+
     // Find the target function index by name
     let (target_function_index, _) = resolved_function_names[input.function];
 
@@ -363,11 +367,11 @@ fn for_loop_with_expressions() -> anyhow::Result<()> {
 fn function_returning_string() -> anyhow::Result<()> {
     assert_vm_executes_with_inspection(
         Program {
-            source: "
+            source: r#"
                 fn main() -> string {
-                    \"hello\"
+                    "hello"
                 }
-            ",
+            "#,
             function: "main",
             expected: VmExecState::Complete(Value::Object(0)),
         },

@@ -587,8 +587,8 @@ pub fn compile(
     Vec<Value>,
     HashMap<String, (usize, FunctionKind)>,
 )> {
-    // eprintln!("{:#?}", ast.ast);
-
+    // TODO: This one is wrong because of string allocations during the
+    // compilation of functions.
     // Name -> Index
     let mut resolved_globals = HashMap::new();
     // Class Name -> (Field Name -> Index)
@@ -680,16 +680,14 @@ pub fn compile(
         objects.push(object);
     }
 
-    let resolved_function_names =
-        HashMap::from_iter(resolved_globals.iter().map(|(name, index)| {
-            let kind = if llm_functions.contains(name) {
-                FunctionKind::Llm
-            } else {
-                FunctionKind::Exec
-            };
-
-            (name.clone(), (*index, kind))
-        }));
+    let resolved_function_names = objects
+        .iter()
+        .enumerate()
+        .filter_map(|(i, obj)| match obj {
+            Object::Function(f) => Some((f.name.clone(), (i, f.kind))),
+            _ => None,
+        })
+        .collect();
 
     Ok((objects, globals, resolved_function_names))
 }
