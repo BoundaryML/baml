@@ -5,9 +5,6 @@
   "scripts": {
     "clean": "cargo clean && git clean -xdf .turbo node_modules target",
 		"build": "cargo build --workspace",
-    "build:engine": "cargo build --workspace",
-    "build:cli": "cargo build --bin baml-cli",
-    "build:wasm": "cargo build --package baml-schema-build",
     "typecheck": "cargo check --workspace",
 		"release": "cargo build --release --workspace",
 		"dev": "cargo build --workspace",

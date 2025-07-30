@@ -2,9 +2,6 @@
   "$schema": "https://turbo.build/schema.json",
   "extends": ["//"],
   "tasks": {
-    "build:engine": {
-      "outputs": ["target/**", "dist/**", "build/**", "artifacts/**"]
-    },
     "dev": {
       "persistent": true,
       "interruptible": true
