@@ -368,6 +368,68 @@ impl<'g> HirCompiler<'g> {
                 // Pop condition
                 self.emit(Instruction::Pop);
             }
+            hir::Statement::ForLoop {
+                identifier,
+                iterator,
+                block,
+                ..
+            } => {
+                // Compile the iterator expression (array) - leaves array on stack
+                self.compile_expression(iterator);
+
+                // Create iterator from array - replaces array with iterator on stack
+                self.emit(Instruction::CreateIterator);
+
+                // Loop start - iterator is on top of stack
+                let loop_start = self.bytecode.instructions.len();
+
+                // Get next element - pops iterator, pushes iterator, element, has_next
+                self.emit(Instruction::IterNext);
+
+                // Check if we have more elements (has_next is on top of stack)
+                let jump_to_end = self.emit(Instruction::JumpIfFalse(0));
+
+                // Pop the has_next boolean
+                self.emit(Instruction::Pop);
+
+                // Now we have: [function, args..., locals..., iterator, element] on stack
+                // The element is what we want for the loop variable.
+                // The element is always 2 positions after the last local
+                // (iterator is at last_local + 1, element is at last_local + 2)
+                let last_local_index = self.locals.values().max().copied().unwrap_or(0);
+                let item_local = last_local_index + 2;
+                self.locals.insert(identifier.clone(), item_local);
+
+                // Compile the loop body (nested expression block)
+                self.compile_block(block);
+
+                // Pop the body result
+                self.emit(Instruction::Pop);
+
+                // Pop the element since we're done with it for this iteration
+                self.emit(Instruction::Pop);
+
+                // Now iterator is back on top of stack. Jump back to loop start.
+                let current_pos = self.bytecode.instructions.len();
+                self.emit(Instruction::Jump(
+                    (loop_start as isize) - (current_pos as isize),
+                ));
+
+                // Patch the jump to end - this is where we land when has_next is false
+                self.patch_jump(jump_to_end);
+
+                // Clean up remaining stack values
+                self.emit(Instruction::Pop); // Pop has_next boolean
+                self.emit(Instruction::Pop); // Pop element
+                self.emit(Instruction::Pop); // Pop iterator
+
+                // Remove the loop variable from locals since it's no longer in scope
+                self.locals.remove(identifier);
+
+                // Push null as the for loop result
+                let null_index = self.add_constant(Value::Null);
+                self.emit(Instruction::LoadConst(null_index));
+            }
         }
     }
 
@@ -458,17 +520,43 @@ impl<'g> HirCompiler<'g> {
                 if let Some(&class_index) = self.globals.get(&cc.class_name) {
                     self.emit(Instruction::AllocInstance(class_index));
 
-                    // Set fields
+                    let mut defined_named_fields = std::collections::HashSet::new();
+
+                    // Process fields in order
                     for field in &cc.fields {
-                        self.compile_expression(&field.value);
-                        if let Some(class_fields) = self.class_fields.get(&cc.class_name) {
-                            if let Some(&field_index) = class_fields.get(&field.name) {
-                                self.emit(Instruction::StoreField(field_index));
-                            } else {
-                                panic!("undefined field: {}.{}", cc.class_name, field.name);
+                        match field {
+                            hir::ClassConstructorField::Named { name, value } => {
+                                self.compile_expression(value);
+                                if let Some(class_fields) = self.class_fields.get(&cc.class_name) {
+                                    if let Some(&field_index) = class_fields.get(name) {
+                                        self.emit(Instruction::StoreField(field_index));
+                                        defined_named_fields.insert(name.as_str());
+                                    } else {
+                                        panic!("undefined field: {}.{}", cc.class_name, name);
+                                    }
+                                } else {
+                                    panic!("undefined class: {}", cc.class_name);
+                                }
                             }
-                        } else {
-                            panic!("undefined class: {}", cc.class_name);
+                            hir::ClassConstructorField::Spread { value } => {
+                                self.compile_expression(value);
+
+                                // Pseudo local, user didn't declare it.
+                                let spread_local = self.locals.len() + 2;
+                                self.emit(Instruction::LoadVar(spread_local - 1));
+
+                                if let Some(class_fields) = self.class_fields.get(&cc.class_name) {
+                                    for (field_name, &field_index) in class_fields {
+                                        if !defined_named_fields.contains(field_name.as_str()) {
+                                            self.emit(Instruction::LoadVar(spread_local));
+                                            self.emit(Instruction::LoadField(field_index));
+                                            self.emit(Instruction::StoreField(field_index));
+                                        }
+                                    }
+                                } else {
+                                    panic!("undefined class: {}", cc.class_name);
+                                }
+                            }
                         }
                     }
                 } else {

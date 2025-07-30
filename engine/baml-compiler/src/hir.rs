@@ -164,6 +164,12 @@ pub enum Statement {
         block: Block,
         span: Span,
     },
+    ForLoop {
+        identifier: String,
+        iterator: Box<Expression>,
+        block: Block,
+        span: Span,
+    },
 }
 
 /// Expressions
@@ -194,9 +200,9 @@ pub struct ClassConstructor {
 }
 
 #[derive(Debug)]
-pub struct ClassConstructorField {
-    pub name: String,
-    pub value: Expression,
+pub enum ClassConstructorField {
+    Named { name: String, value: Expression },
+    Spread { value: Expression },
 }
 
 impl LLMFunction {
@@ -311,14 +317,31 @@ impl Block {
                     });
                 }
                 ast::Stmt::ForLoop(ast::ForLoopStmt {
-                    identifier: _,
-                    iterator: _,
-                    body: _,
-                    span: _,
+                    identifier,
+                    iterator,
+                    body,
+                    span,
                 }) => {
-                    // For now, we'll skip for loops in HIR
-                    // TODO: Implement for loop lowering
-                    eprintln!("Warning: For loops are not yet supported in HIR");
+                    // Lower for loop to HIR
+                    let mut temp_counter = 0;
+                    let mut lifted_statements = vec![];
+                    let lifted_iterator = Expression::from_ast(
+                        iterator,
+                        true,
+                        &mut lifted_statements,
+                        &mut temp_counter,
+                    );
+
+                    // Add any lifted statements first
+                    statements.extend(lifted_statements);
+
+                    // Add the for loop statement
+                    statements.push(Statement::ForLoop {
+                        identifier: identifier.name().to_string(),
+                        iterator: Box::new(lifted_iterator),
+                        block: Block::from_expression_block(body),
+                        span: span.clone(),
+                    });
                 }
             }
         }
@@ -351,7 +374,6 @@ impl Block {
 
         Block { statements }
     }
-
 
 }
 
@@ -471,10 +493,10 @@ impl Expression {
                         fields: cc
                             .fields
                             .iter()
-                            .filter_map(|field| {
+                            .map(|field| {
                                 match field {
                                     ast::ClassConstructorField::Named(name, expr) => {
-                                        Some(ClassConstructorField {
+                                        ClassConstructorField::Named {
                                             name: name.to_string(),
                                             value: Self::from_ast(
                                                 expr,
@@ -482,11 +504,17 @@ impl Expression {
                                                 statements,
                                                 temp_counter,
                                             ),
-                                        })
+                                        }
                                     }
-                                    ast::ClassConstructorField::Spread(_) => {
-                                        // Spreads should be desugared in HIR
-                                        None
+                                    ast::ClassConstructorField::Spread(expr) => {
+                                        ClassConstructorField::Spread {
+                                            value: Self::from_ast(
+                                                expr,
+                                                with_lifting,
+                                                statements,
+                                                temp_counter,
+                                            ),
+                                        }
                                     }
                                 }
                             })
