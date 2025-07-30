@@ -20,8 +20,6 @@ import { CheckCircle } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { vscodeLocalStorageStore } from './JotaiProvider';
 import { type BamlConfigAtom, bamlConfig } from './bamlConfig';
-import { ErrorWarningDialog } from '../components/ErrorWarningDialog';
-import { useState } from 'react';
 
 export const hasClosedEnvVarsDialogAtom = atomWithStorage<boolean>(
   'has-closed-env-vars-dialog',
@@ -87,6 +85,7 @@ const ErrorCount: React.FC<{ onClick?: () => void }> = ({ onClick }) => {
     </button>
   );
 };
+
 
 export const isConnectedAtom = atom(true);
 
@@ -383,22 +382,9 @@ export const EventListener: React.FC = () => {
     }
   }, [wasm])
 
-  const version = useAtomValue(versionAtom);
-  const [showDialog, setShowDialog] = useState(false);
-
   return (
     <>
-      {/* <ConnectionStatus /> */}
-      <div className="flex flex-row gap-2 text-xs bg-transparent items-center">
-        <div className="pr-4 whitespace-nowrap">
-          {bamlCliVersion && `baml-cli ${bamlCliVersion}`}
-        </div>
-        <ErrorCount onClick={() => setShowDialog(true)} />
-        <ErrorWarningDialog open={showDialog} onOpenChange={setShowDialog} />
-        <span className="text-muted-foreground text-[10px]">
-          VSCode Runtime Version: {version}
-        </span>
-      </div>
+      {/* EventListener handles background events - no UI needed since StatusBar handles display */}
     </>
   );
 };

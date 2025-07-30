@@ -1,7 +1,7 @@
 import { atom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
-import { runtimeStateAtom } from '../atoms';
 import { vscode } from '../../vscode';
+import { runtimeStateAtom } from '../atoms';
 
 const isEmbed =
   typeof window !== 'undefined' && window.location.href.includes('embed');
