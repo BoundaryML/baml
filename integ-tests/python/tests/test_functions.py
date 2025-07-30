@@ -1566,7 +1566,7 @@ async def test_gemini_thinking():
 
 @pytest.mark.asyncio
 async def test_openai_responses_reasoning():
-    res = await b.TestOpenAIResponsesReasoning(
+    _res = await b.TestOpenAIResponsesReasoning(
         "a world without horses, should be titled 'A World Without Horses'. Make it short, 2 sentences."
     )
 
@@ -1580,4 +1580,4 @@ async def test_openai_responses_reasoning_streaming():
     async for msg in stream:
         print(msg)
 
-    res = await stream.get_final_response()
+    _res = await stream.get_final_response()
