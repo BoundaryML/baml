@@ -169,7 +169,15 @@ impl BamlAsyncVmRuntime {
         // compiler produced objects betweeen VMs. We know they are read only.
         let mut vm = Vm::new(self.objects.clone(), self.globals.clone());
 
-        vm.set_entry_point(*function_index);
+        vm.set_entry_point(
+            *function_index,
+            params
+                .values()
+                .map(|v| try_vm_value_from_baml_value(&vm, &v))
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap_or_else(|e| panic!("failed to convert baml args to vm args: {e}"))
+                .as_slice(),
+        );
 
         let (futures_tx, mut futures_rx) = tokio::sync::mpsc::unbounded_channel::<(
             usize,
@@ -223,7 +231,9 @@ impl BamlAsyncVmRuntime {
                         .internal()
                         .ir()
                         .find_function(&pending_future.llm_function)
-                        .unwrap_or_else(|_| panic!("LLM function not found: {}", pending_future.llm_function));
+                        .unwrap_or_else(|_| {
+                            panic!("LLM function not found: {}", pending_future.llm_function)
+                        });
 
                     let llm_args = pending_future
                         .args

@@ -5580,6 +5580,84 @@ func (*stream) LiteralUnionsTest(ctx context.Context, input string, opts ...Call
 	return channel, nil
 }
 
+// / Streaming version of LlmReturnNumber
+func (*stream) LlmReturnNumber(ctx context.Context, n int64, opts ...CallOptionFunc) (<-chan StreamValue[int64, int64], error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"n": n},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := args.Encode()
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: LlmReturnNumber: %w", err)
+		panic(wrapped_err)
+	}
+
+	internal_ctx := context.Background()
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "LlmReturnNumber", encoded, callOpts.onTick)
+	if err != nil {
+		return nil, err
+	}
+
+	channel := make(chan StreamValue[int64, int64])
+	go func() {
+		defer func() {
+			internal_ctx.Done()
+		}()
+		for {
+			select {
+			case <-ctx.Done():
+				close(channel)
+				return
+			case result, ok := <-internal_channel:
+				if !ok {
+					// channel closed for some reason
+					close(channel)
+					return
+				}
+				if result.Error != nil {
+					channel <- StreamValue[int64, int64]{
+						IsError: true,
+						Error:   result.Error,
+					}
+					close(channel)
+					return
+				}
+				if result.HasData {
+					data := (result.Data).(int64)
+					channel <- StreamValue[int64, int64]{
+						IsFinal:  true,
+						as_final: &data,
+					}
+				} else {
+					data := (result.StreamData).(int64)
+					channel <- StreamValue[int64, int64]{
+						IsFinal:   false,
+						as_stream: &data,
+					}
+				}
+			}
+		}
+	}()
+	return channel, nil
+}
+
 // / Streaming version of MakeBlockConstraint
 func (*stream) MakeBlockConstraint(ctx context.Context, opts ...CallOptionFunc) (<-chan StreamValue[types.Checked[stream_types.BlockConstraint], types.Checked[types.BlockConstraint]], error) {
 

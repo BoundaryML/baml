@@ -502,7 +502,7 @@ impl Vm {
     }
 
     /// Bootstraps the VM preparing the given function to run.
-    pub fn set_entry_point(&mut self, function: usize) {
+    pub fn set_entry_point(&mut self, function: usize, args: &[Value]) {
         debug_assert!(
             matches!(self.objects[function], Object::Function(_)),
             "expect function as entry point, got {:?}",
@@ -515,6 +515,7 @@ impl Vm {
         );
 
         self.stack.push(Value::Object(function));
+        self.stack.extend(args.iter().copied());
 
         self.frames.push(Frame {
             function,

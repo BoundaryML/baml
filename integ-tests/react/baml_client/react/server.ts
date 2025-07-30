@@ -1341,6 +1341,24 @@ export const LiteralUnionsTest = async (
 };
 
 /**
+ * Executes the "LlmReturnNumber" BAML action.
+ *
+ * This server action calls the underlying BAML function "LlmReturnNumber"
+ * with the specified parameters.
+ *
+ * @param { number } n - Input parameter.
+ *
+ * @returns {Promise<number>} A promise that resolves with the result of the action.
+ */
+export const LlmReturnNumber = async (
+  n: number,
+): Promise<number> => {
+  return b.LlmReturnNumber(
+    n,
+  );
+};
+
+/**
  * Executes the "MakeBlockConstraint" BAML action.
  *
  * This server action calls the underlying BAML function "MakeBlockConstraint"

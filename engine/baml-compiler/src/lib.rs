@@ -624,7 +624,7 @@ pub fn compile(
                 llm_functions.insert(llm_function.name().to_string());
             }
 
-            _ => todo!("name resolution: unhandled Top variant: {top:?}"),
+            _ => eprintln!("name resolution: unhandled Top variant: {}", top.get_type()),
         }
     }
 
@@ -673,7 +673,10 @@ pub fn compile(
                     .collect(),
             }),
 
-            _ => todo!("compilation: unhandled Top variant: {top:?}"),
+            _ => {
+                eprintln!("compilation: unhandled Top variant: {}", top.get_type());
+                continue;
+            }
         };
 
         globals.push(Value::Object(objects.len()));

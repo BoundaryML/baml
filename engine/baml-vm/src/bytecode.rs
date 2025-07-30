@@ -202,7 +202,7 @@ impl std::fmt::Display for Instruction {
             Instruction::AllocInstance(i) => write!(f, "ALLOC_INSTANCE {i}"),
             Instruction::CreateIterator => f.write_str("CREATE_ITERATOR"),
             Instruction::IterNext => f.write_str("ITER_NEXT"),
-            Instruction::CreateFuture(i) => write!(f, "DISPATCH_FUTURE {i}"),
+            Instruction::CreateFuture(i) => write!(f, "CREATE_FUTURE {i}"),
             Instruction::Await => f.write_str("AWAIT"),
             Instruction::Call(n) => write!(f, "CALL {n}"),
             Instruction::Return => f.write_str("RETURN"),

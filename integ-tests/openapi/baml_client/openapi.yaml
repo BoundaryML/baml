@@ -1031,6 +1031,19 @@ paths:
                 - type: boolean
                 - type: string
       operationId: LiteralUnionsTest
+  /call/LlmReturnNumber:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/LlmReturnNumber'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: LlmReturnNumberResponse
+                type: integer
+      operationId: LlmReturnNumber
   /call/MakeBlockConstraint:
     post:
       requestBody:
@@ -4117,6 +4130,22 @@ components:
                 $ref: '#/components/schemas/BamlOptions'
             required:
             - input
+            additionalProperties: false
+    LlmReturnNumber:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: LlmReturnNumberRequest
+            type: object
+            properties:
+              n:
+                type: integer
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - n
             additionalProperties: false
     MakeBlockConstraint:
       required: true
