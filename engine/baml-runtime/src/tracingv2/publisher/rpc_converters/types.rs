@@ -1,7 +1,10 @@
 use std::borrow::Cow;
 
 use baml_rpc::{runtime_api, NarrowingType};
-use baml_types::{ir_type::TypeGeneric, type_meta, BamlValueWithMeta, Constraint, HasType, TypeValue, baml_value::TypeQuery, StreamingMode};
+use baml_types::{
+    baml_value::TypeQuery, ir_type::TypeGeneric, type_meta, BamlValueWithMeta, Constraint, HasType,
+    StreamingMode, TypeValue,
+};
 
 use super::{IntoRpcEvent, TypeLookup};
 
@@ -64,7 +67,7 @@ impl<'a, T: HasType<type_meta::NonStreaming>> IntoRpcEvent<'a, runtime_api::Baml
                                     baml_log::warn!("Could not determine union variant index for value type. Using index 0 as fallback.");
                                     0
                                 });
-                            
+
                             runtime_api::TypeIndex::Index(type_index)
                         }
                     },
@@ -80,9 +83,9 @@ impl<'a, T: HasType<type_meta::NonStreaming>> IntoRpcEvent<'a, runtime_api::Baml
 
 // Helper function to check if a BamlValueWithMeta matches a specific RPC type reference
 fn matches_value_with_rpc_type<T: HasType<type_meta::NonStreaming>>(
-    value: &BamlValueWithMeta<T>, 
-    rpc_type_ref: &baml_rpc::TypeReferenceWithMetadata<baml_rpc::TypeMetadata>, 
-    lookup: &(impl TypeLookup + ?Sized)
+    value: &BamlValueWithMeta<T>,
+    rpc_type_ref: &baml_rpc::TypeReferenceWithMetadata<baml_rpc::TypeMetadata>,
+    lookup: &(impl TypeLookup + ?Sized),
 ) -> bool {
     use baml_rpc::TypeReferenceWithMetadata;
     match (value, rpc_type_ref) {
@@ -91,12 +94,18 @@ fn matches_value_with_rpc_type<T: HasType<type_meta::NonStreaming>>(
         (BamlValueWithMeta::Float(_, _), TypeReferenceWithMetadata::Float(_)) => true,
         (BamlValueWithMeta::Bool(_, _), TypeReferenceWithMetadata::Bool(_)) => true,
         (BamlValueWithMeta::Null(_), _) => true, // Null can match any type in a union
-        (BamlValueWithMeta::Enum(enum_name, _, _), TypeReferenceWithMetadata::Enum { type_id, .. }) => {
-            // Compare the enum name with the type_id name 
+        (
+            BamlValueWithMeta::Enum(enum_name, _, _),
+            TypeReferenceWithMetadata::Enum { type_id, .. },
+        ) => {
+            // Compare the enum name with the type_id name
             let type_id_name = type_id.0.to_string();
             enum_name == &type_id_name
         }
-        (BamlValueWithMeta::Class(class_name, _, _), TypeReferenceWithMetadata::Class { type_id, .. }) => {
+        (
+            BamlValueWithMeta::Class(class_name, _, _),
+            TypeReferenceWithMetadata::Class { type_id, .. },
+        ) => {
             // Compare the class name with the type_id name
             let type_id_name = type_id.0.to_string();
             class_name == &type_id_name
@@ -113,15 +122,18 @@ fn matches_value_with_rpc_type<T: HasType<type_meta::NonStreaming>>(
             }
         }
         // Also handle literal values
-        (BamlValueWithMeta::String(s, _), TypeReferenceWithMetadata::Literal(baml_rpc::LiteralTypeDefinition::String(lit_s), _)) => {
-            s == lit_s
-        }
-        (BamlValueWithMeta::Int(i, _), TypeReferenceWithMetadata::Literal(baml_rpc::LiteralTypeDefinition::Int(lit_i), _)) => {
-            i == lit_i
-        }
-        (BamlValueWithMeta::Bool(b, _), TypeReferenceWithMetadata::Literal(baml_rpc::LiteralTypeDefinition::Bool(lit_b), _)) => {
-            b == lit_b
-        }
+        (
+            BamlValueWithMeta::String(s, _),
+            TypeReferenceWithMetadata::Literal(baml_rpc::LiteralTypeDefinition::String(lit_s), _),
+        ) => s == lit_s,
+        (
+            BamlValueWithMeta::Int(i, _),
+            TypeReferenceWithMetadata::Literal(baml_rpc::LiteralTypeDefinition::Int(lit_i), _),
+        ) => i == lit_i,
+        (
+            BamlValueWithMeta::Bool(b, _),
+            TypeReferenceWithMetadata::Literal(baml_rpc::LiteralTypeDefinition::Bool(lit_b), _),
+        ) => b == lit_b,
         _ => false,
     }
 }
