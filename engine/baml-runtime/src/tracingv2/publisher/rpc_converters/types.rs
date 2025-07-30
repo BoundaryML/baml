@@ -113,13 +113,22 @@ fn matches_value_with_rpc_type<T: HasType<type_meta::NonStreaming>>(
         (BamlValueWithMeta::List(_, _), TypeReferenceWithMetadata::List(_, _)) => true,
         (BamlValueWithMeta::Map(_, _), TypeReferenceWithMetadata::Map { .. }) => true,
         (BamlValueWithMeta::Media(media, _), TypeReferenceWithMetadata::Media(media_type, _)) => {
-            match (&media.media_type, media_type) {
-                (baml_types::BamlMediaType::Image, baml_rpc::MediaTypeDefinition::Image) => true,
-                (baml_types::BamlMediaType::Audio, baml_rpc::MediaTypeDefinition::Audio) => true,
-                (baml_types::BamlMediaType::Pdf, baml_rpc::MediaTypeDefinition::Pdf) => true,
-                (baml_types::BamlMediaType::Video, baml_rpc::MediaTypeDefinition::Video) => true,
-                _ => false,
-            }
+            matches!(
+                (&media.media_type, media_type),
+                (
+                    baml_types::BamlMediaType::Image,
+                    baml_rpc::MediaTypeDefinition::Image
+                ) | (
+                    baml_types::BamlMediaType::Audio,
+                    baml_rpc::MediaTypeDefinition::Audio
+                ) | (
+                    baml_types::BamlMediaType::Pdf,
+                    baml_rpc::MediaTypeDefinition::Pdf
+                ) | (
+                    baml_types::BamlMediaType::Video,
+                    baml_rpc::MediaTypeDefinition::Video
+                )
+            )
         }
         // Also handle literal values
         (
