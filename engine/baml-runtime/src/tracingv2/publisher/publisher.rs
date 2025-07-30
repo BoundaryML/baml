@@ -128,12 +128,6 @@ impl RuntimeAST {
         let response = match response {
             Ok(response) => response,
             Err(e) => {
-                println!(
-                    "error: {:#?}, url: {}, path: {}",
-                    e,
-                    self.base_url(),
-                    TEndpoint::path()
-                );
                 return Err(ApiError::Transport(e));
             }
         };
@@ -538,26 +532,22 @@ impl TracePublisher {
     /// Process a batch with automatic splitting on failure.
     /// If a batch fails to upload, we'll recursively split it in half and retry.
     /// This helps with payload size limits, rate limiting, and transient network issues.
+    /// We only allow 2 splits maximum before giving up.
     async fn process_batch_with_splitting(
         &self,
         batch: Vec<Arc<TraceEventWithMeta>>,
     ) -> Result<()> {
-        // Get minimum batch size from env var, default to 1 (individual events)
-        let min_batch_size = self
-            .lookup
-            .ast
-            .env_var("BAML_MIN_BATCH_SIZE")
-            .and_then(|s| s.parse::<usize>().ok())
-            .unwrap_or(1);
+        // Allow maximum of 2 splits before giving up
+        let max_splits = 1;
 
-        self.process_batch_recursive(batch, min_batch_size).await
+        self.process_batch_recursive(batch, max_splits).await
     }
 
-    /// Recursively process batches, splitting on failure until we reach minimum size.
+    /// Recursively process batches, splitting on failure until we reach maximum splits.
     async fn process_batch_recursive(
         &self,
         batch: Vec<Arc<TraceEventWithMeta>>,
-        min_batch_size: usize,
+        splits_remaining: usize,
     ) -> Result<()> {
         // Try to upload the batch
         match self.process_batch_impl(batch.clone()).await {
@@ -566,11 +556,10 @@ impl TracePublisher {
                 Ok(())
             }
             Err(e) => {
-                log::info!("Failed to upload batch of {} events: {:?}", batch.len(), e);
-                // If batch size is at or below minimum, give up
-                if batch.len() <= min_batch_size {
+                // If no more splits remaining, give up
+                if splits_remaining == 0 {
                     log::info!(
-                        "Failed to upload single/minimum batch of {} events: {}",
+                        "Failed to upload batch of {} events after maximum splits: {}",
                         batch.len(),
                         e
                     );
@@ -582,20 +571,23 @@ impl TracePublisher {
                 let (first_half, second_half) = batch.split_at(mid);
 
                 tracing::debug!(
-                    "Batch upload failed (size: {}), splitting into {} and {} events: {}",
+                    "Batch upload failed (size: {}), splitting into {} and {} events (splits remaining: {}): {}",
                     batch.len(),
                     first_half.len(),
                     second_half.len(),
+                    splits_remaining - 1,
                     e
                 );
 
                 // Process both halves recursively with Box::pin
-                let first_result =
-                    Box::pin(self.process_batch_recursive(first_half.to_vec(), min_batch_size))
-                        .await;
-                let second_result =
-                    Box::pin(self.process_batch_recursive(second_half.to_vec(), min_batch_size))
-                        .await;
+                let first_result = Box::pin(
+                    self.process_batch_recursive(first_half.to_vec(), splits_remaining - 1),
+                )
+                .await;
+                let second_result = Box::pin(
+                    self.process_batch_recursive(second_half.to_vec(), splits_remaining - 1),
+                )
+                .await;
 
                 // If either half failed, propagate the error
                 match (first_result, second_result) {
