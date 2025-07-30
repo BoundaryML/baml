@@ -17,6 +17,7 @@ on:
       - "test-release/*.*"
       - "*.*"
     branches:
+      - dryrunrel
       - gofix2
 concurrency:
   # No suffix specified - in reusable workflows we need a statically-defined suffix
