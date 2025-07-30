@@ -14,7 +14,6 @@ import {
 } from '@baml/ui/command';
 import { cn } from '@baml/ui/lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from '@baml/ui/popover';
-import { useSidebar } from '@baml/ui/sidebar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@baml/ui/tooltip';
 import { useAtomValue, useSetAtom } from 'jotai';
 import { atom } from 'jotai';
@@ -30,7 +29,7 @@ import {
 
 interface FunctionTestNameProps {
   functionName: string;
-  testName?: string;
+  testName?: string | null;
   selected?: boolean;
 }
 
@@ -51,7 +50,6 @@ export const FunctionTestName: React.FC<FunctionTestNameProps> = ({
 }) => {
   const [functionOpen, setFunctionOpen] = useState(false);
   const [testOpen, setTestOpen] = useState(false);
-  const { open: isSidebarOpen } = useSidebar();
 
   const functionAtom = useMemo(
     () => functionObjectAtom(functionName),
