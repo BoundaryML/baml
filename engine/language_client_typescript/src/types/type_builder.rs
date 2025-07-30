@@ -182,6 +182,7 @@ impl EnumBuilder {
         self.inner.lock().unwrap().value(&name).into()
     }
 
+    /*
     #[napi]
     pub fn alias(&self, alias: Option<&str>) -> Self {
         self.inner.lock().unwrap().with_meta(
@@ -189,6 +190,15 @@ impl EnumBuilder {
             alias.map_or(baml_types::BamlValue::Null, |s| {
                 BamlValue::String(s.to_string())
             }),
+        );
+        self.inner.clone().into()
+    }
+    */
+    #[napi]
+    pub fn alias(&self, alias: Option<String>) -> Self {
+        self.inner.lock().unwrap().with_meta(
+            "alias",
+            alias.map_or(baml_types::BamlValue::Null, BamlValue::String),
         );
         self.inner.clone().into()
     }
@@ -201,6 +211,7 @@ impl EnumBuilder {
 
 #[napi]
 impl EnumValueBuilder {
+    /*
     #[napi]
     pub fn alias(&self, alias: Option<&str>) -> Self {
         self.inner.lock().unwrap().with_meta(
@@ -208,6 +219,15 @@ impl EnumValueBuilder {
             alias.map_or(baml_types::BamlValue::Null, |s| {
                 BamlValue::String(s.to_string())
             }),
+        );
+        self.inner.clone().into()
+    }
+    */
+    #[napi]
+    pub fn alias(&self, alias: Option<String>) -> Self {
+        self.inner.lock().unwrap().with_meta(
+            "alias",
+            alias.map_or(baml_types::BamlValue::Null, BamlValue::String),
         );
         self.inner.clone().into()
     }
@@ -221,6 +241,7 @@ impl EnumValueBuilder {
         self.inner.clone().into()
     }
 
+    /*
     #[napi]
     pub fn description(&self, description: Option<&str>) -> Self {
         self.inner.lock().unwrap().with_meta(
@@ -228,6 +249,15 @@ impl EnumValueBuilder {
             description.map_or(baml_types::BamlValue::Null, |s| {
                 BamlValue::String(s.to_string())
             }),
+        );
+        self.inner.clone().into()
+    }
+    */
+    #[napi]
+    pub fn description(&self, description: Option<String>) -> Self {
+        self.inner.lock().unwrap().with_meta(
+            "description",
+            description.map_or(baml_types::BamlValue::Null, BamlValue::String),
         );
         self.inner.clone().into()
     }
@@ -257,6 +287,7 @@ impl ClassPropertyBuilder {
         self.inner.clone().into()
     }
 
+    /*
     #[napi]
     pub fn alias(&self, alias: Option<&str>) -> Self {
         self.inner.lock().unwrap().with_meta(
@@ -267,7 +298,17 @@ impl ClassPropertyBuilder {
         );
         self.inner.clone().into()
     }
+    */
+    #[napi]
+    pub fn alias(&self, alias: Option<String>) -> Self {
+        self.inner.lock().unwrap().with_meta(
+            "alias",
+            alias.map_or(baml_types::BamlValue::Null, BamlValue::String),
+        );
+        self.inner.clone().into()
+    }
 
+    /*
     #[napi]
     pub fn description(&self, description: Option<&str>) -> Self {
         self.inner.lock().unwrap().with_meta(
@@ -275,6 +316,15 @@ impl ClassPropertyBuilder {
             description.map_or(baml_types::BamlValue::Null, |s| {
                 BamlValue::String(s.to_string())
             }),
+        );
+        self.inner.clone().into()
+    }
+    */
+    #[napi]
+    pub fn description(&self, description: Option<String>) -> Self {
+        self.inner.lock().unwrap().with_meta(
+            "description",
+            description.map_or(baml_types::BamlValue::Null, BamlValue::String),
         );
         self.inner.clone().into()
     }

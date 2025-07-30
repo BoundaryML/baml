@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
 use napi::{
-    bindgen_prelude::ObjectFinalize,
+    bindgen_prelude::{ObjectFinalize, Function, FunctionRef, Undefined},
     threadsafe_function::{ThreadSafeCallContext, ThreadsafeFunctionCallMode},
-    Env, JsFunction, JsObject, JsUndefined,
+    Env, JsObject, 
 };
 use napi_derive::napi;
 
@@ -16,7 +16,7 @@ crate::lang_wrapper!(
     custom_finalize,
     no_from,
     thread_safe,
-    callback: Option<napi::Ref<()>>,
+    callback: Option<FunctionRef<FunctionResult, ()>>,
     tb: Option<baml_runtime::type_builder::TypeBuilder>,
     cb: Option<baml_runtime::client_registry::ClientRegistry>,
     env_vars: HashMap<String, String>
@@ -25,7 +25,7 @@ crate::lang_wrapper!(
 impl FunctionResultStream {
     pub(crate) fn new(
         inner: baml_runtime::FunctionResultStream,
-        event: Option<napi::Ref<()>>,
+        event: Option<FunctionRef<FunctionResult, ()>>,
         tb: Option<baml_runtime::type_builder::TypeBuilder>,
         cb: Option<baml_runtime::client_registry::ClientRegistry>,
     ) -> Self {
@@ -46,20 +46,27 @@ impl FunctionResultStream {
         &mut self,
         env: Env,
         #[napi(ts_arg_type = "((err: any, param: FunctionResult) => void) | undefined")]
-        func: Option<JsFunction>,
-    ) -> napi::Result<JsUndefined> {
+        func: Option<Function<FunctionResult, ()>>,
+    ) -> napi::Result<Undefined> {
         if let Some(func) = func {
-            let cb = env.create_reference(func)?;
-            let prev = self.callback.take();
-            if let Some(mut old_cb) = prev {
-                old_cb.unref(env)?;
-            }
-            self.callback = Some(cb);
-        } else if let Some(mut cb) = self.callback.take() {
-            cb.unref(env)?;
-        }
+        //     let cb = env.create_reference(func)?;
+        //     let prev = self.callback.take();
+        //     if let Some(mut old_cb) = prev {
+        //         old_cb.unref(env)?;
+        //     }
+        //     self.callback = Some(cb);
+        // } else if let Some(mut cb) = self.callback.take() {
+        //     cb.unref(env)?;
+        // }
 
-        env.get_undefined()
+        let new_ref = func.create_ref()?;
+
+        self.callback = Some(new_ref);
+        } else {
+            self.callback = None; 
+        }
+        // env.get_undefined()
+        Ok(())
     }
 
     #[napi(ts_return_type = "Promise<FunctionResult>")]
@@ -67,20 +74,31 @@ impl FunctionResultStream {
         let inner = self.inner.clone();
 
         let on_event = match &self.callback {
-            Some(cb) => {
-                let cb = env.get_reference_value::<JsFunction>(cb)?;
-                let tsfn = env.create_threadsafe_function(
-                    &cb,
-                    0,
-                    |ctx: ThreadSafeCallContext<baml_runtime::FunctionResult>| {
-                        Ok(vec![FunctionResult::from(ctx.value)])
-                    },
-                )?;
+            // Some(cb) => {
+            //     let cb = env.get_reference_value::<JsFunction>(cb)?;
+            //     let tsfn = env.create_threadsafe_function(
+            //         &cb,
+            //         0,
+            //         |ctx: ThreadSafeCallContext<baml_runtime::FunctionResult>| {
+            //             Ok(vec![FunctionResult::from(ctx.value)])
+            //         },
+            //     )?;
+
+            Some(cb_ref) => {
+                let cb = cb_ref.borrow_back(&env)?;
+                let tsfn = cb
+                    .build_threadsafe_function()
+                    .build_callback(|ctx: ThreadSafeCallContext<baml_runtime::FunctionResult>| {
+                        Ok(FunctionResult::from(ctx.value))
+                    })?;
 
                 Some(move |event: baml_runtime::FunctionResult| {
-                    let res = tsfn.call(Ok(event), ThreadsafeFunctionCallMode::Blocking);
-                    if res != napi::Status::Ok {
-                        log::error!("Error calling on_event callback: {res:?}");
+                    // let res = tsfn.call(Ok(event), ThreadsafeFunctionCallMode::Blocking);
+                    // if res != napi::Status::Ok {
+                    //     log::error!("Error calling on_event callback: {res:?}");
+                    let status = tsfn.call(event, ThreadsafeFunctionCallMode::Blocking);
+                    if status != napi::Status::Ok {
+                        log::error!("Error calling on_event callback: {status:?}");
                     }
                 })
             }
@@ -114,10 +132,10 @@ impl FunctionResultStream {
 }
 
 impl ObjectFinalize for FunctionResultStream {
-    fn finalize(mut self, env: Env) -> napi::Result<()> {
-        if let Some(mut cb) = self.callback.take() {
-            cb.unref(env)?;
-        }
+    fn finalize(self, env: Env) -> napi::Result<()> {
+        // if let Some(mut cb) = self.callback.take() {
+        //     cb.unref(env)?;
+        // }
         Ok(())
     }
 }
