@@ -58,6 +58,8 @@ export class WebviewPanelHost {
   private readonly _panel: WebviewPanel
   private _disposables: Disposable[] = []
   private _port: () => number
+  private _isInitialized: boolean = false
+  private _pendingCommands: Array<{ command: string; content: any }> = []
 
   /**
    * The WebPanelView class private constructor (called only from the render method).
@@ -128,6 +130,12 @@ export class WebviewPanelHost {
   }
 
   public postMessage<T>(command: string, content: T) {
+    if (!this._isInitialized && command === 'select_function') {
+      // Queue select_function commands until initialized
+      this._pendingCommands.push({ command, content })
+      return
+    }
+    
     this._panel.webview.postMessage({ command: command, content })
     this.reporter?.sendTelemetryEvent({
       event: `baml.webview.${command}`,
@@ -341,11 +349,13 @@ export class WebviewPanelHost {
 
     const addProject = async () => {
       await requestDiagnostics()
-      console.log('last opened func', openPlaygroundConfig.lastOpenedFunction)
-      // this.postMessage('select_function', {
-      //   root_path: 'default',
-      //   function_name: openPlaygroundConfig.lastOpenedFunction,
-      // })
+      // console.log('last opened func', openPlaygroundConfig.lastOpenedFunction)
+      // if (openPlaygroundConfig.lastOpenedFunction) {
+      //   this.postMessage('select_function', {
+      //     root_path: 'default',
+      //     function_name: openPlaygroundConfig.lastOpenedFunction,
+      //   })
+      // }
       this.postMessage('baml_cli_version', bamlConfig.cliVersion)
       this.postMessage('baml_settings_updated', bamlConfig)
     }
@@ -580,6 +590,15 @@ export class WebviewPanelHost {
             // request diagnostics, which updates the runtime and triggers a new project files update.
             addProject()
             console.log('initialized webview')
+            
+            // Mark as initialized and process pending commands
+            this._isInitialized = true
+            for (const pending of this._pendingCommands) {
+              console.log('sending pending command', pending.command, pending.content)
+              this._panel.webview.postMessage({ command: pending.command, content: pending.content })
+            }
+            this._pendingCommands = []
+            
             this._panel.webview.postMessage({ rpcId: message.rpcId, rpcMethod: vscodeCommand, data: { ack: true } })
             return
         }
