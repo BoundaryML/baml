@@ -342,10 +342,10 @@ export class WebviewPanelHost {
     const addProject = async () => {
       await requestDiagnostics()
       console.log('last opened func', openPlaygroundConfig.lastOpenedFunction)
-      this.postMessage('select_function', {
-        root_path: 'default',
-        function_name: openPlaygroundConfig.lastOpenedFunction,
-      })
+      // this.postMessage('select_function', {
+      //   root_path: 'default',
+      //   function_name: openPlaygroundConfig.lastOpenedFunction,
+      // })
       this.postMessage('baml_cli_version', bamlConfig.cliVersion)
       this.postMessage('baml_settings_updated', bamlConfig)
     }
