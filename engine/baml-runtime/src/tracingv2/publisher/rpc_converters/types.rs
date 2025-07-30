@@ -58,17 +58,17 @@ impl<'a, T: HasType<type_meta::NonStreaming>> IntoRpcEvent<'a, runtime_api::Baml
                         baml_rpc::runtime_api::ValueContent::Null => runtime_api::TypeIndex::Null,
                         _ => {
                             // Find which type in the union matches the actual value type
-                            let type_index = union_type.types
-                                .iter()
-                                .position(|union_variant_type| {
-                                    matches_value_with_rpc_type(self, union_variant_type, lookup)
-                                })
-                                .unwrap_or_else(|| {
-                                    baml_log::warn!("Could not determine union variant index for value type. Using index 0 as fallback.");
-                                    0
-                                });
-
-                            runtime_api::TypeIndex::Index(type_index)
+                            match union_type.types.iter().position(|union_variant_type| {
+                                matches_value_with_rpc_type(self, union_variant_type, lookup)
+                            }) {
+                                Some(idx) => runtime_api::TypeIndex::Index(idx),
+                                None => {
+                                    baml_log::warn!(
+                                        "Could not determine union variant index for value type."
+                                    );
+                                    runtime_api::TypeIndex::NotFound
+                                }
+                            }
                         }
                     },
                     _ => runtime_api::TypeIndex::NotUnion,
