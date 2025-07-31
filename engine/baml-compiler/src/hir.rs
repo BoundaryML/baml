@@ -307,7 +307,7 @@ impl TypeM<TypeMeta> {
 pub struct ExprFunction {
     pub name: String,
     pub parameters: Vec<Parameter>,
-    // pub return_type: Type,
+    pub return_type: Type,
     pub body: Block,
     pub span: Span,
 }
@@ -316,7 +316,7 @@ pub struct ExprFunction {
 pub struct LLMFunction {
     pub name: String,
     pub parameters: Vec<Parameter>,
-    // pub return_type: Type,
+    pub return_type: Type,
     pub client: String,
     pub prompt: String,
     pub span: Span,
@@ -576,6 +576,12 @@ impl LLMFunction {
                         .collect::<Vec<_>>()
                 })
                 .unwrap_or(vec![]),
+            return_type: TypeM::from_ast(function.output().unwrap_or(&FieldType::Primitive(
+                FieldArity::Required,
+                TypeValue::Null,
+                Span::fake(),
+                None,
+            ))),
             client: function
                 .fields()
                 .iter()
@@ -609,6 +615,10 @@ impl LLMFunction {
             .append(RcDoc::text("("))
             .append(self.parameters_to_doc())
             .append(RcDoc::text(")"))
+            .append(RcDoc::space())
+            .append(RcDoc::text("->"))
+            .append(RcDoc::space())
+            .append(self.return_type.to_doc())
             .append(RcDoc::space())
             .append(RcDoc::text("{"))
             .append(RcDoc::hardline())
@@ -1085,14 +1095,12 @@ impl Class {
                 RcDoc::nil()
             } else {
                 RcDoc::hardline()
-                    .append(
-                        RcDoc::intersperse(
-                            self.fields.iter().map(|f| f.to_doc()).collect::<Vec<_>>(),
-                            RcDoc::hardline(),
-                        )
-                        .nest(2),
-                    )
+                    .append(RcDoc::intersperse(
+                        self.fields.iter().map(|f| f.to_doc()).collect::<Vec<_>>(),
+                        RcDoc::hardline(),
+                    ))
                     .append(RcDoc::hardline())
+                    .nest(2)
             })
             .append(RcDoc::text("}"))
     }
@@ -1124,14 +1132,12 @@ impl Enum {
                 RcDoc::nil()
             } else {
                 RcDoc::hardline()
-                    .append(
-                        RcDoc::intersperse(
-                            self.variants.iter().map(|v| v.to_doc()).collect::<Vec<_>>(),
-                            RcDoc::hardline(),
-                        )
-                        .nest(2),
-                    )
+                    .append(RcDoc::intersperse(
+                        self.variants.iter().map(|v| v.to_doc()).collect::<Vec<_>>(),
+                        RcDoc::hardline(),
+                    ))
                     .append(RcDoc::hardline())
+                    .nest(2)
             })
             .append(RcDoc::text("}"))
     }
@@ -1348,8 +1354,8 @@ function CallTest() {
             }
         "#;
         let expected = r#"function simpleIf() {
-        let x = if true { "yes" } else { "no" };
-        return x;
+  let x = if true { "yes" } else { "no" };
+  return x;
 }"#;
         assert_eq!(hir_from_source(source), expected);
     }
@@ -1521,6 +1527,31 @@ function CallTest() {
     }
 
     #[test]
+    fn test_enum_indentation() {
+        // Test enum pretty printing with proper indentation
+        let source = r#"
+            enum Status {
+                PENDING
+                APPROVED
+                REJECTED
+            }
+        "#;
+        let ast = parse_baml(source);
+        let hir = Program::from_ast(&ast);
+        let pretty = hir.pretty_print();
+
+        // Print for visual inspection
+        println!("\nEnum with proper indentation:");
+        println!("{}", pretty);
+
+        // Verify enum structure
+        assert!(pretty.contains("enum Status"));
+        assert!(pretty.contains("PENDING"));
+        assert!(pretty.contains("APPROVED"));
+        assert!(pretty.contains("REJECTED"));
+    }
+
+    #[test]
     fn test_pretty_print_complex_structures() {
         let source = r#"
             function complexFunction(a: int, b: string, c: bool) -> string {
@@ -1619,9 +1650,8 @@ function CallTest() {
 }
 
 class Foo {
-a
-b
-}
+  a: int
+  b: int
 }"#;
         assert_eq!(result, expected);
         // Print for visual inspection
