@@ -165,6 +165,8 @@ web-sys = { version = "0.3.69", features = [
   "Window",
 ] }
 wasmtimer = "0.4.1"
+tokio = { version = "1", features = ["rt", "sync"] }
+
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 aws-config = "=1.5.3"
