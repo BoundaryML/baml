@@ -2,6 +2,7 @@ package baml
 
 import (
 	"fmt"
+	"unsafe"
 
 	"github.com/boundaryml/baml/engine/language_client_go/baml_go/raw_objects"
 	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
@@ -11,8 +12,8 @@ type functionLog struct {
 	*raw_objects.RawObject
 }
 
-func newFunctionLog(ptr int64) FunctionLog {
-	return &functionLog{raw_objects.FromPointer(ptr)}
+func newFunctionLog(ptr int64, rt unsafe.Pointer) FunctionLog {
+	return &functionLog{raw_objects.FromPointer(ptr, rt)}
 }
 
 func (f *functionLog) ObjectType() cffi.CFFIObjectType {

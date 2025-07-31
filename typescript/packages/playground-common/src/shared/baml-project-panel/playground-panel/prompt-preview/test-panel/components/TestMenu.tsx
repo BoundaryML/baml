@@ -138,7 +138,7 @@ export const TestMenu = () => {
           </Tooltip>
         </TooltipProvider>
 
-        <TooltipProvider delayDuration={0}>
+        <TooltipProvider >
           <Tooltip>
             <TooltipTrigger asChild>
               <Button

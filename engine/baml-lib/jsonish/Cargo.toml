@@ -35,6 +35,7 @@ either = "1.10.0"
 test-log = "0.2.16"
 regex.workspace = true
 thiserror = "2.0.9"
+unicode-normalization = "0.1.24"
 
 [dev-dependencies]
 assert-json-diff = "2.0.2"

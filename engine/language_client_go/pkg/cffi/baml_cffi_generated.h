@@ -51,7 +51,7 @@ struct Buffer call_object_constructor(const char *encoded_args, uintptr_t length
 
 void free_buffer(struct Buffer buf);
 
-struct Buffer call_object_method(const char *encoded_args, uintptr_t length);
+struct Buffer call_object_method(const void *runtime, const char *encoded_args, uintptr_t length);
 
 const char *version(void);
 

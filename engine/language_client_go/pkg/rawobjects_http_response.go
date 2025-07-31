@@ -2,6 +2,7 @@ package baml
 
 import (
 	"fmt"
+	"unsafe"
 
 	"github.com/boundaryml/baml/engine/language_client_go/baml_go/raw_objects"
 	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
@@ -11,8 +12,8 @@ type httpResponse struct {
 	*raw_objects.RawObject
 }
 
-func newHttpResponse(ptr int64) HTTPResponse {
-	return &httpResponse{raw_objects.FromPointer(ptr)}
+func newHttpResponse(ptr int64, rt unsafe.Pointer) HTTPResponse {
+	return &httpResponse{raw_objects.FromPointer(ptr, rt)}
 }
 
 func (h *httpResponse) ObjectType() cffi.CFFIObjectType {

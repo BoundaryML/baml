@@ -89,7 +89,7 @@ impl TypeCoercer for LiteralValue {
                 // second element is the list of aliases.
                 let candidates = vec![(literal_str.as_str(), vec![literal_str.clone()])];
 
-                let literal_match = match_string(ctx, target, Some(value), &candidates)?;
+                let literal_match = match_string(ctx, target, Some(value), &candidates, true)?;
 
                 Ok(BamlValueWithFlags::String(literal_match))
             }

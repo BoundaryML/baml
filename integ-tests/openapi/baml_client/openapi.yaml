@@ -2189,6 +2189,19 @@ paths:
                 title: TestGeminiSystemAsChatResponse
                 type: string
       operationId: TestGeminiSystemAsChat
+  /call/TestGeminiThinking:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestGeminiThinking'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestGeminiThinkingResponse
+                type: string
+      operationId: TestGeminiThinking
   /call/TestGroq:
     post:
       requestBody:
@@ -5474,6 +5487,22 @@ components:
         application/json:
           schema:
             title: TestGeminiSystemAsChatRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    TestGeminiThinking:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestGeminiThinkingRequest
             type: object
             properties:
               input:

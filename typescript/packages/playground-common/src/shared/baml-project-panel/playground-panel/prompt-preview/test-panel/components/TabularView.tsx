@@ -18,6 +18,7 @@ import { ResponseViewType, tabularViewConfigAtom } from './atoms'
 import { MarkdownRenderer } from './MarkdownRenderer'
 import { ParsedResponseRenderer } from './ParsedResponseRender'
 import { TestStatus } from './TestStatus'
+import { EnhancedErrorRenderer } from './EnhancedErrorRenderer'
 import { useMemo } from 'react'
 import { vscode } from '../../../../vscode'
 interface TabularViewProps {
@@ -155,6 +156,18 @@ export const TabularView: React.FC<TabularViewProps> = ({ currentRun }) => {
       })
     }
   }, [selectedItem])
+
+  // Create memoized retry handlers for each test to prevent re-renders
+  const createRetryHandler = useMemo(() => {
+    const handlers = new Map();
+    return (test: any) => {
+      const key = `${test.functionName}-${test.testName}`;
+      if (!handlers.has(key)) {
+        handlers.set(key, () => runBamlTests([{ functionName: test.functionName, testName: test.testName }]));
+      }
+      return handlers.get(key);
+    };
+  }, [runBamlTests]);
 
   return (
     <div className='space-y-4'>
@@ -308,7 +321,13 @@ export const TabularView: React.FC<TabularViewProps> = ({ currentRun }) => {
                 <TableCell className='px-1 py-1'>
                   <TestStatus status={test.response.status} finalState={getStatus(test.response)} />
                   {test.response.status === 'error' && (
-                    <div className='mt-1 text-xs text-red-500'>{test.response.message}</div>
+                    <EnhancedErrorRenderer
+                      errorMessage={test.response.message || 'Unknown error occurred'}
+                      functionName={test.functionName}
+                      testName={test.testName}
+                      onRetry={createRetryHandler(test)}
+                      className="text-xs"
+                    />
                   )}
                 </TableCell>
                 {config.showModel && (

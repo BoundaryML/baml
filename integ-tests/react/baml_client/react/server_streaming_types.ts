@@ -180,6 +180,7 @@ export type StreamingServerTypes = {
   TestGeminiOpenAiGeneric: string,
   TestGeminiSystem: string,
   TestGeminiSystemAsChat: string,
+  TestGeminiThinking: string,
   TestGroq: string,
   TestImageInput: string,
   TestImageInputAnthropic: string,

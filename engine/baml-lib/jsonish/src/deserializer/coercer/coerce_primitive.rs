@@ -273,6 +273,7 @@ pub(super) fn coerce_bool(
                             vec!["false".into(), "False".into(), "FALSE".into()],
                         ),
                     ],
+                    true,
                 ) {
                     Ok(val) => match val.value().as_str() {
                         "true" => Ok(BamlValueWithFlags::Bool(

@@ -8,8 +8,10 @@ use internal_baml_jinja::types::{Class, Name};
 use super::ParsingContext;
 use crate::deserializer::{
     coercer::{
-        array_helper, field_type::validate_asserts, run_user_checks, DefaultValue, ParsingError,
-        TypeCoercer,
+        array_helper,
+        field_type::validate_asserts,
+        match_string::{match_string, matches_string_to_string},
+        run_user_checks, DefaultValue, ParsingError, TypeCoercer,
     },
     deserialize_flags::{DeserializerConditions, Flag},
     types::BamlValueWithFlags,
@@ -93,7 +95,7 @@ impl TypeCoercer for Class {
                     if let Some(field) = self
                         .fields
                         .iter()
-                        .find(|(name, ..)| name.rendered_name().trim() == key.trim())
+                        .find(|(name, ..)| matches_string_to_string(ctx, key, name.rendered_name()))
                     {
                         let scope = ctx.enter_scope(field.0.real_name());
                         let parsed = field.1.coerce(&scope, &field.1, Some(v));

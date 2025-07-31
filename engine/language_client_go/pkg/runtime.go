@@ -15,7 +15,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sync"
 	"unsafe"
 
 	"github.com/boundaryml/baml/engine/language_client_go/baml_go"
@@ -28,9 +27,6 @@ type BamlRuntime struct {
 func NewClientRegistry() *ClientRegistry {
 	return &ClientRegistry{}
 }
-
-var instance *BamlRuntime
-var once sync.Once
 
 func InvokeRuntimeCli(args []string) int {
 
