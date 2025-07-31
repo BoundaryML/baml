@@ -72,7 +72,7 @@ impl TypeCoercer for TypeIR {
                 }
 
                 // Only validate asserts - if they fail, then return None
-                if let Err(_) = validate_asserts(&constrained_results) {
+                if validate_asserts(&constrained_results).is_err() {
                     return None;
                 }
 
