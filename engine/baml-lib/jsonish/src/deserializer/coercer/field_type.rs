@@ -44,7 +44,7 @@ impl TypeCoercer for TypeIR {
         };
 
         match result {
-            Some(v) => {
+            Some(mut v) => {
                 // run user checks
                 let Ok(constrainted_results) =
                     run_user_checks(&v.clone().into(), self).map_err(|e| ParsingError {
@@ -55,9 +55,27 @@ impl TypeCoercer for TypeIR {
                 else {
                     return None;
                 };
-                let Ok(()) = validate_asserts(&constrainted_results) else {
+
+                // Don't return None if only checks fail (not asserts)
+                let check_results = constrainted_results
+                    .iter()
+                    .filter_map(|(maybe_check, result)| {
+                        maybe_check
+                            .clone()
+                            .as_check()
+                            .map(|(label, expr)| (label, expr, *result))
+                    })
+                    .collect::<Vec<_>>();
+
+                if !check_results.is_empty() {
+                    v.add_flag(Flag::ConstraintResults(check_results));
+                }
+
+                // Only validate asserts - if they fail, then return None
+                if let Err(_) = validate_asserts(&constrainted_results) {
                     return None;
-                };
+                }
+
                 Some(v)
             }
             None => None,
