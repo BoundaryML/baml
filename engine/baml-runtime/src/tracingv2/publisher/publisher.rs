@@ -183,6 +183,10 @@ pub fn start_publisher(
     lookup: Arc<AstSignatureWrapper>,
     #[cfg(not(target_arch = "wasm32"))] rt: Arc<tokio::runtime::Runtime>,
 ) {
+    if lookup.env_var("BAML_GENERATE").is_some() {
+        log::debug!("Skipping publisher because BAML_GENERATE is set");
+        return;
+    }
     if lookup.env_var("BOUNDARY_API_KEY").is_none() {
         log::debug!("Skipping publisher because BOUNDARY_API_KEY is not set");
         return;

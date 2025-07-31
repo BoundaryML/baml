@@ -191,6 +191,27 @@
       ],
       "cache": false
     },
+    "@boundaryml/baml#build:debug": {
+      "outputs": ["dist/**", "build/**", "artifacts/**"],
+      "cache": false
+    },
+    "integ-tests:ts": {
+      "dependsOn": ["build:debug"],
+      "outputs": [
+        "coverage/**",
+        ".coverage/**",
+        "junit.xml",
+        "test-results/**"
+      ],
+      "cache": false,
+      "env": [
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "GOOGLE_API_KEY",
+        "AWS_*",
+        "INTEG_TESTS_*"
+      ]
+    },
     "integ-tests": {
       "dependsOn": ["build"],
       "outputs": [
