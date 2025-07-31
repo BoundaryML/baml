@@ -67,7 +67,7 @@ impl TypeCoercer for Class {
         enum Triple {
             Pending,
             NotPresent,
-            Present(BamlValueWithFlags),
+            Present(Box<BamlValueWithFlags>),
         }
 
         let mut fill_result = self
@@ -88,7 +88,7 @@ impl TypeCoercer for Class {
                     continue;
                 }
                 if let Some(cast_value) = field_type.try_cast(ctx, field_type, Some(v)) {
-                    *val = Triple::Present(cast_value);
+                    *val = Triple::Present(Box::new(cast_value));
                 } else {
                     return None;
                 }
@@ -115,17 +115,15 @@ impl TypeCoercer for Class {
             }
 
             if let Triple::Present(val) = val {
-                result.insert(name.real_name().to_string(), val);
+                result.insert(name.real_name().to_string(), *val);
+            } else if field_type.is_optional() {
+                let mut null_value =
+                    BamlValueWithFlags::Null(field_type.clone(), Default::default());
+                null_value.add_flag(Flag::OptionalDefaultFromNoValue);
+                null_value.add_flag(Flag::Pending);
+                result.insert(name.real_name().to_string(), null_value);
             } else {
-                if field_type.is_optional() {
-                    let mut null_value =
-                        BamlValueWithFlags::Null(field_type.clone(), Default::default());
-                    null_value.add_flag(Flag::OptionalDefaultFromNoValue);
-                    null_value.add_flag(Flag::Pending);
-                    result.insert(name.real_name().to_string(), null_value);
-                } else {
-                    return None;
-                }
+                return None;
             }
         }
 

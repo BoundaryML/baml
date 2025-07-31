@@ -14,9 +14,7 @@ pub(super) fn try_cast_union(
         unreachable!("try_cast_union");
     };
 
-    let Some(value) = value else {
-        return None;
-    };
+    let value = value?;
 
     if matches!(value, crate::jsonish::Value::Null) && options.is_optional() {
         let mut result = BamlValueWithFlags::Null(union_target.clone(), Default::default());
@@ -38,10 +36,7 @@ pub(super) fn try_cast_union(
     let mut filtered_options = options
         .iter_skip_null()
         .into_iter()
-        .filter_map(|opt| {
-            let result = opt.try_cast(ctx, union_target, Some(value));
-            result
-        })
+        .filter_map(|opt| opt.try_cast(ctx, union_target, Some(value)))
         .collect::<Vec<_>>();
 
     let mut result = match filtered_options.len() {
@@ -50,10 +45,7 @@ pub(super) fn try_cast_union(
         _ => array_helper::pick_best(
             ctx,
             union_target,
-            &filtered_options
-                .into_iter()
-                .map(|v| Ok(v))
-                .collect::<Vec<_>>(),
+            &filtered_options.into_iter().map(Ok).collect::<Vec<_>>(),
         )
         .ok(),
     };
