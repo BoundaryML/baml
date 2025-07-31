@@ -1149,6 +1149,13 @@ class BamlSyncClient:
             "input": input,
         })
         return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    def TestGeminiThinking(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestGeminiThinking", args={
+            "input": input,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestGroq(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
@@ -3381,6 +3388,18 @@ class BamlStreamClient:
           lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
+    def TestGeminiThinking(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestGeminiThinking", args={
+            "input": input,
+        })
+        return baml_py.BamlSyncStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
     def TestGroq(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[str, str]:
@@ -5137,6 +5156,13 @@ class BamlHttpRequestClient:
             "input": input,
         }, mode="request")
         return result
+    def TestGeminiThinking(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestGeminiThinking", args={
+            "input": input,
+        }, mode="request")
+        return result
     def TestGroq(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -6605,6 +6631,13 @@ class BamlHttpStreamRequestClient:
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestGeminiSystemAsChat", args={
+            "input": input,
+        }, mode="stream")
+        return result
+    def TestGeminiThinking(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestGeminiThinking", args={
             "input": input,
         }, mode="stream")
         return result

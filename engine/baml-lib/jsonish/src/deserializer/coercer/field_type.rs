@@ -11,12 +11,59 @@ use super::{
     ParsingContext, ParsingError,
 };
 use crate::deserializer::{
-    coercer::{run_user_checks, DefaultValue, TypeCoercer},
+    coercer::{
+        coerce_array::try_cast_array, coerce_map::try_cast_map, coerce_union::try_cast_union,
+        ir_ref::coerce_alias::try_cast_alias, run_user_checks, DefaultValue, TypeCoercer,
+    },
     deserialize_flags::{DeserializerConditions, Flag},
     types::BamlValueWithFlags,
 };
 
 impl TypeCoercer for TypeIR {
+    fn try_cast(
+        &self,
+        ctx: &ParsingContext,
+        target: &TypeIR,
+        value: Option<&crate::jsonish::Value>,
+    ) -> Option<BamlValueWithFlags> {
+        let result = match self {
+            TypeIR::Primitive(p, _) => p.try_cast(ctx, target, value),
+            TypeIR::Enum { name, .. } => IrRef::Enum(name).try_cast(ctx, target, value),
+            TypeIR::Literal(l, _) => l.try_cast(ctx, target, value),
+            TypeIR::Class { name, mode, .. } => {
+                IrRef::Class(name, mode).try_cast(ctx, target, value)
+            }
+            TypeIR::RecursiveTypeAlias { .. } => {
+                try_cast_alias(ctx, self, value).map(|v| v.with_target(target))
+            }
+            TypeIR::List(_, _) => try_cast_array(ctx, self, value).map(|v| v.with_target(target)),
+            TypeIR::Union(_, _) => try_cast_union(ctx, self, value).map(|v| v.with_target(target)),
+            TypeIR::Map(..) => try_cast_map(ctx, self, value).map(|v| v.with_target(target)),
+            TypeIR::Tuple(_, _) => None,
+            TypeIR::Arrow(_, _) => None,
+        };
+
+        match result {
+            Some(v) => {
+                // run user checks
+                let Ok(constrainted_results) =
+                    run_user_checks(&v.clone().into(), self).map_err(|e| ParsingError {
+                        reason: format!("Failed to evaluate constraints: {e:?}"),
+                        scope: ctx.scope.clone(),
+                        causes: Vec::new(),
+                    })
+                else {
+                    return None;
+                };
+                let Ok(()) = validate_asserts(&constrainted_results) else {
+                    return None;
+                };
+                Some(v)
+            }
+            None => None,
+        }
+    }
+
     fn coerce(
         &self,
         ctx: &ParsingContext,
@@ -84,24 +131,35 @@ impl TypeCoercer for TypeIR {
                 v.add_flag(Flag::ObjectFromFixedJson(fixes.to_vec()));
                 Ok(v)
             }
-            _ => match self {
-                TypeIR::Primitive(p, _) => p.coerce(ctx, target, value),
-                TypeIR::Enum { name, .. } => IrRef::Enum(name).coerce(ctx, target, value),
-                TypeIR::Literal(l, _) => l.coerce(ctx, target, value),
-                TypeIR::Class { name, mode, .. } => {
-                    IrRef::Class(name, mode).coerce(ctx, target, value)
+            _ => {
+                // try_cast is basically a way to exit early
+                if let Some(v) = self.try_cast(ctx, target, value) {
+                    Ok(v)
+                } else {
+                    match self {
+                        TypeIR::Primitive(p, _) => p.coerce(ctx, target, value),
+                        TypeIR::Enum { name, .. } => IrRef::Enum(name).coerce(ctx, target, value),
+                        TypeIR::Literal(l, _) => l.coerce(ctx, target, value),
+                        TypeIR::Class { name, mode, .. } => {
+                            IrRef::Class(name, mode).coerce(ctx, target, value)
+                        }
+                        TypeIR::RecursiveTypeAlias { name, .. } => {
+                            coerce_alias(ctx, self, value).map(|v| v.with_target(target))
+                        }
+                        TypeIR::List(_, _) => {
+                            coerce_array(ctx, self, value).map(|v| v.with_target(target))
+                        }
+                        TypeIR::Union(_, _) => {
+                            coerce_union(ctx, self, value).map(|v| v.with_target(target))
+                        }
+                        TypeIR::Map(..) => {
+                            coerce_map(ctx, self, value).map(|v| v.with_target(target))
+                        }
+                        TypeIR::Tuple(_, _) => Err(ctx.error_internal("Tuple not supported")),
+                        TypeIR::Arrow(_, _) => Err(ctx.error_internal("Arrow type not supported")),
+                    }
                 }
-                TypeIR::RecursiveTypeAlias { name, .. } => {
-                    coerce_alias(ctx, self, value).map(|v| v.with_target(target))
-                }
-                TypeIR::List(_, _) => coerce_array(ctx, self, value).map(|v| v.with_target(target)),
-                TypeIR::Union(_, _) => {
-                    coerce_union(ctx, self, value).map(|v| v.with_target(target))
-                }
-                TypeIR::Map(..) => coerce_map(ctx, self, value).map(|v| v.with_target(target)),
-                TypeIR::Tuple(_, _) => Err(ctx.error_internal("Tuple not supported")),
-                TypeIR::Arrow(_, _) => Err(ctx.error_internal("Arrow type not supported")),
-            },
+            }
         };
         if !target.meta().constraints.is_empty() {
             if let Ok(coerced_value) = result.as_mut() {

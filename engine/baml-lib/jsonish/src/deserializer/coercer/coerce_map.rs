@@ -12,6 +12,79 @@ use crate::{
     jsonish,
 };
 
+pub(super) fn try_cast_map(
+    ctx: &ParsingContext,
+    map_target: &TypeIR,
+    value: Option<&jsonish::Value>,
+) -> Option<BamlValueWithFlags> {
+    let TypeIR::Map(key_type, value_type, _) = map_target else {
+        unreachable!("try_cast_map");
+    };
+
+    // Only handle object values
+    let Some(crate::jsonish::Value::Object(obj, _)) = value else {
+        return None;
+    };
+
+    // For empty objects, we can return immediately
+    if obj.is_empty() {
+        let mut flags = DeserializerConditions::new();
+        if let Some(v) = value {
+            flags.add_flag(Flag::ObjectToMap(v.clone()));
+        }
+
+        let mut result = BamlValueWithFlags::Map(flags, map_target.clone(), BamlMap::new());
+
+        // Check completion state
+        if let Some(v) = value {
+            match v.completion_state() {
+                CompletionState::Complete => {}
+                CompletionState::Incomplete => {
+                    result.add_flag(Flag::Incomplete);
+                }
+                CompletionState::Pending => {
+                    unreachable!("jsonish::Value may never be in a Pending state.")
+                }
+            }
+        }
+
+        return Some(result);
+    }
+
+    // Try to cast all values
+    let mut items = BamlMap::new();
+    for (key, value) in obj {
+        match value_type.try_cast(ctx, value_type, Some(value)) {
+            Some(cast_value) => {
+                items.insert(key.to_string(), (DeserializerConditions::new(), cast_value));
+            }
+            None => return None, // Fail fast on first error
+        }
+    }
+
+    let mut flags = DeserializerConditions::new();
+    if let Some(v) = value {
+        flags.add_flag(Flag::ObjectToMap(v.clone()));
+    }
+
+    let mut result = BamlValueWithFlags::Map(flags, map_target.clone(), items);
+
+    // Check completion state
+    if let Some(v) = value {
+        match v.completion_state() {
+            CompletionState::Complete => {}
+            CompletionState::Incomplete => {
+                result.add_flag(Flag::Incomplete);
+            }
+            CompletionState::Pending => {
+                unreachable!("jsonish::Value may never be in a Pending state.")
+            }
+        }
+    }
+
+    Some(result)
+}
+
 pub(super) fn coerce_map(
     ctx: &ParsingContext,
     map_target: &TypeIR,

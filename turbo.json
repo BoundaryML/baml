@@ -41,7 +41,6 @@
       "dependsOn": ["^clean"]
     },
     "dev": {
-      "dependsOn": ["^build"],
       "cache": false,
       "persistent": true,
       "env": [
@@ -75,6 +74,19 @@
     "@baml/playground-common#typecheck": {
       "dependsOn": ["@gloo-ai/baml-schema-wasm-web#build"]
     },
+    "@baml/playground-common#dev": {
+      "dependsOn": ["@gloo-ai/baml-schema-wasm-web#build"],
+      "cache": false,
+      "persistent": true
+    },
+    "@baml/playground#dev": {
+      "dependsOn": [
+        "@gloo-ai/baml-schema-wasm-web#build",
+        "@baml/playground#build"
+      ],
+      "cache": false,
+      "persistent": true
+    },
     "typecheck": {
       "dependsOn": ["^typecheck"],
       "inputs": [
@@ -96,26 +108,6 @@
     },
     "build": {
       "dependsOn": ["^build"],
-      "inputs": [
-        "src/**",
-        "lib/**",
-        "*.ts",
-        "*.tsx",
-        "*.js",
-        "*.jsx",
-        "*.py",
-        "*.rb",
-        "*.go",
-        "*.rs",
-        "Cargo.toml",
-        "go.mod",
-        "pyproject.toml",
-        "Gemfile",
-        "package.json",
-        "tsconfig.json",
-        "**/*.css",
-        "**/*.mdx"
-      ],
       "outputs": [
         "dist/**",
         "build/**",
@@ -146,18 +138,29 @@
         "INTEG_TESTS_GOOGLE_APPLICATION_CREDENTIALS_CONTENT"
       ]
     },
+    "build:engine": {
+      "dependsOn": [],
+      "outputs": ["target/**", "dist/**", "build/**", "artifacts/**"],
+      "env": [
+        "BOUNDARY_API_*",
+        "DATABASE_URL*",
+        "SENTRY_AUTH_TOKEN",
+        "NEXT_PUBLIC_*",
+        "CLERK_*",
+        "STRIPE_*",
+        "AWS_*",
+        "GLOO_*",
+        "WORKOS_*",
+        "CREDITS_PER_DOLLAR",
+        "KV_*",
+        "CLICKHOUSE_*",
+        "PROPELAUTH_*",
+        "GOOGLE_API_KEY",
+        "INTEG_TESTS_GOOGLE_APPLICATION_CREDENTIALS_CONTENT"
+      ]
+    },
     "release": {
       "dependsOn": ["^release"],
-      "inputs": [
-        "src/**",
-        "lib/**",
-        "*.ts",
-        "*.tsx",
-        "*.js",
-        "*.jsx",
-        "package.json",
-        "tsconfig.json"
-      ],
       "outputs": [
         "dist/**",
         ".next/**",
@@ -180,29 +183,6 @@
     },
     "test": {
       "dependsOn": ["build"],
-      "inputs": [
-        "**/*.test.ts",
-        "**/*.test.tsx",
-        "**/*.test.js",
-        "**/*.test.jsx",
-        "**/*.spec.ts",
-        "**/*.spec.tsx",
-        "**/*.spec.js",
-        "**/*.spec.jsx",
-        "**/test_*.py",
-        "**/*_test.py",
-        "**/test_*.rb",
-        "**/*_test.rb",
-        "**/*_test.go",
-        "**/tests/**",
-        "**/test/**",
-        "**/__tests__/**",
-        "**/jest.config.*",
-        "**/vitest.config.*",
-        "**/pytest.ini",
-        "**/.rspec",
-        "**/Rakefile"
-      ],
       "outputs": [
         "coverage/**",
         ".coverage/**",
@@ -213,25 +193,6 @@
     },
     "integ-tests": {
       "dependsOn": ["build"],
-      "inputs": [
-        "**/*.test.ts",
-        "**/*.test.tsx",
-        "**/*.test.js",
-        "**/*.test.jsx",
-        "**/*.spec.ts",
-        "**/*.spec.tsx",
-        "**/*.spec.js",
-        "**/*.spec.jsx",
-        "**/test_*.py",
-        "**/*_test.py",
-        "**/test_*.rb",
-        "**/*_test.rb",
-        "**/*_test.go",
-        "**/tests/**",
-        "**/test/**",
-        "**/__tests__/**",
-        "**/baml_src/**"
-      ],
       "outputs": [
         "coverage/**",
         ".coverage/**",

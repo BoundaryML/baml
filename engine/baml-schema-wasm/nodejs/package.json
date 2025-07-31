@@ -10,7 +10,6 @@
     "release": "pnpm run pack --release",
     "pack": "wasm-pack build ../ --target nodejs --out-dir ./nodejs/dist",
     "typecheck": "pnpm run pack --dev",
-    "dev.skip": "cargo watch -C .. -w ./src -s 'cargo build --manifest-path ../Cargo.toml && pnpm run pack --dev'",
     "dev": "pnpm run build"
   },
   "repository": {

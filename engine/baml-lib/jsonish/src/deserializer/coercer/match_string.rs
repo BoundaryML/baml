@@ -195,8 +195,8 @@ fn string_match_strategy<'c>(
     flags: &mut DeserializerConditions,
     allow_substring_match: bool,
 ) -> Option<&'c str> {
-    log::info!("string_match_strategy: {value_str}");
-    log::info!(
+    log::debug!("string_match_strategy: {value_str}");
+    log::debug!(
         "candidates:\n{}",
         candidates
             .iter()
