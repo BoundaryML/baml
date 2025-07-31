@@ -21,10 +21,12 @@ use internal_baml_parser_database::ParserDatabase;
 /// This now uses a two-stage compilation process:
 /// 1. AST -> HIR
 /// 2. HIR -> Bytecode
-pub fn compile(ast: &ParserDatabase) -> anyhow::Result<(
+pub fn compile(
+    ast: &ParserDatabase,
+) -> anyhow::Result<(
     Vec<Object>,
     Vec<Value>,
-    HashMap<String, (usize, FunctionKind)>
+    HashMap<String, (usize, FunctionKind)>,
 )> {
     // Stage 1: AST -> HIR
     let hir_program = hir::Program::from_ast(&ast.ast);
@@ -36,7 +38,9 @@ pub fn compile(ast: &ParserDatabase) -> anyhow::Result<(
 /// Compile HIR to bytecode.
 ///
 /// This function takes an HIR Program and generates the bytecode for the VM.
-fn compile_hir_to_bytecode(hir: &hir::Program) -> anyhow::Result<(
+fn compile_hir_to_bytecode(
+    hir: &hir::Program,
+) -> anyhow::Result<(
     Vec<Object>,
     Vec<Value>,
     HashMap<String, (usize, FunctionKind)>,
@@ -48,9 +52,9 @@ fn compile_hir_to_bytecode(hir: &hir::Program) -> anyhow::Result<(
     // We need to process all top-level declarations in the order they appear in the source
     // For now, we'll approximate this by processing classes first, then functions
     // This matches the expected behavior from the tests
-    
+
     let mut global_index = 0;
-    
+
     // Resolve classes first (they appear first in the test source)
     for class in &hir.classes {
         resolved_globals.insert(class.name.clone(), global_index);
@@ -87,8 +91,13 @@ fn compile_hir_to_bytecode(hir: &hir::Program) -> anyhow::Result<(
 
     // Then compile and add functions
     for func in &hir.expr_functions {
-        let bytecode_function =
-            compile_hir_function(func, &resolved_globals, &resolved_classes, &mut objects, &llm_functions)?;
+        let bytecode_function = compile_hir_function(
+            func,
+            &resolved_globals,
+            &resolved_classes,
+            &mut objects,
+            &llm_functions,
+        )?;
 
         // Add the function to the globals and objects pools.
         globals.push(Value::Object(objects.len()));
@@ -96,13 +105,13 @@ fn compile_hir_to_bytecode(hir: &hir::Program) -> anyhow::Result<(
     }
 
     let resolved_function_names = objects
-    .iter()
-    .enumerate()
-    .filter_map(|(i, obj)| match obj {
-        Object::Function(f) => Some((f.name.clone(), (i, f.kind))),
-        _ => None,
-    })
-    .collect();
+        .iter()
+        .enumerate()
+        .filter_map(|(i, obj)| match obj {
+            Object::Function(f) => Some((f.name.clone(), (i, f.kind))),
+            _ => None,
+        })
+        .collect();
 
     Ok((objects, globals, resolved_function_names))
 }
@@ -127,7 +136,7 @@ fn compile_hir_function(
 /// validated before calling this otherwise it will issue incorrect bytecode,
 /// the VM will break and the universe will collapse.
 struct HirCompiler<'g> {
-        /// Resolved global variables.
+    /// Resolved global variables.
     ///
     /// Maps the name of the global variable to its index in the globals pool.
     globals: &'g HashMap<String, usize>,
@@ -250,7 +259,7 @@ impl<'g> HirCompiler<'g> {
             for statement in &block.statements[..num_stmts - 1] {
                 self.compile_statement(statement);
             }
-            
+
             // The last statement should be an Expression or Return
             // For expression blocks, it should leave its value on the stack
             match &block.statements[num_stmts - 1] {
@@ -567,35 +576,36 @@ impl<'g> HirCompiler<'g> {
                 // Expression blocks need special handling to maintain proper scoping
                 // We need to track how many locals are defined in the block
                 // and emit EndBlock to clean them up
-                
+
                 // Save the current scope state
                 self.scope += 1;
                 let locals_before = self.locals.len();
-                
+
                 // Compile the block
                 self.compile_expression_block(block);
-                
+
                 // Count how many locals were added in this block
                 let locals_added = self.locals.len() - locals_before;
-                
+
                 // If we're in a nested scope and added locals, emit EndBlock
                 // Note: scope > 0 because we already incremented it
                 if self.scope > 0 && locals_added > 0 {
                     self.emit(Instruction::EndBlock(locals_added));
-                    
+
                     // Remove the scoped locals from our tracking
                     // We need to remove the last `locals_added` entries
-                    let keys_to_remove: Vec<String> = self.locals
+                    let keys_to_remove: Vec<String> = self
+                        .locals
                         .iter()
                         .filter(|(_, &index)| index > locals_before)
                         .map(|(name, _)| name.clone())
                         .collect();
-                    
+
                     for key in keys_to_remove {
                         self.locals.remove(&key);
                     }
                 }
-                
+
                 self.scope -= 1;
             }
             hir::Expression::If(condition, then_expr, else_expr, _) => {
@@ -663,7 +673,6 @@ impl<'g> HirCompiler<'g> {
         self.bytecode.constants.push(value);
         self.bytecode.constants.len() - 1
     }
-
 
     /// Patches a jump instruction to point to the correct destination.
     ///
