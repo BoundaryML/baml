@@ -1,9 +1,10 @@
 use anyhow::Result;
-use baml_compiler::hir::Program;
+use baml_compiler::{compile, hir::Program};
 use clap::Parser;
 use std::path::PathBuf;
 
 use crate::baml_src_files;
+use baml_vm::{Object, Value};
 use internal_baml_core::{
     internal_baml_diagnostics::SourceFile, ir::repr::IntermediateRepr, validate, ValidatedSchema,
 };
@@ -89,10 +90,25 @@ impl DumpIntermediateArgs {
     }
 
     fn dump_bytecode(&self, validated_schema: &ValidatedSchema) -> Result<()> {
-        println!("Bytecode compilation is not yet fully implemented.");
-        println!("For now, showing the parsed structure:");
-        println!();
+        let (objects, globals, _) = compile(&validated_schema.db)?;
 
-        self.dump_hir(validated_schema)
+        // Create a map of function name to function for easy lookup
+        let functions: std::collections::HashMap<&str, &baml_vm::Function> = objects
+            .iter()
+            .filter_map(|obj| match obj {
+                Object::Function(f) => Some((f.name.as_str(), f)),
+                _ => None,
+            })
+            .collect();
+
+        for (name, function) in functions {
+            println!("{}", name);
+            println!(
+                "{}",
+                baml_vm::debug::display_bytecode(function, &[], &objects, &globals, true)
+            );
+        }
+
+        Ok(())
     }
 }
