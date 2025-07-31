@@ -74,6 +74,12 @@ macro_rules! test_memory_usage {
             let peak_memory = PEAK_ALLOC.peak_usage_as_mb();
 
             log::info!("{} - Peak memory usage: {:.2} MB", $goal, peak_memory);
+            assert!(
+                peak_memory < 2.0,
+                "{} - Peak memory usage is too high: {:.2} MB > 2.0 MB",
+                $goal,
+                peak_memory
+            );
 
             assert!(
                 result.is_ok(),
