@@ -16,7 +16,29 @@ pub(super) enum IrRef<'a> {
     RecursiveAlias(&'a String),
 }
 
-impl TypeCoercer for IrRef<'_> {
+impl<'a> TypeCoercer for IrRef<'a> {
+    fn try_cast(
+        &self,
+        ctx: &ParsingContext,
+        target: &TypeIR,
+        value: Option<&crate::jsonish::Value>,
+    ) -> Option<BamlValueWithFlags> {
+        match self {
+            IrRef::Enum(e) => match ctx.of.find_enum(e.as_str()) {
+                Ok(e) => e.try_cast(ctx, target, value),
+                Err(e) => None,
+            },
+            IrRef::Class(c, mode) => match ctx.of.find_class(mode, c.as_str()) {
+                Ok(c) => c.try_cast(ctx, target, value),
+                Err(e) => None,
+            },
+            IrRef::RecursiveAlias(a) => match ctx.of.find_recursive_alias_target(a.as_str()) {
+                Ok(a) => a.try_cast(ctx, target, value),
+                Err(e) => None,
+            },
+        }
+    }
+
     fn coerce(
         &self,
         ctx: &ParsingContext,

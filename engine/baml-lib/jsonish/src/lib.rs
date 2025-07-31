@@ -257,7 +257,7 @@ pub fn from_str(
     // Determine the best way to get the desired schema from the parsed schema.
 
     // Lets try to now coerce the value into the expected schema.
-    let mut parsed_value: BamlValueWithFlags = match target.coerce(&ctx, target, Some(&value)) {
+    let parsed_value: BamlValueWithFlags = match target.coerce(&ctx, target, Some(&value)) {
         Ok(v) => {
             if v.conditions()
                 .flags()

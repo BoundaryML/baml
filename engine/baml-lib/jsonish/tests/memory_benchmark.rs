@@ -37,18 +37,18 @@ fn test_story_memory_usage() {
 
         let start = std::time::Instant::now();
         let mut num_parses = 1;
-        // for i in 0..target_string.chars().count() {
-        //     if i % 100 != 0 {
-        //         continue;
-        //     }
-        //     num_parses += 1;
-        //     let result = from_str(
-        //         &of,
-        //         &target,
-        //         &target_string.chars().take(i).collect::<String>(),
-        //         true,
-        //     );
-        // }
+        for i in 0..target_string.chars().count() {
+            if i % 5 != 0 {
+                continue;
+            }
+            num_parses += 1;
+            let result = from_str(
+                &of,
+                &target,
+                &target_string.chars().take(i).collect::<String>(),
+                true,
+            );
+        }
 
         let of = jsonish::helpers::render_output_format(
             &ir,
