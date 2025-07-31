@@ -1,23 +1,15 @@
 import type { WasmError, WasmPrompt } from '@gloo-ai/baml-schema-wasm-web';
 import { atom, useAtomValue, useSetAtom } from 'jotai';
 import { useState } from 'react';
+import { useMemo } from 'react';
 import useSWR from 'swr';
-import React, { useMemo } from 'react';
-import {
-  ctxAtom,
-  diagnosticsAtom,
-  runtimeAtom,
-  filesAtom,
-} from '../../atoms';
-import {
-  areTestsRunningAtom,
-  selectionAtom,
-} from '../atoms';
+import { apiKeysAtom } from '../../../../components/api-keys-dialog/atoms';
+import { ctxAtom, diagnosticsAtom, filesAtom, runtimeAtom } from '../../atoms';
+import { areTestsRunningAtom, selectionAtom } from '../atoms';
 import { Loader } from './components';
-import { EnhancedErrorRenderer } from './test-panel/components/EnhancedErrorRenderer';
 import { findMediaFile } from './media-utils';
 import { RenderPrompt } from './render-prompt';
-import { apiKeysAtom } from '../../../../components/api-keys-dialog/atoms';
+import { EnhancedErrorRenderer } from './test-panel/components/EnhancedErrorRenderer';
 
 export const renderedPromptAtom = atom<WasmPrompt | undefined>(undefined);
 
@@ -30,28 +22,31 @@ export const PromptPreviewContent = () => {
   const diagnostics = useAtomValue(diagnosticsAtom);
   const setPromptData = useSetAtom(renderedPromptAtom);
   const areTestsRunning = useAtomValue(areTestsRunningAtom);
-  
+
   // Memoize the generatePreview function to prevent unnecessary re-renders
-  const generatePreview = useMemo(() => async () => {
-    if (
-      rt === undefined ||
-      ctx === undefined ||
-      selectedFn === undefined ||
-      selectedTc === undefined
-    ) {
-      return;
-    }
-    const newPreview = await selectedFn.render_prompt_for_test(
-      rt,
-      selectedTc.name,
-      ctx,
-      findMediaFile,
-      apiKeys,
-    );
-    setLastKnownPreview(newPreview);
-    setPromptData(newPreview);
-    return newPreview;
-  }, [rt, ctx, selectedFn, selectedTc, apiKeys, files, setPromptData]);
+  const generatePreview = useMemo(
+    () => async () => {
+      if (
+        rt === undefined ||
+        ctx === undefined ||
+        selectedFn === undefined ||
+        selectedTc === undefined
+      ) {
+        return;
+      }
+      const newPreview = await selectedFn.render_prompt_for_test(
+        rt,
+        selectedTc.name,
+        ctx,
+        findMediaFile,
+        apiKeys,
+      );
+      setLastKnownPreview(newPreview);
+      setPromptData(newPreview);
+      return newPreview;
+    },
+    [rt, ctx, selectedFn, selectedTc, apiKeys, files, setPromptData],
+  );
 
   const [lastKnownPreview, setLastKnownPreview] = useState<
     WasmPrompt | undefined
@@ -63,11 +58,11 @@ export const PromptPreviewContent = () => {
     isLoading,
   } = useSWR(
     // Include file content in the key so updates trigger when typing
-    rt && ctx && selectedFn && selectedTc 
+    rt && ctx && selectedFn && selectedTc
       ? [
           'prompt-preview',
-          selectedFn.name, 
-          selectedTc.name, 
+          selectedFn.name,
+          selectedTc.name,
           JSON.stringify(apiKeys),
           JSON.stringify(files), // Add file content to trigger updates on typing
         ]
@@ -78,7 +73,7 @@ export const PromptPreviewContent = () => {
       revalidateOnFocus: false,
       revalidateOnReconnect: false,
       dedupingInterval: 100, // Reduced from 1000ms to 100ms for more responsiveness
-    }
+    },
   );
 
   if (isLoading && !preview) {
@@ -101,51 +96,18 @@ export const PromptPreviewContent = () => {
       .filter((d: WasmError) => d.type === 'error')
       .map((d) => `- ${d.message}`)
       .join('\n');
-    
+
     const fullErrorMessage = `${diagnostics.filter((d: WasmError) => d.type === 'error').length} error(s):\n${errorMessages}`;
-    
+
     return (
       <div className="relative">
         {/* todo: maybe keep rendering the last known prompt? And make this a more condensed error banner in absolute position? */}
         <div className="p-3">
-          <EnhancedErrorRenderer
-            errorMessage={fullErrorMessage}
-          />
+          <EnhancedErrorRenderer errorMessage={fullErrorMessage} />
         </div>
       </div>
     );
   }
-  if (preview === undefined) {
-    return <NoTestsContent />;
-  }
 
   return <RenderPrompt prompt={preview} testCase={selectedTc} />;
-};
-
-export const NoTestsContent = () => {
-  const { selectedFn } = useAtomValue(selectionAtom);
-
-  // Check if the function has any valid test cases
-  const hasValidTestCases = selectedFn?.test_cases && selectedFn.test_cases.length > 0;
-
-  const message = hasValidTestCases 
-    ? "Add a test to see the preview!"
-    : "This function has no active test cases. Add one to see the preview!";
-
-  return (
-    <div className="flex flex-col gap-y-4">
-      <div className="relative border-l-4 pl-2 rounded border-chart-3">
-        <div className="flex w-full items-center justify-between p-3 bg-accent rounded">
-          <div className="flex flex-col items-start gap-1 flex-1 overflow-hidden min-w-0 w-full">
-            <div className="text-xs text-muted-foreground font-mono">
-              No Test Selected
-            </div>
-            <div className="text-sm text-muted-foreground mt-1">
-              {message}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
 };

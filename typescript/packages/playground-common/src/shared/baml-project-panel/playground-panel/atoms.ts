@@ -8,7 +8,6 @@ import type {
   WasmTestResponse,
 } from '@gloo-ai/baml-schema-wasm-web';
 import { atomFamily } from 'jotai/utils';
-import { vscode } from '../vscode';
 
 export const runtimeStateAtom: Atom<{
   functions: WasmFunction[];
@@ -61,7 +60,7 @@ export const functionObjectAtom = atomFamily((functionName: string) =>
 );
 
 export const testcaseObjectAtom = atomFamily(
-  (params: { functionName: string; testcaseName: string }) =>
+  (params: { functionName: string; testcaseName?: string | null }) =>
     atom((get) => {
       const { functions } = get(runtimeStateAtom);
       const fn = functions.find((f) => f.name === params.functionName);
@@ -102,21 +101,30 @@ export const updateCursorAtom = atom(
 
       cursorIdx += cursor.column;
 
+      const currentSelectedFunction = get(selectedFunctionAtom);
+      const currentSelectedTestcase = get(selectedTestcaseAtom);
+
       const selectedFunc = runtime.get_function_at_position(
         fileName,
-        get(selectedFunctionAtom) ?? '',
+        currentSelectedFunction ?? '',
         cursorIdx,
       );
 
       if (selectedFunc) {
+        const functionChanged = selectedFunc.name !== currentSelectedFunction;
         set(selectedFunctionAtom, selectedFunc.name);
+
+        // Check if cursor is inside a specific test case
         const selectedTestcase = runtime.get_testcase_from_position(
           selectedFunc,
           cursorIdx,
         );
 
         if (selectedTestcase) {
+          // If cursor is inside a test case, always use that test case
           set(selectedTestcaseAtom, selectedTestcase.name);
+
+          // Check if this test case belongs to a different function
           const nestedFunc = runtime.get_function_of_testcase(
             fileName,
             cursorIdx,
@@ -125,7 +133,20 @@ export const updateCursorAtom = atom(
           if (nestedFunc) {
             set(selectedFunctionAtom, nestedFunc.name);
           }
+        } else if (functionChanged) {
+          // Function changed and cursor is not in a test case
+          const { functions } = get(runtimeStateAtom);
+          const newFunc = functions.find((f) => f.name === selectedFunc.name);
+          if (newFunc && newFunc.test_cases.length > 0) {
+            // Reset to first test case of the new function
+            set(selectedTestcaseAtom, newFunc.test_cases[0]?.name);
+          } else {
+            // Function has no test cases, set to undefined
+            set(selectedTestcaseAtom, undefined);
+          }
         }
+        // If function didn't change and cursor is not in a test case,
+        // preserve the current test case selection
       }
     }
   },
@@ -137,27 +158,43 @@ export const selectionAtom = atom((get) => {
 
   const state = get(runtimeStateAtom);
 
+  // Get the selected function, defaulting to first if none selected
   let selectedFn = state.functions.at(0);
   if (selectedFunction !== undefined) {
     const foundFn = state.functions.find((f) => f.name === selectedFunction);
     if (foundFn) {
       selectedFn = foundFn;
     } else {
-      console.error('Function not found', selectedFunction);
+      // Function not found, fallback to first function
+      console.debug(
+        'Function not found, using first function',
+        selectedFunction,
+      );
+      selectedFn = state.functions.at(0);
     }
-  } else {
-    console.debug('No function selected');
   }
 
-  let selectedTc = selectedFn?.test_cases.at(0);
-  if (selectedTestcase !== undefined) {
-    const foundTc = selectedFn?.test_cases.find(
-      (tc) => tc.name === selectedTestcase,
-    );
-    if (foundTc) {
-      selectedTc = foundTc;
+  // Get the selected test case
+  let selectedTc = undefined;
+  if (selectedFn) {
+    if (selectedTestcase !== undefined) {
+      // Try to find the selected test case in current function
+      const foundTc = selectedFn.test_cases.find(
+        (tc) => tc.name === selectedTestcase,
+      );
+      if (foundTc) {
+        selectedTc = foundTc;
+      } else {
+        // Test case not found in current function, use first test case
+        console.debug(
+          'Testcase not found in current function, using first',
+          selectedTestcase,
+        );
+        selectedTc = selectedFn.test_cases.at(0);
+      }
     } else {
-      console.error('Testcase not found', selectedTestcase);
+      // No test case selected, use first one
+      selectedTc = selectedFn.test_cases.at(0);
     }
   }
 
@@ -248,4 +285,3 @@ export interface FlashRange {
 }
 
 export const flashRangesAtom = atom<FlashRange[]>([]);
-

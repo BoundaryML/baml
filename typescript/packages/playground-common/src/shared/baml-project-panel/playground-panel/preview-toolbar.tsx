@@ -16,8 +16,8 @@ import { toast } from '@baml/ui/sonner';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@baml/ui/tooltip';
 import { TooltipProvider } from '@baml/ui/tooltip';
 import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai';
-import { BarChart2, Check, Copy, Key, Play, Settings } from 'lucide-react';
-import React from 'react';
+import { Key, Play, Settings } from 'lucide-react';
+import type React from 'react';
 import {
   type BamlConfigAtom,
   bamlConfig,
@@ -27,9 +27,8 @@ import { showApiKeyDialogAtom } from '../../../components/api-keys-dialog/atoms'
 import { proxyUrlAtom } from '../atoms';
 import { ThemeToggle } from '../theme/ThemeToggle';
 import { vscode } from '../vscode';
-import { areTestsRunningAtom, selectedItemAtom } from './atoms';
+import { areTestsRunningAtom, selectedItemAtom, selectionAtom } from './atoms';
 import { FunctionTestName } from './function-test-name';
-import { renderedPromptAtom } from './prompt-preview/prompt-preview-content';
 import { isParallelTestsEnabledAtom } from './prompt-preview/test-panel/atoms';
 import { useRunBamlTests } from './prompt-preview/test-panel/test-runner';
 
@@ -43,10 +42,21 @@ export const displaySettingsAtom = atom({
   showParallelTests: false,
 });
 
+// RunButton component
 const RunButton: React.FC<{ className?: string }> = ({ className }) => {
   const runBamlTests = useRunBamlTests();
   const isRunning = useAtomValue(areTestsRunningAtom);
   const selected = useAtomValue(selectedItemAtom);
+  const { open: isSidebarOpen } = useSidebar();
+
+  // Hide text when sidebar is open or on smaller screens
+  const getButtonTextClass = () => {
+    if (isSidebarOpen) {
+      return 'text-sm hidden whitespace-nowrap';
+    }
+    return 'text-sm hidden md:block whitespace-nowrap';
+  };
+
   return (
     <Button
       variant="default"
@@ -61,8 +71,8 @@ const RunButton: React.FC<{ className?: string }> = ({ className }) => {
         }
       }}
     >
-      <Play className="size-3 flex-shrink-0" />
-      <div className="text-xs hidden md:block whitespace-nowrap">Run Test</div>
+      <Play className="size-4 flex-shrink-0" />
+      <div className={getButtonTextClass()}>Run Test</div>
     </Button>
   );
 };
@@ -71,104 +81,55 @@ export const isClientCallGraphEnabledAtom = atom(false);
 
 export function PreviewToolbar() {
   const selections = useAtomValue(selectedItemAtom);
+  const { selectedFn } = useAtomValue(selectionAtom);
   const setShowApiKeyDialog = useSetAtom(showApiKeyDialogAtom);
   const { open: isSidebarOpen } = useSidebar();
 
-  const options: {
-    label: string;
-    icon: React.FC<React.SVGProps<SVGSVGElement>>;
-    value: 'tokens';
-  }[] = [{ label: 'Token Counts', icon: BarChart2, value: 'tokens' }];
+  // Detect platform for keyboard shortcut
+  const isMac =
+    typeof window !== 'undefined' &&
+    navigator.userAgent.toUpperCase().indexOf('MAC') >= 0;
+  const sidebarShortcut = isMac ? 'Cmd+U' : 'Ctrl+U';
 
   const areApiKeysMissing = useAtomValue(areApiKeysMissingAtom);
-  const renderedPrompt = useAtomValue(renderedPromptAtom);
-  const [showCopied, setShowCopied] = React.useState(false);
   const [isParallelTestsEnabled, setIsParallelTestsEnabled] = useAtom(
     isParallelTestsEnabledAtom,
   );
   const proxySettings = useAtomValue(proxyUrlAtom);
   const setBamlConfig = useSetAtom(bamlConfig);
 
-  // Adjust text visibility based on sidebar state
+  // Hide text when sidebar is open or on smaller screens
   const getButtonTextClass = () => {
     if (isSidebarOpen) {
-      return 'text-sm hidden lg:block whitespace-nowrap';
+      return 'text-sm hidden whitespace-nowrap';
     }
     return 'text-sm hidden md:block whitespace-nowrap';
   };
 
-  const handleCopy = () => {
-    if (!renderedPrompt) return;
-    navigator.clipboard.writeText(
-      renderedPrompt
-        .as_chat()
-        ?.map(
-          (msg) =>
-            `${msg.role}:\n${msg.parts.map((part) => part.as_text()).join('\n')}`,
-        )
-        .join('\n\n') ?? '',
-    );
-    setShowCopied(true);
-    setTimeout(() => setShowCopied(false), 1500);
-  };
-
   return (
-    <div className="flex flex-col gap-1 overflow-x-clip">
+    <div className="flex flex-col gap-1 overflow-hidden w-full">
       <div
         className={cn(
-          'flex flex-row gap-1 items-center min-w-0',
-          selections === undefined ? 'justify-end' : 'justify-start',
+          'flex flex-row gap-1 items-center min-w-0 w-full',
+          selectedFn === undefined ? 'justify-end' : 'justify-between',
         )}
-        style={{ minWidth: 'fit-content' }}
       >
-        {selections !== undefined && (
-          <div className="flex flex-row items-center gap-2 min-w-0 flex-shrink">
-            <FunctionTestName
-              functionName={selections[0]}
-              testName={selections[1]}
-            />
-            <TooltipProvider>
-              <Tooltip delayDuration={100}>
-                <TooltipTrigger asChild>
-                  <span>
-                    <RunButton className="ml-1" />
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>{`Run ${selections[1]}`}</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            <TooltipProvider>
-              <Tooltip delayDuration={100}>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="xs"
-                    className="flex gap-2 items-center text-muted-foreground/70 hover:text-foreground flex-shrink-0 min-w-fit"
-                    onClick={handleCopy}
-                  >
-                    {showCopied ? (
-                      <Check className="size-4 flex-shrink-0" />
-                    ) : (
-                      <Copy className="size-4 flex-shrink-0" />
-                    )}
-                    {showCopied ? (
-                      <span className={getButtonTextClass()}>Copied!</span>
-                    ) : (
-                      <span className={getButtonTextClass()}>Copy Prompt</span>
-                    )}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Copy Prompt</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+        {selectedFn !== undefined && (
+          <div className="flex flex-col gap-1 min-w-0 flex-1 overflow-hidden">
+            <div className="flex flex-row items-center gap-2 min-w-0">
+              <div className="min-w-0 flex-1 overflow-hidden">
+                <FunctionTestName
+                  functionName={selectedFn.name}
+                  testName={selections?.[1]}
+                />
+              </div>
+
+              <RunButton />
+            </div>
           </div>
         )}
 
-        <div className="flex items-center gap-2 ml-auto flex-shrink-0">
+        <div className="flex items-center gap-2 flex-shrink-0">
           <TooltipProvider>
             <Tooltip delayDuration={100}>
               <TooltipTrigger asChild>
@@ -202,7 +163,7 @@ export function PreviewToolbar() {
                 <span className={getButtonTextClass()}>Settings</span>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
+            <DropdownMenuContent align="start" className="min-w-fit p-0">
               {/* <DropdownMenuLabel>Display</DropdownMenuLabel> */}
               {/* {options.map((option) => (
                 <DropdownMenuCheckboxItem
@@ -215,15 +176,20 @@ export function PreviewToolbar() {
                 </DropdownMenuCheckboxItem>
               ))} */}
               {/* <DropdownMenuSeparator /> */}
-              <DropdownMenuLabel>Testing</DropdownMenuLabel>
+              <DropdownMenuLabel className="text-xs px-2 py-1.5">
+                Testing
+              </DropdownMenuLabel>
               <DropdownMenuCheckboxItem
                 checked={isParallelTestsEnabled}
                 onCheckedChange={setIsParallelTestsEnabled}
+                className="text-sm px-2 py-1.5 pl-7"
               >
                 Enable Parallel Testing
               </DropdownMenuCheckboxItem>
               <DropdownMenuSeparator />
-              <DropdownMenuLabel>Network</DropdownMenuLabel>
+              <DropdownMenuLabel className="text-xs px-2 py-1.5">
+                Network
+              </DropdownMenuLabel>
               <DropdownMenuCheckboxItem
                 checked={proxySettings.proxyEnabled}
                 onCheckedChange={async (checked) => {
@@ -243,6 +209,7 @@ export function PreviewToolbar() {
                     });
                   }
                 }}
+                className="text-sm px-2 py-1.5 pl-7"
               >
                 <TooltipProvider>
                   <Tooltip delayDuration={300}>
@@ -271,7 +238,23 @@ export function PreviewToolbar() {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <SidebarTrigger />
+          <TooltipProvider>
+            <Tooltip delayDuration={300}>
+              <TooltipTrigger asChild>
+                <SidebarTrigger />
+              </TooltipTrigger>
+              <TooltipContent>
+                <div className="flex items-center gap-2">
+                  <span>
+                    {isSidebarOpen ? 'Close Sidebar' : 'Open Sidebar'}
+                  </span>
+                  <kbd className="pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100">
+                    {sidebarShortcut}
+                  </kbd>
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
 
           {!isVSCodeEnvironment && <ThemeToggle />}
         </div>

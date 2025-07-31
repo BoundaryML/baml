@@ -34,7 +34,12 @@
       "Bash(mv:*)",
       "Bash(tree:*)",
       "Bash(rg:*)",
-      "Bash(cargo build:*)"
+      "Bash(cargo build:*)",
+      "Bash(npm run typecheck:*)",
+      "Bash(npm run lint)",
+      "Bash(npm run format:*)",
+      "Bash(npm run:*)",
+      "Bash(npx biome check:*)"
     ],
     "deny": []
   }
