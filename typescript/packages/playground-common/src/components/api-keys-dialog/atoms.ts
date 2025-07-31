@@ -173,8 +173,6 @@ export const apiKeysAtom = atom(
       Object.entries(userEnvVarsUnescaped).map(([key, value]) => [key, value.replaceAll('\n', '\\n').replaceAll('\t', '\\t')]),
     );
 
-    console.log('userEnvVars', userEnvVars);
-
     if (!proxyEnabled) {
       // if proxy is not enabled, just return user vars without BOUNDARY_PROXY_URL
       return userEnvVars;

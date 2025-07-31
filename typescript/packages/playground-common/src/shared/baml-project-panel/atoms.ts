@@ -29,19 +29,62 @@ export const useWaitForWasm = () => {
 export const filesAtom = atom<Record<string, string>>({});
 export const sandboxFilesAtom = atom<Record<string, string>>({});
 
+// Simple hash function for file content
+const hashString = (str: string): number => {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32-bit integer
+  }
+  return hash;
+};
+
+// Helper to create a stable key from baml files for memoization
+const createBamlFilesKey = (bamlFiles: [string, string][]): string => {
+  return bamlFiles
+    .map(([path, content]) => `${path}:${hashString(content)}`)
+    .sort()
+    .join('|');
+};
+
+// Cache for memoizing project creation
+let projectCache: {
+  key: string;
+  project: any;
+} | null = null;
+
 export const projectAtom = atom((get) => {
   const wasm = get(wasmAtom);
   const files = get(filesAtom);
+  
   if (wasm === undefined) {
     return undefined;
   }
+  
   // filter out files that are not baml files
   const bamlFiles = Object.entries(files).filter(([path, content]) =>
     path.endsWith('.baml'),
   );
+  
+  // Create a key representing the current baml files state
+  const currentKey = createBamlFilesKey(bamlFiles);
+  
+  // Return cached project if files haven't changed
+  if (projectCache && projectCache.key === currentKey) {
+    return projectCache.project;
+  }
+  
   // TODO: add python generator if using sandbox
-
-  return wasm.WasmProject.new('./', bamlFiles);
+  const newProject = wasm.WasmProject.new('./', bamlFiles);
+  
+  // Update cache
+  projectCache = {
+    key: currentKey,
+    project: newProject,
+  };
+  
+  return newProject;
 });
 
 export const ctxAtom = atom((get) => {
@@ -135,8 +178,8 @@ export const generatedFilesAtom = atom((get) => {
   }
 
   const generators = project.run_generators();
-  const files = generators.flatMap((gen) =>
-    gen.files.map((f) => ({
+  const files = generators.flatMap((gen: any) =>
+    gen.files.map((f: any) => ({
       path: f.path_in_output_dir,
       content: f.contents,
       outputDir: gen.output_dir,
@@ -152,8 +195,8 @@ export const generatedFilesByLangAtom = atomFamily(
       if (!allFiles) return undefined;
 
       return allFiles
-        .filter((f) => f.outputDir.includes(lang))
-        .map(({ path, content }) => ({
+        .filter((f: any) => f.outputDir.includes(lang))
+        .map(({ path, content }: { path: string; content: string }) => ({
           path,
           content,
         }));

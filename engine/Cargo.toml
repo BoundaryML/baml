@@ -15,10 +15,12 @@ members = [
   "language_client_typescript",
   "language_server",
   "language_client_cffi",
+  "llm-response-parser",
   "generators/utils/*",
   "generators/languages/*",
   "sandbox",
   "llm-response-parser",
+  "boundary-udf",
 ]
 default-members = [
   "baml-lsp-types",

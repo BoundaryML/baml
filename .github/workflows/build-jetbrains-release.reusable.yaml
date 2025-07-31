@@ -76,7 +76,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: baml-jetbrains-zip
+          name: baml-jetbrains-zip-${{ steps.properties.outputs.version }}
           path: ./jetbrains/build/distributions/*
 
   # # Run tests and upload a code coverage report

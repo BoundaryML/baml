@@ -18,28 +18,52 @@ type_complexity = "allow"
 
 [dependencies]
 anyhow.workspace = true
-baml-types = { path = "../baml-types" }
+baml-types.workspace = true
 bstd.workspace = true
 colored = "2"
 pest = "2.1.3"
 indoc.workspace = true
-internal-baml-jinja = { path = "../jinja-runtime" }
-internal-baml-core = { path = "../baml-core" }
+internal-baml-jinja.workspace = true
+internal-baml-core.workspace = true
 log = "0.4.20"
-indexmap = "2.1.0"
+indexmap.workspace = true
 strsim = "0.10.0"
 serde_json.workspace = true
 serde.workspace = true
 # jsonschema = "0.17.1"
-either = "1.10.0"
+either.workspace = true
 test-log = "0.2.16"
 regex.workspace = true
 thiserror = "2.0.9"
+unicode-normalization = "0.1.24"
+cowstr.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+uuid = { version = "1.8", features = ["v4", "js"] }
+getrandom = { version = "0.2.15", features = ["js"] }
 
 [dev-dependencies]
 assert-json-diff = "2.0.2"
-criterion = { version = "0.5", features = ["html_reports"] }
+wasm-bindgen-test = "0.3"
+peak_alloc = "0.2.0"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+criterion = { version = "0.5", default-features = false, features = ["html_reports", "plotters", "cargo_bench_support"] }
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+criterion = { version = "0.5", default-features = false }
+web-sys = { version = "0.3", features = ["console", "Performance", "Window"] }
 
 [[bench]]
 name = "jsonish_benchmark"
 harness = false
+required-features = []
+
+[[bench]]
+name = "unions"
+harness = false
+
+[[bench]]
+name = "browser_bench"
+harness = false
+required-features = []

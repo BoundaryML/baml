@@ -1,21 +1,26 @@
-use std::sync::Arc;
-
 use anyhow::Result;
+use mime_guess::from_path;
+use tokio::fs;
 use warp::{http, Filter, Rejection, Reply};
 
 /// Custom response type for binary data with CORS headers
 struct BinaryResponse {
     body: Vec<u8>,
     status: http::StatusCode,
+    content_type: Option<String>,
 }
 
 impl warp::Reply for BinaryResponse {
     fn into_response(self) -> warp::http::Response<warp::hyper::Body> {
-        warp::http::Response::builder()
+        let mut builder = warp::http::Response::builder()
             .status(self.status)
-            .header("access-control-allow-origin", "*")
-            .body(warp::hyper::Body::from(self.body))
-            .unwrap()
+            .header("access-control-allow-origin", "*");
+
+        if let Some(content_type) = self.content_type {
+            builder = builder.header("content-type", content_type);
+        }
+
+        builder.body(warp::hyper::Body::from(self.body)).unwrap()
     }
 }
 
@@ -60,22 +65,6 @@ const API_PROVIDERS: &[(&str, &str, &str, &str)] = &[
     ),
 ];
 
-/// Fallback API keys for development and testing
-/// TODO: Remove these in production builds
-const FALLBACK_API_KEYS: &[(&str, &str)] = &[
-    ("OPENAI_API_KEY", "sk-dummy-openai-key-for-testing-only"),
-    (
-        "ANTHROPIC_API_KEY",
-        "sk-ant-dummy-anthropic-key-for-testing-only",
-    ),
-    ("GOOGLE_API_KEY", "dummy-google-api-key-for-testing-only"),
-    (
-        "OPENROUTER_API_KEY",
-        "sk-dummy-openrouter-key-for-testing-only",
-    ),
-    ("LLAMA_API_KEY", "sk-dummy-llama-key-for-testing-only"),
-];
-
 /// Proxy server for handling CORS and API key injection
 pub struct ProxyServer {
     port: u16,
@@ -104,7 +93,9 @@ impl ProxyServer {
             .and(warp::header::headers_cloned())
             .and_then(handle_proxy_request);
 
-        let routes = cors_route.or(proxy_route);
+        let routes = cors_route
+            .or(proxy_route)
+            .recover(handle_rejection_with_cors);
 
         tracing::info!("Proxy server listening on port {}", self.port);
         warp::serve(routes).run(addr).await;
@@ -133,6 +124,105 @@ fn create_cors_response(_: warp::path::Tail) -> impl Reply {
         .unwrap()
 }
 
+/// Handle rejections and ensure CORS headers are always present
+async fn handle_rejection_with_cors(
+    err: Rejection,
+) -> Result<impl Reply, std::convert::Infallible> {
+    let (code, message) = if err.is_not_found() {
+        (http::StatusCode::NOT_FOUND, "NOT_FOUND")
+    } else if err
+        .find::<warp::filters::body::BodyDeserializeError>()
+        .is_some()
+    {
+        (http::StatusCode::BAD_REQUEST, "BAD_REQUEST")
+    } else if err.find::<warp::reject::MethodNotAllowed>().is_some() {
+        (http::StatusCode::METHOD_NOT_ALLOWED, "METHOD_NOT_ALLOWED")
+    } else if err.find::<ProxyError>().is_some() {
+        (http::StatusCode::BAD_REQUEST, "PROXY_ERROR")
+    } else {
+        tracing::warn!("Unhandled rejection: {:?}", err);
+        (
+            http::StatusCode::INTERNAL_SERVER_ERROR,
+            "INTERNAL_SERVER_ERROR",
+        )
+    };
+
+    let error_response = format!(r#"{{"code": {}, "message": "{}"}}"#, code.as_u16(), message);
+
+    Ok(warp::http::Response::builder()
+        .status(code)
+        .header("content-type", "application/json")
+        .header("access-control-allow-origin", "*")
+        .header(
+            "access-control-allow-methods",
+            "GET, POST, PUT, DELETE, OPTIONS",
+        )
+        .header(
+            "access-control-allow-headers",
+            "Content-Type, Authorization, x-api-key, baml-original-url, \
+             baml-openai-api-key, baml-anthropic-api-key, baml-google-api-key, \
+             baml-openrouter-api-key, baml-llama-api-key",
+        )
+        .body(warp::hyper::Body::from(error_response))
+        .unwrap())
+}
+
+/// Serve static files from the current working directory with CORS headers
+async fn serve_static_file(path_str: &str) -> Result<BinaryResponse, Rejection> {
+    let file_path = path_str.strip_prefix("static/").unwrap_or(path_str);
+
+    let current_dir = std::env::current_dir().map_err(|_| warp::reject::custom(ProxyError))?;
+
+    // Try multiple potential base directories
+    let potential_paths = vec![
+        current_dir.join(file_path),
+        current_dir.join("baml_src").join(file_path),
+        current_dir.join("../baml_src").join(file_path),
+    ];
+
+    let absolute_path = potential_paths
+        .into_iter()
+        .find(|path| path.exists())
+        .unwrap_or_else(|| current_dir.join(file_path));
+
+    match fs::read(&absolute_path).await {
+        Ok(contents) => {
+            let mime_type = from_path(file_path).first_or_octet_stream();
+            let content_type = mime_type.as_ref().to_string();
+
+            Ok(BinaryResponse {
+                body: contents,
+                status: http::StatusCode::OK,
+                content_type: Some(content_type),
+            })
+        }
+        Err(err) => {
+            tracing::warn!("Failed to read static file {}: {}", file_path, err);
+
+            let (status, message) = match err.kind() {
+                std::io::ErrorKind::NotFound => (
+                    http::StatusCode::NOT_FOUND,
+                    format!("File not found: {file_path}"),
+                ),
+                std::io::ErrorKind::PermissionDenied => (
+                    http::StatusCode::FORBIDDEN,
+                    format!("Permission denied: {file_path}"),
+                ),
+                _ => (
+                    http::StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Error reading file: {file_path}"),
+                ),
+            };
+
+            Ok(BinaryResponse {
+                body: message.into_bytes(),
+                status,
+                content_type: Some("text/plain".to_string()),
+            })
+        }
+    }
+}
+
 /// Main proxy request handler
 async fn handle_proxy_request(
     body: bytes::Bytes,
@@ -141,6 +231,11 @@ async fn handle_proxy_request(
     mut headers: http::HeaderMap,
 ) -> Result<BinaryResponse, Rejection> {
     let path_str = path.as_str();
+
+    // Handle static file serving
+    if path_str.starts_with("static/") && method == http::Method::GET {
+        return serve_static_file(path_str).await;
+    }
 
     // Extract and validate the original URL
     let original_url = extract_original_url(&headers)?;
@@ -198,6 +293,7 @@ fn create_empty_response() -> BinaryResponse {
     BinaryResponse {
         body: Vec::new(),
         status: http::StatusCode::OK,
+        content_type: None,
     }
 }
 
@@ -275,7 +371,7 @@ fn get_origin_string(url: &url::Url) -> String {
     }
 }
 
-/// Get API key from environment, headers, or fallback
+/// Get API key from environment or headers
 fn get_api_key(env_var: &str, baml_header: &str, headers: &http::HeaderMap) -> Option<String> {
     // Try environment variable first
     std::env::var(env_var)
@@ -286,13 +382,6 @@ fn get_api_key(env_var: &str, baml_header: &str, headers: &http::HeaderMap) -> O
                 .get(baml_header)
                 .and_then(|v| v.to_str().ok())
                 .map(String::from)
-        })
-        // Finally try fallback keys
-        .or_else(|| {
-            FALLBACK_API_KEYS
-                .iter()
-                .find(|(key, _)| *key == env_var)
-                .map(|(_, value)| value.to_string())
         })
 }
 
@@ -314,7 +403,7 @@ async fn execute_request(
 ) -> Result<BinaryResponse, Rejection> {
     let client = reqwest::Client::new();
 
-    // Build reqwest request manually
+    // Build reqwest request
     let mut reqwest_builder = client.request(
         reqwest::Method::from_bytes(method.as_str().as_bytes())
             .map_err(|_| warp::reject::custom(ProxyError))?,
@@ -342,18 +431,18 @@ async fn execute_request(
         .await
         .map_err(|_| warp::reject::custom(ProxyError))?;
 
-    tracing::info!(
-        "[PROXY] {} {} → {:?} | status: {} | body_len: {}",
+    tracing::debug!(
+        "[PROXY] {} {} → {:?} | status: {}",
         method,
         path_str,
         target_url.origin(),
-        status,
-        body_bytes.len()
+        status
     );
 
     Ok(BinaryResponse {
         body: body_bytes.to_vec(),
         status: http::StatusCode::from_u16(status.as_u16())
             .map_err(|_| warp::reject::custom(ProxyError))?,
+        content_type: None,
     })
 }

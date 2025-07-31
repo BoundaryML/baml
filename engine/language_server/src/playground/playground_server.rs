@@ -31,7 +31,7 @@ impl PlaygroundServer {
     pub async fn run(self, port: u16) -> Result<()> {
         // Sets debug mode using the VSCODE_DEBUG_MODE enviroment variable.
         // Otherwise defaults to retrieving the playground from github releases
-        let dist_dir = if env::var("VSCODE_DEBUG_MODE_DONT_USE_THIS")
+        let dist_dir = if env::var("VSCODE_DEBUG_MODE")
             .map(|v| v == "true")
             .unwrap_or(false)
         {
@@ -60,7 +60,6 @@ impl PlaygroundServer {
         };
 
         // TODO REMOVE FOR PRODUCTION
-
         // let local_dist = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         //     .join("../../typescript/apps/playground/dist");
         // tracing::info!(
@@ -88,7 +87,7 @@ impl PlaygroundServer {
         warp::serve(routes).try_bind(([127, 0, 0, 1], port)).await;
 
         // If we get here, the main server has stopped
-        tracing::info!("Main playground server stopped");
+        tracing::info!("Main playground server has stopped");
 
         Ok(())
     }

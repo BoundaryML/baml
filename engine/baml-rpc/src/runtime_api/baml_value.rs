@@ -13,6 +13,7 @@ pub enum TypeIndex {
     NotUnion,
     Null,         // the type is a union but the value is null
     Index(usize), // the type is a union and this index points to the actual type
+    NotFound,
 }
 
 // Export this to TS since we don't yet decouple this into a DB specific type or anything. What the runtime exports is what the frontend reads as far as BamlValue is concerned. If you want to decouple it, create a UIBamlValue type and do a conversion from this to the UI type.

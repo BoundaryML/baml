@@ -1806,6 +1806,7 @@ impl WasmFunction {
         expand_images: bool,
         get_baml_src_cb: js_sys::Function,
         env: js_sys::Object,
+        expose_secrets: bool,
     ) -> Result<String, wasm_bindgen::JsError> {
         let context_manager = rt.runtime.create_ctx_manager(
             BamlValue::String("wasm".to_string()),
@@ -1864,7 +1865,7 @@ impl WasmFunction {
                 RenderCurlSettings {
                     stream,
                     as_shell_commands: !expand_images,
-                    expose_secrets: false,
+                    expose_secrets,
                 },
                 wasm_call_context.node_index,
             )

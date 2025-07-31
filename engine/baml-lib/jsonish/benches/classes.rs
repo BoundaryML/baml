@@ -1,8 +1,13 @@
+#[cfg(not(target_arch = "wasm32"))]
 use baml_types::TypeIR;
+#[cfg(not(target_arch = "wasm32"))]
 use criterion::Criterion;
+#[cfg(not(target_arch = "wasm32"))]
 use internal_baml_jinja::types::Builder;
+#[cfg(not(target_arch = "wasm32"))]
 use jsonish::from_str;
 
+#[cfg(not(target_arch = "wasm32"))]
 pub fn bench_complex_classes(c: &mut Criterion) {
     let mut group = c.benchmark_group("complex_classes");
 
