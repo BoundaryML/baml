@@ -12,5 +12,3 @@ function AnalyzeSentiment(text: string) -> Sentiment {
     Return one of: Positive, Negative, or Neutral
   "#
 }
-
-// Bytecode tests require baml_compiler and baml_vm dependencies

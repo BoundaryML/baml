@@ -1,4 +1,33 @@
-mod panic_with_diff;
+
+fn panic_with_diff(expected: &str, found: &str) {
+    let chunks = dissimilar::diff(expected, found);
+    let diff = format_chunks(chunks);
+    panic!(
+        r#"
+Snapshot comparison failed. Run the test again with UPDATE_EXPECT=1 in the environment to update the snapshot.
+
+===== EXPECTED ====
+{expected}
+====== FOUND ======
+{found}
+======= DIFF ======
+{diff}
+      "#
+    );
+}
+
+fn format_chunks(chunks: Vec<dissimilar::Chunk<'_>>) -> String {
+    let mut buf = String::new();
+    for chunk in chunks {
+        let formatted = match chunk {
+            dissimilar::Chunk::Equal(text) => text.into(),
+            dissimilar::Chunk::Delete(text) => format!("\x1b[41m{text}\x1b[0m"),
+            dissimilar::Chunk::Insert(text) => format!("\x1b[42m{text}\x1b[0m"),
+        };
+        buf.push_str(&formatted);
+    }
+    buf
+}
 
 use std::fs;
 use std::path::Path;
@@ -6,9 +35,10 @@ use std::sync::Arc;
 
 use baml_lib::SourceFile;
 use strip_ansi_escapes::strip_str;
+use baml_compiler::hir::Program;
 
 #[allow(dead_code)]
-pub(crate) fn run_hir_test(test_name: &str, content: &str) {
+fn run_hir_test(test_name: &str, content: &str) {
     let result = get_hir_output(content);
     let (without_expected, expected) = parse_expected_from_comments(content);
     
@@ -22,9 +52,22 @@ pub(crate) fn run_hir_test(test_name: &str, content: &str) {
 }
 
 fn get_hir_output(content: &str) -> Result<String, String> {
-    // Need to add baml_compiler dependency to access HIR
-    // For now, return a placeholder until we can update Cargo.toml
-    Err("HIR tests require baml_compiler dependency".to_string())
+    let source_file = SourceFile::new_allocated("test.baml".into(), Arc::from(content.to_string().into_boxed_str()));
+    let schema = baml_lib::validate(&std::path::PathBuf::from("./test"), vec![source_file]);
+    
+    // Check for validation errors first
+    if !schema.diagnostics.errors().is_empty() {
+        let mut message: Vec<u8> = Vec::new();
+        for err in schema.diagnostics.errors() {
+            err.pretty_print(&mut message)
+                .expect("printing datamodel error");
+        }
+        return Err(String::from_utf8_lossy(&message).into_owned());
+    }
+    
+    // Convert AST to HIR and pretty print
+    let hir = Program::from_ast(&schema.db.ast);
+    Ok(hir.pretty_print())
 }
 
 fn parse_expected_from_comments(content: &str) -> (String, String) {
@@ -108,10 +151,7 @@ fn compare_output(expected: &str, actual: &str, test_name: &str) {
     let actual = strip_str(actual);
     
     if expected != actual {
-        panic_with_diff::panic_with_diff(
-            &expected,
-            &actual,
-        );
+        panic_with_diff(&expected, &actual);
     }
 }
 

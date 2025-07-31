@@ -958,6 +958,8 @@ dependencies = [
 name = "baml-lib"
 version = "0.202.1"
 dependencies = [
+ "baml-compiler",
+ "baml-vm",
  "base64 0.13.1",
  "dissimilar",
  "either",

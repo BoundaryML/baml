@@ -106,7 +106,7 @@ fn build_hir_tests() {
         let file_path = schema_path.trim_start_matches('/');
         writeln!(
             out_file,
-            "#[test] fn {test_name}() {{ crate::hir_tests::run_hir_test(\"{file_path}\", include_str!(\"../../{HIR_ROOT_DIR}/{file_path}\")); }}"
+            "#[test] fn {test_name}() {{ run_hir_test(\"{file_path}\", include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/{HIR_ROOT_DIR}/{file_path}\"))); }}"
         )
         .unwrap();
     }
@@ -124,7 +124,7 @@ fn build_bytecode_tests() {
         let file_path = schema_path.trim_start_matches('/');
         writeln!(
             out_file,
-            "#[test] fn {test_name}() {{ crate::bytecode_tests::run_bytecode_test(\"{file_path}\", include_str!(\"../../{BYTECODE_ROOT_DIR}/{file_path}\")); }}"
+            "#[test] fn {test_name}() {{ run_bytecode_test(\"{file_path}\", include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/{BYTECODE_ROOT_DIR}/{file_path}\"))); }}"
         )
         .unwrap();
     }

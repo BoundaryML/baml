@@ -1,40 +1,112 @@
-mod panic_with_diff;
+fn panic_with_diff(expected: &str, found: &str) {
+    let chunks = dissimilar::diff(expected, found);
+    let diff = format_chunks(chunks);
+    panic!(
+        r#"
+Snapshot comparison failed. Run the test again with UPDATE_EXPECT=1 in the environment to update the snapshot.
+
+===== EXPECTED ====
+{expected}
+====== FOUND ======
+{found}
+======= DIFF ======
+{diff}
+      "#
+    );
+}
+
+fn format_chunks(chunks: Vec<dissimilar::Chunk<'_>>) -> String {
+    let mut buf = String::new();
+    for chunk in chunks {
+        let formatted = match chunk {
+            dissimilar::Chunk::Equal(text) => text.into(),
+            dissimilar::Chunk::Delete(text) => format!("\x1b[41m{text}\x1b[0m"),
+            dissimilar::Chunk::Insert(text) => format!("\x1b[42m{text}\x1b[0m"),
+        };
+        buf.push_str(&formatted);
+    }
+    buf
+}
 
 use std::fs;
 use std::path::Path;
 use std::sync::Arc;
-
+use baml_compiler::compile;
 use baml_lib::SourceFile;
 use strip_ansi_escapes::strip_str;
 
 #[allow(dead_code)]
-pub(crate) fn run_bytecode_test(test_name: &str, content: &str) {
+fn run_bytecode_test(test_name: &str, content: &str) {
     let result = get_bytecode_output(content);
     let (without_expected, expected) = parse_expected_from_comments(content);
-    
+
     let actual = result.unwrap_or_else(|e| format!("error: {}", e));
-    
+
     if std::env::var("UPDATE_EXPECT").is_ok() {
-        update_expected(&format!("bytecode_files/{}", test_name), &without_expected, &actual);
+        update_expected(
+            &format!("bytecode_files/{}", test_name),
+            &without_expected,
+            &actual,
+        );
     } else {
         compare_output(&expected, &actual, test_name);
     }
 }
 
 fn get_bytecode_output(content: &str) -> Result<String, String> {
-    // Need to add baml_compiler and baml_vm dependencies to access bytecode generation and display
-    // For now, return a placeholder until we can update Cargo.toml
-    Err("Bytecode tests require baml_compiler and baml_vm dependencies".to_string())
+    let source_file = SourceFile::new_allocated(
+        "test.baml".into(),
+        Arc::from(content.to_string().into_boxed_str()),
+    );
+    let schema = baml_lib::validate(&std::path::PathBuf::from("./test"), vec![source_file]);
+
+    // Check for validation errors first
+    if !schema.diagnostics.errors().is_empty() {
+        let mut message: Vec<u8> = Vec::new();
+        for err in schema.diagnostics.errors() {
+            err.pretty_print(&mut message)
+                .expect("printing datamodel error");
+        }
+        return Err(String::from_utf8_lossy(&message).into_owned());
+    }
+
+    // Compile to bytecode
+    match compile(&schema.db) {
+        Ok((objects, globals, _function_map)) => {
+            // Format bytecode output
+            let mut output = String::new();
+
+            // Display functions
+            for obj in &objects {
+                match obj {
+                    baml_vm::Object::Function(func) => {
+                        output.push_str(&baml_vm::debug::display_bytecode(
+                            func,
+                            &[], // empty stack
+                            &objects,
+                            &globals,
+                            false, // no colors for golden tests
+                        ));
+                        output.push('\n');
+                    }
+                    _ => {} // Skip non-function objects for now
+                }
+            }
+
+            Ok(output.trim().to_string())
+        }
+        Err(e) => Err(format!("Compilation error: {:?}", e)),
+    }
 }
 
 fn parse_expected_from_comments(content: &str) -> (String, String) {
     let lines: Vec<&str> = content.lines().collect();
-    
+
     // Find the last block of consecutive comment lines
     let mut last_comment_block = Vec::new();
     let mut in_comment_block = false;
     let mut content_lines = Vec::new();
-    
+
     for (i, line) in lines.iter().enumerate().rev() {
         if line.trim_start().starts_with("//") {
             if !in_comment_block && i == lines.len() - 1 {
@@ -49,13 +121,13 @@ fn parse_expected_from_comments(content: &str) -> (String, String) {
             break;
         }
     }
-    
+
     if !in_comment_block {
         content_lines = lines.clone();
     }
-    
+
     last_comment_block.reverse();
-    
+
     let expected = last_comment_block
         .iter()
         .map(|line| {
@@ -70,15 +142,15 @@ fn parse_expected_from_comments(content: &str) -> (String, String) {
         })
         .collect::<Vec<_>>()
         .join("\n");
-    
+
     let without_expected = content_lines.join("\n");
-    
+
     (without_expected, expected)
 }
 
 fn update_expected(test_name: &str, content: &str, actual: &str) {
     let test_path = Path::new("tests").join(test_name);
-    
+
     let new_content = if actual.is_empty() {
         content.to_string()
     } else {
@@ -92,26 +164,23 @@ fn update_expected(test_name: &str, content: &str, actual: &str) {
                 }
             })
             .collect();
-        
+
         format!("{}\n\n{}", content.trim_end(), comment_lines.join("\n"))
     };
-    
+
     fs::write(&test_path, new_content).unwrap_or_else(|e| {
         panic!("Failed to update test file {}: {}", test_path.display(), e);
     });
-    
+
     println!("Updated expected output for test: {}", test_name);
 }
 
 fn compare_output(expected: &str, actual: &str, test_name: &str) {
     let expected = strip_str(expected);
     let actual = strip_str(actual);
-    
+
     if expected != actual {
-        panic_with_diff::panic_with_diff(
-            &expected,
-            &actual,
-        );
+        panic_with_diff(&expected, &actual);
     }
 }
 

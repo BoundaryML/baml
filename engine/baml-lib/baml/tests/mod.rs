@@ -1,4 +1,3 @@
 // mod classes;
 // mod functions;
-mod hir_tests;
-mod bytecode_tests;
+mod panic_with_diff;

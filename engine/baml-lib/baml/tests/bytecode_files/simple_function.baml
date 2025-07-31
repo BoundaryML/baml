@@ -4,5 +4,3 @@ function GetName(person: string) -> string {
     Extract the name from: {{ person }}
   "#
 }
-
-// Bytecode tests require baml_compiler and baml_vm dependencies
