@@ -76,10 +76,11 @@ fn get_bytecode_output(content: &str) -> Result<String, String> {
             // Format bytecode output
             let mut output = String::new();
 
-            // Display functions
+            // Display all objects
             for obj in &objects {
                 match obj {
                     baml_vm::Object::Function(func) => {
+                        output.push_str(&format!("Function: {}\n", func.name));
                         output.push_str(&baml_vm::debug::display_bytecode(
                             func,
                             &[], // empty stack
@@ -89,7 +90,24 @@ fn get_bytecode_output(content: &str) -> Result<String, String> {
                         ));
                         output.push('\n');
                     }
-                    _ => {} // Skip non-function objects for now
+                    baml_vm::Object::Class(class) => {
+                        output.push_str(&format!("Class: {} with {} fields\n", class.name, class.field_names.len()));
+                    }
+                    baml_vm::Object::Instance(instance) => {
+                        output.push_str(&format!("Instance with {} fields\n", instance.fields.len()));
+                    }
+                    baml_vm::Object::String(s) => {
+                        output.push_str(&format!("String: {:?}\n", s));
+                    }
+                    baml_vm::Object::Array(arr) => {
+                        output.push_str(&format!("Array with {} elements\n", arr.len()));
+                    }
+                    baml_vm::Object::Iterator { iterable, index } => {
+                        output.push_str(&format!("Iterator: iterable={}, index={}\n", iterable, index));
+                    }
+                    baml_vm::Object::Future(_) => {
+                        output.push_str("Future\n");
+                    }
                 }
             }
 

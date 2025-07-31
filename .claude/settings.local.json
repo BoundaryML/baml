@@ -36,7 +36,11 @@
       "Bash(rg:*)",
       "Bash(cargo build:*)",
       "Bash(UPDATE_EXPECT=1 cargo test basic_class --lib)",
-      "Bash(ln:*)"
+      "Bash(ln:*)",
+      "Bash(UPDATE_EXPECT=1 cargo test basic_class)",
+      "Bash(UPDATE_EXPECT=1 cargo test)",
+      "Bash(UPDATE_EXPECT=1 cargo test test_class)",
+      "Bash(UPDATE_EXPECT=1 cargo test simple_function enum_function)"
     ],
     "deny": []
   }

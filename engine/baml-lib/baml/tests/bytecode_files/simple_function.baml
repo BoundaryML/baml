@@ -1,6 +1,8 @@
 function GetName(person: string) -> string {
-  client "openai/gpt-4o-mini"
-  prompt #"
-    Extract the name from: {{ person }}
-  "#
+  "Antonio"
 }
+
+// String: "Antonio"
+// Function: GetName
+//    0   LOAD_CONST 0   (Antonio)
+//    1   RETURN
