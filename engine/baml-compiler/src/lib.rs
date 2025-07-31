@@ -362,8 +362,6 @@ impl<'g> HirCompiler<'g> {
                             panic!("undefined class: {}", cc.class_name);
                         }
                     }
-                } else {
-                    panic!("undefined class: {}", cc.class_name);
                 }
             }
             hir::Expression::ExpressionBlock(block, _) => {
@@ -450,7 +448,7 @@ mod tests {
 
             eprintln!(
                 "---- fn {function_name}() ----\n{}",
-                baml_vm::debug::display_bytecode(function, &[], &objects, &globals)
+                baml_vm::debug::display_bytecode(function, &[], &objects, &globals, true)
             );
 
             assert_eq!(

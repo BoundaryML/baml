@@ -66,7 +66,9 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
     // firefox wont apply the background color for some reason so we forcefully set it.
     <div className="flex relative flex-col w-full h-full main-panel overflow-x-clip overflow-y-auto">
       <CustomErrorBoundary message="Error loading project">
-        <EventListener />
+        <div className="absolute bottom-0 right-4 z-50">
+          <EventListener />
+        </div>
         {isMobile && (
           <div className="absolute bottom-0 left-0 right-0 font-semibold  border-t-[1px] w-full h-[100px] z-50 text-center p-8">
             Visit PromptFiddle on Desktop to get the best experience

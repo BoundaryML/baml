@@ -223,6 +223,7 @@ class BamlRuntime:
         cr: Optional[ClientRegistry],
         env_vars: Dict[str, str],
     ) -> Any: ...
+    def disassemble(self, function_name: str) -> None: ...
 
 class LogEventMetadata:
     event_id: str

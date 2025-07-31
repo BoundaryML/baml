@@ -366,7 +366,10 @@ pub fn scan_openai_responses_stream(
         ResponseCompleted { response, .. } => {
             // Final response with usage information and content
             inner.model = response.model;
-            inner.metadata.finish_reason = Some(response.status.clone());
+            inner.metadata.finish_reason = response
+                .incomplete_details
+                .as_ref()
+                .map(|d| d.reason.clone());
             inner.metadata.baml_is_complete = true;
 
             // Extract content from the final response
@@ -390,7 +393,10 @@ pub fn scan_openai_responses_stream(
         }
         ResponseFailed { response, .. } => {
             // Handle failure
-            inner.metadata.finish_reason = Some(response.status.clone());
+            inner.metadata.finish_reason = response
+                .incomplete_details
+                .as_ref()
+                .map(|d| d.reason.clone());
             inner.metadata.baml_is_complete = false;
 
             // If there's an error, we might want to add it to the content or handle it differently
@@ -410,7 +416,10 @@ pub fn scan_openai_responses_stream(
         ResponseIncomplete { response, .. } => {
             // Handle incomplete response (e.g., hit token limit)
             inner.model = response.model;
-            inner.metadata.finish_reason = Some(response.status.clone());
+            inner.metadata.finish_reason = response
+                .incomplete_details
+                .as_ref()
+                .map(|d| d.reason.clone());
             inner.metadata.baml_is_complete = false; // Mark as incomplete
 
             // Extract any partial content that was generated

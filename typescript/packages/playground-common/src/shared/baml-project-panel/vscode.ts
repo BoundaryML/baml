@@ -9,6 +9,8 @@ import {
   type LoadAwsCredsResponse,
   type LoadGcpCredsRequest,
   type LoadGcpCredsResponse,
+  type OpenPlaygroundRequest,
+  type OpenPlaygroundResponse,
   type SetProxySettingsRequest,
   decodeBuffer,
 } from './vscode-rpc';
@@ -231,6 +233,16 @@ class VSCodeAPIWrapper {
     } catch (e) {
       console.error('Error marking initialized', e);
     }
+  }
+
+  public async openPlayground() {
+    const resp = await this.rpc<
+      OpenPlaygroundRequest,
+      OpenPlaygroundResponse
+    >({
+      vscodeCommand: 'OPEN_PLAYGROUND',
+    });
+    return resp;
   }
 
   public rpc<TRequest, TResponse>(data: TRequest): Promise<TResponse> {

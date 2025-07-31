@@ -320,6 +320,10 @@ pub struct ListFunctionCallsRequest {
     /// Search filter for LLM request and response content
     #[ts(optional)]
     pub search: Option<String>,
+    /// Whether to include detailed information (details, llm_request, llm_response) in the response.
+    /// Set to false for table views to improve performance. Defaults to true.
+    #[ts(optional)]
+    pub include_details: Option<bool>,
 }
 
 impl Default for ListFunctionCallsRequest {
@@ -343,6 +347,7 @@ impl Default for ListFunctionCallsRequest {
             streamed: None,
             relative_time: None,
             search: None,
+            include_details: None,
         }
     }
 }

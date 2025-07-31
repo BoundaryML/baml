@@ -181,7 +181,7 @@ impl Server {
         }
         session.reload(Some(notifier))?;
 
-        let server = Self {
+        let mut server = Self {
             connection,
             worker_threads,
             session,
@@ -410,49 +410,82 @@ impl Server {
     }
 
     #[cfg(feature = "playground-server")]
-    fn start_playground_server(&self) {
-        if let (Some(playground_state), Some(rt)) = (
-            self.session.playground_state.clone(),
-            self.session.playground_runtime.as_ref(),
-        ) {
-            let mut playground_port = self.session.baml_settings.playground_port.unwrap_or(3030);
-            let session_arc = Arc::new(self.session.clone());
-            let playground_server = PlaygroundServer::new(playground_state.clone(), session_arc);
-            let sender = self.connection.make_sender();
+    fn start_playground_server(&mut self) {
+        // Extract needed values to avoid borrowing conflicts
+        let playground_state = self.session.playground_state.clone();
+        let playground_runtime = self.session.playground_runtime.as_ref().is_some();
 
-            rt.spawn(async move {
+        if let Some(playground_state) = playground_state {
+            if playground_runtime {
+                let mut playground_port =
+                    self.session.baml_settings.playground_port.unwrap_or(3030);
+                const MAX_PORT_ATTEMPTS: u16 = 100;
+                let starting_port = playground_port;
+                let mut attempts = 0;
+
+                // Determine the actual available port synchronously with a limit
                 loop {
+                    if attempts >= MAX_PORT_ATTEMPTS {
+                        tracing::error!(
+                            "Failed to find an available port after {} attempts starting from port {}. Playground server will not start.",
+                            MAX_PORT_ATTEMPTS,
+                            starting_port
+                        );
+                        return;
+                    }
+
                     // Check if port is available before attempting to bind
                     let port_available =
                         { std::net::TcpListener::bind(("127.0.0.1", playground_port)).is_ok() };
 
                     if port_available {
-                        // Port is available, start the server
-                        let server = playground_server.clone();
-
-                        // Send LSP notification about the port
-                        let params = PortNotificationParams::new(playground_port);
-                        let notification = lsp_server::Notification::new(
-                            "baml/port".to_string(),
-                            serde_json::to_value(params).unwrap(),
-                        );
-                        if let Err(e) = sender.send(Message::Notification(notification)) {
-                            tracing::error!("Failed to send port notification: {}", e);
-                        }
-
-                        server.run(playground_port).await.unwrap();
                         break;
                     } else {
                         // Port is already in use, try next port
+                        attempts += 1;
                         playground_port += 1;
                         tracing::info!(
-                            "Port {} is in use, trying port {}...",
+                            "Port {} is in use, trying port {} (attempt {}/{})",
                             playground_port - 1,
-                            playground_port
+                            playground_port,
+                            attempts,
+                            MAX_PORT_ATTEMPTS
                         );
                     }
                 }
-            });
+
+                // Port is available, store it in the session
+                self.session.set_session_playground_port(playground_port);
+                tracing::info!(
+                    "Successfully found available port {} after {} attempts",
+                    playground_port,
+                    attempts
+                );
+
+                // Now get the runtime and start the server
+                let rt = self.session.playground_runtime.as_ref().unwrap();
+                let session_arc = Arc::new(self.session.clone());
+                let playground_server =
+                    PlaygroundServer::new(playground_state.clone(), session_arc);
+                let sender = self.connection.make_sender();
+                let final_port = playground_port;
+
+                rt.spawn(async move {
+                    // Send LSP notification about the port
+                    let params = PortNotificationParams::new(final_port);
+                    let notification = lsp_server::Notification::new(
+                        "baml/port".to_string(),
+                        serde_json::to_value(params).unwrap(),
+                    );
+                    if let Err(e) = sender.send(Message::Notification(notification)) {
+                        tracing::error!("Failed to send port notification: {}", e);
+                    }
+
+                    if let Err(e) = playground_server.run(final_port).await {
+                        tracing::error!("Playground server error: {}", e);
+                    }
+                });
+            }
         }
     }
 }

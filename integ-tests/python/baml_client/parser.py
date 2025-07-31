@@ -448,6 +448,12 @@ class LlmResponseParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="LiteralUnionsTest", llm_response=llm_response, mode="request")
         return typing.cast(typing.Union[typing_extensions.Literal[1], typing_extensions.Literal[True], typing_extensions.Literal['string output']], result)
 
+    def LlmReturnNumber(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="LlmReturnNumber", llm_response=llm_response, mode="request")
+        return typing.cast(int, result)
+
     def MakeBlockConstraint(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.Checked["types.BlockConstraint", typing_extensions.Literal['cross_field', 'cross_field']]:
@@ -934,6 +940,12 @@ class LlmResponseParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestGeminiSystemAsChat", llm_response=llm_response, mode="request")
         return typing.cast(str, result)
 
+    def TestGeminiThinking(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestGeminiThinking", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
     def TestGroq(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> str:
@@ -1275,6 +1287,66 @@ class LlmResponseParser:
     ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="VideoInputVertex", llm_response=llm_response, mode="request")
         return typing.cast(str, result)
+
+    def EchoWorkflow(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="EchoWorkflow", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
+    def ReturnOne(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="ReturnOne", llm_response=llm_response, mode="request")
+        return typing.cast(int, result)
+
+    def ReturnNumber(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="ReturnNumber", llm_response=llm_response, mode="request")
+        return typing.cast(int, result)
+
+    def CallReturnOne(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="CallReturnOne", llm_response=llm_response, mode="request")
+        return typing.cast(int, result)
+
+    def ChainedCalls(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="ChainedCalls", llm_response=llm_response, mode="request")
+        return typing.cast(int, result)
+
+    def StoreFnCallInLocalVar(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="StoreFnCallInLocalVar", llm_response=llm_response, mode="request")
+        return typing.cast(int, result)
+
+    def BoolToIntWithIfElse(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="BoolToIntWithIfElse", llm_response=llm_response, mode="request")
+        return typing.cast(int, result)
+
+    def ReturnNumberCallingLlm(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="ReturnNumberCallingLlm", llm_response=llm_response, mode="request")
+        return typing.cast(int, result)
+
+    def StoreLlmCallInLocalVar(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="StoreLlmCallInLocalVar", llm_response=llm_response, mode="request")
+        return typing.cast(int, result)
+
+    def BoolToIntWithIfElseCallingLlm(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="BoolToIntWithIfElseCallingLlm", llm_response=llm_response, mode="request")
+        return typing.cast(int, result)
 
     
 
@@ -1709,6 +1781,12 @@ class LlmStreamParser:
     ) -> typing.Union[int, bool, str]:
         result = self.__options.merge_options(baml_options).parse_response(function_name="LiteralUnionsTest", llm_response=llm_response, mode="stream")
         return typing.cast(typing.Union[int, bool, str], result)
+
+    def LlmReturnNumber(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="LlmReturnNumber", llm_response=llm_response, mode="stream")
+        return typing.cast(int, result)
 
     def MakeBlockConstraint(
         self, llm_response: str, baml_options: BamlCallOptions = {},
@@ -2196,6 +2274,12 @@ class LlmStreamParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestGeminiSystemAsChat", llm_response=llm_response, mode="stream")
         return typing.cast(str, result)
 
+    def TestGeminiThinking(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestGeminiThinking", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
+
     def TestGroq(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> str:
@@ -2537,5 +2621,65 @@ class LlmStreamParser:
     ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="VideoInputVertex", llm_response=llm_response, mode="stream")
         return typing.cast(str, result)
+
+    def EchoWorkflow(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional[str]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="EchoWorkflow", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[str], result)
+
+    def ReturnOne(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional[int]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="ReturnOne", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[int], result)
+
+    def ReturnNumber(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional[int]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="ReturnNumber", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[int], result)
+
+    def CallReturnOne(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional[int]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="CallReturnOne", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[int], result)
+
+    def ChainedCalls(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional[int]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="ChainedCalls", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[int], result)
+
+    def StoreFnCallInLocalVar(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional[int]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="StoreFnCallInLocalVar", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[int], result)
+
+    def BoolToIntWithIfElse(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional[int]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="BoolToIntWithIfElse", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[int], result)
+
+    def ReturnNumberCallingLlm(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional[int]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="ReturnNumberCallingLlm", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[int], result)
+
+    def StoreLlmCallInLocalVar(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional[int]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="StoreLlmCallInLocalVar", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[int], result)
+
+    def BoolToIntWithIfElseCallingLlm(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional[int]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="BoolToIntWithIfElseCallingLlm", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[int], result)
 
     

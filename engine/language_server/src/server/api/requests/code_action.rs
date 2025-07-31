@@ -56,14 +56,18 @@ impl SyncRequestHandler for CodeActionHandler {
             .find(|f| f.span.file_path == document_key.path().to_string_lossy())
             .map(|f| f.name);
 
-        // Get the playground port from session settings
-        let port = session.baml_settings.playground_port.unwrap_or(3030);
+        // Get the actual playground port from session (determined by server after availability check)
+        // Fall back to configured port if actual port not set yet
+        #[cfg(feature = "playground-server")]
+        let port = session
+            .get_session_playground_port()
+            .unwrap_or_else(|| session.baml_settings.playground_port.unwrap_or(3030));
 
         let action = CodeActionOrCommand::CodeAction(CodeAction {
-            title: "Open Playground".to_string(),
+            title: format!("Open Playground Localhost:{port}"),
             kind: Some(CodeActionKind::EMPTY),
             command: Some(Command {
-                title: "Open Playground".to_string(),
+                title: format!("Open Playground Localhost:{port}"),
                 command: "openPlayground".to_string(),
                 arguments: function_name.map(|name| vec![Value::String(name)]),
             }),

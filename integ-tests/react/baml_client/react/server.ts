@@ -1341,6 +1341,24 @@ export const LiteralUnionsTest = async (
 };
 
 /**
+ * Executes the "LlmReturnNumber" BAML action.
+ *
+ * This server action calls the underlying BAML function "LlmReturnNumber"
+ * with the specified parameters.
+ *
+ * @param { number } n - Input parameter.
+ *
+ * @returns {Promise<number>} A promise that resolves with the result of the action.
+ */
+export const LlmReturnNumber = async (
+  n: number,
+): Promise<number> => {
+  return b.LlmReturnNumber(
+    n,
+  );
+};
+
+/**
  * Executes the "MakeBlockConstraint" BAML action.
  *
  * This server action calls the underlying BAML function "MakeBlockConstraint"
@@ -2788,6 +2806,24 @@ export const TestGeminiSystemAsChat = async (
   input: string,
 ): Promise<string> => {
   return b.TestGeminiSystemAsChat(
+    input,
+  );
+};
+
+/**
+ * Executes the "TestGeminiThinking" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestGeminiThinking"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestGeminiThinking = async (
+  input: string,
+): Promise<string> => {
+  return b.TestGeminiThinking(
     input,
   );
 };

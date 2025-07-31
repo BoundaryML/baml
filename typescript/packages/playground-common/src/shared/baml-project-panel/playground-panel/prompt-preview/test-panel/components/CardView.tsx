@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-floating-promises */
 import { useAtomValue, useSetAtom } from 'jotai'
 import { Play } from 'lucide-react'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useCallback } from 'react'
 import { Button } from '@baml/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@baml/ui/tooltip'
 import { cn } from '@baml/ui/lib/utils'
@@ -12,6 +12,7 @@ import { useRunBamlTests } from '../test-runner'
 import { getStatus } from '../testStateUtils'
 import { ResponseRenderer } from './ResponseRenderer'
 import { TestStatus } from './TestStatus'
+import { EnhancedErrorRenderer } from './EnhancedErrorRenderer'
 
 export const CardView = ({ currentRun }: { currentRun?: TestHistoryRun }) => {
   return (
@@ -34,7 +35,12 @@ interface TestId {
   testName: string
 }
 
-const TestResult = ({ testId, historicalResponse }: { testId: TestId; historicalResponse?: TestState }) => {
+interface TestResultProps {
+  testId: TestId;
+  historicalResponse?: TestState;
+}
+
+const TestResult = ({ testId, historicalResponse }: TestResultProps) => {
   const response = useAtomValue(testCaseResponseAtom(testId))
   const displayResponse = historicalResponse || response
   const runBamlTests = useRunBamlTests()
@@ -58,6 +64,11 @@ const TestResult = ({ testId, historicalResponse }: { testId: TestId; historical
     return null
   }
 
+  // Use useCallback to create a stable retry function
+  const handleRetry = useCallback(() => {
+    runBamlTests([{ functionName: testId.functionName, testName: testId.testName }]);
+  }, [runBamlTests, testId.functionName, testId.testName]);
+
   return (
     <div
       ref={cardRef}
@@ -70,7 +81,7 @@ const TestResult = ({ testId, historicalResponse }: { testId: TestId; historical
       <div className='flex gap-2 justify-between items-center'>
         <div className='flex gap-2 items-center'>
           <TooltipProvider>
-            <Tooltip delayDuration={0}>
+            <Tooltip >
               <TooltipTrigger asChild>
                 <Button
                   variant='ghost'
@@ -100,7 +111,12 @@ const TestResult = ({ testId, historicalResponse }: { testId: TestId; historical
       )}
 
       {displayResponse.status === 'error' && (
-        <div className='mt-2 text-xs text-red-500'>Error: {displayResponse.message}</div>
+        <EnhancedErrorRenderer
+          errorMessage={displayResponse.message || 'Unknown error occurred'}
+          functionName={testId.functionName}
+          testName={testId.testName}
+          onRetry={handleRetry}
+        />
       )}
     </div>
   )

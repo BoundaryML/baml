@@ -6,7 +6,7 @@ use crate::bytecode::{Bytecode, Instruction};
 const MAX_FRAMES: usize = 256;
 
 /// Function type.
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum FunctionKind {
     /// Regular executable function.
     ///
@@ -484,7 +484,7 @@ pub enum VmExecState {
     ///
     /// Bytecode execution continues when control flow is handled back to the
     /// VM.
-    SpawnFuture(usize),
+    ScheduleFuture(usize),
 
     /// VM has completed the execution of all available bytecode.
     Complete(Value),
@@ -502,7 +502,7 @@ impl Vm {
     }
 
     /// Bootstraps the VM preparing the given function to run.
-    pub fn set_entry_point(&mut self, function: usize) {
+    pub fn set_entry_point(&mut self, function: usize, args: &[Value]) {
         debug_assert!(
             matches!(self.objects[function], Object::Function(_)),
             "expect function as entry point, got {:?}",
@@ -515,6 +515,7 @@ impl Vm {
         );
 
         self.stack.push(Value::Object(function));
+        self.stack.extend(args.iter().copied());
 
         self.frames.push(Frame {
             function,
@@ -544,12 +545,25 @@ impl Vm {
         }
     }
 
-    pub fn fulfil_future(&mut self, future: usize, value: Value) {
-        let Object::Future(future) = &mut self.objects[future] else {
-            panic!("expect future, got {:?}", self.objects[future]);
+    pub fn fulfil_future(&mut self, future_index: usize, value: Value) {
+        let Object::Future(future) = &mut self.objects[future_index] else {
+            panic!("expect future, got {:?}", self.objects[future_index]);
         };
 
         *future = Future::Ready(value);
+
+        // At any given moment, the VM can only await a single future, because
+        // we can only call the AWAIT instruction on a future on top of the
+        // stack. If that future being await is fulfilled, we need to replace
+        // the future on the stack with the ready value so that the next
+        // instruction that the VM runs can use the value, not the future
+        // object.
+        if let Some(Value::Object(index)) = self.stack.last() {
+            if *index == future_index {
+                self.stack.pop();
+                self.stack.push(value);
+            }
+        }
     }
 
     pub fn object(&self, index: usize) -> &Object {
@@ -599,27 +613,27 @@ impl Vm {
             frame.instruction_ptr += 1;
 
             // Runtime debugging information.
-            #[cfg(debug_assertions)]
-            {
-                let stack = self
-                    .stack
-                    .iter()
-                    .map(|v| crate::debug::display_value(v, &self.objects))
-                    .collect::<Vec<_>>()
-                    .join(", ");
+            // #[cfg(debug_assertions)]
+            // {
+            //     let stack = self
+            //         .stack
+            //         .iter()
+            //         .map(|v| crate::debug::display_value(v, &self.objects))
+            //         .collect::<Vec<_>>()
+            //         .join(", ");
 
-                eprintln!("[{stack}]");
+            //     eprintln!("[{stack}]");
 
-                let (instruction, metadata) = crate::debug::display_instruction(
-                    instruction_ptr,
-                    function,
-                    &self.stack,
-                    &self.objects,
-                    &self.globals,
-                );
+            //     let (instruction, metadata) = crate::debug::display_instruction(
+            //         instruction_ptr,
+            //         function,
+            //         &self.stack,
+            //         &self.objects,
+            //         &self.globals,
+            //     );
 
-                eprintln!("{instruction} {metadata}");
-            }
+            //     eprintln!("{instruction} {metadata}");
+            // }
 
             match function.bytecode.instructions[instruction_ptr as usize] {
                 Instruction::LoadConst(index) => {
@@ -862,7 +876,7 @@ impl Vm {
                     function = self.objects[frame.function].as_function()?;
                 }
 
-                Instruction::CreateFuture(arg_count) => {
+                Instruction::DispatchFuture(arg_count) => {
                     let args_offset = self.stack.len().saturating_sub(arg_count).saturating_sub(1);
 
                     // Get the function object from the stack.
@@ -913,7 +927,7 @@ impl Vm {
                     self.stack.push(Value::Object(self.objects.len() - 1));
 
                     // Yield control flow back to the embedder.
-                    return Ok(VmExecState::SpawnFuture(self.objects.len() - 1));
+                    return Ok(VmExecState::ScheduleFuture(self.objects.len() - 1));
                 }
 
                 Instruction::Await => {
@@ -928,9 +942,18 @@ impl Vm {
                         }));
                     };
 
-                    // Can't do nothing, handle control flow back to embedder.
-                    if let Future::Pending { .. } = awaiting {
-                        return Ok(VmExecState::Await(*index));
+                    match awaiting {
+                        // Can't do nothing, handle control flow back to embedder.
+                        Future::Pending(_) => {
+                            return Ok(VmExecState::Await(*index));
+                        }
+
+                        // Replace the future on the eval stack with the ready
+                        // value.
+                        Future::Ready(value) => {
+                            self.stack.pop();
+                            self.stack.push(*value);
+                        }
                     }
                 }
 
