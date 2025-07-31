@@ -10,128 +10,109 @@ use peak_alloc::PeakAlloc;
 static PEAK_ALLOC: PeakAlloc = PeakAlloc;
 
 #[cfg(not(target_arch = "wasm32"))]
-#[test]
-fn test_story_memory_usage() {
-    let ir = jsonish::helpers::load_test_ir(UNION_SCHEMA);
-    let target_string = jsonish::helpers::common::JSON_STRING;
+macro_rules! test_memory_usage {
+    ($test_name:ident, $target_string:expr, $schema:expr, $goal:expr) => {
+        #[test_log::test]
+        fn $test_name() {
+            let ir = jsonish::helpers::load_test_ir($schema);
+            let target_string = $target_string;
 
-    let start = std::time::Instant::now();
-    let _ = serde_json::from_str::<serde_json::Value>(target_string).unwrap();
-    let end = std::time::Instant::now();
-    println!("Time taken for serde: {:?}", end - start);
+            let start = std::time::Instant::now();
+            let _ = serde_json::from_str::<serde_json::Value>(target_string).unwrap();
+            let end = std::time::Instant::now();
+            log::info!("Time taken for serde: {:?}", end - start);
 
-    for goal in [
-        TypeIR::recursive_type_alias("JSON"),
-        // TypeIR::map(TypeIR::string(), TypeIR::recursive_type_alias("JSON")),
-    ] {
-        let target = goal.clone().to_streaming_type(&ir).to_ir_type();
-        let of = jsonish::helpers::render_output_format(
-            &ir,
-            &target,
-            &Default::default(),
-            baml_types::StreamingMode::Streaming,
-        )
-        .unwrap();
-        // Reset peak memory tracking
-        PEAK_ALLOC.reset_peak_usage();
-
-        let start = std::time::Instant::now();
-        let mut num_parses = 1;
-        for i in 0..target_string.chars().count() {
-            if i % 5 != 0 {
-                continue;
-            }
-            num_parses += 1;
-            let result = from_str(
-                &of,
+            let target = $goal.clone().to_streaming_type(&ir).to_ir_type();
+            let of = jsonish::helpers::render_output_format(
+                &ir,
                 &target,
-                &target_string.chars().take(i).collect::<String>(),
-                true,
+                &Default::default(),
+                baml_types::StreamingMode::Streaming,
+            )
+            .unwrap();
+            // Reset peak memory tracking
+            PEAK_ALLOC.reset_peak_usage();
+
+            let start = std::time::Instant::now();
+            let mut num_parses = 0;
+            for i in 0..target_string.chars().count() {
+                if i % 5 != 0 {
+                    continue;
+                }
+                num_parses += 1;
+                let result = from_str(
+                    &of,
+                    &target,
+                    &target_string.chars().take(i).collect::<String>(),
+                    true,
+                );
+            }
+
+            let of = jsonish::helpers::render_output_format(
+                &ir,
+                &$goal,
+                &Default::default(),
+                baml_types::StreamingMode::NonStreaming,
+            )
+            .unwrap();
+            // Run the function we want to measure
+            let result = from_str(&of, &$goal, &target_string, true);
+            let end = std::time::Instant::now();
+
+            let time_taken = end - start;
+            log::info!("{} - Time taken: {:?}", $goal, time_taken);
+            log::info!("{} - Time per parse: {:?}", $goal, time_taken / num_parses);
+
+            assert!(
+                time_taken / num_parses < std::time::Duration::from_millis(10),
+                "{} - Parsing is too slow: {:?} is more than 10ms",
+                $goal,
+                time_taken / num_parses
+            );
+
+            // Get peak memory usage
+            let peak_memory = PEAK_ALLOC.peak_usage_as_mb();
+
+            log::info!("{} - Peak memory usage: {:.2} MB", $goal, peak_memory);
+
+            assert!(
+                result.is_ok(),
+                "{} - Parse failed: {:?}",
+                $goal,
+                result.err()
             );
         }
-
-        let of = jsonish::helpers::render_output_format(
-            &ir,
-            &goal,
-            &Default::default(),
-            baml_types::StreamingMode::NonStreaming,
-        )
-        .unwrap();
-        // Run the function we want to measure
-        let result = from_str(&of, &goal, &target_string, true);
-        let end = std::time::Instant::now();
-
-        let time_taken = end - start;
-        println!("Time taken: {:?}", time_taken);
-        println!("Time per parse: {:?}", time_taken / num_parses);
-
-        // Get peak memory usage
-        let peak_memory = PEAK_ALLOC.peak_usage_as_mb();
-
-        println!("Peak memory usage for {goal}: {:.2} MB\n\n", peak_memory);
-        match &result {
-            Ok(_) => println!("Parse result successful: true"),
-            Err(e) => println!("Parse result successful: false, error: {:?}", e),
-        }
-
-        // You can add assertions here if needed
-        assert!(result.is_ok(), "Parse failed: {:?}", result.err());
-    }
+    };
 }
 
-// #[cfg(not(target_arch = "wasm32"))]
-// #[test]
-// fn test_story_memory_usage_multiple_iterations() {
-//     let ir = jsonish::helpers::load_test_ir(UNION_SCHEMA);
-//     let target = TypeIR::class("Story");
-//     let of = jsonish::helpers::render_output_format(
-//         &ir,
-//         &target,
-//         &Default::default(),
-//         baml_types::StreamingMode::NonStreaming,
-//     )
-//     .unwrap();
+#[cfg(not(target_arch = "wasm32"))]
+test_memory_usage!(
+    test_story1_memory_usage,
+    jsonish::helpers::common::JSON_STRING_STORY,
+    UNION_SCHEMA,
+    TypeIR::class("Story1")
+);
 
-//     // Reset peak memory tracking
-//     PEAK_ALLOC.reset_peak_usage();
+#[cfg(not(target_arch = "wasm32"))]
+test_memory_usage!(
+    test_story2_memory_usage,
+    jsonish::helpers::common::JSON_STRING_STORY,
+    UNION_SCHEMA,
+    TypeIR::class("Story2")
+);
 
-//     // Run multiple iterations to see memory usage pattern
-//     let iterations = 1000;
-//     let mut successful_parses = 0;
+#[cfg(not(target_arch = "wasm32"))]
+test_memory_usage!(
+    test_story3_memory_usage,
+    jsonish::helpers::common::JSON_STRING_STORY,
+    UNION_SCHEMA,
+    TypeIR::class("Story3")
+);
 
-//     for _ in 0..iterations {
-//         let result = from_str(
-//             &of,
-//             &target,
-//             jsonish::helpers::common::JSON_STRING_STORY,
-//             true,
-//         );
-//         if result.is_ok() {
-//             successful_parses += 1;
-//         }
-//     }
-
-//     // Get peak memory usage
-//     let peak_memory = PEAK_ALLOC.peak_usage_as_mb();
-
-//     println!("Peak memory usage ({} iterations): {:.2} MB", iterations, peak_memory);
-//     println!("Successful parses: {}/{}", successful_parses, iterations);
-
-//     if successful_parses != iterations {
-//         // Show an example error if any failed
-//         let result = from_str(
-//             &of,
-//             &target,
-//             jsonish::helpers::common::JSON_STRING_STORY,
-//             true,
-//         );
-//         println!("Example error: {:?}", result.err());
-//     }
-
-//     assert_eq!(successful_parses, iterations);
-// }
-
-#[cfg(target_arch = "wasm32")]
-fn main() {
-    // No-op for WASM builds
-}
+#[cfg(not(target_arch = "wasm32"))]
+test_memory_usage!(
+    test_story4_memory_usage,
+    jsonish::helpers::common::JSON_STRING_STORY,
+    UNION_SCHEMA,
+    TypeIR::class("Story4")
+);
