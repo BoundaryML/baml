@@ -11,10 +11,9 @@
 //!
 pub mod hir;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use baml_vm::{Bytecode, Class, Function, FunctionKind, Instruction, Object, Value};
-use internal_baml_core::ast::WithName;
 use internal_baml_parser_database::ParserDatabase;
 
 /// Compile a Baml AST into bytecode.
@@ -24,16 +23,18 @@ use internal_baml_parser_database::ParserDatabase;
 /// 2. HIR -> Bytecode
 pub fn compile(ast: ParserDatabase) -> anyhow::Result<(Vec<Object>, Vec<Value>)> {
     // Stage 1: AST -> HIR
-    let hir_program = hir::Program::from_ast(&ast.ast);
+    let hir = hir::Hir::from_ast(&ast.ast);
+
+    println!("HIR: {:#?}", hir);
 
     // Stage 2: HIR -> Bytecode
-    compile_hir_to_bytecode(&hir_program)
+    compile_hir_to_bytecode(&hir)
 }
 
 /// Compile HIR to bytecode.
 ///
 /// This function takes an HIR Program and generates the bytecode for the VM.
-fn compile_hir_to_bytecode(hir: &hir::Program) -> anyhow::Result<(Vec<Object>, Vec<Value>)> {
+fn compile_hir_to_bytecode(hir: &hir::Hir) -> anyhow::Result<(Vec<Object>, Vec<Value>)> {
     let mut resolved_globals = HashMap::new();
     let mut resolved_classes = HashMap::new();
 
@@ -96,6 +97,12 @@ fn compile_hir_function(
     compiler.compile_function(func)
 }
 
+#[derive(Debug, Default)]
+struct Scope {
+    depth: usize,
+    locals: HashSet<String>,
+}
+
 /// HIR to bytecode compiler.
 struct HirCompiler<'g> {
     /// Resolved global variables.
@@ -108,6 +115,8 @@ struct HirCompiler<'g> {
     bytecode: Bytecode,
     /// Objects pool.
     objects: &'g mut Vec<Object>,
+    /// Current scope.
+    scope: Scope,
 }
 
 impl<'g> HirCompiler<'g> {
@@ -122,6 +131,7 @@ impl<'g> HirCompiler<'g> {
             locals: HashMap::new(),
             bytecode: Bytecode::new(),
             objects,
+            scope: Scope::default(),
         }
     }
 
@@ -161,86 +171,54 @@ impl<'g> HirCompiler<'g> {
     }
 
     fn compile_block(&mut self, block: &hir::Block) {
+        self.enter_scope();
+
         for statement in &block.statements {
             self.compile_statement(statement);
         }
+
+        self.exit_scope();
     }
 
     fn compile_statement(&mut self, statement: &hir::Statement) {
         match statement {
             hir::Statement::Let { name, value, .. } => {
                 self.compile_expression(value);
-                let local_index = self.locals.len() + 1;
-                self.locals.insert(name.clone(), local_index);
+                self.track_local(name);
             }
-            hir::Statement::DeclareReference { name, .. } => {
+
+            hir::Statement::Declare { name, .. } => {
                 // For mutable references, we need to allocate space on the stack
                 // We'll push a null/undefined value as placeholder
-                let index = self.add_constant(Value::Bool(false)); // placeholder
-                self.emit(Instruction::LoadConst(index));
-                let local_index = self.locals.len() + 1;
-                self.locals.insert(name.clone(), local_index);
+                let constant_index = self.add_constant(Value::Null);
+                self.emit(Instruction::LoadConst(constant_index));
+                self.track_local(name);
             }
-            hir::Statement::Assign { name: _, value } => {
-                // For assignment to existing variable, compile the expression
-                // then store it at the variable's location
+
+            hir::Statement::Assign { name, value } => {
                 self.compile_expression(value);
-                // The value is on top of stack, but we need to move it to the right local
-                // This is a bit tricky - we need to implement proper assignment
-                // For now, this is a limitation - assignments don't work properly in bytecode
-                // TODO: Implement proper assignment instructions
+                self.emit(Instruction::StoreVar(self.locals[name]));
             }
+
             hir::Statement::DeclareAndAssign { name, value, .. } => {
                 self.compile_expression(value);
-                let local_index = self.locals.len() + 1;
-                self.locals.insert(name.clone(), local_index);
+                self.track_local(name);
             }
+
             hir::Statement::Return { expr, .. } => {
                 self.compile_expression(expr);
                 self.emit(Instruction::Return);
             }
+
             hir::Statement::Expression { expr, .. } => {
                 self.compile_expression(expr);
-                // Expression results are left on stack
             }
-            hir::Statement::If {
-                condition,
-                then_block,
-                else_block,
-                ..
-            } => {
-                // Compile condition
-                self.compile_expression(condition);
 
-                // Jump if false
-                let skip_if = self.emit(Instruction::JumpIfFalse(0));
-
-                // Pop condition and compile then branch
-                self.emit(Instruction::Pop);
-                self.compile_block(then_block);
-
-                // Jump over else
-                let skip_else = self.emit(Instruction::Jump(0));
-
-                // Patch the skip_if jump
-                self.patch_jump(skip_if);
-
-                // Pop condition
-                self.emit(Instruction::Pop);
-
-                // Compile else branch if present
-                if let Some(else_block) = else_block {
-                    self.compile_block(else_block);
-                }
-
-                // Patch the skip_else jump
-                self.patch_jump(skip_else);
-            }
             hir::Statement::While {
                 condition, block, ..
             } => {
                 // Remember where the loop starts
-                let loop_start = self.bytecode.instructions.len();
+                let loop_start = self.bytecode.instructions.len() as isize;
 
                 // Compile condition
                 self.compile_expression(condition);
@@ -255,7 +233,8 @@ impl<'g> HirCompiler<'g> {
                 self.compile_block(block);
 
                 // Jump back to start
-                let offset = -(self.bytecode.instructions.len() as isize - loop_start as isize);
+                let loop_end = self.bytecode.instructions.len() as isize;
+                let offset = -(loop_end - loop_start);
                 self.emit(Instruction::Jump(offset));
 
                 // Patch exit jump
@@ -268,19 +247,13 @@ impl<'g> HirCompiler<'g> {
     }
 
     /// Generate bytecode for an expression.
-    ///
-    /// # Dev notes
-    ///
-    /// Be cautious with "abstractions" here. It's better to be explicit so that
-    /// we can see exactly what instructions are being emitted in each scenario.
-    /// We should not create `emit_some_crazy_stuff` functions unless they can
-    /// be reused many times.
     fn compile_expression(&mut self, expr: &hir::Expression) {
         match expr {
             hir::Expression::BoolValue(val, _) => {
                 let index = self.add_constant(Value::Bool(*val));
                 self.emit(Instruction::LoadConst(index));
             }
+
             hir::Expression::NumericValue(num, _) => {
                 let value = num
                     .parse::<i64>()
@@ -291,6 +264,7 @@ impl<'g> HirCompiler<'g> {
                 let index = self.add_constant(value);
                 self.emit(Instruction::LoadConst(index));
             }
+
             hir::Expression::StringValue(string, _) => {
                 // Allocate the string in the objects pool
                 self.objects.push(Object::String(string.clone()));
@@ -300,6 +274,7 @@ impl<'g> HirCompiler<'g> {
                 let const_index = self.add_constant(Value::Object(object_index));
                 self.emit(Instruction::LoadConst(const_index));
             }
+
             hir::Expression::RawStringValue(string, _) => {
                 // Raw strings work the same as regular strings for bytecode
                 self.objects.push(Object::String(string.clone()));
@@ -308,6 +283,7 @@ impl<'g> HirCompiler<'g> {
                 let const_index = self.add_constant(Value::Object(object_index));
                 self.emit(Instruction::LoadConst(const_index));
             }
+
             hir::Expression::Identifier(name, _) => {
                 if let Some(&index) = self.locals.get(name) {
                     self.emit(Instruction::LoadVar(index));
@@ -315,19 +291,23 @@ impl<'g> HirCompiler<'g> {
                     panic!("undefined variable: {}", name);
                 }
             }
+
             hir::Expression::Array(elements, _) => {
                 for element in elements {
                     self.compile_expression(element);
                 }
                 self.emit(Instruction::AllocArray(elements.len()));
             }
+
             hir::Expression::Map(_pairs, _) => {
                 // Maps are not yet implemented in bytecode
                 todo!("map compilation")
             }
+
             hir::Expression::JinjaExpressionValue(_, _) => {
                 todo!("jinja expression compilation")
             }
+
             hir::Expression::Call(name, args, _) => {
                 // Push the function onto the stack
                 if let Some(&index) = self.globals.get(name) {
@@ -344,6 +324,7 @@ impl<'g> HirCompiler<'g> {
                 // Call the function
                 self.emit(Instruction::Call(args.len()));
             }
+
             hir::Expression::ClassConstructor(cc, _) => {
                 // Allocate instance
                 if let Some(&class_index) = self.globals.get(&cc.class_name) {
@@ -364,10 +345,42 @@ impl<'g> HirCompiler<'g> {
                     }
                 }
             }
+
+            hir::Expression::If {
+                condition,
+                if_branch,
+                else_branch,
+                ..
+            } => {
+                // Compile condition
+                self.compile_expression(condition);
+
+                // Jump if false
+                let skip_if = self.emit(Instruction::JumpIfFalse(0));
+
+                // Pop condition and compile then branch
+                self.emit(Instruction::Pop);
+                self.compile_expression(if_branch);
+
+                // Jump over else
+                let skip_else = self.emit(Instruction::Jump(0));
+
+                // Patch the skip_if jump
+                self.patch_jump(skip_if);
+
+                // Pop condition
+                self.emit(Instruction::Pop);
+
+                // Compile else branch if present
+                if let Some(else_branch) = else_branch {
+                    self.compile_expression(else_branch);
+                }
+
+                // Patch the skip_else jump
+                self.patch_jump(skip_else);
+            }
+
             hir::Expression::ExpressionBlock(block, _) => {
-                // Expression blocks need special handling to maintain proper scoping
-                // For now, we'll compile them as regular blocks
-                // TODO: Implement proper scoping for expression blocks
                 self.compile_block(block);
             }
         }
@@ -395,6 +408,32 @@ impl<'g> HirCompiler<'g> {
                 self.bytecode.instructions[instruction_ptr]
             ),
         }
+    }
+
+    fn track_local(&mut self, name: &str) -> usize {
+        let index = self.locals.len() + 1;
+        self.locals.insert(name.to_string(), index);
+        if self.scope.depth > 1 {
+            self.scope.locals.insert(name.to_string());
+        }
+        index
+    }
+
+    fn enter_scope(&mut self) {
+        self.scope.depth += 1;
+        self.scope.locals.clear();
+    }
+
+    fn exit_scope(&mut self) {
+        if self.scope.depth > 1 && !self.scope.locals.is_empty() {
+            self.emit(Instruction::EndBlock(self.scope.locals.len()));
+
+            for local in &self.scope.locals {
+                self.locals.remove(local);
+            }
+        }
+
+        self.scope.depth -= 1;
     }
 }
 
@@ -500,11 +539,10 @@ mod tests {
                 "main",
                 vec![
                     Instruction::LoadVar(1),
-                    Instruction::JumpIfFalse(5),
+                    Instruction::JumpIfFalse(4),
                     Instruction::Pop,
                     Instruction::LoadConst(0),
-                    Instruction::Return,
-                    Instruction::Jump(4),
+                    Instruction::Jump(3),
                     Instruction::Pop,
                     Instruction::LoadConst(1),
                     Instruction::Return,
@@ -609,11 +647,11 @@ mod tests {
     #[test]
     fn function_returning_string() -> anyhow::Result<()> {
         assert_compiles(Program {
-            source: "
+            source: r#"
                 fn main() -> string {
-                    \"hello\"
+                    "hello"
                 }
-            ",
+            "#,
             expected: vec![("main", vec![Instruction::LoadConst(0), Instruction::Return])],
         })
     }

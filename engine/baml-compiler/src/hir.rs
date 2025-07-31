@@ -17,54 +17,37 @@ use internal_baml_diagnostics::Span;
 ///   - Implicit returns become explicit.
 ///   - If expressions become if statements with a block.
 #[derive(Debug)]
-pub struct Program {
+pub struct Hir {
     pub expr_functions: Vec<ExprFunction>,
-    pub llm_functions: Vec<LLMFunction>,
+    pub llm_functions: Vec<LlmFunction>,
     pub classes: Vec<Class>,
     pub enums: Vec<Enum>,
 }
 
-impl Program {
+impl Hir {
     /// Lower BAML AST into HIR.
     pub fn from_ast(ast: &ast::Ast) -> Self {
-        let llm_functions = ast
-            .iter_tops()
-            .filter_map(|(_id, top)| match top {
-                ast::Top::Function(function) => Some(LLMFunction::from_ast(function)),
-                _ => None,
-            })
-            .collect();
-
-        let expr_functions = ast
-            .iter_tops()
-            .filter_map(|(_id, top)| match top {
-                ast::Top::ExprFn(expr_fn) => Some(ExprFunction::from_ast(expr_fn)),
-                _ => None,
-            })
-            .collect();
-
-        let classes = ast
-            .iter_tops()
-            .filter_map(|(_id, top)| match top {
-                ast::Top::Class(class) => Some(Class::from_ast(class)),
-                _ => None,
-            })
-            .collect();
-
-        let enums = ast
-            .iter_tops()
-            .filter_map(|(_id, top)| match top {
-                ast::Top::Enum(enum_def) => Some(Enum::from_ast(enum_def)),
-                _ => None,
-            })
-            .collect();
-
-        let hir = Program {
-            expr_functions,
-            llm_functions,
-            classes,
-            enums,
+        let mut hir = Self {
+            expr_functions: vec![],
+            llm_functions: vec![],
+            classes: vec![],
+            enums: vec![],
         };
+
+        for top in &ast.tops {
+            match top {
+                ast::Top::Function(function) => {
+                    hir.llm_functions.push(LlmFunction::from_ast(function))
+                }
+                ast::Top::ExprFn(expr_fn) => {
+                    hir.expr_functions.push(ExprFunction::from_ast(expr_fn))
+                }
+                ast::Top::Class(class) => hir.classes.push(Class::from_ast(class)),
+                ast::Top::Enum(enum_def) => hir.enums.push(Enum::from_ast(enum_def)),
+
+                _ => {}
+            }
+        }
 
         hir
     }
@@ -80,7 +63,7 @@ pub struct ExprFunction {
 }
 
 #[derive(Debug)]
-pub struct LLMFunction {
+pub struct LlmFunction {
     pub name: String,
     pub parameters: Vec<Parameter>,
     // pub return_type: Type,
@@ -140,7 +123,7 @@ pub enum Statement {
     /// Declare a (mutable) reference.
     /// There is no span because it is never present in the source AST.
     /// This is a desugaring from `if` expressions.
-    DeclareReference { name: String, span: Span },
+    Declare { name: String, span: Span },
     /// Assign a mutable variable.
     Assign { name: String, value: Expression },
     /// Declare and assign a mutable reference in one statement.
@@ -153,12 +136,6 @@ pub enum Statement {
     Return { expr: Expression, span: Span },
     /// Evaluate an expression as the final value of a block (without returning from function).
     Expression { expr: Expression, span: Span },
-    If {
-        condition: Box<Expression>,
-        then_block: Block,
-        else_block: Option<Block>,
-        span: Span,
-    },
     While {
         condition: Box<Expression>,
         block: Block,
@@ -174,6 +151,12 @@ pub enum Expression {
     Identifier(String, Span),
     StringValue(String, Span),
     RawStringValue(String, Span),
+    If {
+        condition: Box<Expression>,
+        if_branch: Box<Expression>,
+        else_branch: Option<Box<Expression>>,
+        span: Span,
+    },
     Array(Vec<Expression>, Span),
     Map(Vec<(Expression, Expression)>, Span),
     JinjaExpressionValue(String, Span),
@@ -197,9 +180,9 @@ pub struct ClassConstructorField {
     pub value: Expression,
 }
 
-impl LLMFunction {
+impl LlmFunction {
     pub fn from_ast(function: &ast::ValueExprBlock) -> Self {
-        LLMFunction {
+        LlmFunction {
             name: function.name().to_string(),
             parameters: function
                 .input()
@@ -288,50 +271,25 @@ impl Block {
                     expr,
                     span,
                 }) => {
-                    match expr {
-                        ast::Expression::If(condition, then_expr, else_expr, _if_span) => {
-                            // Desugar: let foo = if cond then a else b
-                            // Into: var foo; if cond { foo = a; } else { foo = b; }
-                            match else_expr {
-                                Some(else_expr) => {
-                                    Self::desugar_if_expression_in_let(
-                                        &mut statements,
-                                        identifier.to_string(),
-                                        condition.as_ref(),
-                                        then_expr.as_ref(),
-                                        else_expr.as_ref(),
-                                        span,
-                                    );
-                                }
-                                None => {
-                                    // If there's no else branch, fall back to regular let
-                                    statements.push(Statement::from_ast(stmt));
-                                }
-                            }
-                        }
-                        _ => {
-                            // Regular let statement - but check for if expressions in nested contexts
-                            let mut temp_counter = 0;
-                            let mut lifted_statements = vec![];
-                            let lifted_expr = Expression::from_ast(
-                                expr,
-                                true,
-                                &mut lifted_statements,
-                                &mut temp_counter,
-                            );
+                    // Regular let statement - but check for if expressions in nested contexts
+                    // NOTE: Since we're not desugaring assignments, there will be no
+                    // lifted statements.
+                    let mut temp_counter = 0;
+                    let mut lifted_statements = vec![];
+                    let lifted_expr =
+                        Expression::from_ast(expr, &mut lifted_statements, &mut temp_counter);
 
-                            // Add any lifted statements first
-                            statements.extend(lifted_statements);
+                    // Add any lifted statements first
+                    statements.extend(lifted_statements);
 
-                            // Then add the actual let statement
-                            statements.push(Statement::Let {
-                                name: identifier.to_string(),
-                                value: lifted_expr,
-                                span: span.clone(),
-                            });
-                        }
-                    }
+                    // Then add the actual let statement
+                    statements.push(Statement::Let {
+                        name: identifier.to_string(),
+                        value: lifted_expr,
+                        span: span.clone(),
+                    });
                 }
+
                 ast::Stmt::ForLoop(ast::ForLoopStmt {
                     identifier: _,
                     iterator: _,
@@ -346,213 +304,32 @@ impl Block {
         }
 
         // Handle if expressions specially in return position
-        match block.expr.as_ref() {
-            ast::Expression::If(condition, then_expr, else_expr, span) => {
-                // Desugar if expression into statements
-                // Handle the optional else branch
-                match else_expr {
-                    Some(else_expr) => {
-                        Self::desugar_if_expression_final(
-                            &mut statements,
-                            condition.as_ref(),
-                            then_expr.as_ref(),
-                            else_expr.as_ref(),
-                            span,
-                            is_function_body,
-                        );
-                    }
-                    None => {
-                        // If there's no else branch, we can't desugar this properly in HIR
-                        // since HIR requires both branches for assignment.
-                        // For now, we'll treat it as a regular expression
-                        let mut dummy_statements = vec![];
-                        let mut dummy_counter = 0;
-                        statements.push(if is_function_body {
-                            Statement::Return {
-                                expr: Expression::from_ast(
-                                    block.expr.as_ref(),
-                                    false,
-                                    &mut dummy_statements,
-                                    &mut dummy_counter,
-                                ),
-                                span: block.expr.span().clone(),
-                            }
-                        } else {
-                            Statement::Expression {
-                                expr: Expression::from_ast(
-                                    block.expr.as_ref(),
-                                    false,
-                                    &mut dummy_statements,
-                                    &mut dummy_counter,
-                                ),
-                                span: block.expr.span().clone(),
-                            }
-                        });
-                    }
-                }
-            }
-            _ => {
-                // Normal expression - but check for if expressions in nested contexts
-                let mut temp_counter = 0;
-                let mut lifted_statements = vec![];
-                let lifted_expr = Expression::from_ast(
-                    block.expr.as_ref(),
-                    true,
-                    &mut lifted_statements,
-                    &mut temp_counter,
-                );
+        // Normal expression - but check for if expressions in nested contexts
+        let mut temp_counter = 0;
+        let mut lifted_statements = vec![];
+        let lifted_expr = Expression::from_ast(
+            block.expr.as_ref(),
+            &mut lifted_statements,
+            &mut temp_counter,
+        );
 
-                // Add any lifted statements first
-                statements.extend(lifted_statements);
+        // Add any lifted statements first
+        statements.extend(lifted_statements);
 
-                // Then add the final statement
-                statements.push(if is_function_body {
-                    Statement::Return {
-                        expr: lifted_expr,
-                        span: block.expr.span().clone(),
-                    }
-                } else {
-                    Statement::Expression {
-                        expr: lifted_expr,
-                        span: block.expr.span().clone(),
-                    }
-                });
+        // Then add the final statement
+        statements.push(if is_function_body {
+            Statement::Return {
+                expr: lifted_expr,
+                span: block.expr.span().clone(),
             }
-        }
+        } else {
+            Statement::Expression {
+                expr: lifted_expr,
+                span: block.expr.span().clone(),
+            }
+        });
 
         Block { statements }
-    }
-
-    /// Desugar an if expression in a let binding into statements.
-    /// Transforms: let foo = if cond then a else b
-    /// Into: var foo; if cond { foo = a; } else { foo = b; }
-    fn desugar_if_expression_in_let(
-        statements: &mut Vec<Statement>,
-        var_name: String,
-        condition: &ast::Expression,
-        then_expr: &ast::Expression,
-        else_expr: &ast::Expression,
-        span: &internal_baml_diagnostics::Span,
-    ) {
-        // 1. Declare the variable
-        statements.push(Statement::DeclareReference {
-            name: var_name.clone(),
-            span: span.clone(),
-        });
-
-        // 2. Create the if statement with assignments to the variable
-        let mut dummy_statements = vec![];
-        let mut dummy_counter = 0;
-        let then_block = Block {
-            statements: vec![Statement::Assign {
-                name: var_name.clone(),
-                value: Expression::from_ast(
-                    then_expr,
-                    false,
-                    &mut dummy_statements,
-                    &mut dummy_counter,
-                ),
-            }],
-        };
-
-        let else_block = Block {
-            statements: vec![Statement::Assign {
-                name: var_name.clone(),
-                value: Expression::from_ast(
-                    else_expr,
-                    false,
-                    &mut dummy_statements,
-                    &mut dummy_counter,
-                ),
-            }],
-        };
-
-        statements.push(Statement::If {
-            condition: Box::new(Expression::from_ast(
-                condition,
-                false,
-                &mut dummy_statements,
-                &mut dummy_counter,
-            )),
-            then_block,
-            else_block: Some(else_block),
-            span: span.clone(),
-        });
-    }
-
-    /// Desugar an if expression in final position into statements.
-    /// For function bodies: if cond { a } else { b } -> if cond { return a; } else { return b; }
-    /// For expression blocks: if cond { a } else { b } -> if cond { a; } else { b; }
-    fn desugar_if_expression_final(
-        statements: &mut Vec<Statement>,
-        condition: &ast::Expression,
-        then_expr: &ast::Expression,
-        else_expr: &ast::Expression,
-        span: &internal_baml_diagnostics::Span,
-        is_function_body: bool,
-    ) {
-        // Create the if statement with appropriate final statements in each branch
-        let mut dummy_statements = vec![];
-        let mut dummy_counter = 0;
-        let then_block = Block {
-            statements: vec![if is_function_body {
-                Statement::Return {
-                    expr: Expression::from_ast(
-                        then_expr,
-                        false,
-                        &mut dummy_statements,
-                        &mut dummy_counter,
-                    ),
-                    span: then_expr.span().clone(),
-                }
-            } else {
-                Statement::Expression {
-                    expr: Expression::from_ast(
-                        then_expr,
-                        false,
-                        &mut dummy_statements,
-                        &mut dummy_counter,
-                    ),
-                    span: then_expr.span().clone(),
-                }
-            }],
-        };
-
-        let else_block = Block {
-            statements: vec![if is_function_body {
-                Statement::Return {
-                    expr: Expression::from_ast(
-                        else_expr,
-                        false,
-                        &mut dummy_statements,
-                        &mut dummy_counter,
-                    ),
-                    span: else_expr.span().clone(),
-                }
-            } else {
-                Statement::Expression {
-                    expr: Expression::from_ast(
-                        else_expr,
-                        false,
-                        &mut dummy_statements,
-                        &mut dummy_counter,
-                    ),
-                    span: else_expr.span().clone(),
-                }
-            }],
-        };
-
-        statements.push(Statement::If {
-            condition: Box::new(Expression::from_ast(
-                condition,
-                false,
-                &mut dummy_statements,
-                &mut dummy_counter,
-            )),
-            then_block,
-            else_block: Some(else_block),
-            span: span.clone(),
-        });
     }
 }
 
@@ -570,12 +347,7 @@ impl Statement {
                 let mut dummy_counter = 0;
                 Statement::Let {
                     name: identifier.to_string(),
-                    value: Expression::from_ast(
-                        expr,
-                        false,
-                        &mut dummy_statements,
-                        &mut dummy_counter,
-                    ),
+                    value: Expression::from_ast(expr, &mut dummy_statements, &mut dummy_counter),
                     span: span.clone(),
                 }
             }
@@ -595,7 +367,6 @@ impl Expression {
     /// If `with_lifting` is false, if expressions will fall back to placeholders.
     pub fn from_ast(
         expr: &ast::Expression,
-        with_lifting: bool,
         statements: &mut Vec<Statement>,
         temp_counter: &mut usize,
     ) -> Self {
@@ -617,7 +388,7 @@ impl Expression {
             ast::Expression::Array(values, span) => Expression::Array(
                 values
                     .iter()
-                    .map(|value| Self::from_ast(value, with_lifting, statements, temp_counter))
+                    .map(|value| Self::from_ast(value, statements, temp_counter))
                     .collect(),
                 span.clone(),
             ),
@@ -626,7 +397,7 @@ impl Expression {
             }) => Expression::Call(
                 name.to_string(),
                 args.iter()
-                    .map(|arg| Self::from_ast(arg, with_lifting, statements, temp_counter))
+                    .map(|arg| Self::from_ast(arg, statements, temp_counter))
                     .collect(),
                 span.clone(),
             ),
@@ -635,93 +406,21 @@ impl Expression {
                     .iter()
                     .map(|(key, value)| {
                         (
-                            Self::from_ast(key, with_lifting, statements, temp_counter),
-                            Self::from_ast(value, with_lifting, statements, temp_counter),
+                            Self::from_ast(key, statements, temp_counter),
+                            Self::from_ast(value, statements, temp_counter),
                         )
                     })
                     .collect(),
                 span.clone(),
             ),
-            ast::Expression::If(condition, then_expr, else_expr, span) => {
-                if with_lifting {
-                    // Handle if expressions with lifting to temporary variables
-                    match else_expr {
-                        Some(else_expr) => {
-                            // Generate a unique temporary variable name
-                            let temp_name = format!("temp_{}", *temp_counter);
-                            *temp_counter += 1;
-
-                            // Declare the temporary variable
-                            statements.push(Statement::DeclareReference {
-                                name: temp_name.clone(),
-                                span: span.clone(),
-                            });
-
-                            // Process subexpressions first to avoid borrow checker issues
-                            let mut condition_statements = vec![];
-                            let mut then_statements = vec![];
-                            let mut else_statements = vec![];
-
-                            let condition_expr = Self::from_ast(
-                                condition,
-                                with_lifting,
-                                &mut condition_statements,
-                                temp_counter,
-                            );
-                            let then_value = Self::from_ast(
-                                then_expr,
-                                with_lifting,
-                                &mut then_statements,
-                                temp_counter,
-                            );
-                            let else_value = Self::from_ast(
-                                else_expr,
-                                with_lifting,
-                                &mut else_statements,
-                                temp_counter,
-                            );
-
-                            // Add all lifted statements
-                            statements.extend(condition_statements);
-                            statements.extend(then_statements);
-                            statements.extend(else_statements);
-
-                            // Create the if statement with assignments to the temporary variable
-                            let then_block = Block {
-                                statements: vec![Statement::Assign {
-                                    name: temp_name.clone(),
-                                    value: then_value,
-                                }],
-                            };
-
-                            let else_block = Block {
-                                statements: vec![Statement::Assign {
-                                    name: temp_name.clone(),
-                                    value: else_value,
-                                }],
-                            };
-
-                            statements.push(Statement::If {
-                                condition: Box::new(condition_expr),
-                                then_block,
-                                else_block: Some(else_block),
-                                span: span.clone(),
-                            });
-
-                            // Return reference to the temporary variable
-                            Expression::Identifier(temp_name, span.clone())
-                        }
-                        None => {
-                            // If without else - can't lift properly since we need both branches
-                            // Fall back to placeholder for now
-                            panic!("in a lifting context, if without else is impossible");
-                        }
-                    }
-                } else {
-                    // If expressions appearing in non-return contexts fall back to placeholders
-                    panic!("in a non-lifting context, we can not reach an if")
-                }
-            }
+            ast::Expression::If(condition, if_branch, else_branch, span) => Expression::If {
+                condition: Box::new(Self::from_ast(condition, statements, temp_counter)),
+                if_branch: Box::new(Self::from_ast(if_branch, statements, temp_counter)),
+                else_branch: else_branch
+                    .as_ref()
+                    .map(|block| Box::new(Self::from_ast(&block, statements, temp_counter))),
+                span: span.clone(),
+            },
             ast::Expression::ExprBlock(block, span) => {
                 // Expression blocks are lowered to HIR preserving their structure
                 // This maintains proper scoping - variables defined inside the block
@@ -754,12 +453,7 @@ impl Expression {
                                     ast::ClassConstructorField::Named(name, expr) => {
                                         Some(ClassConstructorField {
                                             name: name.to_string(),
-                                            value: Self::from_ast(
-                                                expr,
-                                                with_lifting,
-                                                statements,
-                                                temp_counter,
-                                            ),
+                                            value: Self::from_ast(expr, statements, temp_counter),
                                         })
                                     }
                                     ast::ClassConstructorField::Spread(_) => {
@@ -818,14 +512,15 @@ impl Enum {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use internal_baml_core::ast;
     use internal_baml_diagnostics::SourceFile;
 
+    use super::*;
+
     /// Test helper to generate HIR from BAML source
-    fn hir_from_source(source: &str) -> Program {
+    fn hir_from_source(source: &str) -> Hir {
         let ast = parse_baml(source);
-        Program::from_ast(&ast)
+        Hir::from_ast(&ast)
     }
 
     /// Parse BAML source code and return the AST
@@ -873,22 +568,6 @@ mod tests {
         let hir = hir_from_source(source);
         assert_eq!(hir.expr_functions.len(), 1);
         assert_eq!(hir.expr_functions[0].body.statements.len(), 2);
-    }
-
-    #[test]
-    fn test_if_expression_desugaring() {
-        // Test if expression desugaring in let bindings
-        let source = r#"
-            fn simpleIf() -> string {
-                let x = if true { "yes" } else { "no" };
-                x
-            }
-        "#;
-
-        let hir = hir_from_source(source);
-        assert_eq!(hir.expr_functions.len(), 1);
-        // Should have 3 statements: declare x, if statement, return x
-        assert_eq!(hir.expr_functions[0].body.statements.len(), 3);
     }
 
     #[test]
