@@ -1,6 +1,6 @@
 use baml_types::type_meta::base::StreamingBehavior;
-use baml_types::Constraint;
-use internal_baml_core::ast::{self, App, Attribute, FieldType, WithName, WithSpan};
+use baml_types::{Constraint, ConstraintLevel, JinjaExpression, TypeValue};
+use internal_baml_core::ast::{self, App, Attribute, WithName, WithSpan};
 use internal_baml_diagnostics::Span;
 use pretty::RcDoc;
 
@@ -132,7 +132,63 @@ impl TypeM<TypeMeta> {
     pub fn from_ast(type_: &ast::FieldType) -> Self {
         let mut constraints = Vec::new();
         let mut streaming_behavior = StreamingBehavior::default();
-        type_.attributes().iter().for_each(|attr: &Attribute| ());
+
+        // Convert attributes to constraints and streaming behavior
+        type_.attributes().iter().for_each(|attr: &Attribute| {
+            match attr.name.name() {
+                // Handle constraint attributes
+                "assert" | "check" => {
+                    let level = match attr.name.name() {
+                        "assert" => ConstraintLevel::Assert,
+                        "check" => ConstraintLevel::Check,
+                        _ => unreachable!(),
+                    };
+
+                    // Extract label and expression from arguments
+                    let arguments: Vec<&ast::Expression> = attr.arguments.arguments
+                        .iter()
+                        .map(|arg| &arg.value)
+                        .collect();
+
+                    let (label, expression) = match arguments.as_slice() {
+                        // Single argument: just the expression
+                        [ast::Expression::JinjaExpressionValue(jinja_expr, _)] => {
+                            (None, Some(jinja_expr.clone()))
+                        }
+                        // Two arguments: label and expression
+                        [ast::Expression::Identifier(label_id), ast::Expression::JinjaExpressionValue(jinja_expr, _)] => {
+                            (Some(label_id.to_string()), Some(jinja_expr.clone()))
+                        }
+                        _ => {
+                            // Skip invalid constraint formats
+                            (None, None)
+                        }
+                    };
+
+                    if let Some(expr) = expression {
+                        constraints.push(Constraint {
+                            level,
+                            expression: expr,
+                            label,
+                        });
+                    }
+                }
+                // Handle streaming behavior attributes
+                "stream.not_null" => {
+                    streaming_behavior.needed = true;
+                }
+                "stream.done" => {
+                    streaming_behavior.done = true;
+                }
+                "stream.with_state" => {
+                    streaming_behavior.state = true;
+                }
+                _ => {
+                    // Ignore other attributes for now
+                }
+            }
+        });
+
         let meta = TypeMeta {
             span: type_.span().clone(),
             constraints,
@@ -151,18 +207,18 @@ impl TypeM<TypeMeta> {
                 TypeValue::Int => TypeM::Int(meta),
                 TypeValue::String => TypeM::String(meta),
                 TypeValue::Bool => TypeM::Bool(meta),
+                TypeValue::Float => TypeM::String(meta), // TODO: Add Float type to TypeM
+                TypeValue::Null => TypeM::String(meta),  // TODO: Add Null type to TypeM
+                TypeValue::Media(_) => TypeM::String(meta), // TODO: Add Media type to TypeM
             },
             ast::FieldType::List(_, inner, _, _, _) => {
                 TypeM::Array(Box::new(Self::from_ast(inner)), meta)
             }
-            ast::FieldType::Map(_, box_pair, _, _) => {
-                let pair = *box_pair;
-                TypeM::Map(
-                    Box::new(Self::from_ast(&pair.0)),
-                    Box::new(Self::from_ast(&pair.1)),
-                    meta,
-                )
-            }
+            ast::FieldType::Map(_, box_pair, _, _) => TypeM::Map(
+                Box::new(Self::from_ast(&box_pair.0)),
+                Box::new(Self::from_ast(&box_pair.1)),
+                meta,
+            ),
             ast::FieldType::Union(_, types, _, _) => {
                 TypeM::Union(types.iter().map(Self::from_ast).collect(), meta)
             }
@@ -284,8 +340,7 @@ impl Field {
     pub fn to_doc(&self) -> RcDoc<'static, ()> {
         RcDoc::text(self.name.clone())
             .append(RcDoc::text(": "))
-            .append(RcDoc::space())
-            .append(RcDoc::text("..."))
+            .append(self.r#type.to_doc())
     }
 }
 
@@ -1003,6 +1058,17 @@ impl Class {
                 .iter()
                 .map(|field| Field {
                     name: field.name().to_string(),
+                    r#type: field
+                        .expr
+                        .as_ref()
+                        .map(|field_type| TypeM::from_ast(field_type))
+                        .unwrap_or_else(|| {
+                            TypeM::String(TypeMeta {
+                                span: field.span().clone(),
+                                constraints: Vec::new(),
+                                streaming_behavior: StreamingBehavior::default(),
+                            })
+                        }),
                     span: field.span().clone(),
                 })
                 .collect(),
@@ -1227,9 +1293,9 @@ function CallTest() {
         let hir = Program::from_ast(&ast);
         let pretty_printed = hir.pretty_print();
         // Check that the pretty printed output contains the expected structure
-        assert!(pretty_printed.contains("fn AddOne(x)"));
+        assert!(pretty_printed.contains("function AddOne(x)"));
         assert!(pretty_printed.contains("let y = x;"));
-        assert!(pretty_printed.contains("y"));
+        assert!(pretty_printed.contains("return y;"));
         // Print it for visual inspection
         println!("Pretty printed HIR:");
         println!("{}", pretty_printed);
@@ -1287,6 +1353,173 @@ function CallTest() {
 }"#;
         assert_eq!(hir_from_source(source), expected);
     }
+    #[test]
+    fn test_attribute_conversion() {
+        // Test constraint attributes
+        let source = r#"
+            function TestConstraints() -> string @assert("this.length > 0") @check("this != 'bad'") {
+                "hello"
+            }
+        "#;
+        let ast = parse_baml(source);
+        let hir = Program::from_ast(&ast);
+
+        // The HIR should have the constraints stored in the type metadata
+        // This test verifies that the attribute parsing doesn't crash
+        let pretty = hir.pretty_print();
+        assert!(pretty.contains("function TestConstraints"));
+    }
+
+    #[test]
+    fn test_streaming_behavior_attributes() {
+        // Test streaming behavior attributes
+        let source = r#"
+            class MyClass {
+                field1 string @stream.done
+                field2 int @stream.not_null
+                field3 bool @stream.with_state
+            }
+        "#;
+        let ast = parse_baml(source);
+        let hir = Program::from_ast(&ast);
+
+        // Verify the HIR was created successfully with streaming attributes
+        let pretty = hir.pretty_print();
+        assert!(pretty.contains("class MyClass"));
+        assert!(pretty.contains("field1: string @stream.done"));
+        assert!(pretty.contains("field2: int @stream.needed"));
+        assert!(pretty.contains("field3: bool @stream.with_state"));
+    }
+
+    #[test]
+    fn test_class_with_constraints() {
+        // Test class fields with constraint attributes - simplified test for now
+        let source = r#"
+            class User {
+                name string
+                age int
+                email string
+            }
+        "#;
+        let ast = parse_baml(source);
+        let hir = Program::from_ast(&ast);
+        let pretty = hir.pretty_print();
+
+        // Verify the class pretty prints successfully
+        assert!(pretty.contains("class User"));
+        assert!(pretty.contains("name: string"));
+        assert!(pretty.contains("age: int"));
+        assert!(pretty.contains("email: string"));
+
+        // Print for visual inspection
+        println!("Simple class:");
+        println!("{}", pretty);
+    }
+
+    #[test]
+    fn test_constraint_parsing() {
+        // Test that constraints are properly parsed from AST to HIR
+        let source = r#"
+            class User {
+                name string @assert({{ this.length > 0 }})
+                age int @check(valid_age, {{ this >= 0 }})
+            }
+        "#;
+        let ast = parse_baml(source);
+        let hir = Program::from_ast(&ast);
+
+        // Find the User class
+        let user_class = hir
+            .classes
+            .iter()
+            .find(|c| c.name == "User")
+            .expect("User class not found");
+
+        // Check name field constraints
+        let name_field = user_class
+            .fields
+            .iter()
+            .find(|f| f.name == "name")
+            .expect("name field not found");
+        let name_meta = name_field.r#type.get_meta();
+        assert_eq!(name_meta.constraints.len(), 1);
+        let name_constraint = &name_meta.constraints[0];
+        assert_eq!(name_constraint.level, baml_types::ConstraintLevel::Assert);
+        assert_eq!(name_constraint.expression.0, "this.length > 0");
+        assert_eq!(name_constraint.label, None);
+
+        // Check age field constraints
+        let age_field = user_class
+            .fields
+            .iter()
+            .find(|f| f.name == "age")
+            .expect("age field not found");
+        let age_meta = age_field.r#type.get_meta();
+        assert_eq!(age_meta.constraints.len(), 1);
+        let age_constraint = &age_meta.constraints[0];
+        assert_eq!(age_constraint.level, baml_types::ConstraintLevel::Check);
+        assert_eq!(age_constraint.expression.0, "this >= 0");
+        assert_eq!(age_constraint.label, Some("valid_age".to_string()));
+
+        println!("Constraint parsing test passed!");
+    }
+
+    #[test]
+    fn test_complex_class_with_mixed_attributes() {
+        // Test class with streaming behaviors (no constraints for now)
+        let source = r#"
+            class StreamingUser {
+                id string @stream.done
+                username string @stream.not_null
+                messages string[] @stream.with_state
+                score int @stream.done
+                metadata map<string, string> @stream.not_null
+            }
+        "#;
+        let ast = parse_baml(source);
+        let hir = Program::from_ast(&ast);
+        let pretty = hir.pretty_print();
+
+        // Verify the class pretty prints with streaming attributes
+        assert!(pretty.contains("class StreamingUser"));
+        assert!(pretty.contains("id: string @stream.done"));
+        assert!(pretty.contains("username: string @stream.needed"));
+        assert!(pretty.contains("messages: arraystring @stream.with_state"));
+        assert!(pretty.contains("score: int @stream.done"));
+        assert!(pretty.contains("metadata: mapstring:string @stream.needed"));
+
+        // Print for visual inspection
+        println!("\nClass with streaming attributes:");
+        println!("{}", pretty);
+    }
+
+    #[test]
+    fn test_nested_types_with_attributes() {
+        // Test nested types (arrays, unions) with streaming attributes only for now
+        let source = r#"
+            class DataModel {
+                tags string[]
+                status (string | int) @stream.done
+                matrix int[][]
+                config map<string, bool> @stream.not_null
+            }
+        "#;
+        let ast = parse_baml(source);
+        let hir = Program::from_ast(&ast);
+        let pretty = hir.pretty_print();
+
+        // Print for visual inspection
+        println!("\nNested types with streaming attributes:");
+        println!("{}", pretty);
+
+        // Verify nested types with attributes
+        assert!(pretty.contains("class DataModel"));
+        assert!(pretty.contains("tags:"));
+        assert!(pretty.contains("status:"));
+        assert!(pretty.contains("matrix:"));
+        assert!(pretty.contains("config:"));
+    }
+
     #[test]
     fn test_pretty_print_complex_structures() {
         let source = r#"
