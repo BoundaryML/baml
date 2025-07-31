@@ -3922,13 +3922,16 @@ dependencies = [
  "baml-types",
  "bstd",
  "colored 2.2.0",
+ "cowstr",
  "criterion",
  "either",
+ "getrandom 0.2.16",
  "indexmap 2.9.0",
  "indoc",
  "internal-baml-core",
  "internal-baml-jinja",
  "log",
+ "peak_alloc",
  "pest",
  "regex",
  "serde",
@@ -3937,6 +3940,9 @@ dependencies = [
  "test-log",
  "thiserror 2.0.12",
  "unicode-normalization",
+ "uuid",
+ "wasm-bindgen-test",
+ "web-sys",
 ]
 
 [[package]]
@@ -4814,6 +4820,12 @@ name = "pathdiff"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "df94ce210e5bc13cb6651479fa48d14f601d9858cfe0467f43ae157023b938d3"
+
+[[package]]
+name = "peak_alloc"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "29c4e8e2dd832fd76346468f822e4e600d30ba4e5aa545a128abf12cfae7ea3e"
 
 [[package]]
 name = "pem"
