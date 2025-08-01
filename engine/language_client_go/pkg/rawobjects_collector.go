@@ -81,8 +81,8 @@ func (c *collector) Last() (FunctionLog, error) {
 		return nil, fmt.Errorf("failed to get last log: %w", err)
 	}
 
-	if as_nil, ok := result.(*interface{}); ok && as_nil == nil {
-		return nil, nil // No last log available
+	if result == nil {
+		return nil, nil
 	}
 
 	log, ok := result.(FunctionLog)

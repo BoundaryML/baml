@@ -11,6 +11,7 @@ import (
 // enumBuilder provides enum construction functionality
 type enumBuilder struct {
 	*raw_objects.RawObject
+	llmRenderableObject
 }
 
 func (eb *enumBuilder) ObjectType() cffi.CFFIObjectType {
@@ -18,7 +19,9 @@ func (eb *enumBuilder) ObjectType() cffi.CFFIObjectType {
 }
 
 func newEnumBuilder(ptr int64, rt unsafe.Pointer) EnumBuilder {
-	return &enumBuilder{raw_objects.FromPointer(ptr, rt)}
+	bldr := enumBuilder{raw_objects.FromPointer(ptr, rt), llmRenderableObject{}}
+	bldr.llmRenderableObject = llmRenderableObject{&bldr}
+	return &bldr
 }
 
 // AddValue adds a new value to the enum
@@ -37,24 +40,6 @@ func (eb *enumBuilder) AddValue(value string) (EnumValueBuilder, error) {
 	}
 
 	return enumValueBuilder, nil
-}
-
-// Description sets the description for the enum
-func (eb *enumBuilder) Description(description string) error {
-	args := map[string]interface{}{
-		"description": description,
-	}
-	_, err := raw_objects.CallMethod(eb, "description", args)
-	return err
-}
-
-// Alias sets the alias for the enum
-func (eb *enumBuilder) Alias(alias string) error {
-	args := map[string]interface{}{
-		"alias": alias,
-	}
-	_, err := raw_objects.CallMethod(eb, "alias", args)
-	return err
 }
 
 // Type returns the type definition for this enum

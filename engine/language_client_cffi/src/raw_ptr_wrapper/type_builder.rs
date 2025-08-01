@@ -166,19 +166,31 @@ impl EnumBuilderWrapper {
     }
 
     #[export_baml_fn]
-    fn description(
+    fn set_description(
         &self,
         runtime: &baml_runtime::BamlRuntime,
         description: &str,
     ) -> Result<(), String> {
         self.inner
-            .description(runtime, description)
+            .set_description(runtime, description)
             .map_err(|e| e.to_string())
     }
 
     #[export_baml_fn]
-    fn alias(&self, runtime: &baml_runtime::BamlRuntime, alias: &str) -> Result<(), String> {
-        self.inner.alias(runtime, alias).map_err(|e| e.to_string())
+    fn set_alias(&self, runtime: &baml_runtime::BamlRuntime, alias: &str) -> Result<(), String> {
+        self.inner
+            .set_alias(runtime, alias)
+            .map_err(|e| e.to_string())
+    }
+
+    #[export_baml_fn]
+    fn description(&self, runtime: &baml_runtime::BamlRuntime) -> Result<Option<String>, String> {
+        self.inner.description(runtime).map_err(|e| e.to_string())
+    }
+
+    #[export_baml_fn]
+    fn alias(&self, runtime: &baml_runtime::BamlRuntime) -> Result<Option<String>, String> {
+        self.inner.alias(runtime).map_err(|e| e.to_string())
     }
 
     #[export_baml_fn]
@@ -213,19 +225,31 @@ impl EnumBuilderWrapper {
 #[export_baml_fn]
 impl EnumValueBuilderWrapper {
     #[export_baml_fn]
-    fn description(
+    fn set_description(
         &self,
         runtime: &baml_runtime::BamlRuntime,
         description: &str,
     ) -> Result<(), String> {
         self.inner
-            .description(runtime, description)
+            .set_description(runtime, description)
             .map_err(|e| e.to_string())
     }
 
     #[export_baml_fn]
-    fn alias(&self, runtime: &baml_runtime::BamlRuntime, alias: &str) -> Result<(), String> {
-        self.inner.alias(runtime, alias).map_err(|e| e.to_string())
+    fn set_alias(&self, runtime: &baml_runtime::BamlRuntime, alias: &str) -> Result<(), String> {
+        self.inner
+            .set_alias(runtime, alias)
+            .map_err(|e| e.to_string())
+    }
+
+    #[export_baml_fn]
+    fn description(&self, runtime: &baml_runtime::BamlRuntime) -> Result<Option<String>, String> {
+        self.inner.description(runtime).map_err(|e| e.to_string())
+    }
+
+    #[export_baml_fn]
+    fn alias(&self, runtime: &baml_runtime::BamlRuntime) -> Result<Option<String>, String> {
+        self.inner.alias(runtime).map_err(|e| e.to_string())
     }
 
     #[export_baml_fn]
@@ -252,19 +276,31 @@ impl ClassBuilderWrapper {
     }
 
     #[export_baml_fn]
-    fn alias(&self, runtime: &baml_runtime::BamlRuntime, alias: &str) -> Result<(), String> {
-        self.inner.alias(runtime, alias).map_err(|e| e.to_string())
+    fn set_alias(&self, runtime: &baml_runtime::BamlRuntime, alias: &str) -> Result<(), String> {
+        self.inner
+            .set_alias(runtime, alias)
+            .map_err(|e| e.to_string())
     }
 
     #[export_baml_fn]
-    fn description(
+    fn set_description(
         &self,
         runtime: &baml_runtime::BamlRuntime,
         description: &str,
     ) -> Result<(), String> {
         self.inner
-            .description(runtime, description)
+            .set_description(runtime, description)
             .map_err(|e| e.to_string())
+    }
+
+    #[export_baml_fn]
+    fn alias(&self, runtime: &baml_runtime::BamlRuntime) -> Result<Option<String>, String> {
+        self.inner.alias(runtime).map_err(|e| e.to_string())
+    }
+
+    #[export_baml_fn]
+    fn description(&self, runtime: &baml_runtime::BamlRuntime) -> Result<Option<String>, String> {
+        self.inner.description(runtime).map_err(|e| e.to_string())
     }
 
     #[export_baml_fn]
@@ -294,29 +330,46 @@ impl ClassBuilderWrapper {
 #[export_baml_fn]
 impl ClassPropertyBuilderWrapper {
     #[export_baml_fn]
-    fn description(
+    fn set_description(
         &self,
         runtime: &baml_runtime::BamlRuntime,
         description: &str,
     ) -> Result<(), String> {
         self.inner
-            .description(runtime, description)
+            .set_description(runtime, description)
             .map_err(|e| e.to_string())
     }
 
     #[export_baml_fn]
-    fn alias(&self, runtime: &baml_runtime::BamlRuntime, alias: &str) -> Result<(), String> {
-        self.inner.alias(runtime, alias).map_err(|e| e.to_string())
+    fn set_alias(&self, runtime: &baml_runtime::BamlRuntime, alias: &str) -> Result<(), String> {
+        self.inner
+            .set_alias(runtime, alias)
+            .map_err(|e| e.to_string())
     }
 
     #[export_baml_fn]
-    fn type_(
+    fn set_type(
         &self,
         runtime: &baml_runtime::BamlRuntime,
         field_type: &TypeWrapper,
     ) -> Result<(), String> {
         self.inner
-            .r#type(runtime, field_type.as_ref().clone())
+            .set_type(runtime, field_type.as_ref().clone())
             .map_err(|e| e.to_string())
+    }
+
+    #[export_baml_fn]
+    fn description(&self, runtime: &baml_runtime::BamlRuntime) -> Result<Option<String>, String> {
+        self.inner.description(runtime).map_err(|e| e.to_string())
+    }
+
+    #[export_baml_fn]
+    fn alias(&self, runtime: &baml_runtime::BamlRuntime) -> Result<Option<String>, String> {
+        self.inner.alias(runtime).map_err(|e| e.to_string())
+    }
+
+    #[export_baml_fn]
+    fn type_(&self, runtime: &baml_runtime::BamlRuntime) -> Result<TypeIR, String> {
+        self.inner.type_(runtime).map_err(|e| e.to_string())
     }
 }

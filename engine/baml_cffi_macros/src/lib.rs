@@ -186,6 +186,14 @@ pub fn export_baml_fn(_attr: TokenStream, item: TokenStream) -> TokenStream {
                                 Err(e) => Err(e),
                             }
                         }
+                    } else if is_result_option_string(ty) {
+                        quote! {
+                            match #method_call {
+                                Ok(Some(value)) => Ok(BamlObjectResponseSuccess::new_value(BamlValue::String(value))),
+                                Ok(None) => Ok(BamlObjectResponseSuccess::new_value(BamlValue::Null)),
+                                Err(e) => Err(e),
+                            }
+                        }
                     } else if is_result_bamlvalue(ty) {
                         // Result<BamlValue, E>
                         quote! {
@@ -1063,6 +1071,40 @@ fn is_result_option_vec_rawptrtype(ty: &Type) -> bool {
                                                     }
                                                 }
                                             }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    false
+}
+
+fn is_result_option_string(ty: &Type) -> bool {
+    if let Type::Path(type_path) = ty {
+        if let Some(segment) = type_path.path.segments.last() {
+            if segment.ident == "Result" {
+                if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
+                    if let Some(syn::GenericArgument::Type(Type::Path(result_type))) =
+                        args.args.first()
+                    {
+                        if let Some(result_segment) = result_type.path.segments.last() {
+                            if result_segment.ident == "Option" {
+                                if let syn::PathArguments::AngleBracketed(option_args) =
+                                    &result_segment.arguments
+                                {
+                                    if let Some(syn::GenericArgument::Type(Type::Path(
+                                        option_inner_type,
+                                    ))) = option_args.args.first()
+                                    {
+                                        if let Some(option_inner_segment) =
+                                            option_inner_type.path.segments.last()
+                                        {
+                                            return option_inner_segment.ident == "String";
                                         }
                                     }
                                 }

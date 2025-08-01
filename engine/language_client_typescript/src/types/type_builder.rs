@@ -254,7 +254,7 @@ impl ClassPropertyBuilder {
         self.inner
             .lock()
             .unwrap()
-            .r#type(field_type.inner.lock().unwrap().clone());
+            .set_type(field_type.inner.lock().unwrap().clone());
         self.inner.clone().into()
     }
 

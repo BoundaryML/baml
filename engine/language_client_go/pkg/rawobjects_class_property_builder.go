@@ -1,6 +1,7 @@
 package baml
 
 import (
+	"fmt"
 	"unsafe"
 
 	"github.com/boundaryml/baml/engine/language_client_go/baml_go/raw_objects"
@@ -10,6 +11,7 @@ import (
 // classPropertyBuilder provides class property construction functionality
 type classPropertyBuilder struct {
 	*raw_objects.RawObject
+	llmRenderableObject
 }
 
 func (cpb *classPropertyBuilder) ObjectType() cffi.CFFIObjectType {
@@ -17,32 +19,30 @@ func (cpb *classPropertyBuilder) ObjectType() cffi.CFFIObjectType {
 }
 
 func newClassPropertyBuilder(ptr int64, rt unsafe.Pointer) ClassPropertyBuilder {
-	return &classPropertyBuilder{raw_objects.FromPointer(ptr, rt)}
-}
-
-// Description sets the description for the property
-func (cpb *classPropertyBuilder) Description(description string) error {
-	args := map[string]interface{}{
-		"description": description,
-	}
-	_, err := raw_objects.CallMethod(cpb, "description", args)
-	return err
-}
-
-// Alias sets the alias for the property
-func (cpb *classPropertyBuilder) Alias(alias string) error {
-	args := map[string]interface{}{
-		"alias": alias,
-	}
-	_, err := raw_objects.CallMethod(cpb, "alias", args)
-	return err
+	bldr := classPropertyBuilder{raw_objects.FromPointer(ptr, rt), llmRenderableObject{}}
+	bldr.llmRenderableObject = llmRenderableObject{&bldr}
+	return &bldr
 }
 
 // Type sets the type for the property
-func (cpb *classPropertyBuilder) Type(fieldType Type) error {
+func (cpb *classPropertyBuilder) SetType(fieldType Type) error {
 	args := map[string]interface{}{
 		"field_type": fieldType,
 	}
-	_, err := raw_objects.CallMethod(cpb, "type_", args)
+	_, err := raw_objects.CallMethod(cpb, "set_type", args)
 	return err
+}
+
+func (cpb *classPropertyBuilder) Type() (Type, error) {
+	result, err := raw_objects.CallMethod(cpb, "type_", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	typ, ok := result.(Type)
+	if !ok {
+		return nil, fmt.Errorf("unexpected type for class property type: %T", result)
+	}
+
+	return typ, nil
 }

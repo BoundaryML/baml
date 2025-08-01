@@ -11,6 +11,7 @@ import (
 // classBuilder provides class construction functionality
 type classBuilder struct {
 	*raw_objects.RawObject
+	llmRenderableObject
 }
 
 func (cb *classBuilder) ObjectType() cffi.CFFIObjectType {
@@ -18,7 +19,9 @@ func (cb *classBuilder) ObjectType() cffi.CFFIObjectType {
 }
 
 func newClassBuilder(ptr int64, rt unsafe.Pointer) ClassBuilder {
-	return &classBuilder{raw_objects.FromPointer(ptr, rt)}
+	bldr := classBuilder{raw_objects.FromPointer(ptr, rt), llmRenderableObject{}}
+	bldr.llmRenderableObject = llmRenderableObject{&bldr}
+	return &bldr
 }
 
 // Type returns the type definition for this class
@@ -54,24 +57,6 @@ func (cb *classBuilder) ListProperties() ([]ClassPropertyBuilder, error) {
 	}
 
 	return rawObjectsCast, nil
-}
-
-// Alias sets the alias for the class
-func (cb *classBuilder) Alias(alias string) error {
-	args := map[string]interface{}{
-		"alias": alias,
-	}
-	_, err := raw_objects.CallMethod(cb, "alias", args)
-	return err
-}
-
-// Description sets the description for the class
-func (cb *classBuilder) Description(description string) error {
-	args := map[string]interface{}{
-		"description": description,
-	}
-	_, err := raw_objects.CallMethod(cb, "description", args)
-	return err
 }
 
 // AddProperty adds a new property to the class

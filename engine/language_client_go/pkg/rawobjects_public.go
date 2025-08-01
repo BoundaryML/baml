@@ -212,14 +212,22 @@ type Type interface {
 	String() string
 }
 
+type llmRenderable interface {
+	// Set the description for the object
+	SetDescription(description string) error
+	// Set the alias for the object
+	SetAlias(alias string) error
+	// Get the description for the object
+	Description() (*string, error)
+	// Get the alias for the object
+	Alias() (*string, error)
+}
+
 type EnumBuilder interface {
 	raw_objects.RawPointer
+	llmRenderable
 	// Add a new value to the enum
 	AddValue(value string) (EnumValueBuilder, error)
-	// Set the description for the enum
-	Description(description string) error
-	// Set the alias for the enum
-	Alias(alias string) error
 	// Get the type definition for this enum
 	Type() (Type, error)
 	// List all values in the enum
@@ -230,24 +238,18 @@ type EnumBuilder interface {
 
 type EnumValueBuilder interface {
 	raw_objects.RawPointer
-	// Set the description for the enum value
-	Description(description string) error
-	// Set the alias for the enum value
-	Alias(alias string) error
+	llmRenderable
 	// Mark the enum value to be skipped
 	Skip() error
 }
 
 type ClassBuilder interface {
 	raw_objects.RawPointer
+	llmRenderable
 	// Get the type definition for this class
 	Type() (Type, error)
 	// List all properties in the class
 	ListProperties() ([]ClassPropertyBuilder, error)
-	// Set the alias for the class
-	Alias(alias string) error
-	// Set the description for the class
-	Description(description string) error
 	// Add a new property to the class
 	AddProperty(name string, fieldType Type) (ClassPropertyBuilder, error)
 	// Get a specific property from the class
@@ -256,10 +258,9 @@ type ClassBuilder interface {
 
 type ClassPropertyBuilder interface {
 	raw_objects.RawPointer
-	// Set the description for the property
-	Description(description string) error
-	// Set the alias for the property
-	Alias(alias string) error
+	llmRenderable
 	// Set the type for the property
-	Type(fieldType Type) error
+	SetType(fieldType Type) error
+	// Get the type for the property
+	Type() (Type, error)
 }

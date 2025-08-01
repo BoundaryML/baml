@@ -259,7 +259,7 @@ impl ClassBuilder {
             .collect())
     }
 
-    pub fn alias(&self, rt: &BamlRuntime, alias: &str) -> anyhow::Result<()> {
+    pub fn set_alias(&self, rt: &BamlRuntime, alias: &str) -> anyhow::Result<()> {
         self.mode.at_least(NodeRW::LLMOnly)?;
 
         let cls = self.cls(rt)?;
@@ -268,13 +268,54 @@ impl ClassBuilder {
         Ok(())
     }
 
-    pub fn description(&self, rt: &BamlRuntime, description: &str) -> anyhow::Result<()> {
+    pub fn set_description(&self, rt: &BamlRuntime, description: &str) -> anyhow::Result<()> {
         self.mode.at_least(NodeRW::LLMOnly)?;
 
         let cls = self.cls(rt)?;
         let builder = cls.lock().unwrap();
         builder.with_meta("description", BamlValue::String(description.to_string()));
         Ok(())
+    }
+
+    pub fn alias(&self, rt: &BamlRuntime) -> Result<Option<String>, anyhow::Error> {
+        self.mode.at_least(NodeRW::ReadOnly)?;
+
+        let ast_alias = || {
+            if let Ok(cls) = rt.internal().ir().find_class(self.class_name.as_str()) {
+                cls.alias(&Default::default()).ok().flatten()
+            } else {
+                None
+            }
+        };
+
+        let cls = self.cls(rt)?;
+        let builder = cls.lock().unwrap();
+        let result = builder
+            .get_meta("alias")
+            .and_then(|value| value.as_str().map(|s| s.to_string()))
+            .or_else(ast_alias);
+        Ok(result)
+    }
+
+    pub fn description(&self, rt: &BamlRuntime) -> Result<Option<String>, anyhow::Error> {
+        self.mode.at_least(NodeRW::ReadOnly)?;
+
+        // ast does not support description
+        let ast_description = || {
+            if let Ok(cls) = rt.internal().ir().find_class(self.class_name.as_str()) {
+                cls.description(&Default::default()).ok().flatten()
+            } else {
+                None
+            }
+        };
+
+        let cls = self.cls(rt)?;
+        let builder = cls.lock().unwrap();
+        let result = builder
+            .get_meta("description")
+            .and_then(|value| value.as_str().map(|s| s.to_string()))
+            .or_else(ast_description);
+        Ok(result)
     }
 
     pub fn add_property(
@@ -299,7 +340,7 @@ impl ClassBuilder {
 
         let builder = cls.lock().unwrap();
         let prop = builder.upsert_property(name);
-        prop.lock().unwrap().r#type(field_type);
+        prop.lock().unwrap().set_type(field_type);
         Ok(self.create_property(name, rt))
     }
 
@@ -379,7 +420,82 @@ impl ClassPropertyBuilder {
         }
     }
 
-    pub fn description(&self, rt: &BamlRuntime, description: &str) -> anyhow::Result<()> {
+    pub fn description(&self, rt: &BamlRuntime) -> Result<Option<String>, anyhow::Error> {
+        self.mode.at_least(NodeRW::ReadOnly)?;
+
+        let prop = self.prop(rt)?;
+
+        let ast_description = || {
+            if let Ok(cls) = rt.internal().ir().find_class(self.class_name.as_str()) {
+                if let Some(field) = cls.find_field(&self.property_name) {
+                    field.description(&Default::default()).ok().flatten()
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        };
+        let builder = prop.lock().unwrap();
+        let result = builder
+            .get_meta("description")
+            .and_then(|value| value.as_str().map(|s| s.to_string()))
+            .or_else(ast_description);
+        Ok(result)
+    }
+
+    pub fn alias(&self, rt: &BamlRuntime) -> Result<Option<String>, anyhow::Error> {
+        self.mode.at_least(NodeRW::ReadOnly)?;
+
+        let prop = self.prop(rt)?;
+
+        let ast_alias = || {
+            if let Ok(cls) = rt.internal().ir().find_class(self.class_name.as_str()) {
+                if let Some(field) = cls.find_field(&self.property_name) {
+                    field.description(&Default::default()).ok().flatten()
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        };
+        let builder = prop.lock().unwrap();
+        let result = builder
+            .get_meta("alias")
+            .and_then(|value| value.as_str().map(|s| s.to_string()))
+            .or_else(ast_alias);
+        Ok(result)
+    }
+
+    pub fn type_(&self, rt: &BamlRuntime) -> Result<TypeIR, anyhow::Error> {
+        self.mode.at_least(NodeRW::ReadOnly)?;
+
+        let ast_type = || {
+            if let Ok(cls) = rt.internal().ir().find_class(self.class_name.as_str()) {
+                if let Some(field) = cls.find_field(&self.property_name) {
+                    Some(field.r#type().clone())
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        };
+
+        let prop = self.prop(rt)?;
+        let builder = prop.lock().unwrap();
+        let result = builder.r#type().or_else(ast_type).ok_or_else(|| {
+            anyhow::anyhow!(
+                "Type not found for property {} in class {}",
+                self.property_name,
+                self.class_name
+            )
+        });
+        result
+    }
+
+    pub fn set_description(&self, rt: &BamlRuntime, description: &str) -> anyhow::Result<()> {
         self.mode.at_least(NodeRW::LLMOnly)?;
 
         let prop = self.prop(rt)?;
@@ -388,7 +504,7 @@ impl ClassPropertyBuilder {
         Ok(())
     }
 
-    pub fn alias(&self, rt: &BamlRuntime, alias: &str) -> anyhow::Result<()> {
+    pub fn set_alias(&self, rt: &BamlRuntime, alias: &str) -> anyhow::Result<()> {
         self.mode.at_least(NodeRW::LLMOnly)?;
 
         let prop = self.prop(rt)?;
@@ -397,12 +513,12 @@ impl ClassPropertyBuilder {
         Ok(())
     }
 
-    pub fn r#type(&self, rt: &BamlRuntime, field_type: TypeIR) -> anyhow::Result<()> {
+    pub fn set_type(&self, rt: &BamlRuntime, field_type: TypeIR) -> anyhow::Result<()> {
         self.mode.at_least(NodeRW::ReadWrite)?;
 
         let prop = self.prop(rt)?;
         let builder = prop.lock().unwrap();
-        builder.r#type(field_type);
+        builder.set_type(field_type);
         Ok(())
     }
 }
@@ -492,7 +608,7 @@ impl EnumBuilder {
         Ok(self.create_value(value, rt))
     }
 
-    pub fn description(&self, rt: &BamlRuntime, description: &str) -> anyhow::Result<()> {
+    pub fn set_description(&self, rt: &BamlRuntime, description: &str) -> anyhow::Result<()> {
         self.mode.at_least(NodeRW::LLMOnly)?;
 
         let enm = self.enm(rt)?;
@@ -501,13 +617,49 @@ impl EnumBuilder {
         Ok(())
     }
 
-    pub fn alias(&self, rt: &BamlRuntime, alias: &str) -> anyhow::Result<()> {
+    pub fn set_alias(&self, rt: &BamlRuntime, alias: &str) -> anyhow::Result<()> {
         self.mode.at_least(NodeRW::LLMOnly)?;
 
         let enm = self.enm(rt)?;
         let builder = enm.lock().unwrap();
         builder.with_meta("alias", BamlValue::String(alias.to_string()));
         Ok(())
+    }
+
+    pub fn alias(&self, rt: &BamlRuntime) -> Result<Option<String>, anyhow::Error> {
+        let ast_alias = || {
+            if let Ok(enm) = rt.internal().ir().find_enum(self.enum_name.as_str()) {
+                enm.alias(&Default::default()).ok().flatten()
+            } else {
+                None
+            }
+        };
+
+        let enm = self.enm(rt)?;
+        let builder = enm.lock().unwrap();
+        let result = builder
+            .get_meta("alias")
+            .and_then(|value| value.as_str().map(|s| s.to_string()))
+            .or_else(ast_alias);
+        Ok(result)
+    }
+
+    pub fn description(&self, rt: &BamlRuntime) -> Result<Option<String>, anyhow::Error> {
+        let ast_description = || {
+            if let Ok(enm) = rt.internal().ir().find_enum(self.enum_name.as_str()) {
+                enm.description(&Default::default()).ok().flatten()
+            } else {
+                None
+            }
+        };
+
+        let enm = self.enm(rt)?;
+        let builder = enm.lock().unwrap();
+        let result = builder
+            .get_meta("description")
+            .and_then(|value| value.as_str().map(|s| s.to_string()))
+            .or_else(ast_description);
+        Ok(result)
     }
 
     pub fn r#type(&self, rt: &BamlRuntime) -> anyhow::Result<TypeIR> {
@@ -623,7 +775,7 @@ impl EnumValueBuilder {
         }
     }
 
-    pub fn description(&self, rt: &BamlRuntime, description: &str) -> anyhow::Result<()> {
+    pub fn set_description(&self, rt: &BamlRuntime, description: &str) -> anyhow::Result<()> {
         self.mode.at_least(NodeRW::LLMOnly)?;
 
         let value = self.value(rt)?;
@@ -632,13 +784,57 @@ impl EnumValueBuilder {
         Ok(())
     }
 
-    pub fn alias(&self, rt: &BamlRuntime, alias: &str) -> anyhow::Result<()> {
+    pub fn set_alias(&self, rt: &BamlRuntime, alias: &str) -> anyhow::Result<()> {
         self.mode.at_least(NodeRW::LLMOnly)?;
 
         let value = self.value(rt)?;
         let builder = value.lock().unwrap();
         builder.with_meta("alias", BamlValue::String(alias.to_string()));
         Ok(())
+    }
+
+    pub fn description(&self, rt: &BamlRuntime) -> Result<Option<String>, anyhow::Error> {
+        let ast_description = || {
+            if let Ok(enm) = rt.internal().ir().find_enum(self.enum_name.as_str()) {
+                if let Some(value) = enm.find_value(&self.value_name) {
+                    value.description(&Default::default()).ok().flatten()
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        };
+
+        let value = self.value(rt)?;
+        let builder = value.lock().unwrap();
+        let result = builder
+            .get_meta("description")
+            .and_then(|value| value.as_str().map(|s| s.to_string()))
+            .or_else(ast_description);
+        Ok(result)
+    }
+
+    pub fn alias(&self, rt: &BamlRuntime) -> Result<Option<String>, anyhow::Error> {
+        let ast_alias = || {
+            if let Ok(enm) = rt.internal().ir().find_enum(self.enum_name.as_str()) {
+                if let Some(value) = enm.find_value(&self.value_name) {
+                    value.alias(&Default::default()).ok().flatten()
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        };
+
+        let value = self.value(rt)?;
+        let builder = value.lock().unwrap();
+        let result = builder
+            .get_meta("alias")
+            .and_then(|value| value.as_str().map(|s| s.to_string()))
+            .or_else(ast_alias);
+        Ok(result)
     }
 
     pub fn skip(&self, rt: &BamlRuntime) -> anyhow::Result<()> {

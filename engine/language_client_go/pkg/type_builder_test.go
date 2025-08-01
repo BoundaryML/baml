@@ -2,8 +2,14 @@ package baml
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 )
+
+// Helper function for string contains check
+func contains(s, substr string) bool {
+	return strings.Contains(s, substr)
+}
 
 func TestTypeBuilderBasicTypes(t *testing.T) {
 	rt, err := CreateRuntime(".", map[string]string{}, map[string]string{})
@@ -233,14 +239,38 @@ func TestTypeBuilderEnums(t *testing.T) {
 	t.Log("Successfully created Category enum")
 
 	// Test enum descriptions and aliases
-	err = statusEnum.Description("Status enumeration for tasks")
+	err = statusEnum.SetDescription("Status enumeration for tasks")
 	if err != nil {
 		t.Errorf("Failed to set Status enum description: %v", err)
 	}
 
-	err = statusEnum.Alias("task_status")
+	// Validate the description was set correctly
+	statusDesc, err := statusEnum.Description()
+	if err != nil {
+		t.Errorf("Failed to get Status enum description: %v", err)
+	} else if statusDesc == nil {
+		t.Errorf("Expected Status enum description to be set, but got nil")
+	} else if *statusDesc != "Status enumeration for tasks" {
+		t.Errorf("Expected Status enum description to be 'Status enumeration for tasks', got: %s", *statusDesc)
+	} else {
+		t.Logf("Successfully validated Status enum description: %s", *statusDesc)
+	}
+
+	err = statusEnum.SetAlias("task_status")
 	if err != nil {
 		t.Errorf("Failed to set Status enum alias: %v", err)
+	}
+
+	// Validate the alias was set correctly
+	statusAlias, err := statusEnum.Alias()
+	if err != nil {
+		t.Errorf("Failed to get Status enum alias: %v", err)
+	} else if statusAlias == nil {
+		t.Errorf("Expected Status enum alias to be set, but got nil")
+	} else if *statusAlias != "task_status" {
+		t.Errorf("Expected Status enum alias to be 'task_status', got: %s", *statusAlias)
+	} else {
+		t.Logf("Successfully validated Status enum alias: %s", *statusAlias)
 	}
 
 	// Add values to Status enum
@@ -248,15 +278,40 @@ func TestTypeBuilderEnums(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to add ACTIVE value: %v", err)
 	} else {
-		err = activeValue.Description("Task is currently active")
+		err = activeValue.SetDescription("Task is currently active")
 		if err != nil {
 			t.Errorf("Failed to set ACTIVE value description: %v", err)
 		}
 
-		err = activeValue.Alias("active_state")
+		// Validate the ACTIVE value description
+		activeDesc, err := activeValue.Description()
+		if err != nil {
+			t.Errorf("Failed to get ACTIVE value description: %v", err)
+		} else if activeDesc == nil {
+			t.Errorf("Expected ACTIVE value description to be set, but got nil")
+		} else if *activeDesc != "Task is currently active" {
+			t.Errorf("Expected ACTIVE value description to be 'Task is currently active', got: %s", *activeDesc)
+		} else {
+			t.Logf("Successfully validated ACTIVE value description: %s", *activeDesc)
+		}
+
+		err = activeValue.SetAlias("active_state")
 		if err != nil {
 			t.Errorf("Failed to set ACTIVE value alias: %v", err)
 		}
+
+		// Validate the ACTIVE value alias
+		activeAlias, err := activeValue.Alias()
+		if err != nil {
+			t.Errorf("Failed to get ACTIVE value alias: %v", err)
+		} else if activeAlias == nil {
+			t.Errorf("Expected ACTIVE value alias to be set, but got nil")
+		} else if *activeAlias != "active_state" {
+			t.Errorf("Expected ACTIVE value alias to be 'active_state', got: %s", *activeAlias)
+		} else {
+			t.Logf("Successfully validated ACTIVE value alias: %s", *activeAlias)
+		}
+
 		t.Log("Successfully added and configured ACTIVE value")
 	}
 
@@ -264,10 +319,23 @@ func TestTypeBuilderEnums(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to add INACTIVE value: %v", err)
 	} else {
-		err = inactiveValue.Description("Task is inactive")
+		err = inactiveValue.SetDescription("Task is inactive")
 		if err != nil {
 			t.Errorf("Failed to set INACTIVE value description: %v", err)
 		}
+
+		// Validate the INACTIVE value description
+		inactiveDesc, err := inactiveValue.Description()
+		if err != nil {
+			t.Errorf("Failed to get INACTIVE value description: %v", err)
+		} else if inactiveDesc == nil {
+			t.Errorf("Expected INACTIVE value description to be set, but got nil")
+		} else if *inactiveDesc != "Task is inactive" {
+			t.Errorf("Expected INACTIVE value description to be 'Task is inactive', got: %s", *inactiveDesc)
+		} else {
+			t.Logf("Successfully validated INACTIVE value description: %s", *inactiveDesc)
+		}
+
 		t.Log("Successfully added INACTIVE value")
 	}
 
@@ -489,19 +557,55 @@ func TestTypeBuilderClasses(t *testing.T) {
 	t.Log("Successfully added Project class")
 
 	// Set class descriptions and aliases
-	err = userClass.Description("User information and profile")
+	err = userClass.SetDescription("User information and profile")
 	if err != nil {
 		t.Errorf("Failed to set User class description: %v", err)
 	}
 
-	err = userClass.Alias("user_profile")
+	// Validate the User class description was set correctly
+	userDesc, err := userClass.Description()
+	if err != nil {
+		t.Errorf("Failed to get User class description: %v", err)
+	} else if userDesc == nil {
+		t.Errorf("Expected User class description to be set, but got nil")
+	} else if *userDesc != "User information and profile" {
+		t.Errorf("Expected User class description to be 'User information and profile', got: %s", *userDesc)
+	} else {
+		t.Logf("Successfully validated User class description: %s", *userDesc)
+	}
+
+	err = userClass.SetAlias("user_profile")
 	if err != nil {
 		t.Errorf("Failed to set User class alias: %v", err)
 	}
 
-	err = taskClass.Description("Individual task or todo item")
+	// Validate the User class alias was set correctly
+	userAlias, err := userClass.Alias()
+	if err != nil {
+		t.Errorf("Failed to get User class alias: %v", err)
+	} else if userAlias == nil {
+		t.Errorf("Expected User class alias to be set, but got nil")
+	} else if *userAlias != "user_profile" {
+		t.Errorf("Expected User class alias to be 'user_profile', got: %s", *userAlias)
+	} else {
+		t.Logf("Successfully validated User class alias: %s", *userAlias)
+	}
+
+	err = taskClass.SetDescription("Individual task or todo item")
 	if err != nil {
 		t.Errorf("Failed to set Task class description: %v", err)
+	}
+
+	// Validate the Task class description was set correctly
+	taskDesc, err := taskClass.Description()
+	if err != nil {
+		t.Errorf("Failed to get Task class description: %v", err)
+	} else if taskDesc == nil {
+		t.Errorf("Expected Task class description to be set, but got nil")
+	} else if *taskDesc != "Individual task or todo item" {
+		t.Errorf("Expected Task class description to be 'Individual task or todo item', got: %s", *taskDesc)
+	} else {
+		t.Logf("Successfully validated Task class description: %s", *taskDesc)
 	}
 
 	// Create various types for properties
@@ -541,15 +645,53 @@ func TestTypeBuilderClasses(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to add name property to User: %v", err)
 	} else {
-		err = nameProperty.Description("User's full name")
+		err = nameProperty.SetDescription("User's full name")
 		if err != nil {
 			t.Errorf("Failed to set name property description: %v", err)
 		}
 
-		err = nameProperty.Alias("full_name")
+		// Validate the name property description was set correctly
+		nameDesc, err := nameProperty.Description()
+		if err != nil {
+			t.Errorf("Failed to get name property description: %v", err)
+		} else if nameDesc == nil {
+			t.Errorf("Expected name property description to be set, but got nil")
+		} else if *nameDesc != "User's full name" {
+			t.Errorf("Expected name property description to be 'User's full name', got: %s", *nameDesc)
+		} else {
+			t.Logf("Successfully validated name property description: %s", *nameDesc)
+		}
+
+		err = nameProperty.SetAlias("full_name")
 		if err != nil {
 			t.Errorf("Failed to set name property alias: %v", err)
 		}
+
+		// Validate the name property alias was set correctly
+		nameAlias, err := nameProperty.Alias()
+		if err != nil {
+			t.Errorf("Failed to get name property alias: %v", err)
+		} else if nameAlias == nil {
+			t.Errorf("Expected name property alias to be set, but got nil")
+		} else if *nameAlias != "full_name" {
+			t.Errorf("Expected name property alias to be 'full_name', got: %s", *nameAlias)
+		} else {
+			t.Logf("Successfully validated name property alias: %s", *nameAlias)
+		}
+
+		// Validate the name property type
+		nameType, err := nameProperty.Type()
+		if err != nil {
+			t.Errorf("Failed to get name property type: %v", err)
+		} else {
+			nameTypeStr := nameType.String()
+			if nameTypeStr != "string" {
+				t.Errorf("Expected name property type to be 'string', got: %s", nameTypeStr)
+			} else {
+				t.Logf("Successfully validated name property type: %s", nameTypeStr)
+			}
+		}
+
 		t.Log("Successfully added and configured name property")
 	}
 
@@ -557,10 +699,36 @@ func TestTypeBuilderClasses(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to add email property to User: %v", err)
 	} else {
-		err = emailProperty.Description("User's email address")
+		err = emailProperty.SetDescription("User's email address")
 		if err != nil {
 			t.Errorf("Failed to set email property description: %v", err)
 		}
+
+		// Validate the email property description was set correctly
+		emailDesc, err := emailProperty.Description()
+		if err != nil {
+			t.Errorf("Failed to get email property description: %v", err)
+		} else if emailDesc == nil {
+			t.Errorf("Expected email property description to be set, but got nil")
+		} else if *emailDesc != "User's email address" {
+			t.Errorf("Expected email property description to be 'User's email address', got: %s", *emailDesc)
+		} else {
+			t.Logf("Successfully validated email property description: %s", *emailDesc)
+		}
+
+		// Validate the email property type
+		emailType, err := emailProperty.Type()
+		if err != nil {
+			t.Errorf("Failed to get email property type: %v", err)
+		} else {
+			emailTypeStr := emailType.String()
+			if emailTypeStr != "string" {
+				t.Errorf("Expected email property type to be 'string', got: %s", emailTypeStr)
+			} else {
+				t.Logf("Successfully validated email property type: %s", emailTypeStr)
+			}
+		}
+
 		t.Log("Successfully added email property")
 	}
 
@@ -691,10 +859,23 @@ func TestTypeBuilderClasses(t *testing.T) {
 		t.Errorf("Failed to retrieve name property for modification: %v", err)
 	} else {
 		// Change name property type from string to optional string
-		err = retrievedNameProp.Type(optionalStringType)
+		err = retrievedNameProp.SetType(optionalStringType)
 		if err != nil {
 			t.Errorf("Failed to change name property type: %v", err)
 		} else {
+			// Validate the type change was successful
+			updatedNameType, err := retrievedNameProp.Type()
+			if err != nil {
+				t.Errorf("Failed to get updated name property type: %v", err)
+			} else {
+				updatedNameTypeStr := updatedNameType.String()
+				t.Logf("Updated name property type: %s", updatedNameTypeStr)
+				if !contains(updatedNameTypeStr, "string") && !contains(updatedNameTypeStr, "optional") {
+					t.Errorf("Expected updated name property type to contain 'string' and 'optional', got: %s", updatedNameTypeStr)
+				} else {
+					t.Logf("Successfully validated updated name property type: %s", updatedNameTypeStr)
+				}
+			}
 			t.Log("Successfully changed name property type to optional string")
 		}
 	}

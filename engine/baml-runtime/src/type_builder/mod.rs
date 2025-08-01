@@ -19,6 +19,7 @@ trait Meta {
 
 pub trait WithMeta {
     fn with_meta(&self, key: &str, value: BamlValue) -> &Self;
+    fn get_meta(&self, key: &str) -> Option<BamlValue>;
 }
 
 macro_rules! impl_meta {
@@ -40,6 +41,12 @@ where
         let mut meta = meta.lock().unwrap();
         meta.insert(key.to_string(), value);
         self
+    }
+
+    fn get_meta(&self, key: &str) -> Option<BamlValue> {
+        let meta = self.meta();
+        let meta = meta.lock().unwrap();
+        meta.get(key).cloned()
     }
 }
 
@@ -78,9 +85,13 @@ pub struct ClassPropertyBuilder {
 impl_meta!(ClassPropertyBuilder);
 
 impl ClassPropertyBuilder {
-    pub fn r#type(&self, r#type: TypeIR) -> &Self {
+    pub fn set_type(&self, r#type: TypeIR) -> &Self {
         *self.r#type.lock().unwrap() = Some(r#type);
         self
+    }
+
+    pub fn r#type(&self) -> Option<TypeIR> {
+        self.r#type.lock().unwrap().clone()
     }
 }
 
@@ -558,7 +569,7 @@ impl TypeBuilder {
                             .upsert_property(&f.elem.name)
                             .lock()
                             .unwrap()
-                            .r#type(f.elem.r#type.elem.to_owned())
+                            .set_type(f.elem.r#type.elem.to_owned())
                             .with_meta(
                                 "alias",
                                 f.attributes.alias().map_or(BamlValue::Null, |v| {
