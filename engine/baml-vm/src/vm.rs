@@ -44,7 +44,7 @@ pub struct Function {
     /// Local variable names.
     ///
     /// This is basically debug info, VM doesn't need it all to run.
-    pub local_var_names: Vec<String>,
+    pub locals_in_scope: Vec<Vec<String>>,
 }
 
 impl std::fmt::Display for Function {
@@ -490,8 +490,19 @@ pub enum VmExecState {
     Complete(Value),
 }
 
+#[derive(Clone, Debug)]
+pub struct BamlVmProgram {
+    pub objects: Vec<Object>,
+    pub globals: Vec<Value>,
+    pub resolved_function_names: HashMap<String, (usize, FunctionKind)>,
+}
+
 impl Vm {
-    pub fn new(objects: Vec<Object>, globals: Vec<Value>) -> Self {
+    pub fn new(
+        BamlVmProgram {
+            objects, globals, ..
+        }: BamlVmProgram,
+    ) -> Self {
         Self {
             frames: Vec::new(),
             stack: Vec::new(),
@@ -791,88 +802,6 @@ impl Vm {
                     self.stack.push(Value::Object(self.objects.len() - 1));
 
                     // Same as in the instruction above.
-                    function = self.objects[frame.function].as_function()?;
-                }
-
-                Instruction::CreateIterator => {
-                    // Pop the array from the stack
-                    let Some(Value::Object(array_index)) = self.stack.pop() else {
-                        return Err(InternalError::UnexpectedEmptyStack.into());
-                    };
-
-                    // Verify it's an array
-                    let Object::Array(_) = &self.objects[array_index] else {
-                        return Err(VmError::from(InternalError::TypeError {
-                            expected: Type::Object,
-                            got: Type::Object,
-                        }));
-                    };
-
-                    // Create the iterator
-                    self.objects.push(Object::Iterator {
-                        iterable: array_index,
-                        index: 0,
-                    });
-
-                    // Push the iterator on the stack
-                    self.stack.push(Value::Object(self.objects.len() - 1));
-
-                    // Restore function reference
-                    function = self.objects[frame.function].as_function()?;
-                }
-
-                Instruction::IterNext => {
-                    // Pop the iterator from the stack
-                    let Some(Value::Object(iterator_index)) = self.stack.pop() else {
-                        return Err(InternalError::UnexpectedEmptyStack.into());
-                    };
-
-                    let (array_index, current_index) = match &self.objects[iterator_index] {
-                        Object::Iterator {
-                            iterable: array,
-                            index,
-                        } => (*array, *index),
-                        _ => {
-                            return Err(VmError::from(InternalError::TypeError {
-                                expected: Type::Object,
-                                got: Type::Object,
-                            }))
-                        }
-                    };
-
-                    // Get the element from the array
-                    let (element, has_next) = match &self.objects[array_index] {
-                        Object::Array(array) => {
-                            if current_index < array.len() {
-                                let element = array[current_index];
-                                let has_next = (current_index + 1) < array.len();
-                                (element, has_next)
-                            } else {
-                                (Value::Null, false)
-                            }
-                        }
-                        _ => {
-                            return Err(VmError::from(InternalError::TypeError {
-                                expected: Type::Object,
-                                got: Type::Object,
-                            }))
-                        }
-                    };
-
-                    // Now update the iterator index
-                    match &mut self.objects[iterator_index] {
-                        Object::Iterator { index, .. } => {
-                            *index += 1;
-                        }
-                        _ => unreachable!(), // We already checked this above
-                    };
-
-                    // Push iterator back, then element, then has_next
-                    self.stack.push(Value::Object(iterator_index));
-                    self.stack.push(element);
-                    self.stack.push(Value::Bool(has_next));
-
-                    // Restore function reference
                     function = self.objects[frame.function].as_function()?;
                 }
 

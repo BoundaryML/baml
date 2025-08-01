@@ -15,4 +15,6 @@ pub mod debug;
 mod vm;
 
 pub use bytecode::{Bytecode, Instruction};
-pub use vm::{Class, Frame, Function, FunctionKind, Instance, Object, Value, Vm, VmExecState};
+pub use vm::{
+    BamlVmProgram, Class, Frame, Function, FunctionKind, Instance, Object, Value, Vm, VmExecState,
+};

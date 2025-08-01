@@ -69,8 +69,9 @@ pub fn display_instruction(
             format!(
                 "({})",
                 function
-                    .local_var_names
-                    .get(*index)
+                    .locals_in_scope
+                    .get(function.bytecode.scopes[instruction_ptr as usize])
+                    .and_then(|locals| locals.get(*index))
                     .unwrap_or(&"?".to_string())
             )
         }
@@ -114,8 +115,6 @@ pub fn display_instruction(
         Instruction::Pop
         | Instruction::EndBlock(_)
         | Instruction::AllocArray(_)
-        | Instruction::CreateIterator
-        | Instruction::IterNext
         | Instruction::DispatchFuture(_)
         | Instruction::Await
         | Instruction::Call(_)
@@ -168,7 +167,7 @@ fn instruction_color(instruction: &Instruction) -> Color {
         }
 
         // Branch instructions.
-        Instruction::Jump(_) | Instruction::JumpIfFalse(_) | Instruction::IterNext => Color::Yellow,
+        Instruction::Jump(_) | Instruction::JumpIfFalse(_) => Color::Yellow,
 
         // Call instructions.
         Instruction::Call(_) => Color::Magenta,
@@ -177,9 +176,7 @@ fn instruction_color(instruction: &Instruction) -> Color {
         Instruction::Return | Instruction::Pop | Instruction::EndBlock(_) => Color::Red,
 
         // Alloc instructions.
-        Instruction::AllocInstance(_)
-        | Instruction::AllocArray(_)
-        | Instruction::CreateIterator => Color::Cyan,
+        Instruction::AllocInstance(_) | Instruction::AllocArray(_) => Color::Cyan,
 
         // Async instructions.
         Instruction::DispatchFuture(_) | Instruction::Await => Color::BrightGreen,
