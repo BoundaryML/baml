@@ -246,7 +246,7 @@ client<llm> AwsBedrockInvalidProfile {
   provider aws-bedrock
   options {
     model_id "meta.llama3-8b-instruct-v1:0"
-    profile "boundaryml-dev"
+    profile "boundaryml-dev-invalid"
     inference_configuration {
       max_tokens 100
     }
