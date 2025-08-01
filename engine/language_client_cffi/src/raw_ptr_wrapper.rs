@@ -184,6 +184,12 @@ impl RawPtrType {
     ) -> Result<MediaWrapper, String> {
         create_media_object(baml_types::BamlMediaType::Video, mime_type, url, base64)
     }
+
+    #[export_baml_new_fn(ObjectTypeBuilder)]
+    fn new_type_builder() -> Result<TypeBuilderWrapper, String> {
+        let type_builder = TypeBuilder::default();
+        Ok(TypeBuilderWrapper::from_object(type_builder))
+    }
 }
 
 // Internal trait used by macros - not part of the public API

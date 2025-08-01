@@ -55,7 +55,7 @@ pub struct TypeBuilder {
 }
 
 impl TypeBuilder {
-    pub fn add_enum(&self, name: &str, rt: &BamlRuntime) -> anyhow::Result<EnumBuilder> {
+    pub fn add_enum(&self, rt: &BamlRuntime, name: &str) -> anyhow::Result<EnumBuilder> {
         match rt.internal().ir().find_enum(name) {
             Ok(_) => {
                 anyhow::bail!("Enum with name {name} already exists");
@@ -68,7 +68,7 @@ impl TypeBuilder {
         }
     }
 
-    pub fn add_class(&self, name: &str, rt: &BamlRuntime) -> anyhow::Result<ClassBuilder> {
+    pub fn add_class(&self, rt: &BamlRuntime, name: &str) -> anyhow::Result<ClassBuilder> {
         match rt.internal().ir().find_class(name) {
             Ok(_) => {
                 anyhow::bail!("Class with name {name} already exists");
@@ -81,7 +81,7 @@ impl TypeBuilder {
         }
     }
 
-    pub fn class(&self, name: &str, rt: &BamlRuntime) -> anyhow::Result<ClassBuilder> {
+    pub fn class(&self, rt: &BamlRuntime, name: &str) -> anyhow::Result<ClassBuilder> {
         match rt.internal().ir().find_class(name) {
             Ok(cls) => {
                 let _ = self.type_builder.upsert_class(name);
@@ -104,7 +104,7 @@ impl TypeBuilder {
         }
     }
 
-    pub fn r#enum(&self, name: &str, rt: &BamlRuntime) -> anyhow::Result<EnumBuilder> {
+    pub fn r#enum(&self, rt: &BamlRuntime, name: &str) -> anyhow::Result<EnumBuilder> {
         match rt.internal().ir().find_enum(name) {
             Ok(enm) => {
                 let _ = self.type_builder.upsert_enum(name);
@@ -128,6 +128,30 @@ impl TypeBuilder {
 
     pub fn add_baml(&self, baml: &str, rt: &BamlRuntime) -> anyhow::Result<()> {
         self.type_builder.add_baml(baml, rt)
+    }
+
+    pub fn list_enums(&self, rt: &BamlRuntime) -> Vec<EnumBuilder> {
+        let ir = rt.internal().ir();
+        let enums = ir.walk_enums();
+        enums
+            .map(|enm| enm.name().to_string())
+            .chain(self.type_builder.list_enums().into_iter())
+            .collect::<indexmap::IndexSet<_>>()
+            .into_iter()
+            .map(|name| EnumBuilder::new(self.type_builder.clone(), name))
+            .collect()
+    }
+
+    pub fn list_classes(&self, rt: &BamlRuntime) -> Vec<ClassBuilder> {
+        let ir = rt.internal().ir();
+        let classes = ir.walk_classes();
+        classes
+            .map(|cls| cls.name().to_string())
+            .chain(self.type_builder.list_classes().into_iter())
+            .collect::<indexmap::IndexSet<_>>()
+            .into_iter()
+            .map(|name| ClassBuilder::new(self.type_builder.clone(), name))
+            .collect()
     }
 }
 

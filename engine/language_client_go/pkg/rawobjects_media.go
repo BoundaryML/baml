@@ -38,9 +38,11 @@ func (m *mediaHolder) Encode() (*cffi.CFFIValueHolder, error) {
 		return nil, err
 	}
 	return &cffi.CFFIValueHolder{
-		Value: &cffi.CFFIValueHolder_MediaValue{
-			MediaValue: &cffi.CFFIValueMedia{
-				MediaObject: raw_objects.EncodeRawObject(m),
+		Value: &cffi.CFFIValueHolder_ObjectValue{
+			ObjectValue: &cffi.CFFIValueRawObject{
+				Object: &cffi.CFFIValueRawObject_Media{
+					Media: raw_objects.EncodeRawObject(m),
+				},
 			},
 		},
 		Type: &cffi.CFFIFieldTypeHolder{

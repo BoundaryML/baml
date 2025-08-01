@@ -420,6 +420,10 @@ func encodeFieldType(fieldType reflect.Type) (*cffi.CFFIFieldTypeHolder, error) 
 						},
 					},
 				}, nil
+			case "Type":
+				return &cffi.CFFIFieldTypeHolder{
+					Type: nil,
+				}, nil
 			default:
 				// For other interfaces that implement InternalBamlSerializer,
 				// we can't instantiate them with reflect.New() since they're interfaces

@@ -513,6 +513,14 @@ impl TypeBuilder {
         )
     }
 
+    pub fn list_enums(&self) -> Vec<String> {
+        self.enums.lock().unwrap().keys().cloned().collect()
+    }
+
+    pub fn list_classes(&self) -> Vec<String> {
+        self.classes.lock().unwrap().keys().cloned().collect()
+    }
+
     pub fn maybe_get_enum(&self, name: &str) -> Option<Arc<Mutex<EnumBuilder>>> {
         self.enums.lock().unwrap().get(name).cloned()
     }

@@ -106,3 +106,17 @@ func (r *BamlRuntime) NewPDFFromBase64(base64 string, mimeType *string) (PDF, er
 func (r *BamlRuntime) NewVideoFromBase64(base64 string, mimeType *string) (Video, error) {
 	return r.newMediaFromBase64(MediaType_Video, base64, mimeType)
 }
+
+func (r *BamlRuntime) NewTypeBuilder() (TypeBuilder, error) {
+	ptr, err := raw_objects.NewRawObject(r.runtime, cffi.CFFIObjectType_OBJECT_TYPE_BUILDER, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create type builder: %w", err)
+	}
+
+	as_type_builder, ok := ptr.(*typeBuilder)
+	if !ok {
+		return nil, fmt.Errorf("unexpected type for type builder creation: %T", ptr)
+	}
+
+	return as_type_builder, nil
+}

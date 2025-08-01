@@ -1311,6 +1311,7 @@ dependencies = [
  "baml_cffi_macros",
  "cbindgen",
  "env_logger",
+ "indexmap 2.9.0",
  "internal-baml-codegen",
  "libc",
  "once_cell",

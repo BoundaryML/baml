@@ -95,8 +95,10 @@ where
                     RawPtrWrapper::from_object(media.clone()),
                 );
                 let media_object = crate::raw_ptr_wrapper::RawPtrType::encode(media_object);
-                cValue::MediaValue(crate::baml::cffi::CffiValueMedia {
-                    media_object: Some(media_object),
+                cValue::ObjectValue(crate::baml::cffi::CffiValueRawObject {
+                    object: Some(crate::baml::cffi::cffi_value_raw_object::Object::Media(
+                        media_object,
+                    )),
                 })
             }
             BamlValue::Enum(name, value) => cValue::EnumValue(CffiValueEnum {

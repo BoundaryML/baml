@@ -86,7 +86,7 @@ impl TypeBuilderWrapper {
         name: &str,
     ) -> Result<objects::EnumBuilder, String> {
         self.inner
-            .add_enum(name, runtime)
+            .add_enum(runtime, name)
             .map_err(|e| e.to_string())
     }
 
@@ -97,7 +97,7 @@ impl TypeBuilderWrapper {
         name: &str,
     ) -> Result<ClassBuilderWrapper, String> {
         self.inner
-            .add_class(name, runtime)
+            .add_class(runtime, name)
             .map(ClassBuilderWrapper::from_object)
             .map_err(|e| e.to_string())
     }
@@ -109,18 +109,28 @@ impl TypeBuilderWrapper {
         name: &str,
     ) -> Result<ClassBuilderWrapper, String> {
         self.inner
-            .class(name, runtime)
+            .class(runtime, name)
             .map(ClassBuilderWrapper::from_object)
             .map_err(|e| e.to_string())
     }
 
     #[export_baml_fn]
-    fn r#enum(
+    fn enum_(
         &self,
         runtime: &baml_runtime::BamlRuntime,
         name: &str,
     ) -> Result<objects::EnumBuilder, String> {
-        self.inner.r#enum(name, runtime).map_err(|e| e.to_string())
+        self.inner.r#enum(runtime, name).map_err(|e| e.to_string())
+    }
+
+    #[export_baml_fn]
+    fn list_enums(&self, runtime: &baml_runtime::BamlRuntime) -> Vec<objects::EnumBuilder> {
+        self.inner.list_enums(runtime)
+    }
+
+    #[export_baml_fn]
+    fn list_classes(&self, runtime: &baml_runtime::BamlRuntime) -> Vec<objects::ClassBuilder> {
+        self.inner.list_classes(runtime)
     }
 }
 
@@ -134,6 +144,11 @@ impl TypeWrapper {
     #[export_baml_fn]
     fn optional(&self) -> TypeIR {
         self.as_ref().clone().as_optional()
+    }
+
+    #[export_baml_fn]
+    fn __repr__(&self) -> String {
+        self.as_ref().to_string()
     }
 }
 
@@ -167,7 +182,7 @@ impl EnumBuilderWrapper {
     }
 
     #[export_baml_fn]
-    fn r#type(&self, runtime: &baml_runtime::BamlRuntime) -> Result<TypeIR, String> {
+    fn type_(&self, runtime: &baml_runtime::BamlRuntime) -> Result<TypeIR, String> {
         self.inner.r#type(runtime).map_err(|e| e.to_string())
     }
 
@@ -222,7 +237,7 @@ impl EnumValueBuilderWrapper {
 #[export_baml_fn]
 impl ClassBuilderWrapper {
     #[export_baml_fn]
-    fn r#type(&self, runtime: &baml_runtime::BamlRuntime) -> Result<TypeIR, String> {
+    fn type_(&self, runtime: &baml_runtime::BamlRuntime) -> Result<TypeIR, String> {
         self.inner.r#type(runtime).map_err(|e| e.to_string())
     }
 
@@ -295,7 +310,7 @@ impl ClassPropertyBuilderWrapper {
     }
 
     #[export_baml_fn]
-    fn r#type(
+    fn type_(
         &self,
         runtime: &baml_runtime::BamlRuntime,
         field_type: &TypeWrapper,

@@ -171,3 +171,95 @@ type TickReason string
 const (
 	TickReason_Unknown TickReason = "Unknown"
 )
+
+// Types for BAML Type Construction
+
+type TypeBuilder interface {
+	raw_objects.RawPointer
+	// Basic types
+	String() (Type, error)
+	Int() (Type, error)
+	Float() (Type, error)
+	Bool() (Type, error)
+	Null() (Type, error)
+	// Literal types  
+	LiteralString(value string) (Type, error)
+	LiteralInt(value int64) (Type, error)
+	LiteralBool(value bool) (Type, error)
+	// Composite types
+	Map(key Type, value Type) (Type, error)
+	List(inner Type) (Type, error)
+	Optional(inner Type) (Type, error)
+	Union(types []Type) (Type, error)
+	// BAML schema operations
+	AddBaml(baml string) error
+	// Enum operations
+	AddEnum(name string) (EnumBuilder, error)
+	Enum(name string) (EnumBuilder, error)
+	ListEnums() ([]EnumBuilder, error)
+	// Class operations
+	AddClass(name string) (ClassBuilder, error)
+	Class(name string) (ClassBuilder, error)
+	ListClasses() ([]ClassBuilder, error)
+}
+
+type Type interface {
+	raw_objects.RawPointer
+	serde.InternalBamlSerializer
+	// Type extensions
+	List() (Type, error)
+	Optional() (Type, error)
+	String() string
+}
+
+type EnumBuilder interface {
+	raw_objects.RawPointer
+	// Add a new value to the enum
+	AddValue(value string) (EnumValueBuilder, error)
+	// Set the description for the enum
+	Description(description string) error
+	// Set the alias for the enum
+	Alias(alias string) error
+	// Get the type definition for this enum
+	Type() (Type, error)
+	// List all values in the enum
+	ListValues() ([]EnumValueBuilder, error)
+	// Get a specific value from the enum
+	Value(name string) (EnumValueBuilder, error)
+}
+
+type EnumValueBuilder interface {
+	raw_objects.RawPointer
+	// Set the description for the enum value
+	Description(description string) error
+	// Set the alias for the enum value
+	Alias(alias string) error
+	// Mark the enum value to be skipped
+	Skip() error
+}
+
+type ClassBuilder interface {
+	raw_objects.RawPointer
+	// Get the type definition for this class
+	Type() (Type, error)
+	// List all properties in the class
+	ListProperties() ([]ClassPropertyBuilder, error)
+	// Set the alias for the class
+	Alias(alias string) error
+	// Set the description for the class
+	Description(description string) error
+	// Add a new property to the class
+	AddProperty(name string, fieldType Type) (ClassPropertyBuilder, error)
+	// Get a specific property from the class
+	Property(name string) (ClassPropertyBuilder, error)
+}
+
+type ClassPropertyBuilder interface {
+	raw_objects.RawPointer
+	// Set the description for the property
+	Description(description string) error
+	// Set the alias for the property
+	Alias(alias string) error
+	// Set the type for the property
+	Type(fieldType Type) error
+}
