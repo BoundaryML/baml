@@ -1,4 +1,10 @@
-use std::{env, fs, io::Write, path::PathBuf, process::Command, time::Duration};
+use std::{
+    env, fs,
+    io::Write,
+    path::{Path, PathBuf},
+    process::Command,
+    time::Duration,
+};
 
 use anyhow::Result;
 use baml_types::GeneratorOutputType;
@@ -364,7 +370,7 @@ fn install_extension_manually(editor: &str) {
     }
 }
 
-fn detect_python_project_type(path: &PathBuf) -> Option<GeneratorOutputType> {
+fn detect_python_project_type(path: &Path) -> Option<GeneratorOutputType> {
     // Check for uv.lock first (uv projects)
     if path.join("uv.lock").exists() {
         return Some(GeneratorOutputType::PythonPydantic);
@@ -383,7 +389,7 @@ fn detect_python_project_type(path: &PathBuf) -> Option<GeneratorOutputType> {
     None
 }
 
-fn detect_project_type(path: &PathBuf) -> Option<GeneratorOutputType> {
+fn detect_project_type(path: &Path) -> Option<GeneratorOutputType> {
     // Check for Python project indicators first
     if let Some(python_type) = detect_python_project_type(path) {
         return Some(python_type);
