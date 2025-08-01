@@ -2,6 +2,40 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.203.0](https://github.com/boundaryml/baml/compare/0.202.1..0.203.0) - 2025-08-01
+
+### Bug Fixes
+
+- [Go] fix panic when downloading baml cli (#2201) - ([c8fd18b](https://github.com/boundaryml/baml/commit/c8fd18b143d19b235f44e707c2d4037e9895f4ad)) - Rahul Tiwari
+- [Go] Support go mod vendor (#2203) - ([c62cf63](https://github.com/boundaryml/baml/commit/c62cf63e400072292649c6ae59fb9f107ee4fc73)) - Rahul Tiwari
+- [Python] fix typebuilder type imports (#2209) - ([c104174](https://github.com/boundaryml/baml/commit/c10417488b0b4dd2667bf860e6e5a036d1960137)) - Rahul Tiwari
+- Dont parse thinking blocks from Gemini (#2215) - ([c5a9cbc](https://github.com/boundaryml/baml/commit/c5a9cbc24488561c934b946749122d0a7e4f1a84)) - Rahul Tiwari
+- Fix Issue with cross-origin policy on playground (#2217) - ([a82f682](https://github.com/boundaryml/baml/commit/a82f6829806e0502a4c30804b34cc97744d17027)) - Chris Watts
+- Fix missing types for some llm responses like computer use (#2226)
+- fix union type warning (#2225)
+- Improve BAML SAP parser performance by 100x in many scenarios (#2233) - ([28b092e](https://github.com/boundaryml/baml/commit/28b092efb78f0d2758f03b6f06dc07fff7dd9f90)) - Rahul Tiwari
+- Fix issue with BAML_LOG env var not being respected (#2235) - ([65c8c66](https://github.com/boundaryml/baml/commit/65c8c663e43bea9b8b9cc3e11631546c6b0be525)) - Rahul Tiwari
+- [Breaking] Remove Pdf media type specification (#2167) - ([fcbcb55](https://github.com/boundaryml/baml/commit/fcbcb55ae5d27d122903c8aaa92e961b55569a68)) - egol
+- Add a pool timeout to try to fix open File descriptor issue like deno (#2205) - ([2a031b6](https://github.com/boundaryml/baml/commit/2a031b608af6de79534960ebbf9f186ffe09cb10)) - aaronvg
+- Fix parser during streaming so that we correctly parse string[] from "["foo", (#2213) - ([5838036](https://github.com/boundaryml/baml/commit/583803634c98dfdb2eed2faff43306d2dab7250b)) - hellovai
+- [Playground] Fix issue with test selection, and improve performance when selecting another function (#2224) - ([dd00956](https://github.com/boundaryml/baml/commit/dd00956f7ade26e6e09a865191802b8b4a840367)) - aaronvg
+
+
+
+### Features
+- Finalize Zed Extension (#2169) - ([ec170db](https://github.com/boundaryml/baml/commit/ec170dbc0bb01598715ef8e220828c0dc52777c7)) - egol
+- Re-add playground tests sidebar to 'run all' tests (#2214) - ([96e9d64](https://github.com/boundaryml/baml/commit/96e9d648411d24df5eaac796e6b5d69e91df5559)) - Chris Watts
+- Add ClientRegistry, BamlPdf and BamlVideo in openapi generator (#2170) - ([0bc450f](https://github.com/boundaryml/baml/commit/0bc450facd2a9b2fdae9d7ed34341a8bfbf7c56c)) - Greg Hale
+- [feature] add multimodal support for go (#2192) - ([f49c25c](https://github.com/boundaryml/baml/commit/f49c25c8d356a00695b287f07e05c55f4878e47a)) - hellovai
+- [feat] Add internationalization to SAP parser (#2210) - ([dce9074](https://github.com/boundaryml/baml/commit/dce9074f5910b43c8a7197edd614bd8ca7585fb1)) - hellovai
+- Refreshed playground look (#2227) - ([e514d53](https://github.com/boundaryml/baml/commit/e514d53c775ef6b305b6a1ff85d97f5288c2f1a7)) - Chris Watts
+
+
+### Cli
+
+- add IDE/terminal auto-detect from baml-cli init (#2178) - ([34a0428](https://github.com/boundaryml/baml/commit/34a0428d6b755226110f891327aa8ec7d6f0cf0b)) - Rahul Tiwari
+
+
 ## [0.202.1](https://github.com/boundaryml/baml/compare/0.202.0..0.202.1) - 2025-07-18
 
 
