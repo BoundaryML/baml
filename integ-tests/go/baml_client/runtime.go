@@ -30,6 +30,7 @@ import (
 	"os"
 	"strings"
 
+	"example.com/integ-tests/baml_client/type_builder"
 	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 )
 
@@ -178,4 +179,14 @@ func NewPDFFromUrl(url string, mimeType *string) (PDF, error) {
 
 func NewVideoFromUrl(url string, mimeType *string) (Video, error) {
 	return bamlRuntime.NewVideoFromUrl(url, mimeType)
+}
+
+type TypeBuilder = type_builder.TypeBuilder
+
+func NewTypeBuilder() (*TypeBuilder, error) {
+	tb, err := bamlRuntime.NewTypeBuilder()
+	if err != nil {
+		return nil, err
+	}
+	return type_builder.InternalNewTypeBuilder(tb), nil
 }

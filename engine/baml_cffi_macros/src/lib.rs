@@ -194,6 +194,13 @@ pub fn export_baml_fn(_attr: TokenStream, item: TokenStream) -> TokenStream {
                                 Err(e) => Err(e),
                             }
                         }
+                    } else if is_result_bool(ty) {
+                        quote! {
+                            match #method_call {
+                                Ok(value) => Ok(BamlObjectResponseSuccess::new_value(BamlValue::Bool(value))),
+                                Err(e) => Err(e),
+                            }
+                        }
                     } else if is_result_bamlvalue(ty) {
                         // Result<BamlValue, E>
                         quote! {
@@ -1109,6 +1116,25 @@ fn is_result_option_string(ty: &Type) -> bool {
                                     }
                                 }
                             }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    false
+}
+
+fn is_result_bool(ty: &Type) -> bool {
+    if let Type::Path(type_path) = ty {
+        if let Some(segment) = type_path.path.segments.last() {
+            if segment.ident == "Result" {
+                if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
+                    if let Some(syn::GenericArgument::Type(Type::Path(result_type))) =
+                        args.args.first()
+                    {
+                        if let Some(result_segment) = result_type.path.segments.last() {
+                            return result_segment.ident == "bool";
                         }
                     }
                 }

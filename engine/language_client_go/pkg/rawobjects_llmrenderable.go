@@ -1,6 +1,10 @@
 package baml
 
-import "github.com/boundaryml/baml/engine/language_client_go/baml_go/raw_objects"
+import (
+	"fmt"
+
+	"github.com/boundaryml/baml/engine/language_client_go/baml_go/raw_objects"
+)
 
 type llmRenderableObject struct {
 	// never owns this.
@@ -60,4 +64,23 @@ func (eb *llmRenderableObject) Alias() (*string, error) {
 	}
 
 	return &alias, nil
+}
+
+
+func (eb *llmRenderableObject) From() (ASTNodeSource, error) {
+	result, err := raw_objects.CallMethod(eb, "is_from_ast", nil)
+	if err != nil {
+		return ASTNodeSource_Unknown, err
+	}
+
+	fromSource, ok := result.(bool)
+	if !ok {
+		return ASTNodeSource_Unknown, fmt.Errorf("unexpected type from source: %T", result)
+	}
+
+	if fromSource {
+		return ASTNodeSource_Baml, nil
+	}
+
+	return ASTNodeSource_TypeBuilder, nil
 }

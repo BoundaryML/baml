@@ -220,6 +220,11 @@ impl EnumBuilderWrapper {
             .map(EnumValueBuilderWrapper::from_object)
             .map_err(|e| e.to_string())
     }
+
+    #[export_baml_fn]
+    fn is_from_ast(&self, runtime: &baml_runtime::BamlRuntime) -> Result<bool, String> {
+        self.inner.is_from_ast(runtime).map_err(|e| e.to_string())
+    }
 }
 
 #[export_baml_fn]
@@ -253,8 +258,20 @@ impl EnumValueBuilderWrapper {
     }
 
     #[export_baml_fn]
-    fn skip(&self, runtime: &baml_runtime::BamlRuntime) -> Result<(), String> {
+    fn set_skip(&self, runtime: &baml_runtime::BamlRuntime, skip: bool) -> Result<(), String> {
+        self.inner
+            .set_skip(runtime, skip)
+            .map_err(|e| e.to_string())
+    }
+
+    #[export_baml_fn]
+    fn skip(&self, runtime: &baml_runtime::BamlRuntime) -> Result<bool, String> {
         self.inner.skip(runtime).map_err(|e| e.to_string())
+    }
+
+    #[export_baml_fn]
+    fn is_from_ast(&self, runtime: &baml_runtime::BamlRuntime) -> Result<bool, String> {
+        self.inner.is_from_ast(runtime).map_err(|e| e.to_string())
     }
 }
 
@@ -325,6 +342,11 @@ impl ClassBuilderWrapper {
             .property(runtime, name)
             .map_err(|e| e.to_string())
     }
+
+    #[export_baml_fn]
+    fn is_from_ast(&self, runtime: &baml_runtime::BamlRuntime) -> Result<bool, String> {
+        self.inner.is_from_ast(runtime).map_err(|e| e.to_string())
+    }
 }
 
 #[export_baml_fn]
@@ -371,5 +393,10 @@ impl ClassPropertyBuilderWrapper {
     #[export_baml_fn]
     fn type_(&self, runtime: &baml_runtime::BamlRuntime) -> Result<TypeIR, String> {
         self.inner.type_(runtime).map_err(|e| e.to_string())
+    }
+
+    #[export_baml_fn]
+    fn is_from_ast(&self, runtime: &baml_runtime::BamlRuntime) -> Result<bool, String> {
+        self.inner.is_from_ast(runtime).map_err(|e| e.to_string())
     }
 }

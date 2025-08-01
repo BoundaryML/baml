@@ -366,6 +366,15 @@ impl ClassBuilder {
             }
         }
     }
+
+    pub fn is_from_ast(&self, rt: &BamlRuntime) -> anyhow::Result<bool> {
+        self.mode.at_least(NodeRW::ReadOnly)?;
+        Ok(rt
+            .internal()
+            .ir()
+            .find_class(self.class_name.as_str())
+            .is_ok())
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -520,6 +529,16 @@ impl ClassPropertyBuilder {
         let builder = prop.lock().unwrap();
         builder.set_type(field_type);
         Ok(())
+    }
+
+    pub fn is_from_ast(&self, rt: &BamlRuntime) -> anyhow::Result<bool> {
+        self.mode.at_least(NodeRW::ReadOnly)?;
+        if let Ok(cls) = rt.internal().ir().find_class(self.class_name.as_str()) {
+            if cls.find_field(&self.property_name).is_some() {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 }
 
@@ -721,6 +740,15 @@ impl EnumBuilder {
             }
         }
     }
+
+    pub fn is_from_ast(&self, rt: &BamlRuntime) -> anyhow::Result<bool> {
+        self.mode.at_least(NodeRW::ReadOnly)?;
+        Ok(rt
+            .internal()
+            .ir()
+            .find_enum(self.enum_name.as_str())
+            .is_ok())
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -837,12 +865,47 @@ impl EnumValueBuilder {
         Ok(result)
     }
 
-    pub fn skip(&self, rt: &BamlRuntime) -> anyhow::Result<()> {
+    pub fn set_skip(&self, rt: &BamlRuntime, skip: bool) -> anyhow::Result<()> {
         self.mode.at_least(NodeRW::LLMOnly)?;
 
         let value = self.value(rt)?;
         let builder = value.lock().unwrap();
-        builder.with_meta("skip", BamlValue::Bool(true));
+        builder.with_meta("skip", BamlValue::Bool(skip));
         Ok(())
+    }
+
+    pub fn skip(&self, rt: &BamlRuntime) -> anyhow::Result<bool> {
+        self.mode.at_least(NodeRW::ReadOnly)?;
+
+        let ast_skip = || {
+            if let Ok(enm) = rt.internal().ir().find_enum(self.enum_name.as_str()) {
+                if let Some(value) = enm.find_value(&self.value_name) {
+                    value.skip(&Default::default()).ok()
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        };
+
+        let value = self.value(rt)?;
+        let builder = value.lock().unwrap();
+        let skip = builder
+            .get_meta("skip")
+            .and_then(|value| value.as_bool())
+            .or_else(ast_skip)
+            .unwrap_or(false);
+        Ok(skip)
+    }
+
+    pub fn is_from_ast(&self, rt: &BamlRuntime) -> anyhow::Result<bool> {
+        self.mode.at_least(NodeRW::ReadOnly)?;
+        if let Ok(enm) = rt.internal().ir().find_enum(self.enum_name.as_str()) {
+            if enm.find_value(&self.value_name).is_some() {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 }

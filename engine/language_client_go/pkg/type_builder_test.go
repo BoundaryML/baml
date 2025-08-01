@@ -1048,10 +1048,16 @@ func TestTypeBuilderSkipEnumValue(t *testing.T) {
 	}
 
 	// Test skipping a value
-	err = value2.Skip()
+	err = value2.SetSkip(true)
 	if err != nil {
 		t.Errorf("Failed to skip enum value: %v", err)
 	} else {
+		skip, err := value2.Skip()
+		if err != nil {
+			t.Errorf("Failed to get skip value: %v", err)
+		} else if !skip {
+			t.Errorf("Expected skip value to be true, got false")
+		}
 		t.Log("Successfully skipped enum value")
 	}
 

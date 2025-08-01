@@ -5,6 +5,14 @@ import (
 	"github.com/boundaryml/baml/engine/language_client_go/baml_go/serde"
 )
 
+type ASTNodeSource string
+
+const (
+	ASTNodeSource_Unknown ASTNodeSource = "unknown"
+	ASTNodeSource_Baml    ASTNodeSource = "baml_file"
+	ASTNodeSource_TypeBuilder ASTNodeSource = "type_builder"
+)
+
 type MediaType string
 
 const (
@@ -221,6 +229,8 @@ type llmRenderable interface {
 	Description() (*string, error)
 	// Get the alias for the object
 	Alias() (*string, error)
+	// Determine where this enum was defined
+	From() (ASTNodeSource, error)
 }
 
 type EnumBuilder interface {
@@ -240,7 +250,9 @@ type EnumValueBuilder interface {
 	raw_objects.RawPointer
 	llmRenderable
 	// Mark the enum value to be skipped
-	Skip() error
+	SetSkip(skip bool) error
+	// Get the skip value
+	Skip() (bool, error)
 }
 
 type ClassBuilder interface {

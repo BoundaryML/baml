@@ -23,8 +23,18 @@ func newEnumValueBuilder(ptr int64, rt unsafe.Pointer) EnumValueBuilder {
 	return &bldr
 }
 
-// Skip marks the enum value to be skipped
-func (evb *enumValueBuilder) Skip() error {
-	_, err := raw_objects.CallMethod(evb, "skip", nil)
+func (evb *enumValueBuilder) Skip() (bool, error) {
+	skip, err := raw_objects.CallMethod(evb, "skip", nil)
+	if err != nil {
+		return false, err
+	}
+	return skip.(bool), nil
+}
+
+// SetSkip marks the enum value to be skipped
+func (evb *enumValueBuilder) SetSkip(skip bool) error {
+	_, err := raw_objects.CallMethod(evb, "set_skip", map[string]any{
+		"skip": skip,
+	})
 	return err
 }
