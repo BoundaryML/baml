@@ -35,10 +35,10 @@
     "next": "*"
   },
   "devDependencies": {
-    "@types/node": "24.0.3",
+    "@types/node": "24.1.0",
     "@types/webpack": "5.28.5",
-    "next": "15.3.3",
-    "typescript": "5.8.3"
+    "next": "15.4.5",
+    "typescript": "5.9.2"
   },
   "bugs": {
     "url": "https://github.com/BoundaryML/baml/issues"

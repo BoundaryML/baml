@@ -19,13 +19,13 @@
   },
   "files": ["dist/**"],
   "devDependencies": {
-    "@types/node": "24.0.3",
+    "@types/node": "24.1.0",
     "rimraf": "6.0.1",
     "ts-node": "10.9.2",
     "tsup": "8.5.0",
-    "typescript": "5.8.3"
+    "typescript": "5.9.2"
   },
   "dependencies": {
-    "zod": "3.25.66"
+    "zod": "4.0.14"
   }
 }
