@@ -500,3 +500,22 @@ func DecodeStreamingState[T any](holder *cffi.CFFIValueHolder, decodeFunc func(i
 	}
 	panic("error decoding streaming state: " + holder.String())
 }
+
+func DecodeChecked[T any](holder *cffi.CFFIValueHolder, decodeFunc func(inner *cffi.CFFIValueHolder) T) shared.Checked[T] {
+	value := holder.Value
+	if checkedVal, ok := value.(*cffi.CFFIValueHolder_CheckedValue); ok {
+		checks := make(map[string]shared.Check, len(checkedVal.CheckedValue.Checks))
+		for _, check := range checkedVal.CheckedValue.Checks {
+			checks[string(check.Name)] = shared.Check{
+				Name:       string(check.Name),
+				Expression: string(check.Expression),
+				Status:     string(check.Status),
+			}
+		}
+		return shared.Checked[T]{
+			Value: decodeFunc(checkedVal.CheckedValue.Value),
+			Checks: checks,
+		}
+	}
+	panic("error decoding checked value: " + holder.String())
+}

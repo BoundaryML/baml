@@ -20,7 +20,6 @@ type ArrayWithConstraintsClassView struct {
 }
 
 func (t *ArrayWithConstraintsClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -30,7 +29,6 @@ func (t *ArrayWithConstraintsClassView) ListProperties() ([]ClassPropertyView, e
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *ArrayWithConstraintsClassView) NonEmptyStrings() (ClassPropertyView, error) {
@@ -58,7 +56,6 @@ type MixedArraysClassView struct {
 }
 
 func (t *MixedArraysClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -68,7 +65,6 @@ func (t *MixedArraysClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *MixedArraysClassView) PrimitiveArray() (ClassPropertyView, error) {
@@ -104,7 +100,6 @@ type NestedArraysClassView struct {
 }
 
 func (t *NestedArraysClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -114,7 +109,6 @@ func (t *NestedArraysClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *NestedArraysClassView) Matrix() (ClassPropertyView, error) {
@@ -142,7 +136,6 @@ type ObjectArraysClassView struct {
 }
 
 func (t *ObjectArraysClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -152,7 +145,6 @@ func (t *ObjectArraysClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *ObjectArraysClassView) Users() (ClassPropertyView, error) {
@@ -180,7 +172,6 @@ type ProductClassView struct {
 }
 
 func (t *ProductClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -190,7 +181,6 @@ func (t *ProductClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *ProductClassView) Id() (ClassPropertyView, error) {
@@ -226,7 +216,6 @@ type SimpleArraysClassView struct {
 }
 
 func (t *SimpleArraysClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -236,7 +225,6 @@ func (t *SimpleArraysClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *SimpleArraysClassView) Strings() (ClassPropertyView, error) {
@@ -268,7 +256,6 @@ type TagClassView struct {
 }
 
 func (t *TagClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -278,7 +265,6 @@ func (t *TagClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *TagClassView) Id() (ClassPropertyView, error) {
@@ -306,7 +292,6 @@ type UserClassView struct {
 }
 
 func (t *UserClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -316,7 +301,6 @@ func (t *UserClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *UserClassView) Id() (ClassPropertyView, error) {

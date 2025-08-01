@@ -8,7 +8,6 @@ type {{cls.name}}Class{{cls.builder()}} struct {
 }
 
 func (t *{{cls.name}}Class{{cls.builder()}}) ListProperties() ([]ClassProperty{{cls.builder()}}, error) {
-	{% if !cls.dynamic %}
     result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -18,9 +17,6 @@ func (t *{{cls.name}}Class{{cls.builder()}}) ListProperties() ([]ClassProperty{{
 		builders[i] = p
 	}
 	return builders, nil
-	{% else %}
-	return t.inner.ListProperties()
-	{% endif %}
 }
 
 {% for prop in cls.fields %}

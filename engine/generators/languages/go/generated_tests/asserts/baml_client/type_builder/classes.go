@@ -20,7 +20,6 @@ type PersonClassView struct {
 }
 
 func (t *PersonClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -30,7 +29,6 @@ func (t *PersonClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *PersonClassView) Name() (ClassPropertyView, error) {

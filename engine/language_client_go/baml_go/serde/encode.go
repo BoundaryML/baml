@@ -295,6 +295,10 @@ func EncodeMapEntries(fields map[string]any, context string) ([]*cffi.CFFIMapEnt
 	return entries, nil
 }
 
+func EncodeValue(value any) (*cffi.CFFIValueHolder, error) {
+	return encodeValue(value)
+}
+
 func EncodeEnvVar(fields map[string]string) ([]*cffi.CFFIEnvVar, error) {
 	if len(fields) == 0 || fields == nil {
 		return nil, nil

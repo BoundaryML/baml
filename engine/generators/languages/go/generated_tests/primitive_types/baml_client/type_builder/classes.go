@@ -20,7 +20,6 @@ type MixedPrimitivesClassView struct {
 }
 
 func (t *MixedPrimitivesClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -30,7 +29,6 @@ func (t *MixedPrimitivesClassView) ListProperties() ([]ClassPropertyView, error)
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *MixedPrimitivesClassView) Name() (ClassPropertyView, error) {
@@ -82,7 +80,6 @@ type PrimitiveArraysClassView struct {
 }
 
 func (t *PrimitiveArraysClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -92,7 +89,6 @@ func (t *PrimitiveArraysClassView) ListProperties() ([]ClassPropertyView, error)
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *PrimitiveArraysClassView) StringArray() (ClassPropertyView, error) {
@@ -124,7 +120,6 @@ type PrimitiveMapsClassView struct {
 }
 
 func (t *PrimitiveMapsClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -134,7 +129,6 @@ func (t *PrimitiveMapsClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *PrimitiveMapsClassView) StringMap() (ClassPropertyView, error) {
@@ -166,7 +160,6 @@ type PrimitiveTypesClassView struct {
 }
 
 func (t *PrimitiveTypesClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -176,7 +169,6 @@ func (t *PrimitiveTypesClassView) ListProperties() ([]ClassPropertyView, error) 
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *PrimitiveTypesClassView) StringField() (ClassPropertyView, error) {

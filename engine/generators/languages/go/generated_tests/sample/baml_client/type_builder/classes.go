@@ -20,7 +20,6 @@ type ExampleClassView struct {
 }
 
 func (t *ExampleClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -30,7 +29,6 @@ func (t *ExampleClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *ExampleClassView) Type() (ClassPropertyView, error) {
@@ -58,7 +56,6 @@ type Example2ClassView struct {
 }
 
 func (t *Example2ClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -68,7 +65,6 @@ func (t *Example2ClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *Example2ClassView) Type() (ClassPropertyView, error) {

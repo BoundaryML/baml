@@ -8,7 +8,6 @@ type {{enm.name}}Enum{{enm.builder()}} struct {
 }
 
 func (t *{{enm.name}}Enum{{enm.builder()}}) ListValues() ([]EnumValue{{enm.builder()}}, error) {
-	{% if !enm.dynamic %}
     result, err := t.inner.ListValues()
 	if err != nil {
 		return nil, err
@@ -18,9 +17,6 @@ func (t *{{enm.name}}Enum{{enm.builder()}}) ListValues() ([]EnumValue{{enm.build
 		builders[i] = p
 	}
 	return builders, nil
-	{% else %}
-	return t.inner.ListValues()
-	{% endif %}
 }
 
 {% for (val, _) in enm.values %}

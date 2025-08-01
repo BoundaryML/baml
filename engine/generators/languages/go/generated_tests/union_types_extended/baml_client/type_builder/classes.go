@@ -20,7 +20,6 @@ type AdminClassView struct {
 }
 
 func (t *AdminClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -30,7 +29,6 @@ func (t *AdminClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *AdminClassView) Id() (ClassPropertyView, error) {
@@ -62,7 +60,6 @@ type ApiErrorClassView struct {
 }
 
 func (t *ApiErrorClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -72,7 +69,6 @@ func (t *ApiErrorClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *ApiErrorClassView) Status() (ClassPropertyView, error) {
@@ -100,7 +96,6 @@ type ApiPendingClassView struct {
 }
 
 func (t *ApiPendingClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -110,7 +105,6 @@ func (t *ApiPendingClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *ApiPendingClassView) Status() (ClassPropertyView, error) {
@@ -138,7 +132,6 @@ type ApiSuccessClassView struct {
 }
 
 func (t *ApiSuccessClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -148,7 +141,6 @@ func (t *ApiSuccessClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *ApiSuccessClassView) Status() (ClassPropertyView, error) {
@@ -172,7 +164,6 @@ type BirdClassView struct {
 }
 
 func (t *BirdClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -182,7 +173,6 @@ func (t *BirdClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *BirdClassView) Species() (ClassPropertyView, error) {
@@ -210,7 +200,6 @@ type CatClassView struct {
 }
 
 func (t *CatClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -220,7 +209,6 @@ func (t *CatClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *CatClassView) Species() (ClassPropertyView, error) {
@@ -248,7 +236,6 @@ type CircleClassView struct {
 }
 
 func (t *CircleClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -258,7 +245,6 @@ func (t *CircleClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *CircleClassView) Shape() (ClassPropertyView, error) {
@@ -282,7 +268,6 @@ type ComplexUnionsClassView struct {
 }
 
 func (t *ComplexUnionsClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -292,7 +277,6 @@ func (t *ComplexUnionsClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *ComplexUnionsClassView) UserOrProduct() (ClassPropertyView, error) {
@@ -328,7 +312,6 @@ type DataResponseClassView struct {
 }
 
 func (t *DataResponseClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -338,7 +321,6 @@ func (t *DataResponseClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *DataResponseClassView) Data() (ClassPropertyView, error) {
@@ -366,7 +348,6 @@ type DiscriminatedUnionsClassView struct {
 }
 
 func (t *DiscriminatedUnionsClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -376,7 +357,6 @@ func (t *DiscriminatedUnionsClassView) ListProperties() ([]ClassPropertyView, er
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *DiscriminatedUnionsClassView) Shape() (ClassPropertyView, error) {
@@ -404,7 +384,6 @@ type DogClassView struct {
 }
 
 func (t *DogClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -414,7 +393,6 @@ func (t *DogClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *DogClassView) Species() (ClassPropertyView, error) {
@@ -442,7 +420,6 @@ type ErrorClassView struct {
 }
 
 func (t *ErrorClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -452,7 +429,6 @@ func (t *ErrorClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *ErrorClassView) Type() (ClassPropertyView, error) {
@@ -484,7 +460,6 @@ type ErrorResponseClassView struct {
 }
 
 func (t *ErrorResponseClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -494,7 +469,6 @@ func (t *ErrorResponseClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *ErrorResponseClassView) Error() (ClassPropertyView, error) {
@@ -522,7 +496,6 @@ type PrimitiveUnionsClassView struct {
 }
 
 func (t *PrimitiveUnionsClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -532,7 +505,6 @@ func (t *PrimitiveUnionsClassView) ListProperties() ([]ClassPropertyView, error)
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *PrimitiveUnionsClassView) StringOrInt() (ClassPropertyView, error) {
@@ -568,7 +540,6 @@ type ProductClassView struct {
 }
 
 func (t *ProductClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -578,7 +549,6 @@ func (t *ProductClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *ProductClassView) Id() (ClassPropertyView, error) {
@@ -610,7 +580,6 @@ type RectangleClassView struct {
 }
 
 func (t *RectangleClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -620,7 +589,6 @@ func (t *RectangleClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *RectangleClassView) Shape() (ClassPropertyView, error) {
@@ -648,7 +616,6 @@ type RecursiveUnionClassView struct {
 }
 
 func (t *RecursiveUnionClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -658,7 +625,6 @@ func (t *RecursiveUnionClassView) ListProperties() ([]ClassPropertyView, error) 
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *RecursiveUnionClassView) Value() (ClassPropertyView, error) {
@@ -682,7 +648,6 @@ type ResultClassView struct {
 }
 
 func (t *ResultClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -692,7 +657,6 @@ func (t *ResultClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *ResultClassView) Value() (ClassPropertyView, error) {
@@ -716,7 +680,6 @@ type SuccessClassView struct {
 }
 
 func (t *SuccessClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -726,7 +689,6 @@ func (t *SuccessClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *SuccessClassView) Type() (ClassPropertyView, error) {
@@ -754,7 +716,6 @@ type TriangleClassView struct {
 }
 
 func (t *TriangleClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -764,7 +725,6 @@ func (t *TriangleClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *TriangleClassView) Shape() (ClassPropertyView, error) {
@@ -792,7 +752,6 @@ type UnionArraysClassView struct {
 }
 
 func (t *UnionArraysClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -802,7 +761,6 @@ func (t *UnionArraysClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *UnionArraysClassView) MixedArray() (ClassPropertyView, error) {
@@ -834,7 +792,6 @@ type UserClassView struct {
 }
 
 func (t *UserClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -844,7 +801,6 @@ func (t *UserClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *UserClassView) Id() (ClassPropertyView, error) {
@@ -872,7 +828,6 @@ type WarningClassView struct {
 }
 
 func (t *WarningClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -882,7 +837,6 @@ func (t *WarningClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *WarningClassView) Type() (ClassPropertyView, error) {

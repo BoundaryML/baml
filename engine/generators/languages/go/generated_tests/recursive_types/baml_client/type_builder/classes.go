@@ -20,7 +20,6 @@ type UseMyUnionClassView struct {
 }
 
 func (t *UseMyUnionClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -30,7 +29,6 @@ func (t *UseMyUnionClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *UseMyUnionClassView) U() (ClassPropertyView, error) {

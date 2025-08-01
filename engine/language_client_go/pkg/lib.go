@@ -28,6 +28,14 @@ func DecodeStreamingState[T any](holder *cffi.CFFIValueHolder, decodeFunc func(i
 	return serde.DecodeStreamingState(holder, decodeFunc)
 }
 
+func DecodeChecked[T any](holder *cffi.CFFIValueHolder, decodeFunc func(inner *cffi.CFFIValueHolder) T) shared.Checked[T] {
+	return serde.DecodeChecked(holder, decodeFunc)
+}
+
+func BAMLTESTINGONLY_InternalEncode(value any) (*cffi.CFFIValueHolder, error) {
+	return serde.EncodeValue(value)
+}
+
 type TypeMap = serde.TypeMap
 type Checked[T any] = shared.Checked[T]
 type StreamState[T any] = shared.StreamState[T]

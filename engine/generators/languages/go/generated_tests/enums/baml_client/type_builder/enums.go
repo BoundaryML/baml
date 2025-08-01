@@ -20,7 +20,6 @@ type TestEnumEnumView struct {
 }
 
 func (t *TestEnumEnumView) ListValues() ([]EnumValueView, error) {
-
 	result, err := t.inner.ListValues()
 	if err != nil {
 		return nil, err
@@ -30,7 +29,6 @@ func (t *TestEnumEnumView) ListValues() ([]EnumValueView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *TestEnumEnumView) Angry() (EnumValueView, error) {

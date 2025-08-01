@@ -20,7 +20,6 @@ type ComplexOptionalClassView struct {
 }
 
 func (t *ComplexOptionalClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -30,7 +29,6 @@ func (t *ComplexOptionalClassView) ListProperties() ([]ClassPropertyView, error)
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *ComplexOptionalClassView) Data() (ClassPropertyView, error) {
@@ -58,7 +56,6 @@ type MixedOptionalNullableClassView struct {
 }
 
 func (t *MixedOptionalNullableClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -68,7 +65,6 @@ func (t *MixedOptionalNullableClassView) ListProperties() ([]ClassPropertyView, 
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *MixedOptionalNullableClassView) Id() (ClassPropertyView, error) {
@@ -124,7 +120,6 @@ type NullableTypesClassView struct {
 }
 
 func (t *NullableTypesClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -134,7 +129,6 @@ func (t *NullableTypesClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *NullableTypesClassView) NullableString() (ClassPropertyView, error) {
@@ -174,7 +168,6 @@ type OptionalDataClassView struct {
 }
 
 func (t *OptionalDataClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -184,7 +177,6 @@ func (t *OptionalDataClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *OptionalDataClassView) Value() (ClassPropertyView, error) {
@@ -212,7 +204,6 @@ type OptionalFieldsClassView struct {
 }
 
 func (t *OptionalFieldsClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -222,7 +213,6 @@ func (t *OptionalFieldsClassView) ListProperties() ([]ClassPropertyView, error) 
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *OptionalFieldsClassView) RequiredString() (ClassPropertyView, error) {
@@ -270,7 +260,6 @@ type OptionalItemClassView struct {
 }
 
 func (t *OptionalItemClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -280,7 +269,6 @@ func (t *OptionalItemClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *OptionalItemClassView) Id() (ClassPropertyView, error) {
@@ -312,7 +300,6 @@ type OptionalValueClassView struct {
 }
 
 func (t *OptionalValueClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -322,7 +309,6 @@ func (t *OptionalValueClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *OptionalValueClassView) Data() (ClassPropertyView, error) {
@@ -346,7 +332,6 @@ type ProductClassView struct {
 }
 
 func (t *ProductClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -356,7 +341,6 @@ func (t *ProductClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *ProductClassView) Id() (ClassPropertyView, error) {
@@ -384,7 +368,6 @@ type UnionWithNullClassView struct {
 }
 
 func (t *UnionWithNullClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -394,7 +377,6 @@ func (t *UnionWithNullClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *UnionWithNullClassView) SimpleUnion() (ClassPropertyView, error) {
@@ -426,7 +408,6 @@ type UserClassView struct {
 }
 
 func (t *UserClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -436,7 +417,6 @@ func (t *UserClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *UserClassView) Id() (ClassPropertyView, error) {

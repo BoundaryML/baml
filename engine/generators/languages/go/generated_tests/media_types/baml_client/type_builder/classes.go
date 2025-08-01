@@ -20,7 +20,6 @@ type MediaAnalysisResultClassView struct {
 }
 
 func (t *MediaAnalysisResultClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -30,7 +29,6 @@ func (t *MediaAnalysisResultClassView) ListProperties() ([]ClassPropertyView, er
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *MediaAnalysisResultClassView) Topics() (ClassPropertyView, error) {
@@ -54,7 +52,6 @@ type MediaArrayAnalysisResultClassView struct {
 }
 
 func (t *MediaArrayAnalysisResultClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -64,7 +61,6 @@ func (t *MediaArrayAnalysisResultClassView) ListProperties() ([]ClassPropertyVie
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *MediaArrayAnalysisResultClassView) AnalysisText() (ClassPropertyView, error) {
@@ -88,7 +84,6 @@ type MediaMapAnalysisResultClassView struct {
 }
 
 func (t *MediaMapAnalysisResultClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -98,7 +93,6 @@ func (t *MediaMapAnalysisResultClassView) ListProperties() ([]ClassPropertyView,
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *MediaMapAnalysisResultClassView) AnalysisText() (ClassPropertyView, error) {
@@ -126,7 +120,6 @@ type MixedMediaAnalysisResultClassView struct {
 }
 
 func (t *MixedMediaAnalysisResultClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -136,7 +129,6 @@ func (t *MixedMediaAnalysisResultClassView) ListProperties() ([]ClassPropertyVie
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *MixedMediaAnalysisResultClassView) Title() (ClassPropertyView, error) {
@@ -184,7 +176,6 @@ type OptionalMediaAnalysisResultClassView struct {
 }
 
 func (t *OptionalMediaAnalysisResultClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -194,7 +185,6 @@ func (t *OptionalMediaAnalysisResultClassView) ListProperties() ([]ClassProperty
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *OptionalMediaAnalysisResultClassView) AnalysisText() (ClassPropertyView, error) {

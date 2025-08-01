@@ -20,7 +20,6 @@ type BooleanLiteralsClassView struct {
 }
 
 func (t *BooleanLiteralsClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -30,7 +29,6 @@ func (t *BooleanLiteralsClassView) ListProperties() ([]ClassPropertyView, error)
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *BooleanLiteralsClassView) AlwaysTrue() (ClassPropertyView, error) {
@@ -58,7 +56,6 @@ type ComplexLiteralsClassView struct {
 }
 
 func (t *ComplexLiteralsClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -68,7 +65,6 @@ func (t *ComplexLiteralsClassView) ListProperties() ([]ClassPropertyView, error)
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *ComplexLiteralsClassView) State() (ClassPropertyView, error) {
@@ -104,7 +100,6 @@ type IntegerLiteralsClassView struct {
 }
 
 func (t *IntegerLiteralsClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -114,7 +109,6 @@ func (t *IntegerLiteralsClassView) ListProperties() ([]ClassPropertyView, error)
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *IntegerLiteralsClassView) Priority() (ClassPropertyView, error) {
@@ -142,7 +136,6 @@ type MixedLiteralsClassView struct {
 }
 
 func (t *MixedLiteralsClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -152,7 +145,6 @@ func (t *MixedLiteralsClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *MixedLiteralsClassView) Id() (ClassPropertyView, error) {
@@ -188,7 +180,6 @@ type StringLiteralsClassView struct {
 }
 
 func (t *StringLiteralsClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -198,7 +189,6 @@ func (t *StringLiteralsClassView) ListProperties() ([]ClassPropertyView, error) 
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *StringLiteralsClassView) Status() (ClassPropertyView, error) {

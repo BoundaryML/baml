@@ -20,7 +20,6 @@ type ActionClassView struct {
 }
 
 func (t *ActionClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -30,7 +29,6 @@ func (t *ActionClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *ActionClassView) Type() (ClassPropertyView, error) {
@@ -58,7 +56,6 @@ type AssetClassView struct {
 }
 
 func (t *AssetClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -68,7 +65,6 @@ func (t *AssetClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *AssetClassView) Id() (ClassPropertyView, error) {
@@ -100,7 +96,6 @@ type AssetMetadataClassView struct {
 }
 
 func (t *AssetMetadataClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -110,7 +105,6 @@ func (t *AssetMetadataClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *AssetMetadataClassView) Filename() (ClassPropertyView, error) {
@@ -146,7 +140,6 @@ type ButtonWidgetClassView struct {
 }
 
 func (t *ButtonWidgetClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -156,7 +149,6 @@ func (t *ButtonWidgetClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *ButtonWidgetClassView) Label() (ClassPropertyView, error) {
@@ -184,7 +176,6 @@ type ComplexDataClassView struct {
 }
 
 func (t *ComplexDataClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -194,7 +185,6 @@ func (t *ComplexDataClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *ComplexDataClassView) Primary() (ClassPropertyView, error) {
@@ -222,7 +212,6 @@ type ConditionClassView struct {
 }
 
 func (t *ConditionClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -232,7 +221,6 @@ func (t *ConditionClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *ConditionClassView) Type() (ClassPropertyView, error) {
@@ -256,7 +244,6 @@ type ConfigurationClassView struct {
 }
 
 func (t *ConfigurationClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -266,7 +253,6 @@ func (t *ConfigurationClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *ConfigurationClassView) Version() (ClassPropertyView, error) {
@@ -298,7 +284,6 @@ type ContainerWidgetClassView struct {
 }
 
 func (t *ContainerWidgetClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -308,7 +293,6 @@ func (t *ContainerWidgetClassView) ListProperties() ([]ClassPropertyView, error)
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *ContainerWidgetClassView) Layout() (ClassPropertyView, error) {
@@ -336,7 +320,6 @@ type DataObjectClassView struct {
 }
 
 func (t *DataObjectClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -346,7 +329,6 @@ func (t *DataObjectClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *DataObjectClassView) Type() (ClassPropertyView, error) {
@@ -370,7 +352,6 @@ type DimensionsClassView struct {
 }
 
 func (t *DimensionsClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -380,7 +361,6 @@ func (t *DimensionsClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *DimensionsClassView) Width() (ClassPropertyView, error) {
@@ -404,7 +384,6 @@ type EnvironmentClassView struct {
 }
 
 func (t *EnvironmentClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -414,7 +393,6 @@ func (t *EnvironmentClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *EnvironmentClassView) Name() (ClassPropertyView, error) {
@@ -446,7 +424,6 @@ type ErrorClassView struct {
 }
 
 func (t *ErrorClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -456,7 +433,6 @@ func (t *ErrorClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *ErrorClassView) Type() (ClassPropertyView, error) {
@@ -484,7 +460,6 @@ type ErrorDetailClassView struct {
 }
 
 func (t *ErrorDetailClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -494,7 +469,6 @@ func (t *ErrorDetailClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *ErrorDetailClassView) Code() (ClassPropertyView, error) {
@@ -522,7 +496,6 @@ type FeatureClassView struct {
 }
 
 func (t *FeatureClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -532,7 +505,6 @@ func (t *FeatureClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *FeatureClassView) Name() (ClassPropertyView, error) {
@@ -564,7 +536,6 @@ type ImageWidgetClassView struct {
 }
 
 func (t *ImageWidgetClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -574,7 +545,6 @@ func (t *ImageWidgetClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *ImageWidgetClassView) Alt() (ClassPropertyView, error) {
@@ -598,7 +568,6 @@ type ItemClassView struct {
 }
 
 func (t *ItemClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -608,7 +577,6 @@ func (t *ItemClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *ItemClassView) Id() (ClassPropertyView, error) {
@@ -640,7 +608,6 @@ type KitchenSinkClassView struct {
 }
 
 func (t *KitchenSinkClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -650,7 +617,6 @@ func (t *KitchenSinkClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *KitchenSinkClassView) Id() (ClassPropertyView, error) {
@@ -742,7 +708,6 @@ type NodeClassView struct {
 }
 
 func (t *NodeClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -752,7 +717,6 @@ func (t *NodeClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *NodeClassView) Id() (ClassPropertyView, error) {
@@ -784,7 +748,6 @@ type NodeMetadataClassView struct {
 }
 
 func (t *NodeMetadataClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -794,7 +757,6 @@ func (t *NodeMetadataClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *NodeMetadataClassView) Created() (ClassPropertyView, error) {
@@ -826,7 +788,6 @@ type PrimaryDataClassView struct {
 }
 
 func (t *PrimaryDataClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -836,7 +797,6 @@ func (t *PrimaryDataClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *PrimaryDataClassView) Values() (ClassPropertyView, error) {
@@ -864,7 +824,6 @@ type RecordClassView struct {
 }
 
 func (t *RecordClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -874,7 +833,6 @@ func (t *RecordClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *RecordClassView) Id() (ClassPropertyView, error) {
@@ -902,7 +860,6 @@ type ResponseMetadataClassView struct {
 }
 
 func (t *ResponseMetadataClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -912,7 +869,6 @@ func (t *ResponseMetadataClassView) ListProperties() ([]ClassPropertyView, error
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *ResponseMetadataClassView) Timestamp() (ClassPropertyView, error) {
@@ -944,7 +900,6 @@ type RuleClassView struct {
 }
 
 func (t *RuleClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -954,7 +909,6 @@ func (t *RuleClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *RuleClassView) Id() (ClassPropertyView, error) {
@@ -990,7 +944,6 @@ type SecondaryDataClassView struct {
 }
 
 func (t *SecondaryDataClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -1000,7 +953,6 @@ func (t *SecondaryDataClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *SecondaryDataClassView) Records() (ClassPropertyView, error) {
@@ -1024,7 +976,6 @@ type SettingClassView struct {
 }
 
 func (t *SettingClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -1034,7 +985,6 @@ func (t *SettingClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *SettingClassView) Key() (ClassPropertyView, error) {
@@ -1062,7 +1012,6 @@ type SimpleConditionClassView struct {
 }
 
 func (t *SimpleConditionClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -1072,7 +1021,6 @@ func (t *SimpleConditionClassView) ListProperties() ([]ClassPropertyView, error)
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *SimpleConditionClassView) Field() (ClassPropertyView, error) {
@@ -1100,7 +1048,6 @@ type SuccessClassView struct {
 }
 
 func (t *SuccessClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -1110,7 +1057,6 @@ func (t *SuccessClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *SuccessClassView) Type() (ClassPropertyView, error) {
@@ -1134,7 +1080,6 @@ type TertiaryDataClassView struct {
 }
 
 func (t *TertiaryDataClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -1144,7 +1089,6 @@ func (t *TertiaryDataClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *TertiaryDataClassView) Raw() (ClassPropertyView, error) {
@@ -1172,7 +1116,6 @@ type TextWidgetClassView struct {
 }
 
 func (t *TextWidgetClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -1182,7 +1125,6 @@ func (t *TextWidgetClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *TextWidgetClassView) Content() (ClassPropertyView, error) {
@@ -1210,7 +1152,6 @@ type UltraComplexClassView struct {
 }
 
 func (t *UltraComplexClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -1220,7 +1161,6 @@ func (t *UltraComplexClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *UltraComplexClassView) Tree() (ClassPropertyView, error) {
@@ -1256,7 +1196,6 @@ type UserClassView struct {
 }
 
 func (t *UserClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -1266,7 +1205,6 @@ func (t *UserClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *UserClassView) Id() (ClassPropertyView, error) {
@@ -1294,7 +1232,6 @@ type UserProfileClassView struct {
 }
 
 func (t *UserProfileClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -1304,7 +1241,6 @@ func (t *UserProfileClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *UserProfileClassView) Name() (ClassPropertyView, error) {
@@ -1336,7 +1272,6 @@ type UserResponseClassView struct {
 }
 
 func (t *UserResponseClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -1346,7 +1281,6 @@ func (t *UserResponseClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *UserResponseClassView) Status() (ClassPropertyView, error) {
@@ -1378,7 +1312,6 @@ type VariantClassView struct {
 }
 
 func (t *VariantClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -1388,7 +1321,6 @@ func (t *VariantClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *VariantClassView) Sku() (ClassPropertyView, error) {
@@ -1420,7 +1352,6 @@ type WidgetClassView struct {
 }
 
 func (t *WidgetClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -1430,7 +1361,6 @@ func (t *WidgetClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *WidgetClassView) Type() (ClassPropertyView, error) {

@@ -20,7 +20,6 @@ type AllNullableClassView struct {
 }
 
 func (t *AllNullableClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -30,7 +29,6 @@ func (t *AllNullableClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *AllNullableClassView) NullString() (ClassPropertyView, error) {
@@ -70,7 +68,6 @@ type BooleanEdgeCasesClassView struct {
 }
 
 func (t *BooleanEdgeCasesClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -80,7 +77,6 @@ func (t *BooleanEdgeCasesClassView) ListProperties() ([]ClassPropertyView, error
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *BooleanEdgeCasesClassView) ExplicitTrue() (ClassPropertyView, error) {
@@ -116,7 +112,6 @@ type CircularReferenceClassView struct {
 }
 
 func (t *CircularReferenceClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -126,7 +121,6 @@ func (t *CircularReferenceClassView) ListProperties() ([]ClassPropertyView, erro
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *CircularReferenceClassView) Id() (ClassPropertyView, error) {
@@ -162,7 +156,6 @@ type DeepRecursionClassView struct {
 }
 
 func (t *DeepRecursionClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -172,7 +165,6 @@ func (t *DeepRecursionClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *DeepRecursionClassView) Value() (ClassPropertyView, error) {
@@ -196,7 +188,6 @@ type EmptyCollectionsClassView struct {
 }
 
 func (t *EmptyCollectionsClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -206,7 +197,6 @@ func (t *EmptyCollectionsClassView) ListProperties() ([]ClassPropertyView, error
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *EmptyCollectionsClassView) EmptyStringArray() (ClassPropertyView, error) {
@@ -242,7 +232,6 @@ type InnerNullableClassView struct {
 }
 
 func (t *InnerNullableClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -252,7 +241,6 @@ func (t *InnerNullableClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *InnerNullableClassView) Value() (ClassPropertyView, error) {
@@ -272,7 +260,6 @@ type LargeStructureClassView struct {
 }
 
 func (t *LargeStructureClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -282,7 +269,6 @@ func (t *LargeStructureClassView) ListProperties() ([]ClassPropertyView, error) 
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *LargeStructureClassView) Field1() (ClassPropertyView, error) {
@@ -418,7 +404,6 @@ type MixedEdgeCasesClassView struct {
 }
 
 func (t *MixedEdgeCasesClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -428,7 +413,6 @@ func (t *MixedEdgeCasesClassView) ListProperties() ([]ClassPropertyView, error) 
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *MixedEdgeCasesClassView) EmptyString() (ClassPropertyView, error) {
@@ -468,7 +452,6 @@ type NestedNullableClassView struct {
 }
 
 func (t *NestedNullableClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -478,7 +461,6 @@ func (t *NestedNullableClassView) ListProperties() ([]ClassPropertyView, error) 
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *NestedNullableClassView) Outer() (ClassPropertyView, error) {
@@ -498,7 +480,6 @@ type NullEdgeCasesClassView struct {
 }
 
 func (t *NullEdgeCasesClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -508,7 +489,6 @@ func (t *NullEdgeCasesClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *NullEdgeCasesClassView) AllNull() (ClassPropertyView, error) {
@@ -536,7 +516,6 @@ type NumberEdgeCasesClassView struct {
 }
 
 func (t *NumberEdgeCasesClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -546,7 +525,6 @@ func (t *NumberEdgeCasesClassView) ListProperties() ([]ClassPropertyView, error)
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *NumberEdgeCasesClassView) Zero() (ClassPropertyView, error) {
@@ -602,7 +580,6 @@ type OptionalEverythingClassView struct {
 }
 
 func (t *OptionalEverythingClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -612,7 +589,6 @@ func (t *OptionalEverythingClassView) ListProperties() ([]ClassPropertyView, err
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *OptionalEverythingClassView) OptString() (ClassPropertyView, error) {
@@ -656,7 +632,6 @@ type OuterNullableClassView struct {
 }
 
 func (t *OuterNullableClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -666,7 +641,6 @@ func (t *OuterNullableClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *OuterNullableClassView) Inner() (ClassPropertyView, error) {
@@ -686,7 +660,6 @@ type SomeNullableClassView struct {
 }
 
 func (t *SomeNullableClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -696,7 +669,6 @@ func (t *SomeNullableClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *SomeNullableClassView) PresentString() (ClassPropertyView, error) {
@@ -728,7 +700,6 @@ type SpecialCharactersClassView struct {
 }
 
 func (t *SpecialCharactersClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -738,7 +709,6 @@ func (t *SpecialCharactersClassView) ListProperties() ([]ClassPropertyView, erro
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *SpecialCharactersClassView) NormalText() (ClassPropertyView, error) {
@@ -786,7 +756,6 @@ type UserClassView struct {
 }
 
 func (t *UserClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -796,7 +765,6 @@ func (t *UserClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *UserClassView) Id() (ClassPropertyView, error) {
@@ -820,7 +788,6 @@ type VeryLongStringsClassView struct {
 }
 
 func (t *VeryLongStringsClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -830,7 +797,6 @@ func (t *VeryLongStringsClassView) ListProperties() ([]ClassPropertyView, error)
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *VeryLongStringsClassView) ShortString() (ClassPropertyView, error) {

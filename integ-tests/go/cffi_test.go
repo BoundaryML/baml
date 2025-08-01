@@ -71,13 +71,6 @@ func TestEncodeDecode(t *testing.T) {
 				},
 			},
 		}},
-		// {b.RecursiveUnion(*b.Union__string__Map__string_RecursiveUnionNewWithMap__string_RecursiveUnion(&map[string]b.RecursiveUnion{
-		// 	"key": b.RecursiveUnion(*b.Union__string__Map__string_RecursiveUnionNewWithString(&[]string{"value"}[0])),
-		// 	"key2": b.RecursiveUnion(*b.Union__string__Map__string_RecursiveUnionNewWithMap__string_RecursiveUnion(&map[string]b.RecursiveUnion{
-		// 		"key":  b.RecursiveUnion(*b.Union__string__Map__string_RecursiveUnionNewWithString(&[]string{"value2"}[0])),
-		// 		"key2": b.RecursiveUnion(*b.Union__string__Map__string_RecursiveUnionNewWithString(&[]string{"value3"}[0])),
-		// 	})),
-		// }))},
 		{map[string]b.Union2BoolOrFloat{
 			"a": b.Union2BoolOrFloat__NewBool(true),
 			"b": b.Union2BoolOrFloat__NewFloat(2.2),
@@ -89,7 +82,7 @@ func TestEncodeDecode(t *testing.T) {
 			encoded, err := baml.BAMLTESTINGONLY_InternalEncode(test.input)
 			require.NoError(t, err)
 
-			decoded := baml.Decode(encoded)
+			decoded := baml.Decode(encoded).Interface()
 			require.Equal(t, test.input, decoded)
 		})
 	}

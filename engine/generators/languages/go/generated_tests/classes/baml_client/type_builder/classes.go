@@ -20,7 +20,6 @@ type SimpleClassClassView struct {
 }
 
 func (t *SimpleClassClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -30,7 +29,6 @@ func (t *SimpleClassClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *SimpleClassClassView) Digits() (ClassPropertyView, error) {

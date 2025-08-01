@@ -20,7 +20,6 @@ type ComplexMapsClassView struct {
 }
 
 func (t *ComplexMapsClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -30,7 +29,6 @@ func (t *ComplexMapsClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *ComplexMapsClassView) UserMap() (ClassPropertyView, error) {
@@ -66,7 +64,6 @@ type ConfigClassView struct {
 }
 
 func (t *ConfigClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -76,7 +73,6 @@ func (t *ConfigClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *ConfigClassView) Url() (ClassPropertyView, error) {
@@ -104,7 +100,6 @@ type EdgeCaseMapsClassView struct {
 }
 
 func (t *EdgeCaseMapsClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -114,7 +109,6 @@ func (t *EdgeCaseMapsClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *EdgeCaseMapsClassView) EmptyMap() (ClassPropertyView, error) {
@@ -146,7 +140,6 @@ type MixedKeyMapsClassView struct {
 }
 
 func (t *MixedKeyMapsClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -156,7 +149,6 @@ func (t *MixedKeyMapsClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *MixedKeyMapsClassView) StringIntMap() (ClassPropertyView, error) {
@@ -188,7 +180,6 @@ type NestedMapsClassView struct {
 }
 
 func (t *NestedMapsClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -198,7 +189,6 @@ func (t *NestedMapsClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *NestedMapsClassView) Simple() (ClassPropertyView, error) {
@@ -234,7 +224,6 @@ type ProductClassView struct {
 }
 
 func (t *ProductClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -244,7 +233,6 @@ func (t *ProductClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *ProductClassView) Id() (ClassPropertyView, error) {
@@ -276,7 +264,6 @@ type SimpleMapsClassView struct {
 }
 
 func (t *SimpleMapsClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -286,7 +273,6 @@ func (t *SimpleMapsClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *SimpleMapsClassView) StringToString() (ClassPropertyView, error) {
@@ -322,7 +308,6 @@ type UserClassView struct {
 }
 
 func (t *UserClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -332,7 +317,6 @@ func (t *UserClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *UserClassView) Id() (ClassPropertyView, error) {

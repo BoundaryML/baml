@@ -20,7 +20,6 @@ type ClassWithBlockDoneClassView struct {
 }
 
 func (t *ClassWithBlockDoneClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -30,7 +29,6 @@ func (t *ClassWithBlockDoneClassView) ListProperties() ([]ClassPropertyView, err
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *ClassWithBlockDoneClassView) I_16_digits() (ClassPropertyView, error) {
@@ -54,7 +52,6 @@ type ClassWithoutDoneClassView struct {
 }
 
 func (t *ClassWithoutDoneClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -64,7 +61,6 @@ func (t *ClassWithoutDoneClassView) ListProperties() ([]ClassPropertyView, error
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *ClassWithoutDoneClassView) I_16_digits() (ClassPropertyView, error) {
@@ -88,7 +84,6 @@ type SemanticContainerClassView struct {
 }
 
 func (t *SemanticContainerClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -98,7 +93,6 @@ func (t *SemanticContainerClassView) ListProperties() ([]ClassPropertyView, erro
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *SemanticContainerClassView) Sixteen_digit_number() (ClassPropertyView, error) {
@@ -146,7 +140,6 @@ type SmallThingClassView struct {
 }
 
 func (t *SmallThingClassView) ListProperties() ([]ClassPropertyView, error) {
-
 	result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
@@ -156,7 +149,6 @@ func (t *SmallThingClassView) ListProperties() ([]ClassPropertyView, error) {
 		builders[i] = p
 	}
 	return builders, nil
-
 }
 
 func (t *SmallThingClassView) I_16_digits() (ClassPropertyView, error) {
