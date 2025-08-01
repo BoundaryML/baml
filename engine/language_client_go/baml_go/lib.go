@@ -33,7 +33,7 @@ import (
 import "C"
 
 const (
-	VERSION            = "0.203.0"
+	VERSION            = "0.203.1"
 	githubRepo         = "boundaryml/baml"
 	bamlCacheDirEnvVar = "BAML_CACHE_DIR"
 	bamlLibraryPathEnv = "BAML_LIBRARY_PATH"
