@@ -25,19 +25,19 @@
   },
   "dependencies": {
     "@codemirror/autocomplete": "6.18.6",
-    "@codemirror/language": "6.11.1",
+    "@codemirror/language": "6.11.2",
     "@codemirror/legacy-modes": "6.5.1",
     "@lezer/common": "1.2.3",
     "@lezer/highlight": "1.2.1",
     "@lezer/lr": "1.4.2",
-    "@uiw/codemirror-theme-vscode": "4.23.13"
+    "@uiw/codemirror-theme-vscode": "4.24.2"
   },
   "devDependencies": {
-    "@lezer/generator": "1.7.3",
-    "mocha": "11.6.0",
+    "@lezer/generator": "1.8.0",
+    "mocha": "11.7.1",
     "tslib": "^2.6.2",
     "tsup": "8.5.0",
-    "typescript": "5.8.3"
+    "typescript": "5.9.2"
   },
   "license": "MIT"
 }

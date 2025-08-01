@@ -7,7 +7,7 @@
     "preview": "npx fern generate --preview --docs"
   },
   "devDependencies": {
-    "fern-api": "^0.31.24"
+    "fern-api": "^0.65.43"
   },
   "packageManager": "pnpm@9.12.0"
 }
