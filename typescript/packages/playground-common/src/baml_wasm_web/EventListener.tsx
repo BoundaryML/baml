@@ -5,7 +5,6 @@ import { vscode } from '@baml/playground-common';
 import { diagnosticsAtom, filesAtom, wasmAtom } from '@baml/playground-common';
 import {
   flashRangesAtom,
-  runtimeStateAtom,
   selectedFunctionAtom,
   selectedTestcaseAtom,
   updateCursorAtom,
@@ -17,7 +16,7 @@ import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
 import { AlertTriangle, XCircle } from 'lucide-react';
 import { CheckCircle } from 'lucide-react';
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { vscodeLocalStorageStore } from './JotaiProvider';
 import { type BamlConfigAtom, bamlConfig } from './bamlConfig';
 
@@ -111,51 +110,31 @@ export const isConnectedAtom = atom(true);
 //   )
 // }
 
-// Deep equality check for objects
-const deepEqual = (obj1: any, obj2: any): boolean => {
-  if (obj1 === obj2) return true;
-  if (!obj1 || !obj2) return false;
-  if (typeof obj1 !== 'object' || typeof obj2 !== 'object') return false;
-  
-  const keys1 = Object.keys(obj1);
-  const keys2 = Object.keys(obj2);
-  
-  if (keys1.length !== keys2.length) return false;
-  
-  for (const key of keys1) {
-    if (!keys2.includes(key)) return false;
-    if (!deepEqual(obj1[key], obj2[key])) return false;
-  }
-  
-  return true;
-};
-
 // We don't use ASTContext.provider because we should the default value of the context
 export const EventListener: React.FC = () => {
   const updateCursor = useSetAtom(updateCursorAtom)
   const setFiles = useSetAtom(filesAtom)
-  const currentFilesRef = useRef<Record<string, string>>({})
-  
-  // Wrap setFiles to only update if files actually changed
-  const setFilesIfChanged = useDebounceCallback((newFiles: Record<string, string>) => {
-    if (!deepEqual(currentFilesRef.current, newFiles)) {
-      currentFilesRef.current = newFiles;
-      setFiles(newFiles);
-    }
-  }, 20, true)
-  
+  const debouncedSetFiles = useDebounceCallback(setFiles, 50, true)
   const setFlashRanges = useSetAtom(flashRangesAtom)
   const setIsConnected = useSetAtom(isConnectedAtom)
   const isVSCodeWebview = vscode.isVscode()
 
   const [selectedFunc, setSelectedFunction] = useAtom(selectedFunctionAtom)
-  const [selectedTestcase, setSelectedTestcase] = useAtom(selectedTestcaseAtom)
+  const setSelectedTestcase = useSetAtom(selectedTestcaseAtom)
   const setBamlConfig = useSetAtom(bamlConfig)
   const [bamlCliVersion, setBamlCliVersion] = useAtom(bamlCliVersionAtom)
   const runBamlTests = useRunBamlTests()
   const wasm = useAtomValue(wasmAtom)
-  const runtimeState = useAtomValue(runtimeStateAtom)
-
+  useEffect(() => {
+    if (wasm) {
+      console.debug('wasm ready!')
+      try {
+        vscode.markInitialized()
+      } catch (e) {
+        console.error('Error marking initialized', e)
+      }
+    }
+  }, [wasm])
 
   const setOrchestratorIndex = useSetAtom(orchIndexAtom)
 
@@ -202,10 +181,10 @@ export const EventListener: React.FC = () => {
     return () => ws.close()
   }, [setIsConnected, isVSCodeWebview])
 
+  console.debug('Websocket execution finished');
 
   useEffect(() => {
-    // console.debug('adding event listener');
-    console.debug('selectedFunc', selectedFunc, 'selectedTestcase', selectedTestcase);
+    console.debug('adding event listener');
     const fn = (
       event: MessageEvent<
         | {
@@ -277,8 +256,8 @@ export const EventListener: React.FC = () => {
       switch (command) {
         case 'add_project':
           if (content?.root_path) {
-            // console.debug('add_project', content.root_path);
-            setFilesIfChanged(
+            console.debug('add_project', content.root_path);
+            debouncedSetFiles(
               Object.fromEntries(
                 Object.entries(content.files).map(([name, content]) => [
                   name,
@@ -286,8 +265,6 @@ export const EventListener: React.FC = () => {
                 ]),
               ),
             );
-          } else {
-            console.error('add_project: no root_path');
           }
           break;
 
@@ -306,33 +283,10 @@ export const EventListener: React.FC = () => {
 
         case 'select_function':
           console.debug('select_function', content);
-          
-          // Handle VSCode sending 'default' or non-existent function names
-          let functionToSelect = content.function_name;
-          const func = runtimeState.functions.find(f => f.name === content.function_name);
-          
-          if (!func) {
-            // Function doesn't exist, select the first available function
-            const firstFunc = runtimeState.functions[0];
-            if (firstFunc) {
-              functionToSelect = firstFunc.name;
-              console.debug('Function not found, selecting first function:', functionToSelect);
-            }
-          }
-          
-          setSelectedFunction(functionToSelect);
-          
-          // Reset test case to first for the selected function, or undefined if no test cases
-          const selectedFunction = runtimeState.functions.find(f => f.name === functionToSelect);
-          if (selectedFunction && selectedFunction.test_cases.length > 0) {
-            setSelectedTestcase(selectedFunction.test_cases[0]?.name);
-          } else {
-            setSelectedTestcase(undefined);
-          }
+          setSelectedFunction(content.function_name);
           break;
         case 'update_cursor':
           if ('cursor' in content) {
-            console.debug('update_cursor', content.cursor.fileName.split('/').pop());
             updateCursor(content.cursor);
           }
           break;
@@ -369,18 +323,7 @@ export const EventListener: React.FC = () => {
 
     return () => window.removeEventListener('message', fn);
     // If we dont add the jotai atom callbacks here like setRunningTests, this will call an old version of the atom (e.g. runTests which may have undefined dependencies).
-  }, [selectedFunc, setSelectedTestcase, setSelectedFunction]);
-
-  useEffect(() => {
-    if (wasm) {
-      console.debug('wasm ready!')
-      try {
-        vscode.markInitialized()
-      } catch (e) {
-        console.error('Error marking initialized', e)
-      }
-    }
-  }, [wasm])
+  }, [selectedFunc, runBamlTests, updateCursor, setSelectedTestcase]);
 
   return (
     <>

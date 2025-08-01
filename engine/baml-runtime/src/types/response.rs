@@ -7,7 +7,8 @@ use jsonish::{
 
 pub use crate::internal::llm_client::LLMResponse;
 use crate::{
-    errors::ExposedError, internal::llm_client::orchestrator::OrchestrationScope,
+    errors::ExposedError,
+    internal::llm_client::{orchestrator::OrchestrationScope, ErrorCode},
     test_constraints::TestConstraintsResult,
 };
 
@@ -127,6 +128,18 @@ impl FunctionResult {
         }
         // Capture the actual error to preserve its details
         let actual_error = err.to_string();
+        // TODO: HACK! Figure out why now connection errors dont get converted into ExposedError. Instead of converting to a validation error, check for connection errors here. We probably are missing a lot of other connection failures that should NOT be validation errors.
+        if actual_error.to_lowercase().contains("connecterror") {
+            return ExposedError::ClientHttpError {
+                client_name: match self.llm_response() {
+                    LLMResponse::Success(resp) => resp.client.clone(),
+                    LLMResponse::LLMFailure(err) => err.client.clone(),
+                    _ => "unknown".to_string(),
+                },
+                message: actual_error,
+                status_code: ErrorCode::ServiceUnavailable,
+            };
+        }
         ExposedError::ValidationError {
             prompt: match self.llm_response() {
                 LLMResponse::Success(resp) => resp.prompt.to_string(),

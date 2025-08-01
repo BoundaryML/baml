@@ -16,6 +16,7 @@
     "dev:vscode": "turbo run dev --filter=baml-extension...",
     "dev:language-server": "turbo run dev --filter=@baml/language-server",
     "dev:playground": "turbo run dev --filter=@baml/playground",
+    "dev:fiddle-web-app": "turbo run dev --filter=@baml/fiddle-web-app...",
     "generate": "turbo run generate",
     "typecheck": "turbo run typecheck",
     "lint:ws": "pnpm dlx sherif@latest",
