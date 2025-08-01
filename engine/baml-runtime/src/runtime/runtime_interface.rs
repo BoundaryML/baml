@@ -280,6 +280,7 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
         ctx: &RuntimeContext,
         strict: bool,
     ) -> Result<BamlMap<String, BamlValue>> {
+        log::info!("get_test_params: {function_name} {test_name}");
         let maybe_test_and_params = self.get_function(function_name).and_then(|func| {
             let test = self.ir().find_test(&func, test_name)?;
             let test_case_params = test.test_case_params(&ctx.eval_ctx(strict))?;

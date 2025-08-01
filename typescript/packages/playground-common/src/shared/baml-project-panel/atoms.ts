@@ -71,18 +71,18 @@ export const projectAtom = atom((get) => {
   const currentKey = createBamlFilesKey(bamlFiles);
   
   // Return cached project if files haven't changed
-  if (projectCache && projectCache.key === currentKey) {
-    return projectCache.project;
-  }
+  // if (projectCache && projectCache.key === currentKey) {
+  //   return projectCache.project;
+  // }
   
   // TODO: add python generator if using sandbox
   const newProject = wasm.WasmProject.new('./', bamlFiles);
   
   // Update cache
-  projectCache = {
-    key: currentKey,
-    project: newProject,
-  };
+  // projectCache = {
+  //   key: currentKey,
+  //   project: newProject,
+  // };
   
   return newProject;
 });

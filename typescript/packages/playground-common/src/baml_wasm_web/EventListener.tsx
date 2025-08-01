@@ -138,10 +138,10 @@ export const EventListener: React.FC = () => {
   
   // Wrap setFiles to only update if files actually changed
   const setFilesIfChanged = useDebounceCallback((newFiles: Record<string, string>) => {
-    if (!deepEqual(currentFilesRef.current, newFiles)) {
+    // if (!deepEqual(currentFilesRef.current, newFiles)) {
       currentFilesRef.current = newFiles;
       setFiles(newFiles);
-    }
+    // }
   }, 20, true)
   
   const setFlashRanges = useSetAtom(flashRangesAtom)
@@ -369,7 +369,7 @@ export const EventListener: React.FC = () => {
 
     return () => window.removeEventListener('message', fn);
     // If we dont add the jotai atom callbacks here like setRunningTests, this will call an old version of the atom (e.g. runTests which may have undefined dependencies).
-  }, [selectedFunc, setSelectedTestcase, setSelectedFunction]);
+  }, [selectedFunc, setSelectedTestcase, setSelectedFunction, runBamlTests]);
 
   useEffect(() => {
     if (wasm) {

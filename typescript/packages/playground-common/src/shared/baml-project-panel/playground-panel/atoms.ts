@@ -119,6 +119,7 @@ export const updateCursorAtom = atom(
           selectedFunc,
           cursorIdx,
         );
+        console.log('get_test_case_from_position', selectedTestcase)
 
         if (selectedTestcase) {
           // If cursor is inside a test case, always use that test case
