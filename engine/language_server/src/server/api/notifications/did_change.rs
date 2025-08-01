@@ -68,7 +68,6 @@ impl SyncNotificationHandler for DidChangeTextDocumentHandler {
         // Broadcast update to playground clients
         #[cfg(feature = "playground-server")]
         if let Some(state) = &session.playground_state {
-            tracing::info!("broadcasting update to playground clients");
             let project = project.lock().unwrap();
             let files_map: std::collections::HashMap<String, String> = project
                 .baml_project
