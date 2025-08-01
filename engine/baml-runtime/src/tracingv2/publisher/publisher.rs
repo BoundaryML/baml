@@ -471,7 +471,10 @@ impl TracePublisher {
 
         // Check if we should upload
         let check_response = match lookup
-            .api_request::<CheckBamlSrcUpload>(CheckBamlSrcUploadRequest { baml_src_hash })
+            .api_request::<CheckBamlSrcUpload>(CheckBamlSrcUploadRequest {
+                baml_src_hash,
+                baml_runtime: Some(env!("CARGO_PKG_VERSION").to_string()),
+            })
             .await
         {
             Ok(response) => response,
@@ -665,7 +668,9 @@ impl TracePublisher {
 
         let upload_url_details = match self
             .lookup
-            .api_request::<CreateTraceEventUploadUrl>(CreateTraceEventUploadUrlRequest {})
+            .api_request::<CreateTraceEventUploadUrl>(CreateTraceEventUploadUrlRequest {
+                baml_runtime: Some(env!("CARGO_PKG_VERSION").to_string()),
+            })
             .await
         {
             Ok(response) => response,
