@@ -1,5 +1,5 @@
 mod codegen;
-mod hir;
+pub mod hir;
 
 pub use codegen::compile;
 

@@ -191,13 +191,8 @@ impl<'g> HirCompiler<'g> {
     }
 
     fn compile_function(&mut self, func: &hir::ExprFunction) -> anyhow::Result<Function> {
-        // Resolve parameters.
-        for param in &func.parameters {
-            self.track_local(&param.name);
-        }
-
         // Compile statements in the function body.
-        self.compile_block(&func.body);
+        self.compile_block_with_parameters(&func.body, &func.parameters);
 
         Ok(Function {
             name: func.name.clone(),
@@ -225,14 +220,22 @@ impl<'g> HirCompiler<'g> {
         })
     }
 
-    fn compile_block(&mut self, block: &hir::Block) {
+    fn compile_block_with_parameters(&mut self, block: &hir::Block, parameters: &[hir::Parameter]) {
         self.enter_scope();
+
+        for param in parameters {
+            self.track_local(&param.name);
+        }
 
         for statement in &block.statements {
             self.compile_statement(statement);
         }
 
         self.exit_scope();
+    }
+
+    fn compile_block(&mut self, block: &hir::Block) {
+        self.compile_block_with_parameters(block, &[]);
     }
 
     fn compile_statement(&mut self, statement: &hir::Statement) {
@@ -267,6 +270,15 @@ impl<'g> HirCompiler<'g> {
 
             hir::Statement::Expression { expr, .. } => {
                 self.compile_expression(expr);
+            }
+
+            hir::Statement::ForLoop {
+                identifier,
+                iterator,
+                block,
+                ..
+            } => {
+                todo!()
             }
 
             hir::Statement::While {
@@ -377,21 +389,51 @@ impl<'g> HirCompiler<'g> {
             }
 
             hir::Expression::ClassConstructor(cc, _) => {
-                // Allocate instance
-                if let Some(&class_index) = self.globals.get(&cc.class_name) {
-                    self.emit(Instruction::AllocInstance(class_index));
+                let Some(&class_index) = self.globals.get(&cc.class_name) else {
+                    panic!("undefined class: {}", cc.class_name);
+                };
 
-                    // Set fields
-                    for field in &cc.fields {
-                        self.compile_expression(&field.value);
-                        if let Some(class_fields) = self.classes.get(&cc.class_name) {
-                            if let Some(&field_index) = class_fields.get(&field.name) {
-                                self.emit(Instruction::StoreField(field_index));
-                            } else {
-                                panic!("undefined field: {}.{}", cc.class_name, field.name);
+                // Allocate instance
+                self.emit(Instruction::AllocInstance(class_index));
+
+                let mut defined_named_fields = std::collections::HashSet::new();
+
+                // Process fields in order
+                for field in &cc.fields {
+                    match field {
+                        hir::ClassConstructorField::Named { name, value } => {
+                            self.compile_expression(value);
+
+                            let Some(classes) = self.classes.get(&cc.class_name) else {
+                                panic!("undefined class: {}", cc.class_name);
+                            };
+
+                            let Some(&field_index) = classes.get(name) else {
+                                panic!("undefined field: {}.{}", cc.class_name, name);
+                            };
+
+                            self.emit(Instruction::StoreField(field_index));
+                            defined_named_fields.insert(name.as_str());
+                        }
+                        hir::ClassConstructorField::Spread { value } => {
+                            // TODO: @antonio: Variable tracking here is wrong.
+                            self.compile_expression(value);
+
+                            // Pseudo local, user didn't declare it.
+                            let spread_local = self.locals.len() + 2;
+                            self.emit(Instruction::LoadVar(spread_local - 1));
+
+                            let Some(classes) = self.classes.get(&cc.class_name) else {
+                                panic!("undefined class: {}", cc.class_name);
+                            };
+
+                            for (field_name, &field_index) in classes {
+                                if !defined_named_fields.contains(field_name.as_str()) {
+                                    self.emit(Instruction::LoadVar(spread_local));
+                                    self.emit(Instruction::LoadField(field_index));
+                                    self.emit(Instruction::StoreField(field_index));
+                                }
                             }
-                        } else {
-                            panic!("undefined class: {}", cc.class_name);
                         }
                     }
                 }

@@ -35,11 +35,13 @@
       "Bash(tree:*)",
       "Bash(rg:*)",
       "Bash(cargo build:*)",
-      "Bash(npm run typecheck:*)",
-      "Bash(npm run lint)",
-      "Bash(npm run format:*)",
-      "Bash(npm run:*)",
-      "Bash(npx biome check:*)"
+      "Bash(UPDATE_EXPECT=1 cargo test basic_class --lib)",
+      "Bash(ln:*)",
+      "Bash(UPDATE_EXPECT=1 cargo test basic_class)",
+      "Bash(UPDATE_EXPECT=1 cargo test)",
+      "Bash(UPDATE_EXPECT=1 cargo test test_class)",
+      "Bash(UPDATE_EXPECT=1 cargo test simple_function enum_function)",
+      "Bash(UPDATE_EXPECT=1 cargo test literal_values if_expressions let_bindings function_calls llm_functions http_calls mixed_features mixed_complex)"
     ],
     "deny": []
   }

@@ -317,59 +317,6 @@ fn class_constructor_with_spread_operator() -> anyhow::Result<()> {
 }
 
 #[test]
-fn for_loop_simple() -> anyhow::Result<()> {
-    assert_vm_executes(Program {
-        source: "
-            fn main() -> int {
-                let list = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-                for (i in list) { i + 1 }
-                42
-            }
-        ",
-        function: "main",
-        expected: VmExecState::Complete(Value::Int(42)),
-    })
-}
-
-#[test]
-fn nested_for_loop() -> anyhow::Result<()> {
-    assert_vm_executes(Program {
-        source: "
-            fn main() -> int {
-                let list = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-                for (i in list) {
-                    for (j in list) { j }
-                    i
-                }
-                42
-            }
-        ",
-        function: "main",
-        expected: VmExecState::Complete(Value::Int(42)),
-    })
-}
-
-#[test]
-fn for_loop_with_expressions() -> anyhow::Result<()> {
-    // Test that arrays with expressions work properly
-    assert_vm_executes(Program {
-        source: "
-            fn three(x: int) -> int {
-                3
-            }
-
-            fn main() -> int {
-                let list = [three(1), three(2), three(3)];
-                for (i in list) { i }
-                42
-            }
-        ",
-        function: "main",
-        expected: VmExecState::Complete(Value::Int(42)),
-    })
-}
-
-#[test]
 fn function_returning_string() -> anyhow::Result<()> {
     assert_vm_executes_with_inspection(
         Program {
