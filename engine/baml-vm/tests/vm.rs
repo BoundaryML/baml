@@ -3,7 +3,7 @@
 //! These tests need the compiler crate to go from source to bytecode, that's
 //! why they're not placed in the source vm module.
 
-use baml_compiler::ast;
+use baml_compiler::test::ast;
 use baml_vm::{
     BamlVmProgram, Bytecode, Frame, Function, FunctionKind, Instruction, Object, Value, Vm,
     VmExecState,

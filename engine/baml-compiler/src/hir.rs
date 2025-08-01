@@ -503,32 +503,13 @@ impl Enum {
 
 #[cfg(test)]
 mod tests {
-    use internal_baml_core::ast;
-    use internal_baml_diagnostics::SourceFile;
 
     use super::*;
 
     /// Test helper to generate HIR from BAML source
     fn hir_from_source(source: &str) -> Hir {
-        let ast = parse_baml(source);
-        Hir::from_ast(&ast)
-    }
-
-    /// Parse BAML source code and return the AST
-    fn parse_baml(source: &str) -> ast::Ast {
-        let path = std::path::PathBuf::from("test.baml");
-        let source_file = SourceFile::from((path.clone(), source));
-
-        let validated_schema = internal_baml_core::validate(&path, vec![source_file]);
-
-        if validated_schema.diagnostics.has_errors() {
-            panic!(
-                "Parse errors: {}",
-                validated_schema.diagnostics.to_pretty_string()
-            );
-        }
-
-        validated_schema.db.ast
+        let parser_db = crate::test::ast(source).unwrap_or_else(|e| panic!("{}", e));
+        Hir::from_ast(&parser_db.ast)
     }
 
     // Test cases start here
