@@ -132,21 +132,6 @@ pub enum Instruction {
     /// [`crate::Vm::objects`] array.
     AllocInstance(usize),
 
-    /// Create an iterator from an array.
-    ///
-    /// Format: `CREATE_ITERATOR` - pops an array from the stack and pushes an iterator.
-    /// Stack before: [array]
-    /// Stack after: [iterator]
-    CreateIterator,
-
-    /// Get the next element from an iterator.
-    ///
-    /// Format: `ITER_NEXT` - pops an iterator from the stack and pushes the next element and a boolean.
-    /// Stack before: [iterator]
-    /// Stack after: [iterator, element, has_next]
-    /// TODO(Rahul): Check with Antonio, if this insn is complex than needed.
-    IterNext,
-
     /// Creates a pending future, pushes it on the stack and notifies embedder.
     ///
     /// Format: `DISPATCH_FUTURE n` where `n` is the number of arguments passed
@@ -200,8 +185,6 @@ impl std::fmt::Display for Instruction {
             Instruction::JumpIfFalse(o) => write!(f, "JUMP_IF_FALSE {o}"),
             Instruction::AllocArray(n) => write!(f, "ALLOC_ARRAY {n}"),
             Instruction::AllocInstance(i) => write!(f, "ALLOC_INSTANCE {i}"),
-            Instruction::CreateIterator => f.write_str("CREATE_ITERATOR"),
-            Instruction::IterNext => f.write_str("ITER_NEXT"),
             Instruction::DispatchFuture(i) => write!(f, "DISPATCH_FUTURE {i}"),
             Instruction::Await => f.write_str("AWAIT"),
             Instruction::Call(n) => write!(f, "CALL {n}"),
@@ -226,6 +209,8 @@ pub struct Bytecode {
     /// Maps instruction indices to their source line numbers.
     /// Each element corresponds to an instruction at the same index.
     pub source_lines: Vec<usize>,
+
+    pub scopes: Vec<usize>,
 }
 
 impl Bytecode {
@@ -234,6 +219,7 @@ impl Bytecode {
             instructions: Vec::new(),
             constants: Vec::new(),
             source_lines: Vec::new(),
+            scopes: Vec::new(),
         }
     }
 }

@@ -5,7 +5,8 @@
 
 use baml_compiler::ast;
 use baml_vm::{
-    Bytecode, Frame, Function, FunctionKind, Instruction, Object, Value, Vm, VmExecState,
+    BamlVmProgram, Bytecode, Frame, Function, FunctionKind, Instruction, Object, Value, Vm,
+    VmExecState,
 };
 
 /// Helper struct for testing VM execution.
@@ -26,11 +27,15 @@ fn assert_vm_executes_with_inspection(
     inspect: impl FnOnce(&Vm) -> anyhow::Result<()>,
 ) -> anyhow::Result<()> {
     let ast = ast(input.source)?;
-    let (objects, globals, resolved_function_names) = baml_compiler::compile(&ast)?;
+    let BamlVmProgram {
+        objects,
+        globals,
+        resolved_function_names,
+    } = baml_compiler::compile(&ast)?;
 
-    eprintln!("objects: {:#?}", objects);
-    eprintln!("globals: {:#?}", globals);
-    eprintln!("resolved_function_names: {:#?}", resolved_function_names);
+    eprintln!("objects: {objects:#?}");
+    eprintln!("globals: {globals:#?}");
+    eprintln!("resolved_function_names: {resolved_function_names:#?}");
 
     // Find the target function index by name
     let (target_function_index, _) = resolved_function_names[input.function];
@@ -88,15 +93,16 @@ fn assert_vm_executes_bytecode_with_inspection(
         arity: input.arity,
         bytecode: Bytecode {
             source_lines: vec![1; input.instructions.len()],
+            scopes: vec![0; input.instructions.len()],
             instructions: input.instructions,
             constants: input.constants,
         },
         kind: FunctionKind::Exec,
-        local_var_names: {
+        locals_in_scope: {
             let mut names = Vec::with_capacity(input.arity + 1);
             names.push("<fn test_fn>".to_string());
             names.resize_with(names.capacity(), String::new);
-            names
+            vec![names]
         },
     };
 
@@ -439,57 +445,5 @@ fn block_expr() -> anyhow::Result<()> {
         ",
         function: "main",
         expected: VmExecState::Complete(Value::Int(1)),
-    })
-}
-
-#[test]
-fn create_iterator_instruction() -> anyhow::Result<()> {
-    assert_vm_executes_bytecode_with_inspection(
-        BytecodeProgram {
-            arity: 0,
-            constants: vec![Value::Int(1), Value::Int(2), Value::Int(3)],
-            instructions: vec![
-                Instruction::LoadConst(0),   // Load 1
-                Instruction::LoadConst(1),   // Load 2
-                Instruction::LoadConst(2),   // Load 3
-                Instruction::AllocArray(3),  // Create array [1, 2, 3]
-                Instruction::CreateIterator, // Create iterator
-                Instruction::Return,         // Return the iterator object
-            ],
-            expected: VmExecState::Complete(Value::Object(2)), // Should return iterator object at index 2
-        },
-        |vm, result| {
-            let VmExecState::Complete(Value::Object(index)) = result else {
-                panic!("expected Object, got {result:?}");
-            };
-
-            let Object::Iterator { iterable, index } = &vm.objects[index] else {
-                panic!("expected Iterator, got {:?}", vm.objects[index]);
-            };
-
-            assert_eq!(*index, 0); // Should start at index 0
-            assert_eq!(*iterable, 1); // Array should be at index 1 (after function at index 0)
-
-            Ok(())
-        },
-    )
-}
-
-#[test]
-fn iter_next_instruction() -> anyhow::Result<()> {
-    assert_vm_executes_bytecode(BytecodeProgram {
-        arity: 0,
-        constants: vec![Value::Int(10), Value::Int(20), Value::Int(30)],
-        instructions: vec![
-            Instruction::LoadConst(0),   // Load 10
-            Instruction::LoadConst(1),   // Load 20
-            Instruction::LoadConst(2),   // Load 30
-            Instruction::AllocArray(3),  // Create array [10, 20, 30]
-            Instruction::CreateIterator, // Create iterator
-            Instruction::IterNext,       // Get first element
-            Instruction::Pop,            // Remove has_next boolean
-            Instruction::Return,         // Return the element
-        ],
-        expected: VmExecState::Complete(Value::Int(10)), // Should return first element
     })
 }

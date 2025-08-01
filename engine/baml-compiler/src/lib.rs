@@ -13,7 +13,7 @@ pub mod hir;
 
 use std::collections::{HashMap, HashSet};
 
-use baml_vm::{Bytecode, Class, Function, FunctionKind, Instruction, Object, Value};
+use baml_vm::{BamlVmProgram, Bytecode, Class, Function, FunctionKind, Instruction, Object, Value};
 use internal_baml_parser_database::ParserDatabase;
 
 /// Compile a Baml AST into bytecode.
@@ -21,7 +21,7 @@ use internal_baml_parser_database::ParserDatabase;
 /// This now uses a two-stage compilation process:
 /// 1. AST -> HIR
 /// 2. HIR -> Bytecode
-pub fn compile(ast: ParserDatabase) -> anyhow::Result<(Vec<Object>, Vec<Value>)> {
+pub fn compile(ast: &ParserDatabase) -> anyhow::Result<BamlVmProgram> {
     // Stage 1: AST -> HIR
     let hir = hir::Hir::from_ast(&ast.ast);
 
@@ -34,7 +34,7 @@ pub fn compile(ast: ParserDatabase) -> anyhow::Result<(Vec<Object>, Vec<Value>)>
 /// Compile HIR to bytecode.
 ///
 /// This function takes an HIR Program and generates the bytecode for the VM.
-fn compile_hir_to_bytecode(hir: &hir::Hir) -> anyhow::Result<(Vec<Object>, Vec<Value>)> {
+fn compile_hir_to_bytecode(hir: &hir::Hir) -> anyhow::Result<BamlVmProgram> {
     let mut resolved_globals = HashMap::new();
     let mut resolved_classes = HashMap::new();
 
@@ -83,7 +83,20 @@ fn compile_hir_to_bytecode(hir: &hir::Hir) -> anyhow::Result<(Vec<Object>, Vec<V
         objects.push(Object::Class(bytecode_class));
     }
 
-    Ok((objects, globals))
+    let resolved_function_names = objects
+        .iter()
+        .enumerate()
+        .filter_map(|(i, obj)| match obj {
+            Object::Function(f) => Some((f.name.clone(), (i, f.kind))),
+            _ => None,
+        })
+        .collect();
+
+    Ok(BamlVmProgram {
+        objects,
+        globals,
+        resolved_function_names,
+    })
 }
 
 /// Compile an HIR function to bytecode.
@@ -97,26 +110,71 @@ fn compile_hir_function(
     compiler.compile_function(func)
 }
 
+/// Block scope tracker.
+///
+/// The scope increments with each nested block. Example:
+///
+/// ```ignore
+/// fn example() {          // Scope is 1. Locals: [a]
+///     let a = 1;
+///     {                   // Scope is 2. Locals: [a, b]
+///         let b = 2;
+///         {               // Scope is 3. Locals: [a, b, c]
+///             let c  = 3;
+///         }
+///     }
+/// }
+/// ```
+///
+/// This is used to keep track of local variables present in the evaluation
+/// stack.
 #[derive(Debug, Default)]
 struct Scope {
+    /// Current scope depth.
     depth: usize,
-    locals: HashSet<String>,
+
+    /// Stack of locals in each scope we're diving into.
+    locals: Vec<HashSet<String>>,
+
+    /// Stack of scope ids.
+    ids: Vec<usize>,
 }
 
 /// HIR to bytecode compiler.
 struct HirCompiler<'g> {
     /// Resolved global variables.
+    ///
+    /// Maps the name of the global variable to its index in the globals pool.
     globals: &'g HashMap<String, usize>,
+
     /// Resolved class fields.
+    ///
+    /// Maps the name of the class to the field resolution. Field resolution
+    /// is basically a transformation of field name to an index in an array.
+    ///
+    /// TODO: The `g` lifetime here doesn't need to be the same as the globals
+    /// lifetime.
     classes: &'g HashMap<String, HashMap<String, usize>>,
+
     /// Resolved local variables.
+    ///
+    /// Maps the name of the variable to its final index in the eval stack.
     locals: HashMap<String, usize>,
+
+    /// Scope tracking. Current depth and stack of visited scopes.
+    scope: Scope,
+
+    /// Locals in scope.
+    locals_in_scope: Vec<HashMap<String, usize>>,
+
+    /// Current source line.
+    current_source_line: usize,
+
     /// Bytecode to generate.
     bytecode: Bytecode,
+
     /// Objects pool.
     objects: &'g mut Vec<Object>,
-    /// Current scope.
-    scope: Scope,
 }
 
 impl<'g> HirCompiler<'g> {
@@ -128,20 +186,19 @@ impl<'g> HirCompiler<'g> {
         Self {
             globals,
             classes,
+            objects,
             locals: HashMap::new(),
             bytecode: Bytecode::new(),
-            objects,
             scope: Scope::default(),
+            current_source_line: 0,
+            locals_in_scope: Vec::new(),
         }
     }
 
     fn compile_function(&mut self, func: &hir::ExprFunction) -> anyhow::Result<Function> {
         // Resolve parameters.
         for param in &func.parameters {
-            // Note the len() + 1 here. The first local is the function itself,
-            // arguments start at index 1.
-            self.locals
-                .insert(param.name.clone(), self.locals.len() + 1);
+            self.track_local(&param.name);
         }
 
         // Compile statements in the function body.
@@ -153,20 +210,23 @@ impl<'g> HirCompiler<'g> {
             bytecode: self.bytecode.clone(),
             kind: FunctionKind::Exec,
 
-            // Debugging stuff.
-            local_var_names: {
-                let mut names = Vec::with_capacity(self.locals.len() + 1);
+            // Debug info.
+            locals_in_scope: Vec::from_iter(self.locals_in_scope.iter().map(|locals| {
+                let mut names = Vec::with_capacity(locals.len() + 1);
+
                 // Function is pushed onto the stack.
                 names.push(format!("<fn {}>", func.name));
+
                 // Locals come after.
                 names.resize_with(names.capacity(), String::new);
 
-                for (name, index) in &self.locals {
+                // Distribute locals to their respective indexes.
+                for (name, index) in locals {
                     names[*index] = name.to_string();
                 }
 
                 names
-            },
+            })),
         })
     }
 
@@ -248,6 +308,10 @@ impl<'g> HirCompiler<'g> {
 
     /// Generate bytecode for an expression.
     fn compile_expression(&mut self, expr: &hir::Expression) {
+        // TODO: The implementation of line number is extremely slow. It always
+        // reads the entire source string to find the line number.
+        self.current_source_line = expr.span().line_number();
+
         match expr {
             hir::Expression::BoolValue(val, _) => {
                 let index = self.add_constant(Value::Bool(*val));
@@ -265,7 +329,8 @@ impl<'g> HirCompiler<'g> {
                 self.emit(Instruction::LoadConst(index));
             }
 
-            hir::Expression::StringValue(string, _) => {
+            hir::Expression::StringValue(string, _)
+            | hir::Expression::RawStringValue(string, _) => {
                 // Allocate the string in the objects pool
                 self.objects.push(Object::String(string.clone()));
                 let object_index = self.objects.len() - 1;
@@ -275,20 +340,11 @@ impl<'g> HirCompiler<'g> {
                 self.emit(Instruction::LoadConst(const_index));
             }
 
-            hir::Expression::RawStringValue(string, _) => {
-                // Raw strings work the same as regular strings for bytecode
-                self.objects.push(Object::String(string.clone()));
-                let object_index = self.objects.len() - 1;
-
-                let const_index = self.add_constant(Value::Object(object_index));
-                self.emit(Instruction::LoadConst(const_index));
-            }
-
             hir::Expression::Identifier(name, _) => {
                 if let Some(&index) = self.locals.get(name) {
                     self.emit(Instruction::LoadVar(index));
                 } else {
-                    panic!("undefined variable: {}", name);
+                    panic!("undefined variable: {name}");
                 }
             }
 
@@ -387,8 +443,15 @@ impl<'g> HirCompiler<'g> {
     }
 
     fn emit(&mut self, instruction: Instruction) -> usize {
+        let index = self.bytecode.instructions.len();
+
         self.bytecode.instructions.push(instruction);
-        self.bytecode.instructions.len() - 1
+        self.bytecode.source_lines.push(self.current_source_line);
+        self.bytecode.scopes.push(*self.scope.ids.last().expect(
+            "compiler bug: attempt to read scope ID of instruction when scope stack is empty",
+        ));
+
+        index
     }
 
     fn add_constant(&mut self, value: Value) -> usize {
@@ -413,23 +476,40 @@ impl<'g> HirCompiler<'g> {
     fn track_local(&mut self, name: &str) -> usize {
         let index = self.locals.len() + 1;
         self.locals.insert(name.to_string(), index);
-        if self.scope.depth > 1 {
-            self.scope.locals.insert(name.to_string());
-        }
+
+        self.scope
+            .locals
+            .last_mut()
+            .unwrap()
+            .insert(name.to_string());
+
         index
     }
 
     fn enter_scope(&mut self) {
         self.scope.depth += 1;
-        self.scope.locals.clear();
+        self.scope.locals.push(HashSet::new());
+        self.scope.ids.push(self.locals_in_scope.len());
+
+        self.locals_in_scope.push(HashMap::new());
     }
 
     fn exit_scope(&mut self) {
-        if self.scope.depth > 1 && !self.scope.locals.is_empty() {
-            self.emit(Instruction::EndBlock(self.scope.locals.len()));
+        let scope_id = self
+            .scope
+            .ids
+            .pop()
+            .expect("failed to keep track of the current scope id (compiler bug)");
 
-            for local in &self.scope.locals {
-                self.locals.remove(local);
+        self.locals_in_scope[scope_id] = self.locals.clone();
+
+        let scope_locals = self.scope.locals.pop().unwrap();
+
+        if self.scope.depth > 1 && !self.scope.locals.is_empty() {
+            self.emit(Instruction::EndBlock(scope_locals.len()));
+
+            for local in scope_locals {
+                self.locals.remove(&local);
             }
         }
 
@@ -468,7 +548,10 @@ mod tests {
     /// instructions.
     fn assert_compiles(input: Program) -> anyhow::Result<()> {
         let ast = ast(input.source)?;
-        let (objects, globals) = compile(ast)?;
+
+        let BamlVmProgram {
+            objects, globals, ..
+        } = compile(&ast)?;
 
         // Create a map of function name to function for easy lookup
         let functions: std::collections::HashMap<&str, &baml_vm::Function> = objects
@@ -654,5 +737,99 @@ mod tests {
             "#,
             expected: vec![("main", vec![Instruction::LoadConst(0), Instruction::Return])],
         })
+    }
+
+    #[test]
+    fn block_expr() -> anyhow::Result<()> {
+        assert_compiles(Program {
+            source: "
+                fn main() -> int {
+                    let a = {
+                        let b = 1;
+                        b
+                    };
+
+                    a
+                }
+            ",
+            expected: vec![(
+                "main",
+                vec![
+                    Instruction::LoadConst(0),
+                    Instruction::LoadVar(1),
+                    Instruction::EndBlock(1),
+                    Instruction::LoadVar(1),
+                    Instruction::Return,
+                ],
+            )],
+        })
+    }
+
+    #[test]
+    fn locals_in_scope() -> anyhow::Result<()> {
+        let ast = ast(r#"
+            fn main() -> int {
+                let x = 0;
+
+                let a = {
+                    let y = 0;
+
+
+                    let b = {
+                        let c = 1;
+                        let d = 2;
+                        3
+                    };
+                    let e = {
+                        let f = 4;
+                        let g = 5;
+                        6
+                    };
+
+                    7
+                };
+
+                let h = {
+                    let z = 0;
+
+                    let i = {
+                        let w = 0;
+                        let j = 8;
+                        9
+                    };
+
+                    10
+                };
+
+                a
+            }
+        "#)?;
+
+        let BamlVmProgram {
+            objects,
+            resolved_function_names,
+            ..
+        } = compile(&ast)?;
+
+        let main = objects[resolved_function_names["main"].0].as_function()?;
+
+        let expected_locals_in_scope = [
+            vec!["<fn main>", "x", "a", "h"],
+            vec!["<fn main>", "x", "y", "b", "e"],
+            vec!["<fn main>", "x", "y", "c", "d"],
+            vec!["<fn main>", "x", "y", "b", "f", "g"],
+            vec!["<fn main>", "x", "a", "z", "i"],
+            vec!["<fn main>", "x", "a", "z", "w", "j"],
+        ];
+
+        assert_eq!(
+            main.locals_in_scope,
+            expected_locals_in_scope
+                .iter()
+                .map(|scope| scope.iter().map(ToString::to_string).collect::<Vec<_>>())
+                .collect::<Vec<_>>()
+        );
+
+        Ok(())
     }
 }

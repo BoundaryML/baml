@@ -15,7 +15,7 @@ use std::{
 use baml_compiler::{self};
 use baml_ids::FunctionCallId;
 use baml_types::{tracing::events::HTTPRequest, BamlMap, BamlValue, BamlValueWithMeta, Completion};
-use baml_vm::{FunctionKind, Vm, VmExecState};
+use baml_vm::{BamlVmProgram, FunctionKind, Vm, VmExecState};
 use internal_baml_core::ir::IRHelper;
 use jsonish::{ResponseBamlValue, ResponseValueMeta};
 
@@ -52,13 +52,7 @@ pub struct BamlAsyncVmRuntime {
     llm_runtime: Arc<LlmRuntime>,
 
     // Compiler generated objects.
-    objects: Vec<baml_vm::Object>,
-    globals: Vec<baml_vm::Value>,
-
-    /// Maps function names to function IDs in the VM.
-    ///
-    /// We use this to set entry points, VM doesn't care about names.
-    resolved_function_names: HashMap<String, (usize, FunctionKind)>,
+    program: BamlVmProgram,
 }
 
 impl TryFrom<LlmRuntime> for BamlAsyncVmRuntime {
@@ -68,14 +62,11 @@ impl TryFrom<LlmRuntime> for BamlAsyncVmRuntime {
         #[cfg(not(target_arch = "wasm32"))]
         let async_runtime = Arc::clone(&llm_runtime.async_runtime);
 
-        let (objects, globals, resolved_function_names) =
-            baml_compiler::compile(&llm_runtime.inner.db)?;
+        let program = baml_compiler::compile(&llm_runtime.inner.db)?;
 
         Ok(Self {
             llm_runtime: Arc::new(llm_runtime),
-            objects,
-            globals,
-            resolved_function_names,
+            program,
 
             #[cfg(not(target_arch = "wasm32"))]
             async_runtime,
@@ -90,6 +81,7 @@ impl BamlAsyncVmRuntime {
 
     pub fn disassemble(&self, function_name: &str) {
         let Some(index) = self
+            .program
             .resolved_function_names
             .get(function_name)
             .map(|(index, _)| *index)
@@ -97,11 +89,11 @@ impl BamlAsyncVmRuntime {
             return println!("function not found: {function_name}");
         };
 
-        let Some(baml_vm::Object::Function(function)) = self.objects.get(index) else {
+        let Some(baml_vm::Object::Function(function)) = self.program.objects.get(index) else {
             return println!("not a function: {function_name}");
         };
 
-        baml_vm::debug::disassemble(function, &[], &self.objects, &self.globals);
+        baml_vm::debug::disassemble(function, &[], &self.program.objects, &self.program.globals);
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -141,6 +133,7 @@ impl BamlAsyncVmRuntime {
     ) -> (anyhow::Result<FunctionResult>, FunctionCallId) {
         // TODO: Proper error handling. Refactor the API to return a Result.
         let (function_index, function_kind) = self
+            .program
             .resolved_function_names
             .get(&function_name)
             .unwrap_or_else(|| {
@@ -187,7 +180,7 @@ impl BamlAsyncVmRuntime {
         //
         // TODO: This is expensive for big programs, figure out how to share
         // compiler produced objects betweeen VMs. We know they are read only.
-        let mut vm = Vm::new(self.objects.clone(), self.globals.clone());
+        let mut vm = Vm::new(self.program.clone());
 
         vm.set_entry_point(
             *function_index,

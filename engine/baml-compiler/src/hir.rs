@@ -4,18 +4,16 @@ use internal_baml_diagnostics::Span;
 /// High-level intermediate representation.
 ///
 /// This is analogous to the HIR in Rust: https://rustc-dev-guide.rust-lang.org/hir.html
-/// It carries just enough information to produce BAML bytecode. It differs
-/// from baml-core IR in that it does not contain any type information. It has limited
-/// metadata, for use in debugging, namely source spans.
+/// It carries just enough information to produce BAML bytecode. It differs from
+/// baml-core IR in that it does not contain any type information. It has
+/// limited metadata, for use in debugging, namely source spans.
 ///
 /// See `HIR::from_ast` to see how BAML syntax is lowered into HIR.
 ///
 /// Lowering from AST to HIR involves desugaring certain syntax forms.
 ///   - For loops become while loops.
-///   - Class constructor spreads become regular class constructors with
-///     exhaustive fields.
+///   - Class constructor spreads become regular class constructors with exhaustive fields.
 ///   - Implicit returns become explicit.
-///   - If expressions become if statements with a block.
 #[derive(Debug)]
 pub struct Hir {
     pub expr_functions: Vec<ExprFunction>,
@@ -166,6 +164,26 @@ pub enum Expression {
     ClassConstructor(ClassConstructor, Span),
     /// Expression block - has its own scope with statements and evaluates to a value
     ExpressionBlock(Box<Block>, Span),
+}
+
+// TODO: struct Expr {kind: ExprKind, span: Span}
+impl Expression {
+    pub fn span(&self) -> Span {
+        match self {
+            Expression::BoolValue(_, span) => span.clone(),
+            Expression::NumericValue(_, span) => span.clone(),
+            Expression::Identifier(_, span) => span.clone(),
+            Expression::StringValue(_, span) => span.clone(),
+            Expression::RawStringValue(_, span) => span.clone(),
+            Expression::If { span, .. } => span.clone(),
+            Expression::Array(_, span) => span.clone(),
+            Expression::Map(_, span) => span.clone(),
+            Expression::JinjaExpressionValue(_, span) => span.clone(),
+            Expression::Call(_, _, span) => span.clone(),
+            Expression::ClassConstructor(_, span) => span.clone(),
+            Expression::ExpressionBlock(_, span) => span.clone(),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -333,32 +351,6 @@ impl Block {
     }
 }
 
-impl Statement {
-    /// Lower a statement into HIR.
-    /// Note: If expressions in let bindings are handled at the Block level.
-    fn from_ast(stmt: &ast::Stmt) -> Self {
-        match stmt {
-            ast::Stmt::Let(ast::LetStmt {
-                identifier,
-                expr,
-                span,
-            }) => {
-                let mut dummy_statements = vec![];
-                let mut dummy_counter = 0;
-                Statement::Let {
-                    name: identifier.to_string(),
-                    value: Expression::from_ast(expr, &mut dummy_statements, &mut dummy_counter),
-                    span: span.clone(),
-                }
-            }
-            ast::Stmt::ForLoop(_) => {
-                // For loops should be handled at the Block level
-                panic!("For loops should not reach Statement::from_ast");
-            }
-        }
-    }
-}
-
 impl Expression {
     /// Lower an expression into HIR.
     ///
@@ -418,7 +410,7 @@ impl Expression {
                 if_branch: Box::new(Self::from_ast(if_branch, statements, temp_counter)),
                 else_branch: else_branch
                     .as_ref()
-                    .map(|block| Box::new(Self::from_ast(&block, statements, temp_counter))),
+                    .map(|block| Box::new(Self::from_ast(block, statements, temp_counter))),
                 span: span.clone(),
             },
             ast::Expression::ExprBlock(block, span) => {
@@ -431,8 +423,7 @@ impl Expression {
                 )
             }
             ast::Expression::Lambda(_args, _body, span) => {
-                // Lambdas are not yet implemented
-                Expression::StringValue("lambda_todo".to_string(), span.clone())
+                todo!("lambdas are not yet implemented")
             }
             ast::Expression::ClassConstructor(cc, span) => {
                 // TODO: To handle spreads, if there is a spread, compute a sequence
