@@ -25,8 +25,6 @@ pub fn compile(ast: &ParserDatabase) -> anyhow::Result<BamlVmProgram> {
     // Stage 1: AST -> HIR
     let hir = hir::Hir::from_ast(&ast.ast);
 
-    println!("HIR: {:#?}", hir);
-
     // Stage 2: HIR -> Bytecode
     compile_hir_to_bytecode(&hir)
 }
@@ -110,18 +108,24 @@ fn compile_hir_function(
     compiler.compile_function(func)
 }
 
-/// Block scope tracker.
+/// Block scope.
 ///
 /// The scope increments with each nested block. Example:
 ///
 /// ```ignore
-/// fn example() {          // Scope is 1. Locals: [a]
+/// fn example() {          // Scope { id: 0, depth: 0, locals: [a, d] }
 ///     let a = 1;
-///     {                   // Scope is 2. Locals: [a, b]
+///     {                   // Scope { id: 1, depth: 1, locals: [a, b] }
 ///         let b = 2;
-///         {               // Scope is 3. Locals: [a, b, c]
+///         {               // Scope { id: 2, depth: 2, locals: [a, b, c] }
 ///             let c  = 3;
 ///         }
+///     }
+///
+///     let d = 4;
+///
+///     {                   // Scope { id: 3, depth: 1, locals: [a, d, e] }
+///         let e = 4;
 ///     }
 /// }
 /// ```
@@ -130,14 +134,14 @@ fn compile_hir_function(
 /// stack.
 #[derive(Debug, Default)]
 struct Scope {
-    /// Current scope depth.
+    /// Scope depth.
     depth: usize,
 
-    /// Stack of locals in each scope we're diving into.
-    locals: Vec<HashSet<String>>,
+    /// Locals in this scope only. Parent scopes locals are not included.
+    locals: HashSet<String>,
 
-    /// Stack of scope ids.
-    ids: Vec<usize>,
+    /// ID of this scope.
+    id: usize,
 }
 
 /// HIR to bytecode compiler.
@@ -162,7 +166,7 @@ struct HirCompiler<'g> {
     locals: HashMap<String, usize>,
 
     /// Scope tracking. Current depth and stack of visited scopes.
-    scope: Scope,
+    scopes: Vec<Scope>,
 
     /// Locals in scope.
     locals_in_scope: Vec<HashMap<String, usize>>,
@@ -189,7 +193,7 @@ impl<'g> HirCompiler<'g> {
             objects,
             locals: HashMap::new(),
             bytecode: Bytecode::new(),
-            scope: Scope::default(),
+            scopes: Vec::new(),
             current_source_line: 0,
             locals_in_scope: Vec::new(),
         }
@@ -447,9 +451,12 @@ impl<'g> HirCompiler<'g> {
 
         self.bytecode.instructions.push(instruction);
         self.bytecode.source_lines.push(self.current_source_line);
-        self.bytecode.scopes.push(*self.scope.ids.last().expect(
+
+        let scope = self.scopes.last().expect(
             "compiler bug: attempt to read scope ID of instruction when scope stack is empty",
-        ));
+        );
+
+        self.bytecode.scopes.push(scope.id);
 
         index
     }
@@ -477,43 +484,41 @@ impl<'g> HirCompiler<'g> {
         let index = self.locals.len() + 1;
         self.locals.insert(name.to_string(), index);
 
-        self.scope
-            .locals
+        self.scopes
             .last_mut()
-            .unwrap()
+            .expect("compiler bug: attempt to track local when scope stack is empty")
+            .locals
             .insert(name.to_string());
 
         index
     }
 
     fn enter_scope(&mut self) {
-        self.scope.depth += 1;
-        self.scope.locals.push(HashSet::new());
-        self.scope.ids.push(self.locals_in_scope.len());
+        self.scopes.push(Scope {
+            depth: self.scopes.len(),
+            locals: HashSet::new(),
+            id: self.locals_in_scope.len(),
+        });
 
         self.locals_in_scope.push(HashMap::new());
     }
 
     fn exit_scope(&mut self) {
-        let scope_id = self
-            .scope
-            .ids
+        let scope = self
+            .scopes
             .pop()
-            .expect("failed to keep track of the current scope id (compiler bug)");
+            .expect("compiler bug: attempt to exit scope when scope stack is empty");
 
-        self.locals_in_scope[scope_id] = self.locals.clone();
+        self.locals_in_scope[scope.id] = self.locals.clone();
 
-        let scope_locals = self.scope.locals.pop().unwrap();
+        // Depth 0 is function body block. That one ends with return.
+        if scope.depth >= 1 && !scope.locals.is_empty() {
+            self.emit(Instruction::EndBlock(scope.locals.len()));
 
-        if self.scope.depth > 1 && !self.scope.locals.is_empty() {
-            self.emit(Instruction::EndBlock(scope_locals.len()));
-
-            for local in scope_locals {
+            for local in scope.locals {
                 self.locals.remove(&local);
             }
         }
-
-        self.scope.depth -= 1;
     }
 }
 
@@ -774,19 +779,18 @@ mod tests {
                 let a = {
                     let y = 0;
 
-
                     let b = {
                         let c = 1;
                         let d = 2;
-                        3
+                        [c, d]
                     };
                     let e = {
                         let f = 4;
                         let g = 5;
-                        6
+                        [f, g]
                     };
 
-                    7
+                    [b, e]
                 };
 
                 let h = {
@@ -795,23 +799,25 @@ mod tests {
                     let i = {
                         let w = 0;
                         let j = 8;
-                        9
+                        [w, j]
                     };
 
-                    10
+                    [i]
                 };
 
-                a
+                [a, h]
             }
         "#)?;
 
         let BamlVmProgram {
             objects,
             resolved_function_names,
+            globals,
             ..
         } = compile(&ast)?;
 
         let main = objects[resolved_function_names["main"].0].as_function()?;
+        baml_vm::debug::disassemble(main, &[], &objects, &globals);
 
         let expected_locals_in_scope = [
             vec!["<fn main>", "x", "a", "h"],
