@@ -675,11 +675,10 @@ generator target {{
 
 #[cfg(test)]
 mod tests {
-    use std::env;
-    use std::fs;
-    use tempfile::TempDir;
+    use std::{env, fs};
 
     use pretty_assertions::assert_eq;
+    use tempfile::TempDir;
 
     use super::*;
 
