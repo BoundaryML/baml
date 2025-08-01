@@ -26,18 +26,21 @@ pub fn compile(ast: &ParserDatabase) -> anyhow::Result<BamlVmProgram> {
 fn compile_hir_to_bytecode(hir: &hir::Hir) -> anyhow::Result<BamlVmProgram> {
     let mut resolved_globals = HashMap::new();
     let mut resolved_classes = HashMap::new();
+    let mut llm_functions = HashSet::new();
 
     // Resolve global functions from HIR
-    let mut global_index = 0;
     for func in &hir.expr_functions {
-        resolved_globals.insert(func.name.clone(), global_index);
-        global_index += 1;
+        resolved_globals.insert(func.name.clone(), resolved_globals.len());
+    }
+
+    for func in &hir.llm_functions {
+        resolved_globals.insert(func.name.clone(), resolved_globals.len());
+        llm_functions.insert(func.name.clone());
     }
 
     // Resolve classes from HIR
     for class in &hir.classes {
-        resolved_globals.insert(class.name.clone(), global_index);
-        global_index += 1;
+        resolved_globals.insert(class.name.clone(), resolved_globals.len());
 
         // Resolve class fields.
         let mut class_fields = HashMap::new();
@@ -53,12 +56,30 @@ fn compile_hir_to_bytecode(hir: &hir::Hir) -> anyhow::Result<BamlVmProgram> {
 
     // Compile HIR functions to bytecode
     for func in &hir.expr_functions {
-        let bytecode_function =
-            compile_hir_function(func, &resolved_globals, &resolved_classes, &mut objects)?;
+        let bytecode_function = compile_hir_function(
+            func,
+            &resolved_globals,
+            &resolved_classes,
+            &llm_functions,
+            &mut objects,
+        )?;
 
         // Add the function to the globals and objects pools.
         globals.push(Value::Object(objects.len()));
         objects.push(Object::Function(bytecode_function));
+    }
+
+    for func in &hir.llm_functions {
+        let bytecode_llm_function = Object::Function(Function {
+            name: func.name.clone(),
+            arity: func.parameters.len(),
+            bytecode: Bytecode::new(),
+            kind: FunctionKind::Llm,
+            locals_in_scope: vec![func.parameters.iter().map(|p| p.name.clone()).collect()],
+        });
+
+        globals.push(Value::Object(objects.len()));
+        objects.push(bytecode_llm_function);
     }
 
     // Add classes to objects
@@ -93,9 +114,10 @@ fn compile_hir_function(
     func: &hir::ExprFunction,
     globals: &HashMap<String, usize>,
     classes: &HashMap<String, HashMap<String, usize>>,
+    llm_functions: &HashSet<String>,
     objects: &mut Vec<Object>,
 ) -> anyhow::Result<Function> {
-    let mut compiler = HirCompiler::new(globals, classes, objects);
+    let mut compiler = HirCompiler::new(globals, classes, llm_functions, objects);
     compiler.compile_function(func)
 }
 
@@ -151,6 +173,8 @@ struct HirCompiler<'g> {
     /// lifetime.
     classes: &'g HashMap<String, HashMap<String, usize>>,
 
+    llm_functions: &'g HashSet<String>,
+
     /// Resolved local variables.
     ///
     /// Maps the name of the variable to its final index in the eval stack.
@@ -176,11 +200,13 @@ impl<'g> HirCompiler<'g> {
     fn new(
         globals: &'g HashMap<String, usize>,
         classes: &'g HashMap<String, HashMap<String, usize>>,
+        llm_functions: &'g HashSet<String>,
         objects: &'g mut Vec<Object>,
     ) -> Self {
         Self {
             globals,
             classes,
+            llm_functions,
             objects,
             locals: HashMap::new(),
             bytecode: Bytecode::new(),
@@ -384,8 +410,13 @@ impl<'g> HirCompiler<'g> {
                     self.compile_expression(arg);
                 }
 
-                // Call the function
-                self.emit(Instruction::Call(args.len()));
+                // Either async LLM call or regular function call.
+                if self.llm_functions.contains(name) {
+                    self.emit(Instruction::DispatchFuture(args.len()));
+                    self.emit(Instruction::Await);
+                } else {
+                    self.emit(Instruction::Call(args.len()));
+                }
             }
 
             hir::Expression::ClassConstructor(cc, _) => {
