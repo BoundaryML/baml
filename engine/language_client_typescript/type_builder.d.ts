@@ -51,6 +51,8 @@ export declare class ClassBuilder<ClassName extends string, Properties extends s
     constructor(tb: _TypeBuilder, name: ClassName, properties?: Set<Properties | string>);
     addProperty<S extends string>(name: RestrictNot<ClassName, S, Properties>, type: FieldType): ClassPropertyBuilder;
     listProperties(): Record<string, FieldType | null>;
+    removeProperty(name: string): void;
+    clear(): void;
     property(name: string): ClassPropertyBuilder;
 }
 declare class ClassPropertyViewer {

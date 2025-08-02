@@ -192,6 +192,14 @@ export class ClassBuilder<ClassName extends string, Properties extends string = 
     return this.bldr.listProperties()
   }
 
+  removeProperty(name: string): void {
+    this.bldr.removeProperty(name)
+  }
+
+  clear(): void {
+    this.bldr.clear()
+  }
+
   property(name: string): ClassPropertyBuilder {
     if (!this.properties.has(name)) {
       throw new Error(`Property ${name} not found.`)

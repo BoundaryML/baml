@@ -67,7 +67,6 @@ impl TypeBuilder {
 
     #[napi]
     pub fn clear(&self) {
-        panic!("FUCK OFF");
         self.inner.clear();
     }
 

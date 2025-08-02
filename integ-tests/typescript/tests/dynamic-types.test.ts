@@ -285,10 +285,80 @@ describe("Dynamic Type Tests", () => {
 
       const personPropsAfterTbClear = tb.Person.listProperties();
 
-      console.log(personPropsAfterTbClear);
-
       expect("last_name" in personPropsAfterTbClear).toBeFalsy();
       expect("height" in personPropsAfterTbClear).toBeFalsy();
+    });
+
+    it("should clear a class", () => {
+      const tb = new TypeBuilder();
+      tb.Person.addProperty("last_name", tb.string().list());
+      tb.Person.addProperty("height", tb.float().optional()).description("Height in meters");
+
+      tb.DynamicOutput.addProperty("hair_color", tb.string());
+      tb.DynamicOutput.addProperty("height", tb.float().optional()).description("Height in meters");
+
+      tb.Person.clear();
+
+      const personPropsAfterClassClear = tb.Person.listProperties();
+      const dynamicOutputPropsAfterClassClear = tb.DynamicOutput.listProperties();
+
+      expect("last_name" in personPropsAfterClassClear).toBeFalsy();
+      expect("height" in personPropsAfterClassClear).toBeFalsy();
+
+      expect("hair_color" in dynamicOutputPropsAfterClassClear).toBeTruthy();
+      expect("height" in dynamicOutputPropsAfterClassClear).toBeTruthy();
+    });
+
+    it("should remove a property from a class", () => {
+      const tb = new TypeBuilder();
+      tb.Person.addProperty("last_name", tb.string().list());
+      tb.Person.addProperty("height", tb.float().optional()).description("Height in meters");
+
+      tb.Person.removeProperty("last_name");
+
+      const personProps = tb.Person.listProperties();
+
+      expect("last_name" in personProps).toBeFalsy();
+      expect("height" in personProps).toBeTruthy();
+    });
+
+    it("should clear a dynamically added class", () => {
+      const tb = new TypeBuilder();
+      const personClass = tb.addClass("AddedPerson");
+      personClass.addProperty("last_name", tb.string().list());
+      personClass.addProperty("height", tb.float().optional()).description("Height in meters");
+
+      personClass.clear();
+
+      const personProps = personClass.listProperties();
+
+      expect("last_name" in personProps).toBeFalsy();
+      expect("height" in personProps).toBeFalsy();
+    });
+
+    it("should remove a property from a dynamically added class", () => {
+      const tb = new TypeBuilder();
+      const personClass = tb.addClass("AddedPerson");
+      personClass.addProperty("last_name", tb.string().list());
+      personClass.addProperty("height", tb.float().optional()).description("Height in meters");
+
+      personClass.removeProperty("last_name");
+
+      const personProps = personClass.listProperties();
+
+      expect("last_name" in personProps).toBeFalsy();
+      expect("height" in personProps).toBeTruthy();
+    });
+
+    it("should get property types from a class", () => {
+      const tb = new TypeBuilder();
+      tb.Person.addProperty("last_name", tb.string().list());
+      tb.Person.addProperty("height", tb.float().optional()).description("Height in meters");
+
+      const props = tb.Person.listProperties();
+
+      expect(props["last_name"]).toEqual(tb.string().list());
+      expect(props["height"]).toEqual(tb.float().optional());
     });
   });
 });

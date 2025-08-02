@@ -133,6 +133,12 @@ class ClassBuilder extends ClassAst {
     listProperties() {
         return this.bldr.listProperties();
     }
+    removeProperty(name) {
+        this.bldr.removeProperty(name);
+    }
+    clear() {
+        this.bldr.clear();
+    }
     property(name) {
         if (!this.properties.has(name)) {
             throw new Error(`Property ${name} not found.`);
