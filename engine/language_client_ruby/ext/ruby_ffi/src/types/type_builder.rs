@@ -40,6 +40,10 @@ impl TypeBuilder {
         }
     }
 
+    pub fn clear(&self) {
+        self.inner.clear();
+    }
+
     pub fn r#enum(&self, name: String) -> EnumBuilder {
         EnumBuilder {
             inner: self.inner.r#enum(name.as_str()),
@@ -141,6 +145,7 @@ impl TypeBuilder {
         cls.define_singleton_method("new", function!(TypeBuilder::new, 0))?;
         cls.define_method("to_s", method!(TypeBuilder::to_s, 0))?;
         cls.define_method("enum", method!(TypeBuilder::r#enum, 1))?;
+        cls.define_method("clear", method!(TypeBuilder::clear, 0))?;
         // "class" is used by Kernel: https://ruby-doc.org/core-3.0.2/Kernel.html#method-i-class
         cls.define_method("class_", method!(TypeBuilder::class, 1))?;
         cls.define_method("list", method!(TypeBuilder::list, 1))?;
@@ -252,6 +257,14 @@ impl EnumValueBuilder {
 }
 
 impl ClassBuilder {
+    pub fn clear(&self) {
+        self.inner.lock().unwrap().clear();
+    }
+
+    pub fn remove_property(&self, name: String) {
+        self.inner.lock().unwrap().remove_property(name.as_str());
+    }
+
     pub fn field(&self) -> FieldType {
         baml_types::TypeIR::class(&self.name).into()
     }
@@ -265,6 +278,8 @@ impl ClassBuilder {
 
         cls.define_method("field", method!(ClassBuilder::field, 0))?;
         cls.define_method("property", method!(ClassBuilder::property, 1))?;
+        cls.define_method("clear", method!(ClassBuilder::clear, 0))?;
+        cls.define_method("remove_property", method!(ClassBuilder::remove_property, 1))?;
 
         Ok(())
     }
