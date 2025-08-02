@@ -77,27 +77,29 @@ jobs:
         run: pnpm --filter=sage-backend deploy ../sage-backend
 
       - name: Install dependencies and build
-        run: pnpm install && pnpm baml-cli generate
+        run: |
+          pnpm install
+          pnpm baml-cli generate
+          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/canary" ]; then
+            echo TARGET_ENV=production >>$GITHUB_ENV
+          else
+            # echo TARGET_ENV=preview >>$GITHUB_ENV
+            echo TARGET_ENV=production >>$GITHUB_ENV
+          fi
 
       - name: Build Vercel project
         env:
           PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
         run: |
           pnpm vercel pull --yes --token=${{ secrets.VERCEL_TOKEN_SAM }}
-          pnpm vercel build --token=${{ secrets.VERCEL_TOKEN_SAM }}
+          pnpm vercel build --target $TARGET_ENV --token=${{ secrets.VERCEL_TOKEN_SAM }}
 
       - name: Deploy preview backend
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_SAGE_BACKEND }}
         run: |
-          (
-            if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/canary" ]; then
-              pnpm vercel deploy --prod --prebuilt --token=${{ secrets.VERCEL_TOKEN_SAM }}
-            else
-              pnpm vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN_SAM }}
-            fi
-          ) | tee preview_url.txt
+          pnpm vercel deploy --target $TARGET_ENV --prebuilt --token=${{ secrets.VERCEL_TOKEN_SAM }} | tee preview_url.txt
 
       - name: Comment URL in PR
         if: github.event_name == 'pull_request'
