@@ -5,7 +5,6 @@ import remarkGfm from 'remark-gfm';
 import BamlLambWhite from './baml-lamb-white.svg';
 import { type Message, messagesAtom } from './store';
 import { type QueryRequest, QueryResponseSchema } from './api-types';
-import { Messages } from '@baml/ui/chatbot/messages';
 
 const OPEN_BY_DEFAULT = true;
 const SESSION_STORAGE_KEY = 'baml-ai-context';
