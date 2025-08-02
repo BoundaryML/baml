@@ -84,7 +84,7 @@ jobs:
             echo TARGET_ENV=production >>$GITHUB_ENV
           else
             # echo TARGET_ENV=preview >>$GITHUB_ENV
-            echo TARGET_ENV=production >>$GITHUB_ENV
+            echo TARGET_ENV=prod >>$GITHUB_ENV
           fi
 
       - name: Build Vercel project
