@@ -31,6 +31,10 @@ export class TypeBuilder {
     this.runtime = runtime
   }
 
+  clear(): void {
+    this.tb.clear()
+  }
+
   _tb(): _TypeBuilder {
     return this.tb
   }
@@ -139,6 +143,10 @@ export class ClassAst<ClassName extends string, Properties extends string = stri
     this.bldr = tb.getClass(name)
   }
 
+  listProperties(): Record<string, FieldType | null> {
+    return this.bldr.listProperties()
+  }
+
   type(): FieldType {
     return this.bldr.field()
   }
@@ -180,8 +188,8 @@ export class ClassBuilder<ClassName extends string, Properties extends string = 
     return new ClassPropertyBuilder(this.bldr.property(name).setType(type))
   }
 
-  listProperties(): Array<[string, ClassPropertyBuilder]> {
-    return Array.from(this.properties).map((name) => [name, new ClassPropertyBuilder(this.bldr.property(name))])
+  listProperties(): Record<string, FieldType | null> {
+    return this.bldr.listProperties()
   }
 
   property(name: string): ClassPropertyBuilder {

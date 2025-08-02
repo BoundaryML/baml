@@ -745,6 +745,10 @@ export default class TypeBuilder {
         
     }
 
+    clear(): void {
+        this.tb.clear();
+    }
+
     __tb() {
       return this.tb._tb();
     }

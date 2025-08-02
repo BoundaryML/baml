@@ -37,6 +37,10 @@ export default class TypeBuilder {
         {% endfor %}
     }
 
+    clear(): void {
+        this.tb.clear();
+    }
+
     __tb() {
       return this.tb._tb();
     }

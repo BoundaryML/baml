@@ -526,6 +526,25 @@ async def test_referencing_existing_class_types():
     tb.Person.add_property("props", tb.union([tb.Resume.type(), tb.Hobby.type()]))
 
 
+
+def test_typebuilder_and_fieldtype_imports():
+    """Test that both TypeBuilder and FieldType can be imported from baml_client.type_builder"""
+    # Test importing both from the same module
+    from baml_client.type_builder import TypeBuilder, FieldType
+
+    # Verify TypeBuilder works
+    tb = TypeBuilder()
+    assert tb is not None
+    assert isinstance(tb, TypeBuilder)
+
+    # Verify FieldType is available
+    assert FieldType is not None
+
+    # Test that TypeBuilder methods return FieldType instances
+    string_type = tb.string()
+    assert isinstance(string_type, FieldType)
+
+
 def test_type_builder_clear():
     tb = TypeBuilder()
     tb.Person.add_property("last_name", tb.string().list())
@@ -608,21 +627,3 @@ def test_class_prop_get_type():
 
     assert props["last_name"] == tb.string().list()
     assert props["height"] == tb.float().optional()
-
-
-def test_typebuilder_and_fieldtype_imports():
-    """Test that both TypeBuilder and FieldType can be imported from baml_client.type_builder"""
-    # Test importing both from the same module
-    from baml_client.type_builder import TypeBuilder, FieldType
-
-    # Verify TypeBuilder works
-    tb = TypeBuilder()
-    assert tb is not None
-    assert isinstance(tb, TypeBuilder)
-
-    # Verify FieldType is available
-    assert FieldType is not None
-
-    # Test that TypeBuilder methods return FieldType instances
-    string_type = tb.string()
-    assert isinstance(string_type, FieldType)

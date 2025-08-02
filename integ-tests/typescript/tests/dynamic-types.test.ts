@@ -8,10 +8,10 @@ describe("Dynamic Type Tests", () => {
       // Test that TypeBuilder is importable
       const tb = new TypeBuilder();
       expect(tb).toBeInstanceOf(TypeBuilder);
-      
+
       // Test that FieldType is importable and works
       expect(FieldType).toBeDefined();
-      
+
       // Test that TypeBuilder methods return FieldType instances
       const stringType = tb.string();
       // TypeScript will ensure type safety at compile time
@@ -273,6 +273,22 @@ describe("Dynamic Type Tests", () => {
           hair_color: "YELLOW",
         },
       ]);
+    });
+  });
+
+  describe("TypeBuilder APIs", () => {
+    it("should clear", () => {
+      let tb = new TypeBuilder();
+      tb.Person.addProperty("last_name", tb.string().list());
+      tb.Person.addProperty("height", tb.float().optional()).description("Height in meters");
+      tb.clear();
+
+      const personPropsAfterTbClear = tb.Person.listProperties();
+
+      console.log(personPropsAfterTbClear);
+
+      expect("last_name" in personPropsAfterTbClear).toBeFalsy();
+      expect("height" in personPropsAfterTbClear).toBeFalsy();
     });
   });
 });

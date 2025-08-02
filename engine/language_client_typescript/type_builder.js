@@ -13,6 +13,9 @@ class TypeBuilder {
         this.tb = new native_1.TypeBuilder();
         this.runtime = runtime;
     }
+    clear() {
+        this.tb.clear();
+    }
     _tb() {
         return this.tb;
     }
@@ -93,6 +96,9 @@ class ClassAst {
         this.properties = properties;
         this.bldr = tb.getClass(name);
     }
+    listProperties() {
+        return this.bldr.listProperties();
+    }
     type() {
         return this.bldr.field();
     }
@@ -125,7 +131,7 @@ class ClassBuilder extends ClassAst {
         return new ClassPropertyBuilder(this.bldr.property(name).setType(type));
     }
     listProperties() {
-        return Array.from(this.properties).map((name) => [name, new ClassPropertyBuilder(this.bldr.property(name))]);
+        return this.bldr.listProperties();
     }
     property(name) {
         if (!this.properties.has(name)) {

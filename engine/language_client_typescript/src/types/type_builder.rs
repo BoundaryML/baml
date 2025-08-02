@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 // This file provides the native bindings between our Rust implementation and TypeScript
 // We use NAPI-RS to expose Rust functionality to JavaScript/TypeScript
 use baml_runtime::type_builder::{self, WithMeta};
@@ -61,6 +63,12 @@ impl TypeBuilder {
     #[napi(constructor)]
     pub fn new() -> Self {
         type_builder::TypeBuilder::new().into()
+    }
+
+    #[napi]
+    pub fn clear(&self) {
+        panic!("FUCK OFF");
+        self.inner.clear();
     }
 
     #[napi]
@@ -235,6 +243,27 @@ impl EnumValueBuilder {
 
 #[napi]
 impl ClassBuilder {
+    #[napi]
+    pub fn list_properties(&self) -> BTreeMap<String, Option<FieldType>> {
+        self.inner
+            .lock()
+            .unwrap()
+            .list_properties()
+            .into_iter()
+            .map(|(name, prop)| (name, prop.get_type().map(FieldType::from)))
+            .collect()
+    }
+
+    #[napi]
+    pub fn remove_property(&self, name: String) {
+        self.inner.lock().unwrap().remove_property(&name);
+    }
+
+    #[napi]
+    pub fn clear(&self) {
+        self.inner.lock().unwrap().clear();
+    }
+
     #[napi]
     pub fn field(&self) -> FieldType {
         baml_types::TypeIR::class(&self.name).into()
