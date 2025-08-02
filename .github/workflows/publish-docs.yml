@@ -103,4 +103,4 @@ jobs:
         if: github.event_name == 'pull_request'
         uses: thollander/actions-comment-pull-request@v3.0.1
         with:
-          file-path: preview_url.txt
+          file-path: ../sage-backend/preview_url.txt
