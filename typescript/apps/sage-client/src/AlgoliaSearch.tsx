@@ -37,7 +37,7 @@ async function fetchSearchCredentials(): Promise<SearchCredentials> {
     return credentials;
   } catch (error) {
     if (error instanceof z.ZodError) {
-      console.error('Invalid API response format:', error.errors);
+      console.error('Invalid API response format:', error);
       throw new Error('Invalid search credentials response format');
     }
     console.error('Error fetching search credentials:', error);

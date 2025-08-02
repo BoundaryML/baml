@@ -43,7 +43,7 @@ const serializeError = (error: unknown): { message: string; code?: string; statu
     if (error.message.includes('HTTP error! status:')) {
       const match = error.message.match(/status: (\d+)/);
       if (match) {
-        serialized.statusCode = parseInt(match[1]);
+        serialized.statusCode = parseInt(match[1]!);
       }
     }
     
@@ -53,7 +53,6 @@ const serializeError = (error: unknown): { message: string; code?: string; statu
 };
 
 const postDocChat = async (req: QueryRequest) => {
-  console.log('postDocChat', req);
   const response = await fetch(API_ENDPOINT, {
     method: 'POST',
     headers: {
@@ -67,8 +66,7 @@ const postDocChat = async (req: QueryRequest) => {
   }
 
   const data = await response.json();
-  QueryResponseSchema.parse(data);
-  return data;
+  return QueryResponseSchema.parse(data);
 };
 
 const API_ENDPOINT =
@@ -184,11 +182,9 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
 
       // Auto-navigate to first very-relevant doc on same domain if available
       if (data.ranked_docs && data.ranked_docs.length > 0) {
-        console.log('data.ranked_docs', data.ranked_docs);
         const veryRelevantSameDomainDoc = data.ranked_docs.find(
           (doc) => doc.relevance === 'very-relevant' && doc.url.startsWith('/'),
         );
-        console.log('veryRelevantSameDomainDoc', veryRelevantSameDomainDoc);
         if (veryRelevantSameDomainDoc && (window as any).navigateToDoc) {
           (window as any).navigateToDoc(
             {
