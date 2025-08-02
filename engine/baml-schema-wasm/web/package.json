@@ -8,9 +8,7 @@
     "comment": "don't use 'wasm pack --dev' below or it will be too big of a bundle and playground will be slow to load.",
     "build": "pnpm run release",
     "release": "pnpm run pack --release",
-    "pack": "wasm-pack build ../ --target bundler --out-dir ./web/dist",
-    "dev.skip": "cargo watch -C .. -w ./src -s 'cargo build --manifest-path ../Cargo.toml && pnpm run pack --release'",
-    "dev": "pnpm run build"
+    "pack": "wasm-pack build ../ --target bundler --out-dir ./web/dist"
   },
   "exports": {
     ".": {

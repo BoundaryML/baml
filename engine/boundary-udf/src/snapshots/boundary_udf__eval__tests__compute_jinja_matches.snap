@@ -1,0 +1,66 @@
+---
+source: boundary-udf/src/eval.rs
+expression: match_res
+---
+[
+    FunctionResults {
+        has_compile_errors: [],
+        defined: {
+            "total_cost": DefinedResult {
+                missing_values: [
+                    "client.options.stream",
+                ],
+                result: Ok(
+                    0.0115,
+                ),
+            },
+            "completion_cost": DefinedResult {
+                missing_values: [],
+                result: Ok(
+                    0.0029100000000000003,
+                ),
+            },
+        },
+        not_defined: [],
+    },
+    FunctionResults {
+        has_compile_errors: [],
+        defined: {
+            "total_cost": DefinedResult {
+                missing_values: [],
+                result: Ok(
+                    0.05700000000000001,
+                ),
+            },
+        },
+        not_defined: [
+            "completion_cost",
+        ],
+    },
+    FunctionResults {
+        has_compile_errors: [],
+        defined: {},
+        not_defined: [
+            "total_cost",
+            "completion_cost",
+        ],
+    },
+    FunctionResults {
+        has_compile_errors: [],
+        defined: {
+            "total_cost": DefinedResult {
+                missing_values: [
+                    "response.body.usage.cached_tokens",
+                    "response.body.usage.input_tokens",
+                    "response.body.usage.output_tokens",
+                ],
+                result: Ok(
+                    0.0,
+                ),
+            },
+        },
+        not_defined: [
+            "completion_cost",
+        ],
+    },
+]

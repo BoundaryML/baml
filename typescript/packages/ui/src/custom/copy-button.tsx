@@ -10,16 +10,16 @@ import { Icons } from './icons';
 
 export type CopyState = 'idle' | 'copying' | 'copied';
 
-const copyButtonVariants = cva('relative', {
+const copyButtonVariants = cva('relative inline-flex items-center', {
   defaultVariants: {
     size: 'default',
     variant: 'ghost',
   },
   variants: {
     size: {
-      sm: 'h-7 w-7',
-      default: 'h-9 w-9',
-      lg: 'h-10 w-10',
+      sm: 'h-7 px-2',
+      default: 'h-9 px-3',
+      lg: 'h-10 px-4',
     },
     variant: {
       ghost: 'hover:bg-accent hover:text-accent-foreground',
@@ -48,13 +48,40 @@ export function CopyButton({
   size,
   variant,
   showToast = true,
+  children,
   successMessage = 'Copied to clipboard',
   errorMessage = 'Failed to copy to clipboard',
   ...props
 }: CopyButtonProps) {
   const [copyState, setCopyState] = useState<CopyState>('idle');
 
-  const copyToClipboard = async (event: React.MouseEvent<HTMLButtonElement>) => {
+  const getIconSize = () => {
+    switch (size) {
+      case 'sm':
+        return 'xs';
+      case 'lg':
+        return 'lg';
+      default:
+        return 'sm';
+    }
+  };
+
+  const renderIcon = () => {
+    const iconSize = getIconSize();
+
+    switch (copyState) {
+      case 'copying':
+        return <Icons.Spinner size={iconSize} className="animate-spin" />;
+      case 'copied':
+        return <Icons.Check size={iconSize} />;
+      default:
+        return <Icons.Copy size={iconSize} />;
+    }
+  };
+
+  const copyToClipboard = async (
+    event: React.MouseEvent<HTMLButtonElement>,
+  ) => {
     event.stopPropagation();
 
     setCopyState('copying');
@@ -83,23 +110,8 @@ export function CopyButton({
       aria-label={copyState === 'copied' ? 'Copied' : 'Copy to clipboard'}
       {...props}
     >
-      {copyState === 'copying' ? (
-        <Icons.Spinner
-          size={size === 'sm' ? 'xs' : size === 'lg' ? 'lg' : 'sm'}
-          variant="muted"
-          className="animate-spin"
-        />
-      ) : copyState === 'copied' ? (
-        <Icons.Check
-          size={size === 'sm' ? 'xs' : size === 'lg' ? 'lg' : 'sm'}
-          variant="primary"
-        />
-      ) : (
-        <Icons.Copy
-          size={size === 'sm' ? 'xs' : size === 'lg' ? 'lg' : 'sm'}
-          variant="muted"
-        />
-      )}
+      {renderIcon()}
+      {children && <span className="ml-2">{children}</span>}
     </Button>
   );
 }

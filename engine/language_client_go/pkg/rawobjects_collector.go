@@ -2,9 +2,9 @@ package baml
 
 import (
 	"fmt"
+	"unsafe"
 
 	"github.com/boundaryml/baml/engine/language_client_go/baml_go/raw_objects"
-	"github.com/boundaryml/baml/engine/language_client_go/baml_go/serde"
 	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
 )
 
@@ -12,29 +12,8 @@ type collector struct {
 	*raw_objects.RawObject
 }
 
-func NewCollector(name string) (Collector, error) {
-	kwargs, err := serde.EncodeMapEntries(map[string]any{
-		"name": name,
-	}, "collector constructor args")
-	if err != nil {
-		return nil, fmt.Errorf("failed to encode kwargs: %w", err)
-	}
-
-	ptr, err := raw_objects.NewRawObject(cffi.CFFIObjectType_OBJECT_COLLECTOR, kwargs)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create collector: %w", err)
-	}
-
-	as_collector, ok := ptr.(*collector)
-	if !ok {
-		return nil, fmt.Errorf("unexpected type for collector creation: %T", ptr)
-	}
-
-	return as_collector, nil
-}
-
-func newCollector(ptr int64) Collector {
-	return &collector{raw_objects.FromPointer(ptr)}
+func newCollector(ptr int64, rt unsafe.Pointer) Collector {
+	return &collector{raw_objects.FromPointer(ptr, rt)}
 }
 
 func (c *collector) ObjectType() cffi.CFFIObjectType {

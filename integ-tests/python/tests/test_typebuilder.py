@@ -608,3 +608,21 @@ def test_class_prop_get_type():
 
     assert props["last_name"] == tb.string().list()
     assert props["height"] == tb.float().optional()
+
+
+def test_typebuilder_and_fieldtype_imports():
+    """Test that both TypeBuilder and FieldType can be imported from baml_client.type_builder"""
+    # Test importing both from the same module
+    from baml_client.type_builder import TypeBuilder, FieldType
+
+    # Verify TypeBuilder works
+    tb = TypeBuilder()
+    assert tb is not None
+    assert isinstance(tb, TypeBuilder)
+
+    # Verify FieldType is available
+    assert FieldType is not None
+
+    # Test that TypeBuilder methods return FieldType instances
+    string_type = tb.string()
+    assert isinstance(string_type, FieldType)

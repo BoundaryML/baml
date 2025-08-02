@@ -4,7 +4,6 @@ version = "0.202.1"
 description = "BAML python bindings (pyproject.toml)"
 readme = "README.md"
 authors = [{ "name" = "Boundary", "email" = "contact@boundaryml.com" }]
-requires-python = ">=3.13"
 
 [project.license]
 file = "LICENSE"

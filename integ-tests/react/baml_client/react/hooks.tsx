@@ -7964,6 +7964,56 @@ export function useTestGeminiSystemAsChat(
   }
 }
 /**
+ * A specialized hook for the TestGeminiThinking BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - input: string
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** string
+ * - **Streaming Partial:** string
+ * - **Streaming Final:** string
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useTestGeminiThinking({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useTestGeminiThinking({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useTestGeminiThinking(props: HookInput<'TestGeminiThinking', { stream: false }>): HookOutput<'TestGeminiThinking', { stream: false }>
+export function useTestGeminiThinking(props?: HookInput<'TestGeminiThinking', { stream?: true }>): HookOutput<'TestGeminiThinking', { stream: true }>
+export function useTestGeminiThinking(
+  props: HookInput<'TestGeminiThinking', { stream?: boolean }> = {},
+): HookOutput<'TestGeminiThinking', { stream: true }> | HookOutput<'TestGeminiThinking', { stream: false }> {
+  let action: ServerAction = Actions.TestGeminiThinking;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.TestGeminiThinking;
+    return useBamlAction(action, props)
+  } else {
+    return useBamlAction(action, props as HookInput<'TestGeminiThinking', { stream: false }>)
+  }
+}
+/**
  * A specialized hook for the TestGroq BAML function that supports both streaming and non‑streaming responses.
  *
  * **Input Types:**

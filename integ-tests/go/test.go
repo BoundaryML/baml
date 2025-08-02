@@ -5,13 +5,12 @@ import (
 	"fmt"
 
 	b "example.com/integ-tests/baml_client"
-	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 )
 
 func main() {
 	ctx := context.Background()
 
-	collector := baml.NewCollector()
+	collector, err := b.NewCollector("test-collector")
 
 	v2, err := b.AaaSamOutputFormat(ctx, "oranges", b.WithCollector(collector))
 	if err != nil {

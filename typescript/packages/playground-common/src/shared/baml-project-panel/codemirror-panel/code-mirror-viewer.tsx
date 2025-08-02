@@ -30,11 +30,11 @@ import {
   tsSync,
 } from '@valtown/codemirror-ts';
 
-import {
-  createDefaultMapFromCDN,
-  createSystem,
-  createVirtualTypeScriptEnvironment,
-} from '@typescript/vfs';
+// import {
+//   createDefaultMapFromCDN,
+//   createSystem,
+//   createVirtualTypeScriptEnvironment,
+// } from '@typescript/vfs';
 import { useTheme } from 'next-themes';
 import ts from 'typescript';
 import { flashRangesAtom, updateCursorAtom } from '../playground-panel/atoms';
@@ -232,52 +232,52 @@ export const CodeMirrorViewer = ({
     async function initializeExtensions() {
       try {
         if (lang === 'typescript') {
-          console.log('initializing ts extensions');
-          const fsMap = await createDefaultMapFromCDN(
-            { target: ts.ScriptTarget.ES2022 },
-            '5.6.3',
-            true,
-            ts,
-          );
-          const system = createSystem(fsMap);
-          const compilerOpts = {
-            lib: ['es2022', 'dom'],
-          };
-          const baml_dir = '/baml_client';
-          let generated_files_paths: string[] = [];
-          // I dont think we need to update fsmap..
-          if (generatedFiles) {
-            generated_files_paths = generatedFiles.map(
-              (f) => baml_dir + '/' + f.path,
-            );
-            generatedFiles.forEach((f) => {
-              fsMap.set(baml_dir + '/' + f.path, f.content);
-            });
-          }
-          const env = createVirtualTypeScriptEnvironment(
-            system,
-            generated_files_paths,
-            ts,
-            compilerOpts,
-          );
-          for (const f of generatedFiles ?? []) {
-            env.createFile(baml_dir + '/' + f.path, f.content);
-          }
+          // console.log('initializing ts extensions');
+          // const fsMap = await createDefaultMapFromCDN(
+          //   { target: ts.ScriptTarget.ES2022 },
+          //   '5.6.3',
+          //   true,
+          //   ts,
+          // );
+          // const system = createSystem(fsMap);
+          // const compilerOpts = {
+          //   lib: ['es2022', 'dom'],
+          // };
+          // const baml_dir = '/baml_client';
+          // let generated_files_paths: string[] = [];
+          // // I dont think we need to update fsmap..
+          // if (generatedFiles) {
+          //   generated_files_paths = generatedFiles.map(
+          //     (f) => baml_dir + '/' + f.path,
+          //   );
+          //   generatedFiles.forEach((f) => {
+          //     fsMap.set(baml_dir + '/' + f.path, f.content);
+          //   });
+          // }
+          // const env = createVirtualTypeScriptEnvironment(
+          //   system,
+          //   generated_files_paths,
+          //   ts,
+          //   compilerOpts,
+          // );
+          // for (const f of generatedFiles ?? []) {
+          //   env.createFile(baml_dir + '/' + f.path, f.content);
+          // }
 
-          const tsExtensions = [
-            langs.typescript(),
-            javascript({ typescript: true }),
-            tsFacet.of({ env, path: 'index.ts' }),
-            tsSync(),
-            tsLinter(),
-            tsHover(),
-            autocompletion({
-              override: [tsAutocomplete()],
-            }),
-          ];
+          // const tsExtensions = [
+          //   langs.typescript(),
+          //   javascript({ typescript: true }),
+          //   tsFacet.of({ env, path: 'index.ts' }),
+          //   tsSync(),
+          //   tsLinter(),
+          //   tsHover(),
+          //   autocompletion({
+          //     override: [tsAutocomplete()],
+          //   }),
+          // ];
 
           setExtensions([
-            ...tsExtensions,
+            // ...tsExtensions,
             EditorView.lineWrapping,
             hyperLink,
             createFlashingField(),

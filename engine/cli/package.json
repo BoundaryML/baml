@@ -8,11 +8,10 @@
   },
   "scripts": {
     "dev": "pnpm build && pnpm run copy:debug",
-    "dev.skip": "cargo watch -x 'build' -s 'pnpm run copy:debug'",
     "clean": "git clean -xdf .turbo node_modules target",
     "copy:debug": "mkdir -p dist && cp ../target/debug/baml-cli dist/baml-cli",
     "copy:release": "mkdir -p dist && cp ../target/release/baml-cli dist/baml-cli",
-    "build": "cargo build && pnpm run copy:debug",
-    "release": "cargo build --release && pnpm run copy:release"
+    "build": "cargo build --bin baml-cli && pnpm run copy:debug",
+    "release": "cargo build --release --bin baml-cli && pnpm run copy:release"
   }
 }

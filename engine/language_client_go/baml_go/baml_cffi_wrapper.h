@@ -3,7 +3,7 @@
 #ifndef BAML_CFFI_WRAPPER_H
 #define BAML_CFFI_WRAPPER_H
 
-#include "baml_cffi_generated.h"
+#include "../pkg/cffi/baml_cffi_generated.h"
 
 // Function declarations for the wrapper functions
 
@@ -32,7 +32,7 @@ void SetCallObjectConstructorFn(void *fn);
 Buffer WrapCallObjectConstructor(const char *encoded_args, uintptr_t length);
 
 void SetCallObjectMethodFunctionFn(void *fn);
-Buffer WrapCallObjectMethodFunction(const char *encoded_args, uintptr_t length);
+Buffer WrapCallObjectMethodFunction(const void *runtime, const char *encoded_args, uintptr_t length);
 
 void SetFreeBufferFn(void *fn);
 void WrapFreeBuffer(Buffer buffer);

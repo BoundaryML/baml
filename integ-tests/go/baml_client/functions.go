@@ -601,7 +601,7 @@ func AssertFn(ctx context.Context, a int64, opts ...CallOptionFunc) (int64, erro
 	}
 }
 
-func AudioInput(ctx context.Context, aud any, opts ...CallOptionFunc) (string, error) {
+func AudioInput(ctx context.Context, aud types.Audio, opts ...CallOptionFunc) (string, error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -659,7 +659,7 @@ func AudioInput(ctx context.Context, aud any, opts ...CallOptionFunc) (string, e
 	}
 }
 
-func AudioInputOpenai(ctx context.Context, aud any, prompt string, opts ...CallOptionFunc) (string, error) {
+func AudioInputOpenai(ctx context.Context, aud types.Audio, prompt string, opts ...CallOptionFunc) (string, error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -1239,7 +1239,7 @@ func CustomTask(ctx context.Context, input string, opts ...CallOptionFunc) (type
 	}
 }
 
-func DescribeAudio(ctx context.Context, audio any, opts ...CallOptionFunc) (string, error) {
+func DescribeAudio(ctx context.Context, audio types.Audio, opts ...CallOptionFunc) (string, error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -1297,7 +1297,7 @@ func DescribeAudio(ctx context.Context, audio any, opts ...CallOptionFunc) (stri
 	}
 }
 
-func DescribeAudio2(ctx context.Context, audio any, opts ...CallOptionFunc) (string, error) {
+func DescribeAudio2(ctx context.Context, audio types.Audio, opts ...CallOptionFunc) (string, error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -1355,7 +1355,7 @@ func DescribeAudio2(ctx context.Context, audio any, opts ...CallOptionFunc) (str
 	}
 }
 
-func DescribeImage(ctx context.Context, img any, opts ...CallOptionFunc) (string, error) {
+func DescribeImage(ctx context.Context, img types.Image, opts ...CallOptionFunc) (string, error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -1413,7 +1413,7 @@ func DescribeImage(ctx context.Context, img any, opts ...CallOptionFunc) (string
 	}
 }
 
-func DescribeImage2(ctx context.Context, classWithImage types.ClassWithImage, img2 any, opts ...CallOptionFunc) (string, error) {
+func DescribeImage2(ctx context.Context, classWithImage types.ClassWithImage, img2 types.Image, opts ...CallOptionFunc) (string, error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -1471,7 +1471,7 @@ func DescribeImage2(ctx context.Context, classWithImage types.ClassWithImage, im
 	}
 }
 
-func DescribeImage3(ctx context.Context, classWithImage types.ClassWithImage, img2 any, opts ...CallOptionFunc) (string, error) {
+func DescribeImage3(ctx context.Context, classWithImage types.ClassWithImage, img2 types.Image, opts ...CallOptionFunc) (string, error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -1529,7 +1529,7 @@ func DescribeImage3(ctx context.Context, classWithImage types.ClassWithImage, im
 	}
 }
 
-func DescribeImage4(ctx context.Context, classWithImage types.ClassWithImage, img2 any, opts ...CallOptionFunc) (string, error) {
+func DescribeImage4(ctx context.Context, classWithImage types.ClassWithImage, img2 types.Image, opts ...CallOptionFunc) (string, error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -1587,7 +1587,7 @@ func DescribeImage4(ctx context.Context, classWithImage types.ClassWithImage, im
 	}
 }
 
-func DescribeMedia1599(ctx context.Context, img any, client_sector string, client_name string, opts ...CallOptionFunc) (string, error) {
+func DescribeMedia1599(ctx context.Context, img types.Image, client_sector string, client_name string, opts ...CallOptionFunc) (string, error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -2341,7 +2341,7 @@ func ExtractReceiptInfo(ctx context.Context, email string, reason types.Union2Kc
 	}
 }
 
-func ExtractResume(ctx context.Context, resume string, img *any, opts ...CallOptionFunc) (types.Resume, error) {
+func ExtractResume(ctx context.Context, resume string, img *types.Image, opts ...CallOptionFunc) (types.Resume, error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -4835,7 +4835,7 @@ func OptionalTest_Function(ctx context.Context, input string, opts ...CallOption
 	}
 }
 
-func PdfInput(ctx context.Context, pdf any, opts ...CallOptionFunc) (string, error) {
+func PdfInput(ctx context.Context, pdf types.PDF, opts ...CallOptionFunc) (string, error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -4893,7 +4893,7 @@ func PdfInput(ctx context.Context, pdf any, opts ...CallOptionFunc) (string, err
 	}
 }
 
-func PdfInputAnthropic(ctx context.Context, pdf any, opts ...CallOptionFunc) (string, error) {
+func PdfInputAnthropic(ctx context.Context, pdf types.PDF, opts ...CallOptionFunc) (string, error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -4951,7 +4951,7 @@ func PdfInputAnthropic(ctx context.Context, pdf any, opts ...CallOptionFunc) (st
 	}
 }
 
-func PdfInputOpenai(ctx context.Context, pdf any, prompt string, opts ...CallOptionFunc) (string, error) {
+func PdfInputOpenai(ctx context.Context, pdf types.PDF, prompt string, opts ...CallOptionFunc) (string, error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -5009,7 +5009,7 @@ func PdfInputOpenai(ctx context.Context, pdf any, prompt string, opts ...CallOpt
 	}
 }
 
-func PdfInputVertex(ctx context.Context, pdf any, opts ...CallOptionFunc) (string, error) {
+func PdfInputVertex(ctx context.Context, pdf types.PDF, opts ...CallOptionFunc) (string, error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -8837,6 +8837,64 @@ func TestGeminiSystemAsChat(ctx context.Context, input string, opts ...CallOptio
 	}
 }
 
+func TestGeminiThinking(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := args.Encode()
+	if err != nil {
+		panic(err)
+	}
+
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestGeminiThinking", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestGeminiThinking", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
+	}
+}
+
 func TestGroq(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
 	var callOpts callOption
@@ -8895,7 +8953,7 @@ func TestGroq(ctx context.Context, input string, opts ...CallOptionFunc) (string
 	}
 }
 
-func TestImageInput(ctx context.Context, img any, opts ...CallOptionFunc) (string, error) {
+func TestImageInput(ctx context.Context, img types.Image, opts ...CallOptionFunc) (string, error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -8953,7 +9011,7 @@ func TestImageInput(ctx context.Context, img any, opts ...CallOptionFunc) (strin
 	}
 }
 
-func TestImageInputAnthropic(ctx context.Context, img any, opts ...CallOptionFunc) (string, error) {
+func TestImageInputAnthropic(ctx context.Context, img types.Image, opts ...CallOptionFunc) (string, error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -9011,7 +9069,7 @@ func TestImageInputAnthropic(ctx context.Context, img any, opts ...CallOptionFun
 	}
 }
 
-func TestImageListInput(ctx context.Context, imgs []any, opts ...CallOptionFunc) (string, error) {
+func TestImageListInput(ctx context.Context, imgs []types.Image, opts ...CallOptionFunc) (string, error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -12027,7 +12085,7 @@ func ValidateResponseTypes(ctx context.Context, input string, opts ...CallOption
 	}
 }
 
-func VideoInputGemini(ctx context.Context, vid any, opts ...CallOptionFunc) (string, error) {
+func VideoInputGemini(ctx context.Context, vid types.Video, opts ...CallOptionFunc) (string, error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -12085,7 +12143,7 @@ func VideoInputGemini(ctx context.Context, vid any, opts ...CallOptionFunc) (str
 	}
 }
 
-func VideoInputVertex(ctx context.Context, vid any, opts ...CallOptionFunc) (string, error) {
+func VideoInputVertex(ctx context.Context, vid types.Video, opts ...CallOptionFunc) (string, error) {
 
 	var callOpts callOption
 	for _, opt := range opts {

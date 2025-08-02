@@ -109,8 +109,10 @@ export default function EmbedComponent({ bamlContent }: EmbedComponentProps) {
   }
 
   return (
-    <div className="flex justify-center items-center w-screen h-screen bg-background">
-      <EventListener />
+    <div className="flex justify-center items-center w-screen h-screen bg-background relative">
+      <div className="absolute bottom-0 right-4 z-50">
+        <EventListener />
+      </div>
       {/* <h1 className='text-xl font-bold text-gray-500'>This is an embeddable React Component!</h1> */}
       {/* <p className='text-gray-600'>You can use this inside an iframe.</p> */}
       <ResizablePanelGroup

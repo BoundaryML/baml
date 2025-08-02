@@ -9,7 +9,7 @@ import {
 /* eslint-disable @typescript-eslint/no-floating-promises */
 import { useAtomValue, useSetAtom } from 'jotai';
 import { Play } from 'lucide-react';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import {
   type TestState,
   selectedItemAtom,
@@ -21,6 +21,7 @@ import { useRunBamlTests } from '../test-runner';
 import { getStatus } from '../testStateUtils';
 import { ResponseRenderer } from './ResponseRenderer';
 import { TestStatus } from './TestStatus';
+import { EnhancedErrorRenderer } from '../../test-panel/components/EnhancedErrorRenderer';
 
 export const CardView = ({ currentRun }: { currentRun?: TestHistoryRun }) => {
   return (
@@ -43,10 +44,15 @@ interface TestId {
   testName: string;
 }
 
+interface TestResultProps {
+  testId: TestId;
+  historicalResponse?: TestState;
+}
+
 const TestResult = ({
   testId,
   historicalResponse,
-}: { testId: TestId; historicalResponse?: TestState }) => {
+}: TestResultProps) => {
   const response = useAtomValue(testCaseResponseAtom(testId));
   const displayResponse = historicalResponse || response;
   const runBamlTests = useRunBamlTests();
@@ -71,6 +77,11 @@ const TestResult = ({
     console.log('no display response');
     return null;
   }
+
+  // Use useCallback to create a stable retry function
+  const handleRetry = useCallback(() => {
+    runBamlTests([{ functionName: testId.functionName, testName: testId.testName }]);
+  }, [runBamlTests, testId.functionName, testId.testName]);
 
   return (
     <div
@@ -127,9 +138,12 @@ const TestResult = ({
       )}
 
       {displayResponse.status === 'error' && (
-        <div className="mt-2 text-xs text-red-500">
-          Error: {displayResponse.message}
-        </div>
+        <EnhancedErrorRenderer
+          errorMessage={displayResponse.message || 'Unknown error occurred'}
+          functionName={testId.functionName}
+          testName={testId.testName}
+          onRetry={handleRetry}
+        />
       )}
     </div>
   );

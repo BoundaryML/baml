@@ -127,7 +127,6 @@ tasks {
     // This task is inherited from a dependency, "intellij platform" maybe?
     processResources {
         dependsOn("copyTextmateFiles")
-        dependsOn("copyWebPanelDist")
     }
 
     // This task is inherited from a dependency, "intellij platform" maybe?
@@ -144,14 +143,6 @@ tasks {
             include("syntaxes/jinja.tmLanguage.json")
         }
         into("src/main/resources/textmate")
-    }
-
-    register<Copy>("copyWebPanelDist") {
-        group = "build"
-        from("../typescript/apps/vscode-ext/src/web-panel/") {
-            include("dist")
-        }
-        into("src/main/resources/web-panel")
     }
 }
 

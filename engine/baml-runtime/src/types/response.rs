@@ -97,7 +97,8 @@ impl FunctionResult {
     }
 
     pub fn parsed(&self) -> &Option<Result<ResponseBamlValue>> {
-        match self.event_chain.last() {
+        let last = self.event_chain.last();
+        match last {
             Some((_, _, result)) => result,
             None => &None,
         }

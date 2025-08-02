@@ -823,7 +823,7 @@ func (*stream) AssertFn(ctx context.Context, a int64, opts ...CallOptionFunc) (<
 }
 
 // / Streaming version of AudioInput
-func (*stream) AudioInput(ctx context.Context, aud any, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+func (*stream) AudioInput(ctx context.Context, aud types.Audio, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -901,7 +901,7 @@ func (*stream) AudioInput(ctx context.Context, aud any, opts ...CallOptionFunc) 
 }
 
 // / Streaming version of AudioInputOpenai
-func (*stream) AudioInputOpenai(ctx context.Context, aud any, prompt string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+func (*stream) AudioInputOpenai(ctx context.Context, aud types.Audio, prompt string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -1681,7 +1681,7 @@ func (*stream) CustomTask(ctx context.Context, input string, opts ...CallOptionF
 }
 
 // / Streaming version of DescribeAudio
-func (*stream) DescribeAudio(ctx context.Context, audio any, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+func (*stream) DescribeAudio(ctx context.Context, audio types.Audio, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -1759,7 +1759,7 @@ func (*stream) DescribeAudio(ctx context.Context, audio any, opts ...CallOptionF
 }
 
 // / Streaming version of DescribeAudio2
-func (*stream) DescribeAudio2(ctx context.Context, audio any, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+func (*stream) DescribeAudio2(ctx context.Context, audio types.Audio, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -1837,7 +1837,7 @@ func (*stream) DescribeAudio2(ctx context.Context, audio any, opts ...CallOption
 }
 
 // / Streaming version of DescribeImage
-func (*stream) DescribeImage(ctx context.Context, img any, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+func (*stream) DescribeImage(ctx context.Context, img types.Image, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -1915,7 +1915,7 @@ func (*stream) DescribeImage(ctx context.Context, img any, opts ...CallOptionFun
 }
 
 // / Streaming version of DescribeImage2
-func (*stream) DescribeImage2(ctx context.Context, classWithImage types.ClassWithImage, img2 any, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+func (*stream) DescribeImage2(ctx context.Context, classWithImage types.ClassWithImage, img2 types.Image, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -1993,7 +1993,7 @@ func (*stream) DescribeImage2(ctx context.Context, classWithImage types.ClassWit
 }
 
 // / Streaming version of DescribeImage3
-func (*stream) DescribeImage3(ctx context.Context, classWithImage types.ClassWithImage, img2 any, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+func (*stream) DescribeImage3(ctx context.Context, classWithImage types.ClassWithImage, img2 types.Image, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -2071,7 +2071,7 @@ func (*stream) DescribeImage3(ctx context.Context, classWithImage types.ClassWit
 }
 
 // / Streaming version of DescribeImage4
-func (*stream) DescribeImage4(ctx context.Context, classWithImage types.ClassWithImage, img2 any, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+func (*stream) DescribeImage4(ctx context.Context, classWithImage types.ClassWithImage, img2 types.Image, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -2149,7 +2149,7 @@ func (*stream) DescribeImage4(ctx context.Context, classWithImage types.ClassWit
 }
 
 // / Streaming version of DescribeMedia1599
-func (*stream) DescribeMedia1599(ctx context.Context, img any, client_sector string, client_name string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+func (*stream) DescribeMedia1599(ctx context.Context, img types.Image, client_sector string, client_name string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -3163,7 +3163,7 @@ func (*stream) ExtractReceiptInfo(ctx context.Context, email string, reason type
 }
 
 // / Streaming version of ExtractResume
-func (*stream) ExtractResume(ctx context.Context, resume string, img *any, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.Resume, types.Resume], error) {
+func (*stream) ExtractResume(ctx context.Context, resume string, img *types.Image, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.Resume, types.Resume], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -6517,7 +6517,7 @@ func (*stream) OptionalTest_Function(ctx context.Context, input string, opts ...
 }
 
 // / Streaming version of PdfInput
-func (*stream) PdfInput(ctx context.Context, pdf any, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+func (*stream) PdfInput(ctx context.Context, pdf types.PDF, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -6595,7 +6595,7 @@ func (*stream) PdfInput(ctx context.Context, pdf any, opts ...CallOptionFunc) (<
 }
 
 // / Streaming version of PdfInputAnthropic
-func (*stream) PdfInputAnthropic(ctx context.Context, pdf any, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+func (*stream) PdfInputAnthropic(ctx context.Context, pdf types.PDF, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -6673,7 +6673,7 @@ func (*stream) PdfInputAnthropic(ctx context.Context, pdf any, opts ...CallOptio
 }
 
 // / Streaming version of PdfInputOpenai
-func (*stream) PdfInputOpenai(ctx context.Context, pdf any, prompt string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+func (*stream) PdfInputOpenai(ctx context.Context, pdf types.PDF, prompt string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -6751,7 +6751,7 @@ func (*stream) PdfInputOpenai(ctx context.Context, pdf any, prompt string, opts 
 }
 
 // / Streaming version of PdfInputVertex
-func (*stream) PdfInputVertex(ctx context.Context, pdf any, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+func (*stream) PdfInputVertex(ctx context.Context, pdf types.PDF, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -11898,6 +11898,84 @@ func (*stream) TestGeminiSystemAsChat(ctx context.Context, input string, opts ..
 	return channel, nil
 }
 
+// / Streaming version of TestGeminiThinking
+func (*stream) TestGeminiThinking(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	encoded, err := args.Encode()
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestGeminiThinking: %w", err)
+		panic(wrapped_err)
+	}
+
+	internal_ctx := context.Background()
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "TestGeminiThinking", encoded, callOpts.onTick)
+	if err != nil {
+		return nil, err
+	}
+
+	channel := make(chan StreamValue[string, string])
+	go func() {
+		defer func() {
+			internal_ctx.Done()
+		}()
+		for {
+			select {
+			case <-ctx.Done():
+				close(channel)
+				return
+			case result, ok := <-internal_channel:
+				if !ok {
+					// channel closed for some reason
+					close(channel)
+					return
+				}
+				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
+					close(channel)
+					return
+				}
+				if result.HasData {
+					data := (result.Data).(string)
+					channel <- StreamValue[string, string]{
+						IsFinal:  true,
+						as_final: &data,
+					}
+				} else {
+					data := (result.StreamData).(string)
+					channel <- StreamValue[string, string]{
+						IsFinal:   false,
+						as_stream: &data,
+					}
+				}
+			}
+		}
+	}()
+	return channel, nil
+}
+
 // / Streaming version of TestGroq
 func (*stream) TestGroq(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
@@ -11977,7 +12055,7 @@ func (*stream) TestGroq(ctx context.Context, input string, opts ...CallOptionFun
 }
 
 // / Streaming version of TestImageInput
-func (*stream) TestImageInput(ctx context.Context, img any, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+func (*stream) TestImageInput(ctx context.Context, img types.Image, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -12055,7 +12133,7 @@ func (*stream) TestImageInput(ctx context.Context, img any, opts ...CallOptionFu
 }
 
 // / Streaming version of TestImageInputAnthropic
-func (*stream) TestImageInputAnthropic(ctx context.Context, img any, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+func (*stream) TestImageInputAnthropic(ctx context.Context, img types.Image, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -12133,7 +12211,7 @@ func (*stream) TestImageInputAnthropic(ctx context.Context, img any, opts ...Cal
 }
 
 // / Streaming version of TestImageListInput
-func (*stream) TestImageListInput(ctx context.Context, imgs []any, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+func (*stream) TestImageListInput(ctx context.Context, imgs []types.Image, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -16189,7 +16267,7 @@ func (*stream) ValidateResponseTypes(ctx context.Context, input string, opts ...
 }
 
 // / Streaming version of VideoInputGemini
-func (*stream) VideoInputGemini(ctx context.Context, vid any, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+func (*stream) VideoInputGemini(ctx context.Context, vid types.Video, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -16267,7 +16345,7 @@ func (*stream) VideoInputGemini(ctx context.Context, vid any, opts ...CallOption
 }
 
 // / Streaming version of VideoInputVertex
-func (*stream) VideoInputVertex(ctx context.Context, vid any, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+func (*stream) VideoInputVertex(ctx context.Context, vid types.Video, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {

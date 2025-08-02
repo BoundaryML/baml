@@ -113,7 +113,7 @@ func TestOnTickStream(t *testing.T) {
 func TestFoo(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	collector, err := baml.NewCollector("test-foo-collector")
+	collector, err := b.NewCollector("test-foo-collector")
 	if err != nil {
 		t.Fatalf("Error creating collector: %v", err)
 	}
@@ -135,7 +135,7 @@ func TestFoo(t *testing.T) {
 func TestBar(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	collector, err := baml.NewCollector("test-bar-collector")
+	collector, err := b.NewCollector("test-bar-collector")
 	if err != nil {
 		t.Fatalf("Error creating collector: %v", err)
 	}
@@ -157,7 +157,7 @@ func TestBar(t *testing.T) {
 func TestFooStream(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	collector, err := baml.NewCollector("test-foo-stream-collector")
+	collector, err := b.NewCollector("test-foo-stream-collector")
 	if err != nil {
 		t.Fatalf("Error creating collector: %v", err)
 	}
@@ -199,7 +199,7 @@ func TestFooStream(t *testing.T) {
 func TestBarStream(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	collector, err := baml.NewCollector("test-bar-stream-collector")
+	collector, err := b.NewCollector("test-bar-stream-collector")
 	if err != nil {
 		t.Fatalf("Error creating collector: %v", err)
 	}
@@ -250,7 +250,7 @@ func TestBarStream(t *testing.T) {
 func TestMultipleFunctionsWithCollector(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	collector, err := baml.NewCollector("test-multiple-functions-collector")
+	collector, err := b.NewCollector("test-multiple-functions-collector")
 	if err != nil {
 		t.Fatalf("Error creating collector: %v", err)
 	}
@@ -311,7 +311,7 @@ func TestMultipleFunctionsWithCollector(t *testing.T) {
 func TestCollectorClear(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	collector, err := baml.NewCollector("test-clear-collector")
+	collector, err := b.NewCollector("test-clear-collector")
 	if err != nil {
 		t.Fatalf("Error creating collector: %v", err)
 	}
@@ -352,7 +352,7 @@ func TestCollectorWithNamedCollector(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	collectorName := "comprehensive-test-collector"
-	collector, err := baml.NewCollector(collectorName)
+	collector, err := b.NewCollector(collectorName)
 	if err != nil {
 		t.Fatalf("Error creating collector: %v", err)
 	}
