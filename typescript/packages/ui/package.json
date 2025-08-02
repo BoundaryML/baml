@@ -1,6 +1,5 @@
 {
   "dependencies": {
-    "@ai-sdk/react": "^2.0.0",
     "@githubocto/tailwind-vscode": "1.0.5",
     "@hookform/resolvers": "5.1.1",
     "@icons-pack/react-simple-icons": "13.1.0",
@@ -34,17 +33,13 @@
     "@radix-ui/react-toggle-group": "1.1.10",
     "@radix-ui/react-tooltip": "1.2.7",
     "@tailwindcss/typography": "0.5.16",
-    "ai": "^5.0.0",
     "class-variance-authority": "0.7.1",
-    "classnames": "^2.5.1",
     "clsx": "2.1.1",
     "cmdk": "1.1.1",
     "cobe": "0.6.4",
     "color-bits": "1.1.0",
     "date-fns": "4.1.0",
     "embla-carousel-react": "8.6.0",
-    "fast-deep-equal": "^3.1.3",
-    "framer-motion": "^12.23.12",
     "input-otp": "1.4.2",
     "lucide-react": "0.516.0",
     "markdown-to-jsx": "7.7.7",
@@ -68,11 +63,9 @@
     "remark-gfm": "4.0.1",
     "shiki": "3.6.0",
     "sonner": "2.0.5",
-    "swr": "2.3.3",
     "tailwind-merge": "3.3.1",
     "tailwindcss-animate": "1.0.7",
     "tinykeys": "3.0.0",
-    "usehooks-ts": "^3.1.1",
     "vaul": "1.1.2"
   },
   "devDependencies": {
@@ -87,7 +80,6 @@
   "exports": {
     "./*": "./src/components/*.tsx",
     "./custom/*": "./src/custom/*.tsx",
-    "./chatbot/*": "./src/chatbot/*.tsx",
     "./globals.css": "./src/styles/globals.css",
     "./hooks/*": "./src/hooks/*.tsx",
     "./lib/*": "./src/lib/*.tsx",
