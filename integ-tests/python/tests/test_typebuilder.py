@@ -545,6 +545,17 @@ def test_typebuilder_and_fieldtype_imports():
     assert isinstance(string_type, FieldType)
 
 
+def test_type_builder_list_properties():
+    tb = TypeBuilder()
+    tb.Person.add_property("last_name", tb.string().list())
+    tb.Person.add_property("height", tb.float().optional()).description("Height in meters")
+
+    assert tb.Person.list_properties() == [
+        ("last_name", tb.string().list()),
+        ("height", tb.float().optional())
+    ]
+
+
 def test_type_builder_clear():
     tb = TypeBuilder()
     tb.Person.add_property("last_name", tb.string().list())

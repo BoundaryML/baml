@@ -277,6 +277,17 @@ describe("Dynamic Type Tests", () => {
   });
 
   describe("TypeBuilder APIs", () => {
+    it("should list properties", () => {
+      let tb = new TypeBuilder();
+      tb.Person.addProperty("last_name", tb.string().list());
+      tb.Person.addProperty("height", tb.float().optional()).description("Height in meters");
+
+      expect(tb.Person.listProperties()).toEqual({
+        last_name: tb.string().list(),
+        height: tb.float().optional(),
+      });
+    });
+
     it("should clear", () => {
       let tb = new TypeBuilder();
       tb.Person.addProperty("last_name", tb.string().list());
