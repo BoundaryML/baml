@@ -283,7 +283,7 @@ impl ClassPropertyBuilder {
         self.inner
             .lock()
             .unwrap()
-            .r#type(r#type.inner.lock().unwrap().clone());
+            .set_type(r#type.inner.lock().unwrap().clone());
         self.inner.clone().into()
     }
 

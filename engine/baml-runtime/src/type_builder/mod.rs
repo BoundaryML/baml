@@ -822,7 +822,7 @@ mod tests {
             cls.upsert_property("name")
                 .lock()
                 .unwrap()
-                .r#type(TypeIR::string())
+                .set_type(TypeIR::string())
                 .with_meta("alias", BamlValue::String("username".to_string()))
                 .with_meta(
                     "description",
@@ -833,7 +833,7 @@ mod tests {
             cls.upsert_property("age")
                 .lock()
                 .unwrap()
-                .r#type(TypeIR::int())
+                .set_type(TypeIR::int())
                 .with_meta(
                     "description",
                     BamlValue::String("User's age in years".to_string()),
@@ -843,7 +843,7 @@ mod tests {
             cls.upsert_property("email")
                 .lock()
                 .unwrap()
-                .r#type(TypeIR::string());
+                .set_type(TypeIR::string());
         }
 
         // Add an enum with values and metadata
@@ -909,7 +909,7 @@ mod tests {
                 .upsert_property("street")
                 .lock()
                 .unwrap()
-                .r#type(TypeIR::string())
+                .set_type(TypeIR::string())
                 .with_meta("alias", BamlValue::String("streetAddress".to_string()))
                 .with_meta(
                     "description",
@@ -921,7 +921,7 @@ mod tests {
                 .upsert_property("unit")
                 .lock()
                 .unwrap()
-                .r#type(TypeIR::int().as_optional())
+                .set_type(TypeIR::int().as_optional())
                 .with_meta(
                     "description",
                     BamlValue::String("Apartment/unit number if applicable".to_string()),
@@ -932,7 +932,7 @@ mod tests {
                 .upsert_property("tags")
                 .lock()
                 .unwrap()
-                .r#type(TypeIR::string().as_list())
+                .set_type(TypeIR::string().as_list())
                 .with_meta("alias", BamlValue::String("labels".to_string()));
 
             // Boolean with no metadata
@@ -940,14 +940,14 @@ mod tests {
                 .upsert_property("is_primary")
                 .lock()
                 .unwrap()
-                .r#type(TypeIR::bool());
+                .set_type(TypeIR::bool());
 
             // Float with skip metadata
             address
                 .upsert_property("coordinates")
                 .lock()
                 .unwrap()
-                .r#type(TypeIR::float())
+                .set_type(TypeIR::float())
                 .with_meta("skip", BamlValue::Bool(true));
         }
 
@@ -1064,7 +1064,7 @@ mod tests {
             node.upsert_property("child")
                 .lock()
                 .unwrap()
-                .r#type(TypeIR::class("Node"))
+                .set_type(TypeIR::class("Node"))
                 .with_meta(
                     "description",
                     BamlValue::String("recursive self reference".to_string()),
