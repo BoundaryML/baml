@@ -211,7 +211,7 @@ impl RequestBuilder for VertexClient {
         _expose_secrets: bool,
     ) -> Result<reqwest::RequestBuilder> {
         let vertex_auth =
-            super::std_auth::VertexAuth::get_or_create(&self.properties.auth_strategy).await?;
+            super::auth::VertexAuth::get_or_create(&self.properties.auth_strategy).await?;
 
         let base_url = match &self.properties.base_url_or_location {
             BaseUrlOrLocation::BaseUrl(base_url) => base_url.to_string(),
