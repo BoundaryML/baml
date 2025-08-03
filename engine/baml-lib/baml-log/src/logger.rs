@@ -951,23 +951,23 @@ mod tests {
 
         guard.set("BAML_LOG_JSON", "true");
         let json_mode: bool = JsonModeConfig::from_env().into();
-        assert_eq!(json_mode, true);
+        assert!(json_mode);
 
         guard.set("BAML_LOG_JSON", "TRUE");
         let json_mode: bool = JsonModeConfig::from_env().into();
-        assert_eq!(json_mode, true);
+        assert!(json_mode);
 
         guard.set("BAML_LOG_JSON", "1");
         let json_mode: bool = JsonModeConfig::from_env().into();
-        assert_eq!(json_mode, true);
+        assert!(json_mode);
 
         guard.set("BAML_LOG_JSON", "false");
         let json_mode: bool = JsonModeConfig::from_env().into();
-        assert_eq!(json_mode, false);
+        assert!(!json_mode);
 
         guard.set("BAML_LOG_JSON", "0");
         let json_mode: bool = JsonModeConfig::from_env().into();
-        assert_eq!(json_mode, false);
+        assert!(!json_mode);
 
         guard.remove("BAML_LOG_JSON");
         let json_mode: bool = JsonModeConfig::from_env().into();
@@ -1018,15 +1018,15 @@ mod tests {
 
         guard.set("BAML_LOG_LSP", "true");
         let lsp_mode: bool = LspConfig::from_env().into();
-        assert_eq!(lsp_mode, true);
+        assert!(lsp_mode);
 
         guard.set("BAML_LOG_LSP", "1");
         let lsp_mode: bool = LspConfig::from_env().into();
-        assert_eq!(lsp_mode, true);
+        assert!(lsp_mode);
 
         guard.set("BAML_LOG_LSP", "false");
         let lsp_mode: bool = LspConfig::from_env().into();
-        assert_eq!(lsp_mode, false);
+        assert!(!lsp_mode);
 
         guard.remove("BAML_LOG_LSP");
         let lsp_mode: bool = LspConfig::from_env().into();
@@ -1053,7 +1053,7 @@ mod tests {
 
         // Verify the changes took effect
         assert_eq!(get_log_level(), Level::Trace);
-        assert_eq!(JsonMode::get(), true);
+        assert!(JsonMode::get());
         assert_eq!(LogColorMode::get(), ColorMode::Never);
         assert_eq!(
             LogMaxMessageLength::get(),
@@ -1081,7 +1081,7 @@ mod tests {
         // Check that only the specified value changed
         assert_eq!(get_log_level(), Level::Error);
         // Other values should remain unchanged
-        assert_eq!(JsonMode::get(), true);
+        assert!(JsonMode::get());
         assert_eq!(LogColorMode::get(), ColorMode::Always);
     }
 
@@ -1148,10 +1148,10 @@ mod tests {
         let _ = init();
 
         assert!(set_json_mode(true).is_ok());
-        assert_eq!(JsonMode::get(), true);
+        assert!(JsonMode::get());
 
         assert!(set_json_mode(false).is_ok());
-        assert_eq!(JsonMode::get(), false);
+        assert!(!JsonMode::get());
     }
 
     #[test]
@@ -1211,7 +1211,7 @@ mod tests {
 
         // Verify the changes
         assert_eq!(get_log_level(), Level::Warn);
-        assert_eq!(JsonMode::get(), true);
+        assert!(JsonMode::get());
     }
 
     // Test thread safety of configuration
@@ -1336,13 +1336,13 @@ mod tests {
 
         // Assert the values
         assert_eq!(config.level, Level::Debug);
-        assert_eq!(config.use_json, true);
+        assert!(config.use_json);
         assert_eq!(config.color_mode, ColorMode::Always);
         assert_eq!(
             config.max_message_length,
             MaxMessageLength::Limited { max_length: 500 }
         );
-        assert_eq!(config.initialized, false);
+        assert!(!config.initialized);
     }
 
     #[test]
@@ -1356,6 +1356,6 @@ mod tests {
         config.update_from_map(&vars);
 
         assert_eq!(config.level, Level::Error);
-        assert_eq!(config.use_json, false);
+        assert!(!config.use_json);
     }
 }

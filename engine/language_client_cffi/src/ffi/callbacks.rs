@@ -120,7 +120,7 @@ pub fn safe_trigger_callback(
     match result {
         Ok(result) => match result.parsed() {
             Some(Ok(content)) => {
-                send_result_to_callback(id, is_done, &content, runtime);
+                send_result_to_callback(id, is_done, content, runtime);
             }
             Some(Err(e)) => {
                 send_error_to_callback(id, e);

@@ -65,9 +65,9 @@ where
 
         let Some((value_type_index, options)) = union_type_generic
             .selected_type_index(&real_type, lookup)
-            .expect(&format!(
-                "Failed to find target_type in options: {real_type} -> {target_type}"
-            ))
+            .unwrap_or_else(|_| {
+                panic!("Failed to find target_type in options: {real_type} -> {target_type}")
+            })
         else {
             return holder;
         };

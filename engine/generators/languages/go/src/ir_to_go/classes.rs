@@ -3,7 +3,6 @@ use internal_baml_core::ir::{Class, Field};
 use crate::{
     generated_types::{ClassGo, FieldGo},
     package::CurrentRenderPackage,
-    r#type::SerializeType,
 };
 
 pub fn ir_class_to_go<'a>(class: &Class, pkg: &'a CurrentRenderPackage) -> ClassGo<'a> {

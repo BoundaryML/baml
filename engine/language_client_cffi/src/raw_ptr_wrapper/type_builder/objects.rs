@@ -135,7 +135,7 @@ impl TypeBuilder {
         let enums = ir.walk_enums();
         enums
             .map(|enm| enm.name().to_string())
-            .chain(self.type_builder.list_enums().into_iter())
+            .chain(self.type_builder.list_enums())
             .collect::<indexmap::IndexSet<_>>()
             .into_iter()
             .map(|name| EnumBuilder::new(self.type_builder.clone(), name))
@@ -147,7 +147,7 @@ impl TypeBuilder {
         let classes = ir.walk_classes();
         classes
             .map(|cls| cls.name().to_string())
-            .chain(self.type_builder.list_classes().into_iter())
+            .chain(self.type_builder.list_classes())
             .collect::<indexmap::IndexSet<_>>()
             .into_iter()
             .map(|name| ClassBuilder::new(self.type_builder.clone(), name))
@@ -482,11 +482,8 @@ impl ClassPropertyBuilder {
 
         let ast_type = || {
             if let Ok(cls) = rt.internal().ir().find_class(self.class_name.as_str()) {
-                if let Some(field) = cls.find_field(&self.property_name) {
-                    Some(field.r#type().clone())
-                } else {
-                    None
-                }
+                cls.find_field(&self.property_name)
+                    .map(|field| field.r#type().clone())
             } else {
                 None
             }

@@ -80,10 +80,7 @@ fn call_function_from_c_inner(
     rt.spawn(async move {
         let result = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| async {
             // TODO: There's a race condition bug here. Technically we should COPY the type builder, not just clone it.
-            let type_builder = match type_builder {
-                Some(t) => Some(t.type_builder.as_ref().clone()),
-                None => None,
-            };
+            let type_builder = type_builder.map(|t| t.type_builder.as_ref().clone());
             runtime
                 .call_function(
                     func_name,
@@ -173,10 +170,7 @@ fn call_function_parse_from_c_inner(
     rt.spawn(async move {
         let result = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| async {
             // TODO: There's a race condition bug here. Technically we should COPY the type builder, not just clone it.
-            let type_builder = match type_builder {
-                Some(t) => Some(t.type_builder.as_ref().clone()),
-                None => None,
-            };
+            let type_builder = type_builder.map(|t| t.type_builder.as_ref().clone());
             runtime.parse_llm_response(
                 func_name,
                 text,

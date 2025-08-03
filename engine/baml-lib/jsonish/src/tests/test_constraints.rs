@@ -343,7 +343,7 @@ mod try_cast_tests {
         // Should have one failed check
         assert_eq!(constraint_results.len(), 1);
         assert_eq!(constraint_results[0].0, "value_check");
-        assert_eq!(constraint_results[0].2, false); // Check failed
+        assert!(!constraint_results[0].2); // Check failed
     }
 
     #[test]
@@ -685,14 +685,14 @@ mod try_cast_tests {
             .iter()
             .find(|(label, _, _)| label == "gt_10");
         assert!(gt_10_check.is_some());
-        assert_eq!(gt_10_check.unwrap().2, false);
+        assert!(!gt_10_check.unwrap().2);
 
         // Second check should pass (5 < 100 is true)
         let lt_100_check = constraint_results
             .iter()
             .find(|(label, _, _)| label == "lt_100");
         assert!(lt_100_check.is_some());
-        assert_eq!(lt_100_check.unwrap().2, true);
+        assert!(lt_100_check.unwrap().2);
     }
 
     #[test]
