@@ -27,7 +27,9 @@
     "format:fix": "biome check --write",
     "docker-build": "bash build-docker.sh",
     "test": "turbo run test",
-    "integ-tests:ts": "turbo run build:debug --filter=@boundaryml/baml && cd integ-tests/typescript && pnpm generate && pnpm integ-tests"
+    "integ-tests": "pnpm run generate && turbo run integ-tests",
+    "integ-tests:ts": "turbo run build:debug --filter=@boundaryml/baml && cd integ-tests/typescript && pnpm generate && pnpm integ-tests",
+    "fern": "pnpm --filter @baml/fern run dev"
   },
   "devDependencies": {
     "@infisical/cli": "0.41.89",
