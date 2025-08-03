@@ -31,15 +31,15 @@ func (t *StatusEnumView) ListValues() ([]EnumValueView, error) {
 	return builders, nil
 }
 
-func (t *StatusEnumView) ACTIVE() (EnumValueView, error) {
+func (t *StatusEnumView) ValueACTIVE() (EnumValueView, error) {
 	return t.inner.Value("ACTIVE")
 }
 
-func (t *StatusEnumView) INACTIVE() (EnumValueView, error) {
+func (t *StatusEnumView) ValueINACTIVE() (EnumValueView, error) {
 	return t.inner.Value("INACTIVE")
 }
 
-func (t *StatusEnumView) PENDING() (EnumValueView, error) {
+func (t *StatusEnumView) ValuePENDING() (EnumValueView, error) {
 	return t.inner.Value("PENDING")
 }
 
@@ -49,4 +49,8 @@ func (t *TypeBuilder) Status() (*StatusEnumView, error) {
 		return nil, err
 	}
 	return &StatusEnumView{inner: bld}, nil
+}
+
+func (t *StatusEnumView) Type() (baml.Type, error) {
+	return t.inner.Type()
 }

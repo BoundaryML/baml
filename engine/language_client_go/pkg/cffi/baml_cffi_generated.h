@@ -37,6 +37,12 @@ const void *call_function_from_c(const void *runtime,
                                  uintptr_t length,
                                  uint32_t id);
 
+const void *call_function_parse_from_c(const void *runtime,
+                                       const char *function_name,
+                                       const char *encoded_args,
+                                       uintptr_t length,
+                                       uint32_t id);
+
 /**
  * Extern "C" function that returns immediately, scheduling the async call.
  * Once the asynchronous function completes, the provided callback is invoked.

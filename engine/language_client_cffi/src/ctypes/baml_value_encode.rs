@@ -114,7 +114,7 @@ where
                     namespace: CffiTypeNamespace::Internal.into(),
                     name: name.clone(),
                 }),
-                dynamic_fields: vec![],
+                // dynamic_fields: vec![],
                 fields: fields
                     .iter()
                     .map(|(name, value)| CffiMapEntry {

@@ -19,8 +19,14 @@ func (t *{{enm.name}}Enum{{enm.builder()}}) ListValues() ([]EnumValue{{enm.build
 	return builders, nil
 }
 
+{% if enm.dynamic %}
+func (t *{{enm.name}}Enum{{enm.builder()}}) AddValue(value string) (EnumValue{{enm.builder()}}, error) {
+	return t.inner.AddValue(value)
+}
+{% endif %}
+
 {% for (val, _) in enm.values %}
-func (t *{{enm.name}}Enum{{enm.builder()}}) {{val|exported_name}}() (EnumValue{{enm.builder()}}, error) {
+func (t *{{enm.name}}Enum{{enm.builder()}}) Value{{val|exported_name}}() (EnumValue{{enm.builder()}}, error) {
     return t.inner.Value("{{val}}")
 }
 {% endfor %}
@@ -31,5 +37,9 @@ func (t *TypeBuilder) {{enm.name}}() (*{{enm.name}}Enum{{enm.builder()}}, error)
 		return nil, err
 	}
 	return &{{enm.name}}Enum{{enm.builder()}}{inner: bld}, nil
+}
+
+func (t *{{enm.name}}Enum{{enm.builder()}}) Type() (baml.Type, error) {
+	return t.inner.Type()
 }
 {% endfor %}

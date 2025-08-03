@@ -48,7 +48,9 @@ func (c *ClassWithBlockDone) Decode(holder *cffi.CFFIValueClass, typeMap baml.Ty
 			c.S_20_words = baml.Decode(valueHolder).Interface().(*string)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class ClassWithBlockDone", key))
+
 		}
 	}
 
@@ -103,7 +105,9 @@ func (c *ClassWithoutDone) Decode(holder *cffi.CFFIValueClass, typeMap baml.Type
 			})
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class ClassWithoutDone", key))
+
 		}
 	}
 
@@ -180,7 +184,9 @@ func (c *SemanticContainer) Decode(holder *cffi.CFFIValueClass, typeMap baml.Typ
 			c.Final_string = baml.Decode(valueHolder).Interface().(*string)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class SemanticContainer", key))
+
 		}
 	}
 
@@ -245,7 +251,9 @@ func (c *SmallThing) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.I_8_digits = baml.Decode(valueHolder).Interface().(*int64)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class SmallThing", key))
+
 		}
 	}
 

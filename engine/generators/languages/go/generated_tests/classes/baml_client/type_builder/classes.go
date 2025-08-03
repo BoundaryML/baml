@@ -31,11 +31,11 @@ func (t *SimpleClassClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
-func (t *SimpleClassClassView) Digits() (ClassPropertyView, error) {
+func (t *SimpleClassClassView) PropertyDigits() (ClassPropertyView, error) {
 	return t.inner.Property("digits")
 }
 
-func (t *SimpleClassClassView) Words() (ClassPropertyView, error) {
+func (t *SimpleClassClassView) PropertyWords() (ClassPropertyView, error) {
 	return t.inner.Property("words")
 }
 
@@ -45,4 +45,8 @@ func (t *TypeBuilder) SimpleClass() (*SimpleClassClassView, error) {
 		return nil, err
 	}
 	return &SimpleClassClassView{inner: bld}, nil
+}
+
+func (t *SimpleClassClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
 }

@@ -27,6 +27,6 @@ func TestSimpleTypeBuilder(t *testing.T) {
 	t.Log("String type created successfully")
 
 	// Test the String() method
-	repr := stringType.String()
+	repr := stringType.Print()
 	t.Logf("String type representation: %s", repr)
 }

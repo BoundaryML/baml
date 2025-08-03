@@ -29,6 +29,8 @@ type media interface {
 	MimeType() (*string, error)
 	AsUrl() (*string, error)
 	AsBase64() (*string, error)
+	IsUrl() (bool, error)
+	IsBase64() (bool, error)
 }
 
 type Image interface {
@@ -209,6 +211,9 @@ type TypeBuilder interface {
 	AddClass(name string) (ClassBuilder, error)
 	Class(name string) (ClassBuilder, error)
 	ListClasses() ([]ClassBuilder, error)
+
+	// Display the type builder
+	Print() string
 }
 
 type Type interface {
@@ -217,7 +222,7 @@ type Type interface {
 	// Type extensions
 	List() (Type, error)
 	Optional() (Type, error)
-	String() string
+	Print() string
 }
 
 type llmRenderable interface {
@@ -231,6 +236,8 @@ type llmRenderable interface {
 	Alias() (*string, error)
 	// Determine where this enum was defined
 	From() (ASTNodeSource, error)
+	// Get the name for the property
+	Name() (string, error)
 }
 
 type EnumBuilder interface {

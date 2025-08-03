@@ -31,11 +31,11 @@ func (t *PersonClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
-func (t *PersonClassView) Name() (ClassPropertyView, error) {
+func (t *PersonClassView) PropertyName() (ClassPropertyView, error) {
 	return t.inner.Property("name")
 }
 
-func (t *PersonClassView) Age() (ClassPropertyView, error) {
+func (t *PersonClassView) PropertyAge() (ClassPropertyView, error) {
 	return t.inner.Property("age")
 }
 
@@ -45,4 +45,8 @@ func (t *TypeBuilder) Person() (*PersonClassView, error) {
 		return nil, err
 	}
 	return &PersonClassView{inner: bld}, nil
+}
+
+func (t *PersonClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
 }

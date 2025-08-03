@@ -31,15 +31,15 @@ func (t *ComplexOptionalClassView) ListProperties() ([]ClassPropertyView, error)
 	return builders, nil
 }
 
-func (t *ComplexOptionalClassView) Data() (ClassPropertyView, error) {
+func (t *ComplexOptionalClassView) PropertyData() (ClassPropertyView, error) {
 	return t.inner.Property("data")
 }
 
-func (t *ComplexOptionalClassView) Items() (ClassPropertyView, error) {
+func (t *ComplexOptionalClassView) PropertyItems() (ClassPropertyView, error) {
 	return t.inner.Property("items")
 }
 
-func (t *ComplexOptionalClassView) Mapping() (ClassPropertyView, error) {
+func (t *ComplexOptionalClassView) PropertyMapping() (ClassPropertyView, error) {
 	return t.inner.Property("mapping")
 }
 
@@ -49,6 +49,10 @@ func (t *TypeBuilder) ComplexOptional() (*ComplexOptionalClassView, error) {
 		return nil, err
 	}
 	return &ComplexOptionalClassView{inner: bld}, nil
+}
+
+func (t *ComplexOptionalClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
 }
 
 type MixedOptionalNullableClassView struct {
@@ -67,43 +71,43 @@ func (t *MixedOptionalNullableClassView) ListProperties() ([]ClassPropertyView, 
 	return builders, nil
 }
 
-func (t *MixedOptionalNullableClassView) Id() (ClassPropertyView, error) {
+func (t *MixedOptionalNullableClassView) PropertyId() (ClassPropertyView, error) {
 	return t.inner.Property("id")
 }
 
-func (t *MixedOptionalNullableClassView) Description() (ClassPropertyView, error) {
+func (t *MixedOptionalNullableClassView) PropertyDescription() (ClassPropertyView, error) {
 	return t.inner.Property("description")
 }
 
-func (t *MixedOptionalNullableClassView) Metadata() (ClassPropertyView, error) {
+func (t *MixedOptionalNullableClassView) PropertyMetadata() (ClassPropertyView, error) {
 	return t.inner.Property("metadata")
 }
 
-func (t *MixedOptionalNullableClassView) Notes() (ClassPropertyView, error) {
+func (t *MixedOptionalNullableClassView) PropertyNotes() (ClassPropertyView, error) {
 	return t.inner.Property("notes")
 }
 
-func (t *MixedOptionalNullableClassView) Tags() (ClassPropertyView, error) {
+func (t *MixedOptionalNullableClassView) PropertyTags() (ClassPropertyView, error) {
 	return t.inner.Property("tags")
 }
 
-func (t *MixedOptionalNullableClassView) Categories() (ClassPropertyView, error) {
+func (t *MixedOptionalNullableClassView) PropertyCategories() (ClassPropertyView, error) {
 	return t.inner.Property("categories")
 }
 
-func (t *MixedOptionalNullableClassView) Keywords() (ClassPropertyView, error) {
+func (t *MixedOptionalNullableClassView) PropertyKeywords() (ClassPropertyView, error) {
 	return t.inner.Property("keywords")
 }
 
-func (t *MixedOptionalNullableClassView) PrimaryUser() (ClassPropertyView, error) {
+func (t *MixedOptionalNullableClassView) PropertyPrimaryUser() (ClassPropertyView, error) {
 	return t.inner.Property("primaryUser")
 }
 
-func (t *MixedOptionalNullableClassView) SecondaryUser() (ClassPropertyView, error) {
+func (t *MixedOptionalNullableClassView) PropertySecondaryUser() (ClassPropertyView, error) {
 	return t.inner.Property("secondaryUser")
 }
 
-func (t *MixedOptionalNullableClassView) TertiaryUser() (ClassPropertyView, error) {
+func (t *MixedOptionalNullableClassView) PropertyTertiaryUser() (ClassPropertyView, error) {
 	return t.inner.Property("tertiaryUser")
 }
 
@@ -113,6 +117,10 @@ func (t *TypeBuilder) MixedOptionalNullable() (*MixedOptionalNullableClassView, 
 		return nil, err
 	}
 	return &MixedOptionalNullableClassView{inner: bld}, nil
+}
+
+func (t *MixedOptionalNullableClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
 }
 
 type NullableTypesClassView struct {
@@ -131,27 +139,27 @@ func (t *NullableTypesClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
-func (t *NullableTypesClassView) NullableString() (ClassPropertyView, error) {
+func (t *NullableTypesClassView) PropertyNullableString() (ClassPropertyView, error) {
 	return t.inner.Property("nullableString")
 }
 
-func (t *NullableTypesClassView) NullableInt() (ClassPropertyView, error) {
+func (t *NullableTypesClassView) PropertyNullableInt() (ClassPropertyView, error) {
 	return t.inner.Property("nullableInt")
 }
 
-func (t *NullableTypesClassView) NullableFloat() (ClassPropertyView, error) {
+func (t *NullableTypesClassView) PropertyNullableFloat() (ClassPropertyView, error) {
 	return t.inner.Property("nullableFloat")
 }
 
-func (t *NullableTypesClassView) NullableBool() (ClassPropertyView, error) {
+func (t *NullableTypesClassView) PropertyNullableBool() (ClassPropertyView, error) {
 	return t.inner.Property("nullableBool")
 }
 
-func (t *NullableTypesClassView) NullableArray() (ClassPropertyView, error) {
+func (t *NullableTypesClassView) PropertyNullableArray() (ClassPropertyView, error) {
 	return t.inner.Property("nullableArray")
 }
 
-func (t *NullableTypesClassView) NullableObject() (ClassPropertyView, error) {
+func (t *NullableTypesClassView) PropertyNullableObject() (ClassPropertyView, error) {
 	return t.inner.Property("nullableObject")
 }
 
@@ -161,6 +169,10 @@ func (t *TypeBuilder) NullableTypes() (*NullableTypesClassView, error) {
 		return nil, err
 	}
 	return &NullableTypesClassView{inner: bld}, nil
+}
+
+func (t *NullableTypesClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
 }
 
 type OptionalDataClassView struct {
@@ -179,15 +191,15 @@ func (t *OptionalDataClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
-func (t *OptionalDataClassView) Value() (ClassPropertyView, error) {
+func (t *OptionalDataClassView) PropertyValue() (ClassPropertyView, error) {
 	return t.inner.Property("value")
 }
 
-func (t *OptionalDataClassView) Count() (ClassPropertyView, error) {
+func (t *OptionalDataClassView) PropertyCount() (ClassPropertyView, error) {
 	return t.inner.Property("count")
 }
 
-func (t *OptionalDataClassView) Enabled() (ClassPropertyView, error) {
+func (t *OptionalDataClassView) PropertyEnabled() (ClassPropertyView, error) {
 	return t.inner.Property("enabled")
 }
 
@@ -197,6 +209,10 @@ func (t *TypeBuilder) OptionalData() (*OptionalDataClassView, error) {
 		return nil, err
 	}
 	return &OptionalDataClassView{inner: bld}, nil
+}
+
+func (t *OptionalDataClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
 }
 
 type OptionalFieldsClassView struct {
@@ -215,35 +231,35 @@ func (t *OptionalFieldsClassView) ListProperties() ([]ClassPropertyView, error) 
 	return builders, nil
 }
 
-func (t *OptionalFieldsClassView) RequiredString() (ClassPropertyView, error) {
+func (t *OptionalFieldsClassView) PropertyRequiredString() (ClassPropertyView, error) {
 	return t.inner.Property("requiredString")
 }
 
-func (t *OptionalFieldsClassView) OptionalString() (ClassPropertyView, error) {
+func (t *OptionalFieldsClassView) PropertyOptionalString() (ClassPropertyView, error) {
 	return t.inner.Property("optionalString")
 }
 
-func (t *OptionalFieldsClassView) RequiredInt() (ClassPropertyView, error) {
+func (t *OptionalFieldsClassView) PropertyRequiredInt() (ClassPropertyView, error) {
 	return t.inner.Property("requiredInt")
 }
 
-func (t *OptionalFieldsClassView) OptionalInt() (ClassPropertyView, error) {
+func (t *OptionalFieldsClassView) PropertyOptionalInt() (ClassPropertyView, error) {
 	return t.inner.Property("optionalInt")
 }
 
-func (t *OptionalFieldsClassView) RequiredBool() (ClassPropertyView, error) {
+func (t *OptionalFieldsClassView) PropertyRequiredBool() (ClassPropertyView, error) {
 	return t.inner.Property("requiredBool")
 }
 
-func (t *OptionalFieldsClassView) OptionalBool() (ClassPropertyView, error) {
+func (t *OptionalFieldsClassView) PropertyOptionalBool() (ClassPropertyView, error) {
 	return t.inner.Property("optionalBool")
 }
 
-func (t *OptionalFieldsClassView) OptionalArray() (ClassPropertyView, error) {
+func (t *OptionalFieldsClassView) PropertyOptionalArray() (ClassPropertyView, error) {
 	return t.inner.Property("optionalArray")
 }
 
-func (t *OptionalFieldsClassView) OptionalMap() (ClassPropertyView, error) {
+func (t *OptionalFieldsClassView) PropertyOptionalMap() (ClassPropertyView, error) {
 	return t.inner.Property("optionalMap")
 }
 
@@ -253,6 +269,10 @@ func (t *TypeBuilder) OptionalFields() (*OptionalFieldsClassView, error) {
 		return nil, err
 	}
 	return &OptionalFieldsClassView{inner: bld}, nil
+}
+
+func (t *OptionalFieldsClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
 }
 
 type OptionalItemClassView struct {
@@ -271,19 +291,19 @@ func (t *OptionalItemClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
-func (t *OptionalItemClassView) Id() (ClassPropertyView, error) {
+func (t *OptionalItemClassView) PropertyId() (ClassPropertyView, error) {
 	return t.inner.Property("id")
 }
 
-func (t *OptionalItemClassView) Name() (ClassPropertyView, error) {
+func (t *OptionalItemClassView) PropertyName() (ClassPropertyView, error) {
 	return t.inner.Property("name")
 }
 
-func (t *OptionalItemClassView) Description() (ClassPropertyView, error) {
+func (t *OptionalItemClassView) PropertyDescription() (ClassPropertyView, error) {
 	return t.inner.Property("description")
 }
 
-func (t *OptionalItemClassView) Metadata() (ClassPropertyView, error) {
+func (t *OptionalItemClassView) PropertyMetadata() (ClassPropertyView, error) {
 	return t.inner.Property("metadata")
 }
 
@@ -293,6 +313,10 @@ func (t *TypeBuilder) OptionalItem() (*OptionalItemClassView, error) {
 		return nil, err
 	}
 	return &OptionalItemClassView{inner: bld}, nil
+}
+
+func (t *OptionalItemClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
 }
 
 type OptionalValueClassView struct {
@@ -311,11 +335,11 @@ func (t *OptionalValueClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
-func (t *OptionalValueClassView) Data() (ClassPropertyView, error) {
+func (t *OptionalValueClassView) PropertyData() (ClassPropertyView, error) {
 	return t.inner.Property("data")
 }
 
-func (t *OptionalValueClassView) Optional() (ClassPropertyView, error) {
+func (t *OptionalValueClassView) PropertyOptional() (ClassPropertyView, error) {
 	return t.inner.Property("optional")
 }
 
@@ -325,6 +349,10 @@ func (t *TypeBuilder) OptionalValue() (*OptionalValueClassView, error) {
 		return nil, err
 	}
 	return &OptionalValueClassView{inner: bld}, nil
+}
+
+func (t *OptionalValueClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
 }
 
 type ProductClassView struct {
@@ -343,15 +371,15 @@ func (t *ProductClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
-func (t *ProductClassView) Id() (ClassPropertyView, error) {
+func (t *ProductClassView) PropertyId() (ClassPropertyView, error) {
 	return t.inner.Property("id")
 }
 
-func (t *ProductClassView) Name() (ClassPropertyView, error) {
+func (t *ProductClassView) PropertyName() (ClassPropertyView, error) {
 	return t.inner.Property("name")
 }
 
-func (t *ProductClassView) Price() (ClassPropertyView, error) {
+func (t *ProductClassView) PropertyPrice() (ClassPropertyView, error) {
 	return t.inner.Property("price")
 }
 
@@ -361,6 +389,10 @@ func (t *TypeBuilder) Product() (*ProductClassView, error) {
 		return nil, err
 	}
 	return &ProductClassView{inner: bld}, nil
+}
+
+func (t *ProductClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
 }
 
 type UnionWithNullClassView struct {
@@ -379,19 +411,19 @@ func (t *UnionWithNullClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
-func (t *UnionWithNullClassView) SimpleUnion() (ClassPropertyView, error) {
+func (t *UnionWithNullClassView) PropertySimpleUnion() (ClassPropertyView, error) {
 	return t.inner.Property("simpleUnion")
 }
 
-func (t *UnionWithNullClassView) NullableUnion() (ClassPropertyView, error) {
+func (t *UnionWithNullClassView) PropertyNullableUnion() (ClassPropertyView, error) {
 	return t.inner.Property("nullableUnion")
 }
 
-func (t *UnionWithNullClassView) OptionalUnion() (ClassPropertyView, error) {
+func (t *UnionWithNullClassView) PropertyOptionalUnion() (ClassPropertyView, error) {
 	return t.inner.Property("optionalUnion")
 }
 
-func (t *UnionWithNullClassView) ComplexUnion() (ClassPropertyView, error) {
+func (t *UnionWithNullClassView) PropertyComplexUnion() (ClassPropertyView, error) {
 	return t.inner.Property("complexUnion")
 }
 
@@ -401,6 +433,10 @@ func (t *TypeBuilder) UnionWithNull() (*UnionWithNullClassView, error) {
 		return nil, err
 	}
 	return &UnionWithNullClassView{inner: bld}, nil
+}
+
+func (t *UnionWithNullClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
 }
 
 type UserClassView struct {
@@ -419,19 +455,19 @@ func (t *UserClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
-func (t *UserClassView) Id() (ClassPropertyView, error) {
+func (t *UserClassView) PropertyId() (ClassPropertyView, error) {
 	return t.inner.Property("id")
 }
 
-func (t *UserClassView) Name() (ClassPropertyView, error) {
+func (t *UserClassView) PropertyName() (ClassPropertyView, error) {
 	return t.inner.Property("name")
 }
 
-func (t *UserClassView) Email() (ClassPropertyView, error) {
+func (t *UserClassView) PropertyEmail() (ClassPropertyView, error) {
 	return t.inner.Property("email")
 }
 
-func (t *UserClassView) Phone() (ClassPropertyView, error) {
+func (t *UserClassView) PropertyPhone() (ClassPropertyView, error) {
 	return t.inner.Property("phone")
 }
 
@@ -441,4 +477,8 @@ func (t *TypeBuilder) User() (*UserClassView, error) {
 		return nil, err
 	}
 	return &UserClassView{inner: bld}, nil
+}
+
+func (t *UserClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
 }

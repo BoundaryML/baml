@@ -31,7 +31,7 @@ func (t *UseMyUnionClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
-func (t *UseMyUnionClassView) U() (ClassPropertyView, error) {
+func (t *UseMyUnionClassView) PropertyU() (ClassPropertyView, error) {
 	return t.inner.Property("u")
 }
 
@@ -41,4 +41,8 @@ func (t *TypeBuilder) UseMyUnion() (*UseMyUnionClassView, error) {
 		return nil, err
 	}
 	return &UseMyUnionClassView{inner: bld}, nil
+}
+
+func (t *UseMyUnionClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
 }

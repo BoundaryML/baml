@@ -1,0 +1,375 @@
+# Go Test Implementation Plan
+
+This document provides a comprehensive task list for implementing Go tests equivalent to the existing Python test suite. The Python tests in `/integ-tests/python/tests/` serve as the reference implementation, covering all aspects of the BAML framework.
+
+## Overview
+
+The Python test suite contains approximately **1,584 lines** of test code across **16 test files**, covering:
+- Basic function calls (sync/async)
+- All data types and structures
+- Streaming operations
+- Media inputs (Image, Audio, Video, PDF)
+- Error handling and validation
+- Multiple LLM providers
+- Advanced features (collectors, type builders, etc.)
+
+## Test Categories
+
+### 🔴 High Priority Tests (Core Functionality)
+
+#### 1. Basic Function Tests (`test_functions_basic_test.go`)
+**Reference**: `test_functions.py:58-183`
+
+```go
+// Test cases to implement:
+func TestSyncFunctionCall(t *testing.T)
+func TestSingleBoolInput(t *testing.T)
+func TestSingleStringListInput(t *testing.T)
+func TestMultipleArgsFunction(t *testing.T)
+func TestSingleClassInput(t *testing.T)
+func TestSingleEnumInput(t *testing.T)
+```
+
+**Key aspects**:
+- Sync vs async patterns (Go uses context.Context)
+- Single argument functions
+- Multiple argument functions
+- Basic input validation
+
+#### 2. Data Type Tests (`test_functions_data_types_test.go`)
+**Reference**: `test_functions.py:70-249`
+
+```go
+// Test cases to implement:
+func TestAllPrimitiveTypes(t *testing.T)
+func TestEnumTypes(t *testing.T)
+func TestClassTypes(t *testing.T)
+func TestMapTypes(t *testing.T)
+func TestUnionTypes(t *testing.T)
+func TestOptionalFields(t *testing.T)
+func TestLiteralTypes(t *testing.T)
+```
+
+**Key aspects**:
+- `bool`, `int64`, `float64`, `string`
+- Enums and enum lists
+- Nested classes and structs
+- Maps with different key/value types
+- Union types and optional fields
+- Type aliases and recursive structures
+
+#### 3. Streaming Tests (`test_functions_streaming_test.go`)
+**Reference**: `test_functions.py:642-777`
+
+```go
+// Test cases to implement:
+func TestBasicStreaming(t *testing.T)
+func TestStreamingWithProviders(t *testing.T)
+func TestConcurrentStreaming(t *testing.T)
+func TestStreamingErrorHandling(t *testing.T)
+func TestPartialResponseStreaming(t *testing.T)
+```
+
+**Key aspects**:
+- Channel-based streaming in Go
+- Chunk-by-chunk validation
+- Final response collection
+- Provider-specific streaming behavior
+- Error handling during streams
+
+#### 4. Media Input Tests (`test_functions_media_test.go`)
+**Reference**: `test_functions.py:421-497` and `test_media_inputs.py`
+
+```go
+// Test cases to implement:
+func TestImageInputURL(t *testing.T)
+func TestImageInputBase64(t *testing.T)
+func TestAudioInputs(t *testing.T)
+func TestVideoInputs(t *testing.T)
+func TestPDFInputs(t *testing.T)
+func TestMediaRoundTrip(t *testing.T)
+```
+
+**Key aspects**:
+- Image, Audio, Video, PDF types
+- URL vs base64 input methods
+- MIME type handling
+- Round-trip serialization
+
+#### 5. Constraint Validation (`test_functions_constraints_test.go`)
+**Reference**: `test_functions.py:98-127`
+
+```go
+// Test cases to implement:
+func TestFieldConstraints(t *testing.T)
+func TestBlockConstraints(t *testing.T)
+func TestConstraintValidation(t *testing.T)
+func TestMalformedConstraints(t *testing.T)
+```
+
+**Key aspects**:
+- Field-level constraints
+- Cross-field validation
+- Constraint status checking
+- Error handling for invalid constraints
+
+#### 6. Collector/Logging Tests (`test_collector_comprehensive_test.go`)
+**Reference**: `test_collector.py` (1,020 lines)
+
+```go
+// Test cases to implement:
+func TestCollectorBasicUsage(t *testing.T)
+func TestCollectorMultipleCalls(t *testing.T)
+func TestCollectorConcurrentCalls(t *testing.T)
+func TestCollectorStreamingCalls(t *testing.T)
+func TestCollectorErrorHandling(t *testing.T)
+func TestCollectorMemoryManagement(t *testing.T)
+```
+
+**Key aspects**:
+- Usage tracking and token counting
+- Multiple collectors per call
+- Concurrent operation support
+- Memory management and cleanup
+- Provider-specific logging
+
+#### 7. Client Registry Tests (`test_client_registry_test.go`)
+**Reference**: `test_functions.py:982-1034`
+
+```go
+// Test cases to implement:
+func TestDynamicClientCreation(t *testing.T)
+func TestClientRegistryProviders(t *testing.T)
+func TestPrimaryClientSelection(t *testing.T)
+func TestClientValidation(t *testing.T)
+```
+
+**Key aspects**:
+- Dynamic client creation
+- Provider-specific configurations
+- Primary client selection
+- Validation and error handling
+
+#### 8. Provider Tests (`test_providers_test.go`)
+**Reference**: `test_functions.py:446-640`
+
+```go
+// Test cases to implement:
+func TestOpenAIProvider(t *testing.T)
+func TestAnthropicProvider(t *testing.T)
+func TestGoogleProvider(t *testing.T)
+func TestAWSBedrockProvider(t *testing.T)
+func TestVertexAIProvider(t *testing.T)
+func TestProviderFallbacks(t *testing.T)
+```
+
+**Key aspects**:
+- All major LLM providers
+- Provider-specific configurations
+- Model selection and parameters
+- Authentication handling
+
+#### 9. Retry/Fallback Logic (`test_retries_fallbacks_test.go`)
+**Reference**: `test_functions.py:500-518`
+
+```go
+// Test cases to implement:
+func TestRetryExponential(t *testing.T)
+func TestFallbackChains(t *testing.T)
+func TestFailureHandling(t *testing.T)
+func TestTimeoutBehavior(t *testing.T)
+```
+
+**Key aspects**:
+- Exponential backoff strategies
+- Fallback client chains
+- Error-specific retry behavior
+- Timeout handling
+
+#### 10. Error Handling (`test_error_handling_test.go`)
+**Reference**: `test_functions.py:1184-1230`
+
+```go
+// Test cases to implement:
+func TestHTTPErrors(t *testing.T)
+func TestValidationErrors(t *testing.T)
+func TestSerializationErrors(t *testing.T)
+func TestNetworkErrors(t *testing.T)
+func TestArgumentErrors(t *testing.T)
+```
+
+**Key aspects**:
+- HTTP status code handling (401, 404, 500)
+- Input validation errors
+- Serialization/deserialization errors
+- Network connectivity issues
+
+### 🟡 Medium Priority Tests (Advanced Features)
+
+#### 11. Recursive Data Structures (`test_functions_recursive_test.go`)
+**Reference**: `test_functions.py:1351-1413`
+
+```go
+func TestLinkedListConstruction(t *testing.T)
+func TestTreeStructures(t *testing.T)
+func TestMutuallyRecursiveTypes(t *testing.T)
+```
+
+#### 12. Type Aliases & Unions (`test_functions_aliases_test.go`)
+**Reference**: `test_functions.py:232-331`
+
+```go
+func TestSimpleAliases(t *testing.T)
+func TestRecursiveAliases(t *testing.T)
+func TestUnionTypes(t *testing.T)
+```
+
+#### 13. Response Parser Tests (`test_parser_test.go`)
+**Reference**: `test_parser.py`
+
+```go
+func TestLLMResponseParsing(t *testing.T)
+func TestStreamResponseParsing(t *testing.T)
+func TestPartialResponseHandling(t *testing.T)
+```
+
+#### 14. Type Builder Tests (`test_type_builder_test.go`)
+**Reference**: `test_typebuilder.py` (546 lines)
+
+```go
+func TestDynamicClassCreation(t *testing.T)
+func TestDynamicEnumCreation(t *testing.T)
+func TestPropertyAddition(t *testing.T)
+func TestBAMLCodeInjection(t *testing.T)
+```
+
+#### 15. Modular API Tests (`test_modular_api_test.go`)
+**Reference**: `test_modular_api.py` (335 lines)
+
+```go
+func TestRequestResponsePattern(t *testing.T)
+func TestManualHTTPClient(t *testing.T)
+func TestBatchOperations(t *testing.T)
+```
+
+#### 16. Tracing Tests (`test_tracing_test.go`)
+**Reference**: `test_functions.py:830-896`
+
+```go
+func TestSpanCreation(t *testing.T)
+func TestNestedTraces(t *testing.T)
+func TestConcurrentTracing(t *testing.T)
+```
+
+#### 17. Options Pattern Tests (`test_options_patterns_test.go`)
+**Reference**: `test_with_options.py`
+
+```go
+func TestWithCollectorOption(t *testing.T)
+func TestWithClientRegistryOption(t *testing.T)
+func TestEnvironmentOverrides(t *testing.T)
+```
+
+### 🟢 Low Priority Tests (Performance & Edge Cases)
+
+#### 18. Memory/Performance Tests (`test_memory_performance_test.go`)
+**Reference**: `memory_test.py`
+
+```go
+func TestMemoryUsage(t *testing.T)
+func TestGarbageCollection(t *testing.T)
+func TestLargeResponseHandling(t *testing.T)
+```
+
+#### 19. Caching Tests (`test_caching_test.go`)
+**Reference**: `test_functions.py:1146-1181`
+
+```go
+func TestResponseCaching(t *testing.T)
+func TestCacheValidation(t *testing.T)
+func TestPerformanceImprovement(t *testing.T)
+```
+
+## Implementation Guidelines
+
+### Test Structure
+
+Each test file should follow this pattern:
+
+```go
+package main
+
+import (
+    "context"
+    "testing"
+    
+    b "example.com/integ-tests/baml_client"
+    "example.com/integ-tests/baml_client/types"
+    "github.com/stretchr/testify/assert"
+    "github.com/stretchr/testify/require"
+)
+
+func TestExample(t *testing.T) {
+    ctx := context.Background()
+    
+    result, err := b.SomeFunction(ctx, "input")
+    require.NoError(t, err)
+    assert.Equal(t, "expected", result)
+}
+```
+
+### Key Differences from Python
+
+1. **Context Management**: Go uses `context.Context` instead of async/await
+2. **Error Handling**: Explicit error returns vs exceptions
+3. **Type System**: Strict typing vs dynamic typing
+4. **Concurrency**: Goroutines and channels vs asyncio
+5. **Memory Management**: Garbage collection vs manual management
+
+### Testing Framework
+
+- Use `testing` package for basic structure
+- Use `testify` for assertions (`assert`, `require`)
+- Use `context` for timeouts and cancellation
+- Consider `gomock` for mocking if needed
+
+### Execution Strategy
+
+1. **Phase 1**: Implement high-priority basic tests (1-5)
+2. **Phase 2**: Add streaming, collector, and provider tests (6-10)
+3. **Phase 3**: Implement advanced features (11-17)
+4. **Phase 4**: Add performance and edge case tests (18-20)
+
+### Success Metrics
+
+- **Coverage**: Match Python test coverage (~90%+ of BAML functionality)
+- **Reliability**: All tests pass consistently
+- **Performance**: Tests complete within reasonable time
+- **Maintainability**: Clear, readable test code following Go conventions
+
+## File Organization
+
+```
+integ-tests/go/
+├── test_functions_basic_test.go
+├── test_functions_data_types_test.go
+├── test_functions_streaming_test.go
+├── test_functions_media_test.go
+├── test_functions_constraints_test.go
+├── test_collector_comprehensive_test.go
+├── test_client_registry_test.go
+├── test_providers_test.go
+├── test_retries_fallbacks_test.go
+├── test_error_handling_test.go
+├── test_functions_recursive_test.go
+├── test_functions_aliases_test.go
+├── test_parser_test.go
+├── test_type_builder_test.go
+├── test_modular_api_test.go
+├── test_tracing_test.go
+├── test_options_patterns_test.go
+├── test_memory_performance_test.go
+└── test_caching_test.go
+```
+
+This plan ensures comprehensive test coverage matching the Python implementation while leveraging Go's strengths and conventions.

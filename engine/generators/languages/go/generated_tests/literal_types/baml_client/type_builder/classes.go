@@ -31,15 +31,15 @@ func (t *BooleanLiteralsClassView) ListProperties() ([]ClassPropertyView, error)
 	return builders, nil
 }
 
-func (t *BooleanLiteralsClassView) AlwaysTrue() (ClassPropertyView, error) {
+func (t *BooleanLiteralsClassView) PropertyAlwaysTrue() (ClassPropertyView, error) {
 	return t.inner.Property("alwaysTrue")
 }
 
-func (t *BooleanLiteralsClassView) AlwaysFalse() (ClassPropertyView, error) {
+func (t *BooleanLiteralsClassView) PropertyAlwaysFalse() (ClassPropertyView, error) {
 	return t.inner.Property("alwaysFalse")
 }
 
-func (t *BooleanLiteralsClassView) EitherBool() (ClassPropertyView, error) {
+func (t *BooleanLiteralsClassView) PropertyEitherBool() (ClassPropertyView, error) {
 	return t.inner.Property("eitherBool")
 }
 
@@ -49,6 +49,10 @@ func (t *TypeBuilder) BooleanLiterals() (*BooleanLiteralsClassView, error) {
 		return nil, err
 	}
 	return &BooleanLiteralsClassView{inner: bld}, nil
+}
+
+func (t *BooleanLiteralsClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
 }
 
 type ComplexLiteralsClassView struct {
@@ -67,23 +71,23 @@ func (t *ComplexLiteralsClassView) ListProperties() ([]ClassPropertyView, error)
 	return builders, nil
 }
 
-func (t *ComplexLiteralsClassView) State() (ClassPropertyView, error) {
+func (t *ComplexLiteralsClassView) PropertyState() (ClassPropertyView, error) {
 	return t.inner.Property("state")
 }
 
-func (t *ComplexLiteralsClassView) RetryCount() (ClassPropertyView, error) {
+func (t *ComplexLiteralsClassView) PropertyRetryCount() (ClassPropertyView, error) {
 	return t.inner.Property("retryCount")
 }
 
-func (t *ComplexLiteralsClassView) Response() (ClassPropertyView, error) {
+func (t *ComplexLiteralsClassView) PropertyResponse() (ClassPropertyView, error) {
 	return t.inner.Property("response")
 }
 
-func (t *ComplexLiteralsClassView) Flags() (ClassPropertyView, error) {
+func (t *ComplexLiteralsClassView) PropertyFlags() (ClassPropertyView, error) {
 	return t.inner.Property("flags")
 }
 
-func (t *ComplexLiteralsClassView) Codes() (ClassPropertyView, error) {
+func (t *ComplexLiteralsClassView) PropertyCodes() (ClassPropertyView, error) {
 	return t.inner.Property("codes")
 }
 
@@ -93,6 +97,10 @@ func (t *TypeBuilder) ComplexLiterals() (*ComplexLiteralsClassView, error) {
 		return nil, err
 	}
 	return &ComplexLiteralsClassView{inner: bld}, nil
+}
+
+func (t *ComplexLiteralsClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
 }
 
 type IntegerLiteralsClassView struct {
@@ -111,15 +119,15 @@ func (t *IntegerLiteralsClassView) ListProperties() ([]ClassPropertyView, error)
 	return builders, nil
 }
 
-func (t *IntegerLiteralsClassView) Priority() (ClassPropertyView, error) {
+func (t *IntegerLiteralsClassView) PropertyPriority() (ClassPropertyView, error) {
 	return t.inner.Property("priority")
 }
 
-func (t *IntegerLiteralsClassView) HttpStatus() (ClassPropertyView, error) {
+func (t *IntegerLiteralsClassView) PropertyHttpStatus() (ClassPropertyView, error) {
 	return t.inner.Property("httpStatus")
 }
 
-func (t *IntegerLiteralsClassView) MaxRetries() (ClassPropertyView, error) {
+func (t *IntegerLiteralsClassView) PropertyMaxRetries() (ClassPropertyView, error) {
 	return t.inner.Property("maxRetries")
 }
 
@@ -129,6 +137,10 @@ func (t *TypeBuilder) IntegerLiterals() (*IntegerLiteralsClassView, error) {
 		return nil, err
 	}
 	return &IntegerLiteralsClassView{inner: bld}, nil
+}
+
+func (t *IntegerLiteralsClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
 }
 
 type MixedLiteralsClassView struct {
@@ -147,23 +159,23 @@ func (t *MixedLiteralsClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
-func (t *MixedLiteralsClassView) Id() (ClassPropertyView, error) {
+func (t *MixedLiteralsClassView) PropertyId() (ClassPropertyView, error) {
 	return t.inner.Property("id")
 }
 
-func (t *MixedLiteralsClassView) Type() (ClassPropertyView, error) {
+func (t *MixedLiteralsClassView) PropertyType() (ClassPropertyView, error) {
 	return t.inner.Property("type")
 }
 
-func (t *MixedLiteralsClassView) Level() (ClassPropertyView, error) {
+func (t *MixedLiteralsClassView) PropertyLevel() (ClassPropertyView, error) {
 	return t.inner.Property("level")
 }
 
-func (t *MixedLiteralsClassView) IsActive() (ClassPropertyView, error) {
+func (t *MixedLiteralsClassView) PropertyIsActive() (ClassPropertyView, error) {
 	return t.inner.Property("isActive")
 }
 
-func (t *MixedLiteralsClassView) ApiVersion() (ClassPropertyView, error) {
+func (t *MixedLiteralsClassView) PropertyApiVersion() (ClassPropertyView, error) {
 	return t.inner.Property("apiVersion")
 }
 
@@ -173,6 +185,10 @@ func (t *TypeBuilder) MixedLiterals() (*MixedLiteralsClassView, error) {
 		return nil, err
 	}
 	return &MixedLiteralsClassView{inner: bld}, nil
+}
+
+func (t *MixedLiteralsClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
 }
 
 type StringLiteralsClassView struct {
@@ -191,15 +207,15 @@ func (t *StringLiteralsClassView) ListProperties() ([]ClassPropertyView, error) 
 	return builders, nil
 }
 
-func (t *StringLiteralsClassView) Status() (ClassPropertyView, error) {
+func (t *StringLiteralsClassView) PropertyStatus() (ClassPropertyView, error) {
 	return t.inner.Property("status")
 }
 
-func (t *StringLiteralsClassView) Environment() (ClassPropertyView, error) {
+func (t *StringLiteralsClassView) PropertyEnvironment() (ClassPropertyView, error) {
 	return t.inner.Property("environment")
 }
 
-func (t *StringLiteralsClassView) Method() (ClassPropertyView, error) {
+func (t *StringLiteralsClassView) PropertyMethod() (ClassPropertyView, error) {
 	return t.inner.Property("method")
 }
 
@@ -209,4 +225,8 @@ func (t *TypeBuilder) StringLiterals() (*StringLiteralsClassView, error) {
 		return nil, err
 	}
 	return &StringLiteralsClassView{inner: bld}, nil
+}
+
+func (t *StringLiteralsClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
 }

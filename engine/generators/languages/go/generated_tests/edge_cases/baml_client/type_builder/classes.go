@@ -31,27 +31,27 @@ func (t *AllNullableClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
-func (t *AllNullableClassView) NullString() (ClassPropertyView, error) {
+func (t *AllNullableClassView) PropertyNullString() (ClassPropertyView, error) {
 	return t.inner.Property("nullString")
 }
 
-func (t *AllNullableClassView) NullInt() (ClassPropertyView, error) {
+func (t *AllNullableClassView) PropertyNullInt() (ClassPropertyView, error) {
 	return t.inner.Property("nullInt")
 }
 
-func (t *AllNullableClassView) NullFloat() (ClassPropertyView, error) {
+func (t *AllNullableClassView) PropertyNullFloat() (ClassPropertyView, error) {
 	return t.inner.Property("nullFloat")
 }
 
-func (t *AllNullableClassView) NullBool() (ClassPropertyView, error) {
+func (t *AllNullableClassView) PropertyNullBool() (ClassPropertyView, error) {
 	return t.inner.Property("nullBool")
 }
 
-func (t *AllNullableClassView) NullArray() (ClassPropertyView, error) {
+func (t *AllNullableClassView) PropertyNullArray() (ClassPropertyView, error) {
 	return t.inner.Property("nullArray")
 }
 
-func (t *AllNullableClassView) NullObject() (ClassPropertyView, error) {
+func (t *AllNullableClassView) PropertyNullObject() (ClassPropertyView, error) {
 	return t.inner.Property("nullObject")
 }
 
@@ -61,6 +61,10 @@ func (t *TypeBuilder) AllNullable() (*AllNullableClassView, error) {
 		return nil, err
 	}
 	return &AllNullableClassView{inner: bld}, nil
+}
+
+func (t *AllNullableClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
 }
 
 type BooleanEdgeCasesClassView struct {
@@ -79,23 +83,23 @@ func (t *BooleanEdgeCasesClassView) ListProperties() ([]ClassPropertyView, error
 	return builders, nil
 }
 
-func (t *BooleanEdgeCasesClassView) ExplicitTrue() (ClassPropertyView, error) {
+func (t *BooleanEdgeCasesClassView) PropertyExplicitTrue() (ClassPropertyView, error) {
 	return t.inner.Property("explicitTrue")
 }
 
-func (t *BooleanEdgeCasesClassView) ExplicitFalse() (ClassPropertyView, error) {
+func (t *BooleanEdgeCasesClassView) PropertyExplicitFalse() (ClassPropertyView, error) {
 	return t.inner.Property("explicitFalse")
 }
 
-func (t *BooleanEdgeCasesClassView) ArrayOfTrue() (ClassPropertyView, error) {
+func (t *BooleanEdgeCasesClassView) PropertyArrayOfTrue() (ClassPropertyView, error) {
 	return t.inner.Property("arrayOfTrue")
 }
 
-func (t *BooleanEdgeCasesClassView) ArrayOfFalse() (ClassPropertyView, error) {
+func (t *BooleanEdgeCasesClassView) PropertyArrayOfFalse() (ClassPropertyView, error) {
 	return t.inner.Property("arrayOfFalse")
 }
 
-func (t *BooleanEdgeCasesClassView) MixedBoolArray() (ClassPropertyView, error) {
+func (t *BooleanEdgeCasesClassView) PropertyMixedBoolArray() (ClassPropertyView, error) {
 	return t.inner.Property("mixedBoolArray")
 }
 
@@ -105,6 +109,10 @@ func (t *TypeBuilder) BooleanEdgeCases() (*BooleanEdgeCasesClassView, error) {
 		return nil, err
 	}
 	return &BooleanEdgeCasesClassView{inner: bld}, nil
+}
+
+func (t *BooleanEdgeCasesClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
 }
 
 type CircularReferenceClassView struct {
@@ -123,23 +131,23 @@ func (t *CircularReferenceClassView) ListProperties() ([]ClassPropertyView, erro
 	return builders, nil
 }
 
-func (t *CircularReferenceClassView) Id() (ClassPropertyView, error) {
+func (t *CircularReferenceClassView) PropertyId() (ClassPropertyView, error) {
 	return t.inner.Property("id")
 }
 
-func (t *CircularReferenceClassView) Name() (ClassPropertyView, error) {
+func (t *CircularReferenceClassView) PropertyName() (ClassPropertyView, error) {
 	return t.inner.Property("name")
 }
 
-func (t *CircularReferenceClassView) Parent() (ClassPropertyView, error) {
+func (t *CircularReferenceClassView) PropertyParent() (ClassPropertyView, error) {
 	return t.inner.Property("parent")
 }
 
-func (t *CircularReferenceClassView) Children() (ClassPropertyView, error) {
+func (t *CircularReferenceClassView) PropertyChildren() (ClassPropertyView, error) {
 	return t.inner.Property("children")
 }
 
-func (t *CircularReferenceClassView) RelatedItems() (ClassPropertyView, error) {
+func (t *CircularReferenceClassView) PropertyRelatedItems() (ClassPropertyView, error) {
 	return t.inner.Property("relatedItems")
 }
 
@@ -149,6 +157,10 @@ func (t *TypeBuilder) CircularReference() (*CircularReferenceClassView, error) {
 		return nil, err
 	}
 	return &CircularReferenceClassView{inner: bld}, nil
+}
+
+func (t *CircularReferenceClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
 }
 
 type DeepRecursionClassView struct {
@@ -167,11 +179,11 @@ func (t *DeepRecursionClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
-func (t *DeepRecursionClassView) Value() (ClassPropertyView, error) {
+func (t *DeepRecursionClassView) PropertyValue() (ClassPropertyView, error) {
 	return t.inner.Property("value")
 }
 
-func (t *DeepRecursionClassView) Next() (ClassPropertyView, error) {
+func (t *DeepRecursionClassView) PropertyNext() (ClassPropertyView, error) {
 	return t.inner.Property("next")
 }
 
@@ -181,6 +193,10 @@ func (t *TypeBuilder) DeepRecursion() (*DeepRecursionClassView, error) {
 		return nil, err
 	}
 	return &DeepRecursionClassView{inner: bld}, nil
+}
+
+func (t *DeepRecursionClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
 }
 
 type EmptyCollectionsClassView struct {
@@ -199,23 +215,23 @@ func (t *EmptyCollectionsClassView) ListProperties() ([]ClassPropertyView, error
 	return builders, nil
 }
 
-func (t *EmptyCollectionsClassView) EmptyStringArray() (ClassPropertyView, error) {
+func (t *EmptyCollectionsClassView) PropertyEmptyStringArray() (ClassPropertyView, error) {
 	return t.inner.Property("emptyStringArray")
 }
 
-func (t *EmptyCollectionsClassView) EmptyIntArray() (ClassPropertyView, error) {
+func (t *EmptyCollectionsClassView) PropertyEmptyIntArray() (ClassPropertyView, error) {
 	return t.inner.Property("emptyIntArray")
 }
 
-func (t *EmptyCollectionsClassView) EmptyObjectArray() (ClassPropertyView, error) {
+func (t *EmptyCollectionsClassView) PropertyEmptyObjectArray() (ClassPropertyView, error) {
 	return t.inner.Property("emptyObjectArray")
 }
 
-func (t *EmptyCollectionsClassView) EmptyMap() (ClassPropertyView, error) {
+func (t *EmptyCollectionsClassView) PropertyEmptyMap() (ClassPropertyView, error) {
 	return t.inner.Property("emptyMap")
 }
 
-func (t *EmptyCollectionsClassView) EmptyNestedArray() (ClassPropertyView, error) {
+func (t *EmptyCollectionsClassView) PropertyEmptyNestedArray() (ClassPropertyView, error) {
 	return t.inner.Property("emptyNestedArray")
 }
 
@@ -225,6 +241,10 @@ func (t *TypeBuilder) EmptyCollections() (*EmptyCollectionsClassView, error) {
 		return nil, err
 	}
 	return &EmptyCollectionsClassView{inner: bld}, nil
+}
+
+func (t *EmptyCollectionsClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
 }
 
 type InnerNullableClassView struct {
@@ -243,7 +263,7 @@ func (t *InnerNullableClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
-func (t *InnerNullableClassView) Value() (ClassPropertyView, error) {
+func (t *InnerNullableClassView) PropertyValue() (ClassPropertyView, error) {
 	return t.inner.Property("value")
 }
 
@@ -253,6 +273,10 @@ func (t *TypeBuilder) InnerNullable() (*InnerNullableClassView, error) {
 		return nil, err
 	}
 	return &InnerNullableClassView{inner: bld}, nil
+}
+
+func (t *InnerNullableClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
 }
 
 type LargeStructureClassView struct {
@@ -271,123 +295,123 @@ func (t *LargeStructureClassView) ListProperties() ([]ClassPropertyView, error) 
 	return builders, nil
 }
 
-func (t *LargeStructureClassView) Field1() (ClassPropertyView, error) {
+func (t *LargeStructureClassView) PropertyField1() (ClassPropertyView, error) {
 	return t.inner.Property("field1")
 }
 
-func (t *LargeStructureClassView) Field2() (ClassPropertyView, error) {
+func (t *LargeStructureClassView) PropertyField2() (ClassPropertyView, error) {
 	return t.inner.Property("field2")
 }
 
-func (t *LargeStructureClassView) Field3() (ClassPropertyView, error) {
+func (t *LargeStructureClassView) PropertyField3() (ClassPropertyView, error) {
 	return t.inner.Property("field3")
 }
 
-func (t *LargeStructureClassView) Field4() (ClassPropertyView, error) {
+func (t *LargeStructureClassView) PropertyField4() (ClassPropertyView, error) {
 	return t.inner.Property("field4")
 }
 
-func (t *LargeStructureClassView) Field5() (ClassPropertyView, error) {
+func (t *LargeStructureClassView) PropertyField5() (ClassPropertyView, error) {
 	return t.inner.Property("field5")
 }
 
-func (t *LargeStructureClassView) Field6() (ClassPropertyView, error) {
+func (t *LargeStructureClassView) PropertyField6() (ClassPropertyView, error) {
 	return t.inner.Property("field6")
 }
 
-func (t *LargeStructureClassView) Field7() (ClassPropertyView, error) {
+func (t *LargeStructureClassView) PropertyField7() (ClassPropertyView, error) {
 	return t.inner.Property("field7")
 }
 
-func (t *LargeStructureClassView) Field8() (ClassPropertyView, error) {
+func (t *LargeStructureClassView) PropertyField8() (ClassPropertyView, error) {
 	return t.inner.Property("field8")
 }
 
-func (t *LargeStructureClassView) Field9() (ClassPropertyView, error) {
+func (t *LargeStructureClassView) PropertyField9() (ClassPropertyView, error) {
 	return t.inner.Property("field9")
 }
 
-func (t *LargeStructureClassView) Field10() (ClassPropertyView, error) {
+func (t *LargeStructureClassView) PropertyField10() (ClassPropertyView, error) {
 	return t.inner.Property("field10")
 }
 
-func (t *LargeStructureClassView) Field11() (ClassPropertyView, error) {
+func (t *LargeStructureClassView) PropertyField11() (ClassPropertyView, error) {
 	return t.inner.Property("field11")
 }
 
-func (t *LargeStructureClassView) Field12() (ClassPropertyView, error) {
+func (t *LargeStructureClassView) PropertyField12() (ClassPropertyView, error) {
 	return t.inner.Property("field12")
 }
 
-func (t *LargeStructureClassView) Field13() (ClassPropertyView, error) {
+func (t *LargeStructureClassView) PropertyField13() (ClassPropertyView, error) {
 	return t.inner.Property("field13")
 }
 
-func (t *LargeStructureClassView) Field14() (ClassPropertyView, error) {
+func (t *LargeStructureClassView) PropertyField14() (ClassPropertyView, error) {
 	return t.inner.Property("field14")
 }
 
-func (t *LargeStructureClassView) Field15() (ClassPropertyView, error) {
+func (t *LargeStructureClassView) PropertyField15() (ClassPropertyView, error) {
 	return t.inner.Property("field15")
 }
 
-func (t *LargeStructureClassView) Field16() (ClassPropertyView, error) {
+func (t *LargeStructureClassView) PropertyField16() (ClassPropertyView, error) {
 	return t.inner.Property("field16")
 }
 
-func (t *LargeStructureClassView) Field17() (ClassPropertyView, error) {
+func (t *LargeStructureClassView) PropertyField17() (ClassPropertyView, error) {
 	return t.inner.Property("field17")
 }
 
-func (t *LargeStructureClassView) Field18() (ClassPropertyView, error) {
+func (t *LargeStructureClassView) PropertyField18() (ClassPropertyView, error) {
 	return t.inner.Property("field18")
 }
 
-func (t *LargeStructureClassView) Field19() (ClassPropertyView, error) {
+func (t *LargeStructureClassView) PropertyField19() (ClassPropertyView, error) {
 	return t.inner.Property("field19")
 }
 
-func (t *LargeStructureClassView) Field20() (ClassPropertyView, error) {
+func (t *LargeStructureClassView) PropertyField20() (ClassPropertyView, error) {
 	return t.inner.Property("field20")
 }
 
-func (t *LargeStructureClassView) Array1() (ClassPropertyView, error) {
+func (t *LargeStructureClassView) PropertyArray1() (ClassPropertyView, error) {
 	return t.inner.Property("array1")
 }
 
-func (t *LargeStructureClassView) Array2() (ClassPropertyView, error) {
+func (t *LargeStructureClassView) PropertyArray2() (ClassPropertyView, error) {
 	return t.inner.Property("array2")
 }
 
-func (t *LargeStructureClassView) Array3() (ClassPropertyView, error) {
+func (t *LargeStructureClassView) PropertyArray3() (ClassPropertyView, error) {
 	return t.inner.Property("array3")
 }
 
-func (t *LargeStructureClassView) Array4() (ClassPropertyView, error) {
+func (t *LargeStructureClassView) PropertyArray4() (ClassPropertyView, error) {
 	return t.inner.Property("array4")
 }
 
-func (t *LargeStructureClassView) Array5() (ClassPropertyView, error) {
+func (t *LargeStructureClassView) PropertyArray5() (ClassPropertyView, error) {
 	return t.inner.Property("array5")
 }
 
-func (t *LargeStructureClassView) Map1() (ClassPropertyView, error) {
+func (t *LargeStructureClassView) PropertyMap1() (ClassPropertyView, error) {
 	return t.inner.Property("map1")
 }
 
-func (t *LargeStructureClassView) Map2() (ClassPropertyView, error) {
+func (t *LargeStructureClassView) PropertyMap2() (ClassPropertyView, error) {
 	return t.inner.Property("map2")
 }
 
-func (t *LargeStructureClassView) Map3() (ClassPropertyView, error) {
+func (t *LargeStructureClassView) PropertyMap3() (ClassPropertyView, error) {
 	return t.inner.Property("map3")
 }
 
-func (t *LargeStructureClassView) Map4() (ClassPropertyView, error) {
+func (t *LargeStructureClassView) PropertyMap4() (ClassPropertyView, error) {
 	return t.inner.Property("map4")
 }
 
-func (t *LargeStructureClassView) Map5() (ClassPropertyView, error) {
+func (t *LargeStructureClassView) PropertyMap5() (ClassPropertyView, error) {
 	return t.inner.Property("map5")
 }
 
@@ -397,6 +421,10 @@ func (t *TypeBuilder) LargeStructure() (*LargeStructureClassView, error) {
 		return nil, err
 	}
 	return &LargeStructureClassView{inner: bld}, nil
+}
+
+func (t *LargeStructureClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
 }
 
 type MixedEdgeCasesClassView struct {
@@ -415,27 +443,27 @@ func (t *MixedEdgeCasesClassView) ListProperties() ([]ClassPropertyView, error) 
 	return builders, nil
 }
 
-func (t *MixedEdgeCasesClassView) EmptyString() (ClassPropertyView, error) {
+func (t *MixedEdgeCasesClassView) PropertyEmptyString() (ClassPropertyView, error) {
 	return t.inner.Property("emptyString")
 }
 
-func (t *MixedEdgeCasesClassView) SingleChar() (ClassPropertyView, error) {
+func (t *MixedEdgeCasesClassView) PropertySingleChar() (ClassPropertyView, error) {
 	return t.inner.Property("singleChar")
 }
 
-func (t *MixedEdgeCasesClassView) VeryLongArray() (ClassPropertyView, error) {
+func (t *MixedEdgeCasesClassView) PropertyVeryLongArray() (ClassPropertyView, error) {
 	return t.inner.Property("veryLongArray")
 }
 
-func (t *MixedEdgeCasesClassView) DeeplyNestedMap() (ClassPropertyView, error) {
+func (t *MixedEdgeCasesClassView) PropertyDeeplyNestedMap() (ClassPropertyView, error) {
 	return t.inner.Property("deeplyNestedMap")
 }
 
-func (t *MixedEdgeCasesClassView) MixedTypeArray() (ClassPropertyView, error) {
+func (t *MixedEdgeCasesClassView) PropertyMixedTypeArray() (ClassPropertyView, error) {
 	return t.inner.Property("mixedTypeArray")
 }
 
-func (t *MixedEdgeCasesClassView) OptionalEverything() (ClassPropertyView, error) {
+func (t *MixedEdgeCasesClassView) PropertyOptionalEverything() (ClassPropertyView, error) {
 	return t.inner.Property("optionalEverything")
 }
 
@@ -445,6 +473,10 @@ func (t *TypeBuilder) MixedEdgeCases() (*MixedEdgeCasesClassView, error) {
 		return nil, err
 	}
 	return &MixedEdgeCasesClassView{inner: bld}, nil
+}
+
+func (t *MixedEdgeCasesClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
 }
 
 type NestedNullableClassView struct {
@@ -463,7 +495,7 @@ func (t *NestedNullableClassView) ListProperties() ([]ClassPropertyView, error) 
 	return builders, nil
 }
 
-func (t *NestedNullableClassView) Outer() (ClassPropertyView, error) {
+func (t *NestedNullableClassView) PropertyOuter() (ClassPropertyView, error) {
 	return t.inner.Property("outer")
 }
 
@@ -473,6 +505,10 @@ func (t *TypeBuilder) NestedNullable() (*NestedNullableClassView, error) {
 		return nil, err
 	}
 	return &NestedNullableClassView{inner: bld}, nil
+}
+
+func (t *NestedNullableClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
 }
 
 type NullEdgeCasesClassView struct {
@@ -491,15 +527,15 @@ func (t *NullEdgeCasesClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
-func (t *NullEdgeCasesClassView) AllNull() (ClassPropertyView, error) {
+func (t *NullEdgeCasesClassView) PropertyAllNull() (ClassPropertyView, error) {
 	return t.inner.Property("allNull")
 }
 
-func (t *NullEdgeCasesClassView) SomeNull() (ClassPropertyView, error) {
+func (t *NullEdgeCasesClassView) PropertySomeNull() (ClassPropertyView, error) {
 	return t.inner.Property("someNull")
 }
 
-func (t *NullEdgeCasesClassView) NestedNull() (ClassPropertyView, error) {
+func (t *NullEdgeCasesClassView) PropertyNestedNull() (ClassPropertyView, error) {
 	return t.inner.Property("nestedNull")
 }
 
@@ -509,6 +545,10 @@ func (t *TypeBuilder) NullEdgeCases() (*NullEdgeCasesClassView, error) {
 		return nil, err
 	}
 	return &NullEdgeCasesClassView{inner: bld}, nil
+}
+
+func (t *NullEdgeCasesClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
 }
 
 type NumberEdgeCasesClassView struct {
@@ -527,43 +567,43 @@ func (t *NumberEdgeCasesClassView) ListProperties() ([]ClassPropertyView, error)
 	return builders, nil
 }
 
-func (t *NumberEdgeCasesClassView) Zero() (ClassPropertyView, error) {
+func (t *NumberEdgeCasesClassView) PropertyZero() (ClassPropertyView, error) {
 	return t.inner.Property("zero")
 }
 
-func (t *NumberEdgeCasesClassView) NegativeInt() (ClassPropertyView, error) {
+func (t *NumberEdgeCasesClassView) PropertyNegativeInt() (ClassPropertyView, error) {
 	return t.inner.Property("negativeInt")
 }
 
-func (t *NumberEdgeCasesClassView) LargeInt() (ClassPropertyView, error) {
+func (t *NumberEdgeCasesClassView) PropertyLargeInt() (ClassPropertyView, error) {
 	return t.inner.Property("largeInt")
 }
 
-func (t *NumberEdgeCasesClassView) VeryLargeInt() (ClassPropertyView, error) {
+func (t *NumberEdgeCasesClassView) PropertyVeryLargeInt() (ClassPropertyView, error) {
 	return t.inner.Property("veryLargeInt")
 }
 
-func (t *NumberEdgeCasesClassView) SmallFloat() (ClassPropertyView, error) {
+func (t *NumberEdgeCasesClassView) PropertySmallFloat() (ClassPropertyView, error) {
 	return t.inner.Property("smallFloat")
 }
 
-func (t *NumberEdgeCasesClassView) LargeFloat() (ClassPropertyView, error) {
+func (t *NumberEdgeCasesClassView) PropertyLargeFloat() (ClassPropertyView, error) {
 	return t.inner.Property("largeFloat")
 }
 
-func (t *NumberEdgeCasesClassView) NegativeFloat() (ClassPropertyView, error) {
+func (t *NumberEdgeCasesClassView) PropertyNegativeFloat() (ClassPropertyView, error) {
 	return t.inner.Property("negativeFloat")
 }
 
-func (t *NumberEdgeCasesClassView) ScientificNotation() (ClassPropertyView, error) {
+func (t *NumberEdgeCasesClassView) PropertyScientificNotation() (ClassPropertyView, error) {
 	return t.inner.Property("scientificNotation")
 }
 
-func (t *NumberEdgeCasesClassView) Infinity() (ClassPropertyView, error) {
+func (t *NumberEdgeCasesClassView) PropertyInfinity() (ClassPropertyView, error) {
 	return t.inner.Property("infinity")
 }
 
-func (t *NumberEdgeCasesClassView) NotANumber() (ClassPropertyView, error) {
+func (t *NumberEdgeCasesClassView) PropertyNotANumber() (ClassPropertyView, error) {
 	return t.inner.Property("notANumber")
 }
 
@@ -573,6 +613,10 @@ func (t *TypeBuilder) NumberEdgeCases() (*NumberEdgeCasesClassView, error) {
 		return nil, err
 	}
 	return &NumberEdgeCasesClassView{inner: bld}, nil
+}
+
+func (t *NumberEdgeCasesClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
 }
 
 type OptionalEverythingClassView struct {
@@ -591,31 +635,31 @@ func (t *OptionalEverythingClassView) ListProperties() ([]ClassPropertyView, err
 	return builders, nil
 }
 
-func (t *OptionalEverythingClassView) OptString() (ClassPropertyView, error) {
+func (t *OptionalEverythingClassView) PropertyOptString() (ClassPropertyView, error) {
 	return t.inner.Property("optString")
 }
 
-func (t *OptionalEverythingClassView) OptInt() (ClassPropertyView, error) {
+func (t *OptionalEverythingClassView) PropertyOptInt() (ClassPropertyView, error) {
 	return t.inner.Property("optInt")
 }
 
-func (t *OptionalEverythingClassView) OptFloat() (ClassPropertyView, error) {
+func (t *OptionalEverythingClassView) PropertyOptFloat() (ClassPropertyView, error) {
 	return t.inner.Property("optFloat")
 }
 
-func (t *OptionalEverythingClassView) OptBool() (ClassPropertyView, error) {
+func (t *OptionalEverythingClassView) PropertyOptBool() (ClassPropertyView, error) {
 	return t.inner.Property("optBool")
 }
 
-func (t *OptionalEverythingClassView) OptArray() (ClassPropertyView, error) {
+func (t *OptionalEverythingClassView) PropertyOptArray() (ClassPropertyView, error) {
 	return t.inner.Property("optArray")
 }
 
-func (t *OptionalEverythingClassView) OptMap() (ClassPropertyView, error) {
+func (t *OptionalEverythingClassView) PropertyOptMap() (ClassPropertyView, error) {
 	return t.inner.Property("optMap")
 }
 
-func (t *OptionalEverythingClassView) OptObject() (ClassPropertyView, error) {
+func (t *OptionalEverythingClassView) PropertyOptObject() (ClassPropertyView, error) {
 	return t.inner.Property("optObject")
 }
 
@@ -625,6 +669,10 @@ func (t *TypeBuilder) OptionalEverything() (*OptionalEverythingClassView, error)
 		return nil, err
 	}
 	return &OptionalEverythingClassView{inner: bld}, nil
+}
+
+func (t *OptionalEverythingClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
 }
 
 type OuterNullableClassView struct {
@@ -643,7 +691,7 @@ func (t *OuterNullableClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
-func (t *OuterNullableClassView) Inner() (ClassPropertyView, error) {
+func (t *OuterNullableClassView) PropertyInner() (ClassPropertyView, error) {
 	return t.inner.Property("inner")
 }
 
@@ -653,6 +701,10 @@ func (t *TypeBuilder) OuterNullable() (*OuterNullableClassView, error) {
 		return nil, err
 	}
 	return &OuterNullableClassView{inner: bld}, nil
+}
+
+func (t *OuterNullableClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
 }
 
 type SomeNullableClassView struct {
@@ -671,19 +723,19 @@ func (t *SomeNullableClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
-func (t *SomeNullableClassView) PresentString() (ClassPropertyView, error) {
+func (t *SomeNullableClassView) PropertyPresentString() (ClassPropertyView, error) {
 	return t.inner.Property("presentString")
 }
 
-func (t *SomeNullableClassView) NullString() (ClassPropertyView, error) {
+func (t *SomeNullableClassView) PropertyNullString() (ClassPropertyView, error) {
 	return t.inner.Property("nullString")
 }
 
-func (t *SomeNullableClassView) PresentInt() (ClassPropertyView, error) {
+func (t *SomeNullableClassView) PropertyPresentInt() (ClassPropertyView, error) {
 	return t.inner.Property("presentInt")
 }
 
-func (t *SomeNullableClassView) NullInt() (ClassPropertyView, error) {
+func (t *SomeNullableClassView) PropertyNullInt() (ClassPropertyView, error) {
 	return t.inner.Property("nullInt")
 }
 
@@ -693,6 +745,10 @@ func (t *TypeBuilder) SomeNullable() (*SomeNullableClassView, error) {
 		return nil, err
 	}
 	return &SomeNullableClassView{inner: bld}, nil
+}
+
+func (t *SomeNullableClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
 }
 
 type SpecialCharactersClassView struct {
@@ -711,35 +767,35 @@ func (t *SpecialCharactersClassView) ListProperties() ([]ClassPropertyView, erro
 	return builders, nil
 }
 
-func (t *SpecialCharactersClassView) NormalText() (ClassPropertyView, error) {
+func (t *SpecialCharactersClassView) PropertyNormalText() (ClassPropertyView, error) {
 	return t.inner.Property("normalText")
 }
 
-func (t *SpecialCharactersClassView) WithNewlines() (ClassPropertyView, error) {
+func (t *SpecialCharactersClassView) PropertyWithNewlines() (ClassPropertyView, error) {
 	return t.inner.Property("withNewlines")
 }
 
-func (t *SpecialCharactersClassView) WithTabs() (ClassPropertyView, error) {
+func (t *SpecialCharactersClassView) PropertyWithTabs() (ClassPropertyView, error) {
 	return t.inner.Property("withTabs")
 }
 
-func (t *SpecialCharactersClassView) WithQuotes() (ClassPropertyView, error) {
+func (t *SpecialCharactersClassView) PropertyWithQuotes() (ClassPropertyView, error) {
 	return t.inner.Property("withQuotes")
 }
 
-func (t *SpecialCharactersClassView) WithBackslashes() (ClassPropertyView, error) {
+func (t *SpecialCharactersClassView) PropertyWithBackslashes() (ClassPropertyView, error) {
 	return t.inner.Property("withBackslashes")
 }
 
-func (t *SpecialCharactersClassView) WithUnicode() (ClassPropertyView, error) {
+func (t *SpecialCharactersClassView) PropertyWithUnicode() (ClassPropertyView, error) {
 	return t.inner.Property("withUnicode")
 }
 
-func (t *SpecialCharactersClassView) WithEmoji() (ClassPropertyView, error) {
+func (t *SpecialCharactersClassView) PropertyWithEmoji() (ClassPropertyView, error) {
 	return t.inner.Property("withEmoji")
 }
 
-func (t *SpecialCharactersClassView) WithMixedSpecial() (ClassPropertyView, error) {
+func (t *SpecialCharactersClassView) PropertyWithMixedSpecial() (ClassPropertyView, error) {
 	return t.inner.Property("withMixedSpecial")
 }
 
@@ -749,6 +805,10 @@ func (t *TypeBuilder) SpecialCharacters() (*SpecialCharactersClassView, error) {
 		return nil, err
 	}
 	return &SpecialCharactersClassView{inner: bld}, nil
+}
+
+func (t *SpecialCharactersClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
 }
 
 type UserClassView struct {
@@ -767,11 +827,11 @@ func (t *UserClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
-func (t *UserClassView) Id() (ClassPropertyView, error) {
+func (t *UserClassView) PropertyId() (ClassPropertyView, error) {
 	return t.inner.Property("id")
 }
 
-func (t *UserClassView) Name() (ClassPropertyView, error) {
+func (t *UserClassView) PropertyName() (ClassPropertyView, error) {
 	return t.inner.Property("name")
 }
 
@@ -781,6 +841,10 @@ func (t *TypeBuilder) User() (*UserClassView, error) {
 		return nil, err
 	}
 	return &UserClassView{inner: bld}, nil
+}
+
+func (t *UserClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
 }
 
 type VeryLongStringsClassView struct {
@@ -799,23 +863,23 @@ func (t *VeryLongStringsClassView) ListProperties() ([]ClassPropertyView, error)
 	return builders, nil
 }
 
-func (t *VeryLongStringsClassView) ShortString() (ClassPropertyView, error) {
+func (t *VeryLongStringsClassView) PropertyShortString() (ClassPropertyView, error) {
 	return t.inner.Property("shortString")
 }
 
-func (t *VeryLongStringsClassView) MediumString() (ClassPropertyView, error) {
+func (t *VeryLongStringsClassView) PropertyMediumString() (ClassPropertyView, error) {
 	return t.inner.Property("mediumString")
 }
 
-func (t *VeryLongStringsClassView) LongString() (ClassPropertyView, error) {
+func (t *VeryLongStringsClassView) PropertyLongString() (ClassPropertyView, error) {
 	return t.inner.Property("longString")
 }
 
-func (t *VeryLongStringsClassView) VeryLongString() (ClassPropertyView, error) {
+func (t *VeryLongStringsClassView) PropertyVeryLongString() (ClassPropertyView, error) {
 	return t.inner.Property("veryLongString")
 }
 
-func (t *VeryLongStringsClassView) ExtremelyLongString() (ClassPropertyView, error) {
+func (t *VeryLongStringsClassView) PropertyExtremelyLongString() (ClassPropertyView, error) {
 	return t.inner.Property("extremelyLongString")
 }
 
@@ -825,4 +889,8 @@ func (t *TypeBuilder) VeryLongStrings() (*VeryLongStringsClassView, error) {
 		return nil, err
 	}
 	return &VeryLongStringsClassView{inner: bld}, nil
+}
+
+func (t *VeryLongStringsClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
 }

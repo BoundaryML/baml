@@ -32,6 +32,14 @@ func DecodeChecked[T any](holder *cffi.CFFIValueHolder, decodeFunc func(inner *c
 	return serde.DecodeChecked(holder, decodeFunc)
 }
 
+func CastChecked[T any](value any, castFunc func(inner any) T) shared.Checked[T] {
+	return serde.CastChecked(value, castFunc)
+}
+
+func CastStreamState[T any](value any, castFunc func(inner any) T) shared.StreamState[T] {
+	return serde.CastStreamState(value, castFunc)
+}
+
 func BAMLTESTINGONLY_InternalEncode(value any) (*cffi.CFFIValueHolder, error) {
 	return serde.EncodeValue(value)
 }

@@ -23,19 +23,20 @@ type InternalBamlSerializer interface {
 
 // implment BamlSerializer for anything that implements BamlClassSerializer, BamlEnumSerializer, or BamlUnionSerializer
 func EncodeClass(nameEncoder func() *cffi.CFFITypeName, fields map[string]any, dynamicFields *map[string]any) (*cffi.CFFIValueHolder, error) {
-	// Encode Static Fields
-	staticFields, err := EncodeMapEntries(fields, "static class")
-	if err != nil {
-		return nil, err // Error already includes context
+	all_fields := make(map[string]any)
+	for k, v := range fields {
+		all_fields[k] = v
+	}
+	if dynamicFields != nil {
+		for k, v := range *dynamicFields {
+			all_fields[k] = v
+		}
 	}
 
-	// Encode Dynamic Fields
-	var dynamicFieldsEncoded []*cffi.CFFIMapEntry
-	if dynamicFields != nil {
-		dynamicFieldsEncoded, err = EncodeMapEntries(*dynamicFields, "dynamic class")
-		if err != nil {
-			return nil, err // Error already includes context
-		}
+	// Encode Static Fields
+	staticFields, err := EncodeMapEntries(all_fields, "static class")
+	if err != nil {
+		return nil, err // Error already includes context
 	}
 
 	// Create the CFFIValueClass table
@@ -44,7 +45,6 @@ func EncodeClass(nameEncoder func() *cffi.CFFITypeName, fields map[string]any, d
 	class := cffi.CFFIValueClass{
 		Name:          name,
 		Fields:        staticFields,
-		DynamicFields: dynamicFieldsEncoded,
 	}
 
 	return &cffi.CFFIValueHolder{

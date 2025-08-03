@@ -13,7 +13,11 @@
 
 package type_builder
 
-import baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
+import (
+	"fmt"
+
+	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
+)
 
 type Type = baml.Type
 
@@ -21,6 +25,7 @@ type llmViewOnly interface {
 	Description() (*string, error)
 	Alias() (*string, error)
 	From() (baml.ASTNodeSource, error)
+	Name() (string, error)
 }
 
 type llmWriteOnly interface {
@@ -89,6 +94,10 @@ type ClassPropertyBuilder interface {
 
 type TypeBuilder struct {
 	inner baml.TypeBuilder
+}
+
+func (t *TypeBuilder) InternalExport() baml.TypeBuilder {
+	return t.inner
 }
 
 func InternalNewTypeBuilder(inner baml.TypeBuilder) *TypeBuilder {
@@ -161,6 +170,12 @@ func (t *TypeBuilder) AddClass(name string) (ClassBuilder, error) {
 		return nil, err
 	}
 	return &dynamicClassBuilder{ClassBuilder: bld}, nil
+}
+
+// override the default stringer to use the type builder's print method
+func (t *TypeBuilder) Format(f fmt.State, verb rune) {
+	display := t.inner.Print()
+	fmt.Fprint(f, display)
 }
 
 // ----------------------------------------------------------------------------

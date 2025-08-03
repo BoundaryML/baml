@@ -155,6 +155,24 @@ func (m *mediaHolder) MimeType() (*string, error) {
 	return &as_mime_type, nil
 }
 
+func (m *mediaHolder) IsUrl() (bool, error) {
+	result, err := raw_objects.CallMethod(m, "is_url", nil)
+	if err != nil {
+		return false, fmt.Errorf("failed to get is url: %w", err)
+	}
+
+	return result.(bool), nil
+}
+
+func (m *mediaHolder) IsBase64() (bool, error) {
+	result, err := raw_objects.CallMethod(m, "is_base64", nil)
+	if err != nil {
+		return false, fmt.Errorf("failed to get is base64: %w", err)
+	}
+
+	return result.(bool), nil
+}
+
 func (m *mediaHolder) AsUrl() (*string, error) {
 	result, err := raw_objects.CallMethod(m, "as_url", nil)
 	if err != nil {

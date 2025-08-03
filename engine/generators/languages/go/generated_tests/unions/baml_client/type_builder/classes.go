@@ -31,23 +31,23 @@ func (t *ExistingSystemComponentClassView) ListProperties() ([]ClassPropertyView
 	return builders, nil
 }
 
-func (t *ExistingSystemComponentClassView) Id() (ClassPropertyView, error) {
+func (t *ExistingSystemComponentClassView) PropertyId() (ClassPropertyView, error) {
 	return t.inner.Property("id")
 }
 
-func (t *ExistingSystemComponentClassView) Name() (ClassPropertyView, error) {
+func (t *ExistingSystemComponentClassView) PropertyName() (ClassPropertyView, error) {
 	return t.inner.Property("name")
 }
 
-func (t *ExistingSystemComponentClassView) Type() (ClassPropertyView, error) {
+func (t *ExistingSystemComponentClassView) PropertyType() (ClassPropertyView, error) {
 	return t.inner.Property("type")
 }
 
-func (t *ExistingSystemComponentClassView) Category() (ClassPropertyView, error) {
+func (t *ExistingSystemComponentClassView) PropertyCategory() (ClassPropertyView, error) {
 	return t.inner.Property("category")
 }
 
-func (t *ExistingSystemComponentClassView) Explanation() (ClassPropertyView, error) {
+func (t *ExistingSystemComponentClassView) PropertyExplanation() (ClassPropertyView, error) {
 	return t.inner.Property("explanation")
 }
 
@@ -57,6 +57,10 @@ func (t *TypeBuilder) ExistingSystemComponent() (*ExistingSystemComponentClassVi
 		return nil, err
 	}
 	return &ExistingSystemComponentClassView{inner: bld}, nil
+}
+
+func (t *ExistingSystemComponentClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
 }
 
 type UseMyUnionClassView struct {
@@ -75,7 +79,7 @@ func (t *UseMyUnionClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
-func (t *UseMyUnionClassView) U() (ClassPropertyView, error) {
+func (t *UseMyUnionClassView) PropertyU() (ClassPropertyView, error) {
 	return t.inner.Property("u")
 }
 
@@ -85,4 +89,8 @@ func (t *TypeBuilder) UseMyUnion() (*UseMyUnionClassView, error) {
 		return nil, err
 	}
 	return &UseMyUnionClassView{inner: bld}, nil
+}
+
+func (t *UseMyUnionClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
 }

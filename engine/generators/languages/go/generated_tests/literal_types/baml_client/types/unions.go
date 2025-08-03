@@ -135,7 +135,7 @@ func (u *Union2BoolKFalseOrBoolKTrue) IsBoolKTrue() bool {
 	return u.variant == "BoolKTrue"
 }
 
-func (u *Union2BoolKFalseOrBoolKTrue) BoolKTrue() *bool {
+func (u *Union2BoolKFalseOrBoolKTrue) AsBoolKTrue() *bool {
 	if u.variant != "BoolKTrue" {
 		return nil
 	}
@@ -167,7 +167,7 @@ func (u *Union2BoolKFalseOrBoolKTrue) IsBoolKFalse() bool {
 	return u.variant == "BoolKFalse"
 }
 
-func (u *Union2BoolKFalseOrBoolKTrue) BoolKFalse() *bool {
+func (u *Union2BoolKFalseOrBoolKTrue) AsBoolKFalse() *bool {
 	if u.variant != "BoolKFalse" {
 		return nil
 	}
@@ -310,7 +310,7 @@ func (u *Union3IntK1OrIntK2OrIntK3) IsIntK1() bool {
 	return u.variant == "IntK1"
 }
 
-func (u *Union3IntK1OrIntK2OrIntK3) IntK1() *int64 {
+func (u *Union3IntK1OrIntK2OrIntK3) AsIntK1() *int64 {
 	if u.variant != "IntK1" {
 		return nil
 	}
@@ -344,7 +344,7 @@ func (u *Union3IntK1OrIntK2OrIntK3) IsIntK2() bool {
 	return u.variant == "IntK2"
 }
 
-func (u *Union3IntK1OrIntK2OrIntK3) IntK2() *int64 {
+func (u *Union3IntK1OrIntK2OrIntK3) AsIntK2() *int64 {
 	if u.variant != "IntK2" {
 		return nil
 	}
@@ -378,7 +378,7 @@ func (u *Union3IntK1OrIntK2OrIntK3) IsIntK3() bool {
 	return u.variant == "IntK3"
 }
 
-func (u *Union3IntK1OrIntK2OrIntK3) IntK3() *int64 {
+func (u *Union3IntK1OrIntK2OrIntK3) AsIntK3() *int64 {
 	if u.variant != "IntK3" {
 		return nil
 	}
@@ -521,7 +521,7 @@ func (u *Union3IntK200OrIntK404OrIntK500) IsIntK200() bool {
 	return u.variant == "IntK200"
 }
 
-func (u *Union3IntK200OrIntK404OrIntK500) IntK200() *int64 {
+func (u *Union3IntK200OrIntK404OrIntK500) AsIntK200() *int64 {
 	if u.variant != "IntK200" {
 		return nil
 	}
@@ -555,7 +555,7 @@ func (u *Union3IntK200OrIntK404OrIntK500) IsIntK404() bool {
 	return u.variant == "IntK404"
 }
 
-func (u *Union3IntK200OrIntK404OrIntK500) IntK404() *int64 {
+func (u *Union3IntK200OrIntK404OrIntK500) AsIntK404() *int64 {
 	if u.variant != "IntK404" {
 		return nil
 	}
@@ -589,7 +589,7 @@ func (u *Union3IntK200OrIntK404OrIntK500) IsIntK500() bool {
 	return u.variant == "IntK500"
 }
 
-func (u *Union3IntK200OrIntK404OrIntK500) IntK500() *int64 {
+func (u *Union3IntK200OrIntK404OrIntK500) AsIntK500() *int64 {
 	if u.variant != "IntK500" {
 		return nil
 	}
@@ -732,7 +732,7 @@ func (u *Union3KactiveOrKinactiveOrKpending) IsKactive() bool {
 	return u.variant == "Kactive"
 }
 
-func (u *Union3KactiveOrKinactiveOrKpending) Kactive() *string {
+func (u *Union3KactiveOrKinactiveOrKpending) AsKactive() *string {
 	if u.variant != "Kactive" {
 		return nil
 	}
@@ -766,7 +766,7 @@ func (u *Union3KactiveOrKinactiveOrKpending) IsKinactive() bool {
 	return u.variant == "Kinactive"
 }
 
-func (u *Union3KactiveOrKinactiveOrKpending) Kinactive() *string {
+func (u *Union3KactiveOrKinactiveOrKpending) AsKinactive() *string {
 	if u.variant != "Kinactive" {
 		return nil
 	}
@@ -800,7 +800,7 @@ func (u *Union3KactiveOrKinactiveOrKpending) IsKpending() bool {
 	return u.variant == "Kpending"
 }
 
-func (u *Union3KactiveOrKinactiveOrKpending) Kpending() *string {
+func (u *Union3KactiveOrKinactiveOrKpending) AsKpending() *string {
 	if u.variant != "Kpending" {
 		return nil
 	}
@@ -943,7 +943,7 @@ func (u *Union3KadminOrKguestOrKuser) IsKuser() bool {
 	return u.variant == "Kuser"
 }
 
-func (u *Union3KadminOrKguestOrKuser) Kuser() *string {
+func (u *Union3KadminOrKguestOrKuser) AsKuser() *string {
 	if u.variant != "Kuser" {
 		return nil
 	}
@@ -977,7 +977,7 @@ func (u *Union3KadminOrKguestOrKuser) IsKadmin() bool {
 	return u.variant == "Kadmin"
 }
 
-func (u *Union3KadminOrKguestOrKuser) Kadmin() *string {
+func (u *Union3KadminOrKguestOrKuser) AsKadmin() *string {
 	if u.variant != "Kadmin" {
 		return nil
 	}
@@ -1011,7 +1011,7 @@ func (u *Union3KadminOrKguestOrKuser) IsKguest() bool {
 	return u.variant == "Kguest"
 }
 
-func (u *Union3KadminOrKguestOrKuser) Kguest() *string {
+func (u *Union3KadminOrKguestOrKuser) AsKguest() *string {
 	if u.variant != "Kguest" {
 		return nil
 	}
@@ -1154,7 +1154,7 @@ func (u *Union3KdevOrKprodOrKstaging) IsKdev() bool {
 	return u.variant == "Kdev"
 }
 
-func (u *Union3KdevOrKprodOrKstaging) Kdev() *string {
+func (u *Union3KdevOrKprodOrKstaging) AsKdev() *string {
 	if u.variant != "Kdev" {
 		return nil
 	}
@@ -1188,7 +1188,7 @@ func (u *Union3KdevOrKprodOrKstaging) IsKstaging() bool {
 	return u.variant == "Kstaging"
 }
 
-func (u *Union3KdevOrKprodOrKstaging) Kstaging() *string {
+func (u *Union3KdevOrKprodOrKstaging) AsKstaging() *string {
 	if u.variant != "Kstaging" {
 		return nil
 	}
@@ -1222,7 +1222,7 @@ func (u *Union3KdevOrKprodOrKstaging) IsKprod() bool {
 	return u.variant == "Kprod"
 }
 
-func (u *Union3KdevOrKprodOrKstaging) Kprod() *string {
+func (u *Union3KdevOrKprodOrKstaging) AsKprod() *string {
 	if u.variant != "Kprod" {
 		return nil
 	}
@@ -1365,7 +1365,7 @@ func (u *Union3KerrorOrKsuccessOrKtimeout) IsKsuccess() bool {
 	return u.variant == "Ksuccess"
 }
 
-func (u *Union3KerrorOrKsuccessOrKtimeout) Ksuccess() *string {
+func (u *Union3KerrorOrKsuccessOrKtimeout) AsKsuccess() *string {
 	if u.variant != "Ksuccess" {
 		return nil
 	}
@@ -1399,7 +1399,7 @@ func (u *Union3KerrorOrKsuccessOrKtimeout) IsKerror() bool {
 	return u.variant == "Kerror"
 }
 
-func (u *Union3KerrorOrKsuccessOrKtimeout) Kerror() *string {
+func (u *Union3KerrorOrKsuccessOrKtimeout) AsKerror() *string {
 	if u.variant != "Kerror" {
 		return nil
 	}
@@ -1433,7 +1433,7 @@ func (u *Union3KerrorOrKsuccessOrKtimeout) IsKtimeout() bool {
 	return u.variant == "Ktimeout"
 }
 
-func (u *Union3KerrorOrKsuccessOrKtimeout) Ktimeout() *string {
+func (u *Union3KerrorOrKsuccessOrKtimeout) AsKtimeout() *string {
 	if u.variant != "Ktimeout" {
 		return nil
 	}
@@ -1576,7 +1576,7 @@ func (u *Union3Kv1OrKv2OrKv3) IsKv1() bool {
 	return u.variant == "Kv1"
 }
 
-func (u *Union3Kv1OrKv2OrKv3) Kv1() *string {
+func (u *Union3Kv1OrKv2OrKv3) AsKv1() *string {
 	if u.variant != "Kv1" {
 		return nil
 	}
@@ -1610,7 +1610,7 @@ func (u *Union3Kv1OrKv2OrKv3) IsKv2() bool {
 	return u.variant == "Kv2"
 }
 
-func (u *Union3Kv1OrKv2OrKv3) Kv2() *string {
+func (u *Union3Kv1OrKv2OrKv3) AsKv2() *string {
 	if u.variant != "Kv2" {
 		return nil
 	}
@@ -1644,7 +1644,7 @@ func (u *Union3Kv1OrKv2OrKv3) IsKv3() bool {
 	return u.variant == "Kv3"
 }
 
-func (u *Union3Kv1OrKv2OrKv3) Kv3() *string {
+func (u *Union3Kv1OrKv2OrKv3) AsKv3() *string {
 	if u.variant != "Kv3" {
 		return nil
 	}
@@ -1809,7 +1809,7 @@ func (u *Union4IntK0OrIntK1OrIntK3OrIntK5) IsIntK0() bool {
 	return u.variant == "IntK0"
 }
 
-func (u *Union4IntK0OrIntK1OrIntK3OrIntK5) IntK0() *int64 {
+func (u *Union4IntK0OrIntK1OrIntK3OrIntK5) AsIntK0() *int64 {
 	if u.variant != "IntK0" {
 		return nil
 	}
@@ -1845,7 +1845,7 @@ func (u *Union4IntK0OrIntK1OrIntK3OrIntK5) IsIntK1() bool {
 	return u.variant == "IntK1"
 }
 
-func (u *Union4IntK0OrIntK1OrIntK3OrIntK5) IntK1() *int64 {
+func (u *Union4IntK0OrIntK1OrIntK3OrIntK5) AsIntK1() *int64 {
 	if u.variant != "IntK1" {
 		return nil
 	}
@@ -1881,7 +1881,7 @@ func (u *Union4IntK0OrIntK1OrIntK3OrIntK5) IsIntK3() bool {
 	return u.variant == "IntK3"
 }
 
-func (u *Union4IntK0OrIntK1OrIntK3OrIntK5) IntK3() *int64 {
+func (u *Union4IntK0OrIntK1OrIntK3OrIntK5) AsIntK3() *int64 {
 	if u.variant != "IntK3" {
 		return nil
 	}
@@ -1917,7 +1917,7 @@ func (u *Union4IntK0OrIntK1OrIntK3OrIntK5) IsIntK5() bool {
 	return u.variant == "IntK5"
 }
 
-func (u *Union4IntK0OrIntK1OrIntK3OrIntK5) IntK5() *int64 {
+func (u *Union4IntK0OrIntK1OrIntK3OrIntK5) AsIntK5() *int64 {
 	if u.variant != "IntK5" {
 		return nil
 	}
@@ -2082,7 +2082,7 @@ func (u *Union4KDELETEOrKGETOrKPOSTOrKPUT) IsKGET() bool {
 	return u.variant == "KGET"
 }
 
-func (u *Union4KDELETEOrKGETOrKPOSTOrKPUT) KGET() *string {
+func (u *Union4KDELETEOrKGETOrKPOSTOrKPUT) AsKGET() *string {
 	if u.variant != "KGET" {
 		return nil
 	}
@@ -2118,7 +2118,7 @@ func (u *Union4KDELETEOrKGETOrKPOSTOrKPUT) IsKPOST() bool {
 	return u.variant == "KPOST"
 }
 
-func (u *Union4KDELETEOrKGETOrKPOSTOrKPUT) KPOST() *string {
+func (u *Union4KDELETEOrKGETOrKPOSTOrKPUT) AsKPOST() *string {
 	if u.variant != "KPOST" {
 		return nil
 	}
@@ -2154,7 +2154,7 @@ func (u *Union4KDELETEOrKGETOrKPOSTOrKPUT) IsKPUT() bool {
 	return u.variant == "KPUT"
 }
 
-func (u *Union4KDELETEOrKGETOrKPOSTOrKPUT) KPUT() *string {
+func (u *Union4KDELETEOrKGETOrKPOSTOrKPUT) AsKPUT() *string {
 	if u.variant != "KPUT" {
 		return nil
 	}
@@ -2190,7 +2190,7 @@ func (u *Union4KDELETEOrKGETOrKPOSTOrKPUT) IsKDELETE() bool {
 	return u.variant == "KDELETE"
 }
 
-func (u *Union4KDELETEOrKGETOrKPOSTOrKPUT) KDELETE() *string {
+func (u *Union4KDELETEOrKGETOrKPOSTOrKPUT) AsKDELETE() *string {
 	if u.variant != "KDELETE" {
 		return nil
 	}
@@ -2355,7 +2355,7 @@ func (u *Union4KarchivedOrKdeletedOrKdraftOrKpublished) IsKdraft() bool {
 	return u.variant == "Kdraft"
 }
 
-func (u *Union4KarchivedOrKdeletedOrKdraftOrKpublished) Kdraft() *string {
+func (u *Union4KarchivedOrKdeletedOrKdraftOrKpublished) AsKdraft() *string {
 	if u.variant != "Kdraft" {
 		return nil
 	}
@@ -2391,7 +2391,7 @@ func (u *Union4KarchivedOrKdeletedOrKdraftOrKpublished) IsKpublished() bool {
 	return u.variant == "Kpublished"
 }
 
-func (u *Union4KarchivedOrKdeletedOrKdraftOrKpublished) Kpublished() *string {
+func (u *Union4KarchivedOrKdeletedOrKdraftOrKpublished) AsKpublished() *string {
 	if u.variant != "Kpublished" {
 		return nil
 	}
@@ -2427,7 +2427,7 @@ func (u *Union4KarchivedOrKdeletedOrKdraftOrKpublished) IsKarchived() bool {
 	return u.variant == "Karchived"
 }
 
-func (u *Union4KarchivedOrKdeletedOrKdraftOrKpublished) Karchived() *string {
+func (u *Union4KarchivedOrKdeletedOrKdraftOrKpublished) AsKarchived() *string {
 	if u.variant != "Karchived" {
 		return nil
 	}
@@ -2463,7 +2463,7 @@ func (u *Union4KarchivedOrKdeletedOrKdraftOrKpublished) IsKdeleted() bool {
 	return u.variant == "Kdeleted"
 }
 
-func (u *Union4KarchivedOrKdeletedOrKdraftOrKpublished) Kdeleted() *string {
+func (u *Union4KarchivedOrKdeletedOrKdraftOrKpublished) AsKdeleted() *string {
 	if u.variant != "Kdeleted" {
 		return nil
 	}
@@ -2650,7 +2650,7 @@ func (u *Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5) IsIntK1() bool {
 	return u.variant == "IntK1"
 }
 
-func (u *Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5) IntK1() *int64 {
+func (u *Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5) AsIntK1() *int64 {
 	if u.variant != "IntK1" {
 		return nil
 	}
@@ -2688,7 +2688,7 @@ func (u *Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5) IsIntK2() bool {
 	return u.variant == "IntK2"
 }
 
-func (u *Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5) IntK2() *int64 {
+func (u *Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5) AsIntK2() *int64 {
 	if u.variant != "IntK2" {
 		return nil
 	}
@@ -2726,7 +2726,7 @@ func (u *Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5) IsIntK3() bool {
 	return u.variant == "IntK3"
 }
 
-func (u *Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5) IntK3() *int64 {
+func (u *Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5) AsIntK3() *int64 {
 	if u.variant != "IntK3" {
 		return nil
 	}
@@ -2764,7 +2764,7 @@ func (u *Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5) IsIntK4() bool {
 	return u.variant == "IntK4"
 }
 
-func (u *Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5) IntK4() *int64 {
+func (u *Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5) AsIntK4() *int64 {
 	if u.variant != "IntK4" {
 		return nil
 	}
@@ -2802,7 +2802,7 @@ func (u *Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5) IsIntK5() bool {
 	return u.variant == "IntK5"
 }
 
-func (u *Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5) IntK5() *int64 {
+func (u *Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5) AsIntK5() *int64 {
 	if u.variant != "IntK5" {
 		return nil
 	}
@@ -2989,7 +2989,7 @@ func (u *Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500) IsIntK200() bool {
 	return u.variant == "IntK200"
 }
 
-func (u *Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500) IntK200() *int64 {
+func (u *Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500) AsIntK200() *int64 {
 	if u.variant != "IntK200" {
 		return nil
 	}
@@ -3027,7 +3027,7 @@ func (u *Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500) IsIntK201() bool {
 	return u.variant == "IntK201"
 }
 
-func (u *Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500) IntK201() *int64 {
+func (u *Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500) AsIntK201() *int64 {
 	if u.variant != "IntK201" {
 		return nil
 	}
@@ -3065,7 +3065,7 @@ func (u *Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500) IsIntK400() bool {
 	return u.variant == "IntK400"
 }
 
-func (u *Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500) IntK400() *int64 {
+func (u *Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500) AsIntK400() *int64 {
 	if u.variant != "IntK400" {
 		return nil
 	}
@@ -3103,7 +3103,7 @@ func (u *Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500) IsIntK404() bool {
 	return u.variant == "IntK404"
 }
 
-func (u *Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500) IntK404() *int64 {
+func (u *Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500) AsIntK404() *int64 {
 	if u.variant != "IntK404" {
 		return nil
 	}
@@ -3141,7 +3141,7 @@ func (u *Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500) IsIntK500() bool {
 	return u.variant == "IntK500"
 }
 
-func (u *Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500) IntK500() *int64 {
+func (u *Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500) AsIntK500() *int64 {
 	if u.variant != "IntK500" {
 		return nil
 	}
@@ -3372,7 +3372,7 @@ func (u *Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8) IsIntK0() bool 
 	return u.variant == "IntK0"
 }
 
-func (u *Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8) IntK0() *int64 {
+func (u *Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8) AsIntK0() *int64 {
 	if u.variant != "IntK0" {
 		return nil
 	}
@@ -3414,7 +3414,7 @@ func (u *Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8) IsIntK1() bool 
 	return u.variant == "IntK1"
 }
 
-func (u *Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8) IntK1() *int64 {
+func (u *Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8) AsIntK1() *int64 {
 	if u.variant != "IntK1" {
 		return nil
 	}
@@ -3456,7 +3456,7 @@ func (u *Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8) IsIntK2() bool 
 	return u.variant == "IntK2"
 }
 
-func (u *Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8) IntK2() *int64 {
+func (u *Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8) AsIntK2() *int64 {
 	if u.variant != "IntK2" {
 		return nil
 	}
@@ -3498,7 +3498,7 @@ func (u *Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8) IsIntK3() bool 
 	return u.variant == "IntK3"
 }
 
-func (u *Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8) IntK3() *int64 {
+func (u *Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8) AsIntK3() *int64 {
 	if u.variant != "IntK3" {
 		return nil
 	}
@@ -3540,7 +3540,7 @@ func (u *Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8) IsIntK5() bool 
 	return u.variant == "IntK5"
 }
 
-func (u *Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8) IntK5() *int64 {
+func (u *Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8) AsIntK5() *int64 {
 	if u.variant != "IntK5" {
 		return nil
 	}
@@ -3582,7 +3582,7 @@ func (u *Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8) IsIntK8() bool 
 	return u.variant == "IntK8"
 }
 
-func (u *Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8) IntK8() *int64 {
+func (u *Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8) AsIntK8() *int64 {
 	if u.variant != "IntK8" {
 		return nil
 	}
@@ -3624,7 +3624,7 @@ func (u *Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8) IsIntK13() bool
 	return u.variant == "IntK13"
 }
 
-func (u *Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8) IntK13() *int64 {
+func (u *Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8) AsIntK13() *int64 {
 	if u.variant != "IntK13" {
 		return nil
 	}

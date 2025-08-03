@@ -4,13 +4,14 @@ use baml_runtime::client_registry::{ClientProperty, ClientProvider, ClientRegist
 use baml_types::BamlValue;
 
 use super::utils::Decode;
-use crate::raw_ptr_wrapper::{CollectorWrapper, RawPtrType};
+use crate::raw_ptr_wrapper::{CollectorWrapper, RawPtrType, TypeBuilderWrapper};
 
 pub struct BamlFunctionArguments {
     pub kwargs: baml_types::BamlMap<String, BamlValue>,
     pub client_registry: Option<ClientRegistry>,
     pub env_vars: HashMap<String, String>,
     pub collectors: Option<Vec<CollectorWrapper>>,
+    pub type_builder: Option<TypeBuilderWrapper>,
 }
 
 impl Decode for BamlFunctionArguments {
@@ -48,12 +49,25 @@ impl Decode for BamlFunctionArguments {
                 Some(collectors)
             }
         };
+        let type_builder = from
+            .type_builder
+            .map(RawPtrType::decode)
+            .transpose()?
+            .map(|r| match r {
+                RawPtrType::TypeBuilder(t) => Ok(t),
+                other => Err(anyhow::anyhow!(
+                    "Expected TypeBuilder, got {}",
+                    other.name()
+                )),
+            })
+            .transpose()?;
 
         Ok(BamlFunctionArguments {
             kwargs,
             client_registry,
             env_vars,
             collectors,
+            type_builder,
         })
     }
 }

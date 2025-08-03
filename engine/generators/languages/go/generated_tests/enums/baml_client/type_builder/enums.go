@@ -31,31 +31,31 @@ func (t *TestEnumEnumView) ListValues() ([]EnumValueView, error) {
 	return builders, nil
 }
 
-func (t *TestEnumEnumView) Angry() (EnumValueView, error) {
+func (t *TestEnumEnumView) ValueAngry() (EnumValueView, error) {
 	return t.inner.Value("Angry")
 }
 
-func (t *TestEnumEnumView) Happy() (EnumValueView, error) {
+func (t *TestEnumEnumView) ValueHappy() (EnumValueView, error) {
 	return t.inner.Value("Happy")
 }
 
-func (t *TestEnumEnumView) Sad() (EnumValueView, error) {
+func (t *TestEnumEnumView) ValueSad() (EnumValueView, error) {
 	return t.inner.Value("Sad")
 }
 
-func (t *TestEnumEnumView) Confused() (EnumValueView, error) {
+func (t *TestEnumEnumView) ValueConfused() (EnumValueView, error) {
 	return t.inner.Value("Confused")
 }
 
-func (t *TestEnumEnumView) Excited() (EnumValueView, error) {
+func (t *TestEnumEnumView) ValueExcited() (EnumValueView, error) {
 	return t.inner.Value("Excited")
 }
 
-func (t *TestEnumEnumView) Exclamation() (EnumValueView, error) {
+func (t *TestEnumEnumView) ValueExclamation() (EnumValueView, error) {
 	return t.inner.Value("Exclamation")
 }
 
-func (t *TestEnumEnumView) Bored() (EnumValueView, error) {
+func (t *TestEnumEnumView) ValueBored() (EnumValueView, error) {
 	return t.inner.Value("Bored")
 }
 
@@ -65,4 +65,8 @@ func (t *TypeBuilder) TestEnum() (*TestEnumEnumView, error) {
 		return nil, err
 	}
 	return &TestEnumEnumView{inner: bld}, nil
+}
+
+func (t *TestEnumEnumView) Type() (baml.Type, error) {
+	return t.inner.Type()
 }

@@ -67,6 +67,7 @@ type callOption struct {
 	env            map[string]string
 	collectors     []baml.Collector
 	onTick         baml.OnTickCallbackData
+	typeBuilder    baml.TypeBuilder
 }
 
 type CallOptionFunc func(*callOption)
@@ -189,4 +190,10 @@ func NewTypeBuilder() (*TypeBuilder, error) {
 		return nil, err
 	}
 	return type_builder.InternalNewTypeBuilder(tb), nil
+}
+
+func WithTypeBuilder(tb *TypeBuilder) CallOptionFunc {
+	return func(o *callOption) {
+		o.typeBuilder = tb.InternalExport()
+	}
 }

@@ -52,28 +52,25 @@ func (t *typeDef) Optional() (Type, error) {
 	return request, nil
 }
 
-// __repr__ returns the string representation of this type (internal method)
-func (t *typeDef) __repr__() (string, error) {
-	result, err := raw_objects.CallMethod(t, "__repr__", nil)
+// __display__ returns the string representation of this type (internal method)
+func (t *typeDef) Print() string {
+	result, err := raw_objects.CallMethod(t, "__display__", nil)
 	if err != nil {
-		return "", err
+		return fmt.Sprintf("<Type: error getting repr: %v>", err)
 	}
 
 	repr, ok := result.(string)
 	if !ok {
-		return "", fmt.Errorf("unexpected type for repr: %T", result)
+		return fmt.Sprintf("<Type: error getting repr: %T>", result)
 	}
 
-	return repr, nil
+	return repr
 }
 
 // String implements the fmt.Stringer interface for native Go printing
-func (t *typeDef) String() string {
-	repr, err := t.__repr__()
-	if err != nil {
-		return fmt.Sprintf("<Type: error getting repr: %v>", err)
-	}
-	return repr
+func (d *typeDef) Format(f fmt.State, verb rune) {
+	display := d.Print()
+	fmt.Fprint(f, display)
 }
 
 func (t *typeDef) InternalBamlSerializer() {

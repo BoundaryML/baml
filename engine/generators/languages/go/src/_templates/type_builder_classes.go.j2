@@ -19,8 +19,14 @@ func (t *{{cls.name}}Class{{cls.builder()}}) ListProperties() ([]ClassProperty{{
 	return builders, nil
 }
 
+{% if cls.dynamic %}
+func (t *{{cls.name}}Class{{cls.builder()}}) AddProperty(name string, propertyType Type) (ClassProperty{{cls.builder()}}, error) {
+	return t.inner.AddProperty(name, propertyType)
+}
+{% endif %}
+
 {% for prop in cls.fields %}
-func (t *{{cls.name}}Class{{cls.builder()}}) {{prop.name|exported_name}}() (ClassProperty{{cls.builder()}}, error) {
+func (t *{{cls.name}}Class{{cls.builder()}}) Property{{prop.name|exported_name}}() (ClassProperty{{cls.builder()}}, error) {
     return t.inner.Property("{{prop.name}}")
 }
 {% endfor %}
@@ -31,5 +37,9 @@ func (t *TypeBuilder) {{cls.name}}() (*{{cls.name}}Class{{cls.builder()}}, error
 		return nil, err
 	}
 	return &{{cls.name}}Class{{cls.builder()}}{inner: bld}, nil
+}
+
+func (t *{{cls.name}}Class{{cls.builder()}}) Type() (baml.Type, error) {
+	return t.inner.Type()
 }
 {% endfor %}

@@ -71,7 +71,7 @@ message CFFIValueMap {
 message CFFIValueClass {
   CFFITypeName name = 1;
   repeated CFFIMapEntry fields = 2;
-  repeated CFFIMapEntry dynamic_fields = 3;
+  // repeated CFFIMapEntry dynamic_fields = 3;
 }
 
 message CFFIValueEnum {
@@ -210,6 +210,8 @@ message CFFIFunctionArguments {
   repeated CFFIEnvVar env = 3;
   // collectors only
   repeated CFFIRawObject collectors = 4;
+  // type builder only
+  CFFIRawObject type_builder = 5;
 }
 
 message CFFIObjectMethodArguments {

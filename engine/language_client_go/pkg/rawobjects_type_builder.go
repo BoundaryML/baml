@@ -330,3 +330,24 @@ func (tb *typeBuilder) ListClasses() ([]ClassBuilder, error) {
 
 	return classBuilders, nil
 }
+
+// __display__ returns the string representation of this type (internal method)
+func (t *typeBuilder) Print() string {
+	result, err := raw_objects.CallMethod(t, "__display__", nil)
+	if err != nil {
+		return fmt.Sprintf("<TypeBuilder: error getting repr: %v>", err)
+	}
+
+	repr, ok := result.(string)
+	if !ok {
+		return fmt.Sprintf("<TypeBuilder: error getting repr: %T>", result)
+	}
+
+	return repr
+}
+
+// String implements the fmt.Stringer interface for native Go printing
+func (d *typeBuilder) Format(f fmt.State, verb rune) {
+	display := d.Print()
+	fmt.Fprint(f, display)
+}

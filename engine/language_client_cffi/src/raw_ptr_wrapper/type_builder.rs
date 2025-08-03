@@ -132,6 +132,11 @@ impl TypeBuilderWrapper {
     fn list_classes(&self, runtime: &baml_runtime::BamlRuntime) -> Vec<objects::ClassBuilder> {
         self.inner.list_classes(runtime)
     }
+
+    #[export_baml_fn]
+    fn __display__(&self) -> String {
+        self.type_builder.to_string()
+    }
 }
 
 #[export_baml_fn]
@@ -147,13 +152,18 @@ impl TypeWrapper {
     }
 
     #[export_baml_fn]
-    fn __repr__(&self) -> String {
+    fn __display__(&self) -> String {
         self.as_ref().to_string()
     }
 }
 
 #[export_baml_fn]
 impl EnumBuilderWrapper {
+    #[export_baml_fn]
+    fn name(&self) -> String {
+        self.inner.enum_name.to_string()
+    }
+
     #[export_baml_fn]
     fn add_value(
         &self,
@@ -230,6 +240,11 @@ impl EnumBuilderWrapper {
 #[export_baml_fn]
 impl EnumValueBuilderWrapper {
     #[export_baml_fn]
+    fn name(&self) -> String {
+        self.inner.value_name.to_string()
+    }
+
+    #[export_baml_fn]
     fn set_description(
         &self,
         runtime: &baml_runtime::BamlRuntime,
@@ -277,6 +292,11 @@ impl EnumValueBuilderWrapper {
 
 #[export_baml_fn]
 impl ClassBuilderWrapper {
+    #[export_baml_fn]
+    fn name(&self) -> String {
+        self.inner.class_name.to_string()
+    }
+
     #[export_baml_fn]
     fn type_(&self, runtime: &baml_runtime::BamlRuntime) -> Result<TypeIR, String> {
         self.inner.r#type(runtime).map_err(|e| e.to_string())
@@ -351,6 +371,11 @@ impl ClassBuilderWrapper {
 
 #[export_baml_fn]
 impl ClassPropertyBuilderWrapper {
+    #[export_baml_fn]
+    fn name(&self) -> String {
+        self.inner.property_name.to_string()
+    }
+
     #[export_baml_fn]
     fn set_description(
         &self,

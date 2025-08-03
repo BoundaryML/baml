@@ -28,7 +28,7 @@ func TestTypeBuilderBasicTypes(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to create string type: %v", err)
 	} else {
-		typeStr := stringType.String()
+		typeStr := stringType.Print()
 		if typeStr != "string" {
 			t.Errorf("Expected string type to be 'string', got: %s", typeStr)
 		} else {
@@ -40,7 +40,7 @@ func TestTypeBuilderBasicTypes(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to create int type: %v", err)
 	} else {
-		typeStr := intType.String()
+		typeStr := intType.Print()
 		if typeStr != "int" {
 			t.Errorf("Expected int type to be 'int', got: %s", typeStr)
 		} else {
@@ -52,7 +52,7 @@ func TestTypeBuilderBasicTypes(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to create float type: %v", err)
 	} else {
-		typeStr := floatType.String()
+		typeStr := floatType.Print()
 		if typeStr != "float" {
 			t.Errorf("Expected float type to be 'float', got: %s", typeStr)
 		} else {
@@ -64,7 +64,7 @@ func TestTypeBuilderBasicTypes(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to create bool type: %v", err)
 	} else {
-		typeStr := boolType.String()
+		typeStr := boolType.Print()
 		if typeStr != "bool" {
 			t.Errorf("Expected bool type to be 'bool', got: %s", typeStr)
 		} else {
@@ -76,7 +76,7 @@ func TestTypeBuilderBasicTypes(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to create null type: %v", err)
 	} else {
-		typeStr := nullType.String()
+		typeStr := nullType.Print()
 		if typeStr != "null" {
 			t.Errorf("Expected null type to be 'null', got: %s", typeStr)
 		} else {
@@ -90,7 +90,7 @@ func TestTypeBuilderBasicTypes(t *testing.T) {
 		if err != nil {
 			t.Errorf("Failed to create list type: %v", err)
 		} else {
-			typeStr := listType.String()
+			typeStr := listType.Print()
 			t.Logf("Successfully created list of string type: %s", typeStr)
 		}
 
@@ -98,7 +98,7 @@ func TestTypeBuilderBasicTypes(t *testing.T) {
 		if err != nil {
 			t.Errorf("Failed to create optional type: %v", err)
 		} else {
-			typeStr := optionalType.String()
+			typeStr := optionalType.Print()
 			t.Logf("Successfully created optional string type: %s", typeStr)
 		}
 	}
@@ -122,7 +122,7 @@ func TestTypeBuilderLiteralTypes(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to create literal string: %v", err)
 	} else {
-		typeStr := literalString.String()
+		typeStr := literalString.Print()
 		t.Logf("Successfully created literal string type: %s", typeStr)
 	}
 
@@ -130,7 +130,7 @@ func TestTypeBuilderLiteralTypes(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to create literal int: %v", err)
 	} else {
-		typeStr := literalInt.String()
+		typeStr := literalInt.Print()
 		t.Logf("Successfully created literal int type: %s", typeStr)
 	}
 
@@ -138,7 +138,7 @@ func TestTypeBuilderLiteralTypes(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to create literal bool: %v", err)
 	} else {
-		typeStr := literalBool.String()
+		typeStr := literalBool.Print()
 		t.Logf("Successfully created literal bool type: %s", typeStr)
 	}
 
@@ -172,7 +172,7 @@ func TestTypeBuilderCompositeTypes(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to create map type: %v", err)
 	} else {
-		typeStr := mapType.String()
+		typeStr := mapType.Print()
 		t.Logf("Successfully created map type: %s", typeStr)
 	}
 
@@ -180,7 +180,7 @@ func TestTypeBuilderCompositeTypes(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to create list type: %v", err)
 	} else {
-		typeStr := listType.String()
+		typeStr := listType.Print()
 		t.Logf("Successfully created list type: %s", typeStr)
 	}
 
@@ -188,7 +188,7 @@ func TestTypeBuilderCompositeTypes(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to create optional type: %v", err)
 	} else {
-		typeStr := optionalType.String()
+		typeStr := optionalType.Print()
 		t.Logf("Successfully created optional type: %s", typeStr)
 	}
 
@@ -198,7 +198,7 @@ func TestTypeBuilderCompositeTypes(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to create union type: %v", err)
 	} else {
-		typeStr := unionType.String()
+		typeStr := unionType.Print()
 		t.Logf("Successfully created union type: %s", typeStr)
 	}
 
@@ -444,7 +444,7 @@ func TestTypeBuilderEnums(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to get Status enum type: %v", err)
 	} else {
-		typeStr := statusType.String()
+		typeStr := statusType.Print()
 		t.Logf("Status enum type: %s", typeStr)
 	}
 
@@ -452,7 +452,7 @@ func TestTypeBuilderEnums(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to get Priority enum type: %v", err)
 	} else {
-		typeStr := priorityType.String()
+		typeStr := priorityType.Print()
 		t.Logf("Priority enum type: %s", typeStr)
 	}
 
@@ -460,7 +460,7 @@ func TestTypeBuilderEnums(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to get Category enum type: %v", err)
 	} else {
-		typeStr := categoryType.String()
+		typeStr := categoryType.Print()
 		t.Logf("Category enum type: %s", typeStr)
 	}
 
@@ -684,7 +684,7 @@ func TestTypeBuilderClasses(t *testing.T) {
 		if err != nil {
 			t.Errorf("Failed to get name property type: %v", err)
 		} else {
-			nameTypeStr := nameType.String()
+			nameTypeStr := nameType.Print()
 			if nameTypeStr != "string" {
 				t.Errorf("Expected name property type to be 'string', got: %s", nameTypeStr)
 			} else {
@@ -721,7 +721,7 @@ func TestTypeBuilderClasses(t *testing.T) {
 		if err != nil {
 			t.Errorf("Failed to get email property type: %v", err)
 		} else {
-			emailTypeStr := emailType.String()
+			emailTypeStr := emailType.Print()
 			if emailTypeStr != "string" {
 				t.Errorf("Expected email property type to be 'string', got: %s", emailTypeStr)
 			} else {
@@ -868,7 +868,7 @@ func TestTypeBuilderClasses(t *testing.T) {
 			if err != nil {
 				t.Errorf("Failed to get updated name property type: %v", err)
 			} else {
-				updatedNameTypeStr := updatedNameType.String()
+				updatedNameTypeStr := updatedNameType.Print()
 				t.Logf("Updated name property type: %s", updatedNameTypeStr)
 				if !contains(updatedNameTypeStr, "string") && !contains(updatedNameTypeStr, "optional") {
 					t.Errorf("Expected updated name property type to contain 'string' and 'optional', got: %s", updatedNameTypeStr)
@@ -885,7 +885,7 @@ func TestTypeBuilderClasses(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to get User class type: %v", err)
 	} else {
-		typeStr := userType.String()
+		typeStr := userType.Print()
 		t.Logf("User class type: %s", typeStr)
 	}
 
@@ -893,7 +893,7 @@ func TestTypeBuilderClasses(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to get Task class type: %v", err)
 	} else {
-		typeStr := taskType.String()
+		typeStr := taskType.Print()
 		t.Logf("Task class type: %s", typeStr)
 	}
 
@@ -901,7 +901,7 @@ func TestTypeBuilderClasses(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to get Project class type: %v", err)
 	} else {
-		typeStr := projectType.String()
+		typeStr := projectType.Print()
 		t.Logf("Project class type: %s", typeStr)
 	}
 

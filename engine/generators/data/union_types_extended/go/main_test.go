@@ -72,7 +72,7 @@ func TestDiscriminatedUnions(t *testing.T) {
 	}
 	// Check if shape is a circle with the expected discriminator
 	if result.Shape.IsCircle() {
-		circle := result.Shape.Circle()
+		circle := result.Shape.AsCircle()
 		if circle == nil {
 			t.Errorf("Expected non-nil circle")
 			return
@@ -92,7 +92,7 @@ func TestDiscriminatedUnions(t *testing.T) {
 	}
 	// Check if animal is a dog
 	if result.Animal.IsDog() {
-		dog := result.Animal.Dog()
+		dog := result.Animal.AsDog()
 		if dog == nil {
 			t.Errorf("Expected non-nil dog")
 			return
@@ -115,7 +115,7 @@ func TestDiscriminatedUnions(t *testing.T) {
 	}
 	// Check if response is an error
 	if result.Response.IsApiError() {
-		apiError := result.Response.ApiError()
+		apiError := result.Response.AsApiError()
 		if apiError == nil {
 			t.Errorf("Expected non-nil apiError")
 			return

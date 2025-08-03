@@ -31,39 +31,39 @@ func (t *MixedPrimitivesClassView) ListProperties() ([]ClassPropertyView, error)
 	return builders, nil
 }
 
-func (t *MixedPrimitivesClassView) Name() (ClassPropertyView, error) {
+func (t *MixedPrimitivesClassView) PropertyName() (ClassPropertyView, error) {
 	return t.inner.Property("name")
 }
 
-func (t *MixedPrimitivesClassView) Age() (ClassPropertyView, error) {
+func (t *MixedPrimitivesClassView) PropertyAge() (ClassPropertyView, error) {
 	return t.inner.Property("age")
 }
 
-func (t *MixedPrimitivesClassView) Height() (ClassPropertyView, error) {
+func (t *MixedPrimitivesClassView) PropertyHeight() (ClassPropertyView, error) {
 	return t.inner.Property("height")
 }
 
-func (t *MixedPrimitivesClassView) IsActive() (ClassPropertyView, error) {
+func (t *MixedPrimitivesClassView) PropertyIsActive() (ClassPropertyView, error) {
 	return t.inner.Property("isActive")
 }
 
-func (t *MixedPrimitivesClassView) Metadata() (ClassPropertyView, error) {
+func (t *MixedPrimitivesClassView) PropertyMetadata() (ClassPropertyView, error) {
 	return t.inner.Property("metadata")
 }
 
-func (t *MixedPrimitivesClassView) Tags() (ClassPropertyView, error) {
+func (t *MixedPrimitivesClassView) PropertyTags() (ClassPropertyView, error) {
 	return t.inner.Property("tags")
 }
 
-func (t *MixedPrimitivesClassView) Scores() (ClassPropertyView, error) {
+func (t *MixedPrimitivesClassView) PropertyScores() (ClassPropertyView, error) {
 	return t.inner.Property("scores")
 }
 
-func (t *MixedPrimitivesClassView) Measurements() (ClassPropertyView, error) {
+func (t *MixedPrimitivesClassView) PropertyMeasurements() (ClassPropertyView, error) {
 	return t.inner.Property("measurements")
 }
 
-func (t *MixedPrimitivesClassView) Flags() (ClassPropertyView, error) {
+func (t *MixedPrimitivesClassView) PropertyFlags() (ClassPropertyView, error) {
 	return t.inner.Property("flags")
 }
 
@@ -73,6 +73,10 @@ func (t *TypeBuilder) MixedPrimitives() (*MixedPrimitivesClassView, error) {
 		return nil, err
 	}
 	return &MixedPrimitivesClassView{inner: bld}, nil
+}
+
+func (t *MixedPrimitivesClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
 }
 
 type PrimitiveArraysClassView struct {
@@ -91,19 +95,19 @@ func (t *PrimitiveArraysClassView) ListProperties() ([]ClassPropertyView, error)
 	return builders, nil
 }
 
-func (t *PrimitiveArraysClassView) StringArray() (ClassPropertyView, error) {
+func (t *PrimitiveArraysClassView) PropertyStringArray() (ClassPropertyView, error) {
 	return t.inner.Property("stringArray")
 }
 
-func (t *PrimitiveArraysClassView) IntArray() (ClassPropertyView, error) {
+func (t *PrimitiveArraysClassView) PropertyIntArray() (ClassPropertyView, error) {
 	return t.inner.Property("intArray")
 }
 
-func (t *PrimitiveArraysClassView) FloatArray() (ClassPropertyView, error) {
+func (t *PrimitiveArraysClassView) PropertyFloatArray() (ClassPropertyView, error) {
 	return t.inner.Property("floatArray")
 }
 
-func (t *PrimitiveArraysClassView) BoolArray() (ClassPropertyView, error) {
+func (t *PrimitiveArraysClassView) PropertyBoolArray() (ClassPropertyView, error) {
 	return t.inner.Property("boolArray")
 }
 
@@ -113,6 +117,10 @@ func (t *TypeBuilder) PrimitiveArrays() (*PrimitiveArraysClassView, error) {
 		return nil, err
 	}
 	return &PrimitiveArraysClassView{inner: bld}, nil
+}
+
+func (t *PrimitiveArraysClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
 }
 
 type PrimitiveMapsClassView struct {
@@ -131,19 +139,19 @@ func (t *PrimitiveMapsClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
-func (t *PrimitiveMapsClassView) StringMap() (ClassPropertyView, error) {
+func (t *PrimitiveMapsClassView) PropertyStringMap() (ClassPropertyView, error) {
 	return t.inner.Property("stringMap")
 }
 
-func (t *PrimitiveMapsClassView) IntMap() (ClassPropertyView, error) {
+func (t *PrimitiveMapsClassView) PropertyIntMap() (ClassPropertyView, error) {
 	return t.inner.Property("intMap")
 }
 
-func (t *PrimitiveMapsClassView) FloatMap() (ClassPropertyView, error) {
+func (t *PrimitiveMapsClassView) PropertyFloatMap() (ClassPropertyView, error) {
 	return t.inner.Property("floatMap")
 }
 
-func (t *PrimitiveMapsClassView) BoolMap() (ClassPropertyView, error) {
+func (t *PrimitiveMapsClassView) PropertyBoolMap() (ClassPropertyView, error) {
 	return t.inner.Property("boolMap")
 }
 
@@ -153,6 +161,10 @@ func (t *TypeBuilder) PrimitiveMaps() (*PrimitiveMapsClassView, error) {
 		return nil, err
 	}
 	return &PrimitiveMapsClassView{inner: bld}, nil
+}
+
+func (t *PrimitiveMapsClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
 }
 
 type PrimitiveTypesClassView struct {
@@ -171,23 +183,23 @@ func (t *PrimitiveTypesClassView) ListProperties() ([]ClassPropertyView, error) 
 	return builders, nil
 }
 
-func (t *PrimitiveTypesClassView) StringField() (ClassPropertyView, error) {
+func (t *PrimitiveTypesClassView) PropertyStringField() (ClassPropertyView, error) {
 	return t.inner.Property("stringField")
 }
 
-func (t *PrimitiveTypesClassView) IntField() (ClassPropertyView, error) {
+func (t *PrimitiveTypesClassView) PropertyIntField() (ClassPropertyView, error) {
 	return t.inner.Property("intField")
 }
 
-func (t *PrimitiveTypesClassView) FloatField() (ClassPropertyView, error) {
+func (t *PrimitiveTypesClassView) PropertyFloatField() (ClassPropertyView, error) {
 	return t.inner.Property("floatField")
 }
 
-func (t *PrimitiveTypesClassView) BoolField() (ClassPropertyView, error) {
+func (t *PrimitiveTypesClassView) PropertyBoolField() (ClassPropertyView, error) {
 	return t.inner.Property("boolField")
 }
 
-func (t *PrimitiveTypesClassView) NullField() (ClassPropertyView, error) {
+func (t *PrimitiveTypesClassView) PropertyNullField() (ClassPropertyView, error) {
 	return t.inner.Property("nullField")
 }
 
@@ -197,4 +209,8 @@ func (t *TypeBuilder) PrimitiveTypes() (*PrimitiveTypesClassView, error) {
 		return nil, err
 	}
 	return &PrimitiveTypesClassView{inner: bld}, nil
+}
+
+func (t *PrimitiveTypesClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
 }

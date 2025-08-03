@@ -31,11 +31,11 @@ func (t *MediaAnalysisResultClassView) ListProperties() ([]ClassPropertyView, er
 	return builders, nil
 }
 
-func (t *MediaAnalysisResultClassView) Topics() (ClassPropertyView, error) {
+func (t *MediaAnalysisResultClassView) PropertyTopics() (ClassPropertyView, error) {
 	return t.inner.Property("topics")
 }
 
-func (t *MediaAnalysisResultClassView) AnalysisText() (ClassPropertyView, error) {
+func (t *MediaAnalysisResultClassView) PropertyAnalysisText() (ClassPropertyView, error) {
 	return t.inner.Property("analysisText")
 }
 
@@ -45,6 +45,10 @@ func (t *TypeBuilder) MediaAnalysisResult() (*MediaAnalysisResultClassView, erro
 		return nil, err
 	}
 	return &MediaAnalysisResultClassView{inner: bld}, nil
+}
+
+func (t *MediaAnalysisResultClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
 }
 
 type MediaArrayAnalysisResultClassView struct {
@@ -63,11 +67,11 @@ func (t *MediaArrayAnalysisResultClassView) ListProperties() ([]ClassPropertyVie
 	return builders, nil
 }
 
-func (t *MediaArrayAnalysisResultClassView) AnalysisText() (ClassPropertyView, error) {
+func (t *MediaArrayAnalysisResultClassView) PropertyAnalysisText() (ClassPropertyView, error) {
 	return t.inner.Property("analysisText")
 }
 
-func (t *MediaArrayAnalysisResultClassView) MediaCount() (ClassPropertyView, error) {
+func (t *MediaArrayAnalysisResultClassView) PropertyMediaCount() (ClassPropertyView, error) {
 	return t.inner.Property("mediaCount")
 }
 
@@ -77,6 +81,10 @@ func (t *TypeBuilder) MediaArrayAnalysisResult() (*MediaArrayAnalysisResultClass
 		return nil, err
 	}
 	return &MediaArrayAnalysisResultClassView{inner: bld}, nil
+}
+
+func (t *MediaArrayAnalysisResultClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
 }
 
 type MediaMapAnalysisResultClassView struct {
@@ -95,15 +103,15 @@ func (t *MediaMapAnalysisResultClassView) ListProperties() ([]ClassPropertyView,
 	return builders, nil
 }
 
-func (t *MediaMapAnalysisResultClassView) AnalysisText() (ClassPropertyView, error) {
+func (t *MediaMapAnalysisResultClassView) PropertyAnalysisText() (ClassPropertyView, error) {
 	return t.inner.Property("analysisText")
 }
 
-func (t *MediaMapAnalysisResultClassView) KeyCount() (ClassPropertyView, error) {
+func (t *MediaMapAnalysisResultClassView) PropertyKeyCount() (ClassPropertyView, error) {
 	return t.inner.Property("keyCount")
 }
 
-func (t *MediaMapAnalysisResultClassView) Keys() (ClassPropertyView, error) {
+func (t *MediaMapAnalysisResultClassView) PropertyKeys() (ClassPropertyView, error) {
 	return t.inner.Property("keys")
 }
 
@@ -113,6 +121,10 @@ func (t *TypeBuilder) MediaMapAnalysisResult() (*MediaMapAnalysisResultClassView
 		return nil, err
 	}
 	return &MediaMapAnalysisResultClassView{inner: bld}, nil
+}
+
+func (t *MediaMapAnalysisResultClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
 }
 
 type MixedMediaAnalysisResultClassView struct {
@@ -131,35 +143,35 @@ func (t *MixedMediaAnalysisResultClassView) ListProperties() ([]ClassPropertyVie
 	return builders, nil
 }
 
-func (t *MixedMediaAnalysisResultClassView) Title() (ClassPropertyView, error) {
+func (t *MixedMediaAnalysisResultClassView) PropertyTitle() (ClassPropertyView, error) {
 	return t.inner.Property("title")
 }
 
-func (t *MixedMediaAnalysisResultClassView) Description() (ClassPropertyView, error) {
+func (t *MixedMediaAnalysisResultClassView) PropertyDescription() (ClassPropertyView, error) {
 	return t.inner.Property("description")
 }
 
-func (t *MixedMediaAnalysisResultClassView) HasImage() (ClassPropertyView, error) {
+func (t *MixedMediaAnalysisResultClassView) PropertyHasImage() (ClassPropertyView, error) {
 	return t.inner.Property("hasImage")
 }
 
-func (t *MixedMediaAnalysisResultClassView) HasVideo() (ClassPropertyView, error) {
+func (t *MixedMediaAnalysisResultClassView) PropertyHasVideo() (ClassPropertyView, error) {
 	return t.inner.Property("hasVideo")
 }
 
-func (t *MixedMediaAnalysisResultClassView) HasAudio() (ClassPropertyView, error) {
+func (t *MixedMediaAnalysisResultClassView) PropertyHasAudio() (ClassPropertyView, error) {
 	return t.inner.Property("hasAudio")
 }
 
-func (t *MixedMediaAnalysisResultClassView) HasPdf() (ClassPropertyView, error) {
+func (t *MixedMediaAnalysisResultClassView) PropertyHasPdf() (ClassPropertyView, error) {
 	return t.inner.Property("hasPdf")
 }
 
-func (t *MixedMediaAnalysisResultClassView) AdditionalImageCount() (ClassPropertyView, error) {
+func (t *MixedMediaAnalysisResultClassView) PropertyAdditionalImageCount() (ClassPropertyView, error) {
 	return t.inner.Property("additionalImageCount")
 }
 
-func (t *MixedMediaAnalysisResultClassView) MetadataKeys() (ClassPropertyView, error) {
+func (t *MixedMediaAnalysisResultClassView) PropertyMetadataKeys() (ClassPropertyView, error) {
 	return t.inner.Property("metadataKeys")
 }
 
@@ -169,6 +181,10 @@ func (t *TypeBuilder) MixedMediaAnalysisResult() (*MixedMediaAnalysisResultClass
 		return nil, err
 	}
 	return &MixedMediaAnalysisResultClassView{inner: bld}, nil
+}
+
+func (t *MixedMediaAnalysisResultClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
 }
 
 type OptionalMediaAnalysisResultClassView struct {
@@ -187,15 +203,15 @@ func (t *OptionalMediaAnalysisResultClassView) ListProperties() ([]ClassProperty
 	return builders, nil
 }
 
-func (t *OptionalMediaAnalysisResultClassView) AnalysisText() (ClassPropertyView, error) {
+func (t *OptionalMediaAnalysisResultClassView) PropertyAnalysisText() (ClassPropertyView, error) {
 	return t.inner.Property("analysisText")
 }
 
-func (t *OptionalMediaAnalysisResultClassView) ProvidedMediaTypes() (ClassPropertyView, error) {
+func (t *OptionalMediaAnalysisResultClassView) PropertyProvidedMediaTypes() (ClassPropertyView, error) {
 	return t.inner.Property("providedMediaTypes")
 }
 
-func (t *OptionalMediaAnalysisResultClassView) MissingMediaTypes() (ClassPropertyView, error) {
+func (t *OptionalMediaAnalysisResultClassView) PropertyMissingMediaTypes() (ClassPropertyView, error) {
 	return t.inner.Property("missingMediaTypes")
 }
 
@@ -205,4 +221,8 @@ func (t *TypeBuilder) OptionalMediaAnalysisResult() (*OptionalMediaAnalysisResul
 		return nil, err
 	}
 	return &OptionalMediaAnalysisResultClassView{inner: bld}, nil
+}
+
+func (t *OptionalMediaAnalysisResultClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
 }

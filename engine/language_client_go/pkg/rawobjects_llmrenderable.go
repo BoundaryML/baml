@@ -84,3 +84,19 @@ func (eb *llmRenderableObject) From() (ASTNodeSource, error) {
 
 	return ASTNodeSource_TypeBuilder, nil
 }
+
+
+
+func (eb *llmRenderableObject) Name() (string, error) {
+	result, err := raw_objects.CallMethod(eb, "name", nil)
+	if err != nil {
+		return "", err
+	}
+
+	name, ok := result.(string)
+	if !ok {
+		return "", fmt.Errorf("unexpected type from source: %T", result)
+	}
+
+	return name, nil
+}

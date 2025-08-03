@@ -51,7 +51,7 @@ mod tests {
 
 #[derive(Debug, Clone, Default)]
 pub struct TypeBuilder {
-    type_builder: RuntimeTypeBuilder,
+    pub type_builder: RuntimeTypeBuilder,
 }
 
 impl TypeBuilder {
@@ -158,7 +158,7 @@ impl TypeBuilder {
 #[derive(Debug, Clone)]
 pub struct ClassBuilder {
     type_builder: RuntimeTypeBuilder,
-    class_name: String,
+    pub class_name: String,
     mode: NodeRW,
 }
 
@@ -381,7 +381,7 @@ impl ClassBuilder {
 pub struct ClassPropertyBuilder {
     type_builder: RuntimeTypeBuilder,
     class_name: String,
-    property_name: String,
+    pub property_name: String,
     mode: NodeRW,
 }
 
@@ -545,7 +545,7 @@ impl ClassPropertyBuilder {
 #[derive(Debug, Clone)]
 pub struct EnumBuilder {
     type_builder: RuntimeTypeBuilder,
-    enum_name: String,
+    pub enum_name: String,
     mode: NodeRW,
 }
 
@@ -755,7 +755,7 @@ impl EnumBuilder {
 pub struct EnumValueBuilder {
     type_builder: RuntimeTypeBuilder,
     enum_name: String,
-    value_name: String,
+    pub value_name: String,
     mode: NodeRW,
 }
 

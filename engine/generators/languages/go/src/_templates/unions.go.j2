@@ -98,7 +98,7 @@ func (u *{{ name }}) Is{{ v.name|exported_name }}() bool {
     return u.variant == "{{ v.name }}"
 }
 
-func (u *{{ name }}) {{ v.name|exported_name }}() *{{ v.type_.serialize_type(pkg) }} {
+func (u *{{ name }}) As{{ v.name|exported_name }}() *{{ v.type_.serialize_type(pkg) }} {
     if u.variant != "{{ v.name }}" {
         return nil
     }

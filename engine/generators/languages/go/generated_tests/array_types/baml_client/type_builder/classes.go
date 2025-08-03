@@ -31,15 +31,15 @@ func (t *ArrayWithConstraintsClassView) ListProperties() ([]ClassPropertyView, e
 	return builders, nil
 }
 
-func (t *ArrayWithConstraintsClassView) NonEmptyStrings() (ClassPropertyView, error) {
+func (t *ArrayWithConstraintsClassView) PropertyNonEmptyStrings() (ClassPropertyView, error) {
 	return t.inner.Property("nonEmptyStrings")
 }
 
-func (t *ArrayWithConstraintsClassView) LimitedInts() (ClassPropertyView, error) {
+func (t *ArrayWithConstraintsClassView) PropertyLimitedInts() (ClassPropertyView, error) {
 	return t.inner.Property("limitedInts")
 }
 
-func (t *ArrayWithConstraintsClassView) PositiveFloats() (ClassPropertyView, error) {
+func (t *ArrayWithConstraintsClassView) PropertyPositiveFloats() (ClassPropertyView, error) {
 	return t.inner.Property("positiveFloats")
 }
 
@@ -49,6 +49,10 @@ func (t *TypeBuilder) ArrayWithConstraints() (*ArrayWithConstraintsClassView, er
 		return nil, err
 	}
 	return &ArrayWithConstraintsClassView{inner: bld}, nil
+}
+
+func (t *ArrayWithConstraintsClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
 }
 
 type MixedArraysClassView struct {
@@ -67,23 +71,23 @@ func (t *MixedArraysClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
-func (t *MixedArraysClassView) PrimitiveArray() (ClassPropertyView, error) {
+func (t *MixedArraysClassView) PropertyPrimitiveArray() (ClassPropertyView, error) {
 	return t.inner.Property("primitiveArray")
 }
 
-func (t *MixedArraysClassView) NullableArray() (ClassPropertyView, error) {
+func (t *MixedArraysClassView) PropertyNullableArray() (ClassPropertyView, error) {
 	return t.inner.Property("nullableArray")
 }
 
-func (t *MixedArraysClassView) OptionalItems() (ClassPropertyView, error) {
+func (t *MixedArraysClassView) PropertyOptionalItems() (ClassPropertyView, error) {
 	return t.inner.Property("optionalItems")
 }
 
-func (t *MixedArraysClassView) ArrayOfArrays() (ClassPropertyView, error) {
+func (t *MixedArraysClassView) PropertyArrayOfArrays() (ClassPropertyView, error) {
 	return t.inner.Property("arrayOfArrays")
 }
 
-func (t *MixedArraysClassView) ComplexMixed() (ClassPropertyView, error) {
+func (t *MixedArraysClassView) PropertyComplexMixed() (ClassPropertyView, error) {
 	return t.inner.Property("complexMixed")
 }
 
@@ -93,6 +97,10 @@ func (t *TypeBuilder) MixedArrays() (*MixedArraysClassView, error) {
 		return nil, err
 	}
 	return &MixedArraysClassView{inner: bld}, nil
+}
+
+func (t *MixedArraysClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
 }
 
 type NestedArraysClassView struct {
@@ -111,15 +119,15 @@ func (t *NestedArraysClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
-func (t *NestedArraysClassView) Matrix() (ClassPropertyView, error) {
+func (t *NestedArraysClassView) PropertyMatrix() (ClassPropertyView, error) {
 	return t.inner.Property("matrix")
 }
 
-func (t *NestedArraysClassView) StringMatrix() (ClassPropertyView, error) {
+func (t *NestedArraysClassView) PropertyStringMatrix() (ClassPropertyView, error) {
 	return t.inner.Property("stringMatrix")
 }
 
-func (t *NestedArraysClassView) ThreeDimensional() (ClassPropertyView, error) {
+func (t *NestedArraysClassView) PropertyThreeDimensional() (ClassPropertyView, error) {
 	return t.inner.Property("threeDimensional")
 }
 
@@ -129,6 +137,10 @@ func (t *TypeBuilder) NestedArrays() (*NestedArraysClassView, error) {
 		return nil, err
 	}
 	return &NestedArraysClassView{inner: bld}, nil
+}
+
+func (t *NestedArraysClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
 }
 
 type ObjectArraysClassView struct {
@@ -147,15 +159,15 @@ func (t *ObjectArraysClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
-func (t *ObjectArraysClassView) Users() (ClassPropertyView, error) {
+func (t *ObjectArraysClassView) PropertyUsers() (ClassPropertyView, error) {
 	return t.inner.Property("users")
 }
 
-func (t *ObjectArraysClassView) Products() (ClassPropertyView, error) {
+func (t *ObjectArraysClassView) PropertyProducts() (ClassPropertyView, error) {
 	return t.inner.Property("products")
 }
 
-func (t *ObjectArraysClassView) Tags() (ClassPropertyView, error) {
+func (t *ObjectArraysClassView) PropertyTags() (ClassPropertyView, error) {
 	return t.inner.Property("tags")
 }
 
@@ -165,6 +177,10 @@ func (t *TypeBuilder) ObjectArrays() (*ObjectArraysClassView, error) {
 		return nil, err
 	}
 	return &ObjectArraysClassView{inner: bld}, nil
+}
+
+func (t *ObjectArraysClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
 }
 
 type ProductClassView struct {
@@ -183,23 +199,23 @@ func (t *ProductClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
-func (t *ProductClassView) Id() (ClassPropertyView, error) {
+func (t *ProductClassView) PropertyId() (ClassPropertyView, error) {
 	return t.inner.Property("id")
 }
 
-func (t *ProductClassView) Name() (ClassPropertyView, error) {
+func (t *ProductClassView) PropertyName() (ClassPropertyView, error) {
 	return t.inner.Property("name")
 }
 
-func (t *ProductClassView) Price() (ClassPropertyView, error) {
+func (t *ProductClassView) PropertyPrice() (ClassPropertyView, error) {
 	return t.inner.Property("price")
 }
 
-func (t *ProductClassView) Tags() (ClassPropertyView, error) {
+func (t *ProductClassView) PropertyTags() (ClassPropertyView, error) {
 	return t.inner.Property("tags")
 }
 
-func (t *ProductClassView) InStock() (ClassPropertyView, error) {
+func (t *ProductClassView) PropertyInStock() (ClassPropertyView, error) {
 	return t.inner.Property("inStock")
 }
 
@@ -209,6 +225,10 @@ func (t *TypeBuilder) Product() (*ProductClassView, error) {
 		return nil, err
 	}
 	return &ProductClassView{inner: bld}, nil
+}
+
+func (t *ProductClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
 }
 
 type SimpleArraysClassView struct {
@@ -227,19 +247,19 @@ func (t *SimpleArraysClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
-func (t *SimpleArraysClassView) Strings() (ClassPropertyView, error) {
+func (t *SimpleArraysClassView) PropertyStrings() (ClassPropertyView, error) {
 	return t.inner.Property("strings")
 }
 
-func (t *SimpleArraysClassView) Integers() (ClassPropertyView, error) {
+func (t *SimpleArraysClassView) PropertyIntegers() (ClassPropertyView, error) {
 	return t.inner.Property("integers")
 }
 
-func (t *SimpleArraysClassView) Floats() (ClassPropertyView, error) {
+func (t *SimpleArraysClassView) PropertyFloats() (ClassPropertyView, error) {
 	return t.inner.Property("floats")
 }
 
-func (t *SimpleArraysClassView) Booleans() (ClassPropertyView, error) {
+func (t *SimpleArraysClassView) PropertyBooleans() (ClassPropertyView, error) {
 	return t.inner.Property("booleans")
 }
 
@@ -249,6 +269,10 @@ func (t *TypeBuilder) SimpleArrays() (*SimpleArraysClassView, error) {
 		return nil, err
 	}
 	return &SimpleArraysClassView{inner: bld}, nil
+}
+
+func (t *SimpleArraysClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
 }
 
 type TagClassView struct {
@@ -267,15 +291,15 @@ func (t *TagClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
-func (t *TagClassView) Id() (ClassPropertyView, error) {
+func (t *TagClassView) PropertyId() (ClassPropertyView, error) {
 	return t.inner.Property("id")
 }
 
-func (t *TagClassView) Name() (ClassPropertyView, error) {
+func (t *TagClassView) PropertyName() (ClassPropertyView, error) {
 	return t.inner.Property("name")
 }
 
-func (t *TagClassView) Color() (ClassPropertyView, error) {
+func (t *TagClassView) PropertyColor() (ClassPropertyView, error) {
 	return t.inner.Property("color")
 }
 
@@ -285,6 +309,10 @@ func (t *TypeBuilder) Tag() (*TagClassView, error) {
 		return nil, err
 	}
 	return &TagClassView{inner: bld}, nil
+}
+
+func (t *TagClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
 }
 
 type UserClassView struct {
@@ -303,19 +331,19 @@ func (t *UserClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
-func (t *UserClassView) Id() (ClassPropertyView, error) {
+func (t *UserClassView) PropertyId() (ClassPropertyView, error) {
 	return t.inner.Property("id")
 }
 
-func (t *UserClassView) Name() (ClassPropertyView, error) {
+func (t *UserClassView) PropertyName() (ClassPropertyView, error) {
 	return t.inner.Property("name")
 }
 
-func (t *UserClassView) Email() (ClassPropertyView, error) {
+func (t *UserClassView) PropertyEmail() (ClassPropertyView, error) {
 	return t.inner.Property("email")
 }
 
-func (t *UserClassView) IsActive() (ClassPropertyView, error) {
+func (t *UserClassView) PropertyIsActive() (ClassPropertyView, error) {
 	return t.inner.Property("isActive")
 }
 
@@ -325,4 +353,8 @@ func (t *TypeBuilder) User() (*UserClassView, error) {
 		return nil, err
 	}
 	return &UserClassView{inner: bld}, nil
+}
+
+func (t *UserClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
 }

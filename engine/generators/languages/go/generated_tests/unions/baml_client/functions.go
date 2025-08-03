@@ -42,6 +42,10 @@ func JsonInput(ctx context.Context, x []types.ExistingSystemComponent, opts ...C
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
