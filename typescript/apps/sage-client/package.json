@@ -1,0 +1,41 @@
+{
+  "name": "fern-sage-chatbot",
+  "version": "1.0.0",
+  "description": "TSX React chatbot for Fern documentation",
+  "main": "index.js",
+  "scripts": {
+    "build": "pnpm webpack --mode production",
+    "dev": "pnpm webpack --mode development --watch",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@baml/ui": "workspace:*",
+    "@radix-ui/react-slot": "1.2.3",
+    "algoliasearch": "^5.34.1",
+    "class-variance-authority": "0.7.1",
+    "clsx": "2.1.1",
+    "jotai": "^2.12.5",
+    "lucide-react": "^0.536.0",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "react-instantsearch": "^7.16.2",
+    "react-markdown": "^9.0.1",
+    "react-syntax-highlighter": "^15.5.0",
+    "remark-gfm": "^4.0.0",
+    "tailwind-merge": "^3.3.1",
+    "tw-animate-css": "^1.3.6",
+    "zod": "^4.0.10"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.9",
+    "@types/react-dom": "^19.1.7",
+    "@types/react-syntax-highlighter": "^15.5.13",
+    "css-loader": "^7.1.2",
+    "jotai-devtools": "0.12.0",
+    "style-loader": "^4.0.0",
+    "ts-loader": "^9.4.0",
+    "typescript": "^5.0.0",
+    "webpack": "^5.88.0",
+    "webpack-cli": "^5.1.4"
+  }
+}

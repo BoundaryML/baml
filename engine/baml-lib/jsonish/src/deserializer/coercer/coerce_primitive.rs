@@ -43,6 +43,74 @@ impl TypeCoercer for TypeValue {
             TypeValue::Media(BamlMediaType::Video) => Err(ctx.error_video_not_supported()),
         }
     }
+
+    fn try_cast(
+        &self,
+        ctx: &ParsingContext,
+        target: &TypeIR,
+        value: Option<&crate::jsonish::Value>,
+    ) -> Option<BamlValueWithFlags> {
+        // Early exit for null values
+        if value.is_none() {
+            return match self {
+                TypeValue::Null => {
+                    Some(BamlValueWithFlags::Null(target.clone(), Default::default()))
+                }
+                _ => None,
+            };
+        }
+
+        let mut result = match self {
+            TypeValue::String => match value {
+                Some(crate::jsonish::Value::String(s, _)) => {
+                    Some(BamlValueWithFlags::String((s.to_string(), target).into()))
+                }
+                _ => None,
+            },
+            TypeValue::Int => match value {
+                Some(crate::jsonish::Value::Number(n, _)) => n
+                    .as_i64()
+                    .map(|i| BamlValueWithFlags::Int((i, target).into())),
+                _ => None,
+            },
+            TypeValue::Float => match value {
+                Some(crate::jsonish::Value::Number(n, _)) => n
+                    .as_f64()
+                    .map(|f| BamlValueWithFlags::Float((f, target).into())),
+                _ => None,
+            },
+            TypeValue::Bool => match value {
+                Some(crate::jsonish::Value::Boolean(b)) => {
+                    Some(BamlValueWithFlags::Bool((*b, target).into()))
+                }
+                _ => None,
+            },
+            TypeValue::Null => match value {
+                Some(crate::jsonish::Value::Null) | None => {
+                    Some(BamlValueWithFlags::Null(target.clone(), Default::default()))
+                }
+                _ => None,
+            },
+            TypeValue::Media(_) => None,
+        };
+
+        // Check completion state exactly like coerce methods do
+        if let Some(v) = value {
+            match v.completion_state() {
+                CompletionState::Complete => {}
+                CompletionState::Incomplete => {
+                    result
+                        .iter_mut()
+                        .for_each(|baml_value| baml_value.add_flag(Flag::Incomplete));
+                }
+                CompletionState::Pending => {
+                    unreachable!("jsonish::Value may never be in a Pending state.")
+                }
+            }
+        }
+
+        result
+    }
 }
 
 fn coerce_null(
@@ -273,6 +341,7 @@ pub(super) fn coerce_bool(
                             vec!["false".into(), "False".into(), "FALSE".into()],
                         ),
                     ],
+                    true,
                 ) {
                     Ok(val) => match val.value().as_str() {
                         "true" => Ok(BamlValueWithFlags::Bool(

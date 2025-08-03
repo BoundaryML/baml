@@ -159,9 +159,6 @@ pub fn create_server_routes(
             })
         });
 
-    // Static file serving for user files (e.g., images, data)
-    let static_files = warp::path("static").and(warp::fs::dir("."));
-
     // Static file serving - either real files or error page
     let spa = warp::path::full()
         .and(warp::get())
@@ -206,7 +203,6 @@ pub fn create_server_routes(
 
     ws_route
         .or(rpc_route)
-        .or(static_files)
         .or(spa)
         .with(warp::log("playground-server"))
 }

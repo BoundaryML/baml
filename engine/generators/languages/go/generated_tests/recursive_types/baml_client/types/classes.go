@@ -42,7 +42,9 @@ func (c *UseMyUnion) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.U = baml.Decode(valueHolder).Interface().(*Union3IntOrRecursive1OrString)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class UseMyUnion", key))
+
 		}
 	}
 

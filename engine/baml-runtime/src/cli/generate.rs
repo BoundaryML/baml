@@ -30,7 +30,11 @@ impl GenerateArgs {
     }
 
     fn generate_clients(&self, defaults: super::RuntimeCliDefaults) -> Result<()> {
-        let runtime = BamlRuntime::from_directory(&self.from, std::env::vars().collect())
+        // Set BAML_GENERATE to prevent starting the tracing publisher
+        let mut env_vars: std::collections::HashMap<String, String> = std::env::vars().collect();
+        env_vars.insert("BAML_GENERATE".to_string(), "1".to_string());
+
+        let runtime = BamlRuntime::from_directory(&self.from, env_vars)
             .context("Failed to build BAML runtime")?;
         let src_files = baml_src_files(&self.from)
             .context("Failed while searching for .baml files in baml_src/")?;

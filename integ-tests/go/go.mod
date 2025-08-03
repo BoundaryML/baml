@@ -5,6 +5,7 @@ go 1.24.0
 require (
 	github.com/boundaryml/baml v0.202.1
 	github.com/ghetzel/testify v1.4.1
+	github.com/stretchr/testify v1.10.0
 )
 
 require (
@@ -12,6 +13,7 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	google.golang.org/protobuf v1.36.6 // indirect
 	gopkg.in/yaml.v2 v2.2.2 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
 replace github.com/boundaryml/baml => ../../

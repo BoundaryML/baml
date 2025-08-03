@@ -153,7 +153,7 @@ func (u *Union3BoolOrIntOrString) IsString() bool {
 	return u.variant == "String"
 }
 
-func (u *Union3BoolOrIntOrString) String() *string {
+func (u *Union3BoolOrIntOrString) AsString() *string {
 	if u.variant != "String" {
 		return nil
 	}
@@ -183,7 +183,7 @@ func (u *Union3BoolOrIntOrString) IsInt() bool {
 	return u.variant == "Int"
 }
 
-func (u *Union3BoolOrIntOrString) Int() *int64 {
+func (u *Union3BoolOrIntOrString) AsInt() *int64 {
 	if u.variant != "Int" {
 		return nil
 	}
@@ -213,7 +213,7 @@ func (u *Union3BoolOrIntOrString) IsBool() bool {
 	return u.variant == "Bool"
 }
 
-func (u *Union3BoolOrIntOrString) Bool() *bool {
+func (u *Union3BoolOrIntOrString) AsBool() *bool {
 	if u.variant != "Bool" {
 		return nil
 	}
@@ -352,7 +352,7 @@ func (u *Union3ProductOrTagOrUser) IsUser() bool {
 	return u.variant == "User"
 }
 
-func (u *Union3ProductOrTagOrUser) User() *User {
+func (u *Union3ProductOrTagOrUser) AsUser() *User {
 	if u.variant != "User" {
 		return nil
 	}
@@ -382,7 +382,7 @@ func (u *Union3ProductOrTagOrUser) IsProduct() bool {
 	return u.variant == "Product"
 }
 
-func (u *Union3ProductOrTagOrUser) Product() *Product {
+func (u *Union3ProductOrTagOrUser) AsProduct() *Product {
 	if u.variant != "Product" {
 		return nil
 	}
@@ -412,7 +412,7 @@ func (u *Union3ProductOrTagOrUser) IsTag() bool {
 	return u.variant == "Tag"
 }
 
-func (u *Union3ProductOrTagOrUser) Tag() *Tag {
+func (u *Union3ProductOrTagOrUser) AsTag() *Tag {
 	if u.variant != "Tag" {
 		return nil
 	}
@@ -573,7 +573,7 @@ func (u *Union4BoolOrFloatOrIntOrString) IsString() bool {
 	return u.variant == "String"
 }
 
-func (u *Union4BoolOrFloatOrIntOrString) String() *string {
+func (u *Union4BoolOrFloatOrIntOrString) AsString() *string {
 	if u.variant != "String" {
 		return nil
 	}
@@ -605,7 +605,7 @@ func (u *Union4BoolOrFloatOrIntOrString) IsInt() bool {
 	return u.variant == "Int"
 }
 
-func (u *Union4BoolOrFloatOrIntOrString) Int() *int64 {
+func (u *Union4BoolOrFloatOrIntOrString) AsInt() *int64 {
 	if u.variant != "Int" {
 		return nil
 	}
@@ -637,7 +637,7 @@ func (u *Union4BoolOrFloatOrIntOrString) IsFloat() bool {
 	return u.variant == "Float"
 }
 
-func (u *Union4BoolOrFloatOrIntOrString) Float() *float64 {
+func (u *Union4BoolOrFloatOrIntOrString) AsFloat() *float64 {
 	if u.variant != "Float" {
 		return nil
 	}
@@ -669,7 +669,7 @@ func (u *Union4BoolOrFloatOrIntOrString) IsBool() bool {
 	return u.variant == "Bool"
 }
 
-func (u *Union4BoolOrFloatOrIntOrString) Bool() *bool {
+func (u *Union4BoolOrFloatOrIntOrString) AsBool() *bool {
 	if u.variant != "Bool" {
 		return nil
 	}

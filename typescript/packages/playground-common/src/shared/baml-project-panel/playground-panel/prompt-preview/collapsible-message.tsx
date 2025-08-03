@@ -3,17 +3,17 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@baml/ui/collapsible';
+import { CopyButton } from '@baml/ui/custom/copy-button';
 import { cn } from '@baml/ui/lib/utils';
 import type {
   WasmChatMessage,
   WasmTestCase,
 } from '@gloo-ai/baml-schema-wasm-web';
-import { ChevronDown, ChevronsUpDown, ChevronUp } from 'lucide-react';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import { useState } from 'react';
 import { getFirstLine } from './highlight-utils';
 import { PromptStats } from './prompt-stats';
 import { RenderPart } from './render-part';
-import { CopyButton } from '@baml/ui/custom/copy-button';
 
 interface CollapsibleMessageProps {
   part: WasmChatMessage;
@@ -61,7 +61,7 @@ export const CollapsibleMessage: React.FC<CollapsibleMessageProps> = ({
 
   return (
     <div
-      className={cn('relative border-l-4 pl-2 rounded', {
+      className={cn('relative border-l-4 pl-2 rounded min-w-0', {
         'border-chart-1': part.role === 'assistant',
         'border-chart-2': part.role === 'user',
         'border-chart-3': part.role === 'system',
@@ -86,11 +86,12 @@ export const CollapsibleMessage: React.FC<CollapsibleMessageProps> = ({
               <div className="flex items-center gap-3 flex-shrink-0">
                 {/* Copy button */}
                 <CopyButton
-                  text={part.parts.map((p: any) => p.as_text?.() ?? '').join('\n')}
+                  text={part.parts
+                    .map((p: any) => p.as_text?.() ?? '')
+                    .join('\n')}
                   size="sm"
                   variant="outline"
                   aria-label="Copy message"
-
                 />
                 {/* Expand/collapse icon */}
                 {open ? (
@@ -108,13 +109,14 @@ export const CollapsibleMessage: React.FC<CollapsibleMessageProps> = ({
             )}
           </div>
         </CollapsibleTrigger>
-        <CollapsibleContent>
+        <CollapsibleContent className="min-w-0">
           {part.parts.map((part, index) => (
             <div
               key={`${partIndex}-${
                 // biome-ignore lint/suspicious/noArrayIndexKey: <explanation>
                 index
               }`}
+              className="min-w-0"
             >
               <RenderPart part={part} testCase={testCase} />
             </div>

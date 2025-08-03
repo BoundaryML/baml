@@ -1,7 +1,10 @@
 use std::borrow::Cow;
 
 use baml_rpc::{runtime_api, NarrowingType};
-use baml_types::{ir_type::TypeGeneric, type_meta, BamlValueWithMeta, Constraint, HasType};
+use baml_types::{
+    baml_value::TypeQuery, ir_type::TypeGeneric, type_meta, BamlValueWithMeta, Constraint, HasType,
+    StreamingMode, TypeValue,
+};
 
 use super::{IntoRpcEvent, TypeLookup};
 
@@ -54,8 +57,18 @@ impl<'a, T: HasType<type_meta::NonStreaming>> IntoRpcEvent<'a, runtime_api::Baml
                     baml_rpc::TypeReferenceWithMetadata::Union { union_type, .. } => match value {
                         baml_rpc::runtime_api::ValueContent::Null => runtime_api::TypeIndex::Null,
                         _ => {
-                            baml_log::warn!("Union type index is not set! Please talk to vbv about how to fix this.");
-                            runtime_api::TypeIndex::Index(0)
+                            // Find which type in the union matches the actual value type
+                            match union_type.types.iter().position(|union_variant_type| {
+                                matches_value_with_rpc_type(self, union_variant_type, lookup)
+                            }) {
+                                Some(idx) => runtime_api::TypeIndex::Index(idx),
+                                None => {
+                                    baml_log::warn!(
+                                        "Could not determine union variant index for value type."
+                                    );
+                                    runtime_api::TypeIndex::NotFound
+                                }
+                            }
                         }
                     },
                     _ => runtime_api::TypeIndex::NotUnion,
@@ -65,6 +78,72 @@ impl<'a, T: HasType<type_meta::NonStreaming>> IntoRpcEvent<'a, runtime_api::Baml
             },
             value,
         }
+    }
+}
+
+// Helper function to check if a BamlValueWithMeta matches a specific RPC type reference
+fn matches_value_with_rpc_type<T: HasType<type_meta::NonStreaming>>(
+    value: &BamlValueWithMeta<T>,
+    rpc_type_ref: &baml_rpc::TypeReferenceWithMetadata<baml_rpc::TypeMetadata>,
+    lookup: &(impl TypeLookup + ?Sized),
+) -> bool {
+    use baml_rpc::TypeReferenceWithMetadata;
+    match (value, rpc_type_ref) {
+        (BamlValueWithMeta::String(_, _), TypeReferenceWithMetadata::String(_)) => true,
+        (BamlValueWithMeta::Int(_, _), TypeReferenceWithMetadata::Int(_)) => true,
+        (BamlValueWithMeta::Float(_, _), TypeReferenceWithMetadata::Float(_)) => true,
+        (BamlValueWithMeta::Bool(_, _), TypeReferenceWithMetadata::Bool(_)) => true,
+        (BamlValueWithMeta::Null(_), _) => true, // Null can match any type in a union
+        (
+            BamlValueWithMeta::Enum(enum_name, _, _),
+            TypeReferenceWithMetadata::Enum { type_id, .. },
+        ) => {
+            // Compare the enum name with the type_id name
+            let type_id_name = type_id.0.to_string();
+            enum_name == &type_id_name
+        }
+        (
+            BamlValueWithMeta::Class(class_name, _, _),
+            TypeReferenceWithMetadata::Class { type_id, .. },
+        ) => {
+            // Compare the class name with the type_id name
+            let type_id_name = type_id.0.to_string();
+            class_name == &type_id_name
+        }
+        (BamlValueWithMeta::List(_, _), TypeReferenceWithMetadata::List(_, _)) => true,
+        (BamlValueWithMeta::Map(_, _), TypeReferenceWithMetadata::Map { .. }) => true,
+        (BamlValueWithMeta::Media(media, _), TypeReferenceWithMetadata::Media(media_type, _)) => {
+            matches!(
+                (&media.media_type, media_type),
+                (
+                    baml_types::BamlMediaType::Image,
+                    baml_rpc::MediaTypeDefinition::Image
+                ) | (
+                    baml_types::BamlMediaType::Audio,
+                    baml_rpc::MediaTypeDefinition::Audio
+                ) | (
+                    baml_types::BamlMediaType::Pdf,
+                    baml_rpc::MediaTypeDefinition::Pdf
+                ) | (
+                    baml_types::BamlMediaType::Video,
+                    baml_rpc::MediaTypeDefinition::Video
+                )
+            )
+        }
+        // Also handle literal values
+        (
+            BamlValueWithMeta::String(s, _),
+            TypeReferenceWithMetadata::Literal(baml_rpc::LiteralTypeDefinition::String(lit_s), _),
+        ) => s == lit_s,
+        (
+            BamlValueWithMeta::Int(i, _),
+            TypeReferenceWithMetadata::Literal(baml_rpc::LiteralTypeDefinition::Int(lit_i), _),
+        ) => i == lit_i,
+        (
+            BamlValueWithMeta::Bool(b, _),
+            TypeReferenceWithMetadata::Literal(baml_rpc::LiteralTypeDefinition::Bool(lit_b), _),
+        ) => b == lit_b,
+        _ => false,
     }
 }
 

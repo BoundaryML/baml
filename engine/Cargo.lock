@@ -839,7 +839,7 @@ dependencies = [
 
 [[package]]
 name = "baml-cli"
-version = "0.202.1"
+version = "0.203.1"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -928,7 +928,7 @@ dependencies = [
 
 [[package]]
 name = "baml-derive"
-version = "0.202.1"
+version = "0.203.1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -949,7 +949,7 @@ dependencies = [
 
 [[package]]
 name = "baml-lib"
-version = "0.202.1"
+version = "0.203.1"
 dependencies = [
  "base64 0.13.1",
  "dissimilar",
@@ -965,7 +965,7 @@ dependencies = [
 
 [[package]]
 name = "baml-log"
-version = "0.202.1"
+version = "0.203.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -979,7 +979,7 @@ dependencies = [
 
 [[package]]
 name = "baml-lsp-types"
-version = "0.202.1"
+version = "0.203.1"
 dependencies = [
  "anyhow",
  "baml-runtime",
@@ -1009,7 +1009,7 @@ dependencies = [
 
 [[package]]
 name = "baml-python-ffi"
-version = "0.202.1"
+version = "0.203.1"
 dependencies = [
  "anyhow",
  "baml-cli",
@@ -1086,7 +1086,7 @@ dependencies = [
 
 [[package]]
 name = "baml-runtime"
-version = "0.202.1"
+version = "0.203.1"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -1206,7 +1206,7 @@ dependencies = [
 
 [[package]]
 name = "baml-schema-build"
-version = "0.202.1"
+version = "0.203.1"
 dependencies = [
  "anyhow",
  "baml-ids",
@@ -1251,7 +1251,7 @@ dependencies = [
 
 [[package]]
 name = "baml-types"
-version = "0.202.1"
+version = "0.203.1"
 dependencies = [
  "anyhow",
  "baml-ids",
@@ -1276,7 +1276,7 @@ dependencies = [
 
 [[package]]
 name = "baml-typescript-ffi"
-version = "0.202.1"
+version = "0.203.1"
 dependencies = [
  "anyhow",
  "baml-cli",
@@ -1300,7 +1300,7 @@ dependencies = [
 
 [[package]]
 name = "baml_cffi"
-version = "0.202.1"
+version = "0.203.1"
 dependencies = [
  "anyhow",
  "baml-cli",
@@ -1311,6 +1311,7 @@ dependencies = [
  "baml_cffi_macros",
  "cbindgen",
  "env_logger",
+ "indexmap 2.9.0",
  "internal-baml-codegen",
  "libc",
  "once_cell",
@@ -1425,8 +1426,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "boundary-udf"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "baml-types",
+ "chrono",
+ "indexmap 2.9.0",
+ "insta",
+ "internal-baml-core",
+ "internal-baml-jinja",
+ "log",
+ "minijinja",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "thiserror 2.0.12",
+]
+
+[[package]]
 name = "bstd"
-version = "0.202.1"
+version = "0.203.1"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -2225,7 +2245,7 @@ dependencies = [
 
 [[package]]
 name = "dir-writer"
-version = "0.202.1"
+version = "0.203.1"
 dependencies = [
  "anyhow",
  "baml-log",
@@ -2233,7 +2253,7 @@ dependencies = [
  "filetime",
  "indexmap 2.9.0",
  "internal-baml-core",
- "pathdiff 0.2.3",
+ "pathdiff 0.1.0",
  "serde_json",
  "sugar_path",
  "walkdir",
@@ -2741,7 +2761,7 @@ dependencies = [
 
 [[package]]
 name = "generators-go"
-version = "0.202.1"
+version = "0.203.1"
 dependencies = [
  "anyhow",
  "askama",
@@ -2754,7 +2774,7 @@ dependencies = [
 
 [[package]]
 name = "generators-lib"
-version = "0.202.1"
+version = "0.203.1"
 dependencies = [
  "anyhow",
  "baml-log",
@@ -2771,7 +2791,7 @@ dependencies = [
 
 [[package]]
 name = "generators-openapi"
-version = "0.202.1"
+version = "0.203.1"
 dependencies = [
  "anyhow",
  "askama",
@@ -2790,7 +2810,7 @@ dependencies = [
 
 [[package]]
 name = "generators-python"
-version = "0.202.1"
+version = "0.203.1"
 dependencies = [
  "anyhow",
  "askama",
@@ -2803,7 +2823,7 @@ dependencies = [
 
 [[package]]
 name = "generators-ruby"
-version = "0.202.1"
+version = "0.203.1"
 dependencies = [
  "anyhow",
  "askama",
@@ -2816,7 +2836,7 @@ dependencies = [
 
 [[package]]
 name = "generators-typescript"
-version = "0.202.1"
+version = "0.203.1"
 dependencies = [
  "anyhow",
  "askama",
@@ -3534,6 +3554,7 @@ checksum = "154934ea70c58054b556dd430b99a98c2a7ff5309ac9891597e339b5c28f4371"
 dependencies = [
  "console",
  "once_cell",
+ "serde",
  "similar",
 ]
 
@@ -3552,7 +3573,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-ast"
-version = "0.202.1"
+version = "0.203.1"
 dependencies = [
  "anyhow",
  "baml-types",
@@ -3573,7 +3594,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-codegen"
-version = "0.202.1"
+version = "0.203.1"
 dependencies = [
  "anyhow",
  "askama",
@@ -3602,7 +3623,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-core"
-version = "0.202.1"
+version = "0.203.1"
 dependencies = [
  "anyhow",
  "baml-derive",
@@ -3642,7 +3663,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-diagnostics"
-version = "0.202.1"
+version = "0.203.1"
 dependencies = [
  "anyhow",
  "colored 2.2.0",
@@ -3655,7 +3676,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-jinja"
-version = "0.202.1"
+version = "0.203.1"
 dependencies = [
  "anyhow",
  "askama",
@@ -3676,7 +3697,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-jinja-types"
-version = "0.202.1"
+version = "0.203.1"
 dependencies = [
  "anyhow",
  "askama",
@@ -3695,7 +3716,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-parser-database"
-version = "0.202.1"
+version = "0.203.1"
 dependencies = [
  "anyhow",
  "baml-derive",
@@ -3721,7 +3742,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-prompt-parser"
-version = "0.202.1"
+version = "0.203.1"
 dependencies = [
  "internal-baml-ast",
  "internal-baml-diagnostics",
@@ -3733,7 +3754,7 @@ dependencies = [
 
 [[package]]
 name = "internal-llm-client"
-version = "0.202.1"
+version = "0.203.1"
 dependencies = [
  "anyhow",
  "aws-config",
@@ -3916,20 +3937,23 @@ checksum = "9dbbfed4e59ba9750e15ba154fdfd9329cee16ff3df539c2666b70f58cc32105"
 
 [[package]]
 name = "jsonish"
-version = "0.202.1"
+version = "0.203.1"
 dependencies = [
  "anyhow",
  "assert-json-diff",
  "baml-types",
  "bstd",
  "colored 2.2.0",
+ "cowstr",
  "criterion",
  "either",
+ "getrandom 0.2.16",
  "indexmap 2.9.0",
  "indoc",
  "internal-baml-core",
  "internal-baml-jinja",
  "log",
+ "peak_alloc",
  "pest",
  "regex",
  "serde",
@@ -3937,6 +3961,10 @@ dependencies = [
  "strsim 0.10.0",
  "test-log",
  "thiserror 2.0.12",
+ "unicode-normalization",
+ "uuid",
+ "wasm-bindgen-test",
+ "web-sys",
 ]
 
 [[package]]
@@ -3997,7 +4025,7 @@ dependencies = [
 
 [[package]]
 name = "language-server"
-version = "0.202.1"
+version = "0.203.1"
 dependencies = [
  "anyhow",
  "baml-log",
@@ -4113,7 +4141,7 @@ checksum = "241eaef5fd12c88705a01fc1066c48c4b36e0dd4377dcdc7ec3942cea7a69956"
 
 [[package]]
 name = "llm-response-parser"
-version = "0.202.1"
+version = "0.203.1"
 dependencies = [
  "anyhow",
  "serde",
@@ -4819,6 +4847,12 @@ name = "pathdiff"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "df94ce210e5bc13cb6651479fa48d14f601d9858cfe0467f43ae157023b938d3"
+
+[[package]]
+name = "peak_alloc"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "29c4e8e2dd832fd76346468f822e4e600d30ba4e5aa545a128abf12cfae7ea3e"
 
 [[package]]
 name = "pem"
@@ -6675,7 +6709,7 @@ checksum = "8f50febec83f5ee1df3015341d8bd429f2d1cc62bcba7ea2076759d315084683"
 
 [[package]]
 name = "test-harness"
-version = "0.202.1"
+version = "0.203.1"
 dependencies = [
  "anyhow",
  "baml-log",
@@ -6834,6 +6868,21 @@ dependencies = [
  "serde",
  "serde_json",
 ]
+
+[[package]]
+name = "tinyvec"
+version = "1.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "09b3661f17e86524eccd4371ab0429194e0d7c008abb45f7a7495b1719463c71"
+dependencies = [
+ "tinyvec_macros",
+]
+
+[[package]]
+name = "tinyvec_macros"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "tokio"
@@ -7197,6 +7246,15 @@ name = "unicode-linebreak"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3b09c83c3c29d37506a3e260c08c03743a6bb66a9cd432c6934ab501a190571f"
+
+[[package]]
+name = "unicode-normalization"
+version = "0.1.24"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5033c97c4262335cded6d6fc3e5c18ab755e1a3dc96376350f3d8e9f009ad956"
+dependencies = [
+ "tinyvec",
+]
 
 [[package]]
 name = "unicode-segmentation"

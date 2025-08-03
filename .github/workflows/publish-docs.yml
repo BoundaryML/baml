@@ -1,21 +1,107 @@
 name: Publish Docs
 
+concurrency:
+  # No suffix specified - in reusable workflows we need a statically-defined suffix
+  # to prevent workflow_call workflows from triggering a concurrency deadlock
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
+  pull_request:
   push:
     branches:
       - canary
 
 jobs:
-  run:
+  docs:
     runs-on: ubuntu-latest
+    permissions: write-all
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Setup Node.js and pnpm
+        uses: ./.github/actions/setup-node
+        with:
+          install-dependencies: false
+
       - name: Install Fern
         run: npm install -g fern-api
 
-      - name: Publish Docs
+      - name: Install dependencies and build custom.js
+        working-directory: ./typescript/apps/sage-client
+        run: pnpm install && pnpm run build
+
+      - name: Generate preview URL
+        id: generate-docs
         env:
           FERN_TOKEN: ${{ secrets.FERN_TOKEN }}
-        run: fern generate --docs
+        run: |
+          fern check --strict-broken-links
+          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/canary" ]; then
+            OUTPUT=$(fern generate --docs 2>&1) || true
+          else
+            OUTPUT=$(fern generate --docs --preview 2>&1) || true
+          fi
+          echo "$OUTPUT"
+          URL=$(echo "$OUTPUT" | grep -oP 'Published docs to \K.*(?= \()')
+          echo "🌿 Preview your docs: $URL" | tee preview_url.txt
+
+      - name: Comment URL in PR
+        if: github.event_name == 'pull_request'
+        uses: thollander/actions-comment-pull-request@v3.0.1
+        with:
+          file-path: preview_url.txt
+
+  backend:
+    runs-on: ubuntu-latest
+    permissions: write-all
+    defaults:
+      run:
+        working-directory: ../sage-backend
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js and pnpm
+        uses: ./.github/actions/setup-node
+        with:
+          install-dependencies: false
+
+      - name: Install Fern
+        working-directory: .
+        run: npm install -g fern-api
+
+      - name: Pull sage-backend out of monorepo
+        working-directory: ./typescript
+        run: pnpm --filter=sage-backend deploy ../sage-backend
+
+      - name: Install dependencies and build
+        run: |
+          pnpm install
+          pnpm baml-cli generate
+          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/canary" ]; then
+            echo TARGET_ENV=prod >>$GITHUB_ENV
+          else
+            echo TARGET_ENV=preview >>$GITHUB_ENV
+          fi
+
+      - name: Build Vercel project
+        env:
+          PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
+        run: |
+          pnpm vercel pull --yes --token=${{ secrets.VERCEL_TOKEN_SAM }}
+          pnpm vercel build --target $TARGET_ENV --token=${{ secrets.VERCEL_TOKEN_SAM }}
+
+      - name: Deploy preview backend
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_SAGE_BACKEND }}
+        run: |
+          pnpm vercel deploy --target $TARGET_ENV --prebuilt --token=${{ secrets.VERCEL_TOKEN_SAM }} | tee preview_url.txt
+
+      - name: Comment URL in PR
+        if: github.event_name == 'pull_request'
+        uses: thollander/actions-comment-pull-request@v3.0.1
+        with:
+          file-path: ../sage-backend/preview_url.txt

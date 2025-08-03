@@ -3,7 +3,10 @@ use std::collections::HashSet;
 use indexmap::IndexSet;
 use itertools::Itertools;
 
-use crate::{baml_value::TypeLookups, BamlMediaType, ConstraintLevel};
+use crate::{
+    baml_value::{TypeLookups, TypeLookupsMeta},
+    BamlMediaType, ConstraintLevel,
+};
 
 mod builder;
 mod converters;
@@ -306,6 +309,37 @@ impl<T> UnionTypeGeneric<T> {
             iter.push(&self.null_type);
         }
         iter
+    }
+}
+
+impl<T: std::cmp::Eq + std::hash::Hash> UnionTypeGeneric<T>
+where
+    TypeGeneric<T>: std::fmt::Display,
+{
+    pub fn selected_type_index(
+        &self,
+        type_to_find: &TypeGeneric<T>,
+        lookup: &impl TypeLookupsMeta<T>,
+    ) -> Result<Option<(usize, Vec<&TypeGeneric<T>>)>, anyhow::Error> {
+        let options = match self.view() {
+            // singles don't apply (only one option)
+            UnionTypeViewGeneric::Null | UnionTypeViewGeneric::Optional(..) => return Ok(None),
+            UnionTypeViewGeneric::OneOf(type_generics) => type_generics,
+            UnionTypeViewGeneric::OneOfOptional(type_generics) => type_generics,
+        };
+
+        for (i, t) in options.iter().enumerate() {
+            if match t {
+                TypeGeneric::RecursiveTypeAlias { name, .. } => {
+                    &TypeLookupsMeta::expand_recursive_type(lookup, name.as_str())? == type_to_find
+                }
+                _ => *t == type_to_find,
+            } {
+                return Ok(Some((i, options)));
+            }
+        }
+
+        Err(anyhow::anyhow!("Failed to find {type_to_find} in union"))
     }
 }
 

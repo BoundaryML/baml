@@ -10,36 +10,25 @@ import {
   DropdownMenuTrigger,
 } from '@baml/ui/dropdown-menu';
 import { cn } from '@baml/ui/lib/utils';
+import { SidebarTrigger } from '@baml/ui/sidebar';
+import { useSidebar } from '@baml/ui/sidebar';
+import { toast } from '@baml/ui/sonner';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@baml/ui/tooltip';
 import { TooltipProvider } from '@baml/ui/tooltip';
 import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai';
-import {
-  BarChart2,
-  Check,
-  Copy,
-  Key,
-  Play,
-  Settings,
-  Split,
-  Workflow,
-} from 'lucide-react';
-import React from 'react';
-import { ThemeToggle } from '../theme/ThemeToggle';
-import {
-  areTestsRunningAtom,
-  selectedItemAtom,
-} from './atoms';
-import { areApiKeysMissingAtom } from '../../../components/api-keys-dialog/atoms';
-import { showApiKeyDialogAtom } from '../../../components/api-keys-dialog/atoms';
-import { proxyUrlAtom } from '../atoms';
+import { Key, Play, Settings } from 'lucide-react';
+import type React from 'react';
 import {
   type BamlConfigAtom,
   bamlConfig,
 } from '../../../baml_wasm_web/bamlConfig';
+import { areApiKeysMissingAtom } from '../../../components/api-keys-dialog/atoms';
+import { showApiKeyDialogAtom } from '../../../components/api-keys-dialog/atoms';
+import { proxyUrlAtom } from '../atoms';
+import { ThemeToggle } from '../theme/ThemeToggle';
 import { vscode } from '../vscode';
-import { toast } from '@baml/ui/sonner';
+import { areTestsRunningAtom, selectedItemAtom, selectionAtom } from './atoms';
 import { FunctionTestName } from './function-test-name';
-import { renderedPromptAtom } from './prompt-preview/prompt-preview-content';
 import { isParallelTestsEnabledAtom } from './prompt-preview/test-panel/atoms';
 import { useRunBamlTests } from './prompt-preview/test-panel/test-runner';
 
@@ -53,18 +42,17 @@ export const displaySettingsAtom = atom({
   showParallelTests: false,
 });
 
+// RunButton component
 const RunButton: React.FC<{ className?: string }> = ({ className }) => {
   const runBamlTests = useRunBamlTests();
   const isRunning = useAtomValue(areTestsRunningAtom);
   const selected = useAtomValue(selectedItemAtom);
+
   return (
     <Button
       variant="default"
       size="xs"
-      className={cn(
-        'items-center bg-purple-500 hover:bg-purple-700 disabled:bg-muted disabled:text-muted-foreground dark:bg-purple-600 text-white dark:hover:bg-purple-800 gap-2',
-        className,
-      )}
+      className={cn('cursor-pointer items-center gap-2 flex-shrink-0 min-w-fit bg-purple-600 hover:bg-purple-700 text-white', className)}
       disabled={isRunning || selected === undefined}
       onClick={() => {
         if (selected) {
@@ -74,8 +62,8 @@ const RunButton: React.FC<{ className?: string }> = ({ className }) => {
         }
       }}
     >
-      <Play className="size-3" />
-      <div className="text-xs hidden md:block">Run Test</div>
+      <Play className="size-4 flex-shrink-0" />
+      <span className="text-sm whitespace-nowrap">Run Test</span>
     </Button>
   );
 };
@@ -84,198 +72,183 @@ export const isClientCallGraphEnabledAtom = atom(false);
 
 export function PreviewToolbar() {
   const selections = useAtomValue(selectedItemAtom);
+  const { selectedFn } = useAtomValue(selectionAtom);
   const setShowApiKeyDialog = useSetAtom(showApiKeyDialogAtom);
+  const { open: isSidebarOpen } = useSidebar();
 
-  const options: {
-    label: string;
-    icon: React.FC<React.SVGProps<SVGSVGElement>>;
-    value: 'tokens';
-  }[] = [{ label: 'Token Counts', icon: BarChart2, value: 'tokens' }];
+  // Detect platform for keyboard shortcut
+  const isMac =
+    typeof window !== 'undefined' &&
+    navigator.userAgent.toUpperCase().indexOf('MAC') >= 0;
+  const sidebarShortcut = isMac ? 'Cmd+U' : 'Ctrl+U';
 
   const areApiKeysMissing = useAtomValue(areApiKeysMissingAtom);
-  const renderedPrompt = useAtomValue(renderedPromptAtom);
-  const [showCopied, setShowCopied] = React.useState(false);
   const [isParallelTestsEnabled, setIsParallelTestsEnabled] = useAtom(
     isParallelTestsEnabledAtom,
   );
   const proxySettings = useAtomValue(proxyUrlAtom);
   const setBamlConfig = useSetAtom(bamlConfig);
 
-  const handleCopy = () => {
-    if (!renderedPrompt) return;
-    navigator.clipboard.writeText(
-      renderedPrompt
-        .as_chat()
-        ?.map(
-          (msg) =>
-            `${msg.role}:\n${msg.parts.map((part) => part.as_text()).join('\n')}`,
-        )
-        .join('\n\n') ?? '',
-    );
-    setShowCopied(true);
-    setTimeout(() => setShowCopied(false), 1500);
+  // Hide text when sidebar is open or on smaller screens
+  const getButtonTextClass = () => {
+    if (isSidebarOpen) {
+      return 'text-sm hidden whitespace-nowrap';
+    }
+    return 'text-sm hidden md:block whitespace-nowrap';
   };
 
   return (
-    <div className="flex flex-col gap-1 overflow-x-clip">
+    <div className="flex flex-col gap-1 overflow-hidden w-full">
       <div
         className={cn(
-          'flex flex-row gap-1 items-center',
-          selections === undefined ? 'justify-end' : 'justify-start',
+          'flex flex-row gap-1 items-center min-w-0 w-full',
+          selectedFn === undefined ? 'justify-end' : 'justify-between',
         )}
       >
-        {selections !== undefined && (
-          <div className="flex flex-row items-center gap-2">
-            <FunctionTestName
-              functionName={selections[0]}
-              testName={selections[1]}
-            />
-            <TooltipProvider>
-              <Tooltip delayDuration={100}>
-                <TooltipTrigger asChild>
-                  <span>
-                    <RunButton className="ml-1" />
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>{`Run ${selections[1]}`}</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            <TooltipProvider>
-              <Tooltip delayDuration={100}>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="xs"
-                    className="flex gap-2 items-center text-muted-foreground/70 hover:text-foreground"
-                    onClick={handleCopy}
-                  >
-                    {showCopied ? (
-                      <Check className="size-4" />
-                    ) : (
-                      <Copy className="size-4" />
-                    )}
-                    {showCopied ? (
-                      <span className="text-sm hidden lg:block">Copied!</span>
-                    ) : (
-                      <span className="text-sm hidden lg:block">
-                        Copy Prompt
-                      </span>
-                    )}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Copy Prompt</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+        {selectedFn !== undefined && (
+          <div className="flex flex-col gap-1 min-w-0 flex-1 overflow-hidden">
+            <div className="flex flex-row items-center gap-2 min-w-0">
+              <div className="min-w-0 flex-1 overflow-hidden">
+                <FunctionTestName
+                  functionName={selectedFn.name}
+                  testName={selections?.[1]}
+                />
+              </div>
+
+              <RunButton />
+            </div>
           </div>
         )}
 
-        <TooltipProvider>
-          <Tooltip delayDuration={100}>
-            <TooltipTrigger asChild>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <TooltipProvider>
+            <Tooltip delayDuration={100}>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  className="flex gap-2 items-center text-muted-foreground/70 relative flex-shrink-0 min-w-fit"
+                  onClick={() => setShowApiKeyDialog(true)}
+                >
+                  <Key className="size-4 flex-shrink-0" />
+                  <span className={getButtonTextClass()}>API Keys</span>
+                  {areApiKeysMissing && (
+                    <div className="absolute top-0 -right-1 w-2 h-2 bg-orange-500 rounded-full" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Manage API Keys</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
                 size="xs"
-                className="flex gap-2 items-center text-muted-foreground/70 ml-auto relative"
-                onClick={() => setShowApiKeyDialog(true)}
+                className="flex gap-2 items-center text-muted-foreground/70 flex-shrink-0 min-w-fit"
               >
-                <Key className="size-4" />
-                <span className="text-sm hidden md:block">API Keys</span>
-                {areApiKeysMissing && (
-                    <div className="absolute top-0 -right-1 w-2 h-2 bg-orange-500 rounded-full" />
-                  )}
+                <Settings className="size-4 flex-shrink-0" />
+                <span className={getButtonTextClass()}>Settings</span>
               </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Manage API Keys</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="xs"
-              className="flex gap-2 items-center text-muted-foreground/70"
-            >
-              <Settings className="size-4" />
-              <span className="text-sm hidden md:block">Settings</span>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
-            {/* <DropdownMenuLabel>Display</DropdownMenuLabel> */}
-            {/* {options.map((option) => (
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="min-w-fit p-0">
+              {/* <DropdownMenuLabel>Display</DropdownMenuLabel> */}
+              {/* {options.map((option) => (
+                <DropdownMenuCheckboxItem
+                  key={option.label}
+                  checked={displaySettings. === option.value}
+                  onCheckedChange={() => setDisplaySettings(option.value)}
+                >
+                  <option.icon className='mr-2 size-4' />
+                  {option.label}
+                </DropdownMenuCheckboxItem>
+              ))} */}
+              {/* <DropdownMenuSeparator /> */}
+              <DropdownMenuLabel className="text-xs px-2 py-1.5">
+                Testing
+              </DropdownMenuLabel>
               <DropdownMenuCheckboxItem
-                key={option.label}
-                checked={displaySettings. === option.value}
-                onCheckedChange={() => setDisplaySettings(option.value)}
+                checked={isParallelTestsEnabled}
+                onCheckedChange={setIsParallelTestsEnabled}
+                className="text-sm px-2 py-1.5 pl-7"
               >
-                <option.icon className='mr-2 size-4' />
-                {option.label}
+                Enable Parallel Testing
               </DropdownMenuCheckboxItem>
-            ))} */}
-            {/* <DropdownMenuSeparator /> */}
-            <DropdownMenuLabel>Testing</DropdownMenuLabel>
-            <DropdownMenuCheckboxItem
-              checked={isParallelTestsEnabled}
-              onCheckedChange={setIsParallelTestsEnabled}
-            >
-              Enable Parallel Testing
-            </DropdownMenuCheckboxItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuLabel>Network</DropdownMenuLabel>
-            <DropdownMenuCheckboxItem
-              checked={proxySettings.proxyEnabled}
-              onCheckedChange={async (checked) => {
-                try {
-                  await vscode.setProxySettings(!!checked);
-                  // Update local config to reflect the change immediately
-                  setBamlConfig((prev: BamlConfigAtom) => ({
-                    ...prev,
-                    config: {
-                      ...prev.config,
-                    },
-                  }));
-                } catch (error) {
-                  console.error('Failed to update proxy settings:', error);
-                  toast.error('Error updating proxy settings', {
-                    description: 'Please try again',
-                  });
-                }
-              }}
-            >
-              <TooltipProvider>
-                <Tooltip delayDuration={300}>
-                  <TooltipTrigger asChild>
-                    <span>VSCode Proxy (CORS bypass)</span>
-                  </TooltipTrigger>
-                  <TooltipContent side="left" className="text-xs w-80">
-                    The BAML playground directly calls the LLM provider's API.
-                    Some providers make it difficult for browsers to call their
-                    API due to CORS restrictions.
-                    <br />
-                    <br />
-                    To get around this, the BAML VSCode extension includes a{' '}
-                    <b>localhost proxy</b> that sits between your browser and the
-                    LLM provider's API.
-                    <br />
-                    <br />
-                    <b>
-                      BAML MAKES NO NETWORK CALLS BEYOND THE LLM PROVIDER'S API
-                      YOU SPECIFY.
-                    </b>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </DropdownMenuCheckboxItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel className="text-xs px-2 py-1.5">
+                Network
+              </DropdownMenuLabel>
+              <DropdownMenuCheckboxItem
+                checked={proxySettings.proxyEnabled}
+                onCheckedChange={async (checked) => {
+                  try {
+                    await vscode.setProxySettings(!!checked);
+                    // Update local config to reflect the change immediately
+                    setBamlConfig((prev: BamlConfigAtom) => ({
+                      ...prev,
+                      config: {
+                        ...prev.config,
+                      },
+                    }));
+                  } catch (error) {
+                    console.error('Failed to update proxy settings:', error);
+                    toast.error('Error updating proxy settings', {
+                      description: 'Please try again',
+                    });
+                  }
+                }}
+                className="text-sm px-2 py-1.5 pl-7"
+              >
+                <TooltipProvider>
+                  <Tooltip delayDuration={300}>
+                    <TooltipTrigger asChild>
+                      <span>VSCode Proxy (CORS bypass)</span>
+                    </TooltipTrigger>
+                    <TooltipContent side="left" className="text-xs w-80">
+                      The BAML playground directly calls the LLM provider's API.
+                      Some providers make it difficult for browsers to call
+                      their API due to CORS restrictions.
+                      <br />
+                      <br />
+                      To get around this, the BAML VSCode extension includes a{' '}
+                      <b>localhost proxy</b> that sits between your browser and
+                      the LLM provider's API.
+                      <br />
+                      <br />
+                      <b>
+                        BAML MAKES NO NETWORK CALLS BEYOND THE LLM PROVIDER'S
+                        API YOU SPECIFY.
+                      </b>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </DropdownMenuCheckboxItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
-        {!isVSCodeEnvironment && <ThemeToggle />}
+          <TooltipProvider>
+            <Tooltip delayDuration={300}>
+              <TooltipTrigger asChild>
+                <SidebarTrigger />
+              </TooltipTrigger>
+              <TooltipContent>
+                <div className="flex items-center gap-2">
+                  <span>
+                    {isSidebarOpen ? 'Close Sidebar' : 'Open Sidebar'}
+                  </span>
+                  <kbd className="pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100">
+                    {sidebarShortcut}
+                  </kbd>
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+
+          {!isVSCodeEnvironment && <ThemeToggle />}
+        </div>
       </div>
 
       <div className="flex items-center space-x-4 w-full" />

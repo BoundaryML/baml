@@ -56,7 +56,7 @@ impl TypeBuilder {
 
     pub fn r#enum(&self, name: &str) -> EnumBuilder {
         EnumBuilder {
-            inner: self.inner.r#enum(name),
+            inner: self.inner.upsert_enum(name),
             name: name.to_string(),
         }
     }
@@ -65,7 +65,7 @@ impl TypeBuilder {
     #[pyo3(name = "class_")]
     pub fn class(&self, name: &str) -> ClassBuilder {
         ClassBuilder {
-            inner: self.inner.class(name),
+            inner: self.inner.upsert_class(name),
             name: name.to_string(),
         }
     }
@@ -154,7 +154,7 @@ impl FieldType {
 #[pymethods]
 impl EnumBuilder {
     pub fn value(&self, name: &str) -> EnumValueBuilder {
-        self.inner.lock().unwrap().value(name).into()
+        self.inner.lock().unwrap().upsert_value(name).into()
     }
 
     #[pyo3(signature = (alias = None))]
@@ -214,7 +214,7 @@ impl ClassBuilder {
     }
 
     pub fn property(&self, name: &str) -> ClassPropertyBuilder {
-        self.inner.lock().unwrap().property(name).into()
+        self.inner.lock().unwrap().upsert_property(name).into()
     }
 }
 
@@ -224,7 +224,7 @@ impl ClassPropertyBuilder {
         self.inner
             .lock()
             .unwrap()
-            .r#type(r#type.inner.lock().unwrap().clone());
+            .set_type(r#type.inner.lock().unwrap().clone());
         self.inner.clone().into()
     }
 

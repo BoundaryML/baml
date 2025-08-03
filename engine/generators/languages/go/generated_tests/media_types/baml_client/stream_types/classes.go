@@ -46,7 +46,9 @@ func (c *MediaAnalysisResult) Decode(holder *cffi.CFFIValueClass, typeMap baml.T
 			c.AnalysisText = baml.Decode(valueHolder).Interface().(*string)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class MediaAnalysisResult", key))
+
 		}
 	}
 
@@ -99,7 +101,9 @@ func (c *MediaArrayAnalysisResult) Decode(holder *cffi.CFFIValueClass, typeMap b
 			c.MediaCount = baml.Decode(valueHolder).Interface().(*int64)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class MediaArrayAnalysisResult", key))
+
 		}
 	}
 
@@ -156,7 +160,9 @@ func (c *MediaMapAnalysisResult) Decode(holder *cffi.CFFIValueClass, typeMap bam
 			c.Keys = baml.Decode(valueHolder).Interface().([]string)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class MediaMapAnalysisResult", key))
+
 		}
 	}
 
@@ -235,7 +241,9 @@ func (c *MixedMediaAnalysisResult) Decode(holder *cffi.CFFIValueClass, typeMap b
 			c.MetadataKeys = baml.Decode(valueHolder).Interface().([]string)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class MixedMediaAnalysisResult", key))
+
 		}
 	}
 
@@ -304,7 +312,9 @@ func (c *OptionalMediaAnalysisResult) Decode(holder *cffi.CFFIValueClass, typeMa
 			c.MissingMediaTypes = baml.Decode(valueHolder).Interface().([]string)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class OptionalMediaAnalysisResult", key))
+
 		}
 	}
 

@@ -1,5 +1,7 @@
 'use client';
-import { filesAtom } from '@baml/playground-common';
+import { filesAtom, useWaitForWasm } from '@baml/playground-common';
+import { PromptPreview } from '@baml/playground-common/prompt-preview';
+import { JotaiProvider } from '@baml/playground-common/jotai-provider';
 import { ResizableHandle, ResizablePanelGroup } from '@baml/ui/resizable';
 import { ResizablePanel } from '@baml/ui/resizable';
 import { ScrollArea } from '@baml/ui/scroll-area';
@@ -60,10 +62,6 @@ const CustomErrorBoundary: React.FC<{ children: React.ReactNode; message?: strin
 };
 
 // Placeholder components
-const JotaiProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  return <>{children}</>;
-};
-
 const CodeMirrorViewer: React.FC<any> = ({ fileContent, onContentChange }) => {
   return (
     <textarea
@@ -71,14 +69,6 @@ const CodeMirrorViewer: React.FC<any> = ({ fileContent, onContentChange }) => {
       onChange={(e) => onContentChange(e.target.value)}
       className="w-full h-full p-4 font-mono text-sm bg-transparent border-none outline-none resize-none"
     />
-  );
-};
-
-const PromptPreview: React.FC = () => {
-  return (
-    <div className="flex items-center justify-center w-full h-full">
-      <p className="text-muted-foreground">Prompt preview coming soon...</p>
-    </div>
   );
 };
 
@@ -92,9 +82,21 @@ interface EmbedComponentProps {
 }
 
 export default function EmbedComponent({ bamlContent }: EmbedComponentProps) {
+  return (
+    <JotaiProvider>
+      <EmbedComponentInner bamlContent={bamlContent} />
+    </JotaiProvider>
+  );
+}
+
+function EmbedComponentInner({ bamlContent }: EmbedComponentProps) {
   const [files, setFiles] = useAtom(filesAtom);
   const [isLoading, setIsLoading] = useState(true);
-  const activeFileName = useAtomValue(activeFileNameAtom);
+  const isWasmReady = useWaitForWasm();
+  const activeFileNameAtomValue = useAtomValue(activeFileNameAtom);
+
+  // Use fallback active file name when WASM is not ready
+  const activeFileName = isWasmReady ? activeFileNameAtomValue : 'main.baml';
 
   useEffect(() => {
     // Set the files with the BAML content passed from the server
@@ -104,13 +106,16 @@ export default function EmbedComponent({ bamlContent }: EmbedComponentProps) {
     setIsLoading(false);
   }, [bamlContent, setFiles]);
 
-  if (isLoading) {
+  // Wait for WASM to be ready before rendering
+  if (isLoading || !isWasmReady) {
     return <div className="text-white">Loading BAML file...</div>;
   }
 
   return (
-    <div className="flex justify-center items-center w-screen h-screen bg-background">
-      <EventListener />
+    <div className="flex justify-center items-center w-screen h-screen bg-background relative">
+      <div className="absolute bottom-0 right-4 z-50">
+        <EventListener />
+      </div>
       {/* <h1 className='text-xl font-bold text-gray-500'>This is an embeddable React Component!</h1> */}
       {/* <p className='text-gray-600'>You can use this inside an iframe.</p> */}
       <ResizablePanelGroup
@@ -118,29 +123,27 @@ export default function EmbedComponent({ bamlContent }: EmbedComponentProps) {
         direction="horizontal"
       >
         <ResizablePanel defaultSize={50}>
-          <div className="flex pl-1 w-full h-full tour-editor dark:bg-muted/70">
-            <ScrollArea className="w-full h-full">
-              {activeFileName && (
-                <CodeMirrorViewer
-                  lang="baml"
-                  fileContent={{
-                    code: files[activeFileName] || '',
-                    language: 'baml',
-                    id: activeFileName,
-                  }}
-                  hideLineNumbers={true}
-                  shouldScrollDown={false}
-                  onContentChange={(v: string) => {
-                    const newFiles: Record<string, string> = {};
-                    Object.entries(files).map(([key, value]) => {
-                      const newVal = key === activeFileName ? v : value;
-                      newFiles[key] = newVal;
-                    });
-                    setFiles(newFiles);
-                  }}
-                />
-              )}
-            </ScrollArea>
+          <div className="flex pl-1 w-full h-full tour-editor dark:bg-muted/70 overflow-y-auto">
+            {activeFileName && (
+              <CodeMirrorViewer
+                lang="baml"
+                fileContent={{
+                  code: files[activeFileName] || '',
+                  language: 'baml',
+                  id: activeFileName,
+                }}
+                hideLineNumbers={true}
+                shouldScrollDown={false}
+                onContentChange={(v: string) => {
+                  const newFiles: Record<string, string> = {};
+                  Object.entries(files).map(([key, value]) => {
+                    const newVal = key === activeFileName ? v : value;
+                    newFiles[key] = newVal;
+                  });
+                  setFiles(newFiles);
+                }}
+              />
+            )}
           </div>
         </ResizablePanel>
         <ResizableHandle className="" />

@@ -131,7 +131,7 @@ func (u *Union2ExampleOrExample2) IsExample() bool {
 	return u.variant == "Example"
 }
 
-func (u *Union2ExampleOrExample2) Example() *Example {
+func (u *Union2ExampleOrExample2) AsExample() *Example {
 	if u.variant != "Example" {
 		return nil
 	}
@@ -159,7 +159,7 @@ func (u *Union2ExampleOrExample2) IsExample2() bool {
 	return u.variant == "Example2"
 }
 
-func (u *Union2ExampleOrExample2) Example2() *Example2 {
+func (u *Union2ExampleOrExample2) AsExample2() *Example2 {
 	if u.variant != "Example2" {
 		return nil
 	}

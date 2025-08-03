@@ -42,6 +42,10 @@ func PersonTest(ctx context.Context, opts ...CallOptionFunc) (types.Person, erro
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)

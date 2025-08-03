@@ -27,6 +27,7 @@
 package baml_client
 
 import (
+	"media_types/baml_client/type_builder"
 	"os"
 	"strings"
 
@@ -66,6 +67,7 @@ type callOption struct {
 	env            map[string]string
 	collectors     []baml.Collector
 	onTick         baml.OnTickCallbackData
+	typeBuilder    baml.TypeBuilder
 }
 
 type CallOptionFunc func(*callOption)
@@ -178,4 +180,20 @@ func NewPDFFromUrl(url string, mimeType *string) (PDF, error) {
 
 func NewVideoFromUrl(url string, mimeType *string) (Video, error) {
 	return bamlRuntime.NewVideoFromUrl(url, mimeType)
+}
+
+type TypeBuilder = type_builder.TypeBuilder
+
+func NewTypeBuilder() (*TypeBuilder, error) {
+	tb, err := bamlRuntime.NewTypeBuilder()
+	if err != nil {
+		return nil, err
+	}
+	return type_builder.InternalNewTypeBuilder(tb), nil
+}
+
+func WithTypeBuilder(tb *TypeBuilder) CallOptionFunc {
+	return func(o *callOption) {
+		o.typeBuilder = tb.InternalExport()
+	}
 }

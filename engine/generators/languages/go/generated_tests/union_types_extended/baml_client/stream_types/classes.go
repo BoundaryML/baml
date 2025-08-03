@@ -56,7 +56,9 @@ func (c *Admin) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.Type = baml.Decode(valueHolder).Interface().(*string)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class Admin", key))
+
 		}
 	}
 
@@ -117,7 +119,9 @@ func (c *ApiError) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.Code = baml.Decode(valueHolder).Interface().(*int64)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class ApiError", key))
+
 		}
 	}
 
@@ -176,7 +180,9 @@ func (c *ApiPending) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.Eta = baml.Decode(valueHolder).Interface().(*int64)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class ApiPending", key))
+
 		}
 	}
 
@@ -231,7 +237,9 @@ func (c *ApiSuccess) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.Data = baml.Decode(valueHolder).Interface().(map[string]string)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class ApiSuccess", key))
+
 		}
 	}
 
@@ -288,7 +296,9 @@ func (c *Bird) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.Wingspan = baml.Decode(valueHolder).Interface().(*float64)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class Bird", key))
+
 		}
 	}
 
@@ -347,7 +357,9 @@ func (c *Cat) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.Lives = baml.Decode(valueHolder).Interface().(*int64)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class Cat", key))
+
 		}
 	}
 
@@ -402,7 +414,9 @@ func (c *Circle) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.Radius = baml.Decode(valueHolder).Interface().(*float64)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class Circle", key))
+
 		}
 	}
 
@@ -467,7 +481,9 @@ func (c *ComplexUnions) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap
 			c.MultiTypeResult = baml.Decode(valueHolder).Interface().(*Union3ErrorOrSuccessOrWarning)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class ComplexUnions", key))
+
 		}
 	}
 
@@ -530,7 +546,9 @@ func (c *DataResponse) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap)
 			c.Status = baml.Decode(valueHolder).Interface().(*string)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class DataResponse", key))
+
 		}
 	}
 
@@ -589,7 +607,9 @@ func (c *DiscriminatedUnions) Decode(holder *cffi.CFFIValueClass, typeMap baml.T
 			c.Response = baml.Decode(valueHolder).Interface().(*Union3ApiErrorOrApiPendingOrApiSuccess)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class DiscriminatedUnions", key))
+
 		}
 	}
 
@@ -648,7 +668,9 @@ func (c *Dog) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.GoodBoy = baml.Decode(valueHolder).Interface().(*bool)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class Dog", key))
+
 		}
 	}
 
@@ -711,7 +733,9 @@ func (c *Error) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.Details = baml.Decode(valueHolder).Interface().(*string)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class Error", key))
+
 		}
 	}
 
@@ -772,7 +796,9 @@ func (c *ErrorResponse) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap
 			c.Status = baml.Decode(valueHolder).Interface().(*string)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class ErrorResponse", key))
+
 		}
 	}
 
@@ -839,7 +865,9 @@ func (c *PrimitiveUnions) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeM
 			c.AnyPrimitive = baml.Decode(valueHolder).Interface().(*types.Union4BoolOrFloatOrIntOrString)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class PrimitiveUnions", key))
+
 		}
 	}
 
@@ -906,7 +934,9 @@ func (c *Product) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.Type = baml.Decode(valueHolder).Interface().(*string)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class Product", key))
+
 		}
 	}
 
@@ -967,7 +997,9 @@ func (c *Rectangle) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.Height = baml.Decode(valueHolder).Interface().(*float64)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class Rectangle", key))
+
 		}
 	}
 
@@ -1022,7 +1054,9 @@ func (c *RecursiveUnion) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMa
 			c.Children = baml.Decode(valueHolder).Interface().([]Union2RecursiveUnionOrString)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class RecursiveUnion", key))
+
 		}
 	}
 
@@ -1075,7 +1109,9 @@ func (c *Result) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.Metadata = baml.Decode(valueHolder).Interface().(map[string]string)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class Result", key))
+
 		}
 	}
 
@@ -1132,7 +1168,9 @@ func (c *Success) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.Data = baml.Decode(valueHolder).Interface().(map[string]string)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class Success", key))
+
 		}
 	}
 
@@ -1191,7 +1229,9 @@ func (c *Triangle) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.Height = baml.Decode(valueHolder).Interface().(*float64)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class Triangle", key))
+
 		}
 	}
 
@@ -1254,7 +1294,9 @@ func (c *UnionArrays) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) 
 			c.NestedUnionArray = baml.Decode(valueHolder).Interface().([]types.Union2ListIntOrString)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class UnionArrays", key))
+
 		}
 	}
 
@@ -1315,7 +1357,9 @@ func (c *User) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.Type = baml.Decode(valueHolder).Interface().(*string)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class User", key))
+
 		}
 	}
 
@@ -1374,7 +1418,9 @@ func (c *Warning) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.Level = baml.Decode(valueHolder).Interface().(*int64)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class Warning", key))
+
 		}
 	}
 

@@ -17,6 +17,7 @@ pub struct ResponsesApiResponse {
     pub output: Vec<ResponseOutput>,
     pub usage: Option<CompletionUsage>,
     pub error: Option<serde_json::Value>,
+    pub incomplete_details: Option<IncompleteDetails>,
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]
@@ -27,6 +28,7 @@ pub enum ResponseOutputType {
     FileSearchCall,
     FunctionCall,
     Reasoning,
+    ComputerCall,
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]
@@ -49,6 +51,11 @@ pub struct ResponseOutput {
     pub arguments: Option<String>,
     // For reasoning outputs
     pub summary: Option<Vec<serde_json::Value>>,
+}
+
+#[derive(Debug, Deserialize, Clone, PartialEq)]
+pub struct IncompleteDetails {
+    pub reason: String,
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]
@@ -147,6 +154,7 @@ pub struct ResponsesApiStreamResponse {
     pub output: Vec<ResponseOutput>,
     pub usage: Option<CompletionUsage>,
     pub error: Option<serde_json::Value>,
+    pub incomplete_details: Option<IncompleteDetails>,
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]

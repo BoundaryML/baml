@@ -152,6 +152,21 @@ client<llm> Gemini {
   }
 }
 
+client<llm> Gemini25ProThinking {
+  provider google-ai
+  retry_policy Constant
+  options {
+    model "gemini-2.5-pro"
+    api_key env.GOOGLE_API_KEY
+    generationConfig {
+      thinkingConfig {
+          thinkingBudget 1024
+          includeThoughts true
+      }
+    }
+  }
+}
+
 client<llm> GeminiOpenAiGeneric {
   provider "openai-generic"
   options {
@@ -231,7 +246,7 @@ client<llm> AwsBedrockInvalidProfile {
   provider aws-bedrock
   options {
     model_id "meta.llama3-8b-instruct-v1:0"
-    profile "boundaryml-dev"
+    profile "boundaryml-dev-invalid"
     inference_configuration {
       max_tokens 100
     }

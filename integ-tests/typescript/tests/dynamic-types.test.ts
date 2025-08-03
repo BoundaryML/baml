@@ -1,7 +1,25 @@
 import TypeBuilder from "../baml_client/type_builder";
+import { FieldType } from "../baml_client/type_builder";
 import { b } from "./test-setup";
 
 describe("Dynamic Type Tests", () => {
+  describe("Import Tests", () => {
+    it("should import TypeBuilder and FieldType from type_builder module", () => {
+      // Test that TypeBuilder is importable
+      const tb = new TypeBuilder();
+      expect(tb).toBeInstanceOf(TypeBuilder);
+      
+      // Test that FieldType is importable and works
+      expect(FieldType).toBeDefined();
+      
+      // Test that TypeBuilder methods return FieldType instances
+      const stringType = tb.string();
+      // TypeScript will ensure type safety at compile time
+      // This test verifies runtime behavior
+      expect(stringType).toBeDefined();
+    });
+  });
+
   describe("Basic Dynamic Types", () => {
     it("should work with dynamic types single", async () => {
       let tb = new TypeBuilder();

@@ -52,6 +52,10 @@ pub struct Session {
 
     pub baml_settings: BamlSettings,
 
+    /// The actual port that the playground server is running on (after availability check)
+    #[cfg(feature = "playground-server")]
+    pub playground_port: Option<u16>,
+
     #[cfg(feature = "playground-server")]
     pub playground_state: Option<Arc<RwLock<PlaygroundState>>>,
 
@@ -80,6 +84,8 @@ impl Clone for Session {
             position_encoding: self.position_encoding,
             resolved_client_capabilities: self.resolved_client_capabilities.clone(),
             baml_settings: self.baml_settings.clone(),
+            #[cfg(feature = "playground-server")]
+            playground_port: self.playground_port,
             #[cfg(feature = "playground-server")]
             playground_state: self.playground_state.clone(),
             #[cfg(feature = "playground-server")]
@@ -133,6 +139,8 @@ impl Session {
             )),
             baml_settings: BamlSettings::default(),
             #[cfg(feature = "playground-server")]
+            playground_port: None,
+            #[cfg(feature = "playground-server")]
             playground_state: None,
             #[cfg(feature = "playground-server")]
             playground_runtime: None,
@@ -148,6 +156,22 @@ impl Session {
                 tracing::error!("Failed to parse BAML settings: {}", err);
             }
         }
+    }
+
+    /// Sets the actual playground port that the server determined after availability check
+    #[cfg(feature = "playground-server")]
+    pub fn set_session_playground_port(&mut self, port: u16) {
+        self.playground_port = Some(port);
+    }
+
+    /// Gets the actual playground port that the server is running on
+    #[cfg(feature = "playground-server")]
+    pub fn get_session_playground_port(&self) -> Option<u16> {
+        tracing::info!(
+            "Getting session playground port: {:?}",
+            self.playground_port
+        );
+        self.playground_port
     }
 
     /// Gets or creates a project for the given path.

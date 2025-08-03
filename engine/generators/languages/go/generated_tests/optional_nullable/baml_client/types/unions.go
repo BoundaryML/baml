@@ -131,7 +131,7 @@ func (u *Union2IntOrString) IsString() bool {
 	return u.variant == "String"
 }
 
-func (u *Union2IntOrString) String() *string {
+func (u *Union2IntOrString) AsString() *string {
 	if u.variant != "String" {
 		return nil
 	}
@@ -159,7 +159,7 @@ func (u *Union2IntOrString) IsInt() bool {
 	return u.variant == "Int"
 }
 
-func (u *Union2IntOrString) Int() *int64 {
+func (u *Union2IntOrString) AsInt() *int64 {
 	if u.variant != "Int" {
 		return nil
 	}
@@ -276,7 +276,7 @@ func (u *Union2ProductOrUser) IsUser() bool {
 	return u.variant == "User"
 }
 
-func (u *Union2ProductOrUser) User() *User {
+func (u *Union2ProductOrUser) AsUser() *User {
 	if u.variant != "User" {
 		return nil
 	}
@@ -304,7 +304,7 @@ func (u *Union2ProductOrUser) IsProduct() bool {
 	return u.variant == "Product"
 }
 
-func (u *Union2ProductOrUser) Product() *Product {
+func (u *Union2ProductOrUser) AsProduct() *Product {
 	if u.variant != "Product" {
 		return nil
 	}
