@@ -1,4 +1,6 @@
 import asyncio
+import math
+import time
 import typing
 import json
 import pytest
@@ -332,3 +334,33 @@ async def test_modular_openai_responses():
     
     assert isinstance(parsed, str)
     assert len(parsed) > 0
+
+
+@pytest.mark.asyncio
+async def test_modular_vertex():
+    start = time.time()
+    # warm up with #1
+    _ = await b.request.TestVertex("Hello, world!")
+    end = time.time()
+    warmup_duration = (end - start) * 1000
+
+    # now load 10, they should fast
+    durations = []
+    for _ in range(10):
+        start = time.time()
+        _ = await b.request.TestVertex("Hello, world!")
+        end = time.time()
+        durations.append((end - start) * 1000)
+
+    mean_duration = sum(durations) / len(durations)
+    std_dev = 0
+    for duration in durations:
+        std_dev += (duration - mean_duration) ** 2
+    std_dev = math.sqrt(std_dev / len(durations))
+
+    print(f"Warmup: {warmup_duration:.1f}ms")
+    print(f"Mean: {mean_duration:.1f}ms ± {std_dev:.1f}ms")
+    # we should be well under 50ms cause there's no network latency
+    assert mean_duration < 50, "Vertex should be cached"
+    # this should be pretty low
+    assert std_dev < 5, "Vertex should be cached"

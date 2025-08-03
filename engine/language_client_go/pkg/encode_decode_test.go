@@ -814,8 +814,7 @@ func TestCustomStructs(t *testing.T) {
 		require.True(t, ok, "encoded value should be a class")
 
 		assert.Equal(t, "DynamicTestClass", classValue.ClassValue.Name.Name)
-		assert.Len(t, classValue.ClassValue.Fields, 0)        // static fields
-		assert.Len(t, classValue.ClassValue.DynamicFields, 5) // dynamic fields
+		assert.Len(t, classValue.ClassValue.Fields, 5)
 
 		// Test decoding with DynamicClass
 		decoded := &serde.DynamicClass{}
