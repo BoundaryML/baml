@@ -24,7 +24,7 @@ pub enum VertexAuth {
 impl VertexAuth {
     fn cache_key(auth_strategy: &ResolvedGcpAuthStrategy) -> String {
         match auth_strategy {
-            ResolvedGcpAuthStrategy::MaybeFilePath(path) => format!("file:{}", path),
+            ResolvedGcpAuthStrategy::MaybeFilePath(path) => format!("file:{path}"),
             ResolvedGcpAuthStrategy::StringContainingJson(json) => {
                 // Hash the JSON to avoid storing sensitive data in cache key
                 use std::{
