@@ -37,8 +37,8 @@ impl TypeBuilder {
         type_builder::TypeBuilder::new().into()
     }
 
-    pub fn clear(&self) {
-        self.inner.clear();
+    pub fn reset(&self) {
+        self.inner.reset();
     }
 
     /// provides a detailed string representation of the typebuilder for python users.
@@ -221,24 +221,13 @@ impl ClassBuilder {
         baml_types::TypeIR::class(&self.name).into()
     }
 
-    pub fn list_properties(&self) -> PyResult<Vec<(String, FieldType)>> {
+    pub fn list_properties(&self) -> Vec<(String, ClassPropertyBuilder)> {
         self.inner
             .lock()
             .unwrap()
             .list_properties()
             .into_iter()
-            .map(|(name, prop)| match prop.get_type() {
-                Some(field_type) => Ok((name, field_type.into())),
-
-                // This should not happen because the call to ClassBuilder::property
-                // is not exposed to the user. We only expose add_property which
-                // requires a type.
-                None => Err(BamlError::from_anyhow(anyhow::anyhow!(
-                    "property '{}' of class builder '{}' has no defined type",
-                    name,
-                    self.name,
-                ))),
-            })
+            .map(|(name, prop)| (name, prop.into()))
             .collect()
     }
 
@@ -246,8 +235,8 @@ impl ClassBuilder {
         self.inner.lock().unwrap().remove_property(name);
     }
 
-    pub fn clear(&self) {
-        self.inner.lock().unwrap().clear();
+    pub fn reset(&self) {
+        self.inner.lock().unwrap().reset();
     }
 
     pub fn property(&self, name: &str) -> ClassPropertyBuilder {
@@ -265,8 +254,15 @@ impl ClassPropertyBuilder {
         self.inner.clone().into()
     }
 
-    pub fn get_type(&self) -> Option<FieldType> {
-        self.inner.lock().unwrap().get_type().map(|t| t.into())
+    pub fn get_type(&self) -> PyResult<FieldType> {
+        self.inner
+            .lock()
+            .unwrap()
+            .get_type()
+            .map(FieldType::from)
+            .ok_or_else(|| BamlError::from_anyhow(anyhow::anyhow!(
+                "attempted to read a property that has no defined type, this is likely an internal bug"
+            )))
     }
 
     #[pyo3(signature = (alias = None))]

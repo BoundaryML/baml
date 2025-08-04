@@ -550,17 +550,19 @@ def test_type_builder_list_properties():
     tb.Person.add_property("last_name", tb.string().list())
     tb.Person.add_property("height", tb.float().optional()).description("Height in meters")
 
-    assert tb.Person.list_properties() == [
-        ("last_name", tb.string().list()),
-        ("height", tb.float().optional())
-    ]
+    props = {name: builder.get_type() for name, builder in tb.Person.list_properties()}
+
+    assert props == {
+        "last_name": tb.string().list(),
+        "height": tb.float().optional()
+    }
 
 
-def test_type_builder_clear():
+def test_type_builder_reset():
     tb = TypeBuilder()
     tb.Person.add_property("last_name", tb.string().list())
     tb.Person.add_property("height", tb.float().optional()).description("Height in meters")
-    tb.clear()
+    tb.reset()
 
     person_props_after_tb_clear = {name for name, _ in tb.Person.list_properties()}
 
@@ -568,7 +570,7 @@ def test_type_builder_clear():
     assert "height" not in person_props_after_tb_clear
 
 
-def test_type_builder_class_clear():
+def test_type_builder_class_reset():
     tb = TypeBuilder()
     tb.Person.add_property("last_name", tb.string().list())
     tb.Person.add_property("height", tb.float().optional()).description("Height in meters")
@@ -576,16 +578,16 @@ def test_type_builder_class_clear():
     tb.DynamicOutput.add_property("hair_color", tb.string())
     tb.DynamicOutput.add_property("height", tb.float().optional()).description("Height in meters")
 
-    tb.Person.clear()
+    tb.Person.reset()
 
-    person_props_after_class_clear = {name for name, _ in tb.Person.list_properties()}
-    dynamic_output_props_after_class_clear = {name for name, _ in tb.DynamicOutput.list_properties()}
+    person_props_after_class_reset = {name for name, _ in tb.Person.list_properties()}
+    dynamic_output_props_after_class_reset = {name for name, _ in tb.DynamicOutput.list_properties()}
 
-    assert "last_name" not in person_props_after_class_clear
-    assert "height" not in person_props_after_class_clear
+    assert "last_name" not in person_props_after_class_reset
+    assert "height" not in person_props_after_class_reset
 
-    assert "hair_color" in dynamic_output_props_after_class_clear
-    assert "height" in dynamic_output_props_after_class_clear
+    assert "hair_color" in dynamic_output_props_after_class_reset
+    assert "height" in dynamic_output_props_after_class_reset
 
 
 def test_type_builder_class_remove_property():
@@ -601,18 +603,18 @@ def test_type_builder_class_remove_property():
     assert "height" in person_props_after_class_remove_property
 
 
-def test_type_builder_add_class_clear():
+def test_type_builder_add_class_reset():
     tb = TypeBuilder()
     person_class = tb.add_class("AddedPerson")
     person_class.add_property("last_name", tb.string().list())
     person_class.add_property("height", tb.float().optional()).description("Height in meters")
 
-    person_class.clear()
+    person_class.reset()
 
-    person_props_after_class_clear = {name for name, _ in person_class.list_properties()}
+    person_props_after_class_reset = {name for name, _ in person_class.list_properties()}
 
-    assert "last_name" not in person_props_after_class_clear
-    assert "height" not in person_props_after_class_clear
+    assert "last_name" not in person_props_after_class_reset
+    assert "height" not in person_props_after_class_reset
 
 
 def test_type_builder_add_class_remove_property():
@@ -636,5 +638,23 @@ def test_class_prop_get_type():
 
     props = {name: prop_type for name, prop_type in tb.Person.list_properties()}
 
-    assert props["last_name"] == tb.string().list()
-    assert props["height"] == tb.float().optional()
+    assert props["last_name"].get_type() == tb.string().list()
+    assert props["height"].get_type() == tb.float().optional()
+
+
+def test_class_prop_set_type():
+    tb = TypeBuilder()
+    tb.Person.add_property("last_name", tb.string().list())
+    tb.Person.add_property("height", tb.float().optional()).description("Height in meters")
+
+    # Modify props.
+    props = {name: prop_type for name, prop_type in tb.Person.list_properties()}
+
+    props["last_name"].type(tb.string())
+    props["height"].type(tb.int())
+
+    # Verify changes.
+    props = {name: prop_type for name, prop_type in tb.Person.list_properties()}
+
+    assert props["last_name"].get_type() == tb.string()
+    assert props["height"].get_type() == tb.int()

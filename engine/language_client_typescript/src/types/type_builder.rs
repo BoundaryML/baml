@@ -67,7 +67,7 @@ impl TypeBuilder {
 
     #[napi]
     pub fn clear(&self) {
-        self.inner.clear();
+        self.inner.reset();
     }
 
     #[napi]
@@ -256,7 +256,7 @@ impl ClassBuilder {
                 // is not exposed to the user. We only expose add_property which
                 // requires a type.
                 None => Err(crate::errors::from_anyhow_error(anyhow::anyhow!(
-                    "property '{}' of class builder '{}' has no defined type",
+                    "property '{}' of class builder '{}' has no defined type, this is likely an internal bug",
                     name,
                     self.name,
                 ))),
@@ -271,7 +271,7 @@ impl ClassBuilder {
 
     #[napi]
     pub fn clear(&self) {
-        self.inner.lock().unwrap().clear();
+        self.inner.lock().unwrap().reset();
     }
 
     #[napi]

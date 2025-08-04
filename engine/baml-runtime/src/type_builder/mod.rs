@@ -77,12 +77,13 @@ pub struct ClassPropertyBuilder {
 impl_meta!(ClassPropertyBuilder);
 
 impl ClassPropertyBuilder {
+    /// Setter.
     pub fn r#type(&self, r#type: TypeIR) -> &Self {
         *self.r#type.lock().unwrap() = Some(r#type);
         self
     }
 
-    /// Inner API, user's don't see this.
+    /// Getter.
     pub fn get_type(&self) -> Option<TypeIR> {
         self.r#type.lock().unwrap().clone()
     }
@@ -128,7 +129,7 @@ impl ClassBuilder {
         properties.shift_remove(name);
     }
 
-    pub fn clear(&self) {
+    pub fn reset(&self) {
         self.properties.lock().unwrap().clear();
     }
 }
@@ -500,7 +501,7 @@ impl TypeBuilder {
         }
     }
 
-    pub fn clear(&self) {
+    pub fn reset(&self) {
         self.classes.lock().unwrap().clear();
         self.enums.lock().unwrap().clear();
         self.type_aliases.lock().unwrap().clear();

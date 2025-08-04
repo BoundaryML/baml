@@ -354,7 +354,6 @@ describe("Dynamic Type Tests", () => {
       personClass.addProperty("height", tb.float().optional()).description("Height in meters");
 
       personClass.removeProperty("last_name");
-
       const personProps = personClass.listProperties();
 
       expect("last_name" in personProps).toBeFalsy();
