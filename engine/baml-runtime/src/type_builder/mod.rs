@@ -103,6 +103,7 @@ impl ClassBuilder {
     }
 
     // TODO: Figure out captured lifetime issue and return Iterator.
+    // Iterator that holds mutex locked seems tricky.
     pub fn list_properties(&self) -> Vec<(String, ClassPropertyBuilder)> {
         self.properties
             .lock()

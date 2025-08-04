@@ -61,7 +61,7 @@ export declare class BamlVideo {
 }
 
 export declare class ClassBuilder {
-  listProperties(): Record<string, FieldType | undefined | null>
+  listProperties(): Record<string, FieldType>
   removeProperty(name: string): void
   clear(): void
   field(): FieldType

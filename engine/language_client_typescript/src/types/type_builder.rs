@@ -243,13 +243,24 @@ impl EnumValueBuilder {
 #[napi]
 impl ClassBuilder {
     #[napi]
-    pub fn list_properties(&self) -> BTreeMap<String, Option<FieldType>> {
+    pub fn list_properties(&self) -> napi::Result<BTreeMap<String, FieldType>> {
         self.inner
             .lock()
             .unwrap()
             .list_properties()
             .into_iter()
-            .map(|(name, prop)| (name, prop.get_type().map(FieldType::from)))
+            .map(|(name, prop)| match prop.get_type() {
+                Some(field_type) => Ok((name, field_type.into())),
+
+                // This should not happen because the call to ClassBuilder::property
+                // is not exposed to the user. We only expose add_property which
+                // requires a type.
+                None => Err(crate::errors::from_anyhow_error(anyhow::anyhow!(
+                    "property '{}' of class builder '{}' has no defined type",
+                    name,
+                    self.name,
+                ))),
+            })
             .collect()
     }
 

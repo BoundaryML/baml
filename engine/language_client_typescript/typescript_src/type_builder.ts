@@ -188,7 +188,7 @@ export class ClassBuilder<ClassName extends string, Properties extends string = 
     return new ClassPropertyBuilder(this.bldr.property(name).setType(type))
   }
 
-  listProperties(): Record<string, FieldType | null> {
+  listProperties(): Record<string, FieldType> {
     return this.bldr.listProperties()
   }
 

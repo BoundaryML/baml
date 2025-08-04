@@ -50,7 +50,7 @@ export declare class ClassViewer<ClassName extends string, Properties extends st
 export declare class ClassBuilder<ClassName extends string, Properties extends string = string> extends ClassAst<ClassName, Properties> {
     constructor(tb: _TypeBuilder, name: ClassName, properties?: Set<Properties | string>);
     addProperty<S extends string>(name: RestrictNot<ClassName, S, Properties>, type: FieldType): ClassPropertyBuilder;
-    listProperties(): Record<string, FieldType | null>;
+    listProperties(): Record<string, FieldType>;
     removeProperty(name: string): void;
     clear(): void;
     property(name: string): ClassPropertyBuilder;
