@@ -48,6 +48,49 @@ console.log(collector.last?.calls[-1].httpResponse)
 ```
 </Tab>
 
+<Tab title="Go" language="go">
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    
+    b "example.com/myproject/baml_client"
+)
+
+func main() {
+    ctx := context.Background()
+    
+    // Create a collector with optional name
+    collector, err := b.NewCollector("my-collector")
+    if err != nil {
+        panic(err)
+    }
+    
+    // Use it with a function call
+    result, err := b.ExtractResume(ctx, "...", nil, b.WithCollector(collector))
+    if err != nil {
+        panic(err)
+    }
+    
+    // Access logging information
+    logs, err := collector.Logs()
+    if err != nil {
+        panic(err)
+    }
+    fmt.Printf("Number of logs: %d\n", len(logs))
+    
+    // Get usage information
+    usage, err := collector.Usage()
+    if err != nil {
+        panic(err)
+    }
+    fmt.Printf("Usage: %+v\n", usage)
+}
+```
+</Tab>
+
 <Tab title="Ruby" language="ruby">
 ```ruby
 require_relative "baml_client/client"

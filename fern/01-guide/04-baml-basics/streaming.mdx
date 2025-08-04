@@ -190,6 +190,94 @@ if (require.main === module) {
 ```
 </Tab>
 
+<Tab title="Go">
+BAML will generate `b.Stream.ExtractReceiptInfo()` for you, which you can use like so:
+
+```go main.go
+package main
+
+import (
+    "context"
+    "fmt"
+    "log"
+
+    b "example.com/myproject/baml_client"
+    "example.com/myproject/baml_client/stream_types"
+    "example.com/myproject/baml_client/types"
+)
+
+func example1(receipt string) {
+    ctx := context.Background()
+    
+    stream, err := b.Stream.ExtractReceiptInfo(ctx, receipt)
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    for value := range stream {
+        if value.IsError {
+            log.Fatal(value.Error)
+        }
+        
+        if !value.IsFinal && value.Stream() != nil {
+            partial := *value.Stream()
+            fmt.Printf("partial: parsed %d items\n", len(partial.Items))
+        }
+        
+        if value.IsFinal && value.Final() != nil {
+            final := *value.Final()
+            fmt.Printf("final: %d items\n", len(final.Items))
+        }
+    }
+}
+
+// Using stream without iteration - just getting final result
+func example2(receipt string) (*types.ReceiptInfo, error) {
+    ctx := context.Background()
+    
+    stream, err := b.Stream.ExtractReceiptInfo(ctx, receipt)
+    if err != nil {
+        return nil, err
+    }
+
+    // Skip iteration and just get final result
+    for value := range stream {
+        if value.IsError {
+            return nil, value.Error
+        }
+        if value.IsFinal && value.Final() != nil {
+            final := *value.Final()
+            return &final, nil
+        }
+    }
+    
+    return nil, fmt.Errorf("stream ended without final response")
+}
+
+func main() {
+    receipt := `04/14/2024 1:05 pm
+
+Ticket: 220000082489
+Register: Shop Counter
+Employee: Connor
+Customer: Sam
+Item	#	Price
+Guide leash (1 Pair) uni UNI
+1	$34.95
+The Index Town Walls
+1	$35.00
+Boot Punch
+3	$60.00
+Subtotal	$129.95
+Tax ($129.95 @ 9%)	$11.70
+Total Tax	$11.70
+Total	$141.65`
+
+    example1(receipt)
+}
+```
+</Tab>
+
 <Tab title="Ruby (beta)">
 BAML will generate `Baml.Client.stream.ExtractReceiptInfo()` for you,
 which you can use like so:

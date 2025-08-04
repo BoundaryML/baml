@@ -57,6 +57,65 @@ const result2 = await myB.ExtractResume("...", { collector: otherCollector })
 ```
 </Tab>
 
+<Tab title="Go" language="go">
+<Note>
+Go doesn't have a `with_options` method like Python/TypeScript. Instead, use individual option functions like `WithCollector`, `WithClientRegistry`, and `WithEnv` directly in function calls.
+</Note>
+
+```go
+package main
+
+import (
+    "context"
+    
+    b "example.com/myproject/baml_client"
+)
+
+func run() {
+    ctx := context.Background()
+    
+    // Set up options for function calls
+    collector, err := b.NewCollector("my-collector")
+    if err != nil {
+        panic(err)
+    }
+    
+    clientRegistry, err := b.NewClientRegistry()
+    if err != nil {
+        panic(err)
+    }
+    err = clientRegistry.SetPrimary("openai/gpt-4o-mini")
+    if err != nil {
+        panic(err)
+    }
+    
+    env := map[string]string{
+        "BAML_LOG": "DEBUG",
+        "OPENAI_API_KEY": "key-123",
+    }
+    
+    // Make function call with multiple options
+    result, err := b.ExtractResume(ctx, "...", nil,
+        b.WithCollector(collector),
+        b.WithClientRegistry(clientRegistry),
+        b.WithEnv(env))
+    if err != nil {
+        panic(err)
+    }
+    
+    // Override options for a specific call
+    otherCollector, err := b.NewCollector("other-collector")
+    if err != nil {
+        panic(err)
+    }
+    result2, err := b.ExtractResume(ctx, "...", nil, b.WithCollector(otherCollector))
+    if err != nil {
+        panic(err)
+    }
+}
+```
+</Tab>
+
 <Tab title="Ruby" language="ruby">
 ```ruby
 require 'baml_client'
@@ -132,6 +191,64 @@ const invoice = await myB.ExtractInvoice("...")
 console.log(myB.clientRegistry)
 console.log(collector.logs)
 console.log(collector.last?.usage)
+```
+</Tab>
+
+<Tab title="Go" language="go">
+<Note>
+Go doesn't support client pre-configuration with `with_options`. Each function call requires options to be passed individually.
+</Note>
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    
+    b "example.com/myproject/baml_client"
+)
+
+func run() {
+    ctx := context.Background()
+    
+    // Configure options for reuse
+    collector, err := b.NewCollector("my-collector")
+    if err != nil {
+        panic(err)
+    }
+    
+    clientRegistry, err := b.NewClientRegistry()
+    if err != nil {
+        panic(err)
+    }
+    err = clientRegistry.SetPrimary("openai/gpt-4o-mini")
+    if err != nil {
+        panic(err)
+    }
+    
+    // All calls must explicitly pass options
+    res, err := b.ExtractResume(ctx, "...", nil, 
+        b.WithCollector(collector), 
+        b.WithClientRegistry(clientRegistry))
+    if err != nil {
+        panic(err)
+    }
+    
+    invoice, err := b.ExtractInvoice(ctx, "...", 
+        b.WithCollector(collector), 
+        b.WithClientRegistry(clientRegistry))
+    if err != nil {
+        panic(err)
+    }
+    
+    // Access logs from collector
+    logs, err := collector.Logs()
+    if err != nil {
+        panic(err)
+    }
+    fmt.Printf("Logs: %+v\n", logs)
+}
 ```
 </Tab>
 

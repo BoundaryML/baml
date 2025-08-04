@@ -63,6 +63,54 @@ const result = await b.Categorize("The sun is bright", { tb })
 ```
 </Tab>
 
+<Tab title="Go" language="go">
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    
+    b "example.com/myproject/baml_client"
+)
+
+func main() {
+    ctx := context.Background()
+    
+    // Create a TypeBuilder instance
+    tb, err := b.NewTypeBuilder()
+    if err != nil {
+        panic(err)
+    }
+    
+    // Get the Category enum and add new values
+    category, err := tb.Category()
+    if err != nil {
+        panic(err)
+    }
+    
+    _, err = category.AddValue("GREEN")
+    if err != nil {
+        panic(err)
+    }
+    
+    _, err = category.AddValue("YELLOW")
+    if err != nil {
+        panic(err)
+    }
+    
+    // Pass the typebuilder when calling the function
+    result, err := b.Categorize(ctx, "The sun is bright", b.WithTypeBuilder(tb))
+    if err != nil {
+        panic(err)
+    }
+    
+    // result can now be RED, BLUE, GREEN, or YELLOW
+    fmt.Printf("Result: %+v\n", result)
+}
+```
+</Tab>
+
 <Tab title="Ruby" language="ruby">
 ```ruby
 require_relative 'baml_client/client'
