@@ -109,21 +109,6 @@ export async function resolveCliPath(
   const packageJson = await import('../../../../package.json');
   const bundledVersion = packageJson.version as string;
 
-  // Always use CLI from node_modules/@baml/cli/dist if present
-  const bundledCliActualPath = getBundledCliPath(context);
-  if (bundledCliActualPath) {
-    await cacheBundledCli(
-      context,
-      bundledCliActualPath,
-      bundledVersion,
-      bamlOutputChannel,
-    );
-    bamlOutputChannel.appendLine(
-      `Using CLI from node_modules: ${bundledCliActualPath}`,
-    );
-    return bundledCliActualPath;
-  }
-
   // Check if requested version matches bundled version
   if (
     semver.valid(requestedVersion) &&
@@ -133,10 +118,21 @@ export async function resolveCliPath(
     console.log(
       `Requested version (${requestedVersion}) matches bundled version (${bundledVersion}).`,
     );
+    bamlOutputChannel.appendLine(
+      `Requested version (${requestedVersion}) matches bundled version (${bundledVersion}).`,
+    );
 
+    // Use CLI from node_modules/@baml/cli/dist if present
+    const bundledCliActualPath = getBundledCliPath(context);
     if (bundledCliActualPath) {
+      await cacheBundledCli(
+        context,
+        bundledCliActualPath,
+        bundledVersion,
+        bamlOutputChannel,
+      );
       bamlOutputChannel.appendLine(
-        `Using bundled CLI path: ${bundledCliActualPath}`,
+        `Using CLI from node_modules: ${bundledCliActualPath}`,
       );
       return bundledCliActualPath;
     }
@@ -146,7 +142,7 @@ export async function resolveCliPath(
     );
   } else {
     bamlOutputChannel.appendLine(
-      `Requested version (${requestedVersion}) does not match bundled version (${bundledVersion}).`,
+      `Requested version (${requestedVersion}) does not match bundled version (${bundledVersion}). Will download specific version.`,
     );
   }
 
