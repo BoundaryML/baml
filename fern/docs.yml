@@ -312,6 +312,9 @@ navigation:
           - page: Typescript
             icon: fa-brands fa-js
             path: 01-guide/02-languages/typescript.mdx
+          - page: Go
+            icon: fa-brands fa-golang
+            path: 01-guide/02-languages/go.mdx
           - page: Ruby
             icon: fa-regular fa-gem
             path: 01-guide/02-languages/ruby.mdx
