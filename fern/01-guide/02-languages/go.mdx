@@ -2,9 +2,6 @@
 title: Go
 ---
 
-<Note>You can check out this repo: 
-https://github.com/BoundaryML/baml-examples/tree/main/go-starter</Note>
-
 To set up BAML with Go do the following:
 
 <Steps>
@@ -31,6 +28,16 @@ To set up BAML with Go do the following:
       ```bash go
       go get github.com/boundaryml/baml
       ```
+
+  ### Install Required Go Tools
+      The BAML generator uses `gofmt` and `goimports` to format the generated Go code. Install these tools:
+
+      ```bash go
+      # gofmt comes with Go by default, but install goimports
+      go install golang.org/x/tools/cmd/goimports@latest
+      ```
+
+      These tools are required by the `on_generate` command in your generator configuration and ensure the generated code is properly formatted.
 
   ### Generate the `baml_client` Go package from `.baml` files
 
@@ -130,7 +137,7 @@ module example.com/myproject
 go 1.21
 
 require (
-    github.com/boundaryml/baml v0.54.0
+    github.com/boundaryml/baml v0.203.1
 )
 ```
 

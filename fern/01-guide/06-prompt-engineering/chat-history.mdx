@@ -142,7 +142,9 @@ func main() {
         
         // Add user message to history
         messages = append(messages, types.MyUserMessage{
-            Role:    "user",
+            // Go generates constructor functions for literal unions like "user" | "assistant"
+            // The naming pattern is Union{Number}K{variant1}OrK{variant2}__NewK{variant}()
+            Role:    types.Union2KuserOrKassistant__NewKuser(),
             Content: content,
         })
         
@@ -157,7 +159,8 @@ func main() {
         
         // Add agent's response to chat history
         messages = append(messages, types.MyUserMessage{
-            Role:    "assistant",
+            // Constructor for "assistant" variant of the "user" | "assistant" union
+            Role:    types.Union2KuserOrKassistant__NewKassistant(),
             Content: agentResponse,
         })
     }

@@ -98,7 +98,7 @@ importers:
   fern:
     devDependencies:
       fern-api:
-        specifier: ^0.31.24
+        specifier: '*'
         version: 0.31.24
 
   integ-tests/go:
