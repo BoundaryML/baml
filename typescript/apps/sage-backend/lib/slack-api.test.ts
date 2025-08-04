@@ -7,8 +7,8 @@ describe('SlackFeedbackLogger', () => {
 
   const mockFeedback: SendFeedbackRequest = {
     session_id: 'test-session-123',
-    feedback_type: 'thumbs_up',
-    comment: 'Great answer!',
+    feedback_type: 'thumbs_down',
+    comment: 'answer was not useful',
     messages: [
       {
         role: 'user',

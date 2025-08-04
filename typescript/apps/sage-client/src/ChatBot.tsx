@@ -18,7 +18,16 @@ interface ChatBotProps {
 // Transform messages for API format
 const transformMessagesForAPI = (messages: StoredMessage[]): Array<Message> => {
   return messages
-    .filter(msg => msg.role === 'user' || msg.role === 'assistant');
+    .filter(msg => msg.role === 'user' || msg.role === 'assistant')
+    .map(msg => {
+      if (msg.role === 'user') {
+        return msg; // UserMessage is already correct
+      } else if (msg.role === 'assistant') {
+        return msg; // AssistantMessage is already correct
+      }
+      // This should never happen due to the filter, but TypeScript needs it
+      throw new Error('Unexpected message type in transform');
+    });
 };
 
 // Serialize errors to storable format
@@ -128,7 +137,7 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
       const successMessage: StoredMessage = {
         id: progressMessage.id,
         timestamp: new Date(),
-        ...data
+        ...data.message
       };
 
       // Replace progress message with success message
@@ -193,7 +202,7 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
     // Get the last user message to retry
     const lastUserMessage = [...messages].reverse().find(msg => msg.role === 'user');
     if (lastUserMessage && lastUserMessage.role === 'user') {
-      sendMessage(lastUserMessage.message);
+      sendMessage(lastUserMessage.text);
     }
   };
 
@@ -575,7 +584,7 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
                 }}
               >
                 {message.role === 'user' ? (
-                  message.message
+                  message.text
                 ) : message.role === 'assistant/error' ? (
                   <div>
                     {(() => {
@@ -600,7 +609,7 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
                       return errorText;
                     })()}
                   </div>
-                ) : message.role === 'assistant/success' ? (
+                ) : message.role === 'assistant' ? (
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
                     components={{
@@ -790,7 +799,7 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
                     ),
                   }}
                 >
-                  {message.message.answer || "Sorry, I'm not sure how to answer that."}
+                  {message.text || "Sorry, I'm not sure how to answer that."}
                 </ReactMarkdown>
               ) : null}
               {message.role === 'assistant/error' && (
@@ -852,7 +861,7 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
             </div>
 
             {/* Related docs */}
-            {message.role === 'assistant/success' && message.message.ranked_docs && message.message.ranked_docs.length > 0 && (
+            {message.role === 'assistant' && message.ranked_docs && message.ranked_docs.length > 0 && (
               <div
                 style={{
                   fontSize: '12px',
@@ -872,7 +881,7 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
                 >
                   📖 Related documentation:
                 </div>
-                {message.message.ranked_docs.map((doc) => (
+                {message.ranked_docs.map((doc) => (
                   <div key={doc.url} style={{ marginBottom: '4px' }}>
                     <a
                       href={doc.url}
@@ -887,7 +896,7 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
                           if ((window as any).navigateToDoc) {
                             (window as any).navigateToDoc(
                               { u: doc.url, t: doc.title, sel: 'article' },
-                              message.message.answer || '',
+                              message.text || '',
                             );
                           } else {
                             // Fallback to normal navigation if navigateToDoc is not available
@@ -929,7 +938,7 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
             )}
             
             {/* Suggestions */}
-            {message.role === 'assistant/success' && message.message.suggested_messages && message.message.suggested_messages.length > 0 && (
+            {message.role === 'assistant' && message.suggested_messages && message.suggested_messages.length > 0 && (
               <div
                 style={{
                   fontSize: '12px',
@@ -949,7 +958,7 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
                 >
                   💡 Suggested follow-ups:
                 </div>
-                {message.message.suggested_messages.map((suggestion, index) => (
+                {message.suggested_messages.map((suggestion, index) => (
                   <div key={index} style={{ marginBottom: '4px' }}>
                     <button
                       onClick={() => sendMessage(suggestion)}
