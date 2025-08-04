@@ -1,5 +1,5 @@
 import { Client } from '@notionhq/client';
-import { type UserMessageSchema, type AssistantMessageSchema } from '@baml/sage-interface';
+import { type UserMessage, type AssistantMessage } from '@baml/sage-interface';
 import { z } from 'zod';
 
 // Initialize Notion client
@@ -12,14 +12,17 @@ const DATABASE_ID = process.env.NOTION_ASK_BAAAML_DATABASE_ID;
 export interface NotionLogEntry {
   session_id: string;
   assistant_timestamp: string;
-  user_message: z.infer<typeof UserMessageSchema>;
-  assistant_message: z.infer<typeof AssistantMessageSchema>;
+  user_message: UserMessage;
+  assistant_message: AssistantMessage;
 }
 
 /**
  * Helper function to build Notion page properties from log entry data
  */
 function buildNotionProperties(data: NotionLogEntry) {
+  const { text: userMessageText, ...userMessageRest } = data.user_message;
+  const { text: assistantMessageText, ...assistantMessageRest } = data.assistant_message;
+
   return {
     // Session ID (Text field)
     'Session ID': {
@@ -45,10 +48,20 @@ function buildNotionProperties(data: NotionLogEntry) {
 
     // User Message (Title field)
     'User Message': {
-      title: [
+      rich_text: [
         {
           text: {
             content: data.user_message.text,
+          },
+        },
+      ],
+    },
+    
+    'User Message Fields': {
+      rich_text: [
+        {
+          text: {
+            content: JSON.stringify(userMessageRest, null, 2),
           },
         },
       ],
@@ -65,34 +78,11 @@ function buildNotionProperties(data: NotionLogEntry) {
       ],
     },
 
-    // Language Preference (Text field)
-    'Language Preference': {
+    'Assistant Message Fields': {
       rich_text: [
         {
           text: {
-            content: data.user_message.language_preference || '',
-          },
-        },
-      ],
-    },
-
-    // Ranked Docs (Text field) - storing as JSON
-    'Ranked Docs': {
-      rich_text: [
-        {
-          text: {
-            content: JSON.stringify(data.assistant_message.ranked_docs || [], null, 2),
-          },
-        },
-      ],
-    },
-
-    // Suggested Messages (Text field) - storing as JSON
-    'Suggested Messages': {
-      rich_text: [
-        {
-          text: {
-            content: JSON.stringify(data.assistant_message.suggested_messages || [], null, 2),
+            content: JSON.stringify(assistantMessageRest, null, 2),
           },
         },
       ],
@@ -118,32 +108,20 @@ async function ensureDatabaseSchema() {
   try {
     await notion.databases.update({
       database_id: DATABASE_ID,
-      properties: {
-        'User Message': {
-          title: {},
-        },
-        'Session ID': {
-          rich_text: {},
-        },
-        'Assistant Timestamp': {
-          rich_text: {},
-        },
-        'Assistant Message': {
-          rich_text: {},
-        },
-        'Language Preference': {
-          rich_text: {},
-        },
-        'Ranked Docs': {
-          rich_text: {},
-        },
-        'Suggested Messages': {
-          rich_text: {},
-        },
-        'Created At': {
-          date: {},
-        },
-      },
+      properties: Object.fromEntries(
+        Object.entries(buildNotionProperties({
+          session_id: 'test',
+          assistant_timestamp: 'test',
+          user_message: { text: 'test' },
+          assistant_message: { text: 'test' },
+        })).map(([key, value]) => [
+          key,
+          // Extract just the type information from the property
+          {
+            [Object.keys(value)[0]]: {},
+          },
+        ])
+      ),
     });
   } catch (error) {
     console.warn('Failed to update database schema:', error);
