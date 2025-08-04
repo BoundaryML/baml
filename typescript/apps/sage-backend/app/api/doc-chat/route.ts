@@ -1,7 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { submitQuery } from '../../actions/query';
-import { QueryRequestSchema } from '../../types';
+import { QueryRequestSchema } from '@baml/sage-interface';
 
 export async function POST(request: NextRequest) {
   try {

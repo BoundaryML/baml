@@ -4,7 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import BamlLambWhite from './baml-lamb-white.svg';
 import { type Message, messagesAtom } from './store';
-import { type QueryRequest, QueryResponseSchema } from './api-types';
+import { type QueryRequest, QueryResponseSchema } from '@baml/sage-interface';
 
 const OPEN_BY_DEFAULT = true;
 const SESSION_STORAGE_KEY = 'baml-ai-context';

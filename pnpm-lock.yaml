@@ -492,6 +492,9 @@ importers:
 
   typescript/apps/sage-backend:
     dependencies:
+      '@baml/sage-interface':
+        specifier: workspace:*
+        version: link:../../packages/sage-interface
       '@boundaryml/baml':
         specifier: ^0.202.1
         version: 0.202.1
@@ -562,6 +565,9 @@ importers:
 
   typescript/apps/sage-client:
     dependencies:
+      '@baml/sage-interface':
+        specifier: workspace:*
+        version: link:../../packages/sage-interface
       '@baml/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -1055,6 +1061,19 @@ importers:
         version: 10.9.2(@swc/core@1.12.7)(@types/node@24.0.3)(typescript@5.8.3)
       typescript:
         specifier: 5.8.3
+        version: 5.8.3
+
+  typescript/packages/sage-interface:
+    dependencies:
+      zod:
+        specifier: ^4.0.10
+        version: 4.0.10
+    devDependencies:
+      tsup:
+        specifier: ^8.0.0
+        version: 8.5.0(@swc/core@1.12.7)(jiti@2.4.2)(postcss@8.5.6)(tsx@4.20.3)(typescript@5.8.3)(yaml@2.8.0)
+      typescript:
+        specifier: ^5
         version: 5.8.3
 
   typescript/packages/ui:

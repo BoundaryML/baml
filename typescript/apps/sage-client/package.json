@@ -9,6 +9,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@baml/sage-interface": "workspace:*",
     "@baml/ui": "workspace:*",
     "@radix-ui/react-slot": "1.2.3",
     "algoliasearch": "^5.34.1",

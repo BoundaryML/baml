@@ -1,5 +1,5 @@
 import { atom } from 'jotai';
-import { type QueryResponse } from './api-types';
+import { type QueryResponse } from '@baml/sage-interface';
 
 export type Message = {
   id: string;

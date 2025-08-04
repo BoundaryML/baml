@@ -1,24 +1,8 @@
 'use server';
 
-import { z } from 'zod';
 import { b } from '../../baml_client';
-import type { QueryRequest } from '../types';
+import type { QueryRequest, QueryResponse } from '@baml/sage-interface';
 import { searchPinecone } from './rag';
-
-// Define the Zod schema for the response
-const QueryResponseSchema = z.object({
-  ranked_docs: z.array(
-    z.object({
-      title: z.string(),
-      url: z.string(),
-      relevance: z.enum(['very-relevant', 'relevant', 'not-relevant']),
-    }),
-  ),
-  answer: z.string().optional().or(z.null()),
-  suggested_messages: z.array(z.string()).optional(),
-});
-
-export type QueryResponse = z.infer<typeof QueryResponseSchema>;
 
 export async function submitQuery(
   queryRequest: QueryRequest,

@@ -1,8 +1,8 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { type QueryResponse, submitQuery } from './actions/query';
+import { submitQuery } from './actions/query';
 import { PLACEHOLDER_QUERIES } from './eval_data';
-import type { QueryRequest } from './types';
+import { type QueryRequest, type QueryResponse } from '@baml/sage-interface';
 async function hashQueryRequest(request: QueryRequest): Promise<string> {
   const sortedRequest = JSON.stringify(request, Object.keys(request).sort());
   const encoder = new TextEncoder();
