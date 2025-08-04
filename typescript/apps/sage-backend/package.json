@@ -6,7 +6,8 @@
     "dev": "next dev --port 4000",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "vitest"
   },
   "dependencies": {
     "@baml/sage-interface": "workspace:*",
@@ -22,6 +23,7 @@
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "vercel": "^44.5.5",
+    "vitest": "^3.2.4",
     "yaml": "^2.8.0",
     "zod": "^4.0.10"
   },
