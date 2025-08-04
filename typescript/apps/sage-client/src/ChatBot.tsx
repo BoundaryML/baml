@@ -91,43 +91,6 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
     scrollToBottom();
   }, [messages]);
 
-  // Check for stored AI query on mount and when opening, and periodically when open
-  // useEffect(() => {
-  //   if (!isOpen) return;
-
-  //   const checkForNewQuery = () => {
-  //     try {
-  //       const storedContext = localStorage.getItem('baml-ai-context');
-  //       if (storedContext) {
-  //         const context = JSON.parse(storedContext);
-  //         const now = Date.now();
-
-  //         // Check if the context is recent (within 10 seconds)
-  //         if (context.query && now - context.timestamp < 10000) {
-  //           // Set the pending query to be sent
-  //           setPendingQuery(context.query);
-
-  //           // Clear the stored context after using it
-  //           localStorage.removeItem('baml-ai-context');
-  //         }
-  //       }
-  //     } catch (error) {
-  //       console.error('Error processing stored AI context:', error);
-  //       localStorage.removeItem('baml-ai-context');
-  //     }
-  //   };
-
-  //   // Check immediately when opening
-  //   checkForNewQuery();
-
-  //   // Set up interval to check for new queries while panel is open
-  //   const interval = setInterval(checkForNewQuery, 100);
-
-  //   return () => {
-  //     clearInterval(interval);
-  //   };
-  // }, [isOpen]);
-
   // Clear chat functionality
   const clearChat = () => {
     setMessages([]);
