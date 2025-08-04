@@ -62,7 +62,6 @@ declare class ClassPropertyBuilder {
     private bldr;
     constructor(bldr: _ClassPropertyBuilder);
     getType(): FieldType;
-    type(type: FieldType): ClassPropertyBuilder;
     setType(type: FieldType): ClassPropertyBuilder;
     alias(alias: string | null): ClassPropertyBuilder;
     description(description: string | null): ClassPropertyBuilder;

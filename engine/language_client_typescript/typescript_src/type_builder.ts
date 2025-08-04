@@ -221,7 +221,7 @@ class ClassPropertyBuilder {
   }
 
   getType(): FieldType {
-    return this.bldr.get_type()
+    return this.bldr.getType()
   }
 
   setType(type: FieldType): ClassPropertyBuilder {

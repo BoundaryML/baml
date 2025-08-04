@@ -157,11 +157,7 @@ class ClassPropertyBuilder {
         this.bldr = bldr;
     }
     getType() {
-        return this.bldr.get_type();
-    }
-    type(type) {
-        this.bldr.setType(type);
-        return this;
+        return this.bldr.getType();
     }
     setType(type) {
         this.bldr.setType(type);
