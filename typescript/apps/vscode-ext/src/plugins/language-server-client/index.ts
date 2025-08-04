@@ -44,6 +44,8 @@ const intervalTimers: NodeJS.Timeout[] = [];
 let bamlOutputChannel: OutputChannel;
 // Variable to store the path of the currently executing CLI
 let currentExecutingCliPath: string | null = null;
+// Flag to prevent concurrent LSP restarts
+let isRestarting = false;
 
 const isDebugMode = () => process.env.VSCODE_DEBUG_MODE === 'true';
 const isE2ETestOnPullRequest = () => process.env.PRISMA_USE_LOCAL_LS === 'true';
@@ -325,6 +327,41 @@ export const registerClientEventHandlers = (client: LanguageClient, context: Ext
           `============ baml_src_generator_version notification: ${payload.version} ${payload.root_path}`,
         );
 
+        // Check if this version update is for the currently active baml_src directory
+        const activeEditor =
+          window.activeTextEditor || (window.visibleTextEditors.length > 0 ? window.visibleTextEditors[0] : null);
+        if (activeEditor) {
+          try {
+            const currentFilePath = URI.parse(activeEditor.document.uri.toString()).fsPath;
+            const rootPathUri = URI.file(payload.root_path).fsPath;
+            if (!currentFilePath.startsWith(rootPathUri)) {
+              bamlOutputChannel.appendLine(
+                `baml_src_generator_version ignored: root path does not match active editor ${currentFilePath} ${rootPathUri}`,
+              );
+              return;
+            }
+          } catch (e) {
+            console.error('Error checking if root path matches active editor:', e);
+            bamlOutputChannel.appendLine(
+              `ERROR: Error checking if root path matches active editor: ${e}`,
+            );
+            return;
+          }
+        } else {
+          bamlOutputChannel.appendLine(
+            'baml_src_generator_version ignored: no active editor',
+          );
+          return;
+        }
+
+        // Prevent concurrent restarts
+        if (isRestarting) {
+          bamlOutputChannel.appendLine(
+            `baml_src_generator_version ignored: LSP restart already in progress for version ${payload.version}`,
+          );
+          return;
+        }
+
         const syncExtensionToGeneratorVersion =
           BAML_CONFIG_SINGLETON.config?.syncExtensionToGeneratorVersion;
         if (syncExtensionToGeneratorVersion === 'never') {
@@ -399,6 +436,9 @@ export const registerClientEventHandlers = (client: LanguageClient, context: Ext
             `Target path (${targetCliPath}) differs from current (${currentExecutingCliPath}). Restarting LSP...`,
           );
 
+          // Set the restarting flag
+          isRestarting = true;
+
           const serverOptionsForRestart: ServerOptions = {
             run: {
               command: targetCliPath,
@@ -449,6 +489,9 @@ export const registerClientEventHandlers = (client: LanguageClient, context: Ext
                 window.showErrorMessage(
                   `Failed to restart BAML Language Server to version ${version}.`,
                 );
+              } finally {
+                // Clear the restarting flag regardless of success or failure
+                isRestarting = false;
               }
             },
           );
@@ -497,6 +540,8 @@ const activateClient = (
     .then(() => {
       console.log('Language client is ready.');
       clientReady = true;
+      // Clear the restarting flag when client is ready
+      isRestarting = false;
 
       registerClientEventHandlers(client, context);
       console.log('Client event handlers registered.');
@@ -528,6 +573,8 @@ const activateClient = (
     .catch((error) => {
       console.error('Language client failed to become ready:', error);
       clientReady = false;
+      // Clear the restarting flag on failure as well
+      isRestarting = false;
       window.showErrorMessage('BAML Language Server failed to initialize.');
     });
 
@@ -618,7 +665,19 @@ const plugin: BamlVSCodePlugin = {
     context.subscriptions.push(
       commands.registerCommand('baml.restartLanguageServer', async () => {
         console.log("Manual 'baml.restartLanguageServer' command triggered.");
+        
+        // Prevent concurrent restarts
+        if (isRestarting) {
+          window.showWarningMessage('BAML Language Server restart already in progress. Please wait...');
+          bamlOutputChannel.appendLine(
+            'Manual restart ignored: LSP restart already in progress',
+          );
+          return;
+        }
+        
         window.showInformationMessage('Restarting BAML Language Server...');
+        isRestarting = true;
+        
         try {
           const currentVersion =
             BAML_CONFIG_SINGLETON.cliVersion || packageJson.version;
@@ -677,6 +736,9 @@ const plugin: BamlVSCodePlugin = {
           window.showErrorMessage(
             'Failed to manually restart Baml language server.',
           );
+        } finally {
+          // Clear the restarting flag regardless of success or failure
+          isRestarting = false;
         }
       }),
 
