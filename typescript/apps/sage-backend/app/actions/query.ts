@@ -5,9 +5,9 @@ import type { QueryRequest, QueryResponse } from '@baml/sage-interface';
 import { searchPinecone } from './rag';
 
 export async function submitQuery(
-  queryRequest: QueryRequest,
+  request: QueryRequest,
 ): Promise<QueryResponse> {
-  const docs = await searchPinecone(queryRequest.query);
+  const docs = await searchPinecone(request.message.text);
   const pineconeRankedDocs = docs.map((doc) => ({
     title: (doc.metadata?.title ?? '') as string,
     url: (doc.metadata?.slug ?? '') as string,
@@ -15,13 +15,21 @@ export async function submitQuery(
   }));
 
   const plan = await b.PlanQuery({
-    text: queryRequest.query,
-    language_preference: queryRequest.language_preference,
+    text: request.message.text,
+    language_preference: request.message.language_preference,
     context_docs: pineconeRankedDocs.map((doc) => ({
       title: doc.title,
       body: doc.body,
     })),
-    prev_messages: queryRequest.prev_messages,
+    prev_messages: request.prev_messages.map((msg) => {
+      if (msg.role === 'assistant') {
+        return {
+          role: 'assistant',
+          text: msg.text ?? '',
+        };
+      }
+      return msg;
+    }),
   });
 
   // Merge titles from rankedDocs into plan.ranked_docs
@@ -36,13 +44,15 @@ export async function submitQuery(
     };
   });
 
-  const resp = {
-    answer: plan.answer,
-    ranked_docs: Array.from(
-      new Map(relevantDocs.map((doc) => [doc.url, doc])).values(),
-    ),
-    suggested_messages: plan.refine_query?.suggested_queries,
+  return {
+    session_id: request.session_id,
+    message: {
+      role: 'assistant',
+      text: plan.answer,
+      ranked_docs: Array.from(
+        new Map(relevantDocs.map((doc) => [doc.url, doc])).values(),
+      ),
+      suggested_messages: plan.refine_query?.suggested_queries,
+    },
   };
-
-  return resp;
 }

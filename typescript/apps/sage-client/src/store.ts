@@ -1,18 +1,12 @@
 import { atom } from 'jotai';
-import { type QueryResponse } from '@baml/sage-interface';
+import { type UserMessage, type AssistantMessage } from '@baml/sage-interface';
 
-export type Message = {
+export type StoredMessage = {
   id: string;
   timestamp: Date;
 } & (
-  | {
-      role: 'user';
-      text: string;
-    }
-  | {
-      role: 'assistant/success';
-      response: QueryResponse;
-    }
+  | UserMessage
+  | AssistantMessage
   | {
       role: 'assistant/error';
       error: {
@@ -27,7 +21,7 @@ export type Message = {
 );
 
 // Session storage functions
-const getSessionStorageMessages = (): Message[] => {
+const getSessionStorageMessages = (): StoredMessage[] => {
   try {
     const stored = sessionStorage.getItem('baml-chat-messages');
     if (stored) {
@@ -46,7 +40,7 @@ const getSessionStorageMessages = (): Message[] => {
   return [];
 };
 
-const setSessionStorageMessages = (messages: Message[]) => {
+const setSessionStorageMessages = (messages: StoredMessage[]) => {
   try {
     console.log('Saving messages to session storage:', messages.length);
     sessionStorage.setItem('baml-chat-messages', JSON.stringify(messages));
@@ -56,12 +50,12 @@ const setSessionStorageMessages = (messages: Message[]) => {
 };
 
 // Base atom for messages
-const baseMessagesAtom = atom<Message[]>(getSessionStorageMessages());
+const baseMessagesAtom = atom<StoredMessage[]>(getSessionStorageMessages());
 
 // Derived atom that persists to session storage on write
 export const messagesAtom = atom(
   (get) => get(baseMessagesAtom),
-  (get, set, newMessages: Message[]) => {
+  (get, set, newMessages: StoredMessage[]) => {
     set(baseMessagesAtom, newMessages);
     setSessionStorageMessages(newMessages);
   }

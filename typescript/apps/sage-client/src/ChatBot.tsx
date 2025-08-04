@@ -3,8 +3,8 @@ import React, { useRef, useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import BamlLambWhite from './baml-lamb-white.svg';
-import { type Message, messagesAtom } from './store';
-import { type QueryRequest, QueryResponseSchema } from '@baml/sage-interface';
+import { type StoredMessage, messagesAtom } from './store';
+import { Message, type QueryRequest, QueryResponseSchema } from '@baml/sage-interface';
 
 const OPEN_BY_DEFAULT = true;
 const SESSION_STORAGE_KEY = 'baml-ai-context';
@@ -16,17 +16,9 @@ interface ChatBotProps {
 }
 
 // Transform messages for API format
-const transformMessagesForAPI = (messages: Message[]): Array<{role: 'user' | 'assistant', text: string}> => {
+const transformMessagesForAPI = (messages: StoredMessage[]): Array<Message> => {
   return messages
-    .filter(msg => msg.role === 'user' || (msg.role === 'assistant/success' && msg.response.answer))
-    .map(msg => {
-      if (msg.role === 'user') {
-        return { role: 'user', text: msg.text };
-      } else if (msg.role === 'assistant/success' && msg.response.answer) {
-        return { role: 'assistant', text: msg.response.answer };
-      }
-      throw new Error('Unexpected message type in transform');
-    });
+    .filter(msg => msg.role === 'user' || msg.role === 'assistant');
 };
 
 // Serialize errors to storable format
@@ -100,7 +92,7 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
     if (!text.trim()) return;
 
     // Add user message
-    const userMessage: Message = {
+    const userMessage: StoredMessage = {
       id: Date.now().toString(),
       role: 'user',
       text: text.trim(),
@@ -108,7 +100,7 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
     };
     
     // Add progress message
-    const progressMessage: Message = {
+    const progressMessage: StoredMessage = {
       id: (Date.now() + 1).toString(),
       role: 'assistant/progress',
       timestamp: new Date(),
@@ -122,17 +114,21 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
 
     try {
       const data = await postDocChat({
-        query: text.trim(),
+        // TODO: session ID placeholder
+        session_id: 'asdf',
+        message: {
+          role: 'user',
+          text: text.trim(),
+        },
         // TODO: add language preference
         prev_messages: transformMessagesForAPI(messagesWithProgress),
       });
 
       // Create success message with the response
-      const successMessage: Message = {
+      const successMessage: StoredMessage = {
         id: progressMessage.id,
-        role: 'assistant/success',
         timestamp: new Date(),
-        response: data,
+        ...data
       };
 
       // Replace progress message with success message
@@ -143,8 +139,8 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
       );
 
       // Auto-navigate to first very-relevant doc on same domain if available
-      if (data.ranked_docs && data.ranked_docs.length > 0) {
-        const veryRelevantSameDomainDoc = data.ranked_docs.find(
+      if (data.message.ranked_docs && data.message.ranked_docs.length > 0) {
+        const veryRelevantSameDomainDoc = data.message.ranked_docs.find(
           (doc) => doc.relevance === 'very-relevant' && doc.url.startsWith('/'),
         );
         if (veryRelevantSameDomainDoc && (window as any).navigateToDoc) {
@@ -162,7 +158,7 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
       console.error('Error sending message:', error);
 
       // Create error message
-      const errorMessage: Message = {
+      const errorMessage: StoredMessage = {
         id: progressMessage.id,
         role: 'assistant/error',
         timestamp: new Date(),
@@ -197,7 +193,7 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
     // Get the last user message to retry
     const lastUserMessage = [...messages].reverse().find(msg => msg.role === 'user');
     if (lastUserMessage && lastUserMessage.role === 'user') {
-      sendMessage(lastUserMessage.text);
+      sendMessage(lastUserMessage.message);
     }
   };
 
@@ -325,22 +321,6 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
         }}
       />
 
-      {/*
-      <Messages
-          chatId={'asdf'}
-          status={'submitted'}
-          // votes={votes}
-          // messages={messages}
-          messages={[]}
-          // setMessages={setMessages}
-          setMessages={() => {}}
-          // regenerate={() => {}}
-          regenerate={() => Promise.resolve()}
-          isReadonly={false}
-          isArtifactVisible={false}
-        /> */}
-
-      {/* <DataStreamHandler /> */}
 
       {/* Header */}
       <div
@@ -595,7 +575,7 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
                 }}
               >
                 {message.role === 'user' ? (
-                  message.text
+                  message.message
                 ) : message.role === 'assistant/error' ? (
                   <div>
                     {(() => {
@@ -810,7 +790,7 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
                     ),
                   }}
                 >
-                  {message.response.answer || "Sorry, I'm not sure how to answer that."}
+                  {message.message.answer || "Sorry, I'm not sure how to answer that."}
                 </ReactMarkdown>
               ) : null}
               {message.role === 'assistant/error' && (
@@ -872,7 +852,7 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
             </div>
 
             {/* Related docs */}
-            {message.role === 'assistant/success' && message.response.ranked_docs && message.response.ranked_docs.length > 0 && (
+            {message.role === 'assistant/success' && message.message.ranked_docs && message.message.ranked_docs.length > 0 && (
               <div
                 style={{
                   fontSize: '12px',
@@ -892,7 +872,7 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
                 >
                   📖 Related documentation:
                 </div>
-                {message.response.ranked_docs.map((doc) => (
+                {message.message.ranked_docs.map((doc) => (
                   <div key={doc.url} style={{ marginBottom: '4px' }}>
                     <a
                       href={doc.url}
@@ -907,7 +887,7 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
                           if ((window as any).navigateToDoc) {
                             (window as any).navigateToDoc(
                               { u: doc.url, t: doc.title, sel: 'article' },
-                              message.response.answer || '',
+                              message.message.answer || '',
                             );
                           } else {
                             // Fallback to normal navigation if navigateToDoc is not available
@@ -949,7 +929,7 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
             )}
             
             {/* Suggestions */}
-            {message.role === 'assistant/success' && message.response.suggested_messages && message.response.suggested_messages.length > 0 && (
+            {message.role === 'assistant/success' && message.message.suggested_messages && message.message.suggested_messages.length > 0 && (
               <div
                 style={{
                   fontSize: '12px',
@@ -969,7 +949,7 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
                 >
                   💡 Suggested follow-ups:
                 </div>
-                {message.response.suggested_messages.map((suggestion, index) => (
+                {message.message.suggested_messages.map((suggestion, index) => (
                   <div key={index} style={{ marginBottom: '4px' }}>
                     <button
                       onClick={() => sendMessage(suggestion)}
