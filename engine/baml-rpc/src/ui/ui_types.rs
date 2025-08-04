@@ -184,8 +184,8 @@ pub struct UiHttpRequest {
     pub start_time: EpochMsTimestamp,
     pub url: String,
     pub method: String,
-    #[ts(type = "Record<string, any>")]
-    pub headers: HashMap<String, String>,
+    #[ts(type = "Record<string, any> | undefined")]
+    pub headers: Option<HashMap<String, String>>,
     pub body: String,
 }
 

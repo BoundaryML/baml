@@ -155,7 +155,7 @@ pub fn scan_anthropic_response_stream(
             inner.total_tokens = Some(inner.prompt_tokens.unwrap_or(0) + body.usage.output_tokens);
         }
         MessageChunk::MessageStop => (),
-        MessageChunk::Error(err) => {
+        MessageChunk::Error { error } => {
             return Err(LLMErrorResponse {
                 client: client_name.to_string(),
                 model: model_name.clone(),
@@ -163,7 +163,7 @@ pub fn scan_anthropic_response_stream(
                 request_options: request_options.clone(),
                 start_time: *system_now,
                 latency: instant_now.elapsed(),
-                message: err.message,
+                message: error.message.unwrap_or_default(),
                 code: ErrorCode::Other(2),
             });
         }

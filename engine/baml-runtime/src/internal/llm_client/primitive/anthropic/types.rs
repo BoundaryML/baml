@@ -88,7 +88,8 @@ pub struct AnthropicErrorResponse {
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 pub struct AnthropicErrorInner {
     pub r#type: String,
-    pub message: String,
+    pub message: Option<String>,
+    pub details: Option<serde_json::Value>,
 }
 
 /// The stream chunk of messages.
@@ -109,7 +110,9 @@ pub enum MessageChunk {
     MessageDelta(MessageDeltaChunk),
     /// Message stop chunk.
     MessageStop,
-    Error(AnthropicErrorInner),
+    Error {
+        error: AnthropicErrorInner,
+    },
     /// Fallback for unknown types
     #[serde(other)]
     Other,
