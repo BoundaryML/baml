@@ -50,6 +50,7 @@ func TestDynamicClassCreation(t *testing.T) {
 		// Verify basic properties still work
 		assert.NotNil(t, person.Name)
 		assert.NotNil(t, person.Hair_color)
+		assert.NotNil(t, person.DynamicProperties["height"])
 	}
 }
 
