@@ -2373,7 +2373,7 @@ class DummyOutputBuilder(DummyOutputAst):
             raise ValueError(f"Property {name} already exists.")
         return self._bldr.property(name).type(type)
 
-    def list_properties(self) -> typing.List[typing.Tuple[str, typing.Optional[baml_py.FieldType]]]:
+    def list_properties(self) -> typing.List[typing.Tuple[str, baml_py.FieldType]]:
         return self._bldr.list_properties()
 
     def remove_property(self, name: str) -> None:
@@ -2433,7 +2433,7 @@ class DynInputOutputBuilder(DynInputOutputAst):
             raise ValueError(f"Property {name} already exists.")
         return self._bldr.property(name).type(type)
 
-    def list_properties(self) -> typing.List[typing.Tuple[str, typing.Optional[baml_py.FieldType]]]:
+    def list_properties(self) -> typing.List[typing.Tuple[str, baml_py.FieldType]]:
         return self._bldr.list_properties()
 
     def remove_property(self, name: str) -> None:
@@ -2489,7 +2489,7 @@ class DynamicClassOneBuilder(DynamicClassOneAst):
             raise ValueError(f"Property {name} already exists.")
         return self._bldr.property(name).type(type)
 
-    def list_properties(self) -> typing.List[typing.Tuple[str, typing.Optional[baml_py.FieldType]]]:
+    def list_properties(self) -> typing.List[typing.Tuple[str, baml_py.FieldType]]:
         return self._bldr.list_properties()
 
     def remove_property(self, name: str) -> None:
@@ -2541,7 +2541,7 @@ class DynamicClassTwoBuilder(DynamicClassTwoAst):
             raise ValueError(f"Property {name} already exists.")
         return self._bldr.property(name).type(type)
 
-    def list_properties(self) -> typing.List[typing.Tuple[str, typing.Optional[baml_py.FieldType]]]:
+    def list_properties(self) -> typing.List[typing.Tuple[str, baml_py.FieldType]]:
         return self._bldr.list_properties()
 
     def remove_property(self, name: str) -> None:
@@ -2605,7 +2605,7 @@ class DynamicOutputBuilder(DynamicOutputAst):
             raise ValueError(f"Property {name} already exists.")
         return self._bldr.property(name).type(type)
 
-    def list_properties(self) -> typing.List[typing.Tuple[str, typing.Optional[baml_py.FieldType]]]:
+    def list_properties(self) -> typing.List[typing.Tuple[str, baml_py.FieldType]]:
         return self._bldr.list_properties()
 
     def remove_property(self, name: str) -> None:
@@ -2657,7 +2657,7 @@ class DynamicSchemaBuilder(DynamicSchemaAst):
             raise ValueError(f"Property {name} already exists.")
         return self._bldr.property(name).type(type)
 
-    def list_properties(self) -> typing.List[typing.Tuple[str, typing.Optional[baml_py.FieldType]]]:
+    def list_properties(self) -> typing.List[typing.Tuple[str, baml_py.FieldType]]:
         return self._bldr.list_properties()
 
     def remove_property(self, name: str) -> None:
@@ -4586,7 +4586,7 @@ class OriginalBBuilder(OriginalBAst):
             raise ValueError(f"Property {name} already exists.")
         return self._bldr.property(name).type(type)
 
-    def list_properties(self) -> typing.List[typing.Tuple[str, typing.Optional[baml_py.FieldType]]]:
+    def list_properties(self) -> typing.List[typing.Tuple[str, baml_py.FieldType]]:
         return self._bldr.list_properties()
 
     def remove_property(self, name: str) -> None:
@@ -4642,7 +4642,7 @@ class PersonBuilder(PersonAst):
             raise ValueError(f"Property {name} already exists.")
         return self._bldr.property(name).type(type)
 
-    def list_properties(self) -> typing.List[typing.Tuple[str, typing.Optional[baml_py.FieldType]]]:
+    def list_properties(self) -> typing.List[typing.Tuple[str, baml_py.FieldType]]:
         return self._bldr.list_properties()
 
     def remove_property(self, name: str) -> None:
@@ -5337,7 +5337,7 @@ class SomeClassNestedDynamicBuilder(SomeClassNestedDynamicAst):
             raise ValueError(f"Property {name} already exists.")
         return self._bldr.property(name).type(type)
 
-    def list_properties(self) -> typing.List[typing.Tuple[str, typing.Optional[baml_py.FieldType]]]:
+    def list_properties(self) -> typing.List[typing.Tuple[str, baml_py.FieldType]]:
         return self._bldr.list_properties()
 
     def remove_property(self, name: str) -> None:

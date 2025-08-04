@@ -120,7 +120,7 @@ class NewClassBuilder:
     def type(self) -> FieldType:
         return self.__bldr.field()
 
-    def list_properties(self) -> typing.List[typing.Tuple[str, typing.Optional[FieldType]]]:
+    def list_properties(self) -> typing.List[typing.Tuple[str, FieldType]]:
         return self.__bldr.list_properties()
 
     def clear(self):
