@@ -34,7 +34,8 @@
       "Bash(mv:*)",
       "Bash(tree:*)",
       "Bash(rg:*)",
-      "Bash(cargo build:*)"
+      "Bash(cargo build:*)",
+      "Bash(UPDATE_EXPECT=1 cargo test secure_types)"
     ],
     "deny": []
   }

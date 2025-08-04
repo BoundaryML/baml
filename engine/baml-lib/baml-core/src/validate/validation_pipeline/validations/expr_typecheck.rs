@@ -387,12 +387,16 @@ pub fn typecheck_in_context(
                     ));
                 }
             }
-            
+
             typecheck_in_context(ir, diagnostics, typing_context, base)?;
             typecheck_in_context(ir, diagnostics, typing_context, index)?;
         }
         Expr::FieldAccess { base, field, meta } => {
             // Check that base is a class type and has the requested field
+            panic!(
+                "ctx: {:?}, Field access: {:?}, field: {:?}",
+                typing_context, base, field
+            );
             match &base.meta().1 {
                 Some(TypeIR::Class { name, .. }) => {
                     if let Ok(class_walker) = ir.find_class(name) {
@@ -416,7 +420,7 @@ pub fn typecheck_in_context(
                     ));
                 }
             }
-            
+
             typecheck_in_context(ir, diagnostics, typing_context, base)?;
         }
     };
@@ -657,14 +661,14 @@ pub fn infer_types_in_context(
         Expr::ArrayAccess { base, index, meta } => {
             let new_base = infer_types_in_context(typing_context, base.clone());
             let new_index = infer_types_in_context(typing_context, index.clone());
-            
+
             // Infer the type based on the base type
             let inferred_type = match &new_base.meta().1 {
                 Some(TypeIR::List(inner_type, _)) => Some(*inner_type.clone()),
                 Some(TypeIR::Map(_, value_type, _)) => Some(*value_type.clone()),
                 _ => meta.1.clone(), // Fall back to existing type annotation
             };
-            
+
             let new_meta = (meta.0.clone(), inferred_type);
             Arc::new(Expr::ArrayAccess {
                 base: new_base,
@@ -674,7 +678,7 @@ pub fn infer_types_in_context(
         }
         Expr::FieldAccess { base, field, meta } => {
             let new_base = infer_types_in_context(typing_context, base.clone());
-            
+
             // Try to infer field type from class definition
             let inferred_type = match &new_base.meta().1 {
                 Some(TypeIR::Class { name, .. }) => {
@@ -684,7 +688,7 @@ pub fn infer_types_in_context(
                 }
                 _ => meta.1.clone(),
             };
-            
+
             let new_meta = (meta.0.clone(), inferred_type);
             Arc::new(Expr::FieldAccess {
                 base: new_base,
