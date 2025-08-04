@@ -371,7 +371,7 @@ class MyCustomClass(NamedArgsSingleClass):
 
 
 @pytest.mark.asyncio
-async def accepts_subclass_of_baml_type():
+async def test_accepts_subclass_of_baml_type():
     print("calling with class")
     _ = await b.TestFnNamedArgsSingleClass(
         myArg=MyCustomClass(
