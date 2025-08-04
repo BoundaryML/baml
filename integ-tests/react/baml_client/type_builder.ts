@@ -745,16 +745,16 @@ export default class TypeBuilder {
         
     }
 
-    clear(): void {
-        this.tb.clear();
+    reset(): void {
+        this.tb.reset();
         // TODO: This should happen in Rust. Problem is, when we construct the
         // typebuilder we instantiate class builders once and it seems to make
         // a JS copy, bypassing the Rust side? In Python however, every time we
         // access a class builder with @property, we get a new instance that
-        // wraps over the Rust type builder, so we only need to call tb.clear().
+        // wraps over the Rust type builder, so we only need to call tb.reset().
         // In JS it's not possible unless we refactor the way class builders are
         // accessed.
-         this.DummyOutput.clear();  this.DynInputOutput.clear();  this.DynamicClassOne.clear();  this.DynamicClassTwo.clear();  this.DynamicOutput.clear();  this.DynamicSchema.clear();  this.OriginalB.clear();  this.Person.clear();  this.SomeClassNestedDynamic.clear(); 
+         this.DummyOutput.reset();  this.DynInputOutput.reset();  this.DynamicClassOne.reset();  this.DynamicClassTwo.reset();  this.DynamicOutput.reset();  this.DynamicSchema.reset();  this.OriginalB.reset();  this.Person.reset();  this.SomeClassNestedDynamic.reset(); 
     }
 
     __tb() {

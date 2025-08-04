@@ -31,8 +31,8 @@ export class TypeBuilder {
     this.runtime = runtime
   }
 
-  clear(): void {
-    this.tb.clear()
+  reset(): void {
+    this.tb.reset()
   }
 
   _tb(): _TypeBuilder {
@@ -188,16 +188,17 @@ export class ClassBuilder<ClassName extends string, Properties extends string = 
     return new ClassPropertyBuilder(this.bldr.property(name).setType(type))
   }
 
-  listProperties(): Record<string, FieldType> {
+  listProperties(): Array<[string, ClassPropertyBuilder]> {
     return this.bldr.listProperties()
   }
 
   removeProperty(name: string): void {
+    this.properties.delete(name)
     this.bldr.removeProperty(name)
   }
 
-  clear(): void {
-    this.bldr.clear()
+  reset(): void {
+    this.bldr.reset()
   }
 
   property(name: string): ClassPropertyBuilder {
@@ -217,6 +218,15 @@ class ClassPropertyBuilder {
 
   constructor(bldr: _ClassPropertyBuilder) {
     this.bldr = bldr
+  }
+
+  getType(): FieldType {
+    return this.bldr.get_type()
+  }
+
+  setType(type: FieldType): ClassPropertyBuilder {
+    this.bldr.setType(type)
+    return this
   }
 
   alias(alias: string | null): ClassPropertyBuilder {

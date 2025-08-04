@@ -61,15 +61,16 @@ export declare class BamlVideo {
 }
 
 export declare class ClassBuilder {
-  listProperties(): Record<string, FieldType>
+  listProperties(): unknown[]
   removeProperty(name: string): void
-  clear(): void
+  reset(): void
   field(): FieldType
   property(name: string): ClassPropertyBuilder
 }
 
 export declare class ClassPropertyBuilder {
   setType(fieldType: FieldType): ClassPropertyBuilder
+  getType(): FieldType
   alias(alias?: string | undefined | null): ClassPropertyBuilder
   description(description?: string | undefined | null): ClassPropertyBuilder
 }
@@ -218,7 +219,7 @@ export declare class TraceStats {
 
 export declare class TypeBuilder {
   constructor()
-  clear(): void
+  reset(): void
   getEnum(name: string): EnumBuilder
   getClass(name: string): ClassBuilder
   list(inner: FieldType): FieldType

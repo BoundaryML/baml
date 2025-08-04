@@ -564,10 +564,10 @@ def test_type_builder_reset():
     tb.Person.add_property("height", tb.float().optional()).description("Height in meters")
     tb.reset()
 
-    person_props_after_tb_clear = {name for name, _ in tb.Person.list_properties()}
+    person_props_after_tb_reset = {name for name, _ in tb.Person.list_properties()}
 
-    assert "last_name" not in person_props_after_tb_clear
-    assert "height" not in person_props_after_tb_clear
+    assert "last_name" not in person_props_after_tb_reset
+    assert "height" not in person_props_after_tb_reset
 
 
 def test_type_builder_class_reset():

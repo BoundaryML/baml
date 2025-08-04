@@ -227,7 +227,7 @@ impl ClassBuilder {
             .unwrap()
             .list_properties()
             .into_iter()
-            .map(|(name, prop)| (name, prop.into()))
+            .map(|(name, prop_builder)| (name, prop_builder.into()))
             .collect()
     }
 

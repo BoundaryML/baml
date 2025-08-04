@@ -4,6 +4,7 @@ use std::collections::BTreeMap;
 // We use NAPI-RS to expose Rust functionality to JavaScript/TypeScript
 use baml_runtime::type_builder::{self, WithMeta};
 use baml_types::{ir_type::UnionConstructor, BamlValue};
+use napi::{bindgen_prelude::Array, Env};
 use napi_derive::napi;
 
 // Create TypeScript-compatible wrappers for our Rust types
@@ -66,7 +67,7 @@ impl TypeBuilder {
     }
 
     #[napi]
-    pub fn clear(&self) {
+    pub fn reset(&self) {
         self.inner.reset();
     }
 
@@ -243,25 +244,25 @@ impl EnumValueBuilder {
 #[napi]
 impl ClassBuilder {
     #[napi]
-    pub fn list_properties(&self) -> napi::Result<BTreeMap<String, FieldType>> {
-        self.inner
+    pub fn list_properties(&self, env: Env) -> napi::Result<Array> {
+        let properties = self
+            .inner
             .lock()
             .unwrap()
             .list_properties()
             .into_iter()
-            .map(|(name, prop)| match prop.get_type() {
-                Some(field_type) => Ok((name, field_type.into())),
+            .map(|(name, prop)| (name, ClassPropertyBuilder::from(prop)));
 
-                // This should not happen because the call to ClassBuilder::property
-                // is not exposed to the user. We only expose add_property which
-                // requires a type.
-                None => Err(crate::errors::from_anyhow_error(anyhow::anyhow!(
-                    "property '{}' of class builder '{}' has no defined type, this is likely an internal bug",
-                    name,
-                    self.name,
-                ))),
-            })
-            .collect()
+        let mut js_array = env.create_array(properties.len() as u32)?;
+
+        for (i, (name, prop_builder)) in properties.enumerate() {
+            let mut tuple = env.create_array(2)?;
+            tuple.set(0, env.create_string(&name)?)?;
+            tuple.set(1, prop_builder.into_instance(env)?)?;
+            js_array.set(i as u32, tuple)?;
+        }
+
+        Ok(js_array)
     }
 
     #[napi]
@@ -270,7 +271,7 @@ impl ClassBuilder {
     }
 
     #[napi]
-    pub fn clear(&self) {
+    pub fn reset(&self) {
         self.inner.lock().unwrap().reset();
     }
 
@@ -294,6 +295,18 @@ impl ClassPropertyBuilder {
             .unwrap()
             .r#type(field_type.inner.lock().unwrap().clone());
         self.inner.clone().into()
+    }
+
+    #[napi]
+    pub fn get_type(&self) -> napi::Result<FieldType> {
+        self.inner
+            .lock()
+            .unwrap()
+            .get_type()
+            .map(FieldType::from)
+            .ok_or_else(|| crate::errors::from_anyhow_error(anyhow::anyhow!(
+                "attempted to read a property that has no defined type, this is likely an internal bug"
+            )))
     }
 
     #[napi]
