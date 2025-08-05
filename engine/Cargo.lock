@@ -927,6 +927,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml-compiler"
+version = "0.202.1"
+dependencies = [
+ "anyhow",
+ "baml-types",
+ "internal-baml-core",
+ "internal-baml-diagnostics",
+ "internal-baml-parser-database",
+ "itertools 0.14.0",
+ "pretty",
+]
+
+[[package]]
 name = "baml-derive"
 version = "0.202.1"
 dependencies = [

@@ -1,0 +1,16 @@
+[package]
+edition = "2021"
+name = "baml-compiler"
+version.workspace = true
+authors.workspace = true
+description = "BAML Bytecode Compiler"
+license-file.workspace = true
+
+[dependencies]
+baml-types = { path = "../baml-lib/baml-types" }
+internal-baml-core = { path = "../baml-lib/baml-core" }
+internal-baml-diagnostics = { path = "../baml-lib/diagnostics" }
+internal-baml-parser-database = { path = "../baml-lib/parser-database" }
+anyhow = { workspace = true }
+itertools = { workspace = true }
+pretty = { workspace = true }
