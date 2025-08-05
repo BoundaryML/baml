@@ -30,7 +30,7 @@ use tracing::field;
 #[cfg(target_family = "wasm")]
 use wasmtimer::tokio::*;
 
-use super::rpc_converters::{to_rpc_event, IntoRpcEvent, TypeLookup};
+use super::rpc_converters::{to_rpc_event, IRRpcState, IntoRpcEvent, TypeLookup};
 use crate::{
     runtime::{AstSignatureWrapper, InternalBamlRuntime},
     tracingv2::storage::interface::TraceEventWithMeta,
