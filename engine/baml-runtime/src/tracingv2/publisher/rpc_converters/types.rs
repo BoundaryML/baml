@@ -6,12 +6,12 @@ use baml_types::{
     StreamingMode, TypeValue,
 };
 
-use super::{IntoRpcEvent, TypeLookup};
+use super::{IntoRpcEvent, IRRpcState};
 
 impl<'a, T: HasType<type_meta::NonStreaming>> IntoRpcEvent<'a, runtime_api::BamlValue<'a>>
     for BamlValueWithMeta<T>
 {
-    fn to_rpc_event(&'a self, lookup: &(impl TypeLookup + ?Sized)) -> runtime_api::BamlValue<'a> {
+    fn to_rpc_event(&'a self, lookup: &(impl IRRpcState + ?Sized)) -> runtime_api::BamlValue<'a> {
         let type_ref = self.field_type().to_rpc_event(lookup);
         let value = match self {
             BamlValueWithMeta::String(s, _) => {
@@ -86,7 +86,7 @@ impl<'a, T: HasType<type_meta::NonStreaming>> IntoRpcEvent<'a, runtime_api::Baml
 fn matches_value_with_rpc_type<T: HasType<type_meta::NonStreaming>>(
     value: &BamlValueWithMeta<T>,
     rpc_type_ref: &baml_rpc::TypeReferenceWithMetadata<baml_rpc::TypeMetadata>,
-    lookup: &(impl TypeLookup + ?Sized),
+    lookup: &(impl IRRpcState + ?Sized),
 ) -> bool {
     use baml_rpc::TypeReferenceWithMetadata;
     match (value, rpc_type_ref) {
@@ -159,7 +159,7 @@ fn matches_value_with_rpc_type<T: HasType<type_meta::NonStreaming>>(
 }
 
 impl<'a> IntoRpcEvent<'a, baml_rpc::TypeReference> for baml_types::ir_type::TypeNonStreaming {
-    fn to_rpc_event(&'a self, lookup: &(impl TypeLookup + ?Sized)) -> baml_rpc::TypeReference {
+    fn to_rpc_event(&'a self, lookup: &(impl IRRpcState + ?Sized)) -> baml_rpc::TypeReference {
         use baml_rpc::{LiteralTypeDefinition, MediaTypeDefinition, TypeMetadata, TypeReference};
         let mut base_ref = match self {
             TypeGeneric::Primitive(type_value, _) => match type_value {
@@ -250,7 +250,7 @@ impl<'a> IntoRpcEvent<'a, baml_rpc::TypeReference> for baml_types::ir_type::Type
 }
 
 impl<'a> IntoRpcEvent<'a, baml_rpc::Expression> for baml_types::JinjaExpression {
-    fn to_rpc_event(&'a self, lookup: &(impl TypeLookup + ?Sized)) -> baml_rpc::Expression {
+    fn to_rpc_event(&'a self, lookup: &(impl IRRpcState + ?Sized)) -> baml_rpc::Expression {
         baml_rpc::Expression::Jinja(self.0.to_string())
     }
 }
@@ -258,7 +258,7 @@ impl<'a> IntoRpcEvent<'a, baml_rpc::Expression> for baml_types::JinjaExpression 
 impl<'a> IntoRpcEvent<'a, baml_rpc::runtime_api::Media<'a>> for baml_types::BamlMedia {
     fn to_rpc_event(
         &'a self,
-        lookup: &(impl TypeLookup + ?Sized),
+        lookup: &(impl IRRpcState + ?Sized),
     ) -> baml_rpc::runtime_api::Media<'a> {
         baml_rpc::runtime_api::Media {
             mime_type: self.mime_type.clone(),
@@ -270,7 +270,7 @@ impl<'a> IntoRpcEvent<'a, baml_rpc::runtime_api::Media<'a>> for baml_types::Baml
 impl<'a> IntoRpcEvent<'a, baml_rpc::runtime_api::MediaValue<'a>> for baml_types::BamlMediaContent {
     fn to_rpc_event(
         &'a self,
-        lookup: &(impl TypeLookup + ?Sized),
+        lookup: &(impl IRRpcState + ?Sized),
     ) -> baml_rpc::runtime_api::MediaValue<'a> {
         match self {
             baml_types::BamlMediaContent::Url(url) => {

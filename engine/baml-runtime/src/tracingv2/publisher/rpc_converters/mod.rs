@@ -17,13 +17,19 @@ pub trait TypeLookup {
     fn baml_src_hash(&self) -> Option<String>;
 }
 
+// Add + BlobStorage after typelookup
+pub trait IRRpcState: TypeLookup {}
+
+// add +blobstorage after typelookup
+impl<T: TypeLookup> IRRpcState for T {}
+
 pub(crate) trait IntoRpcEvent<'a, RpcOutputType> {
-    fn to_rpc_event(&'a self, lookup: &(impl TypeLookup + ?Sized)) -> RpcOutputType;
+    fn to_rpc_event(&'a self, lookup: &(impl IRRpcState + ?Sized)) -> RpcOutputType;
 }
 
 pub(super) fn to_rpc_event<'a>(
     event: &'a TraceEventWithMeta,
-    lookup: &(impl TypeLookup + ?Sized),
+    lookup: &(impl IRRpcState + ?Sized),
 ) -> baml_rpc::runtime_api::BackendTraceEvent<'a> {
     let timestamp = baml_rpc::EpochMsTimestamp::try_from(event.timestamp)
         .expect("Failed to convert timestamp to EpochMsTimestamp");
@@ -41,7 +47,7 @@ impl<'a, T: HasType<type_meta::NonStreaming>> IntoRpcEvent<'a, baml_rpc::runtime
 {
     fn to_rpc_event(
         &'a self,
-        lookup: &(impl TypeLookup + ?Sized),
+        lookup: &(impl IRRpcState + ?Sized),
     ) -> baml_rpc::runtime_api::TraceData<'a> {
         use baml_types::tracing::events::TraceData;
 
