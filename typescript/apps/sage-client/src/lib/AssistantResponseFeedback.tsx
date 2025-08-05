@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import type React from 'react';
+import { useState } from 'react';
 import { ThumbsUp, ThumbsDown } from 'lucide-react';
 import { useAtomValue } from 'jotai';
-import type { SendFeedbackRequest, Message } from '@baml/sage-interface';
+import type { SendFeedbackRequest } from '@baml/sage-interface';
 import { sessionIdAtom, messagesAtom } from '../store';
 
 interface AssistantResponseFeedbackProps {
@@ -12,21 +13,6 @@ const FEEDBACK_API_ENDPOINT =
   process.env.NODE_ENV === 'development'
     ? 'http://localhost:4000/api/feedback'
     : 'https://baml-sage-backend.vercel.app/api/feedback';
-
-// Helper to transform stored messages to API format
-const transformMessagesForAPI = (messages: any[]): Message[] => {
-  return messages
-    .filter((msg) => msg.role === 'user' || msg.role === 'assistant')
-    .map((msg) => {
-      if (msg.role === 'user') {
-        return msg; // UserMessage is already correct
-      } else if (msg.role === 'assistant') {
-        return msg; // AssistantMessage is already correct
-      }
-      // This should never happen due to the filter, but TypeScript needs it
-      throw new Error('Unexpected message type in transform');
-    });
-};
 
 export const AssistantResponseFeedback: React.FC<
   AssistantResponseFeedbackProps
@@ -82,7 +68,9 @@ export const AssistantResponseFeedback: React.FC<
         session_id: sessionId,
         feedback_type: feedbackModal.feedbackType,
         comment: feedbackComment || undefined,
-        messages: transformMessagesForAPI(messagesToSend),
+        messages: messagesToSend.filter(
+          (msg) => msg.role === 'user' || msg.role === 'assistant',
+        ),
       };
 
       const response = await fetch(FEEDBACK_API_ENDPOINT, {
