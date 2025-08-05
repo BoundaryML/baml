@@ -32,13 +32,13 @@ export class NotionLogger {
    * Helper method to build Notion page properties from log entry data
    */
   private buildNotionProperties = (data: NotionLogEntry) => {
-    const { text: userMessageText, ...userMessageRest } = data.user_message;
-    const { text: assistantMessageText, ...assistantMessageRest } = data.assistant_message;
+    const { text: userMessageText, role: _userRole, ...userMessageRest } = data.user_message;
+    const { text: assistantMessageText, role: _assistantRole, ...assistantMessageRest } = data.assistant_message;
 
     return {
       // Session ID (Text field)
       'Session ID': {
-        rich_text: [
+        title: [
           {
             text: {
               content: data.session_id,
@@ -135,6 +135,13 @@ export class NotionLogger {
       console.warn('Failed to update database schema:', error);
       // Continue anyway - the database might already have the correct schema
     }
+  };
+
+  getDatabaseSchema = async () => {
+    const response = await this.notion.databases.retrieve({
+      database_id: this.databaseId,
+    });
+    return response.properties;
   };
 
   /**

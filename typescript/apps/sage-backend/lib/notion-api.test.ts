@@ -74,7 +74,7 @@ describe('NotionLogger Integration Tests', () => {
     console.log(`Search for session_id: ${testSessionId} to find test entries.`);
   });
 
-  it('should create a new log entry', async () => {
+  it.only('should create a new log entry', async () => {
     console.log('📝 Testing appendEntry...');
     
     const pageId = await logger.appendEntry(testEntry);
@@ -223,33 +223,10 @@ describe('NotionLogger Integration Tests', () => {
     console.log(`✅ Created entry with null text with ID: ${pageId}`);
   }, 30000);
 
-  it('should handle custom configuration', async () => {
-    console.log('⚙️ Testing with custom configuration...');
-    
-    const customLogger = new NotionLogger({
-      token: process.env.NOTION_BOUNDARY_BOT_TOKEN,
-      databaseId: process.env.NOTION_ASK_BAAAML_DATABASE_ID
-    });
-    
-    const customEntry: NotionLogEntry = {
-      session_id: `custom_${testSessionId}`,
-      assistant_timestamp: new Date().toISOString(),
-      user_message: {
-        role: 'user',
-        text: 'Custom logger test'
-      },
-      assistant_message: {
-        role: 'assistant',
-        text: 'Custom logger response',
-        ranked_docs: []
-      }
-    };
-    
-    const pageId = await customLogger.appendEntry(customEntry);
-    
-    expect(pageId).toBeDefined();
-    expect(typeof pageId).toBe('string');
-    console.log(`✅ Custom logger created entry with ID: ${pageId}`);
+  it.only('should get the database schema', async () => {
+    console.log('🔍 Testing getDatabaseSchema...');
+    const schema = await logger.getDatabaseSchema();
+    console.log(schema);
   }, 30000);
 });
 

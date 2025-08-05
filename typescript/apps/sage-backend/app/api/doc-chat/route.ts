@@ -2,10 +2,13 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { submitQuery } from '../../actions/query';
 import { QueryRequestSchema } from '@baml/sage-interface';
+import { NotionLogger } from '@/lib/notion-api';
 
-export async function POST(request: NextRequest) {
+const notionLogger = new NotionLogger();
+
+export async function POST(httpRequest: NextRequest) {
   try {
-    const body = await request.json();
+    const body = await httpRequest.json();
 
     // Validate the request body using the schema
     const validationResult = QueryRequestSchema.safeParse(body);
@@ -20,8 +23,19 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       );
     }
+    const request = validationResult.data;
 
-    const result = await submitQuery(validationResult.data);
+    const result = await submitQuery(request);
+
+    setImmediate(() => {
+      notionLogger.appendEntry({
+        session_id: request.session_id,
+        assistant_timestamp: new Date().toISOString(),
+        user_message: request.message,
+        assistant_message: result.message,
+      });
+    });
+
     return NextResponse.json(result);
   } catch (error) {
     console.error('Error in doc-chat API:', error);

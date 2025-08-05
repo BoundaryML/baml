@@ -5,6 +5,7 @@ import remarkGfm from 'remark-gfm';
 import BamlLambWhite from './baml-lamb-white.svg';
 import { type StoredMessage, messagesAtom } from './store';
 import { Message, type QueryRequest, QueryResponseSchema } from '@baml/sage-interface';
+import { AssistantResponseFeedback } from './lib/AssistantResponseFeedback';
 
 const OPEN_BY_DEFAULT = true;
 const SESSION_STORAGE_KEY = 'baml-ai-context';
@@ -73,6 +74,7 @@ const API_ENDPOINT =
   process.env.NODE_ENV === 'development'
     ? 'http://localhost:4000/api/doc-chat'
     : 'https://baml-sage-backend.vercel.app/api/doc-chat';
+
 
 const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) => {
   const [messages, setMessages] = useAtom(messagesAtom);
@@ -802,6 +804,16 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
                   {message.text || "Sorry, I'm not sure how to answer that."}
                 </ReactMarkdown>
               ) : null}
+              
+              {/* Feedback buttons for assistant messages */}
+              {message.role === 'assistant' && (
+                <AssistantResponseFeedback
+                  messageId={message.id}
+                  sessionId="asdf" // TODO: use proper session ID
+                  messages={transformMessagesForAPI(messages)}
+                />
+              )}
+              
               {message.role === 'assistant/error' && (
                 <div style={{ marginTop: '12px' }}>
                   <button
