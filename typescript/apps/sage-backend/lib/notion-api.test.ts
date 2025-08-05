@@ -17,10 +17,10 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { NotionLogger, type NotionLogEntry } from './notion-api';
-import {
-  type UserMessage,
-  type AssistantMessage,
-  type SendFeedbackRequest,
+import type {
+  UserMessage,
+  AssistantMessage,
+  SendFeedbackRequest,
 } from '@baml/sage-interface';
 
 // Test data

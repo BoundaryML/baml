@@ -1,12 +1,8 @@
-import {
-  Client,
-  type SelectColor,
-  type CreatePageParameters,
-} from '@notionhq/client';
-import {
-  type UserMessage,
-  type AssistantMessage,
-  type SendFeedbackRequest,
+import { Client, type CreatePageParameters } from '@notionhq/client';
+import type {
+  UserMessage,
+  AssistantMessage,
+  SendFeedbackRequest,
 } from '@baml/sage-interface';
 
 export interface NotionLogEntry {
@@ -84,9 +80,10 @@ export class NotionLogger {
         'Feedback Type': {
           select: {
             name: data.feedback_type,
-            color: (data.feedback_type === 'thumbs_up'
-              ? 'green'
-              : 'red') as SelectColor,
+            color:
+              data.feedback_type === 'thumbs_up'
+                ? ('green' as const)
+                : ('red' as const),
           },
         },
       }),
@@ -175,8 +172,8 @@ export class NotionLogger {
       'Feedback Type': {
         select: {
           options: [
-            { name: 'thumbs_up', color: 'green' as SelectColor },
-            { name: 'thumbs_down', color: 'red' as SelectColor },
+            { name: 'thumbs_up', color: 'green' as const },
+            { name: 'thumbs_down', color: 'red' as const },
           ],
         },
       },
@@ -336,9 +333,10 @@ export class NotionLogger {
           'Feedback Type': {
             select: {
               name: feedbackRequest.feedback_type,
-              color: (feedbackRequest.feedback_type === 'thumbs_up'
-                ? 'green'
-                : 'red') as SelectColor,
+              color:
+                feedbackRequest.feedback_type === 'thumbs_up'
+                  ? ('green' as const)
+                  : ('red' as const),
             },
           },
           'Feedback Comment': feedbackRequest.comment
