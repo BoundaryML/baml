@@ -229,6 +229,12 @@ export const AssistantResponseFeedback: React.FC<AssistantResponseFeedbackProps>
               <textarea
                 value={feedbackComment}
                 onChange={(e) => setFeedbackComment(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                    e.preventDefault();
+                    submitFeedback();
+                  }
+                }}
                 placeholder="Your feedback... (optional)"
                 rows={3}
                 style={{

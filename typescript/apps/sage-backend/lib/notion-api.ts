@@ -1,4 +1,4 @@
-import { Client } from '@notionhq/client';
+import { Client, type SelectColor } from '@notionhq/client';
 import { type UserMessage, type AssistantMessage, type SendFeedbackRequest } from '@baml/sage-interface';
 
 export interface NotionLogEntry {
@@ -29,9 +29,6 @@ export class NotionLogger {
     this.databaseId = databaseId;
   }
 
-  /**
-   * Helper method to build Notion page properties from log entry data
-   */
   private buildNotionProperties = (data: NotionLogEntry) => {
     const { text: userMessageText, role: _userRole, ...userMessageRest } = data.user_message;
     const { text: assistantMessageText, role: _assistantRole, message_id: assistantMessageId, ...assistantMessageRest } = data.assistant_message;
@@ -54,6 +51,31 @@ export class NotionLogger {
           {
             text: {
               content: assistantMessageId,
+            },
+          },
+        ],
+      },
+
+      // Feedback Type (Select field)
+      'Feedback Type': {
+        select: (() => {
+            switch (data.feedback_type) {
+              case 'thumbs_up':
+                return { name: 'thumbs_up', color: 'green' as SelectColor };
+              case 'thumbs_down':
+                return { name: 'thumbs_down', color: 'red' as SelectColor };
+              default:
+                return { name: '' };
+            }
+          })(),
+      },
+
+      // Feedback Comment (Text field)
+      'Feedback Comment': {
+        rich_text: [
+          {
+            text: {
+              content: data.feedback_comment ?? '',
             },
           },
         ],
@@ -108,47 +130,77 @@ export class NotionLogger {
         },
       },
 
-      // Feedback Type (Select field)
-      'Feedback Type': data.feedback_type ? {
-        select: {
-          name: data.feedback_type,
-        },
-      } : { select: null },
-
-      // Feedback Comment (Text field)
-      'Feedback Comment': data.feedback_comment ? {
-        rich_text: [
-          {
-            text: {
-              content: data.feedback_comment,
-            },
-          },
-        ],
-      } : { rich_text: [] },
     };
   };
 
   /**
-   * Update database schema to ensure all required properties exist
+   * Helper method to build Notion page properties from log entry data
    */
+  private buildNotionSchema = (): Record<keyof ReturnType<typeof this.buildNotionProperties>, any> => {
+    return {
+      // Session ID (Title field)
+      'Session ID': {
+        title: {}
+      },
+
+      // Response ID (Text field)
+      'Response ID': {
+        rich_text: {}
+      },
+
+      // Feedback Type (Select field) 
+      'Feedback Type': {
+        select: {
+          options: [
+            { name: '' },
+            { name: 'thumbs_up', color: 'green' as SelectColor },
+            { name: 'thumbs_down', color: 'red' as SelectColor },
+          ]
+        }
+      },
+
+      // Feedback Comment (Text field)
+      'Feedback Comment': {
+        rich_text: {}
+      },
+
+      // User Message (Text field)
+      'User Message': {
+        rich_text: {}
+      },
+
+      // User Message Fields (Text field)
+      'User Message Fields': {
+        rich_text: {}
+      },
+
+      // Assistant Message (Text field)
+      'Assistant Message': {
+        rich_text: {}
+      },
+
+      // Assistant Message Fields (Text field)
+      'Assistant Message Fields': {
+        rich_text: {}
+      },
+
+      // Created At (Date field)
+      'Created At': {
+        date: {}
+      }
+    };
+  };
+
   private ensureDatabaseSchema = async () => {
     try {
+      const properties = this.buildNotionSchema();
+
       await this.notion.databases.update({
         database_id: this.databaseId,
-        properties: Object.fromEntries(
-          Object.entries(this.buildNotionProperties({
-            session_id: 'test',
-            user_message: { role: 'user', text: 'test' },
-            assistant_message: { role: 'assistant', text: 'test', message_id: 'test', ranked_docs: [] },
-          })).map(([key, value]) => [
-            key,
-            // Extract just the type information from the property
-            {
-              [Object.keys(value)[0]]: {},
-            },
-          ])
-        ),
+        properties: this.buildNotionSchema(),
       });
+
+      return properties;
     } catch (error) {
       console.warn('Failed to update database schema:', error);
       // Continue anyway - the database might already have the correct schema
@@ -223,57 +275,6 @@ export class NotionLogger {
       throw error;
     }
   };
-
-  /**
-   * Update the first row that matches session_id and response_id
-   */
-  updateEntry = async (entry: NotionLogEntry): Promise<string | null> => {
-    // Find the existing page
-    const pageId = await this.findPageBySessionAndResponseId(
-      entry.session_id,
-      entry.assistant_message.message_id
-    );
-
-    if (!pageId) {
-      console.warn(
-        `No existing entry found for session_id: ${entry.session_id}, response_id: ${entry.assistant_message.message_id}`
-      );
-      return null;
-    }
-
-    try {
-      // Update the existing page
-      const response = await this.notion.pages.update({
-        page_id: pageId,
-        properties: this.buildNotionProperties(entry),
-      });
-
-      return response.id;
-    } catch (error) {
-      console.error('Failed to update Notion entry:', error);
-      throw error;
-    }
-  };
-
-  /**
-   * Append or update a log entry based on whether it already exists
-   */
-  upsertEntry = async (entry: NotionLogEntry): Promise<{
-    id: string;
-    operation: 'created' | 'updated';
-  }> => {
-    // Try to update first
-    const updatedId = await this.updateEntry(entry);
-    
-    if (updatedId) {
-      return { id: updatedId, operation: 'updated' };
-    }
-
-    // If no existing entry, create a new one
-    const createdId = await this.appendEntry(entry);
-    return { id: createdId, operation: 'created' };
-  };
-
   /**
    * Update feedback for entries based on session_id and message_ids from feedback request
    */
@@ -338,31 +339,4 @@ export class NotionLogger {
 
     return results;
   };
-}
-
-// Export convenience functions for backward compatibility
-export async function appendToNotionDatabase(entry: NotionLogEntry): Promise<string> {
-  const logger = new NotionLogger();
-  return logger.appendEntry(entry);
-}
-
-export async function updateNotionEntry(entry: NotionLogEntry): Promise<string | null> {
-  const logger = new NotionLogger();
-  return logger.updateEntry(entry);
-}
-
-export async function upsertNotionEntry(entry: NotionLogEntry): Promise<{
-  id: string;
-  operation: 'created' | 'updated';
-}> {
-  const logger = new NotionLogger();
-  return logger.upsertEntry(entry);
-}
-
-export async function updateNotionFeedback(feedbackRequest: SendFeedbackRequest): Promise<{
-  updated: number;
-  failed: string[];
-}> {
-  const logger = new NotionLogger();
-  return logger.updateFeedback(feedbackRequest);
 }
