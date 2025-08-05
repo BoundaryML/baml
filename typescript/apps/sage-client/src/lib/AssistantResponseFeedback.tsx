@@ -59,16 +59,17 @@ export const AssistantResponseFeedback: React.FC<AssistantResponseFeedbackProps>
     setIsSubmitting(true);
 
     try {
+      const secondLastAssistantMessageIndex = messages
+        .map((m, i) => m.role === 'assistant' ? i : -1)
+        .filter(i => i !== -1)
+        .slice(-2)[0] ?? -1;
       const feedbackRequest: SendFeedbackRequest = {
         session_id: sessionId,
         feedback_type: feedbackModal.feedbackType,
         comment: feedbackComment || undefined,
         messages: transformMessagesForAPI(
           messages.slice(
-            messages
-              .map((m, i) => m.role === 'assistant' ? i : -1)
-              .filter(i => i !== -1)
-              .slice(-2)[0]
+            Math.max(0, secondLastAssistantMessageIndex + 1),
           )
         )
       };
