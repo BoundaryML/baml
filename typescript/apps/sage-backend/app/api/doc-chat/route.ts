@@ -27,13 +27,15 @@ export async function POST(httpRequest: NextRequest) {
 
     const result = await submitQuery(request);
 
-    notionLogger.appendEntry({
-      session_id: request.session_id,
-      user_message: request.message,
-      assistant_message: result.message,
-    }).catch((error: Error) => {
-      console.error('Failed to log chat to Notion:', error);
-    });
+    notionLogger
+      .appendEntry({
+        session_id: request.session_id,
+        user_message: request.message,
+        assistant_message: result.message,
+      })
+      .catch((error: Error) => {
+        console.error('Failed to log chat to Notion:', error);
+      });
 
     return NextResponse.json(result);
   } catch (error) {

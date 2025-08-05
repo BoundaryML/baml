@@ -276,16 +276,18 @@ export default function Home() {
                     item.response.suggested_messages.length > 0 && (
                       <div>
                         <div>
-                          {item.response.suggested_messages.map((message, msgIndex) => (
-                            <div
-                              key={msgIndex}
-                              className="p-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded text-xs mb-1"
-                            >
-                              <p className="text-blue-800 dark:text-blue-200">
-                                {message}
-                              </p>
-                            </div>
-                          ))}
+                          {item.response.suggested_messages.map(
+                            (message, msgIndex) => (
+                              <div
+                                key={msgIndex}
+                                className="p-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded text-xs mb-1"
+                              >
+                                <p className="text-blue-800 dark:text-blue-200">
+                                  {message}
+                                </p>
+                              </div>
+                            ),
+                          )}
                         </div>
                       </div>
                     )}

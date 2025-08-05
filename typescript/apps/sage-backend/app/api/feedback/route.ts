@@ -28,25 +28,28 @@ export async function POST(request: NextRequest) {
 
     // Deliberately do not await these, so that the request can return immediately.
     (async () => {
-      const {pageId: notionPageId} = await notionLogger.updateFeedback(feedbackData);
-      const notionLink = notionPageId ? notionLogger.toUrl({pageId: notionPageId}) : undefined;
+      const { pageId: notionPageId } =
+        await notionLogger.updateFeedback(feedbackData);
+      const notionLink = notionPageId
+        ? notionLogger.toUrl({ pageId: notionPageId })
+        : undefined;
       console.info('notionLink', notionLink);
-      await slack.sendFeedback({...feedbackData, notionLink});
+      await slack.sendFeedback({ ...feedbackData, notionLink });
     })();
 
     return NextResponse.json({
       enqueued: true,
-      message: 'Feedback received'
+      message: 'Feedback received',
     });
   } catch (error) {
     console.error('Error in send-feedback API:', error);
     return NextResponse.json(
-      { 
+      {
         enqueued: false,
         error: 'Internal server error',
-        message: error instanceof Error ? error.message : 'Unknown error'
+        message: error instanceof Error ? error.message : 'Unknown error',
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

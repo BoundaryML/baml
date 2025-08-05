@@ -9,7 +9,9 @@ export class SlackFeedbackLogger {
     const token = process.env.SLACK_BOUNDARY_BOT_TOKEN;
 
     if (!token) {
-      throw new Error('SLACK_BOUNDARY_BOT_TOKEN environment variable is required');
+      throw new Error(
+        'SLACK_BOUNDARY_BOT_TOKEN environment variable is required',
+      );
     }
 
     this.slack = new WebClient(token);
@@ -18,17 +20,18 @@ export class SlackFeedbackLogger {
   /**
    * Send feedback to Slack using blocks for better formatting
    */
-  sendFeedback = async (request: SendFeedbackRequest & { notionLink?: string }): Promise<any> => {
-
+  sendFeedback = async (
+    request: SendFeedbackRequest & { notionLink?: string },
+  ): Promise<any> => {
     const blocks = [
       {
         type: 'section',
         fields: [
           {
             type: 'mrkdwn',
-            text: `${request.feedback_type === 'thumbs_up' ? '👍' : '❌'}  from user: _${request.comment}_\n\n[Click here to see the full conversation](${request.notionLink})`
-          }
-        ]
+            text: `${request.feedback_type === 'thumbs_up' ? '👍' : '❌'}  from user: _${request.comment}_\n\n[Click here to see the full conversation](${request.notionLink})`,
+          },
+        ],
       },
       {
         type: 'rich_text',
@@ -41,16 +44,16 @@ export class SlackFeedbackLogger {
               if (msg.role === 'user') {
                 text = `🧑 ${msg.text || 'N/A'}`;
               } else if (msg.role === 'assistant') {
-                text = `🐑 ${msg.text || 'N/A'}`; 
+                text = `🐑 ${msg.text || 'N/A'}`;
               }
 
               return {
                 type: 'text',
                 text: text + '\n\n',
               };
-            })
-          }
-        ]
+            }),
+          },
+        ],
       },
     ];
 
@@ -58,7 +61,7 @@ export class SlackFeedbackLogger {
       const result = await this.slack.chat.postMessage({
         channel: this.channel,
         blocks,
-        text: '??? fallback text ???'
+        text: '??? fallback text ???',
       });
 
       return result;
@@ -78,7 +81,7 @@ export class SlackFeedbackLogger {
         success: true,
         botUserId: authTest.user_id,
         team: authTest.team,
-        botName: authTest.user
+        botName: authTest.user,
       };
     } catch (error) {
       console.error('Failed to test Slack connection:', error);

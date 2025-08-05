@@ -10,21 +10,21 @@ describe('SlackFeedbackLogger', () => {
     messages: [
       {
         role: 'user',
-        text: 'How do I use BAML with TypeScript?'
+        text: 'How do I use BAML with TypeScript?',
       },
       {
         role: 'assistant',
-  message_id: 'msg-2025-08-05T19:24:53.414Z',
+        message_id: 'msg-2025-08-05T19:24:53.414Z',
         text: 'You can use BAML with TypeScript by installing the package.',
         ranked_docs: [
           {
             title: 'TypeScript Guide',
             url: 'https://docs.boundaryml.com/typescript',
-            relevance: 'very-relevant'
-          }
-        ]
-      }
-    ]
+            relevance: 'very-relevant',
+          },
+        ],
+      },
+    ],
   };
 
   describe('sendFeedback', () => {

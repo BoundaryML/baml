@@ -1,5 +1,13 @@
-import { Client, type SelectColor , type CreatePageParameters} from '@notionhq/client';
-import { type UserMessage, type AssistantMessage, type SendFeedbackRequest } from '@baml/sage-interface';
+import {
+  Client,
+  type SelectColor,
+  type CreatePageParameters,
+} from '@notionhq/client';
+import {
+  type UserMessage,
+  type AssistantMessage,
+  type SendFeedbackRequest,
+} from '@baml/sage-interface';
 
 export interface NotionLogEntry {
   session_id: string;
@@ -18,20 +26,35 @@ export class NotionLogger {
     const databaseId = process.env.NOTION_ASK_BAML_LOGS_DATABASE_ID;
 
     if (!token) {
-      throw new Error('NOTION_BOUNDARY_BOT_TOKEN environment variable is required');
+      throw new Error(
+        'NOTION_BOUNDARY_BOT_TOKEN environment variable is required',
+      );
     }
 
     if (!databaseId) {
-      throw new Error('NOTION_ASK_BAML_LOGS_DATABASE_ID environment variable is required');
+      throw new Error(
+        'NOTION_ASK_BAML_LOGS_DATABASE_ID environment variable is required',
+      );
     }
 
     this.notion = new Client({ auth: token });
     this.databaseId = databaseId;
   }
 
-  private buildNotionProperties = (data: NotionLogEntry): NonNullable<CreatePageParameters['properties']> => {
-    const { text: userMessageText, role: _userRole, ...userMessageRest } = data.user_message;
-    const { text: assistantMessageText, role: _assistantRole, message_id: assistantMessageId, ...assistantMessageRest } = data.assistant_message;
+  private buildNotionProperties = (
+    data: NotionLogEntry,
+  ): NonNullable<CreatePageParameters['properties']> => {
+    const {
+      text: userMessageText,
+      role: _userRole,
+      ...userMessageRest
+    } = data.user_message;
+    const {
+      text: assistantMessageText,
+      role: _assistantRole,
+      message_id: assistantMessageId,
+      ...assistantMessageRest
+    } = data.assistant_message;
 
     return {
       // Session ID (Text field)
@@ -61,9 +84,11 @@ export class NotionLogger {
         'Feedback Type': {
           select: {
             name: data.feedback_type,
-            color: (data.feedback_type === 'thumbs_up' ? 'green' : 'red') as SelectColor,
+            color: (data.feedback_type === 'thumbs_up'
+              ? 'green'
+              : 'red') as SelectColor,
           },
-        }
+        },
       }),
 
       // Feedback Comment (Text field)
@@ -87,7 +112,7 @@ export class NotionLogger {
           },
         ],
       },
-      
+
       'User Message Fields': {
         rich_text: [
           {
@@ -125,64 +150,66 @@ export class NotionLogger {
           start: new Date().toISOString(),
         },
       },
-
     };
   };
 
   /**
    * Helper method to build Notion page properties from log entry data
    */
-  private buildNotionSchema = (): Record<keyof ReturnType<typeof this.buildNotionProperties>, any> => {
+  private buildNotionSchema = (): Record<
+    keyof ReturnType<typeof this.buildNotionProperties>,
+    any
+  > => {
     return {
       // Session ID (Title field)
       'Session ID': {
-        title: {}
+        title: {},
       },
 
       // Response ID (Text field)
       'Response ID': {
-        rich_text: {}
+        rich_text: {},
       },
 
-      // Feedback Type (Select field) 
+      // Feedback Type (Select field)
       'Feedback Type': {
         select: {
           options: [
             { name: 'thumbs_up', color: 'green' as SelectColor },
             { name: 'thumbs_down', color: 'red' as SelectColor },
-          ]
-        }
+          ],
+        },
       },
 
       // Feedback Comment (Text field)
       'Feedback Comment': {
-        rich_text: {}
+        rich_text: {},
       },
 
       // User Message (Text field)
       'User Message': {
-        rich_text: {}
+        rich_text: {},
       },
 
       // User Message Fields (Text field)
       'User Message Fields': {
-        rich_text: {}
+        rich_text: {},
       },
 
       // Assistant Message (Text field)
       'Assistant Message': {
-        rich_text: {}
+        rich_text: {},
       },
 
       // Assistant Message Fields (Text field)
       'Assistant Message Fields': {
-        rich_text: {}
+        rich_text: {},
       },
 
       // Created At (Date field)
       'Created At': {
-        date: {}
-      }
+        date: {},
+      },
     };
   };
 
@@ -236,7 +263,7 @@ export class NotionLogger {
    */
   private findPageBySessionAndResponseId = async (
     session_id: string,
-    response_id: string
+    response_id: string,
   ): Promise<string | null> => {
     try {
       const response = await this.notion.databases.query({
@@ -273,12 +300,14 @@ export class NotionLogger {
   /**
    * Update feedback for entries based on session_id and message_ids from feedback request
    */
-  updateFeedback = async (feedbackRequest: SendFeedbackRequest): Promise<{
+  updateFeedback = async (
+    feedbackRequest: SendFeedbackRequest,
+  ): Promise<{
     pageId: string | null;
   }> => {
     // Find all assistant messages in the feedback request
     const assistantMessages = feedbackRequest.messages.filter(
-      (msg) => msg.role === 'assistant'
+      (msg) => msg.role === 'assistant',
     ) as AssistantMessage[];
 
     if (assistantMessages.length > 1) {
@@ -291,7 +320,7 @@ export class NotionLogger {
     try {
       const pageId = await this.findPageBySessionAndResponseId(
         feedbackRequest.session_id,
-        assistantMessage.message_id
+        assistantMessage.message_id,
       );
 
       if (!pageId) {
@@ -305,25 +334,31 @@ export class NotionLogger {
           'Feedback Type': {
             select: {
               name: feedbackRequest.feedback_type,
-              color: (feedbackRequest.feedback_type === 'thumbs_up' ? 'green' : 'red') as SelectColor,
+              color: (feedbackRequest.feedback_type === 'thumbs_up'
+                ? 'green'
+                : 'red') as SelectColor,
             },
           },
-          'Feedback Comment': feedbackRequest.comment ? {
-            rich_text: [
-              {
-                text: {
-                  content: feedbackRequest.comment,
-                },
-              },
-            ],
-          } : { rich_text: [] },
+          'Feedback Comment': feedbackRequest.comment
+            ? {
+                rich_text: [
+                  {
+                    text: {
+                      content: feedbackRequest.comment,
+                    },
+                  },
+                ],
+              }
+            : { rich_text: [] },
         },
       });
 
       return { pageId };
-
     } catch (error) {
-      console.error(`Failed to update feedback for message ${assistantMessage.message_id}:`, error);
+      console.error(
+        `Failed to update feedback for message ${assistantMessage.message_id}:`,
+        error,
+      );
       return { pageId: null };
     }
   };
@@ -332,10 +367,10 @@ export class NotionLogger {
    * Convert a Notion page ID to a clickable URL
    * Format: https://www.notion.so/{workspace}/{database_id}?v={view_id}&p={page_id}&pm=s
    */
-  toUrl = ({pageId}: {pageId: string}): string => {
+  toUrl = ({ pageId }: { pageId: string }): string => {
     const cleanDatabaseId = this.databaseId.replace(/-/g, '');
     const cleanPageId = pageId.replace(/-/g, '');
-    
+
     // Use database ID as view ID (common pattern in Notion URLs)
     const viewId = cleanDatabaseId;
 

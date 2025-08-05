@@ -7,7 +7,12 @@
     "defaultBranch": "main"
   },
   "files": {
-    "include": ["typescript/**/*.ts", "typescript/**/*.tsx", "!**/*.min.js"]
+    "include": [
+      "*.ts",
+      "*.tsx",
+      "!baml_client/**/*.ts",
+      "!baml_client/**/*.tsx"
+    ]
   },
   "json": {
     "formatter": {
