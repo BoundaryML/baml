@@ -1,4 +1,4 @@
-import { populatePinecone, searchPinecone } from './app/actions/rag';
+import { populatePinecone, searchPinecone } from './lib/pinecone-api';
 
 async function main() {
   await populatePinecone();

@@ -1,14 +1,5 @@
 [
   {
-    "title": "🏠 Welcome",
-    "path": "pages/welcome.mdx",
-    "description": "The easiest way to use LLMs",
-    "slug": "/home/home",
-    "layout": "overview",
-    "hide-toc": false,
-    "type": "internal"
-  },
-  {
     "title": "What is BAML?",
     "path": "01-guide/what-are-function-definitions.mdx",
     "section": "Guide > Introduction",
@@ -196,13 +187,6 @@
     "path": "01-guide/05-baml-advanced/client-registry.mdx",
     "section": "Guide > BAML Advanced",
     "slug": "/guide/baml-advanced/llm-client-registry",
-    "type": "internal"
-  },
-  {
-    "title": "Dynamic Types - TypeBuilder",
-    "path": "01-guide/05-baml-advanced/dynamic-types.mdx",
-    "section": "Guide > BAML Advanced",
-    "slug": "/guide/baml-advanced/guide-baml-advanced-dynamic-types",
     "type": "internal"
   },
   {
@@ -455,13 +439,6 @@
     "type": "internal"
   },
   {
-    "title": "template_string",
-    "path": "03-reference/baml/template_string.mdx",
-    "section": "BAML Reference > Language Reference",
-    "slug": "/ref/baml/template_string",
-    "type": "internal"
-  },
-  {
     "title": "LLM Clients (client<llm>)",
     "path": "03-reference/baml/client-llm.mdx",
     "section": "BAML Reference > Language Reference",
@@ -487,13 +464,6 @@
     "path": "03-reference/generator.mdx",
     "section": "BAML Reference > Language Reference",
     "slug": "/ref/baml/generator",
-    "type": "internal"
-  },
-  {
-    "title": "with_options",
-    "path": "03-reference/baml_client/with_options.mdx",
-    "section": "BAML Reference > Generated baml_client",
-    "slug": "/ref/baml_client/with_options",
     "type": "internal"
   },
   {
@@ -874,24 +844,10 @@
     "type": "internal"
   },
   {
-    "title": "ctx.output_format",
-    "path": "03-reference/baml/prompt-syntax/output-format.mdx",
-    "section": "BAML Reference > Prompt Syntax",
-    "slug": "/ref/prompt-syntax/ctx-output_format",
-    "type": "internal"
-  },
-  {
     "title": "ctx (accessing metadata)",
     "path": "03-reference/baml/prompt-syntax/ctx.mdx",
     "section": "BAML Reference > Prompt Syntax",
     "slug": "/ref/prompt-syntax/ctx-client",
-    "type": "internal"
-  },
-  {
-    "title": "_.role",
-    "path": "03-reference/baml/prompt-syntax/role.mdx",
-    "section": "BAML Reference > Prompt Syntax",
-    "slug": "/ref/prompt-syntax/_-role",
     "type": "internal"
   },
   {
@@ -948,200 +904,5 @@
     "path": "pages/changelog.mdx",
     "slug": "/changelog/changelog",
     "type": "internal"
-  },
-  {
-    "title": "How to write a Zed extension for a made up language",
-    "url": "https://boundaryml.com/blog/how-to-write-a-zed-extension-for-a-made-up-language",
-    "type": "external"
-  },
-  {
-    "title": "The curious case of environment variables",
-    "url": "https://boundaryml.com/blog/lazily-loading-env-vars",
-    "type": "external"
-  },
-  {
-    "title": "Tech Preview: Workflows",
-    "url": "https://boundaryml.com/blog/workflows",
-    "type": "external"
-  },
-  {
-    "title": "Lambda the Ultimate AI Agent",
-    "url": "https://boundaryml.com/blog/lambda-the-ultimate-ai-agent",
-    "type": "external"
-  },
-  {
-    "title": "Tutorial - An Agentic AI App with Streaming",
-    "url": "https://boundaryml.com/blog/structured-chat-tutorial",
-    "type": "external"
-  },
-  {
-    "title": "Tool use with Llama API (and reasoning)",
-    "url": "https://boundaryml.com/blog/llama-api-tool-calling",
-    "type": "external"
-  },
-  {
-    "title": "Structured outputs with Llama 4",
-    "url": "https://boundaryml.com/blog/llama-4-function-calling",
-    "type": "external"
-  },
-  {
-    "title": "Structured outputs with QwQ 32B",
-    "url": "https://boundaryml.com/blog/qwq-32b-function-calling",
-    "type": "external"
-  },
-  {
-    "title": "Full stack BAML with React/Next.js",
-    "url": "https://boundaryml.com/blog/react-next-js-integration",
-    "type": "external"
-  },
-  {
-    "title": "Structured outputs with Gemini 2.0",
-    "url": "https://boundaryml.com/blog/gemini-2-function-calling",
-    "type": "external"
-  },
-  {
-    "title": "Structured outputs with o3-mini",
-    "url": "https://boundaryml.com/blog/o3-mini-function-calling",
-    "type": "external"
-  },
-  {
-    "title": "BAML Launch Week Day 5",
-    "url": "https://boundaryml.com/blog/launch-week-day-5",
-    "type": "external"
-  },
-  {
-    "title": "BAML Launch Week Day 4",
-    "url": "https://boundaryml.com/blog/launch-week-day-4",
-    "type": "external"
-  },
-  {
-    "title": "BAML Launch Week Day 3",
-    "url": "https://boundaryml.com/blog/launch-week-day-3",
-    "type": "external"
-  },
-  {
-    "title": "BAML Launch Week Day 2",
-    "url": "https://boundaryml.com/blog/launch-week-day-2",
-    "type": "external"
-  },
-  {
-    "title": "BAML Launch Week Day 1",
-    "url": "https://boundaryml.com/blog/launch-week-day-1",
-    "type": "external"
-  },
-  {
-    "title": "AI Agents Need a New Syntax",
-    "url": "https://boundaryml.com/blog/ai-agents-need-new-syntax",
-    "type": "external"
-  },
-  {
-    "title": "BAML Launch Week Announcement",
-    "url": "https://boundaryml.com/blog/launch-week-day-0",
-    "type": "external"
-  },
-  {
-    "title": "Structured outputs with Deepseek R1",
-    "url": "https://boundaryml.com/blog/deepseek-r1-function-calling",
-    "type": "external"
-  },
-  {
-    "title": "Structured outputs with Open AI O1",
-    "url": "https://boundaryml.com/blog/openai-o1",
-    "type": "external"
-  },
-  {
-    "title": "Cursor support for BAML",
-    "url": "https://boundaryml.com/blog/cursor-support",
-    "type": "external"
-  },
-  {
-    "title": "A new trick for generating code in JSON",
-    "url": "https://boundaryml.com/blog/a-new-llm-codegen-trick",
-    "type": "external"
-  },
-  {
-    "title": "Announcing LLM Eval Support for Python, Ruby, Typescript, Go, and more.",
-    "url": "https://boundaryml.com/blog/llm-evals",
-    "type": "external"
-  },
-  {
-    "title": "Generating Structured Output from a Dynamic JSON schema",
-    "url": "https://boundaryml.com/blog/dynamic-json-schemas",
-    "type": "external"
-  },
-  {
-    "title": "Every Way To Get Structured Output From LLMs",
-    "url": "https://boundaryml.com/blog/structured-output-from-llms",
-    "type": "external"
-  },
-  {
-    "title": "Semantic Streaming vs Token-based Streaming",
-    "url": "https://boundaryml.com/blog/semantic-streaming",
-    "type": "external"
-  },
-  {
-    "title": "Bringing Structured Outputs and Schema-Aligned Parsing to Golang, Java, PHP, Ruby, Rust, and More",
-    "url": "https://boundaryml.com/blog/announcing-openapi-support",
-    "type": "external"
-  },
-  {
-    "title": "Structured Output with Ollama",
-    "url": "https://boundaryml.com/blog/ollama-structured-output",
-    "type": "external"
-  },
-  {
-    "title": "Beating OpenAI's structured outputs on cost, accuracy and speed — An interactive deep-dive",
-    "url": "https://boundaryml.com/blog/sota-function-calling",
-    "type": "external"
-  },
-  {
-    "title": "Prompting vs JSON Mode vs Function Calling vs Constrained Generation vs SAP",
-    "url": "https://boundaryml.com/blog/schema-aligned-parsing",
-    "type": "external"
-  },
-  {
-    "title": "Transparency as a Tenet",
-    "url": "https://boundaryml.com/blog/transparency-as-a-tenet",
-    "type": "external"
-  },
-  {
-    "title": "Building a New Programming Language in 2024, pt. 1",
-    "url": "https://boundaryml.com/blog/building-a-new-programming-language",
-    "type": "external"
-  },
-  {
-    "title": "Use Audio with your LLMs!",
-    "url": "https://boundaryml.com/blog/audio-support",
-    "type": "external"
-  },
-  {
-    "title": "Announcing Gemini Support!",
-    "url": "https://boundaryml.com/blog/gemini-release",
-    "type": "external"
-  },
-  {
-    "title": "Building RAG in Ruby, using BAML, with streaming!",
-    "url": "https://boundaryml.com/blog/ruby-rag-streaming-example",
-    "type": "external"
-  },
-  {
-    "title": "Build RAG with citations in NextJS (with streaming!)",
-    "url": "https://boundaryml.com/blog/nextjs-rag-streaming-example",
-    "type": "external"
-  },
-  {
-    "title": "Your prompts are using 4x more tokens than you need",
-    "url": "https://boundaryml.com/blog/type-definition-prompting-baml",
-    "type": "external"
-  },
-  {
-    "title": "Announcing BAML - The typesafe interface to LLMs, with built-in testing, guardrails and observability",
-    "url": "https://boundaryml.com/blog/typesafe-llm-baml-launch",
-    "type": "external"
-  },
-  {
-    "title": "Prompt Fiddle, the BAML playground",
-    "url": "https://promptfiddle.com",
-    "type": "external"
   }
 ]

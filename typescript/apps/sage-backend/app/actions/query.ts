@@ -2,7 +2,7 @@
 
 import { b } from '../../baml_client';
 import type { QueryRequest, QueryResponse } from '@baml/sage-interface';
-import { searchPinecone } from './rag';
+import { searchPinecone } from '../../lib/pinecone-api';
 
 export async function submitQuery(
   request: QueryRequest,
