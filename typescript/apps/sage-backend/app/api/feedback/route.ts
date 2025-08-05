@@ -27,12 +27,12 @@ export async function POST(request: NextRequest) {
     const feedbackData = reqBody.data;
 
     // Deliberately do not await these, so that the request can return immediately.
-    slack.sendFeedback(feedbackData).catch((error: Error) => {
-      console.error('Failed to send feedback to Slack:', error);
-    });
-    notionLogger.updateFeedback(feedbackData).catch((error: Error) => {
-      console.error('Failed to update feedback in Notion:', error);
-    });
+    (async () => {
+      const {pageId: notionPageId} = await notionLogger.updateFeedback(feedbackData);
+      const notionLink = notionPageId ? notionLogger.toUrl({pageId: notionPageId}) : undefined;
+      console.info('notionLink', notionLink);
+      await slack.sendFeedback({...feedbackData, notionLink});
+    })();
 
     return NextResponse.json({
       enqueued: true,

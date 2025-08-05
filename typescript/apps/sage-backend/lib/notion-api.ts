@@ -1,4 +1,4 @@
-import { Client, type SelectColor } from '@notionhq/client';
+import { Client, type SelectColor , type CreatePageParameters} from '@notionhq/client';
 import { type UserMessage, type AssistantMessage, type SendFeedbackRequest } from '@baml/sage-interface';
 
 export interface NotionLogEntry {
@@ -29,7 +29,7 @@ export class NotionLogger {
     this.databaseId = databaseId;
   }
 
-  private buildNotionProperties = (data: NotionLogEntry) => {
+  private buildNotionProperties = (data: NotionLogEntry): NonNullable<CreatePageParameters['properties']> => {
     const { text: userMessageText, role: _userRole, ...userMessageRest } = data.user_message;
     const { text: assistantMessageText, role: _assistantRole, message_id: assistantMessageId, ...assistantMessageRest } = data.assistant_message;
 
@@ -57,18 +57,14 @@ export class NotionLogger {
       },
 
       // Feedback Type (Select field)
-      'Feedback Type': {
-        select: (() => {
-            switch (data.feedback_type) {
-              case 'thumbs_up':
-                return { name: 'thumbs_up', color: 'green' as SelectColor };
-              case 'thumbs_down':
-                return { name: 'thumbs_down', color: 'red' as SelectColor };
-              default:
-                return { name: '' };
-            }
-          })(),
-      },
+      ...(data.feedback_type && {
+        'Feedback Type': {
+          select: {
+            name: data.feedback_type,
+            color: (data.feedback_type === 'thumbs_up' ? 'green' : 'red') as SelectColor,
+          },
+        }
+      }),
 
       // Feedback Comment (Text field)
       'Feedback Comment': {
@@ -152,7 +148,6 @@ export class NotionLogger {
       'Feedback Type': {
         select: {
           options: [
-            { name: '' },
             { name: 'thumbs_up', color: 'green' as SelectColor },
             { name: 'thumbs_down', color: 'red' as SelectColor },
           ]
@@ -279,64 +274,73 @@ export class NotionLogger {
    * Update feedback for entries based on session_id and message_ids from feedback request
    */
   updateFeedback = async (feedbackRequest: SendFeedbackRequest): Promise<{
-    updated: number;
-    failed: string[];
+    pageId: string | null;
   }> => {
-    const results = {
-      updated: 0,
-      failed: [] as string[],
-    };
-
     // Find all assistant messages in the feedback request
     const assistantMessages = feedbackRequest.messages.filter(
       (msg) => msg.role === 'assistant'
     ) as AssistantMessage[];
 
-    // Update each assistant message with feedback
-    for (const assistantMessage of assistantMessages) {
-      try {
-        const pageId = await this.findPageBySessionAndResponseId(
-          feedbackRequest.session_id,
-          assistantMessage.message_id
-        );
-
-        if (!pageId) {
-          results.failed.push(
-            `No entry found for session_id: ${feedbackRequest.session_id}, response_id: ${assistantMessage.message_id}`
-          );
-          continue;
-        }
-
-        // Update only the feedback properties
-        await this.notion.pages.update({
-          page_id: pageId,
-          properties: {
-            'Feedback Type': {
-              select: {
-                name: feedbackRequest.feedback_type,
-              },
-            },
-            'Feedback Comment': feedbackRequest.comment ? {
-              rich_text: [
-                {
-                  text: {
-                    content: feedbackRequest.comment,
-                  },
-                },
-              ],
-            } : { rich_text: [] },
-          },
-        });
-
-        results.updated++;
-      } catch (error) {
-        console.error(`Failed to update feedback for message ${assistantMessage.message_id}:`, error);
-        results.failed.push(
-          `Failed to update message ${assistantMessage.message_id}: ${error instanceof Error ? error.message : 'Unknown error'}`
-        );
-      }
+    if (assistantMessages.length > 1) {
+      throw new Error('More than one assistant message in feedback request');
     }
 
-    return results;
+    const assistantMessage = assistantMessages[0]!;
+
+    // Update each assistant message with feedback
+    try {
+      const pageId = await this.findPageBySessionAndResponseId(
+        feedbackRequest.session_id,
+        assistantMessage.message_id
+      );
+
+      if (!pageId) {
+        return { pageId: null };
+      }
+
+      // Update only the feedback properties
+      await this.notion.pages.update({
+        page_id: pageId,
+        properties: {
+          'Feedback Type': {
+            select: {
+              name: feedbackRequest.feedback_type,
+              color: (feedbackRequest.feedback_type === 'thumbs_up' ? 'green' : 'red') as SelectColor,
+            },
+          },
+          'Feedback Comment': feedbackRequest.comment ? {
+            rich_text: [
+              {
+                text: {
+                  content: feedbackRequest.comment,
+                },
+              },
+            ],
+          } : { rich_text: [] },
+        },
+      });
+
+      return { pageId };
+
+    } catch (error) {
+      console.error(`Failed to update feedback for message ${assistantMessage.message_id}:`, error);
+      return { pageId: null };
+    }
+  };
+
+  /**
+   * Convert a Notion page ID to a clickable URL
+   * Format: https://www.notion.so/{workspace}/{database_id}?v={view_id}&p={page_id}&pm=s
+   */
+  toUrl = ({pageId}: {pageId: string}): string => {
+    const cleanDatabaseId = this.databaseId.replace(/-/g, '');
+    const cleanPageId = pageId.replace(/-/g, '');
+    
+    // Use database ID as view ID (common pattern in Notion URLs)
+    const viewId = cleanDatabaseId;
+
+    return `https://www.notion.so/gloochat/${cleanDatabaseId}?v=${viewId}&p=${cleanPageId}&pm=s`;
   };
 }
+
+// CLAUDE: do not add convenience functions here, they should never be used.

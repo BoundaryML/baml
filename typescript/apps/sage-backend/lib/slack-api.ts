@@ -18,7 +18,7 @@ export class SlackFeedbackLogger {
   /**
    * Send feedback to Slack using blocks for better formatting
    */
-  sendFeedback = async (feedback: SendFeedbackRequest): Promise<any> => {
+  sendFeedback = async (request: SendFeedbackRequest & { notionLink?: string }): Promise<any> => {
 
     const blocks = [
       {
@@ -26,7 +26,7 @@ export class SlackFeedbackLogger {
         fields: [
           {
             type: 'mrkdwn',
-            text: `${feedback.feedback_type === 'thumbs_up' ? '👍' : '❌'} from user: _${feedback.comment}_\n\n`
+            text: `${request.feedback_type === 'thumbs_up' ? '👍' : '❌'}  from user: _${request.comment}_\n\n[Click here to see the full conversation](${request.notionLink})`
           }
         ]
       },
@@ -35,13 +35,13 @@ export class SlackFeedbackLogger {
         elements: [
           {
             type: 'rich_text_quote',
-            elements: feedback.messages.map((msg) => {
+            elements: request.messages.map((msg) => {
               let text = '???';
 
               if (msg.role === 'user') {
                 text = `🧑 ${msg.text || 'N/A'}`;
               } else if (msg.role === 'assistant') {
-                text = `🤖 ${msg.text || 'N/A'}`; 
+                text = `🐑 ${msg.text || 'N/A'}`; 
               }
 
               return {

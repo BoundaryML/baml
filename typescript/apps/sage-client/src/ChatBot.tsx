@@ -809,7 +809,7 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
               {/* Feedback buttons for assistant messages */}
               {message.role === 'assistant' && (
                 <AssistantResponseFeedback
-                  messageId={message.id}
+                  messageId={message.message_id}
                 />
               )}
               

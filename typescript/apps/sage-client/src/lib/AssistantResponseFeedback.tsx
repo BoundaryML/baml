@@ -39,6 +39,7 @@ export const AssistantResponseFeedback: React.FC<AssistantResponseFeedbackProps>
   } | null>(null);
   const [feedbackComment, setFeedbackComment] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleFeedbackClick = (feedbackType: 'thumbs_up' | 'thumbs_down') => {
     setFeedbackModal({
@@ -51,27 +52,37 @@ export const AssistantResponseFeedback: React.FC<AssistantResponseFeedbackProps>
   const closeFeedbackModal = () => {
     setFeedbackModal(null);
     setFeedbackComment('');
+    setErrorMessage(null);
   };
 
   const submitFeedback = async () => {
     if (!feedbackModal) return;
     
     setIsSubmitting(true);
+    setErrorMessage(null);
 
     try {
-      const secondLastAssistantMessageIndex = messages
-        .map((m, i) => m.role === 'assistant' ? i : -1)
-        .filter(i => i !== -1)
-        .slice(-2)[0] ?? -1;
+      // Find the assistant message with the specified messageId
+      const assistantMessageIndex = messages.findIndex(
+        (m) => m.role === 'assistant' && m.message_id === messageId
+      );
+      
+      if (assistantMessageIndex === -1) {
+        throw new Error('Could not find the assistant message');
+      }
+      
+      // Get the assistant message and its preceding user message
+      const messagesToSend = [];
+      if (assistantMessageIndex > 0) {
+        messagesToSend.push(messages[assistantMessageIndex - 1]);
+      }
+      messagesToSend.push(messages[assistantMessageIndex]);
+      
       const feedbackRequest: SendFeedbackRequest = {
         session_id: sessionId,
         feedback_type: feedbackModal.feedbackType,
         comment: feedbackComment || undefined,
-        messages: transformMessagesForAPI(
-          messages.slice(
-            Math.max(0, secondLastAssistantMessageIndex + 1),
-          )
-        )
+        messages: transformMessagesForAPI(messagesToSend)
       };
 
       const response = await fetch(FEEDBACK_API_ENDPOINT, {
@@ -93,7 +104,11 @@ export const AssistantResponseFeedback: React.FC<AssistantResponseFeedbackProps>
       console.log('Feedback submitted successfully');
     } catch (error) {
       console.error('Error submitting feedback:', error);
-      // Optional: Show error message to user
+      setErrorMessage(
+        error instanceof Error 
+          ? error.message 
+          : 'Failed to submit feedback. Please try again.'
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -238,7 +253,7 @@ export const AssistantResponseFeedback: React.FC<AssistantResponseFeedbackProps>
                 value={feedbackComment}
                 onChange={(e) => setFeedbackComment(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !isSubmitting) {
                     e.preventDefault();
                     submitFeedback();
                   }
@@ -326,6 +341,96 @@ export const AssistantResponseFeedback: React.FC<AssistantResponseFeedbackProps>
                 {isSubmitting ? 'Submitting...' : 'Submit Feedback'}
               </button>
             </div>
+            {errorMessage && (
+              <div style={{
+                marginTop: '16px',
+                padding: '12px',
+                backgroundColor: '#fef2f2',
+                border: '1px solid #fecaca',
+                borderRadius: '8px',
+                color: '#991b1b',
+                fontSize: '14px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}>
+                <span style={{ fontWeight: '500' }}>Error:</span>
+                {errorMessage}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Error Modal */}
+      {errorMessage && !feedbackModal && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            zIndex: 3000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px',
+          }}
+          onClick={() => setErrorMessage(null)}
+        >
+          <div
+            style={{
+              backgroundColor: '#ffffff',
+              borderRadius: '12px',
+              padding: '24px',
+              maxWidth: '400px',
+              width: '100%',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+              fontFamily: 'Inter, system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ 
+              margin: '0 0 16px 0', 
+              fontSize: '18px', 
+              fontWeight: '600', 
+              color: '#991b1b'
+            }}>
+              Feedback Failed
+            </h3>
+            <p style={{ 
+              margin: '0 0 20px 0', 
+              fontSize: '14px', 
+              color: '#6b7280', 
+              lineHeight: '1.5' 
+            }}>
+              {errorMessage}
+            </p>
+            <button
+              onClick={() => setErrorMessage(null)}
+              style={{
+                padding: '10px 16px',
+                border: 'none',
+                borderRadius: '8px',
+                backgroundColor: '#ef4444',
+                color: '#ffffff',
+                fontSize: '14px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                width: '100%',
+                transition: 'all 0.2s ease',
+              }}
+              onMouseOver={(e) => {
+                e.currentTarget.style.backgroundColor = '#dc2626';
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.backgroundColor = '#ef4444';
+              }}
+            >
+              Close
+            </button>
           </div>
         </div>
       )}
