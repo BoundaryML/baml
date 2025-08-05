@@ -16,8 +16,8 @@ const FEEDBACK_API_ENDPOINT =
 // Helper to transform stored messages to API format
 const transformMessagesForAPI = (messages: any[]): Message[] => {
   return messages
-    .filter(msg => msg.role === 'user' || msg.role === 'assistant')
-    .map(msg => {
+    .filter((msg) => msg.role === 'user' || msg.role === 'assistant')
+    .map((msg) => {
       if (msg.role === 'user') {
         return msg; // UserMessage is already correct
       } else if (msg.role === 'assistant') {
@@ -28,9 +28,9 @@ const transformMessagesForAPI = (messages: any[]): Message[] => {
     });
 };
 
-export const AssistantResponseFeedback: React.FC<AssistantResponseFeedbackProps> = ({ 
-  messageId
-}) => {
+export const AssistantResponseFeedback: React.FC<
+  AssistantResponseFeedbackProps
+> = ({ messageId }) => {
   const sessionId = useAtomValue(sessionIdAtom);
   const messages = useAtomValue(messagesAtom);
   const [feedbackModal, setFeedbackModal] = useState<{
@@ -44,7 +44,7 @@ export const AssistantResponseFeedback: React.FC<AssistantResponseFeedbackProps>
   const handleFeedbackClick = (feedbackType: 'thumbs_up' | 'thumbs_down') => {
     setFeedbackModal({
       isOpen: true,
-      feedbackType
+      feedbackType,
     });
     setFeedbackComment('');
   };
@@ -57,32 +57,32 @@ export const AssistantResponseFeedback: React.FC<AssistantResponseFeedbackProps>
 
   const submitFeedback = async () => {
     if (!feedbackModal) return;
-    
+
     setIsSubmitting(true);
     setErrorMessage(null);
 
     try {
       // Find the assistant message with the specified messageId
       const assistantMessageIndex = messages.findIndex(
-        (m) => m.role === 'assistant' && m.message_id === messageId
+        (m) => m.role === 'assistant' && m.message_id === messageId,
       );
-      
+
       if (assistantMessageIndex === -1) {
         throw new Error('Could not find the assistant message');
       }
-      
+
       // Get the assistant message and its preceding user message
       const messagesToSend = [];
       if (assistantMessageIndex > 0) {
         messagesToSend.push(messages[assistantMessageIndex - 1]);
       }
       messagesToSend.push(messages[assistantMessageIndex]);
-      
+
       const feedbackRequest: SendFeedbackRequest = {
         session_id: sessionId,
         feedback_type: feedbackModal.feedbackType,
         comment: feedbackComment || undefined,
-        messages: transformMessagesForAPI(messagesToSend)
+        messages: transformMessagesForAPI(messagesToSend),
       };
 
       const response = await fetch(FEEDBACK_API_ENDPOINT, {
@@ -99,15 +99,15 @@ export const AssistantResponseFeedback: React.FC<AssistantResponseFeedbackProps>
 
       // Close modal on success
       closeFeedbackModal();
-      
+
       // Optional: Show a brief success indicator
       console.log('Feedback submitted successfully');
     } catch (error) {
       console.error('Error submitting feedback:', error);
       setErrorMessage(
-        error instanceof Error 
-          ? error.message 
-          : 'Failed to submit feedback. Please try again.'
+        error instanceof Error
+          ? error.message
+          : 'Failed to submit feedback. Please try again.',
       );
     } finally {
       setIsSubmitting(false);
@@ -117,12 +117,14 @@ export const AssistantResponseFeedback: React.FC<AssistantResponseFeedbackProps>
   return (
     <>
       {/* Feedback buttons */}
-      <div style={{ 
-        display: 'flex', 
-        gap: '8px', 
-        marginTop: '8px', 
-        alignItems: 'center' 
-      }}>
+      <div
+        style={{
+          display: 'flex',
+          gap: '8px',
+          marginTop: '8px',
+          alignItems: 'center',
+        }}
+      >
         <button
           onClick={() => handleFeedbackClick('thumbs_up')}
           style={{
@@ -208,21 +210,25 @@ export const AssistantResponseFeedback: React.FC<AssistantResponseFeedbackProps>
               padding: '24px',
               maxWidth: '400px',
               width: '100%',
-              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
-              fontFamily: 'Inter, system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
+              boxShadow:
+                '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+              fontFamily:
+                'Inter, system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
             }}
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ marginBottom: '16px' }}>
-              <h3 style={{ 
-                margin: '0 0 8px 0', 
-                fontSize: '18px', 
-                fontWeight: '600', 
-                color: '#111827',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
-              }}>
+              <h3
+                style={{
+                  margin: '0 0 8px 0',
+                  fontSize: '18px',
+                  fontWeight: '600',
+                  color: '#111827',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                }}
+              >
                 {feedbackModal.feedbackType === 'thumbs_up' ? (
                   <>
                     <ThumbsUp size={20} color="#10b981" />
@@ -235,25 +241,30 @@ export const AssistantResponseFeedback: React.FC<AssistantResponseFeedbackProps>
                   </>
                 )}
               </h3>
-              <p style={{ 
-                margin: '0', 
-                fontSize: '14px', 
-                color: '#6b7280', 
-                lineHeight: '1.5' 
-              }}>
-                {feedbackModal.feedbackType === 'thumbs_up' 
+              <p
+                style={{
+                  margin: '0',
+                  fontSize: '14px',
+                  color: '#6b7280',
+                  lineHeight: '1.5',
+                }}
+              >
+                {feedbackModal.feedbackType === 'thumbs_up'
                   ? 'Thanks for the feedback! What made this response helpful?'
-                  : 'Sorry the response wasn\'t helpful. What could be improved?'
-                }
+                  : "Sorry the response wasn't helpful. What could be improved?"}
               </p>
             </div>
-            
+
             <div style={{ marginBottom: '20px' }}>
               <textarea
                 value={feedbackComment}
                 onChange={(e) => setFeedbackComment(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !isSubmitting) {
+                  if (
+                    e.key === 'Enter' &&
+                    (e.metaKey || e.ctrlKey) &&
+                    !isSubmitting
+                  ) {
                     e.preventDefault();
                     submitFeedback();
                   }
@@ -280,12 +291,14 @@ export const AssistantResponseFeedback: React.FC<AssistantResponseFeedbackProps>
                 }}
               />
             </div>
-            
-            <div style={{ 
-              display: 'flex', 
-              gap: '12px', 
-              justifyContent: 'flex-end' 
-            }}>
+
+            <div
+              style={{
+                display: 'flex',
+                gap: '12px',
+                justifyContent: 'flex-end',
+              }}
+            >
               <button
                 onClick={closeFeedbackModal}
                 disabled={isSubmitting}
@@ -342,18 +355,20 @@ export const AssistantResponseFeedback: React.FC<AssistantResponseFeedbackProps>
               </button>
             </div>
             {errorMessage && (
-              <div style={{
-                marginTop: '16px',
-                padding: '12px',
-                backgroundColor: '#fef2f2',
-                border: '1px solid #fecaca',
-                borderRadius: '8px',
-                color: '#991b1b',
-                fontSize: '14px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
-              }}>
+              <div
+                style={{
+                  marginTop: '16px',
+                  padding: '12px',
+                  backgroundColor: '#fef2f2',
+                  border: '1px solid #fecaca',
+                  borderRadius: '8px',
+                  color: '#991b1b',
+                  fontSize: '14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                }}
+              >
                 <span style={{ fontWeight: '500' }}>Error:</span>
                 {errorMessage}
               </div>
@@ -387,25 +402,31 @@ export const AssistantResponseFeedback: React.FC<AssistantResponseFeedbackProps>
               padding: '24px',
               maxWidth: '400px',
               width: '100%',
-              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
-              fontFamily: 'Inter, system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
+              boxShadow:
+                '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+              fontFamily:
+                'Inter, system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 style={{ 
-              margin: '0 0 16px 0', 
-              fontSize: '18px', 
-              fontWeight: '600', 
-              color: '#991b1b'
-            }}>
+            <h3
+              style={{
+                margin: '0 0 16px 0',
+                fontSize: '18px',
+                fontWeight: '600',
+                color: '#991b1b',
+              }}
+            >
               Feedback Failed
             </h3>
-            <p style={{ 
-              margin: '0 0 20px 0', 
-              fontSize: '14px', 
-              color: '#6b7280', 
-              lineHeight: '1.5' 
-            }}>
+            <p
+              style={{
+                margin: '0 0 20px 0',
+                fontSize: '14px',
+                color: '#6b7280',
+                lineHeight: '1.5',
+              }}
+            >
               {errorMessage}
             </p>
             <button

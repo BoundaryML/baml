@@ -14,6 +14,7 @@ describe('SlackFeedbackLogger', () => {
       },
       {
         role: 'assistant',
+  message_id: 'msg-2025-08-05T19:24:53.414Z',
         text: 'You can use BAML with TypeScript by installing the package.',
         ranked_docs: [
           {

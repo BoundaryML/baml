@@ -112,7 +112,10 @@ const processHighlights = (text: string) => {
 function Hit({
   hit,
   isKeyboardSelected,
-}: { hit: any; isKeyboardSelected?: boolean }) {
+}: {
+  hit: any;
+  isKeyboardSelected?: boolean;
+}) {
   const [showTooltip, setShowTooltip] = useState(false);
 
   const highlightedTitle =

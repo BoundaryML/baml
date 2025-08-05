@@ -7,30 +7,7 @@
     "defaultBranch": "main"
   },
   "files": {
-    "ignoreUnknown": false,
-    "ignore": [
-      ".next",
-      "dist",
-      "**/dist/**",
-      "build",
-      "**/build/**",
-      "bin",
-      "**/bin/**",
-      "node_modules",
-      "**/node_modules/**",
-      "**/baml_client/**",
-      "**/generated/**",
-      "**/target/**",
-      "**/.turbo/**",
-      "**/coverage/**",
-      "engine/**",
-      "integ-tests/**",
-      "typescript/**",
-      "tools/**",
-      "patches/**",
-      "jetbrains/**",
-      "pnpm-lock.yaml"
-    ]
+    "include": ["typescript/**/*.ts", "typescript/**/*.tsx", "!**/*.min.js"]
   },
   "json": {
     "formatter": {
@@ -43,9 +20,6 @@
     "enabled": true,
     "indentStyle": "space"
   },
-  "organizeImports": {
-    "enabled": true
-  },
   "linter": {
     "enabled": true,
     "rules": {
@@ -56,12 +30,7 @@
         "useExhaustiveDependencies": "warn",
         "useHookAtTopLevel": "error"
       },
-      "nursery": {
-        "noCommonJs": "error",
-        "noNestedTernary": "off",
-        "useAtIndex": "error",
-        "useCollapsedIf": "error"
-      },
+      "nursery": {},
       "style": {
         "noNegationElse": "off",
         "useNodejsImportProtocol": "error",

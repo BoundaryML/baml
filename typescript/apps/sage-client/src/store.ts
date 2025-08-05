@@ -35,14 +35,17 @@ const generateSessionId = (): string => {
   const day = String(now.getDate()).padStart(2, '0');
   const hour = String(now.getHours()).padStart(2, '0');
   const minute = String(now.getMinutes()).padStart(2, '0');
-  
+
   // Get timezone abbreviation
-  const timezone = Intl.DateTimeFormat('en', {
-    timeZoneName: 'short'
-  }).formatToParts(now).find(part => part.type === 'timeZoneName')?.value || 'UTC';
-  
+  const timezone =
+    Intl.DateTimeFormat('en', {
+      timeZoneName: 'short',
+    })
+      .formatToParts(now)
+      .find((part) => part.type === 'timeZoneName')?.value || 'UTC';
+
   const randomValue = Math.random().toString(36).substring(2, 8);
-  
+
   return `sess-${year}-${month}-${day}-${hour}${minute}-${timezone}-${randomValue}`;
 };
 
@@ -52,22 +55,24 @@ const getSessionData = (): SessionData => {
     if (stored) {
       const parsed = JSON.parse(stored);
       // Validate structure and that sessionId starts with 'sess-'
-      if (parsed.sessionId?.startsWith('sess-') && 
-          Array.isArray(parsed.messages) && 
-          parsed.createdAt) {
+      if (
+        parsed.sessionId?.startsWith('sess-') &&
+        Array.isArray(parsed.messages) &&
+        parsed.createdAt
+      ) {
         return {
           ...parsed,
           messages: parsed.messages.map((msg: any) => ({
             ...msg,
-            timestamp: new Date(msg.timestamp)
-          }))
+            timestamp: new Date(msg.timestamp),
+          })),
         };
       }
     }
   } catch (error) {
     console.warn('Invalid session data found, creating fresh session:', error);
   }
-  
+
   // Wipe any invalid/legacy data and create fresh session
   try {
     sessionStorage.removeItem(SESSION_STORAGE_KEY);
@@ -75,11 +80,11 @@ const getSessionData = (): SessionData => {
   } catch (e) {
     // Ignore cleanup errors
   }
-  
+
   return {
     sessionId: generateSessionId(),
     messages: [],
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
   };
 };
 
@@ -106,9 +111,9 @@ export const messagesAtom = atom(
     saveSessionData({
       sessionId: currentSessionId,
       messages: newMessages,
-      createdAt: initialSessionData.createdAt
+      createdAt: initialSessionData.createdAt,
     });
-  }
+  },
 );
 
 // Reset session - generates new session ID and clears messages
@@ -116,9 +121,9 @@ export const resetSessionAtom = atom(null, (get, set) => {
   const newSessionData = {
     sessionId: generateSessionId(),
     messages: [],
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
   };
-  
+
   saveSessionData(newSessionData);
   set(sessionIdAtom, newSessionData.sessionId);
   set(baseMessagesAtom, []);

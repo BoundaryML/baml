@@ -3,8 +3,17 @@ import React, { useRef, useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import BamlLambWhite from './baml-lamb-white.svg';
-import { type StoredMessage, messagesAtom, sessionIdAtom, resetSessionAtom } from './store';
-import { Message, type QueryRequest, QueryResponseSchema } from '@baml/sage-interface';
+import {
+  type StoredMessage,
+  messagesAtom,
+  sessionIdAtom,
+  resetSessionAtom,
+} from './store';
+import {
+  Message,
+  type QueryRequest,
+  QueryResponseSchema,
+} from '@baml/sage-interface';
 import { AssistantResponseFeedback } from './lib/AssistantResponseFeedback';
 
 const OPEN_BY_DEFAULT = true;
@@ -19,8 +28,8 @@ interface ChatBotProps {
 // Transform messages for API format
 const transformMessagesForAPI = (messages: StoredMessage[]): Array<Message> => {
   return messages
-    .filter(msg => msg.role === 'user' || msg.role === 'assistant')
-    .map(msg => {
+    .filter((msg) => msg.role === 'user' || msg.role === 'assistant')
+    .map((msg) => {
       if (msg.role === 'user') {
         return msg; // UserMessage is already correct
       } else if (msg.role === 'assistant') {
@@ -32,14 +41,18 @@ const transformMessagesForAPI = (messages: StoredMessage[]): Array<Message> => {
 };
 
 // Serialize errors to storable format
-const serializeError = (error: unknown): { message: string; code?: string; statusCode?: number } => {
+const serializeError = (
+  error: unknown,
+): { message: string; code?: string; statusCode?: number } => {
   if (error instanceof Error) {
-    const serialized: { message: string; code?: string; statusCode?: number } = { 
-      message: error.message 
-    };
+    const serialized: { message: string; code?: string; statusCode?: number } =
+      {
+        message: error.message,
+      };
     if ('code' in error && error.code) serialized.code = String(error.code);
-    if ('statusCode' in error && error.statusCode) serialized.statusCode = Number(error.statusCode);
-    
+    if ('statusCode' in error && error.statusCode)
+      serialized.statusCode = Number(error.statusCode);
+
     // Handle specific HTTP errors
     if (error.message.includes('HTTP error! status:')) {
       const match = error.message.match(/status: (\d+)/);
@@ -47,7 +60,7 @@ const serializeError = (error: unknown): { message: string; code?: string; statu
         serialized.statusCode = parseInt(match[1]!);
       }
     }
-    
+
     return serialized;
   }
   return { message: String(error) };
@@ -75,8 +88,10 @@ const API_ENDPOINT =
     ? 'http://localhost:4000/api/doc-chat'
     : 'https://baml-sage-backend.vercel.app/api/doc-chat';
 
-
-const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) => {
+const ChatBot: React.FC<ChatBotProps> = ({
+  isOpen = OPEN_BY_DEFAULT,
+  onClose,
+}) => {
   const [messages, setMessages] = useAtom(messagesAtom);
   const sessionId = useAtomValue(sessionIdAtom);
   const resetSession = useSetAtom(resetSessionAtom);
@@ -111,18 +126,18 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
       text: text.trim(),
       timestamp: new Date(),
     };
-    
+
     // Add progress message
     const progressMessage: StoredMessage = {
       id: (Date.now() + 1).toString(),
       role: 'assistant/progress',
       timestamp: new Date(),
     };
-    
+
     const messagesWithProgress = [...messages, userMessage, progressMessage];
     setMessages(messagesWithProgress);
     setInput('');
-    
+
     setIsLoading(true);
 
     try {
@@ -140,7 +155,7 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
       const successMessage: StoredMessage = {
         id: progressMessage.id,
         timestamp: new Date(),
-        ...data.message
+        ...data.message,
       };
 
       // Replace progress message with success message
@@ -203,7 +218,9 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
 
   const handleRetry = () => {
     // Get the last user message to retry
-    const lastUserMessage = [...messages].reverse().find(msg => msg.role === 'user');
+    const lastUserMessage = [...messages]
+      .reverse()
+      .find((msg) => msg.role === 'user');
     if (lastUserMessage && lastUserMessage.role === 'user') {
       sendMessage(lastUserMessage.text);
     }
@@ -332,7 +349,6 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
           }
         }}
       />
-
 
       {/* Header */}
       <div
@@ -551,7 +567,7 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
               </div>
             );
           }
-          
+
           return (
             <div
               key={message.id}
@@ -566,23 +582,27 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
               <div
                 style={{
                   padding: '12px 16px',
-                  borderRadius: message.role === 'user'
-                    ? '16px 16px 4px 16px'
-                    : '16px 16px 16px 4px',
+                  borderRadius:
+                    message.role === 'user'
+                      ? '16px 16px 4px 16px'
+                      : '16px 16px 16px 4px',
                   fontSize: '14px',
                   lineHeight: '1.5',
-                  backgroundColor: message.role === 'user'
-                    ? '#7d47e3'
-                    : message.role === 'assistant/error'
-                      ? '#fef2f2'
-                      : '#ffffff',
-                  color: message.role === 'user'
-                    ? '#ffffff'
-                    : message.role === 'assistant/error'
-                      ? '#dc2626'
-                      : '#111827',
+                  backgroundColor:
+                    message.role === 'user'
+                      ? '#7d47e3'
+                      : message.role === 'assistant/error'
+                        ? '#fef2f2'
+                        : '#ffffff',
+                  color:
+                    message.role === 'user'
+                      ? '#ffffff'
+                      : message.role === 'assistant/error'
+                        ? '#dc2626'
+                        : '#111827',
                   wordWrap: 'break-word',
-                  border: message.role === 'user' ? 'none' : '1px solid #e5e7eb',
+                  border:
+                    message.role === 'user' ? 'none' : '1px solid #e5e7eb',
                   boxShadow: 'none',
                 }}
               >
@@ -591,24 +611,30 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
                 ) : message.role === 'assistant/error' ? (
                   <div>
                     {(() => {
-                      let errorText = 'Sorry, there was an error processing your request.';
+                      let errorText =
+                        'Sorry, there was an error processing your request.';
                       const errorMsg = message.error.message;
                       const statusCode = message.error.statusCode;
-                      
+
                       if (errorMsg.includes('fetch')) {
-                        errorText = 'Unable to connect to the AI service. Please check your connection and try again.';
+                        errorText =
+                          'Unable to connect to the AI service. Please check your connection and try again.';
                       } else if (statusCode === 429) {
-                        errorText = 'Too many requests. Please wait a moment and try again.';
+                        errorText =
+                          'Too many requests. Please wait a moment and try again.';
                       } else if (statusCode === 500) {
-                        errorText = 'Server error occurred. The AI service may be temporarily unavailable.';
+                        errorText =
+                          'Server error occurred. The AI service may be temporarily unavailable.';
                       } else if (statusCode === 404) {
-                        errorText = 'AI service endpoint not found. Please check the configuration.';
+                        errorText =
+                          'AI service endpoint not found. Please check the configuration.';
                       } else if (errorMsg.includes('HTTP error!')) {
                         errorText = `Service error: ${errorMsg}. Please try again.`;
                       } else if (errorMsg.includes('JSON')) {
-                        errorText = 'Received invalid response from AI service. Please try again.';
+                        errorText =
+                          'Received invalid response from AI service. Please try again.';
                       }
-                      
+
                       return errorText;
                     })()}
                   </div>
@@ -616,408 +642,411 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
                     components={{
-                    // Custom styles for markdown elements
-                    p: ({ children }) => (
-                      <p style={{ margin: '0 0 12px 0', lineHeight: '1.6' }}>
-                        {children}
-                      </p>
-                    ),
-                    h1: ({ children }) => (
-                      <h1
-                        style={{
-                          fontSize: '18px',
-                          fontWeight: '700',
-                          margin: '0 0 12px 0',
-                          color: '#111827',
-                        }}
-                      >
-                        {children}
-                      </h1>
-                    ),
-                    h2: ({ children }) => (
-                      <h2
-                        style={{
-                          fontSize: '16px',
-                          fontWeight: '600',
-                          margin: '0 0 10px 0',
-                          color: '#111827',
-                        }}
-                      >
-                        {children}
-                      </h2>
-                    ),
-                    h3: ({ children }) => (
-                      <h3
-                        style={{
-                          fontSize: '15px',
-                          fontWeight: '600',
-                          margin: '0 0 8px 0',
-                          color: '#111827',
-                        }}
-                      >
-                        {children}
-                      </h3>
-                    ),
-                    code: ({ children, className, ...props }) => {
-                      const isInline = !className;
-
-                      return isInline ? (
-                        <code
-                          {...props}
+                      // Custom styles for markdown elements
+                      p: ({ children }) => (
+                        <p style={{ margin: '0 0 12px 0', lineHeight: '1.6' }}>
+                          {children}
+                        </p>
+                      ),
+                      h1: ({ children }) => (
+                        <h1
                           style={{
-                            backgroundColor: '#f3f4f6',
-                            padding: '2px 6px',
-                            borderRadius: '4px',
-                            fontSize: '13px',
-                            fontFamily:
-                              'Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
-                            color: '#d63384',
+                            fontSize: '18px',
+                            fontWeight: '700',
+                            margin: '0 0 12px 0',
+                            color: '#111827',
                           }}
                         >
                           {children}
-                        </code>
-                      ) : (
+                        </h1>
+                      ),
+                      h2: ({ children }) => (
+                        <h2
+                          style={{
+                            fontSize: '16px',
+                            fontWeight: '600',
+                            margin: '0 0 10px 0',
+                            color: '#111827',
+                          }}
+                        >
+                          {children}
+                        </h2>
+                      ),
+                      h3: ({ children }) => (
+                        <h3
+                          style={{
+                            fontSize: '15px',
+                            fontWeight: '600',
+                            margin: '0 0 8px 0',
+                            color: '#111827',
+                          }}
+                        >
+                          {children}
+                        </h3>
+                      ),
+                      code: ({ children, className, ...props }) => {
+                        const isInline = !className;
+
+                        return isInline ? (
+                          <code
+                            {...props}
+                            style={{
+                              backgroundColor: '#f3f4f6',
+                              padding: '2px 6px',
+                              borderRadius: '4px',
+                              fontSize: '13px',
+                              fontFamily:
+                                'Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+                              color: '#d63384',
+                            }}
+                          >
+                            {children}
+                          </code>
+                        ) : (
+                          <pre
+                            style={{
+                              margin: '0 0 12px 0',
+                              borderRadius: '6px',
+                              fontSize: '13px',
+                              border: '1px solid #e9ecef',
+                              backgroundColor: '#f8f9fa',
+                              padding: '12px',
+                              overflow: 'auto',
+                              fontFamily:
+                                'Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+                            }}
+                          >
+                            <code style={{ backgroundColor: 'transparent' }}>
+                              {String(children).replace(/\n$/, '')}
+                            </code>
+                          </pre>
+                        );
+                      },
+                      pre: ({ children }) => (
                         <pre
                           style={{
                             margin: '0 0 12px 0',
-                            borderRadius: '6px',
-                            fontSize: '13px',
-                            border: '1px solid #e9ecef',
-                            backgroundColor: '#f8f9fa',
-                            padding: '12px',
-                            overflow: 'auto',
-                            fontFamily:
-                              'Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+                            overflow: 'visible',
                           }}
                         >
-                          <code style={{ backgroundColor: 'transparent' }}>
-                            {String(children).replace(/\n$/, '')}
-                          </code>
+                          {children}
                         </pre>
-                      );
-                    },
-                    pre: ({ children }) => (
-                      <pre
-                        style={{
-                          margin: '0 0 12px 0',
-                          overflow: 'visible',
-                        }}
-                      >
-                        {children}
-                      </pre>
-                    ),
-                    ul: ({ children }) => (
-                      <ul
-                        style={{
-                          margin: '0 0 12px 0',
-                          paddingLeft: '20px',
-                          listStyleType: 'disc',
-                        }}
-                      >
-                        {children}
-                      </ul>
-                    ),
-                    ol: ({ children }) => (
-                      <ol
-                        style={{
-                          margin: '0 0 12px 0',
-                          paddingLeft: '20px',
-                          listStyleType: 'decimal',
-                        }}
-                      >
-                        {children}
-                      </ol>
-                    ),
-                    li: ({ children }) => (
-                      <li
-                        style={{
-                          margin: '0 0 4px 0',
-                          lineHeight: '1.5',
-                        }}
-                      >
-                        {children}
-                      </li>
-                    ),
-                    blockquote: ({ children }) => (
-                      <blockquote
-                        style={{
-                          margin: '0 0 12px 0',
-                          paddingLeft: '16px',
-                          borderLeft: '4px solid #7d47e3',
-                          fontStyle: 'italic',
-                          color: '#6b7280',
-                        }}
-                      >
-                        {children}
-                      </blockquote>
-                    ),
-                    a: ({ children, href }) => (
-                      <a
-                        href={href}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{
-                          color: '#7d47e3',
-                          textDecoration: 'underline',
-                          fontWeight: '500',
-                        }}
-                      >
-                        {children}
-                      </a>
-                    ),
-                    table: ({ children }) => (
-                      <table
-                        style={{
-                          width: '100%',
-                          borderCollapse: 'collapse',
-                          margin: '0 0 12px 0',
-                          fontSize: '13px',
-                        }}
-                      >
-                        {children}
-                      </table>
-                    ),
-                    th: ({ children }) => (
-                      <th
-                        style={{
-                          border: '1px solid #e5e7eb',
-                          padding: '8px 12px',
-                          backgroundColor: '#f9fafb',
-                          fontWeight: '600',
-                          textAlign: 'left',
-                        }}
-                      >
-                        {children}
-                      </th>
-                    ),
-                    td: ({ children }) => (
-                      <td
-                        style={{
-                          border: '1px solid #e5e7eb',
-                          padding: '8px 12px',
-                        }}
-                      >
-                        {children}
-                      </td>
-                    ),
-                  }}
-                >
-                  {message.text || "Sorry, I'm not sure how to answer that."}
-                </ReactMarkdown>
-              ) : null}
-              
-              {/* Feedback buttons for assistant messages */}
-              {message.role === 'assistant' && (
-                <AssistantResponseFeedback
-                  messageId={message.message_id}
-                />
-              )}
-              
-              {message.role === 'assistant/error' && (
-                <div style={{ marginTop: '12px' }}>
-                  <button
-                    type="button"
-                    onClick={() => handleRetry()}
-                    style={{
-                      padding: '8px 16px',
-                      fontSize: '13px',
-                      backgroundColor: '#6366f1',
-                      color: '#fff',
-                      border: 'none',
-                      borderRadius: '8px',
-                      cursor: 'pointer',
-                      fontWeight: '500',
-                      transition: 'all 0.2s ease',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                    }}
-                    onMouseOver={(e) => {
-                      e.currentTarget.style.backgroundColor = '#5d68e4';
-                      e.currentTarget.style.transform = 'translateY(-1px)';
-                    }}
-                    onFocus={(e) => {
-                      e.currentTarget.style.backgroundColor = '#5d68e4';
-                      e.currentTarget.style.transform = 'translateY(-1px)';
-                    }}
-                    onMouseOut={(e) => {
-                      e.currentTarget.style.backgroundColor = '#6366f1';
-                      e.currentTarget.style.transform = 'translateY(0)';
-                    }}
-                    onBlur={(e) => {
-                      e.currentTarget.style.backgroundColor = '#6366f1';
-                      e.currentTarget.style.transform = 'translateY(0)';
+                      ),
+                      ul: ({ children }) => (
+                        <ul
+                          style={{
+                            margin: '0 0 12px 0',
+                            paddingLeft: '20px',
+                            listStyleType: 'disc',
+                          }}
+                        >
+                          {children}
+                        </ul>
+                      ),
+                      ol: ({ children }) => (
+                        <ol
+                          style={{
+                            margin: '0 0 12px 0',
+                            paddingLeft: '20px',
+                            listStyleType: 'decimal',
+                          }}
+                        >
+                          {children}
+                        </ol>
+                      ),
+                      li: ({ children }) => (
+                        <li
+                          style={{
+                            margin: '0 0 4px 0',
+                            lineHeight: '1.5',
+                          }}
+                        >
+                          {children}
+                        </li>
+                      ),
+                      blockquote: ({ children }) => (
+                        <blockquote
+                          style={{
+                            margin: '0 0 12px 0',
+                            paddingLeft: '16px',
+                            borderLeft: '4px solid #7d47e3',
+                            fontStyle: 'italic',
+                            color: '#6b7280',
+                          }}
+                        >
+                          {children}
+                        </blockquote>
+                      ),
+                      a: ({ children, href }) => (
+                        <a
+                          href={href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            color: '#7d47e3',
+                            textDecoration: 'underline',
+                            fontWeight: '500',
+                          }}
+                        >
+                          {children}
+                        </a>
+                      ),
+                      table: ({ children }) => (
+                        <table
+                          style={{
+                            width: '100%',
+                            borderCollapse: 'collapse',
+                            margin: '0 0 12px 0',
+                            fontSize: '13px',
+                          }}
+                        >
+                          {children}
+                        </table>
+                      ),
+                      th: ({ children }) => (
+                        <th
+                          style={{
+                            border: '1px solid #e5e7eb',
+                            padding: '8px 12px',
+                            backgroundColor: '#f9fafb',
+                            fontWeight: '600',
+                            textAlign: 'left',
+                          }}
+                        >
+                          {children}
+                        </th>
+                      ),
+                      td: ({ children }) => (
+                        <td
+                          style={{
+                            border: '1px solid #e5e7eb',
+                            padding: '8px 12px',
+                          }}
+                        >
+                          {children}
+                        </td>
+                      ),
                     }}
                   >
-                    <svg
-                      width="14"
-                      height="14"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                      aria-label="Retry"
-                    >
-                      <title>Retry Icon</title>
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                      />
-                    </svg>
-                    Try Again
-                  </button>
-                </div>
-              )}
-            </div>
+                    {message.text || "Sorry, I'm not sure how to answer that."}
+                  </ReactMarkdown>
+                ) : null}
 
-            {/* Related docs */}
-            {message.role === 'assistant' && message.ranked_docs && message.ranked_docs.length > 0 && (
-              <div
-                style={{
-                  fontSize: '12px',
-                  color: '#6b7280',
-                  padding: '12px',
-                  backgroundColor: '#ffffff',
-                  borderRadius: '8px',
-                  border: '1px solid #e5e7eb',
-                }}
-              >
-                <div
-                  style={{
-                    fontWeight: '600',
-                    marginBottom: '8px',
-                    color: '#374151',
-                  }}
-                >
-                  📖 Related documentation:
-                </div>
-                {message.ranked_docs.map((doc) => (
-                  <div key={doc.url} style={{ marginBottom: '4px' }}>
-                    <a
-                      href={doc.url}
-                      onClick={(e) => {
-                        // Only redirect if very-relevant and same domain, otherwise use normal link behavior
-                        if (
-                          doc.relevance === 'very-relevant' &&
-                          doc.url.startsWith('/')
-                        ) {
-                          e.preventDefault();
-                          // Use the global navigateToDoc function to navigate while keeping chat open
-                          if ((window as any).navigateToDoc) {
-                            (window as any).navigateToDoc(
-                              { u: doc.url, t: doc.title, sel: 'article' },
-                              message.text || '',
-                            );
-                          } else {
-                            // Fallback to normal navigation if navigateToDoc is not available
-                            window.location.href = doc.url;
-                          }
-                        }
-                        // For non-very-relevant docs or external links, let the default link behavior handle it
-                      }}
-                      style={{
-                        color: '#7d47e3',
-                        textDecoration: 'none',
-                        fontSize: '12px',
-                        transition: 'all 0.2s ease',
-                        fontWeight: '500',
-                        cursor: 'pointer',
-                      }}
-                      onMouseOver={(e) => {
-                        e.currentTarget.style.textDecoration = 'underline';
-                        e.currentTarget.style.color = '#6b3bc9';
-                      }}
-                      onFocus={(e) => {
-                        e.currentTarget.style.textDecoration = 'underline';
-                        e.currentTarget.style.color = '#6b3bc9';
-                      }}
-                      onMouseOut={(e) => {
-                        e.currentTarget.style.textDecoration = 'none';
-                        e.currentTarget.style.color = '#7d47e3';
-                      }}
-                      onBlur={(e) => {
-                        e.currentTarget.style.textDecoration = 'none';
-                        e.currentTarget.style.color = '#7d47e3';
-                      }}
-                    >
-                      {doc.title}
-                    </a>
-                  </div>
-                ))}
-              </div>
-            )}
-            
-            {/* Suggestions */}
-            {message.role === 'assistant' && message.suggested_messages && message.suggested_messages.length > 0 && (
-              <div
-                style={{
-                  fontSize: '12px',
-                  color: '#6b7280',
-                  padding: '12px',
-                  backgroundColor: '#ffffff',
-                  borderRadius: '8px',
-                  border: '1px solid #e5e7eb',
-                }}
-              >
-                <div
-                  style={{
-                    fontWeight: '600',
-                    marginBottom: '8px',
-                    color: '#374151',
-                  }}
-                >
-                  💡 Suggested follow-ups:
-                </div>
-                {message.suggested_messages.map((suggestion, index) => (
-                  <div key={index} style={{ marginBottom: '4px' }}>
+                {/* Feedback buttons for assistant messages */}
+                {message.role === 'assistant' && (
+                  <AssistantResponseFeedback messageId={message.message_id} />
+                )}
+
+                {message.role === 'assistant/error' && (
+                  <div style={{ marginTop: '12px' }}>
                     <button
-                      onClick={() => sendMessage(suggestion)}
+                      type="button"
+                      onClick={() => handleRetry()}
                       style={{
-                        background: 'none',
+                        padding: '8px 16px',
+                        fontSize: '13px',
+                        backgroundColor: '#6366f1',
+                        color: '#fff',
                         border: 'none',
-                        color: '#7d47e3',
-                        textDecoration: 'none',
-                        fontSize: '12px',
-                        transition: 'all 0.2s ease',
-                        fontWeight: '500',
+                        borderRadius: '8px',
                         cursor: 'pointer',
-                        padding: '4px 8px',
-                        textAlign: 'left',
-                        width: '100%',
-                        borderRadius: '4px',
+                        fontWeight: '500',
+                        transition: 'all 0.2s ease',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
                       }}
                       onMouseOver={(e) => {
-                        e.currentTarget.style.backgroundColor = '#f3f4f6';
-                        e.currentTarget.style.textDecoration = 'underline';
-                        e.currentTarget.style.color = '#6b3bc9';
+                        e.currentTarget.style.backgroundColor = '#5d68e4';
+                        e.currentTarget.style.transform = 'translateY(-1px)';
                       }}
                       onFocus={(e) => {
-                        e.currentTarget.style.backgroundColor = '#f3f4f6';
-                        e.currentTarget.style.textDecoration = 'underline';
-                        e.currentTarget.style.color = '#6b3bc9';
+                        e.currentTarget.style.backgroundColor = '#5d68e4';
+                        e.currentTarget.style.transform = 'translateY(-1px)';
                       }}
                       onMouseOut={(e) => {
-                        e.currentTarget.style.backgroundColor = 'transparent';
-                        e.currentTarget.style.textDecoration = 'none';
-                        e.currentTarget.style.color = '#7d47e3';
+                        e.currentTarget.style.backgroundColor = '#6366f1';
+                        e.currentTarget.style.transform = 'translateY(0)';
                       }}
                       onBlur={(e) => {
-                        e.currentTarget.style.backgroundColor = 'transparent';
-                        e.currentTarget.style.textDecoration = 'none';
-                        e.currentTarget.style.color = '#7d47e3';
+                        e.currentTarget.style.backgroundColor = '#6366f1';
+                        e.currentTarget.style.transform = 'translateY(0)';
                       }}
                     >
-                      {suggestion}
+                      <svg
+                        width="14"
+                        height="14"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        aria-label="Retry"
+                      >
+                        <title>Retry Icon</title>
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                        />
+                      </svg>
+                      Try Again
                     </button>
                   </div>
-                ))}
+                )}
               </div>
-            )}
-          </div>
+
+              {/* Related docs */}
+              {message.role === 'assistant' &&
+                message.ranked_docs &&
+                message.ranked_docs.length > 0 && (
+                  <div
+                    style={{
+                      fontSize: '12px',
+                      color: '#6b7280',
+                      padding: '12px',
+                      backgroundColor: '#ffffff',
+                      borderRadius: '8px',
+                      border: '1px solid #e5e7eb',
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontWeight: '600',
+                        marginBottom: '8px',
+                        color: '#374151',
+                      }}
+                    >
+                      📖 Related documentation:
+                    </div>
+                    {message.ranked_docs.map((doc) => (
+                      <div key={doc.url} style={{ marginBottom: '4px' }}>
+                        <a
+                          href={doc.url}
+                          onClick={(e) => {
+                            // Only redirect if very-relevant and same domain, otherwise use normal link behavior
+                            if (
+                              doc.relevance === 'very-relevant' &&
+                              doc.url.startsWith('/')
+                            ) {
+                              e.preventDefault();
+                              // Use the global navigateToDoc function to navigate while keeping chat open
+                              if ((window as any).navigateToDoc) {
+                                (window as any).navigateToDoc(
+                                  { u: doc.url, t: doc.title, sel: 'article' },
+                                  message.text || '',
+                                );
+                              } else {
+                                // Fallback to normal navigation if navigateToDoc is not available
+                                window.location.href = doc.url;
+                              }
+                            }
+                            // For non-very-relevant docs or external links, let the default link behavior handle it
+                          }}
+                          style={{
+                            color: '#7d47e3',
+                            textDecoration: 'none',
+                            fontSize: '12px',
+                            transition: 'all 0.2s ease',
+                            fontWeight: '500',
+                            cursor: 'pointer',
+                          }}
+                          onMouseOver={(e) => {
+                            e.currentTarget.style.textDecoration = 'underline';
+                            e.currentTarget.style.color = '#6b3bc9';
+                          }}
+                          onFocus={(e) => {
+                            e.currentTarget.style.textDecoration = 'underline';
+                            e.currentTarget.style.color = '#6b3bc9';
+                          }}
+                          onMouseOut={(e) => {
+                            e.currentTarget.style.textDecoration = 'none';
+                            e.currentTarget.style.color = '#7d47e3';
+                          }}
+                          onBlur={(e) => {
+                            e.currentTarget.style.textDecoration = 'none';
+                            e.currentTarget.style.color = '#7d47e3';
+                          }}
+                        >
+                          {doc.title}
+                        </a>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+              {/* Suggestions */}
+              {message.role === 'assistant' &&
+                message.suggested_messages &&
+                message.suggested_messages.length > 0 && (
+                  <div
+                    style={{
+                      fontSize: '12px',
+                      color: '#6b7280',
+                      padding: '12px',
+                      backgroundColor: '#ffffff',
+                      borderRadius: '8px',
+                      border: '1px solid #e5e7eb',
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontWeight: '600',
+                        marginBottom: '8px',
+                        color: '#374151',
+                      }}
+                    >
+                      💡 Suggested follow-ups:
+                    </div>
+                    {message.suggested_messages.map((suggestion, index) => (
+                      <div key={index} style={{ marginBottom: '4px' }}>
+                        <button
+                          onClick={() => sendMessage(suggestion)}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: '#7d47e3',
+                            textDecoration: 'none',
+                            fontSize: '12px',
+                            transition: 'all 0.2s ease',
+                            fontWeight: '500',
+                            cursor: 'pointer',
+                            padding: '4px 8px',
+                            textAlign: 'left',
+                            width: '100%',
+                            borderRadius: '4px',
+                          }}
+                          onMouseOver={(e) => {
+                            e.currentTarget.style.backgroundColor = '#f3f4f6';
+                            e.currentTarget.style.textDecoration = 'underline';
+                            e.currentTarget.style.color = '#6b3bc9';
+                          }}
+                          onFocus={(e) => {
+                            e.currentTarget.style.backgroundColor = '#f3f4f6';
+                            e.currentTarget.style.textDecoration = 'underline';
+                            e.currentTarget.style.color = '#6b3bc9';
+                          }}
+                          onMouseOut={(e) => {
+                            e.currentTarget.style.backgroundColor =
+                              'transparent';
+                            e.currentTarget.style.textDecoration = 'none';
+                            e.currentTarget.style.color = '#7d47e3';
+                          }}
+                          onBlur={(e) => {
+                            e.currentTarget.style.backgroundColor =
+                              'transparent';
+                            e.currentTarget.style.textDecoration = 'none';
+                            e.currentTarget.style.color = '#7d47e3';
+                          }}
+                        >
+                          {suggestion}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+            </div>
           );
         })}
-
 
         <div ref={messagesEndRef} />
       </main>
