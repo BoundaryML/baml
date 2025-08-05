@@ -50,7 +50,9 @@ func (c *ArrayWithConstraints) Decode(holder *cffi.CFFIValueClass, typeMap baml.
 			c.PositiveFloats = baml.Decode(valueHolder).Interface().([]float64)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class ArrayWithConstraints", key))
+
 		}
 	}
 
@@ -117,7 +119,9 @@ func (c *MixedArrays) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) 
 			c.ComplexMixed = baml.Decode(valueHolder).Interface().([]Union3ProductOrTagOrUser)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class MixedArrays", key))
+
 		}
 	}
 
@@ -180,7 +184,9 @@ func (c *NestedArrays) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap)
 			c.ThreeDimensional = baml.Decode(valueHolder).Interface().([][][]float64)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class NestedArrays", key))
+
 		}
 	}
 
@@ -239,7 +245,9 @@ func (c *ObjectArrays) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap)
 			c.Tags = baml.Decode(valueHolder).Interface().([]Tag)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class ObjectArrays", key))
+
 		}
 	}
 
@@ -306,7 +314,9 @@ func (c *Product) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.InStock = baml.Decode(valueHolder).Interface().(bool)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class Product", key))
+
 		}
 	}
 
@@ -373,7 +383,9 @@ func (c *SimpleArrays) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap)
 			c.Booleans = baml.Decode(valueHolder).Interface().([]bool)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class SimpleArrays", key))
+
 		}
 	}
 
@@ -434,7 +446,9 @@ func (c *Tag) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.Color = baml.Decode(valueHolder).Interface().(string)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class Tag", key))
+
 		}
 	}
 
@@ -497,7 +511,9 @@ func (c *User) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.IsActive = baml.Decode(valueHolder).Interface().(bool)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class User", key))
+
 		}
 	}
 

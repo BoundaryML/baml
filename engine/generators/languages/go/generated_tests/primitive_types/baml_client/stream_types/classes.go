@@ -74,7 +74,9 @@ func (c *MixedPrimitives) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeM
 			c.Flags = baml.Decode(valueHolder).Interface().([]bool)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class MixedPrimitives", key))
+
 		}
 	}
 
@@ -149,7 +151,9 @@ func (c *PrimitiveArrays) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeM
 			c.BoolArray = baml.Decode(valueHolder).Interface().([]bool)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class PrimitiveArrays", key))
+
 		}
 	}
 
@@ -214,7 +218,9 @@ func (c *PrimitiveMaps) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap
 			c.BoolMap = baml.Decode(valueHolder).Interface().(map[string]bool)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class PrimitiveMaps", key))
+
 		}
 	}
 
@@ -283,7 +289,9 @@ func (c *PrimitiveTypes) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMa
 			c.NullField = baml.Decode(valueHolder).Interface().(any)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class PrimitiveTypes", key))
+
 		}
 	}
 

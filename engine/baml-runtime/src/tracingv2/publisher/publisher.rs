@@ -183,6 +183,10 @@ pub fn start_publisher(
     lookup: Arc<AstSignatureWrapper>,
     #[cfg(not(target_arch = "wasm32"))] rt: Arc<tokio::runtime::Runtime>,
 ) {
+    if lookup.env_var("BAML_GENERATE").is_some() {
+        log::debug!("Skipping publisher because BAML_GENERATE is set");
+        return;
+    }
     if lookup.env_var("BOUNDARY_API_KEY").is_none() {
         log::debug!("Skipping publisher because BOUNDARY_API_KEY is not set");
         return;
@@ -467,7 +471,10 @@ impl TracePublisher {
 
         // Check if we should upload
         let check_response = match lookup
-            .api_request::<CheckBamlSrcUpload>(CheckBamlSrcUploadRequest { baml_src_hash })
+            .api_request::<CheckBamlSrcUpload>(CheckBamlSrcUploadRequest {
+                baml_src_hash,
+                baml_runtime: Some(env!("CARGO_PKG_VERSION").to_string()),
+            })
             .await
         {
             Ok(response) => response,
@@ -661,7 +668,9 @@ impl TracePublisher {
 
         let upload_url_details = match self
             .lookup
-            .api_request::<CreateTraceEventUploadUrl>(CreateTraceEventUploadUrlRequest {})
+            .api_request::<CreateTraceEventUploadUrl>(CreateTraceEventUploadUrlRequest {
+                baml_runtime: Some(env!("CARGO_PKG_VERSION").to_string()),
+            })
             .await
         {
             Ok(response) => response,

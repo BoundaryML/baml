@@ -17,7 +17,7 @@ type Amount = int64
 
 type Combination = Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString
 
-type Currency = int64
+type Currency = Checked[int64]
 
 type Graph = map[string][]string
 
@@ -35,7 +35,7 @@ type LinkedListAlias = LinkedListAliasNode
 
 type List = []string
 
-type MultipleAttrs = int64
+type MultipleAttrs = Checked[int64]
 
 type NodeIndirection = NodeWithAliasIndirection
 

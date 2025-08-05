@@ -131,7 +131,7 @@ func (u *Union2EarthlingOrMartian) IsMartian() bool {
 	return u.variant == "Martian"
 }
 
-func (u *Union2EarthlingOrMartian) Martian() *Martian {
+func (u *Union2EarthlingOrMartian) AsMartian() *Martian {
 	if u.variant != "Martian" {
 		return nil
 	}
@@ -159,7 +159,7 @@ func (u *Union2EarthlingOrMartian) IsEarthling() bool {
 	return u.variant == "Earthling"
 }
 
-func (u *Union2EarthlingOrMartian) Earthling() *Earthling {
+func (u *Union2EarthlingOrMartian) AsEarthling() *Earthling {
 	if u.variant != "Earthling" {
 		return nil
 	}
@@ -276,7 +276,7 @@ func (u *Union2EmailAddressOrPhoneNumber) IsPhoneNumber() bool {
 	return u.variant == "PhoneNumber"
 }
 
-func (u *Union2EmailAddressOrPhoneNumber) PhoneNumber() *PhoneNumber {
+func (u *Union2EmailAddressOrPhoneNumber) AsPhoneNumber() *PhoneNumber {
 	if u.variant != "PhoneNumber" {
 		return nil
 	}
@@ -304,7 +304,7 @@ func (u *Union2EmailAddressOrPhoneNumber) IsEmailAddress() bool {
 	return u.variant == "EmailAddress"
 }
 
-func (u *Union2EmailAddressOrPhoneNumber) EmailAddress() *EmailAddress {
+func (u *Union2EmailAddressOrPhoneNumber) AsEmailAddress() *EmailAddress {
 	if u.variant != "EmailAddress" {
 		return nil
 	}
@@ -421,7 +421,7 @@ func (u *Union2EventOrResume) IsResume() bool {
 	return u.variant == "Resume"
 }
 
-func (u *Union2EventOrResume) Resume() *Resume {
+func (u *Union2EventOrResume) AsResume() *Resume {
 	if u.variant != "Resume" {
 		return nil
 	}
@@ -449,7 +449,7 @@ func (u *Union2EventOrResume) IsEvent() bool {
 	return u.variant == "Event"
 }
 
-func (u *Union2EventOrResume) Event() *Event {
+func (u *Union2EventOrResume) AsEvent() *Event {
 	if u.variant != "Event" {
 		return nil
 	}
@@ -566,7 +566,7 @@ func (u *Union2JsonTemplateOrSimpleTag) IsSimpleTag() bool {
 	return u.variant == "SimpleTag"
 }
 
-func (u *Union2JsonTemplateOrSimpleTag) SimpleTag() *SimpleTag {
+func (u *Union2JsonTemplateOrSimpleTag) AsSimpleTag() *SimpleTag {
 	if u.variant != "SimpleTag" {
 		return nil
 	}
@@ -594,7 +594,7 @@ func (u *Union2JsonTemplateOrSimpleTag) IsJsonTemplate() bool {
 	return u.variant == "JsonTemplate"
 }
 
-func (u *Union2JsonTemplateOrSimpleTag) JsonTemplate() *JsonTemplate {
+func (u *Union2JsonTemplateOrSimpleTag) AsJsonTemplate() *JsonTemplate {
 	if u.variant != "JsonTemplate" {
 		return nil
 	}
@@ -711,7 +711,7 @@ func (u *Union2ListNestedOrString) IsString() bool {
 	return u.variant == "String"
 }
 
-func (u *Union2ListNestedOrString) String() *string {
+func (u *Union2ListNestedOrString) AsString() *string {
 	if u.variant != "String" {
 		return nil
 	}
@@ -739,7 +739,7 @@ func (u *Union2ListNestedOrString) IsListNested() bool {
 	return u.variant == "ListNested"
 }
 
-func (u *Union2ListNestedOrString) ListNested() *[]Nested {
+func (u *Union2ListNestedOrString) AsListNested() *[]Nested {
 	if u.variant != "ListNested" {
 		return nil
 	}
@@ -856,7 +856,7 @@ func (u *Union2LiteralClassOneOrLiteralClassTwo) IsLiteralClassOne() bool {
 	return u.variant == "LiteralClassOne"
 }
 
-func (u *Union2LiteralClassOneOrLiteralClassTwo) LiteralClassOne() *LiteralClassOne {
+func (u *Union2LiteralClassOneOrLiteralClassTwo) AsLiteralClassOne() *LiteralClassOne {
 	if u.variant != "LiteralClassOne" {
 		return nil
 	}
@@ -884,7 +884,7 @@ func (u *Union2LiteralClassOneOrLiteralClassTwo) IsLiteralClassTwo() bool {
 	return u.variant == "LiteralClassTwo"
 }
 
-func (u *Union2LiteralClassOneOrLiteralClassTwo) LiteralClassTwo() *LiteralClassTwo {
+func (u *Union2LiteralClassOneOrLiteralClassTwo) AsLiteralClassTwo() *LiteralClassTwo {
 	if u.variant != "LiteralClassTwo" {
 		return nil
 	}
@@ -1001,7 +1001,7 @@ func (u *Union2MapStringKeyRecursiveUnionValueOrString) IsString() bool {
 	return u.variant == "String"
 }
 
-func (u *Union2MapStringKeyRecursiveUnionValueOrString) String() *string {
+func (u *Union2MapStringKeyRecursiveUnionValueOrString) AsString() *string {
 	if u.variant != "String" {
 		return nil
 	}
@@ -1029,7 +1029,7 @@ func (u *Union2MapStringKeyRecursiveUnionValueOrString) IsMapStringKeyRecursiveU
 	return u.variant == "MapStringKeyRecursiveUnionValue"
 }
 
-func (u *Union2MapStringKeyRecursiveUnionValueOrString) MapStringKeyRecursiveUnionValue() *map[string]RecursiveUnion {
+func (u *Union2MapStringKeyRecursiveUnionValueOrString) AsMapStringKeyRecursiveUnionValue() *map[string]RecursiveUnion {
 	if u.variant != "MapStringKeyRecursiveUnionValue" {
 		return nil
 	}
@@ -1146,7 +1146,7 @@ func (u *Union2NestedOrString) IsNested() bool {
 	return u.variant == "Nested"
 }
 
-func (u *Union2NestedOrString) Nested() *Nested {
+func (u *Union2NestedOrString) AsNested() *Nested {
 	if u.variant != "Nested" {
 		return nil
 	}
@@ -1174,7 +1174,7 @@ func (u *Union2NestedOrString) IsString() bool {
 	return u.variant == "String"
 }
 
-func (u *Union2NestedOrString) String() *string {
+func (u *Union2NestedOrString) AsString() *string {
 	if u.variant != "String" {
 		return nil
 	}
@@ -1291,7 +1291,7 @@ func (u *Union2OriginalAOrOriginalB) IsOriginalA() bool {
 	return u.variant == "OriginalA"
 }
 
-func (u *Union2OriginalAOrOriginalB) OriginalA() *OriginalA {
+func (u *Union2OriginalAOrOriginalB) AsOriginalA() *OriginalA {
 	if u.variant != "OriginalA" {
 		return nil
 	}
@@ -1319,7 +1319,7 @@ func (u *Union2OriginalAOrOriginalB) IsOriginalB() bool {
 	return u.variant == "OriginalB"
 }
 
-func (u *Union2OriginalAOrOriginalB) OriginalB() *OriginalB {
+func (u *Union2OriginalAOrOriginalB) AsOriginalB() *OriginalB {
 	if u.variant != "OriginalB" {
 		return nil
 	}
@@ -1458,7 +1458,7 @@ func (u *Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject) IsMemoryObject(
 	return u.variant == "MemoryObject"
 }
 
-func (u *Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject) MemoryObject() *MemoryObject {
+func (u *Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject) AsMemoryObject() *MemoryObject {
 	if u.variant != "MemoryObject" {
 		return nil
 	}
@@ -1488,7 +1488,7 @@ func (u *Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject) IsComplexMemory
 	return u.variant == "ComplexMemoryObject"
 }
 
-func (u *Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject) ComplexMemoryObject() *ComplexMemoryObject {
+func (u *Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject) AsComplexMemoryObject() *ComplexMemoryObject {
 	if u.variant != "ComplexMemoryObject" {
 		return nil
 	}
@@ -1518,7 +1518,7 @@ func (u *Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject) IsAnotherObject
 	return u.variant == "AnotherObject"
 }
 
-func (u *Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject) AnotherObject() *AnotherObject {
+func (u *Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject) AsAnotherObject() *AnotherObject {
 	if u.variant != "AnotherObject" {
 		return nil
 	}
@@ -1657,7 +1657,7 @@ func (u *Union3BookOrderOrFlightConfirmationOrGroceryReceipt) IsBookOrder() bool
 	return u.variant == "BookOrder"
 }
 
-func (u *Union3BookOrderOrFlightConfirmationOrGroceryReceipt) BookOrder() *BookOrder {
+func (u *Union3BookOrderOrFlightConfirmationOrGroceryReceipt) AsBookOrder() *BookOrder {
 	if u.variant != "BookOrder" {
 		return nil
 	}
@@ -1687,7 +1687,7 @@ func (u *Union3BookOrderOrFlightConfirmationOrGroceryReceipt) IsFlightConfirmati
 	return u.variant == "FlightConfirmation"
 }
 
-func (u *Union3BookOrderOrFlightConfirmationOrGroceryReceipt) FlightConfirmation() *FlightConfirmation {
+func (u *Union3BookOrderOrFlightConfirmationOrGroceryReceipt) AsFlightConfirmation() *FlightConfirmation {
 	if u.variant != "FlightConfirmation" {
 		return nil
 	}
@@ -1717,7 +1717,7 @@ func (u *Union3BookOrderOrFlightConfirmationOrGroceryReceipt) IsGroceryReceipt()
 	return u.variant == "GroceryReceipt"
 }
 
-func (u *Union3BookOrderOrFlightConfirmationOrGroceryReceipt) GroceryReceipt() *GroceryReceipt {
+func (u *Union3BookOrderOrFlightConfirmationOrGroceryReceipt) AsGroceryReceipt() *GroceryReceipt {
 	if u.variant != "GroceryReceipt" {
 		return nil
 	}
@@ -1922,7 +1922,7 @@ func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) IsInt() bool {
 	return u.variant == "Int"
 }
 
-func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) Int() *int64 {
+func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) AsInt() *int64 {
 	if u.variant != "Int" {
 		return nil
 	}
@@ -1958,7 +1958,7 @@ func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) IsString() bool 
 	return u.variant == "String"
 }
 
-func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) String() *string {
+func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) AsString() *string {
 	if u.variant != "String" {
 		return nil
 	}
@@ -1994,7 +1994,7 @@ func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) IsBool() bool {
 	return u.variant == "Bool"
 }
 
-func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) Bool() *bool {
+func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) AsBool() *bool {
 	if u.variant != "Bool" {
 		return nil
 	}
@@ -2030,7 +2030,7 @@ func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) IsFloat() bool {
 	return u.variant == "Float"
 }
 
-func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) Float() *float64 {
+func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) AsFloat() *float64 {
 	if u.variant != "Float" {
 		return nil
 	}
@@ -2066,7 +2066,7 @@ func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) IsJsonObject() b
 	return u.variant == "JsonObject"
 }
 
-func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) JsonObject() *JsonObject {
+func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) AsJsonObject() *JsonObject {
 	if u.variant != "JsonObject" {
 		return nil
 	}
@@ -2102,7 +2102,7 @@ func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) IsJsonArray() bo
 	return u.variant == "JsonArray"
 }
 
-func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) JsonArray() *JsonArray {
+func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) AsJsonArray() *JsonArray {
 	if u.variant != "JsonArray" {
 		return nil
 	}

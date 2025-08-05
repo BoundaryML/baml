@@ -23,6 +23,10 @@ func {{ fn.name }}(ctx context.Context{% for (name, go_type) in fn.args -%}
         args.Collectors = callOpts.collectors
     }
 
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
+
     encoded, err := args.Encode()
     if err != nil {
         panic(err)

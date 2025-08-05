@@ -155,6 +155,13 @@ pub fn export_baml_fn(_attr: TokenStream, item: TokenStream) -> TokenStream {
                                 Err(e) => Err(e),
                             }
                         }
+                    } else if is_result_vec_convertible_to_rawptr(ty) {
+                        quote! {
+                            match #method_call {
+                                Ok(result) => Ok(BamlObjectResponseSuccess::new_objects(result.into_iter().map(|item| item.into()).collect())),
+                                Err(e) => Err(e),
+                            }
+                        }
                     } else if is_result_option_rawptrtype(ty) {
                         quote! {
                             match #method_call {
@@ -176,6 +183,21 @@ pub fn export_baml_fn(_attr: TokenStream, item: TokenStream) -> TokenStream {
                             match #method_call {
                                 Ok(Some(result)) => Ok(BamlObjectResponseSuccess::new_objects(result)),
                                 Ok(None) => Ok(BamlObjectResponseSuccess::new_value(BamlValue::Null)),
+                                Err(e) => Err(e),
+                            }
+                        }
+                    } else if is_result_option_string(ty) {
+                        quote! {
+                            match #method_call {
+                                Ok(Some(value)) => Ok(BamlObjectResponseSuccess::new_value(BamlValue::String(value))),
+                                Ok(None) => Ok(BamlObjectResponseSuccess::new_value(BamlValue::Null)),
+                                Err(e) => Err(e),
+                            }
+                        }
+                    } else if is_result_bool(ty) {
+                        quote! {
+                            match #method_call {
+                                Ok(value) => Ok(BamlObjectResponseSuccess::new_value(BamlValue::Bool(value))),
                                 Err(e) => Err(e),
                             }
                         }
@@ -618,6 +640,10 @@ fn is_convertible_to_rawptr(ty: &Type) -> bool {
                     | "SSEEvent"
                     | "BamlMedia"
                     | "TypeBuilder"
+                    | "EnumBuilder"
+                    | "EnumValueBuilder"
+                    | "ClassBuilder"
+                    | "ClassPropertyBuilder"
                     | "TypeIR"
             );
         }
@@ -917,6 +943,35 @@ fn is_result_vec_rawptrtype(ty: &Type) -> bool {
     false
 }
 
+fn is_result_vec_convertible_to_rawptr(ty: &Type) -> bool {
+    if let Type::Path(type_path) = ty {
+        if let Some(segment) = type_path.path.segments.last() {
+            if segment.ident == "Result" {
+                if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
+                    if let Some(syn::GenericArgument::Type(Type::Path(result_type))) =
+                        args.args.first()
+                    {
+                        if let Some(result_segment) = result_type.path.segments.last() {
+                            if result_segment.ident == "Vec" {
+                                if let syn::PathArguments::AngleBracketed(vec_args) =
+                                    &result_segment.arguments
+                                {
+                                    if let Some(syn::GenericArgument::Type(vec_inner_type)) =
+                                        vec_args.args.first()
+                                    {
+                                        return is_convertible_to_rawptr(vec_inner_type);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    false
+}
+
 fn is_result_option_rawptrtype(ty: &Type) -> bool {
     if let Type::Path(type_path) = ty {
         if let Some(segment) = type_path.path.segments.last() {
@@ -1027,6 +1082,59 @@ fn is_result_option_vec_rawptrtype(ty: &Type) -> bool {
                                     }
                                 }
                             }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    false
+}
+
+fn is_result_option_string(ty: &Type) -> bool {
+    if let Type::Path(type_path) = ty {
+        if let Some(segment) = type_path.path.segments.last() {
+            if segment.ident == "Result" {
+                if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
+                    if let Some(syn::GenericArgument::Type(Type::Path(result_type))) =
+                        args.args.first()
+                    {
+                        if let Some(result_segment) = result_type.path.segments.last() {
+                            if result_segment.ident == "Option" {
+                                if let syn::PathArguments::AngleBracketed(option_args) =
+                                    &result_segment.arguments
+                                {
+                                    if let Some(syn::GenericArgument::Type(Type::Path(
+                                        option_inner_type,
+                                    ))) = option_args.args.first()
+                                    {
+                                        if let Some(option_inner_segment) =
+                                            option_inner_type.path.segments.last()
+                                        {
+                                            return option_inner_segment.ident == "String";
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    false
+}
+
+fn is_result_bool(ty: &Type) -> bool {
+    if let Type::Path(type_path) = ty {
+        if let Some(segment) = type_path.path.segments.last() {
+            if segment.ident == "Result" {
+                if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
+                    if let Some(syn::GenericArgument::Type(Type::Path(result_type))) =
+                        args.args.first()
+                    {
+                        if let Some(result_segment) = result_type.path.segments.last() {
+                            return result_segment.ident == "bool";
                         }
                     }
                 }

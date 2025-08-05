@@ -52,16 +52,28 @@ impl Decode for BamlValue {
 
                     BamlValue::Enum(enum_name, enum_value)
                 }
-                Value::MediaValue(cffi_value_media) => {
-                    let inner = cffi_value_media.media_object.unwrap();
-                    let media_object = crate::raw_ptr_wrapper::RawPtrType::decode(inner)?;
-                    let baml_media = match media_object {
-                        crate::raw_ptr_wrapper::RawPtrType::Media(media) => media.as_ref().clone(),
-                        other => {
-                            anyhow::bail!("Expected media object, got: {:?}", other.name());
+                Value::ObjectValue(cffi_value_object) => {
+                    let inner = cffi_value_object.object.unwrap();
+                    match inner {
+                        crate::baml::cffi::cffi_value_raw_object::Object::Media(
+                            cffi_raw_object,
+                        ) => {
+                            let media_object =
+                                crate::raw_ptr_wrapper::RawPtrType::decode(cffi_raw_object)?;
+                            let baml_media = match media_object {
+                                crate::raw_ptr_wrapper::RawPtrType::Media(media) => {
+                                    media.as_ref().clone()
+                                }
+                                other => {
+                                    anyhow::bail!("Expected media object, got: {:?}", other.name());
+                                }
+                            };
+                            BamlValue::Media(baml_media)
                         }
-                    };
-                    BamlValue::Media(baml_media)
+                        other => {
+                            anyhow::bail!("Unexpected object type: {:?}", other)
+                        }
+                    }
                 }
                 Value::TupleValue(cffi_value_tuple) => {
                     let values = cffi_value_tuple

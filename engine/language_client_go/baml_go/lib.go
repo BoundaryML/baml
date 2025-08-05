@@ -33,7 +33,7 @@ import (
 import "C"
 
 const (
-	VERSION            = "0.202.1"
+	VERSION            = "0.203.1"
 	githubRepo         = "boundaryml/baml"
 	bamlCacheDirEnvVar = "BAML_CACHE_DIR"
 	bamlLibraryPathEnv = "BAML_LIBRARY_PATH"
@@ -143,6 +143,7 @@ func initializeBaml() error {
 		lib.registerFn("register_callbacks")
 		lib.registerFn("call_function_from_c")
 		lib.registerFn("call_function_stream_from_c")
+		lib.registerFn("call_function_parse_from_c")
 		lib.registerFn("call_object_constructor")
 		lib.registerFn("call_object_method")
 	}()
@@ -188,6 +189,8 @@ func (l *library) registerFn(fnName string) {
 		C.SetCallFunctionFromCFn(fnPtr)
 	case "call_function_stream_from_c":
 		C.SetCallFunctionStreamFromCFn(fnPtr)
+	case "call_function_parse_from_c":
+		C.SetCallFunctionParseFromCFn(fnPtr)
 	case "call_object_method_function":
 		C.SetCallObjectMethodFunctionFn(fnPtr)
 	case "call_object_constructor":

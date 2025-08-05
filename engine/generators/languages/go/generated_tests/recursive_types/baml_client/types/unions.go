@@ -131,7 +131,7 @@ func (u *Union2IntOrListRecursive1) IsInt() bool {
 	return u.variant == "Int"
 }
 
-func (u *Union2IntOrListRecursive1) Int() *int64 {
+func (u *Union2IntOrListRecursive1) AsInt() *int64 {
 	if u.variant != "Int" {
 		return nil
 	}
@@ -159,7 +159,7 @@ func (u *Union2IntOrListRecursive1) IsListRecursive1() bool {
 	return u.variant == "ListRecursive1"
 }
 
-func (u *Union2IntOrListRecursive1) ListRecursive1() *[]Recursive1 {
+func (u *Union2IntOrListRecursive1) AsListRecursive1() *[]Recursive1 {
 	if u.variant != "ListRecursive1" {
 		return nil
 	}
@@ -298,7 +298,7 @@ func (u *Union3IntOrRecursive1OrString) IsRecursive1() bool {
 	return u.variant == "Recursive1"
 }
 
-func (u *Union3IntOrRecursive1OrString) Recursive1() *Recursive1 {
+func (u *Union3IntOrRecursive1OrString) AsRecursive1() *Recursive1 {
 	if u.variant != "Recursive1" {
 		return nil
 	}
@@ -328,7 +328,7 @@ func (u *Union3IntOrRecursive1OrString) IsInt() bool {
 	return u.variant == "Int"
 }
 
-func (u *Union3IntOrRecursive1OrString) Int() *int64 {
+func (u *Union3IntOrRecursive1OrString) AsInt() *int64 {
 	if u.variant != "Int" {
 		return nil
 	}
@@ -358,7 +358,7 @@ func (u *Union3IntOrRecursive1OrString) IsString() bool {
 	return u.variant == "String"
 }
 
-func (u *Union3IntOrRecursive1OrString) String() *string {
+func (u *Union3IntOrRecursive1OrString) AsString() *string {
 	if u.variant != "String" {
 		return nil
 	}
@@ -541,7 +541,7 @@ func (u *Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString) IsString() b
 	return u.variant == "String"
 }
 
-func (u *Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString) String() *string {
+func (u *Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString) AsString() *string {
 	if u.variant != "String" {
 		return nil
 	}
@@ -575,7 +575,7 @@ func (u *Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString) IsInt() bool
 	return u.variant == "Int"
 }
 
-func (u *Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString) Int() *int64 {
+func (u *Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString) AsInt() *int64 {
 	if u.variant != "Int" {
 		return nil
 	}
@@ -609,7 +609,7 @@ func (u *Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString) IsFloat() bo
 	return u.variant == "Float"
 }
 
-func (u *Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString) Float() *float64 {
+func (u *Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString) AsFloat() *float64 {
 	if u.variant != "Float" {
 		return nil
 	}
@@ -643,7 +643,7 @@ func (u *Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString) IsMapStringK
 	return u.variant == "MapStringKeyJSONValue"
 }
 
-func (u *Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString) MapStringKeyJSONValue() *map[string]JSON {
+func (u *Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString) AsMapStringKeyJSONValue() *map[string]JSON {
 	if u.variant != "MapStringKeyJSONValue" {
 		return nil
 	}
@@ -677,7 +677,7 @@ func (u *Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString) IsListJSON()
 	return u.variant == "ListJSON"
 }
 
-func (u *Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString) ListJSON() *[]JSON {
+func (u *Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString) AsListJSON() *[]JSON {
 	if u.variant != "ListJSON" {
 		return nil
 	}

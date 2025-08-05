@@ -21,9 +21,9 @@ import (
 )
 
 type Example struct {
-	Type string `json:"type"`
-	A    int64  `json:"a"`
-	B    string `json:"b"`
+	Type string         `json:"type"`
+	A    Checked[int64] `json:"a"`
+	B    string         `json:"b"`
 }
 
 func (c *Example) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -44,13 +44,17 @@ func (c *Example) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.Type = baml.Decode(valueHolder).Interface().(string)
 
 		case "a":
-			c.A = baml.Decode(valueHolder).Interface().(int64)
+			c.A = baml.DecodeChecked(valueHolder, func(inner *cffi.CFFIValueHolder) int64 {
+				return baml.Decode(inner).Interface().(int64)
+			})
 
 		case "b":
 			c.B = baml.Decode(valueHolder).Interface().(string)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class Example", key))
+
 		}
 	}
 
@@ -113,7 +117,9 @@ func (c *Example2) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.Element2 = baml.Decode(valueHolder).Interface().(string)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class Example2", key))
+
 		}
 	}
 

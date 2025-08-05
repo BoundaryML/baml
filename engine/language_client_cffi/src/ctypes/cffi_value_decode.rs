@@ -50,12 +50,21 @@ impl Decode for Value {
 
                     let enum_value = cffi_value_enum.value;
 
-                    Value::Enum(enum_name, enum_value)
+                    Value::Enum(enum_name, enum_value, ())
                 }
-                cValue::MediaValue(cffi_value_media) => {
-                    let inner = cffi_value_media.media_object.unwrap();
-                    let media_object = crate::raw_ptr_wrapper::RawPtrType::decode(inner)?;
-                    Value::RawPtr(media_object, ())
+                cValue::ObjectValue(cffi_value_object) => {
+                    let inner = cffi_value_object.object.unwrap();
+                    match inner {
+                        crate::baml::cffi::cffi_value_raw_object::Object::Media(
+                            cffi_raw_object,
+                        )
+                        | crate::baml::cffi::cffi_value_raw_object::Object::Type(cffi_raw_object) =>
+                        {
+                            let raw_object =
+                                crate::raw_ptr_wrapper::RawPtrType::decode(cffi_raw_object)?;
+                            Value::RawPtr(raw_object, ())
+                        }
+                    }
                 }
                 cValue::TupleValue(cffi_value_tuple) => {
                     let values = cffi_value_tuple

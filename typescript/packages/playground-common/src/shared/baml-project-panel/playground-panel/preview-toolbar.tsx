@@ -47,21 +47,12 @@ const RunButton: React.FC<{ className?: string }> = ({ className }) => {
   const runBamlTests = useRunBamlTests();
   const isRunning = useAtomValue(areTestsRunningAtom);
   const selected = useAtomValue(selectedItemAtom);
-  const { open: isSidebarOpen } = useSidebar();
-
-  // Hide text when sidebar is open or on smaller screens
-  const getButtonTextClass = () => {
-    if (isSidebarOpen) {
-      return 'text-sm hidden whitespace-nowrap';
-    }
-    return 'text-sm hidden md:block whitespace-nowrap';
-  };
 
   return (
     <Button
       variant="default"
       size="xs"
-      className={cn('items-center gap-2 flex-shrink-0 min-w-fit', className)}
+      className={cn('cursor-pointer items-center gap-2 flex-shrink-0 min-w-fit bg-purple-600 hover:bg-purple-700 text-white', className)}
       disabled={isRunning || selected === undefined}
       onClick={() => {
         if (selected) {
@@ -72,7 +63,7 @@ const RunButton: React.FC<{ className?: string }> = ({ className }) => {
       }}
     >
       <Play className="size-4 flex-shrink-0" />
-      <div className={getButtonTextClass()}>Run Test</div>
+      <span className="text-sm whitespace-nowrap">Run Test</span>
     </Button>
   );
 };

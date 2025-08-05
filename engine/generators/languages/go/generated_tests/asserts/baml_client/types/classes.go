@@ -46,7 +46,9 @@ func (c *Person) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.Age = baml.Decode(valueHolder).Interface().(int64)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class Person", key))
+
 		}
 	}
 

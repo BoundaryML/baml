@@ -19,6 +19,9 @@ func (c *{{ name }}) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 		panic(fmt.Sprintf("expected {{ name }}, got %s", typeName.Name))
 	}
 
+   {% if dynamic %}
+   c.DynamicProperties = make(map[string]any)
+   {% endif %}
 
 	{% if fields.len() > 0 %}
 	for _, field := range holder.Fields {
@@ -30,16 +33,12 @@ func (c *{{ name }}) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 					c.{{ field.name|exported_name }} = {{ field.type.decode_from_any("valueHolder", pkg) }}
 				{% endfor %}
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
-		}
-	}
-{% endif %}
-
-{% if dynamic %}
-	for _, field := range holder.DynamicFields {
-		key := field.Key
-		valueHolder := field.Value
+			{% if dynamic %}
 			c.DynamicProperties[key] = baml.Decode(valueHolder)
+			{% else %}
+			panic(fmt.Sprintf("unexpected field: %s in class {{ name }}", key))
+			{% endif %}
+		}
 	}
 {% endif %}
 }

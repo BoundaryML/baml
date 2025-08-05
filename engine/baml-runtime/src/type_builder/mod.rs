@@ -20,6 +20,7 @@ trait Meta {
 
 pub trait WithMeta {
     fn with_meta(&self, key: &str, value: BamlValue) -> &Self;
+    fn get_meta(&self, key: &str) -> Option<BamlValue>;
 }
 
 macro_rules! impl_meta {
@@ -42,6 +43,12 @@ where
         meta.insert(key.to_string(), value);
         self
     }
+
+    fn get_meta(&self, key: &str) -> Option<BamlValue> {
+        let meta = self.meta();
+        let meta = meta.lock().unwrap();
+        meta.get(key).cloned()
+    }
 }
 
 impl<T: Meta> From<&Arc<Mutex<T>>> for PropertyAttributes {
@@ -63,13 +70,15 @@ impl<T: Meta> From<&Arc<Mutex<T>>> for PropertyAttributes {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct ClassBuilder {
+    pub name: String,
     properties: Arc<Mutex<IndexMap<String, Arc<Mutex<ClassPropertyBuilder>>>>>,
     meta: MetaData,
 }
 impl_meta!(ClassBuilder);
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct ClassPropertyBuilder {
     r#type: Arc<Mutex<Option<TypeIR>>>,
     meta: MetaData,
@@ -77,35 +86,28 @@ pub struct ClassPropertyBuilder {
 impl_meta!(ClassPropertyBuilder);
 
 impl ClassPropertyBuilder {
-    /// Setter.
-    pub fn r#type(&self, r#type: TypeIR) -> &Self {
+    pub fn set_type(&self, r#type: TypeIR) -> &Self {
         *self.r#type.lock().unwrap() = Some(r#type);
         self
     }
 
-    /// Getter.
-    pub fn get_type(&self) -> Option<TypeIR> {
+    pub fn r#type(&self) -> Option<TypeIR> {
         self.r#type.lock().unwrap().clone()
     }
 }
 
-impl Default for ClassBuilder {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl ClassBuilder {
-    pub fn new() -> Self {
+    pub fn new(name: String) -> Self {
         Self {
+            name,
             properties: Default::default(),
             meta: Arc::new(Mutex::new(Default::default())),
         }
     }
 
     // TODO: Figure out captured lifetime issue and return Iterator.
-    // Iterator that holds mutex locked seems tricky.
-    pub fn list_properties(&self) -> Vec<(String, ClassPropertyBuilder)> {
+    // Iterator that holds mutex lock seems tricky.
+    pub fn list_properties_key_value(&self) -> Vec<(String, ClassPropertyBuilder)> {
         self.properties
             .lock()
             .unwrap()
@@ -114,7 +116,18 @@ impl ClassBuilder {
             .collect()
     }
 
-    pub fn property(&self, name: &str) -> Arc<Mutex<ClassPropertyBuilder>> {
+    // TODO: Unify function above and this one (split because of CFFI).
+    pub fn list_properties(&self) -> Vec<String> {
+        let properties = self.properties.lock().unwrap();
+        properties.keys().cloned().collect()
+    }
+
+    pub fn maybe_get_property(&self, name: &str) -> Option<Arc<Mutex<ClassPropertyBuilder>>> {
+        let properties = self.properties.lock().unwrap();
+        properties.get(name).cloned()
+    }
+
+    pub fn upsert_property(&self, name: &str) -> Arc<Mutex<ClassPropertyBuilder>> {
         let mut properties = self.properties.lock().unwrap();
         Arc::clone(properties.entry(name.to_string()).or_insert_with(|| {
             Arc::new(Mutex::new(ClassPropertyBuilder {
@@ -134,38 +147,46 @@ impl ClassBuilder {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct EnumBuilder {
+    pub name: String,
     values: Arc<Mutex<IndexMap<String, Arc<Mutex<EnumValueBuilder>>>>>,
     meta: MetaData,
 }
 impl_meta!(EnumBuilder);
 
+#[derive(Debug, Clone)]
 pub struct EnumValueBuilder {
     meta: MetaData,
 }
 impl_meta!(EnumValueBuilder);
 
-impl Default for EnumBuilder {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl EnumBuilder {
-    pub fn new() -> Self {
+    pub fn new(name: String) -> Self {
         Self {
+            name,
             values: Default::default(),
             meta: Arc::new(Mutex::new(Default::default())),
         }
     }
 
-    pub fn value(&self, name: &str) -> Arc<Mutex<EnumValueBuilder>> {
+    pub fn maybe_get_value(&self, name: &str) -> Option<Arc<Mutex<EnumValueBuilder>>> {
+        let values = self.values.lock().unwrap();
+        values.get(name).cloned()
+    }
+
+    pub fn upsert_value(&self, name: &str) -> Arc<Mutex<EnumValueBuilder>> {
         let mut values = self.values.lock().unwrap();
         Arc::clone(values.entry(name.to_string()).or_insert_with(|| {
             Arc::new(Mutex::new(EnumValueBuilder {
                 meta: Default::default(),
             }))
         }))
+    }
+
+    pub fn list_values(&self) -> Vec<String> {
+        let values = self.values.lock().unwrap();
+        values.keys().cloned().collect()
     }
 }
 
@@ -509,27 +530,43 @@ impl TypeBuilder {
         self.recursive_classes.lock().unwrap().clear();
     }
 
-    pub fn class(&self, name: &str) -> Arc<Mutex<ClassBuilder>> {
+    pub fn upsert_class(&self, name: &str) -> Arc<Mutex<ClassBuilder>> {
         Arc::clone(
             self.classes
                 .lock()
                 .unwrap()
                 .entry(name.to_string())
-                .or_insert_with(|| Arc::new(Mutex::new(ClassBuilder::new()))),
+                .or_insert_with(|| Arc::new(Mutex::new(ClassBuilder::new(name.to_string())))),
         )
     }
 
-    pub fn r#enum(&self, name: &str) -> Arc<Mutex<EnumBuilder>> {
+    pub fn maybe_get_class(&self, name: &str) -> Option<Arc<Mutex<ClassBuilder>>> {
+        self.classes.lock().unwrap().get(name).cloned()
+    }
+
+    pub fn upsert_enum(&self, name: &str) -> Arc<Mutex<EnumBuilder>> {
         Arc::clone(
             self.enums
                 .lock()
                 .unwrap()
                 .entry(name.to_string())
-                .or_insert_with(|| Arc::new(Mutex::new(EnumBuilder::new()))),
+                .or_insert_with(|| Arc::new(Mutex::new(EnumBuilder::new(name.to_string())))),
         )
     }
 
-    pub fn type_alias(&self, name: &str) -> Arc<Mutex<TypeAliasBuilder>> {
+    pub fn list_enums(&self) -> Vec<String> {
+        self.enums.lock().unwrap().keys().cloned().collect()
+    }
+
+    pub fn list_classes(&self) -> Vec<String> {
+        self.classes.lock().unwrap().keys().cloned().collect()
+    }
+
+    pub fn maybe_get_enum(&self, name: &str) -> Option<Arc<Mutex<EnumBuilder>>> {
+        self.enums.lock().unwrap().get(name).cloned()
+    }
+
+    pub fn upsert_type_alias(&self, name: &str) -> Arc<Mutex<TypeAliasBuilder>> {
         Arc::clone(
             self.type_aliases
                 .lock()
@@ -537,6 +574,10 @@ impl TypeBuilder {
                 .entry(name.to_string())
                 .or_insert_with(|| Arc::new(Mutex::new(TypeAliasBuilder::new()))),
         )
+    }
+
+    pub fn maybe_get_type_alias(&self, name: &str) -> Option<Arc<Mutex<TypeAliasBuilder>>> {
+        self.type_aliases.lock().unwrap().get(name).cloned()
     }
 
     pub fn recursive_type_aliases(&self) -> Arc<Mutex<Vec<IndexMap<String, TypeIR>>>> {
@@ -551,14 +592,14 @@ impl TypeBuilder {
         for entry in entries {
             match entry {
                 TypeBuilderEntry::Class(cls) => {
-                    let mutex = self.class(&cls.elem.name);
+                    let mutex = self.upsert_class(&cls.elem.name);
                     let class_builder = mutex.lock().unwrap();
                     for f in &cls.elem.static_fields {
                         class_builder
-                            .property(&f.elem.name)
+                            .upsert_property(&f.elem.name)
                             .lock()
                             .unwrap()
-                            .r#type(f.elem.r#type.elem.to_owned())
+                            .set_type(f.elem.r#type.elem.to_owned())
                             .with_meta(
                                 "alias",
                                 f.attributes.alias().map_or(BamlValue::Null, |v| {
@@ -577,11 +618,11 @@ impl TypeBuilder {
                 }
 
                 TypeBuilderEntry::Enum(enm) => {
-                    let mutex = self.r#enum(&enm.elem.name);
+                    let mutex = self.upsert_enum(&enm.elem.name);
                     let enum_builder = mutex.lock().unwrap();
                     for (variant, _) in &enm.elem.values {
                         enum_builder
-                            .value(&variant.elem.0)
+                            .upsert_value(&variant.elem.0)
                             .lock()
                             .unwrap()
                             .with_meta(
@@ -613,7 +654,7 @@ impl TypeBuilder {
                 }
 
                 TypeBuilderEntry::TypeAlias(alias) => {
-                    let mutex = self.type_alias(&alias.elem.name);
+                    let mutex = self.upsert_type_alias(&alias.elem.name);
                     let alias_builder = mutex.lock().unwrap();
                     alias_builder.target(alias.elem.r#type.elem.to_owned());
                 }
@@ -804,14 +845,14 @@ mod tests {
         let builder = TypeBuilder::new();
 
         // Add a class with properties and metadata
-        let cls = builder.class("User");
+        let cls = builder.upsert_class("User");
         {
             let cls = cls.lock().unwrap();
             // Add name property with alias and description
-            cls.property("name")
+            cls.upsert_property("name")
                 .lock()
                 .unwrap()
-                .r#type(TypeIR::string())
+                .set_type(TypeIR::string())
                 .with_meta("alias", BamlValue::String("username".to_string()))
                 .with_meta(
                     "description",
@@ -819,28 +860,28 @@ mod tests {
                 );
 
             // Add age property with description only
-            cls.property("age")
+            cls.upsert_property("age")
                 .lock()
                 .unwrap()
-                .r#type(TypeIR::int())
+                .set_type(TypeIR::int())
                 .with_meta(
                     "description",
                     BamlValue::String("User's age in years".to_string()),
                 );
 
             // Add email property with no metadata
-            cls.property("email")
+            cls.upsert_property("email")
                 .lock()
                 .unwrap()
-                .r#type(TypeIR::string());
+                .set_type(TypeIR::string());
         }
 
         // Add an enum with values and metadata
-        let enm = builder.r#enum("Status");
+        let enm = builder.upsert_enum("Status");
         {
             let enm = enm.lock().unwrap();
             // Add ACTIVE value with alias and description
-            enm.value("ACTIVE")
+            enm.upsert_value("ACTIVE")
                 .lock()
                 .unwrap()
                 .with_meta("alias", BamlValue::String("active".to_string()))
@@ -850,13 +891,13 @@ mod tests {
                 );
 
             // Add INACTIVE value with alias only
-            enm.value("INACTIVE")
+            enm.upsert_value("INACTIVE")
                 .lock()
                 .unwrap()
                 .with_meta("alias", BamlValue::String("inactive".to_string()));
 
             // Add PENDING value with no metadata
-            enm.value("PENDING");
+            enm.upsert_value("PENDING");
         }
 
         // Convert to string and verify the format
@@ -890,15 +931,15 @@ mod tests {
         let builder = TypeBuilder::new();
 
         // 1. Complex class with nested types and all field types
-        let address = builder.class("Address");
+        let address = builder.upsert_class("Address");
         {
             let address = address.lock().unwrap();
             // String with all metadata
             address
-                .property("street")
+                .upsert_property("street")
                 .lock()
                 .unwrap()
-                .r#type(TypeIR::string())
+                .set_type(TypeIR::string())
                 .with_meta("alias", BamlValue::String("streetAddress".to_string()))
                 .with_meta(
                     "description",
@@ -907,10 +948,10 @@ mod tests {
 
             // Optional int with description
             address
-                .property("unit")
+                .upsert_property("unit")
                 .lock()
                 .unwrap()
-                .r#type(TypeIR::int().as_optional())
+                .set_type(TypeIR::int().as_optional())
                 .with_meta(
                     "description",
                     BamlValue::String("Apartment/unit number if applicable".to_string()),
@@ -918,38 +959,38 @@ mod tests {
 
             // List of strings with alias
             address
-                .property("tags")
+                .upsert_property("tags")
                 .lock()
                 .unwrap()
-                .r#type(TypeIR::string().as_list())
+                .set_type(TypeIR::string().as_list())
                 .with_meta("alias", BamlValue::String("labels".to_string()));
 
             // Boolean with no metadata
             address
-                .property("is_primary")
+                .upsert_property("is_primary")
                 .lock()
                 .unwrap()
-                .r#type(TypeIR::bool());
+                .set_type(TypeIR::bool());
 
             // Float with skip metadata
             address
-                .property("coordinates")
+                .upsert_property("coordinates")
                 .lock()
                 .unwrap()
-                .r#type(TypeIR::float())
+                .set_type(TypeIR::float())
                 .with_meta("skip", BamlValue::Bool(true));
         }
 
         // 2. Empty class
-        builder.class("EmptyClass");
+        builder.upsert_class("EmptyClass");
 
         // 3. Complex enum with various metadata combinations
-        let priority = builder.r#enum("Priority");
+        let priority = builder.upsert_enum("Priority");
         {
             let priority = priority.lock().unwrap();
             // All metadata
             priority
-                .value("HIGH")
+                .upsert_value("HIGH")
                 .lock()
                 .unwrap()
                 .with_meta("alias", BamlValue::String("urgent".to_string()))
@@ -960,24 +1001,24 @@ mod tests {
                 .with_meta("skip", BamlValue::Bool(false));
 
             // Only description
-            priority.value("MEDIUM").lock().unwrap().with_meta(
+            priority.upsert_value("MEDIUM").lock().unwrap().with_meta(
                 "description",
                 BamlValue::String("Standard priority".to_string()),
             );
 
             // Only skip
             priority
-                .value("LOW")
+                .upsert_value("LOW")
                 .lock()
                 .unwrap()
                 .with_meta("skip", BamlValue::Bool(true));
 
             // No metadata
-            priority.value("NONE");
+            priority.upsert_value("NONE");
         }
 
         // 4. Empty enum
-        builder.r#enum("EmptyEnum");
+        builder.upsert_enum("EmptyEnum");
 
         // Test string representation
         let output = builder.to_string();
@@ -1047,13 +1088,13 @@ mod tests {
         let builder = TypeBuilder::new();
 
         // Create a 'Node' class where the 'child' property recursively refers to 'Node'
-        let node = builder.class("Node");
+        let node = builder.upsert_class("Node");
         {
             let node = node.lock().unwrap();
-            node.property("child")
+            node.upsert_property("child")
                 .lock()
                 .unwrap()
-                .r#type(TypeIR::class("Node"))
+                .set_type(TypeIR::class("Node"))
                 .with_meta(
                     "description",
                     BamlValue::String("recursive self reference".to_string()),

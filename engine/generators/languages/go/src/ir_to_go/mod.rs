@@ -173,7 +173,10 @@ pub(crate) fn type_to_go(field: &TypeNonStreaming, _lookup: &impl TypeLookups) -
     let type_pkg = Package::types();
 
     let type_go = match field {
-        T::Primitive(type_value, _) => type_value.into(),
+        T::Primitive(type_value, _) => {
+            let t: TypeGo = type_value.into();
+            t.with_meta(meta)
+        }
         T::Enum { name, dynamic, .. } => TypeGo::Enum {
             package: type_pkg.clone(),
             name: name.clone(),

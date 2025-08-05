@@ -42,6 +42,10 @@ func ConsumeSimpleClass(ctx context.Context, item types.SimpleClass, opts ...Cal
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -98,6 +102,10 @@ func MakeSimpleClass(ctx context.Context, opts ...CallOptionFunc) (types.SimpleC
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()

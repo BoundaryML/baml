@@ -26,7 +26,7 @@ message CFFIValueHolder {
     CFFIValueMap map_value = 8;
     CFFIValueClass class_value = 9;
     CFFIValueEnum enum_value = 10;
-    CFFIValueMedia media_value = 11;
+    CFFIValueRawObject object_value = 11;
     CFFIValueTuple tuple_value = 12;
     CFFIValueUnionVariant union_variant_value = 13;
     CFFIValueChecked checked_value = 14;
@@ -71,7 +71,7 @@ message CFFIValueMap {
 message CFFIValueClass {
   CFFITypeName name = 1;
   repeated CFFIMapEntry fields = 2;
-  repeated CFFIMapEntry dynamic_fields = 3;
+  // repeated CFFIMapEntry dynamic_fields = 3;
 }
 
 message CFFIValueEnum {
@@ -80,9 +80,11 @@ message CFFIValueEnum {
   bool is_dynamic = 3;
 }
 
-message CFFIValueMedia {
-  // only media objects are allowed here
-  CFFIRawObject media_object = 1;
+message CFFIValueRawObject {
+  oneof object {
+    CFFIRawObject media = 1;
+    CFFIRawObject type = 2;
+  }
 }
 
 message CFFIValueTuple { repeated CFFIValueHolder values = 1; }
@@ -208,6 +210,8 @@ message CFFIFunctionArguments {
   repeated CFFIEnvVar env = 3;
   // collectors only
   repeated CFFIRawObject collectors = 4;
+  // type builder only
+  CFFIRawObject type_builder = 5;
 }
 
 message CFFIObjectMethodArguments {
@@ -264,6 +268,10 @@ enum CFFIObjectType {
   OBJECT_MEDIA_VIDEO = 15;
   OBJECT_TYPE_BUILDER = 16;
   OBJECT_TYPE = 17;
+  OBJECT_ENUM_BUILDER = 18;
+  OBJECT_ENUM_VALUE_BUILDER = 19;
+  OBJECT_CLASS_BUILDER = 20;
+  OBJECT_CLASS_PROPERTY_BUILDER = 21;
 }
 
 // Raw object with type information
@@ -286,6 +294,10 @@ message CFFIRawObject {
     CFFIPointerType media_video = 15;
     CFFIPointerType type_builder = 16;
     CFFIPointerType type = 17;
+    CFFIPointerType enum_builder = 18;
+    CFFIPointerType enum_value_builder = 19;
+    CFFIPointerType class_builder = 20;
+    CFFIPointerType class_property_builder = 21;
   }
 }
 

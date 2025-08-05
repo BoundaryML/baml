@@ -4,7 +4,8 @@ use crate::{
     baml::cffi::{cffi_raw_object::Object, CffiPointerType, CffiRawObject},
     ctypes::utils::{Decode, Encode},
     raw_ptr_wrapper::{
-        CollectorWrapper, FunctionLogWrapper, HTTPBodyWrapper, HTTPRequestWrapper,
+        ClassBuilderWrapper, ClassPropertyBuilderWrapper, CollectorWrapper, EnumBuilderWrapper,
+        EnumValueBuilderWrapper, FunctionLogWrapper, HTTPBodyWrapper, HTTPRequestWrapper,
         HTTPResponseWrapper, LLMCallWrapper, LLMStreamCallWrapper, MediaWrapper, RawPtrType,
         RawPtrWrapper, SSEEventWrapper, StreamTimingWrapper, TimingWrapper, TypeBuilderWrapper,
         TypeWrapper, UsageWrapper,
@@ -25,6 +26,10 @@ generate_encode_decode_impls! {
     SSEEvent => SSEEvent as SSEEventWrapper: "SSEEvent" (Object::SseResponse),
     BamlMedia => Media as MediaWrapper: "Media" (Object::MediaImage, Object::MediaAudio, Object::MediaPdf, Object::MediaVideo),
     TypeBuilder => TypeBuilder as TypeBuilderWrapper: "TypeBuilder" (Object::TypeBuilder),
+    EnumBuilder => EnumBuilder as EnumBuilderWrapper: "EnumBuilder" (Object::EnumBuilder),
+    EnumValueBuilder => EnumValueBuilder as EnumValueBuilderWrapper: "EnumValueBuilder" (Object::EnumValueBuilder),
+    ClassBuilder => ClassBuilder as ClassBuilderWrapper: "ClassBuilder" (Object::ClassBuilder),
+    ClassPropertyBuilder => ClassPropertyBuilder as ClassPropertyBuilderWrapper: "ClassPropertyBuilder" (Object::ClassPropertyBuilder),
     TypeIR => TypeDef as TypeWrapper: "Type" (Object::Type)
 }
 

@@ -63,6 +63,10 @@ func (*stream) AaaSamOutputFormat(ctx context.Context, recipe string, opts ...Ca
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -141,6 +145,10 @@ func (*stream) AliasThatPointsToRecursiveType(ctx context.Context, data types.Li
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -199,7 +207,7 @@ func (*stream) AliasThatPointsToRecursiveType(ctx context.Context, data types.Li
 }
 
 // / Streaming version of AliasWithMultipleAttrs
-func (*stream) AliasWithMultipleAttrs(ctx context.Context, money int64, opts ...CallOptionFunc) (<-chan StreamValue[types.Checked[int64], int64], error) {
+func (*stream) AliasWithMultipleAttrs(ctx context.Context, money int64, opts ...CallOptionFunc) (<-chan StreamValue[types.Checked[int64], types.Checked[int64]], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -219,6 +227,10 @@ func (*stream) AliasWithMultipleAttrs(ctx context.Context, money int64, opts ...
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -233,7 +245,7 @@ func (*stream) AliasWithMultipleAttrs(ctx context.Context, money int64, opts ...
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[types.Checked[int64], int64])
+	channel := make(chan StreamValue[types.Checked[int64], types.Checked[int64]])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -250,7 +262,7 @@ func (*stream) AliasWithMultipleAttrs(ctx context.Context, money int64, opts ...
 					return
 				}
 				if result.Error != nil {
-					channel <- StreamValue[types.Checked[int64], int64]{
+					channel <- StreamValue[types.Checked[int64], types.Checked[int64]]{
 						IsError: true,
 						Error:   result.Error,
 					}
@@ -258,14 +270,18 @@ func (*stream) AliasWithMultipleAttrs(ctx context.Context, money int64, opts ...
 					return
 				}
 				if result.HasData {
-					data := (result.Data).(int64)
-					channel <- StreamValue[types.Checked[int64], int64]{
+					data := baml.CastChecked(result.Data, func(inner any) int64 {
+						return (inner).(int64)
+					})
+					channel <- StreamValue[types.Checked[int64], types.Checked[int64]]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(types.Checked[int64])
-					channel <- StreamValue[types.Checked[int64], int64]{
+					data := baml.CastChecked(result.StreamData, func(inner any) int64 {
+						return (inner).(int64)
+					})
+					channel <- StreamValue[types.Checked[int64], types.Checked[int64]]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -295,6 +311,10 @@ func (*stream) AliasedInputClass(ctx context.Context, input types.InputClass, op
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -375,6 +395,10 @@ func (*stream) AliasedInputClass2(ctx context.Context, input types.InputClass, o
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -451,6 +475,10 @@ func (*stream) AliasedInputClassNested(ctx context.Context, input types.InputCla
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -531,6 +559,10 @@ func (*stream) AliasedInputEnum(ctx context.Context, input types.AliasedEnum, op
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -607,6 +639,10 @@ func (*stream) AliasedInputList(ctx context.Context, input []types.AliasedEnum, 
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -687,6 +723,10 @@ func (*stream) AllowedOptionals(ctx context.Context, optionals types.OptionalLis
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -763,6 +803,10 @@ func (*stream) AssertFn(ctx context.Context, a int64, opts ...CallOptionFunc) (<
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -843,6 +887,10 @@ func (*stream) AudioInput(ctx context.Context, aud types.Audio, opts ...CallOpti
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -919,6 +967,10 @@ func (*stream) AudioInputOpenai(ctx context.Context, aud types.Audio, prompt str
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -999,6 +1051,10 @@ func (*stream) BuildLinkedList(ctx context.Context, input []int64, opts ...CallO
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -1075,6 +1131,10 @@ func (*stream) BuildTree(ctx context.Context, input types.BinaryNode, opts ...Ca
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -1155,6 +1215,10 @@ func (*stream) ClassThatPointsToRecursiveClassThroughAlias(ctx context.Context, 
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -1231,6 +1295,10 @@ func (*stream) ClassifyDynEnumTwo(ctx context.Context, input string, opts ...Cal
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -1311,6 +1379,10 @@ func (*stream) ClassifyMessage(ctx context.Context, input string, opts ...CallOp
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -1387,6 +1459,10 @@ func (*stream) ClassifyMessage2(ctx context.Context, input string, opts ...CallO
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -1467,6 +1543,10 @@ func (*stream) ClassifyMessage3(ctx context.Context, input string, opts ...CallO
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -1543,6 +1623,10 @@ func (*stream) Completion(ctx context.Context, prefix string, suffix string, lan
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -1623,6 +1707,10 @@ func (*stream) CustomTask(ctx context.Context, input string, opts ...CallOptionF
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -1699,6 +1787,10 @@ func (*stream) DescribeAudio(ctx context.Context, audio types.Audio, opts ...Cal
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -1779,6 +1871,10 @@ func (*stream) DescribeAudio2(ctx context.Context, audio types.Audio, opts ...Ca
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -1855,6 +1951,10 @@ func (*stream) DescribeImage(ctx context.Context, img types.Image, opts ...CallO
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -1935,6 +2035,10 @@ func (*stream) DescribeImage2(ctx context.Context, classWithImage types.ClassWit
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -2011,6 +2115,10 @@ func (*stream) DescribeImage3(ctx context.Context, classWithImage types.ClassWit
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -2091,6 +2199,10 @@ func (*stream) DescribeImage4(ctx context.Context, classWithImage types.ClassWit
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -2167,6 +2279,10 @@ func (*stream) DescribeMedia1599(ctx context.Context, img types.Image, client_se
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -2247,6 +2363,10 @@ func (*stream) DifferentiateUnions(ctx context.Context, opts ...CallOptionFunc) 
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -2323,6 +2443,10 @@ func (*stream) DummyOutputFunction(ctx context.Context, input string, opts ...Ca
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -2403,6 +2527,10 @@ func (*stream) DynamicFunc(ctx context.Context, input types.DynamicClassOne, opt
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -2479,6 +2607,10 @@ func (*stream) DynamicInputOutput(ctx context.Context, input types.DynInputOutpu
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -2559,6 +2691,10 @@ func (*stream) DynamicListInputOutput(ctx context.Context, input []types.DynInpu
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -2635,6 +2771,10 @@ func (*stream) ExpectFailure(ctx context.Context, opts ...CallOptionFunc) (<-cha
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -2715,6 +2855,10 @@ func (*stream) ExtractContactInfo(ctx context.Context, document string, opts ...
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -2791,6 +2935,10 @@ func (*stream) ExtractEntities(ctx context.Context, text string, opts ...CallOpt
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -2871,6 +3019,10 @@ func (*stream) ExtractHobby(ctx context.Context, text string, opts ...CallOption
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -2947,6 +3099,10 @@ func (*stream) ExtractNames(ctx context.Context, input string, opts ...CallOptio
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -3027,6 +3183,10 @@ func (*stream) ExtractPeople(ctx context.Context, text string, opts ...CallOptio
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -3103,6 +3263,10 @@ func (*stream) ExtractReceiptInfo(ctx context.Context, email string, reason type
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -3183,6 +3347,10 @@ func (*stream) ExtractResume(ctx context.Context, resume string, img *types.Imag
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -3259,6 +3427,10 @@ func (*stream) ExtractResume2(ctx context.Context, resume string, opts ...CallOp
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -3339,6 +3511,10 @@ func (*stream) FnClassOptionalOutput(ctx context.Context, input string, opts ...
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -3415,6 +3591,10 @@ func (*stream) FnClassOptionalOutput2(ctx context.Context, input string, opts ..
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -3495,6 +3675,10 @@ func (*stream) FnEnumListOutput(ctx context.Context, input string, opts ...CallO
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -3571,6 +3755,10 @@ func (*stream) FnEnumOutput(ctx context.Context, input string, opts ...CallOptio
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -3651,6 +3839,10 @@ func (*stream) FnLiteralClassInputOutput(ctx context.Context, input types.Litera
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -3727,6 +3919,10 @@ func (*stream) FnLiteralUnionClassInputOutput(ctx context.Context, input types.U
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -3807,6 +4003,10 @@ func (*stream) FnNamedArgsSingleStringOptional(ctx context.Context, myString *st
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -3883,6 +4083,10 @@ func (*stream) FnOutputBool(ctx context.Context, input string, opts ...CallOptio
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -3963,6 +4167,10 @@ func (*stream) FnOutputClass(ctx context.Context, input string, opts ...CallOpti
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -4039,6 +4247,10 @@ func (*stream) FnOutputClassList(ctx context.Context, input string, opts ...Call
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -4119,6 +4331,10 @@ func (*stream) FnOutputClassNested(ctx context.Context, input string, opts ...Ca
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -4195,6 +4411,10 @@ func (*stream) FnOutputClassWithEnum(ctx context.Context, input string, opts ...
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -4275,6 +4495,10 @@ func (*stream) FnOutputInt(ctx context.Context, input string, opts ...CallOption
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -4351,6 +4575,10 @@ func (*stream) FnOutputLiteralBool(ctx context.Context, input string, opts ...Ca
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -4431,6 +4659,10 @@ func (*stream) FnOutputLiteralInt(ctx context.Context, input string, opts ...Cal
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -4507,6 +4739,10 @@ func (*stream) FnOutputLiteralString(ctx context.Context, input string, opts ...
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -4587,6 +4823,10 @@ func (*stream) FnOutputStringList(ctx context.Context, input string, opts ...Cal
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -4663,6 +4903,10 @@ func (*stream) FnTestAliasedEnumOutput(ctx context.Context, input string, opts .
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -4743,6 +4987,10 @@ func (*stream) FnTestClassAlias(ctx context.Context, input string, opts ...CallO
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -4819,6 +5067,10 @@ func (*stream) FnTestNamedArgsSingleEnum(ctx context.Context, myArg types.NamedA
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -4899,6 +5151,10 @@ func (*stream) GetDataType(ctx context.Context, text string, opts ...CallOptionF
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -4975,6 +5231,10 @@ func (*stream) GetOrderInfo(ctx context.Context, email types.Email, opts ...Call
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -5055,6 +5315,10 @@ func (*stream) GetQuery(ctx context.Context, query string, opts ...CallOptionFun
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -5131,6 +5395,10 @@ func (*stream) InOutEnumMapKey(ctx context.Context, i1 map[types.MapKey]string, 
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -5211,6 +5479,10 @@ func (*stream) InOutLiteralStringUnionMapKey(ctx context.Context, i1 map[types.U
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -5287,6 +5559,10 @@ func (*stream) InOutSingleLiteralStringMapKey(ctx context.Context, m map[string]
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -5367,6 +5643,10 @@ func (*stream) JsonTypeAliasCycle(ctx context.Context, input types.JsonValue, op
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -5443,6 +5723,10 @@ func (*stream) LLMEcho(ctx context.Context, input string, opts ...CallOptionFunc
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -5523,6 +5807,10 @@ func (*stream) LiteralUnionsTest(ctx context.Context, input string, opts ...Call
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -5601,6 +5889,10 @@ func (*stream) MakeBlockConstraint(ctx context.Context, opts ...CallOptionFunc) 
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -5640,13 +5932,17 @@ func (*stream) MakeBlockConstraint(ctx context.Context, opts ...CallOptionFunc) 
 					return
 				}
 				if result.HasData {
-					data := (result.Data).(types.Checked[types.BlockConstraint])
+					data := baml.CastChecked(result.Data, func(inner any) types.BlockConstraint {
+						return (inner).(types.BlockConstraint)
+					})
 					channel <- StreamValue[types.Checked[stream_types.BlockConstraint], types.Checked[types.BlockConstraint]]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(types.Checked[stream_types.BlockConstraint])
+					data := baml.CastChecked(result.StreamData, func(inner any) stream_types.BlockConstraint {
+						return (inner).(stream_types.BlockConstraint)
+					})
 					channel <- StreamValue[types.Checked[stream_types.BlockConstraint], types.Checked[types.BlockConstraint]]{
 						IsFinal:   false,
 						as_stream: &data,
@@ -5677,6 +5973,10 @@ func (*stream) MakeClassWithBlockDone(ctx context.Context, opts ...CallOptionFun
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -5757,6 +6057,10 @@ func (*stream) MakeClassWithExternalDone(ctx context.Context, opts ...CallOption
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -5833,6 +6137,10 @@ func (*stream) MakeNestedBlockConstraint(ctx context.Context, opts ...CallOption
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -5913,6 +6221,10 @@ func (*stream) MakeSemanticContainer(ctx context.Context, opts ...CallOptionFunc
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -5989,6 +6301,10 @@ func (*stream) MapAlias(ctx context.Context, m map[string][]string, opts ...Call
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -6069,6 +6385,10 @@ func (*stream) MergeAliasAttributes(ctx context.Context, money int64, opts ...Ca
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -6145,6 +6465,10 @@ func (*stream) MyFunc(ctx context.Context, input string, opts ...CallOptionFunc)
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -6225,6 +6549,10 @@ func (*stream) NestedAlias(ctx context.Context, c types.Union6BoolOrFloatOrIntOr
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -6301,6 +6629,10 @@ func (*stream) NullLiteralClassHello(ctx context.Context, s string, opts ...Call
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -6381,6 +6713,10 @@ func (*stream) OpenAIWithAnthropicResponseHello(ctx context.Context, s string, o
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -6457,6 +6793,10 @@ func (*stream) OptionalTest_Function(ctx context.Context, input string, opts ...
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -6537,6 +6877,10 @@ func (*stream) PdfInput(ctx context.Context, pdf types.PDF, opts ...CallOptionFu
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -6613,6 +6957,10 @@ func (*stream) PdfInputAnthropic(ctx context.Context, pdf types.PDF, opts ...Cal
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -6693,6 +7041,10 @@ func (*stream) PdfInputOpenai(ctx context.Context, pdf types.PDF, prompt string,
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -6769,6 +7121,10 @@ func (*stream) PdfInputVertex(ctx context.Context, pdf types.PDF, opts ...CallOp
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -6849,6 +7205,10 @@ func (*stream) PredictAge(ctx context.Context, name string, opts ...CallOptionFu
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -6907,7 +7267,7 @@ func (*stream) PredictAge(ctx context.Context, name string, opts ...CallOptionFu
 }
 
 // / Streaming version of PredictAgeBare
-func (*stream) PredictAgeBare(ctx context.Context, inp string, opts ...CallOptionFunc) (<-chan StreamValue[types.Checked[int64], int64], error) {
+func (*stream) PredictAgeBare(ctx context.Context, inp string, opts ...CallOptionFunc) (<-chan StreamValue[types.Checked[int64], types.Checked[int64]], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -6927,6 +7287,10 @@ func (*stream) PredictAgeBare(ctx context.Context, inp string, opts ...CallOptio
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -6941,7 +7305,7 @@ func (*stream) PredictAgeBare(ctx context.Context, inp string, opts ...CallOptio
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[types.Checked[int64], int64])
+	channel := make(chan StreamValue[types.Checked[int64], types.Checked[int64]])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -6958,7 +7322,7 @@ func (*stream) PredictAgeBare(ctx context.Context, inp string, opts ...CallOptio
 					return
 				}
 				if result.Error != nil {
-					channel <- StreamValue[types.Checked[int64], int64]{
+					channel <- StreamValue[types.Checked[int64], types.Checked[int64]]{
 						IsError: true,
 						Error:   result.Error,
 					}
@@ -6966,14 +7330,18 @@ func (*stream) PredictAgeBare(ctx context.Context, inp string, opts ...CallOptio
 					return
 				}
 				if result.HasData {
-					data := (result.Data).(int64)
-					channel <- StreamValue[types.Checked[int64], int64]{
+					data := baml.CastChecked(result.Data, func(inner any) int64 {
+						return (inner).(int64)
+					})
+					channel <- StreamValue[types.Checked[int64], types.Checked[int64]]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(types.Checked[int64])
-					channel <- StreamValue[types.Checked[int64], int64]{
+					data := baml.CastChecked(result.StreamData, func(inner any) int64 {
+						return (inner).(int64)
+					})
+					channel <- StreamValue[types.Checked[int64], types.Checked[int64]]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -7003,6 +7371,10 @@ func (*stream) PrimitiveAlias(ctx context.Context, p types.Union4BoolOrFloatOrIn
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -7083,6 +7455,10 @@ func (*stream) PromptTestClaude(ctx context.Context, input string, opts ...CallO
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -7159,6 +7535,10 @@ func (*stream) PromptTestClaudeChat(ctx context.Context, input string, opts ...C
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -7239,6 +7619,10 @@ func (*stream) PromptTestClaudeChatNoSystem(ctx context.Context, input string, o
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -7315,6 +7699,10 @@ func (*stream) PromptTestOpenAI(ctx context.Context, input string, opts ...CallO
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -7395,6 +7783,10 @@ func (*stream) PromptTestOpenAIChat(ctx context.Context, input string, opts ...C
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -7471,6 +7863,10 @@ func (*stream) PromptTestOpenAIChatNoSystem(ctx context.Context, input string, o
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -7551,6 +7947,10 @@ func (*stream) PromptTestStreaming(ctx context.Context, input string, opts ...Ca
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -7627,6 +8027,10 @@ func (*stream) RecursiveAliasCycle(ctx context.Context, input types.RecAliasOne,
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -7707,6 +8111,10 @@ func (*stream) RecursiveClassWithAliasIndirection(ctx context.Context, cls types
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -7785,6 +8193,10 @@ func (*stream) RecursiveUnionTest(ctx context.Context, input types.RecursiveUnio
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -7843,7 +8255,7 @@ func (*stream) RecursiveUnionTest(ctx context.Context, input types.RecursiveUnio
 }
 
 // / Streaming version of ReturnAliasWithMergedAttributes
-func (*stream) ReturnAliasWithMergedAttributes(ctx context.Context, money int64, opts ...CallOptionFunc) (<-chan StreamValue[types.Checked[int64], int64], error) {
+func (*stream) ReturnAliasWithMergedAttributes(ctx context.Context, money int64, opts ...CallOptionFunc) (<-chan StreamValue[types.Checked[int64], types.Checked[int64]], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -7863,6 +8275,10 @@ func (*stream) ReturnAliasWithMergedAttributes(ctx context.Context, money int64,
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -7877,7 +8293,7 @@ func (*stream) ReturnAliasWithMergedAttributes(ctx context.Context, money int64,
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[types.Checked[int64], int64])
+	channel := make(chan StreamValue[types.Checked[int64], types.Checked[int64]])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -7894,7 +8310,7 @@ func (*stream) ReturnAliasWithMergedAttributes(ctx context.Context, money int64,
 					return
 				}
 				if result.Error != nil {
-					channel <- StreamValue[types.Checked[int64], int64]{
+					channel <- StreamValue[types.Checked[int64], types.Checked[int64]]{
 						IsError: true,
 						Error:   result.Error,
 					}
@@ -7902,14 +8318,18 @@ func (*stream) ReturnAliasWithMergedAttributes(ctx context.Context, money int64,
 					return
 				}
 				if result.HasData {
-					data := (result.Data).(int64)
-					channel <- StreamValue[types.Checked[int64], int64]{
+					data := baml.CastChecked(result.Data, func(inner any) int64 {
+						return (inner).(int64)
+					})
+					channel <- StreamValue[types.Checked[int64], types.Checked[int64]]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(types.Checked[int64])
-					channel <- StreamValue[types.Checked[int64], int64]{
+					data := baml.CastChecked(result.StreamData, func(inner any) int64 {
+						return (inner).(int64)
+					})
+					channel <- StreamValue[types.Checked[int64], types.Checked[int64]]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -7939,6 +8359,10 @@ func (*stream) ReturnFailingAssert(ctx context.Context, inp int64, opts ...CallO
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -8019,6 +8443,10 @@ func (*stream) ReturnJsonEntry(ctx context.Context, s string, opts ...CallOption
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -8095,6 +8523,10 @@ func (*stream) ReturnMalformedConstraints(ctx context.Context, a int64, opts ...
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -8175,6 +8607,10 @@ func (*stream) SchemaDescriptions(ctx context.Context, input string, opts ...Cal
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -8251,6 +8687,10 @@ func (*stream) SimpleRecursiveListAlias(ctx context.Context, input types.Recursi
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -8331,6 +8771,10 @@ func (*stream) SimpleRecursiveMapAlias(ctx context.Context, input types.Recursiv
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -8407,6 +8851,10 @@ func (*stream) StreamBigNumbers(ctx context.Context, digits int64, opts ...CallO
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -8487,6 +8935,10 @@ func (*stream) StreamFailingAssertion(ctx context.Context, theme string, length 
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -8563,6 +9015,10 @@ func (*stream) StreamFailingCheck(ctx context.Context, theme string, length int6
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -8643,6 +9099,10 @@ func (*stream) StreamOneBigNumber(ctx context.Context, digits int64, opts ...Cal
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -8719,6 +9179,10 @@ func (*stream) StreamUnionIntegers(ctx context.Context, digits int64, opts ...Ca
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -8799,6 +9263,10 @@ func (*stream) StreamingCompoundNumbers(ctx context.Context, digits int64, yappi
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -8875,6 +9343,10 @@ func (*stream) StructureDocument1559(ctx context.Context, document_txt string, o
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -8955,6 +9427,10 @@ func (*stream) TakeRecAliasDep(ctx context.Context, input types.RecursiveAliasDe
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -9031,6 +9507,10 @@ func (*stream) TellStory(ctx context.Context, story string, opts ...CallOptionFu
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -9111,6 +9591,10 @@ func (*stream) TestAnthropic(ctx context.Context, input string, opts ...CallOpti
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -9187,6 +9671,10 @@ func (*stream) TestAnthropicShorthand(ctx context.Context, input string, opts ..
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -9267,6 +9755,10 @@ func (*stream) TestAws(ctx context.Context, input string, opts ...CallOptionFunc
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -9343,6 +9835,10 @@ func (*stream) TestAwsClaude37(ctx context.Context, input string, opts ...CallOp
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -9423,6 +9919,10 @@ func (*stream) TestAwsInferenceProfile(ctx context.Context, input string, opts .
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -9499,6 +9999,10 @@ func (*stream) TestAwsInvalidAccessKey(ctx context.Context, input string, opts .
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -9579,6 +10083,10 @@ func (*stream) TestAwsInvalidProfile(ctx context.Context, input string, opts ...
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -9655,6 +10163,10 @@ func (*stream) TestAwsInvalidRegion(ctx context.Context, input string, opts ...C
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -9735,6 +10247,10 @@ func (*stream) TestAwsInvalidSessionToken(ctx context.Context, input string, opt
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -9811,6 +10327,10 @@ func (*stream) TestAzure(ctx context.Context, input string, opts ...CallOptionFu
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -9891,6 +10411,10 @@ func (*stream) TestAzureFailure(ctx context.Context, input string, opts ...CallO
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -9967,6 +10491,10 @@ func (*stream) TestAzureO1NoMaxTokens(ctx context.Context, input string, opts ..
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -10047,6 +10575,10 @@ func (*stream) TestAzureO1WithMaxCompletionTokens(ctx context.Context, input str
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -10123,6 +10655,10 @@ func (*stream) TestAzureO1WithMaxTokens(ctx context.Context, input string, opts 
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -10203,6 +10739,10 @@ func (*stream) TestAzureO3NoMaxTokens(ctx context.Context, input string, opts ..
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -10279,6 +10819,10 @@ func (*stream) TestAzureO3WithMaxCompletionTokens(ctx context.Context, input str
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -10359,6 +10903,10 @@ func (*stream) TestAzureWithMaxTokens(ctx context.Context, input string, opts ..
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -10435,6 +10983,10 @@ func (*stream) TestCaching(ctx context.Context, input string, not_cached string,
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -10515,6 +11067,10 @@ func (*stream) TestFallbackClient(ctx context.Context, opts ...CallOptionFunc) (
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -10591,6 +11147,10 @@ func (*stream) TestFallbackStrategy(ctx context.Context, input string, opts ...C
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -10671,6 +11231,10 @@ func (*stream) TestFallbackToShorthand(ctx context.Context, input string, opts .
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -10747,6 +11311,10 @@ func (*stream) TestFnNamedArgsSingleBool(ctx context.Context, myBool bool, opts 
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -10827,6 +11395,10 @@ func (*stream) TestFnNamedArgsSingleClass(ctx context.Context, myArg types.Named
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -10903,6 +11475,10 @@ func (*stream) TestFnNamedArgsSingleEnumList(ctx context.Context, myArg []types.
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -10983,6 +11559,10 @@ func (*stream) TestFnNamedArgsSingleFloat(ctx context.Context, myFloat float64, 
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -11059,6 +11639,10 @@ func (*stream) TestFnNamedArgsSingleInt(ctx context.Context, myInt int64, opts .
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -11139,6 +11723,10 @@ func (*stream) TestFnNamedArgsSingleMapStringToClass(ctx context.Context, myMap 
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -11215,6 +11803,10 @@ func (*stream) TestFnNamedArgsSingleMapStringToMap(ctx context.Context, myMap ma
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -11295,6 +11887,10 @@ func (*stream) TestFnNamedArgsSingleMapStringToString(ctx context.Context, myMap
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -11371,6 +11967,10 @@ func (*stream) TestFnNamedArgsSingleString(ctx context.Context, myString string,
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -11451,6 +12051,10 @@ func (*stream) TestFnNamedArgsSingleStringArray(ctx context.Context, myStringArr
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -11527,6 +12131,10 @@ func (*stream) TestFnNamedArgsSingleStringList(ctx context.Context, myArg []stri
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -11607,6 +12215,10 @@ func (*stream) TestGemini(ctx context.Context, input string, opts ...CallOptionF
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -11683,6 +12295,10 @@ func (*stream) TestGeminiOpenAiGeneric(ctx context.Context, opts ...CallOptionFu
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -11763,6 +12379,10 @@ func (*stream) TestGeminiSystem(ctx context.Context, input string, opts ...CallO
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -11839,6 +12459,10 @@ func (*stream) TestGeminiSystemAsChat(ctx context.Context, input string, opts ..
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -11919,6 +12543,10 @@ func (*stream) TestGeminiThinking(ctx context.Context, input string, opts ...Cal
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -11995,6 +12623,10 @@ func (*stream) TestGroq(ctx context.Context, input string, opts ...CallOptionFun
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -12075,6 +12707,10 @@ func (*stream) TestImageInput(ctx context.Context, img types.Image, opts ...Call
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -12151,6 +12787,10 @@ func (*stream) TestImageInputAnthropic(ctx context.Context, img types.Image, opt
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -12231,6 +12871,10 @@ func (*stream) TestImageListInput(ctx context.Context, imgs []types.Image, opts 
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -12307,6 +12951,10 @@ func (*stream) TestMemory(ctx context.Context, input string, opts ...CallOptionF
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -12387,6 +13035,10 @@ func (*stream) TestMulticlassNamedArgs(ctx context.Context, myArg types.NamedArg
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -12463,6 +13115,10 @@ func (*stream) TestNamedArgsLiteralBool(ctx context.Context, myBool bool, opts .
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -12543,6 +13199,10 @@ func (*stream) TestNamedArgsLiteralInt(ctx context.Context, myInt int64, opts ..
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -12619,6 +13279,10 @@ func (*stream) TestNamedArgsLiteralString(ctx context.Context, myString string, 
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -12699,6 +13363,10 @@ func (*stream) TestOllama(ctx context.Context, input string, opts ...CallOptionF
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -12775,6 +13443,10 @@ func (*stream) TestOllamaHaiku(ctx context.Context, input string, opts ...CallOp
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -12855,6 +13527,10 @@ func (*stream) TestOpenAI(ctx context.Context, input string, opts ...CallOptionF
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -12931,6 +13607,10 @@ func (*stream) TestOpenAIDummyClient(ctx context.Context, input string, opts ...
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -13011,6 +13691,10 @@ func (*stream) TestOpenAIGPT4oMini(ctx context.Context, input string, opts ...Ca
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -13087,6 +13771,10 @@ func (*stream) TestOpenAIGPT4oMini2(ctx context.Context, input string, opts ...C
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -13167,6 +13855,10 @@ func (*stream) TestOpenAIGPT4oMini3(ctx context.Context, input string, opts ...C
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -13243,6 +13935,10 @@ func (*stream) TestOpenAILegacyProvider(ctx context.Context, input string, opts 
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -13323,6 +14019,10 @@ func (*stream) TestOpenAIO1NoMaxTokens(ctx context.Context, input string, opts .
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -13399,6 +14099,10 @@ func (*stream) TestOpenAIO1WithMaxCompletionTokens(ctx context.Context, input st
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -13479,6 +14183,10 @@ func (*stream) TestOpenAIO1WithMaxTokens(ctx context.Context, input string, opts
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -13555,6 +14263,10 @@ func (*stream) TestOpenAIProviderWithResponsesType(ctx context.Context, input st
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -13635,6 +14347,10 @@ func (*stream) TestOpenAIResponses(ctx context.Context, input string, opts ...Ca
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -13711,6 +14427,10 @@ func (*stream) TestOpenAIResponsesAutoType(ctx context.Context, input string, op
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -13791,6 +14511,10 @@ func (*stream) TestOpenAIResponsesConversation(ctx context.Context, topic string
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -13867,6 +14591,10 @@ func (*stream) TestOpenAIResponsesCustomURL(ctx context.Context, input string, o
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -13947,6 +14675,10 @@ func (*stream) TestOpenAIResponsesDifferentModel(ctx context.Context, input stri
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -14023,6 +14755,10 @@ func (*stream) TestOpenAIResponsesEndpoint(ctx context.Context, input string, op
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -14103,6 +14839,10 @@ func (*stream) TestOpenAIResponsesExplicit(ctx context.Context, input string, op
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -14179,6 +14919,10 @@ func (*stream) TestOpenAIResponsesFunctionCall(ctx context.Context, query string
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -14259,6 +15003,10 @@ func (*stream) TestOpenAIResponsesImageInput(ctx context.Context, image types.Un
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -14335,6 +15083,10 @@ func (*stream) TestOpenAIResponsesReasoning(ctx context.Context, problem string,
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -14415,6 +15167,10 @@ func (*stream) TestOpenAIResponsesShorthand(ctx context.Context, input string, o
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -14491,6 +15247,10 @@ func (*stream) TestOpenAIResponsesWebSearch(ctx context.Context, query string, o
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -14571,6 +15331,10 @@ func (*stream) TestOpenAIResponsesWithOpenAIResponseType(ctx context.Context, in
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -14647,6 +15411,10 @@ func (*stream) TestOpenAIShorthand(ctx context.Context, input string, opts ...Ca
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -14727,6 +15495,10 @@ func (*stream) TestOpenAIWithFinishReasonError(ctx context.Context, input string
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -14803,6 +15575,10 @@ func (*stream) TestOpenAIWithMaxTokens(ctx context.Context, input string, opts .
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -14883,6 +15659,10 @@ func (*stream) TestOpenAIWithNullMaxTokens(ctx context.Context, input string, op
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -14959,6 +15739,10 @@ func (*stream) TestOpenRouterMistralSmall3_1_24b(ctx context.Context, input stri
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -15039,6 +15823,10 @@ func (*stream) TestRetryConstant(ctx context.Context, opts ...CallOptionFunc) (<
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -15115,6 +15903,10 @@ func (*stream) TestRetryExponential(ctx context.Context, opts ...CallOptionFunc)
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -15195,6 +15987,10 @@ func (*stream) TestRoundRobinStrategy(ctx context.Context, input string, opts ..
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -15271,6 +16067,10 @@ func (*stream) TestSingleFallbackClient(ctx context.Context, opts ...CallOptionF
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -15351,6 +16151,10 @@ func (*stream) TestThinking(ctx context.Context, input string, opts ...CallOptio
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -15427,6 +16231,10 @@ func (*stream) TestUniverseQuestion(ctx context.Context, question types.Universe
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -15507,6 +16315,10 @@ func (*stream) TestVertex(ctx context.Context, input string, opts ...CallOptionF
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -15583,6 +16395,10 @@ func (*stream) TestVertexClaude(ctx context.Context, input string, opts ...CallO
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -15663,6 +16479,10 @@ func (*stream) TestVertexWithSystemInstructions(ctx context.Context, opts ...Cal
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -15739,6 +16559,10 @@ func (*stream) UnionTest_Function(ctx context.Context, input types.Union2BoolOrS
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -15819,6 +16643,10 @@ func (*stream) UseBlockConstraint(ctx context.Context, inp types.BlockConstraint
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -15895,6 +16723,10 @@ func (*stream) UseMaintainFieldOrder(ctx context.Context, input types.MaintainFi
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -15975,6 +16807,10 @@ func (*stream) UseMalformedConstraints(ctx context.Context, a types.MalformedCon
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -16051,6 +16887,10 @@ func (*stream) UseNestedBlockConstraint(ctx context.Context, inp types.NestedBlo
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -16131,6 +16971,10 @@ func (*stream) ValidateBasicResponses(ctx context.Context, input string, opts ..
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -16207,6 +17051,10 @@ func (*stream) ValidateResponseTypes(ctx context.Context, input string, opts ...
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -16287,6 +17135,10 @@ func (*stream) VideoInputGemini(ctx context.Context, vid types.Video, opts ...Ca
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -16363,6 +17215,10 @@ func (*stream) VideoInputVertex(ctx context.Context, vid types.Video, opts ...Ca
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()

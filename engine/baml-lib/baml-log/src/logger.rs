@@ -192,118 +192,125 @@ pub trait ConfigValue: Sized {
 }
 
 /// Specific config value implementations
-pub struct LogLevelConfig;
+pub struct LogLevelConfig(Option<String>);
 impl ConfigValue for LogLevelConfig {
     fn env_name() -> &'static str {
         "BAML_LOG"
     }
 
-    fn parse_value(_: &str) -> Option<Self> {
-        Some(LogLevelConfig)
+    fn parse_value(value: &str) -> Option<Self> {
+        Some(LogLevelConfig(Some(value.to_string())))
     }
 
     fn default_value() -> Self {
-        LogLevelConfig
+        LogLevelConfig(None)
     }
 }
 
 impl From<LogLevelConfig> for Level {
-    fn from(_: LogLevelConfig) -> Self {
-        env::var(LogLevelConfig::env_name())
-            .ok()
+    fn from(config: LogLevelConfig) -> Self {
+        config
+            .0
+            .or_else(|| env::var(LogLevelConfig::env_name()).ok())
             .and_then(|v| v.parse().ok())
             .unwrap_or(defaults::LOG_LEVEL)
     }
 }
 
-pub struct JsonModeConfig;
+pub struct JsonModeConfig(Option<String>);
 impl ConfigValue for JsonModeConfig {
     fn env_name() -> &'static str {
         "BAML_LOG_JSON"
     }
 
-    fn parse_value(_: &str) -> Option<Self> {
-        Some(JsonModeConfig)
+    fn parse_value(value: &str) -> Option<Self> {
+        Some(JsonModeConfig(Some(value.to_string())))
     }
 
     fn default_value() -> Self {
-        JsonModeConfig
+        JsonModeConfig(None)
     }
 }
 
 impl From<JsonModeConfig> for bool {
-    fn from(_: JsonModeConfig) -> Self {
-        env::var(JsonModeConfig::env_name())
+    fn from(config: JsonModeConfig) -> Self {
+        config
+            .0
+            .or_else(|| env::var(JsonModeConfig::env_name()).ok())
             .map(|val| val.trim().eq_ignore_ascii_case("true") || val.trim() == "1")
             .unwrap_or(defaults::USE_JSON)
     }
 }
 
-pub struct ColorModeConfig;
+pub struct ColorModeConfig(Option<String>);
 impl ConfigValue for ColorModeConfig {
     fn env_name() -> &'static str {
         "BAML_LOG_COLOR_MODE"
     }
 
-    fn parse_value(_: &str) -> Option<Self> {
-        Some(ColorModeConfig)
+    fn parse_value(value: &str) -> Option<Self> {
+        Some(ColorModeConfig(Some(value.to_string())))
     }
 
     fn default_value() -> Self {
-        ColorModeConfig
+        ColorModeConfig(None)
     }
 }
 
 impl From<ColorModeConfig> for ColorMode {
-    fn from(_: ColorModeConfig) -> Self {
-        env::var(ColorModeConfig::env_name())
-            .ok()
+    fn from(config: ColorModeConfig) -> Self {
+        config
+            .0
+            .or_else(|| env::var(ColorModeConfig::env_name()).ok())
             .and_then(|v| v.parse().ok())
             .unwrap_or(defaults::COLOR_MODE)
     }
 }
 
-pub struct LspConfig;
+pub struct LspConfig(Option<String>);
 impl ConfigValue for LspConfig {
     fn env_name() -> &'static str {
         "BAML_LOG_LSP"
     }
 
-    fn parse_value(_: &str) -> Option<Self> {
-        Some(LspConfig)
+    fn parse_value(value: &str) -> Option<Self> {
+        Some(LspConfig(Some(value.to_string())))
     }
 
     fn default_value() -> Self {
-        LspConfig
+        LspConfig(None)
     }
 }
 
 impl From<LspConfig> for bool {
-    fn from(_: LspConfig) -> Self {
-        env::var(LspConfig::env_name())
+    fn from(config: LspConfig) -> Self {
+        config
+            .0
+            .or_else(|| env::var(LspConfig::env_name()).ok())
             .map(|val| val.trim().eq_ignore_ascii_case("true") || val.trim() == "1")
             .unwrap_or(defaults::RUNNING_IN_LSP)
     }
 }
-pub struct MaxMessageLengthConfig;
+pub struct MaxMessageLengthConfig(Option<String>);
 impl ConfigValue for MaxMessageLengthConfig {
     fn env_name() -> &'static str {
         "BAML_LOG_MAX_MESSAGE_LENGTH"
     }
 
-    fn parse_value(_: &str) -> Option<Self> {
-        Some(MaxMessageLengthConfig)
+    fn parse_value(value: &str) -> Option<Self> {
+        Some(MaxMessageLengthConfig(Some(value.to_string())))
     }
 
     fn default_value() -> Self {
-        MaxMessageLengthConfig
+        MaxMessageLengthConfig(None)
     }
 }
 
 impl From<MaxMessageLengthConfig> for MaxMessageLength {
-    fn from(_: MaxMessageLengthConfig) -> Self {
-        env::var(MaxMessageLengthConfig::env_name())
-            .ok()
+    fn from(config: MaxMessageLengthConfig) -> Self {
+        config
+            .0
+            .or_else(|| env::var(MaxMessageLengthConfig::env_name()).ok())
             .and_then(|val| {
                 if val.is_empty() {
                     Some(MaxMessageLength::Unlimited)
@@ -827,5 +834,528 @@ pub fn log_event_internal<T: Loggable>(
                 Level::Off => {}
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Mutex;
+
+    use lazy_static::lazy_static;
+
+    use super::*;
+
+    // Global mutex for tests that modify CONFIG
+    lazy_static! {
+        static ref TEST_MUTEX: Mutex<()> = Mutex::new(());
+    }
+
+    // Helper to temporarily set environment variables for testing
+    struct EnvGuard {
+        vars: Vec<(String, Option<String>)>,
+    }
+
+    impl EnvGuard {
+        fn new() -> Self {
+            Self { vars: Vec::new() }
+        }
+
+        fn set(&mut self, key: &str, value: &str) {
+            let old_value = env::var(key).ok();
+            self.vars.push((key.to_string(), old_value));
+            env::set_var(key, value);
+        }
+
+        fn remove(&mut self, key: &str) {
+            let old_value = env::var(key).ok();
+            self.vars.push((key.to_string(), old_value));
+            env::remove_var(key);
+        }
+    }
+
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            for (key, value) in self.vars.iter().rev() {
+                match value {
+                    Some(v) => env::set_var(key, v),
+                    None => env::remove_var(key),
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_level_from_str() {
+        assert_eq!(Level::from_str("off").unwrap(), Level::Off);
+        assert_eq!(Level::from_str("OFF").unwrap(), Level::Off);
+        assert_eq!(Level::from_str("error").unwrap(), Level::Error);
+        assert_eq!(Level::from_str("ERROR").unwrap(), Level::Error);
+        assert_eq!(Level::from_str("warn").unwrap(), Level::Warn);
+        assert_eq!(Level::from_str("info").unwrap(), Level::Info);
+        assert_eq!(Level::from_str("debug").unwrap(), Level::Debug);
+        assert_eq!(Level::from_str("trace").unwrap(), Level::Trace);
+
+        // Invalid values should return default
+        assert_eq!(Level::from_str("invalid").unwrap(), defaults::LOG_LEVEL);
+        assert_eq!(Level::from_str("").unwrap(), defaults::LOG_LEVEL);
+    }
+
+    // Tests for MaxMessageLength
+    #[test]
+    fn test_max_message_length_from_usize() {
+        assert_eq!(MaxMessageLength::from(0), MaxMessageLength::Unlimited);
+        assert_eq!(
+            MaxMessageLength::from(100),
+            MaxMessageLength::Limited { max_length: 100 }
+        );
+        assert_eq!(
+            MaxMessageLength::from(1000),
+            MaxMessageLength::Limited { max_length: 1000 }
+        );
+    }
+
+    #[test]
+    fn test_max_message_length_maybe_truncate_to() {
+        let unlimited = MaxMessageLength::Unlimited;
+        assert_eq!(unlimited.maybe_truncate_to(100), None);
+        assert_eq!(unlimited.maybe_truncate_to(1000000), None);
+
+        let limited = MaxMessageLength::Limited { max_length: 100 };
+        assert_eq!(limited.maybe_truncate_to(50), None);
+        assert_eq!(limited.maybe_truncate_to(100), None);
+        assert_eq!(limited.maybe_truncate_to(150), Some(100));
+        assert_eq!(limited.maybe_truncate_to(1000), Some(100));
+    }
+
+    // Tests for ConfigValue implementations
+    #[test]
+    fn test_log_level_config_from_env() {
+        let mut guard = EnvGuard::new();
+
+        guard.set("BAML_LOG", "debug");
+        let level: Level = LogLevelConfig::from_env().into();
+        assert_eq!(level, Level::Debug);
+
+        guard.set("BAML_LOG", "error");
+        let level: Level = LogLevelConfig::from_env().into();
+        assert_eq!(level, Level::Error);
+
+        guard.remove("BAML_LOG");
+        let level: Level = LogLevelConfig::from_env().into();
+        assert_eq!(level, defaults::LOG_LEVEL);
+    }
+
+    #[test]
+    fn test_json_mode_config_from_env() {
+        let mut guard = EnvGuard::new();
+
+        guard.set("BAML_LOG_JSON", "true");
+        let json_mode: bool = JsonModeConfig::from_env().into();
+        assert!(json_mode);
+
+        guard.set("BAML_LOG_JSON", "TRUE");
+        let json_mode: bool = JsonModeConfig::from_env().into();
+        assert!(json_mode);
+
+        guard.set("BAML_LOG_JSON", "1");
+        let json_mode: bool = JsonModeConfig::from_env().into();
+        assert!(json_mode);
+
+        guard.set("BAML_LOG_JSON", "false");
+        let json_mode: bool = JsonModeConfig::from_env().into();
+        assert!(!json_mode);
+
+        guard.set("BAML_LOG_JSON", "0");
+        let json_mode: bool = JsonModeConfig::from_env().into();
+        assert!(!json_mode);
+
+        guard.remove("BAML_LOG_JSON");
+        let json_mode: bool = JsonModeConfig::from_env().into();
+        assert_eq!(json_mode, defaults::USE_JSON);
+    }
+
+    #[test]
+    fn test_color_mode_config_from_env() {
+        let mut guard = EnvGuard::new();
+
+        guard.set("BAML_LOG_COLOR_MODE", "always");
+        let color_mode: ColorMode = ColorModeConfig::from_env().into();
+        assert_eq!(color_mode, ColorMode::Always);
+
+        guard.set("BAML_LOG_COLOR_MODE", "never");
+        let color_mode: ColorMode = ColorModeConfig::from_env().into();
+        assert_eq!(color_mode, ColorMode::Never);
+
+        guard.remove("BAML_LOG_COLOR_MODE");
+        let color_mode: ColorMode = ColorModeConfig::from_env().into();
+        assert_eq!(color_mode, defaults::COLOR_MODE);
+    }
+
+    #[test]
+    fn test_max_message_length_config_from_env() {
+        let mut guard = EnvGuard::new();
+
+        guard.set("BAML_LOG_MAX_MESSAGE_LENGTH", "500");
+        let max_length: MaxMessageLength = MaxMessageLengthConfig::from_env().into();
+        assert_eq!(max_length, MaxMessageLength::Limited { max_length: 500 });
+
+        guard.set("BAML_LOG_MAX_MESSAGE_LENGTH", "0");
+        let max_length: MaxMessageLength = MaxMessageLengthConfig::from_env().into();
+        assert_eq!(max_length, MaxMessageLength::Unlimited);
+
+        guard.set("BAML_LOG_MAX_MESSAGE_LENGTH", "");
+        let max_length: MaxMessageLength = MaxMessageLengthConfig::from_env().into();
+        assert_eq!(max_length, MaxMessageLength::Unlimited);
+
+        guard.remove("BAML_LOG_MAX_MESSAGE_LENGTH");
+        let max_length: MaxMessageLength = MaxMessageLengthConfig::from_env().into();
+        assert_eq!(max_length, defaults::MAX_MESSAGE_LENGTH.into());
+    }
+
+    #[test]
+    fn test_lsp_config_from_env() {
+        let mut guard = EnvGuard::new();
+
+        guard.set("BAML_LOG_LSP", "true");
+        let lsp_mode: bool = LspConfig::from_env().into();
+        assert!(lsp_mode);
+
+        guard.set("BAML_LOG_LSP", "1");
+        let lsp_mode: bool = LspConfig::from_env().into();
+        assert!(lsp_mode);
+
+        guard.set("BAML_LOG_LSP", "false");
+        let lsp_mode: bool = LspConfig::from_env().into();
+        assert!(!lsp_mode);
+
+        guard.remove("BAML_LOG_LSP");
+        let lsp_mode: bool = LspConfig::from_env().into();
+        assert_eq!(lsp_mode, defaults::RUNNING_IN_LSP);
+    }
+
+    // Tests for set_from_env - Testing potential bug
+    #[test]
+    fn test_set_from_env_updates_config() {
+        let _guard = TEST_MUTEX.lock().unwrap();
+
+        // Save current state and ensure clean state
+        let _ = init();
+
+        // Create test environment variables
+        let mut env_vars = HashMap::new();
+        env_vars.insert("BAML_LOG".to_string(), "trace".to_string());
+        env_vars.insert("BAML_LOG_JSON".to_string(), "true".to_string());
+        env_vars.insert("BAML_LOG_COLOR_MODE".to_string(), "never".to_string());
+        env_vars.insert("BAML_LOG_MAX_MESSAGE_LENGTH".to_string(), "200".to_string());
+
+        // Apply the environment variables
+        assert!(set_from_env(&env_vars).is_ok());
+
+        // Verify the changes took effect
+        assert_eq!(get_log_level(), Level::Trace);
+        assert!(JsonMode::get());
+        assert_eq!(LogColorMode::get(), ColorMode::Never);
+        assert_eq!(
+            LogMaxMessageLength::get(),
+            MaxMessageLength::Limited { max_length: 200 }
+        );
+    }
+
+    #[test]
+    fn test_set_from_env_partial_update() {
+        let _guard = TEST_MUTEX.lock().unwrap();
+
+        let _ = init();
+
+        // Set known initial state
+        let _ = set_log_level(Level::Debug);
+        let _ = set_json_mode(true);
+        let _ = set_color_mode(ColorMode::Always);
+
+        // Update only log level
+        let mut env_vars = HashMap::new();
+        env_vars.insert("BAML_LOG".to_string(), "error".to_string());
+
+        assert!(set_from_env(&env_vars).is_ok());
+
+        // Check that only the specified value changed
+        assert_eq!(get_log_level(), Level::Error);
+        // Other values should remain unchanged
+        assert!(JsonMode::get());
+        assert_eq!(LogColorMode::get(), ColorMode::Always);
+    }
+
+    #[test]
+    fn test_set_from_env_invalid_values() {
+        let _guard = TEST_MUTEX.lock().unwrap();
+
+        let _ = init();
+
+        // Test with invalid values
+        let mut env_vars = HashMap::new();
+        env_vars.insert("BAML_LOG".to_string(), "invalid_level".to_string());
+        env_vars.insert(
+            "BAML_LOG_MAX_MESSAGE_LENGTH".to_string(),
+            "not_a_number".to_string(),
+        );
+
+        // Should not panic, should use defaults for invalid values
+        assert!(set_from_env(&env_vars).is_ok());
+
+        // Invalid log level should default to INFO
+        assert_eq!(get_log_level(), defaults::LOG_LEVEL);
+    }
+
+    #[test]
+    fn test_set_from_env_empty_map() {
+        let _guard = TEST_MUTEX.lock().unwrap();
+
+        let _ = init();
+
+        let original_level = get_log_level();
+        let env_vars = HashMap::new();
+
+        assert!(set_from_env(&env_vars).is_ok());
+
+        // Should not change anything
+        assert_eq!(get_log_level(), original_level);
+    }
+
+    // Tests for configuration update functions
+    #[test]
+    fn test_set_log_level() {
+        let _guard = TEST_MUTEX.lock().unwrap();
+
+        let _ = init();
+
+        // Test setting to Debug
+        assert!(set_log_level(Level::Debug).is_ok());
+        assert_eq!(get_log_level(), Level::Debug);
+
+        // Test setting to Error
+        assert!(set_log_level(Level::Error).is_ok());
+        assert_eq!(get_log_level(), Level::Error);
+
+        // Test setting to Info
+        assert!(set_log_level(Level::Info).is_ok());
+        assert_eq!(get_log_level(), Level::Info);
+    }
+
+    #[test]
+    fn test_set_json_mode() {
+        let _guard = TEST_MUTEX.lock().unwrap();
+
+        let _ = init();
+
+        assert!(set_json_mode(true).is_ok());
+        assert!(JsonMode::get());
+
+        assert!(set_json_mode(false).is_ok());
+        assert!(!JsonMode::get());
+    }
+
+    #[test]
+    fn test_set_color_mode() {
+        let _guard = TEST_MUTEX.lock().unwrap();
+
+        let _ = init();
+
+        assert!(set_color_mode(ColorMode::Always).is_ok());
+        assert_eq!(LogColorMode::get(), ColorMode::Always);
+
+        assert!(set_color_mode(ColorMode::Never).is_ok());
+        assert_eq!(LogColorMode::get(), ColorMode::Never);
+    }
+
+    #[test]
+    fn test_set_max_message_length() {
+        let _guard = TEST_MUTEX.lock().unwrap();
+
+        let _ = init();
+
+        assert!(set_max_message_length(1000).is_ok());
+        assert_eq!(
+            LogMaxMessageLength::get(),
+            MaxMessageLength::Limited { max_length: 1000 }
+        );
+
+        assert!(set_max_message_length(0).is_ok());
+        assert_eq!(LogMaxMessageLength::get(), MaxMessageLength::Unlimited);
+    }
+
+    #[test]
+    fn test_set_running_in_lsp() {
+        let _guard = TEST_MUTEX.lock().unwrap();
+
+        let _ = init();
+
+        assert!(set_running_in_lsp(true).is_ok());
+        // Can't directly test the internal state, but we can verify it doesn't panic
+
+        assert!(set_running_in_lsp(false).is_ok());
+    }
+
+    #[test]
+    fn test_reload_from_env() {
+        let _guard = TEST_MUTEX.lock().unwrap();
+
+        let _ = init();
+        let mut env_guard = EnvGuard::new();
+
+        // Set environment variables
+        env_guard.set("BAML_LOG", "warn");
+        env_guard.set("BAML_LOG_JSON", "true");
+
+        // Reload from environment
+        assert!(reload_from_env().is_ok());
+
+        // Verify the changes
+        assert_eq!(get_log_level(), Level::Warn);
+        assert!(JsonMode::get());
+    }
+
+    // Test thread safety of configuration
+    #[test]
+    fn test_concurrent_config_access() {
+        use std::thread;
+
+        let _guard = TEST_MUTEX.lock().unwrap();
+
+        let _ = init();
+
+        let handles: Vec<_> = (0..10)
+            .map(|i| {
+                thread::spawn(move || {
+                    for _ in 0..100 {
+                        let level = if i % 2 == 0 {
+                            Level::Debug
+                        } else {
+                            Level::Info
+                        };
+                        let _ = set_log_level(level);
+                        let _ = get_log_level();
+                    }
+                })
+            })
+            .collect();
+
+        for handle in handles {
+            handle.join().unwrap();
+        }
+    }
+
+    // Test log_internal_once functionality
+    #[test]
+    fn test_log_internal_once() {
+        // Clear logged lines for test
+        {
+            let mut logged_lines = LOGGED_LINES.write().unwrap();
+            logged_lines.clear();
+        }
+
+        // First call should log
+        log_internal_once(
+            Level::Info,
+            "Test message",
+            Some("test_module"),
+            Some("test_file.rs"),
+            Some(42),
+        );
+
+        // Check that the line was logged
+        {
+            let logged_lines = LOGGED_LINES.read().unwrap();
+            assert_eq!(logged_lines.len(), 1);
+            assert!(logged_lines.contains(&(
+                Some("test_module".to_string()),
+                Some("test_file.rs".to_string()),
+                Some(42)
+            )));
+        }
+
+        // Second call with same parameters should not log again
+        let logged_lines_count = LOGGED_LINES.read().unwrap().len();
+        log_internal_once(
+            Level::Info,
+            "Test message",
+            Some("test_module"),
+            Some("test_file.rs"),
+            Some(42),
+        );
+
+        // Should still have same count
+        assert_eq!(LOGGED_LINES.read().unwrap().len(), logged_lines_count);
+
+        // Different line number should log
+        log_internal_once(
+            Level::Info,
+            "Test message",
+            Some("test_module"),
+            Some("test_file.rs"),
+            Some(43),
+        );
+
+        assert_eq!(LOGGED_LINES.read().unwrap().len(), logged_lines_count + 1);
+    }
+
+    // Test LogConfig functionality
+    #[test]
+    fn test_log_config_from_env() {
+        // Save current environment state
+        let saved_log = env::var("BAML_LOG").ok();
+        let saved_json = env::var("BAML_LOG_JSON").ok();
+        let saved_color = env::var("BAML_LOG_COLOR_MODE").ok();
+        let saved_length = env::var("BAML_LOG_MAX_MESSAGE_LENGTH").ok();
+
+        // Set test values
+        env::set_var("BAML_LOG", "DEBUG");
+        env::set_var("BAML_LOG_JSON", "true");
+        env::set_var("BAML_LOG_COLOR_MODE", "always");
+        env::set_var("BAML_LOG_MAX_MESSAGE_LENGTH", "500");
+
+        // Create config from environment
+        let config = LogConfig::from_env();
+
+        // Restore original environment
+        match saved_log {
+            Some(v) => env::set_var("BAML_LOG", v),
+            None => env::remove_var("BAML_LOG"),
+        }
+        match saved_json {
+            Some(v) => env::set_var("BAML_LOG_JSON", v),
+            None => env::remove_var("BAML_LOG_JSON"),
+        }
+        match saved_color {
+            Some(v) => env::set_var("BAML_LOG_COLOR_MODE", v),
+            None => env::remove_var("BAML_LOG_COLOR_MODE"),
+        }
+        match saved_length {
+            Some(v) => env::set_var("BAML_LOG_MAX_MESSAGE_LENGTH", v),
+            None => env::remove_var("BAML_LOG_MAX_MESSAGE_LENGTH"),
+        }
+
+        // Assert the values
+        assert_eq!(config.level, Level::Debug);
+        assert!(config.use_json);
+        assert_eq!(config.color_mode, ColorMode::Always);
+        assert_eq!(
+            config.max_message_length,
+            MaxMessageLength::Limited { max_length: 500 }
+        );
+        assert!(!config.initialized);
+    }
+
+    #[test]
+    fn test_log_config_update_from_map() {
+        let mut config = LogConfig::from_env();
+
+        let mut vars = HashMap::new();
+        vars.insert("BAML_LOG".to_string(), "ERROR".to_string());
+        vars.insert("BAML_LOG_JSON".to_string(), "false".to_string());
+
+        config.update_from_map(&vars);
+
+        assert_eq!(config.level, Level::Error);
+        assert!(!config.use_json);
     }
 }

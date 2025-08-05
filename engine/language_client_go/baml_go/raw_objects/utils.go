@@ -302,9 +302,45 @@ func EncodeRawObject(object RawPointer) *cffi.CFFIRawObject {
 				MediaVideo: pointer,
 			},
 		}
+	case cffi.CFFIObjectType_OBJECT_TYPE:
+		return &cffi.CFFIRawObject{
+			Object: &cffi.CFFIRawObject_Type{
+				Type: pointer,
+			},
+		}
+	case cffi.CFFIObjectType_OBJECT_TYPE_BUILDER:
+		return &cffi.CFFIRawObject{
+			Object: &cffi.CFFIRawObject_TypeBuilder{
+				TypeBuilder: pointer,
+			},
+		}
+	case cffi.CFFIObjectType_OBJECT_ENUM_BUILDER:
+		return &cffi.CFFIRawObject{
+			Object: &cffi.CFFIRawObject_EnumBuilder{
+				EnumBuilder: pointer,
+			},
+		}
+	case cffi.CFFIObjectType_OBJECT_ENUM_VALUE_BUILDER:
+		return &cffi.CFFIRawObject{
+			Object: &cffi.CFFIRawObject_EnumValueBuilder{
+				EnumValueBuilder: pointer,
+			},
+		}
+	case cffi.CFFIObjectType_OBJECT_CLASS_BUILDER:
+		return &cffi.CFFIRawObject{
+			Object: &cffi.CFFIRawObject_ClassBuilder{
+				ClassBuilder: pointer,
+			},
+		}
+	case cffi.CFFIObjectType_OBJECT_CLASS_PROPERTY_BUILDER:
+		return &cffi.CFFIRawObject{
+			Object: &cffi.CFFIRawObject_ClassPropertyBuilder{
+				ClassPropertyBuilder: pointer,
+			},
+		}
 	case cffi.CFFIObjectType_OBJECT_UNSPECIFIED:
 		panic("unexpected cffi.CFFIObjectType_OBJECT_UNSPECIFIED")
 	default:
-		panic("unexpected cffi.CFFIObjectType")
+		panic(fmt.Sprintf("unexpected cffi.CFFIObjectType: %v", object.ObjectType()))
 	}
 }

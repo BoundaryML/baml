@@ -46,14 +46,14 @@ impl TypeBuilder {
 
     pub fn r#enum(&self, name: String) -> EnumBuilder {
         EnumBuilder {
-            inner: self.inner.r#enum(name.as_str()),
+            inner: self.inner.upsert_enum(name.as_str()),
             name: name.to_string(),
         }
     }
 
     pub fn class(&self, name: String) -> ClassBuilder {
         ClassBuilder {
-            inner: self.inner.class(name.as_str()),
+            inner: self.inner.upsert_class(name.as_str()),
             name: name.to_string(),
         }
     }
@@ -195,7 +195,11 @@ unsafe impl TryConvertOwned for &FieldType {}
 
 impl EnumBuilder {
     pub fn value(&self, name: String) -> EnumValueBuilder {
-        self.inner.lock().unwrap().value(name.as_str()).into()
+        self.inner
+            .lock()
+            .unwrap()
+            .upsert_value(name.as_str())
+            .into()
     }
 
     pub fn alias(&self, alias: Option<String>) -> Self {
@@ -271,7 +275,11 @@ impl ClassBuilder {
     }
 
     pub fn property(&self, name: String) -> ClassPropertyBuilder {
-        self.inner.lock().unwrap().property(name.as_str()).into()
+        self.inner
+            .lock()
+            .unwrap()
+            .upsert_property(name.as_str())
+            .into()
     }
 
     pub fn define_in_ruby(module: &RModule) -> Result<()> {
@@ -292,7 +300,7 @@ impl ClassPropertyBuilder {
         self.inner
             .lock()
             .unwrap()
-            .r#type(r#type.inner.lock().unwrap().clone());
+            .set_type(r#type.inner.lock().unwrap().clone());
         self.inner.clone().into()
     }
 

@@ -127,24 +127,28 @@ func (MediaTypeEnum) EnumDescriptor() ([]byte, []int) {
 type CFFIObjectType int32
 
 const (
-	CFFIObjectType_OBJECT_UNSPECIFIED     CFFIObjectType = 0
-	CFFIObjectType_OBJECT_COLLECTOR       CFFIObjectType = 1
-	CFFIObjectType_OBJECT_FUNCTION_LOG    CFFIObjectType = 2
-	CFFIObjectType_OBJECT_USAGE           CFFIObjectType = 3
-	CFFIObjectType_OBJECT_TIMING          CFFIObjectType = 4
-	CFFIObjectType_OBJECT_STREAM_TIMING   CFFIObjectType = 5
-	CFFIObjectType_OBJECT_LLM_CALL        CFFIObjectType = 6
-	CFFIObjectType_OBJECT_LLM_STREAM_CALL CFFIObjectType = 7
-	CFFIObjectType_OBJECT_HTTP_REQUEST    CFFIObjectType = 8
-	CFFIObjectType_OBJECT_HTTP_RESPONSE   CFFIObjectType = 9
-	CFFIObjectType_OBJECT_HTTP_BODY       CFFIObjectType = 10
-	CFFIObjectType_OBJECT_SSE_RESPONSE    CFFIObjectType = 11
-	CFFIObjectType_OBJECT_MEDIA_IMAGE     CFFIObjectType = 12
-	CFFIObjectType_OBJECT_MEDIA_AUDIO     CFFIObjectType = 13
-	CFFIObjectType_OBJECT_MEDIA_PDF       CFFIObjectType = 14
-	CFFIObjectType_OBJECT_MEDIA_VIDEO     CFFIObjectType = 15
-	CFFIObjectType_OBJECT_TYPE_BUILDER    CFFIObjectType = 16
-	CFFIObjectType_OBJECT_TYPE            CFFIObjectType = 17
+	CFFIObjectType_OBJECT_UNSPECIFIED            CFFIObjectType = 0
+	CFFIObjectType_OBJECT_COLLECTOR              CFFIObjectType = 1
+	CFFIObjectType_OBJECT_FUNCTION_LOG           CFFIObjectType = 2
+	CFFIObjectType_OBJECT_USAGE                  CFFIObjectType = 3
+	CFFIObjectType_OBJECT_TIMING                 CFFIObjectType = 4
+	CFFIObjectType_OBJECT_STREAM_TIMING          CFFIObjectType = 5
+	CFFIObjectType_OBJECT_LLM_CALL               CFFIObjectType = 6
+	CFFIObjectType_OBJECT_LLM_STREAM_CALL        CFFIObjectType = 7
+	CFFIObjectType_OBJECT_HTTP_REQUEST           CFFIObjectType = 8
+	CFFIObjectType_OBJECT_HTTP_RESPONSE          CFFIObjectType = 9
+	CFFIObjectType_OBJECT_HTTP_BODY              CFFIObjectType = 10
+	CFFIObjectType_OBJECT_SSE_RESPONSE           CFFIObjectType = 11
+	CFFIObjectType_OBJECT_MEDIA_IMAGE            CFFIObjectType = 12
+	CFFIObjectType_OBJECT_MEDIA_AUDIO            CFFIObjectType = 13
+	CFFIObjectType_OBJECT_MEDIA_PDF              CFFIObjectType = 14
+	CFFIObjectType_OBJECT_MEDIA_VIDEO            CFFIObjectType = 15
+	CFFIObjectType_OBJECT_TYPE_BUILDER           CFFIObjectType = 16
+	CFFIObjectType_OBJECT_TYPE                   CFFIObjectType = 17
+	CFFIObjectType_OBJECT_ENUM_BUILDER           CFFIObjectType = 18
+	CFFIObjectType_OBJECT_ENUM_VALUE_BUILDER     CFFIObjectType = 19
+	CFFIObjectType_OBJECT_CLASS_BUILDER          CFFIObjectType = 20
+	CFFIObjectType_OBJECT_CLASS_PROPERTY_BUILDER CFFIObjectType = 21
 )
 
 // Enum value maps for CFFIObjectType.
@@ -168,26 +172,34 @@ var (
 		15: "OBJECT_MEDIA_VIDEO",
 		16: "OBJECT_TYPE_BUILDER",
 		17: "OBJECT_TYPE",
+		18: "OBJECT_ENUM_BUILDER",
+		19: "OBJECT_ENUM_VALUE_BUILDER",
+		20: "OBJECT_CLASS_BUILDER",
+		21: "OBJECT_CLASS_PROPERTY_BUILDER",
 	}
 	CFFIObjectType_value = map[string]int32{
-		"OBJECT_UNSPECIFIED":     0,
-		"OBJECT_COLLECTOR":       1,
-		"OBJECT_FUNCTION_LOG":    2,
-		"OBJECT_USAGE":           3,
-		"OBJECT_TIMING":          4,
-		"OBJECT_STREAM_TIMING":   5,
-		"OBJECT_LLM_CALL":        6,
-		"OBJECT_LLM_STREAM_CALL": 7,
-		"OBJECT_HTTP_REQUEST":    8,
-		"OBJECT_HTTP_RESPONSE":   9,
-		"OBJECT_HTTP_BODY":       10,
-		"OBJECT_SSE_RESPONSE":    11,
-		"OBJECT_MEDIA_IMAGE":     12,
-		"OBJECT_MEDIA_AUDIO":     13,
-		"OBJECT_MEDIA_PDF":       14,
-		"OBJECT_MEDIA_VIDEO":     15,
-		"OBJECT_TYPE_BUILDER":    16,
-		"OBJECT_TYPE":            17,
+		"OBJECT_UNSPECIFIED":            0,
+		"OBJECT_COLLECTOR":              1,
+		"OBJECT_FUNCTION_LOG":           2,
+		"OBJECT_USAGE":                  3,
+		"OBJECT_TIMING":                 4,
+		"OBJECT_STREAM_TIMING":          5,
+		"OBJECT_LLM_CALL":               6,
+		"OBJECT_LLM_STREAM_CALL":        7,
+		"OBJECT_HTTP_REQUEST":           8,
+		"OBJECT_HTTP_RESPONSE":          9,
+		"OBJECT_HTTP_BODY":              10,
+		"OBJECT_SSE_RESPONSE":           11,
+		"OBJECT_MEDIA_IMAGE":            12,
+		"OBJECT_MEDIA_AUDIO":            13,
+		"OBJECT_MEDIA_PDF":              14,
+		"OBJECT_MEDIA_VIDEO":            15,
+		"OBJECT_TYPE_BUILDER":           16,
+		"OBJECT_TYPE":                   17,
+		"OBJECT_ENUM_BUILDER":           18,
+		"OBJECT_ENUM_VALUE_BUILDER":     19,
+		"OBJECT_CLASS_BUILDER":          20,
+		"OBJECT_CLASS_PROPERTY_BUILDER": 21,
 	}
 )
 
@@ -289,7 +301,7 @@ type CFFIValueHolder struct {
 	//	*CFFIValueHolder_MapValue
 	//	*CFFIValueHolder_ClassValue
 	//	*CFFIValueHolder_EnumValue
-	//	*CFFIValueHolder_MediaValue
+	//	*CFFIValueHolder_ObjectValue
 	//	*CFFIValueHolder_TupleValue
 	//	*CFFIValueHolder_UnionVariantValue
 	//	*CFFIValueHolder_CheckedValue
@@ -418,10 +430,10 @@ func (x *CFFIValueHolder) GetEnumValue() *CFFIValueEnum {
 	return nil
 }
 
-func (x *CFFIValueHolder) GetMediaValue() *CFFIValueMedia {
+func (x *CFFIValueHolder) GetObjectValue() *CFFIValueRawObject {
 	if x != nil {
-		if x, ok := x.Value.(*CFFIValueHolder_MediaValue); ok {
-			return x.MediaValue
+		if x, ok := x.Value.(*CFFIValueHolder_ObjectValue); ok {
+			return x.ObjectValue
 		}
 	}
 	return nil
@@ -510,8 +522,8 @@ type CFFIValueHolder_EnumValue struct {
 	EnumValue *CFFIValueEnum `protobuf:"bytes,10,opt,name=enum_value,json=enumValue,proto3,oneof"`
 }
 
-type CFFIValueHolder_MediaValue struct {
-	MediaValue *CFFIValueMedia `protobuf:"bytes,11,opt,name=media_value,json=mediaValue,proto3,oneof"`
+type CFFIValueHolder_ObjectValue struct {
+	ObjectValue *CFFIValueRawObject `protobuf:"bytes,11,opt,name=object_value,json=objectValue,proto3,oneof"`
 }
 
 type CFFIValueHolder_TupleValue struct {
@@ -548,7 +560,7 @@ func (*CFFIValueHolder_ClassValue) isCFFIValueHolder_Value() {}
 
 func (*CFFIValueHolder_EnumValue) isCFFIValueHolder_Value() {}
 
-func (*CFFIValueHolder_MediaValue) isCFFIValueHolder_Value() {}
+func (*CFFIValueHolder_ObjectValue) isCFFIValueHolder_Value() {}
 
 func (*CFFIValueHolder_TupleValue) isCFFIValueHolder_Value() {}
 
@@ -817,8 +829,7 @@ func (x *CFFIValueMap) GetEntries() []*CFFIMapEntry {
 type CFFIValueClass struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          *CFFITypeName          `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Fields        []*CFFIMapEntry        `protobuf:"bytes,2,rep,name=fields,proto3" json:"fields,omitempty"`
-	DynamicFields []*CFFIMapEntry        `protobuf:"bytes,3,rep,name=dynamic_fields,json=dynamicFields,proto3" json:"dynamic_fields,omitempty"`
+	Fields        []*CFFIMapEntry        `protobuf:"bytes,2,rep,name=fields,proto3" json:"fields,omitempty"` // repeated CFFIMapEntry dynamic_fields = 3;
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -863,13 +874,6 @@ func (x *CFFIValueClass) GetName() *CFFITypeName {
 func (x *CFFIValueClass) GetFields() []*CFFIMapEntry {
 	if x != nil {
 		return x.Fields
-	}
-	return nil
-}
-
-func (x *CFFIValueClass) GetDynamicFields() []*CFFIMapEntry {
-	if x != nil {
-		return x.DynamicFields
 	}
 	return nil
 }
@@ -934,28 +938,31 @@ func (x *CFFIValueEnum) GetIsDynamic() bool {
 	return false
 }
 
-type CFFIValueMedia struct {
+type CFFIValueRawObject struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// only media objects are allowed here
-	MediaObject   *CFFIRawObject `protobuf:"bytes,1,opt,name=media_object,json=mediaObject,proto3" json:"media_object,omitempty"`
+	// Types that are valid to be assigned to Object:
+	//
+	//	*CFFIValueRawObject_Media
+	//	*CFFIValueRawObject_Type
+	Object        isCFFIValueRawObject_Object `protobuf_oneof:"object"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *CFFIValueMedia) Reset() {
-	*x = CFFIValueMedia{}
+func (x *CFFIValueRawObject) Reset() {
+	*x = CFFIValueRawObject{}
 	mi := &file_types_cffi_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *CFFIValueMedia) String() string {
+func (x *CFFIValueRawObject) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*CFFIValueMedia) ProtoMessage() {}
+func (*CFFIValueRawObject) ProtoMessage() {}
 
-func (x *CFFIValueMedia) ProtoReflect() protoreflect.Message {
+func (x *CFFIValueRawObject) ProtoReflect() protoreflect.Message {
 	mi := &file_types_cffi_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -967,17 +974,51 @@ func (x *CFFIValueMedia) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use CFFIValueMedia.ProtoReflect.Descriptor instead.
-func (*CFFIValueMedia) Descriptor() ([]byte, []int) {
+// Deprecated: Use CFFIValueRawObject.ProtoReflect.Descriptor instead.
+func (*CFFIValueRawObject) Descriptor() ([]byte, []int) {
 	return file_types_cffi_proto_rawDescGZIP(), []int{8}
 }
 
-func (x *CFFIValueMedia) GetMediaObject() *CFFIRawObject {
+func (x *CFFIValueRawObject) GetObject() isCFFIValueRawObject_Object {
 	if x != nil {
-		return x.MediaObject
+		return x.Object
 	}
 	return nil
 }
+
+func (x *CFFIValueRawObject) GetMedia() *CFFIRawObject {
+	if x != nil {
+		if x, ok := x.Object.(*CFFIValueRawObject_Media); ok {
+			return x.Media
+		}
+	}
+	return nil
+}
+
+func (x *CFFIValueRawObject) GetType() *CFFIRawObject {
+	if x != nil {
+		if x, ok := x.Object.(*CFFIValueRawObject_Type); ok {
+			return x.Type
+		}
+	}
+	return nil
+}
+
+type isCFFIValueRawObject_Object interface {
+	isCFFIValueRawObject_Object()
+}
+
+type CFFIValueRawObject_Media struct {
+	Media *CFFIRawObject `protobuf:"bytes,1,opt,name=media,proto3,oneof"`
+}
+
+type CFFIValueRawObject_Type struct {
+	Type *CFFIRawObject `protobuf:"bytes,2,opt,name=type,proto3,oneof"`
+}
+
+func (*CFFIValueRawObject_Media) isCFFIValueRawObject_Object() {}
+
+func (*CFFIValueRawObject_Type) isCFFIValueRawObject_Object() {}
 
 type CFFIValueTuple struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -2506,7 +2547,9 @@ type CFFIFunctionArguments struct {
 	ClientRegistry *CFFIClientRegistry    `protobuf:"bytes,2,opt,name=client_registry,json=clientRegistry,proto3" json:"client_registry,omitempty"`
 	Env            []*CFFIEnvVar          `protobuf:"bytes,3,rep,name=env,proto3" json:"env,omitempty"`
 	// collectors only
-	Collectors    []*CFFIRawObject `protobuf:"bytes,4,rep,name=collectors,proto3" json:"collectors,omitempty"`
+	Collectors []*CFFIRawObject `protobuf:"bytes,4,rep,name=collectors,proto3" json:"collectors,omitempty"`
+	// type builder only
+	TypeBuilder   *CFFIRawObject `protobuf:"bytes,5,opt,name=type_builder,json=typeBuilder,proto3" json:"type_builder,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2565,6 +2608,13 @@ func (x *CFFIFunctionArguments) GetEnv() []*CFFIEnvVar {
 func (x *CFFIFunctionArguments) GetCollectors() []*CFFIRawObject {
 	if x != nil {
 		return x.Collectors
+	}
+	return nil
+}
+
+func (x *CFFIFunctionArguments) GetTypeBuilder() *CFFIRawObject {
+	if x != nil {
+		return x.TypeBuilder
 	}
 	return nil
 }
@@ -3018,6 +3068,10 @@ type CFFIRawObject struct {
 	//	*CFFIRawObject_MediaVideo
 	//	*CFFIRawObject_TypeBuilder
 	//	*CFFIRawObject_Type
+	//	*CFFIRawObject_EnumBuilder
+	//	*CFFIRawObject_EnumValueBuilder
+	//	*CFFIRawObject_ClassBuilder
+	//	*CFFIRawObject_ClassPropertyBuilder
 	Object        isCFFIRawObject_Object `protobuf_oneof:"object"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -3213,6 +3267,42 @@ func (x *CFFIRawObject) GetType() *CFFIPointerType {
 	return nil
 }
 
+func (x *CFFIRawObject) GetEnumBuilder() *CFFIPointerType {
+	if x != nil {
+		if x, ok := x.Object.(*CFFIRawObject_EnumBuilder); ok {
+			return x.EnumBuilder
+		}
+	}
+	return nil
+}
+
+func (x *CFFIRawObject) GetEnumValueBuilder() *CFFIPointerType {
+	if x != nil {
+		if x, ok := x.Object.(*CFFIRawObject_EnumValueBuilder); ok {
+			return x.EnumValueBuilder
+		}
+	}
+	return nil
+}
+
+func (x *CFFIRawObject) GetClassBuilder() *CFFIPointerType {
+	if x != nil {
+		if x, ok := x.Object.(*CFFIRawObject_ClassBuilder); ok {
+			return x.ClassBuilder
+		}
+	}
+	return nil
+}
+
+func (x *CFFIRawObject) GetClassPropertyBuilder() *CFFIPointerType {
+	if x != nil {
+		if x, ok := x.Object.(*CFFIRawObject_ClassPropertyBuilder); ok {
+			return x.ClassPropertyBuilder
+		}
+	}
+	return nil
+}
+
 type isCFFIRawObject_Object interface {
 	isCFFIRawObject_Object()
 }
@@ -3285,6 +3375,22 @@ type CFFIRawObject_Type struct {
 	Type *CFFIPointerType `protobuf:"bytes,17,opt,name=type,proto3,oneof"`
 }
 
+type CFFIRawObject_EnumBuilder struct {
+	EnumBuilder *CFFIPointerType `protobuf:"bytes,18,opt,name=enum_builder,json=enumBuilder,proto3,oneof"`
+}
+
+type CFFIRawObject_EnumValueBuilder struct {
+	EnumValueBuilder *CFFIPointerType `protobuf:"bytes,19,opt,name=enum_value_builder,json=enumValueBuilder,proto3,oneof"`
+}
+
+type CFFIRawObject_ClassBuilder struct {
+	ClassBuilder *CFFIPointerType `protobuf:"bytes,20,opt,name=class_builder,json=classBuilder,proto3,oneof"`
+}
+
+type CFFIRawObject_ClassPropertyBuilder struct {
+	ClassPropertyBuilder *CFFIPointerType `protobuf:"bytes,21,opt,name=class_property_builder,json=classPropertyBuilder,proto3,oneof"`
+}
+
 func (*CFFIRawObject_Collector) isCFFIRawObject_Object() {}
 
 func (*CFFIRawObject_FunctionLog) isCFFIRawObject_Object() {}
@@ -3318,6 +3424,14 @@ func (*CFFIRawObject_MediaVideo) isCFFIRawObject_Object() {}
 func (*CFFIRawObject_TypeBuilder) isCFFIRawObject_Object() {}
 
 func (*CFFIRawObject_Type) isCFFIRawObject_Object() {}
+
+func (*CFFIRawObject_EnumBuilder) isCFFIRawObject_Object() {}
+
+func (*CFFIRawObject_EnumValueBuilder) isCFFIRawObject_Object() {}
+
+func (*CFFIRawObject_ClassBuilder) isCFFIRawObject_Object() {}
+
+func (*CFFIRawObject_ClassPropertyBuilder) isCFFIRawObject_Object() {}
 
 type CFFIClientRegistry struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -3616,7 +3730,7 @@ var File_types_cffi_proto protoreflect.FileDescriptor
 
 const file_types_cffi_proto_rawDesc = "" +
 	"\n" +
-	"\x10types/cffi.proto\x12\tbaml.cffi\"\xeb\x06\n" +
+	"\x10types/cffi.proto\x12\tbaml.cffi\"\xf1\x06\n" +
 	"\x0fCFFIValueHolder\x129\n" +
 	"\n" +
 	"null_value\x18\x02 \x01(\v2\x18.baml.cffi.CFFIValueNullH\x00R\tnullValue\x12#\n" +
@@ -3633,9 +3747,8 @@ const file_types_cffi_proto_rawDesc = "" +
 	"classValue\x129\n" +
 	"\n" +
 	"enum_value\x18\n" +
-	" \x01(\v2\x18.baml.cffi.CFFIValueEnumH\x00R\tenumValue\x12<\n" +
-	"\vmedia_value\x18\v \x01(\v2\x19.baml.cffi.CFFIValueMediaH\x00R\n" +
-	"mediaValue\x12<\n" +
+	" \x01(\v2\x18.baml.cffi.CFFIValueEnumH\x00R\tenumValue\x12B\n" +
+	"\fobject_value\x18\v \x01(\v2\x1d.baml.cffi.CFFIValueRawObjectH\x00R\vobjectValue\x12<\n" +
 	"\vtuple_value\x18\f \x01(\v2\x19.baml.cffi.CFFIValueTupleH\x00R\n" +
 	"tupleValue\x12R\n" +
 	"\x13union_variant_value\x18\r \x01(\v2 .baml.cffi.CFFIValueUnionVariantH\x00R\x11unionVariantValue\x12B\n" +
@@ -3658,18 +3771,19 @@ const file_types_cffi_proto_rawDesc = "" +
 	"\bkey_type\x18\x01 \x01(\v2\x1e.baml.cffi.CFFIFieldTypeHolderR\akeyType\x12=\n" +
 	"\n" +
 	"value_type\x18\x02 \x01(\v2\x1e.baml.cffi.CFFIFieldTypeHolderR\tvalueType\x121\n" +
-	"\aentries\x18\x03 \x03(\v2\x17.baml.cffi.CFFIMapEntryR\aentries\"\xae\x01\n" +
+	"\aentries\x18\x03 \x03(\v2\x17.baml.cffi.CFFIMapEntryR\aentries\"n\n" +
 	"\x0eCFFIValueClass\x12+\n" +
 	"\x04name\x18\x01 \x01(\v2\x17.baml.cffi.CFFITypeNameR\x04name\x12/\n" +
-	"\x06fields\x18\x02 \x03(\v2\x17.baml.cffi.CFFIMapEntryR\x06fields\x12>\n" +
-	"\x0edynamic_fields\x18\x03 \x03(\v2\x17.baml.cffi.CFFIMapEntryR\rdynamicFields\"q\n" +
+	"\x06fields\x18\x02 \x03(\v2\x17.baml.cffi.CFFIMapEntryR\x06fields\"q\n" +
 	"\rCFFIValueEnum\x12+\n" +
 	"\x04name\x18\x01 \x01(\v2\x17.baml.cffi.CFFITypeNameR\x04name\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value\x12\x1d\n" +
 	"\n" +
-	"is_dynamic\x18\x03 \x01(\bR\tisDynamic\"M\n" +
-	"\x0eCFFIValueMedia\x12;\n" +
-	"\fmedia_object\x18\x01 \x01(\v2\x18.baml.cffi.CFFIRawObjectR\vmediaObject\"D\n" +
+	"is_dynamic\x18\x03 \x01(\bR\tisDynamic\"\x80\x01\n" +
+	"\x12CFFIValueRawObject\x120\n" +
+	"\x05media\x18\x01 \x01(\v2\x18.baml.cffi.CFFIRawObjectH\x00R\x05media\x12.\n" +
+	"\x04type\x18\x02 \x01(\v2\x18.baml.cffi.CFFIRawObjectH\x00R\x04typeB\b\n" +
+	"\x06object\"D\n" +
 	"\x0eCFFIValueTuple\x122\n" +
 	"\x06values\x18\x01 \x03(\v2\x1a.baml.cffi.CFFIValueHolderR\x06values\"\x84\x02\n" +
 	"\x15CFFIValueUnionVariant\x12+\n" +
@@ -3754,14 +3868,15 @@ const file_types_cffi_proto_rawDesc = "" +
 	"\n" +
 	"CFFIEnvVar\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value\"\xf3\x01\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value\"\xb0\x02\n" +
 	"\x15CFFIFunctionArguments\x12/\n" +
 	"\x06kwargs\x18\x01 \x03(\v2\x17.baml.cffi.CFFIMapEntryR\x06kwargs\x12F\n" +
 	"\x0fclient_registry\x18\x02 \x01(\v2\x1d.baml.cffi.CFFIClientRegistryR\x0eclientRegistry\x12'\n" +
 	"\x03env\x18\x03 \x03(\v2\x15.baml.cffi.CFFIEnvVarR\x03env\x128\n" +
 	"\n" +
 	"collectors\x18\x04 \x03(\v2\x18.baml.cffi.CFFIRawObjectR\n" +
-	"collectors\"\x9f\x01\n" +
+	"collectors\x12;\n" +
+	"\ftype_builder\x18\x05 \x01(\v2\x18.baml.cffi.CFFIRawObjectR\vtypeBuilder\"\x9f\x01\n" +
 	"\x19CFFIObjectMethodArguments\x120\n" +
 	"\x06object\x18\x01 \x01(\v2\x18.baml.cffi.CFFIRawObjectR\x06object\x12\x1f\n" +
 	"\vmethod_name\x18\x02 \x01(\tR\n" +
@@ -3785,7 +3900,8 @@ const file_types_cffi_proto_rawDesc = "" +
 	"\n" +
 	"\bresponse\"+\n" +
 	"\x0fCFFIPointerType\x12\x18\n" +
-	"\apointer\x18\x01 \x01(\x03R\apointer\"\xad\b\n" +
+	"\apointer\x18\x01 \x01(\x03R\apointer\"\xd1\n" +
+	"\n" +
 	"\rCFFIRawObject\x12:\n" +
 	"\tcollector\x18\x01 \x01(\v2\x1a.baml.cffi.CFFIPointerTypeH\x00R\tcollector\x12?\n" +
 	"\ffunction_log\x18\x02 \x01(\v2\x1a.baml.cffi.CFFIPointerTypeH\x00R\vfunctionLog\x122\n" +
@@ -3807,7 +3923,11 @@ const file_types_cffi_proto_rawDesc = "" +
 	"\vmedia_video\x18\x0f \x01(\v2\x1a.baml.cffi.CFFIPointerTypeH\x00R\n" +
 	"mediaVideo\x12?\n" +
 	"\ftype_builder\x18\x10 \x01(\v2\x1a.baml.cffi.CFFIPointerTypeH\x00R\vtypeBuilder\x120\n" +
-	"\x04type\x18\x11 \x01(\v2\x1a.baml.cffi.CFFIPointerTypeH\x00R\x04typeB\b\n" +
+	"\x04type\x18\x11 \x01(\v2\x1a.baml.cffi.CFFIPointerTypeH\x00R\x04type\x12?\n" +
+	"\fenum_builder\x18\x12 \x01(\v2\x1a.baml.cffi.CFFIPointerTypeH\x00R\venumBuilder\x12J\n" +
+	"\x12enum_value_builder\x18\x13 \x01(\v2\x1a.baml.cffi.CFFIPointerTypeH\x00R\x10enumValueBuilder\x12A\n" +
+	"\rclass_builder\x18\x14 \x01(\v2\x1a.baml.cffi.CFFIPointerTypeH\x00R\fclassBuilder\x12R\n" +
+	"\x16class_property_builder\x18\x15 \x01(\v2\x1a.baml.cffi.CFFIPointerTypeH\x00R\x14classPropertyBuilderB\b\n" +
 	"\x06object\"x\n" +
 	"\x12CFFIClientRegistry\x12\x1d\n" +
 	"\aprimary\x18\x01 \x01(\tH\x00R\aprimary\x88\x01\x01\x127\n" +
@@ -3841,7 +3961,7 @@ const file_types_cffi_proto_rawDesc = "" +
 	"\x05IMAGE\x10\x00\x12\t\n" +
 	"\x05AUDIO\x10\x01\x12\a\n" +
 	"\x03PDF\x10\x02\x12\t\n" +
-	"\x05VIDEO\x10\x03*\xb1\x03\n" +
+	"\x05VIDEO\x10\x03*\xa6\x04\n" +
 	"\x0eCFFIObjectType\x12\x16\n" +
 	"\x12OBJECT_UNSPECIFIED\x10\x00\x12\x14\n" +
 	"\x10OBJECT_COLLECTOR\x10\x01\x12\x17\n" +
@@ -3861,7 +3981,11 @@ const file_types_cffi_proto_rawDesc = "" +
 	"\x10OBJECT_MEDIA_PDF\x10\x0e\x12\x16\n" +
 	"\x12OBJECT_MEDIA_VIDEO\x10\x0f\x12\x17\n" +
 	"\x13OBJECT_TYPE_BUILDER\x10\x10\x12\x0f\n" +
-	"\vOBJECT_TYPE\x10\x11*5\n" +
+	"\vOBJECT_TYPE\x10\x11\x12\x17\n" +
+	"\x13OBJECT_ENUM_BUILDER\x10\x12\x12\x1d\n" +
+	"\x19OBJECT_ENUM_VALUE_BUILDER\x10\x13\x12\x18\n" +
+	"\x14OBJECT_CLASS_BUILDER\x10\x14\x12!\n" +
+	"\x1dOBJECT_CLASS_PROPERTY_BUILDER\x10\x15*5\n" +
 	"\x0fCFFIStreamState\x12\v\n" +
 	"\aPENDING\x10\x00\x12\v\n" +
 	"\aSTARTED\x10\x01\x12\b\n" +
@@ -3894,7 +4018,7 @@ var file_types_cffi_proto_goTypes = []any{
 	(*CFFIValueMap)(nil),              // 9: baml.cffi.CFFIValueMap
 	(*CFFIValueClass)(nil),            // 10: baml.cffi.CFFIValueClass
 	(*CFFIValueEnum)(nil),             // 11: baml.cffi.CFFIValueEnum
-	(*CFFIValueMedia)(nil),            // 12: baml.cffi.CFFIValueMedia
+	(*CFFIValueRawObject)(nil),        // 12: baml.cffi.CFFIValueRawObject
 	(*CFFIValueTuple)(nil),            // 13: baml.cffi.CFFIValueTuple
 	(*CFFIValueUnionVariant)(nil),     // 14: baml.cffi.CFFIValueUnionVariant
 	(*CFFIValueChecked)(nil),          // 15: baml.cffi.CFFIValueChecked
@@ -3942,7 +4066,7 @@ var file_types_cffi_proto_depIdxs = []int32{
 	9,   // 2: baml.cffi.CFFIValueHolder.map_value:type_name -> baml.cffi.CFFIValueMap
 	10,  // 3: baml.cffi.CFFIValueHolder.class_value:type_name -> baml.cffi.CFFIValueClass
 	11,  // 4: baml.cffi.CFFIValueHolder.enum_value:type_name -> baml.cffi.CFFIValueEnum
-	12,  // 5: baml.cffi.CFFIValueHolder.media_value:type_name -> baml.cffi.CFFIValueMedia
+	12,  // 5: baml.cffi.CFFIValueHolder.object_value:type_name -> baml.cffi.CFFIValueRawObject
 	13,  // 6: baml.cffi.CFFIValueHolder.tuple_value:type_name -> baml.cffi.CFFIValueTuple
 	14,  // 7: baml.cffi.CFFIValueHolder.union_variant_value:type_name -> baml.cffi.CFFIValueUnionVariant
 	15,  // 8: baml.cffi.CFFIValueHolder.checked_value:type_name -> baml.cffi.CFFIValueChecked
@@ -3957,9 +4081,9 @@ var file_types_cffi_proto_depIdxs = []int32{
 	8,   // 17: baml.cffi.CFFIValueMap.entries:type_name -> baml.cffi.CFFIMapEntry
 	5,   // 18: baml.cffi.CFFIValueClass.name:type_name -> baml.cffi.CFFITypeName
 	8,   // 19: baml.cffi.CFFIValueClass.fields:type_name -> baml.cffi.CFFIMapEntry
-	8,   // 20: baml.cffi.CFFIValueClass.dynamic_fields:type_name -> baml.cffi.CFFIMapEntry
-	5,   // 21: baml.cffi.CFFIValueEnum.name:type_name -> baml.cffi.CFFITypeName
-	47,  // 22: baml.cffi.CFFIValueMedia.media_object:type_name -> baml.cffi.CFFIRawObject
+	5,   // 20: baml.cffi.CFFIValueEnum.name:type_name -> baml.cffi.CFFITypeName
+	47,  // 21: baml.cffi.CFFIValueRawObject.media:type_name -> baml.cffi.CFFIRawObject
+	47,  // 22: baml.cffi.CFFIValueRawObject.type:type_name -> baml.cffi.CFFIRawObject
 	4,   // 23: baml.cffi.CFFIValueTuple.values:type_name -> baml.cffi.CFFIValueHolder
 	5,   // 24: baml.cffi.CFFIValueUnionVariant.name:type_name -> baml.cffi.CFFITypeName
 	16,  // 25: baml.cffi.CFFIValueUnionVariant.field_types:type_name -> baml.cffi.CFFIFieldTypeHolder
@@ -4004,44 +4128,49 @@ var file_types_cffi_proto_depIdxs = []int32{
 	48,  // 64: baml.cffi.CFFIFunctionArguments.client_registry:type_name -> baml.cffi.CFFIClientRegistry
 	38,  // 65: baml.cffi.CFFIFunctionArguments.env:type_name -> baml.cffi.CFFIEnvVar
 	47,  // 66: baml.cffi.CFFIFunctionArguments.collectors:type_name -> baml.cffi.CFFIRawObject
-	47,  // 67: baml.cffi.CFFIObjectMethodArguments.object:type_name -> baml.cffi.CFFIRawObject
-	8,   // 68: baml.cffi.CFFIObjectMethodArguments.kwargs:type_name -> baml.cffi.CFFIMapEntry
-	2,   // 69: baml.cffi.CFFIObjectConstructorArgs.type:type_name -> baml.cffi.CFFIObjectType
-	8,   // 70: baml.cffi.CFFIObjectConstructorArgs.kwargs:type_name -> baml.cffi.CFFIMapEntry
-	47,  // 71: baml.cffi.CFFIObjectResponseSuccess.object:type_name -> baml.cffi.CFFIRawObject
-	43,  // 72: baml.cffi.CFFIObjectResponseSuccess.objects:type_name -> baml.cffi.MultipleRawObjectResponse
-	4,   // 73: baml.cffi.CFFIObjectResponseSuccess.value:type_name -> baml.cffi.CFFIValueHolder
-	47,  // 74: baml.cffi.MultipleRawObjectResponse.objects:type_name -> baml.cffi.CFFIRawObject
-	42,  // 75: baml.cffi.CFFIObjectResponse.success:type_name -> baml.cffi.CFFIObjectResponseSuccess
-	44,  // 76: baml.cffi.CFFIObjectResponse.error:type_name -> baml.cffi.CFFIObjectResponseError
-	46,  // 77: baml.cffi.CFFIRawObject.collector:type_name -> baml.cffi.CFFIPointerType
-	46,  // 78: baml.cffi.CFFIRawObject.function_log:type_name -> baml.cffi.CFFIPointerType
-	46,  // 79: baml.cffi.CFFIRawObject.usage:type_name -> baml.cffi.CFFIPointerType
-	46,  // 80: baml.cffi.CFFIRawObject.timing:type_name -> baml.cffi.CFFIPointerType
-	46,  // 81: baml.cffi.CFFIRawObject.stream_timing:type_name -> baml.cffi.CFFIPointerType
-	46,  // 82: baml.cffi.CFFIRawObject.llm_call:type_name -> baml.cffi.CFFIPointerType
-	46,  // 83: baml.cffi.CFFIRawObject.llm_stream_call:type_name -> baml.cffi.CFFIPointerType
-	46,  // 84: baml.cffi.CFFIRawObject.http_request:type_name -> baml.cffi.CFFIPointerType
-	46,  // 85: baml.cffi.CFFIRawObject.http_response:type_name -> baml.cffi.CFFIPointerType
-	46,  // 86: baml.cffi.CFFIRawObject.http_body:type_name -> baml.cffi.CFFIPointerType
-	46,  // 87: baml.cffi.CFFIRawObject.sse_response:type_name -> baml.cffi.CFFIPointerType
-	46,  // 88: baml.cffi.CFFIRawObject.media_image:type_name -> baml.cffi.CFFIPointerType
-	46,  // 89: baml.cffi.CFFIRawObject.media_audio:type_name -> baml.cffi.CFFIPointerType
-	46,  // 90: baml.cffi.CFFIRawObject.media_pdf:type_name -> baml.cffi.CFFIPointerType
-	46,  // 91: baml.cffi.CFFIRawObject.media_video:type_name -> baml.cffi.CFFIPointerType
-	46,  // 92: baml.cffi.CFFIRawObject.type_builder:type_name -> baml.cffi.CFFIPointerType
-	46,  // 93: baml.cffi.CFFIRawObject.type:type_name -> baml.cffi.CFFIPointerType
-	49,  // 94: baml.cffi.CFFIClientRegistry.clients:type_name -> baml.cffi.CFFIClientProperty
-	8,   // 95: baml.cffi.CFFIClientProperty.options:type_name -> baml.cffi.CFFIMapEntry
-	16,  // 96: baml.cffi.CFFICheckType.returns:type_name -> baml.cffi.CFFIFieldTypeHolder
-	4,   // 97: baml.cffi.CFFICheckValue.value:type_name -> baml.cffi.CFFIValueHolder
-	4,   // 98: baml.cffi.CFFIValueStreamingState.value:type_name -> baml.cffi.CFFIValueHolder
-	3,   // 99: baml.cffi.CFFIValueStreamingState.state:type_name -> baml.cffi.CFFIStreamState
-	100, // [100:100] is the sub-list for method output_type
-	100, // [100:100] is the sub-list for method input_type
-	100, // [100:100] is the sub-list for extension type_name
-	100, // [100:100] is the sub-list for extension extendee
-	0,   // [0:100] is the sub-list for field type_name
+	47,  // 67: baml.cffi.CFFIFunctionArguments.type_builder:type_name -> baml.cffi.CFFIRawObject
+	47,  // 68: baml.cffi.CFFIObjectMethodArguments.object:type_name -> baml.cffi.CFFIRawObject
+	8,   // 69: baml.cffi.CFFIObjectMethodArguments.kwargs:type_name -> baml.cffi.CFFIMapEntry
+	2,   // 70: baml.cffi.CFFIObjectConstructorArgs.type:type_name -> baml.cffi.CFFIObjectType
+	8,   // 71: baml.cffi.CFFIObjectConstructorArgs.kwargs:type_name -> baml.cffi.CFFIMapEntry
+	47,  // 72: baml.cffi.CFFIObjectResponseSuccess.object:type_name -> baml.cffi.CFFIRawObject
+	43,  // 73: baml.cffi.CFFIObjectResponseSuccess.objects:type_name -> baml.cffi.MultipleRawObjectResponse
+	4,   // 74: baml.cffi.CFFIObjectResponseSuccess.value:type_name -> baml.cffi.CFFIValueHolder
+	47,  // 75: baml.cffi.MultipleRawObjectResponse.objects:type_name -> baml.cffi.CFFIRawObject
+	42,  // 76: baml.cffi.CFFIObjectResponse.success:type_name -> baml.cffi.CFFIObjectResponseSuccess
+	44,  // 77: baml.cffi.CFFIObjectResponse.error:type_name -> baml.cffi.CFFIObjectResponseError
+	46,  // 78: baml.cffi.CFFIRawObject.collector:type_name -> baml.cffi.CFFIPointerType
+	46,  // 79: baml.cffi.CFFIRawObject.function_log:type_name -> baml.cffi.CFFIPointerType
+	46,  // 80: baml.cffi.CFFIRawObject.usage:type_name -> baml.cffi.CFFIPointerType
+	46,  // 81: baml.cffi.CFFIRawObject.timing:type_name -> baml.cffi.CFFIPointerType
+	46,  // 82: baml.cffi.CFFIRawObject.stream_timing:type_name -> baml.cffi.CFFIPointerType
+	46,  // 83: baml.cffi.CFFIRawObject.llm_call:type_name -> baml.cffi.CFFIPointerType
+	46,  // 84: baml.cffi.CFFIRawObject.llm_stream_call:type_name -> baml.cffi.CFFIPointerType
+	46,  // 85: baml.cffi.CFFIRawObject.http_request:type_name -> baml.cffi.CFFIPointerType
+	46,  // 86: baml.cffi.CFFIRawObject.http_response:type_name -> baml.cffi.CFFIPointerType
+	46,  // 87: baml.cffi.CFFIRawObject.http_body:type_name -> baml.cffi.CFFIPointerType
+	46,  // 88: baml.cffi.CFFIRawObject.sse_response:type_name -> baml.cffi.CFFIPointerType
+	46,  // 89: baml.cffi.CFFIRawObject.media_image:type_name -> baml.cffi.CFFIPointerType
+	46,  // 90: baml.cffi.CFFIRawObject.media_audio:type_name -> baml.cffi.CFFIPointerType
+	46,  // 91: baml.cffi.CFFIRawObject.media_pdf:type_name -> baml.cffi.CFFIPointerType
+	46,  // 92: baml.cffi.CFFIRawObject.media_video:type_name -> baml.cffi.CFFIPointerType
+	46,  // 93: baml.cffi.CFFIRawObject.type_builder:type_name -> baml.cffi.CFFIPointerType
+	46,  // 94: baml.cffi.CFFIRawObject.type:type_name -> baml.cffi.CFFIPointerType
+	46,  // 95: baml.cffi.CFFIRawObject.enum_builder:type_name -> baml.cffi.CFFIPointerType
+	46,  // 96: baml.cffi.CFFIRawObject.enum_value_builder:type_name -> baml.cffi.CFFIPointerType
+	46,  // 97: baml.cffi.CFFIRawObject.class_builder:type_name -> baml.cffi.CFFIPointerType
+	46,  // 98: baml.cffi.CFFIRawObject.class_property_builder:type_name -> baml.cffi.CFFIPointerType
+	49,  // 99: baml.cffi.CFFIClientRegistry.clients:type_name -> baml.cffi.CFFIClientProperty
+	8,   // 100: baml.cffi.CFFIClientProperty.options:type_name -> baml.cffi.CFFIMapEntry
+	16,  // 101: baml.cffi.CFFICheckType.returns:type_name -> baml.cffi.CFFIFieldTypeHolder
+	4,   // 102: baml.cffi.CFFICheckValue.value:type_name -> baml.cffi.CFFIValueHolder
+	4,   // 103: baml.cffi.CFFIValueStreamingState.value:type_name -> baml.cffi.CFFIValueHolder
+	3,   // 104: baml.cffi.CFFIValueStreamingState.state:type_name -> baml.cffi.CFFIStreamState
+	105, // [105:105] is the sub-list for method output_type
+	105, // [105:105] is the sub-list for method input_type
+	105, // [105:105] is the sub-list for extension type_name
+	105, // [105:105] is the sub-list for extension extendee
+	0,   // [0:105] is the sub-list for field type_name
 }
 
 func init() { file_types_cffi_proto_init() }
@@ -4059,11 +4188,15 @@ func file_types_cffi_proto_init() {
 		(*CFFIValueHolder_MapValue)(nil),
 		(*CFFIValueHolder_ClassValue)(nil),
 		(*CFFIValueHolder_EnumValue)(nil),
-		(*CFFIValueHolder_MediaValue)(nil),
+		(*CFFIValueHolder_ObjectValue)(nil),
 		(*CFFIValueHolder_TupleValue)(nil),
 		(*CFFIValueHolder_UnionVariantValue)(nil),
 		(*CFFIValueHolder_CheckedValue)(nil),
 		(*CFFIValueHolder_StreamingStateValue)(nil),
+	}
+	file_types_cffi_proto_msgTypes[8].OneofWrappers = []any{
+		(*CFFIValueRawObject_Media)(nil),
+		(*CFFIValueRawObject_Type)(nil),
 	}
 	file_types_cffi_proto_msgTypes[12].OneofWrappers = []any{
 		(*CFFIFieldTypeHolder_StringType)(nil),
@@ -4117,6 +4250,10 @@ func file_types_cffi_proto_init() {
 		(*CFFIRawObject_MediaVideo)(nil),
 		(*CFFIRawObject_TypeBuilder)(nil),
 		(*CFFIRawObject_Type)(nil),
+		(*CFFIRawObject_EnumBuilder)(nil),
+		(*CFFIRawObject_EnumValueBuilder)(nil),
+		(*CFFIRawObject_ClassBuilder)(nil),
+		(*CFFIRawObject_ClassPropertyBuilder)(nil),
 	}
 	file_types_cffi_proto_msgTypes[44].OneofWrappers = []any{}
 	file_types_cffi_proto_msgTypes[45].OneofWrappers = []any{}

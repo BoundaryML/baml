@@ -297,6 +297,7 @@ pub fn parse_openai_responses_response<C: WithClient + RequestBuilder>(
                 }
                 ResponseOutputType::WebSearchCall
                 | ResponseOutputType::FileSearchCall
+                | ResponseOutputType::ComputerCall
                 | ResponseOutputType::Reasoning => {
                     // Tool calls and reasoning outputs don't have text content, skip them
                     None

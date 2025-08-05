@@ -14,6 +14,7 @@ type BamlFunctionArguments struct {
 	ClientRegistry *ClientRegistry
 	Env            map[string]string
 	Collectors     []Collector
+	TypeBuilder    TypeBuilder
 }
 
 func (args *BamlFunctionArguments) Encode() ([]byte, error) {
@@ -60,11 +61,21 @@ func (args *BamlFunctionArguments) encode() (*cffi.CFFIFunctionArguments, error)
 		}
 	}
 
+	var typeBuilder *cffi.CFFIRawObject
+	if args.TypeBuilder != nil {
+		encodedTypeBuilder := raw_objects.EncodeRawObject(args.TypeBuilder)
+		if err != nil {
+			return nil, fmt.Errorf("encoding type builder: %w", err)
+		}
+		typeBuilder = encodedTypeBuilder
+	}
+
 	functionArguments := cffi.CFFIFunctionArguments{
 		Kwargs:         kwargs,
 		ClientRegistry: clientRegistry,
 		Env:            env,
 		Collectors:     collectors,
+		TypeBuilder:    typeBuilder,
 	}
 
 	return &functionArguments, nil
