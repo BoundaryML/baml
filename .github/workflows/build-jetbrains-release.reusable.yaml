@@ -73,18 +73,18 @@ jobs:
       - name: Build plugin
         run: ./gradlew buildPlugin
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: baml-jetbrains-zip-${{ steps.properties.outputs.version }}
-          path: ./jetbrains/build/distributions/*
-
       - name: List downloaded extension zips
         run: ls -la ./jetbrains/build/distributions/
       - name: Publish to JetBrains Marketplace
         run: cd ./jetbrains && ./gradlew publishPlugin
         env:
           INTELLIJ_PLATFORM_PUBLISH_TOKEN: ${{ secrets.SAM_INTELLIJ_PLATFORM_PUBLISH_TOKEN }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: baml-jetbrains-zip-${{ steps.properties.outputs.version }}
+          path: ./jetbrains/build/distributions/*
 
   # # Run tests and upload a code coverage report
   # test:
