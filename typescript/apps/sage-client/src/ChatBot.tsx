@@ -1,9 +1,9 @@
-import { useAtom } from 'jotai';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import React, { useRef, useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import BamlLambWhite from './baml-lamb-white.svg';
-import { type StoredMessage, messagesAtom } from './store';
+import { type StoredMessage, messagesAtom, sessionIdAtom, resetSessionAtom } from './store';
 import { Message, type QueryRequest, QueryResponseSchema } from '@baml/sage-interface';
 import { AssistantResponseFeedback } from './lib/AssistantResponseFeedback';
 
@@ -78,6 +78,8 @@ const API_ENDPOINT =
 
 const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) => {
   const [messages, setMessages] = useAtom(messagesAtom);
+  const sessionId = useAtomValue(sessionIdAtom);
+  const resetSession = useSetAtom(resetSessionAtom);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [pendingQuery, setPendingQuery] = useState<string | null>(null);
@@ -94,9 +96,9 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
     scrollToBottom();
   }, [messages]);
 
-  // Clear chat functionality
+  // Clear chat functionality - now resets session ID too
   const clearChat = () => {
-    setMessages([]);
+    resetSession();
   };
 
   const sendMessage = async (text: string) => {
@@ -125,8 +127,7 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
 
     try {
       const data = await postDocChat({
-        // TODO: session ID placeholder
-        session_id: 'asdf',
+        session_id: sessionId,
         message: {
           role: 'user',
           text: text.trim(),
@@ -809,8 +810,6 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
               {message.role === 'assistant' && (
                 <AssistantResponseFeedback
                   messageId={message.id}
-                  sessionId="asdf" // TODO: use proper session ID
-                  messages={transformMessagesForAPI(messages)}
                 />
               )}
               
