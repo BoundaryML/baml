@@ -10,6 +10,7 @@ export type UserMessage = z.infer<typeof UserMessageSchema>;
 
 export const AssistantMessageSchema = z.object({
   role: z.literal('assistant'),
+  message_id: z.string(), // ISO8601 timestamp
   ranked_docs: z.array(
     z.object({
       title: z.string(),

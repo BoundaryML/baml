@@ -48,6 +48,7 @@ export async function submitQuery(
     session_id: request.session_id,
     message: {
       role: 'assistant',
+      message_id: `msg-${new Date().toISOString()}`,
       text: plan.answer,
       ranked_docs: Array.from(
         new Map(relevantDocs.map((doc) => [doc.url, doc])).values(),

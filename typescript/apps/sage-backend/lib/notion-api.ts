@@ -3,7 +3,6 @@ import { type UserMessage, type AssistantMessage } from '@baml/sage-interface';
 
 export interface NotionLogEntry {
   session_id: string;
-  assistant_timestamp: string;
   user_message: UserMessage;
   assistant_message: AssistantMessage;
 }
@@ -33,7 +32,7 @@ export class NotionLogger {
    */
   private buildNotionProperties = (data: NotionLogEntry) => {
     const { text: userMessageText, role: _userRole, ...userMessageRest } = data.user_message;
-    const { text: assistantMessageText, role: _assistantRole, ...assistantMessageRest } = data.assistant_message;
+    const { text: assistantMessageText, role: _assistantRole, message_id: assistantMessageId, ...assistantMessageRest } = data.assistant_message;
 
     return {
       // Session ID (Text field)
@@ -48,11 +47,11 @@ export class NotionLogger {
       },
 
       // Assistant Timestamp (Text field) - used for querying/updating
-      'Assistant Timestamp': {
+      'Response ID': {
         rich_text: [
           {
             text: {
-              content: data.assistant_timestamp,
+              content: assistantMessageId,
             },
           },
         ],
