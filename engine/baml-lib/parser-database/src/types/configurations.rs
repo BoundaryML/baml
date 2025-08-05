@@ -262,6 +262,44 @@ pub(crate) fn visit_test_case<'db>(
             )),
         });
 
+    // Add validation for field-level attributes that shouldn't be in test blocks
+    for field in &config.fields {
+        // Check if the field has any attributes
+        for attribute in &field.attributes {
+            let attr_name = attribute.name.name();
+
+            // Check for constraint attributes that should be block-level
+            if matches!(attr_name, "assert" | "check") {
+                let error_msg = match attr_name {
+                    "assert" => format!(
+                        "Test assertions must use block-level syntax '@@assert' instead of '@assert'. \
+                         Example:\n  test MyTest {{\n    functions [MyFunc]\n    args {{}}\n    \
+                         @@assert(label, {{{{ this == \"expected\" }}}})\n  }}"
+                    ),
+                    "check" => format!(
+                        "Test checks must use block-level syntax '@@check' instead of '@check'. \
+                         Block-level attributes apply to the entire test result."
+                    ),
+                    _ => unreachable!(),
+                };
+                
+                ctx.push_error(DatamodelError::new_attribute_validation_error(
+                    &error_msg,
+                    attr_name,
+                    attribute.span.clone(),
+                ));
+            }
+
+            // Also check for other field-only attributes that don't make sense in tests
+            if matches!(attr_name, "description" | "alias" | "skip") {
+                ctx.push_error(DatamodelError::new_attribute_not_known_error(
+                    attr_name,
+                    attribute.span.clone(),
+                ));
+            }
+        }
+    }
+
     let constraints: Vec<(Constraint, Span, Span)> = config
         .attributes
         .iter()
