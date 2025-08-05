@@ -10,7 +10,7 @@ import dynamic from 'next/dynamic';
 import { isMobile } from 'react-device-detect';
 
 import { Suspense, useEffect, useState } from 'react';
-import { activeFileNameAtom } from '../[project_id]/_atoms/atoms';
+import { activeFileNameAtom } from '../../[project_id]/_atoms/atoms';
 import { ErrorBoundary } from 'react-error-boundary';
 import { Button } from '@baml/ui/button';
 import { RefreshCcw } from 'lucide-react';
