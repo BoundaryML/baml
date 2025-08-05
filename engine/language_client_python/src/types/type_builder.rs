@@ -1,3 +1,5 @@
+use std::ops::Deref;
+
 use baml_runtime::type_builder::{self, WithMeta};
 use baml_types::{ir_type::UnionConstructor, BamlValue};
 use pyo3::{
@@ -155,7 +157,7 @@ impl FieldType {
     }
 
     pub fn __eq__(&self, other: &FieldType) -> bool {
-        self.inner.lock().unwrap().clone() == other.inner.lock().unwrap().clone()
+        self.inner.lock().unwrap().deref() == other.inner.lock().unwrap().deref()
     }
 }
 

@@ -282,10 +282,10 @@ describe("Dynamic Type Tests", () => {
       tb.Person.addProperty("last_name", tb.string().list());
       tb.Person.addProperty("height", tb.float().optional()).description("Height in meters");
 
-      expect(tb.Person.listProperties().map(([name, prop]) => [name, prop.getType()])).toEqual([
-        ["last_name", tb.string().list()],
-        ["height", tb.float().optional()],
-      ]);
+      const props = Object.fromEntries(tb.Person.listProperties());
+
+      expect(props["last_name"].getType().equals(tb.string().list())).toBeTruthy();
+      expect(props["height"].getType().equals(tb.float().optional())).toBeTruthy();
     });
 
     it("should reset", () => {
@@ -365,12 +365,10 @@ describe("Dynamic Type Tests", () => {
       tb.Person.addProperty("last_name", tb.string().list());
       tb.Person.addProperty("height", tb.float().optional()).description("Height in meters");
 
-      const props = tb.Person.listProperties().map(([name, prop]) => [name, prop.getType()]);
+      const props = Object.fromEntries(tb.Person.listProperties());
 
-      expect(props).toEqual([
-        ["last_name", tb.string().list()],
-        ["height", tb.float().optional()],
-      ]);
+      expect(props["last_name"].getType().equals(tb.string().list())).toBeTruthy();
+      expect(props["height"].getType().equals(tb.float().optional())).toBeTruthy();
     });
 
     it("should set property types", () => {
@@ -385,8 +383,8 @@ describe("Dynamic Type Tests", () => {
 
       // Verify changes
       props = Object.fromEntries(tb.Person.listProperties());
-      expect(props["last_name"].getType()).toEqual(tb.string());
-      expect(props["height"].getType()).toEqual(tb.int());
+      expect(props["last_name"].getType().equals(tb.string())).toBeTruthy();
+      expect(props["height"].getType().equals(tb.int())).toBeTruthy();
     });
   });
 });

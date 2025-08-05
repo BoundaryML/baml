@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, ops::Deref};
 
 // This file provides the native bindings between our Rust implementation and TypeScript
 // We use NAPI-RS to expose Rust functionality to JavaScript/TypeScript
@@ -181,6 +181,11 @@ impl FieldType {
     #[napi]
     pub fn optional(&self) -> FieldType {
         self.inner.lock().unwrap().clone().as_optional().into()
+    }
+
+    #[napi]
+    pub fn equals(&self, other: &FieldType) -> bool {
+        self.inner.lock().unwrap().deref() == other.inner.lock().unwrap().deref()
     }
 }
 

@@ -107,6 +107,7 @@ export declare class EnumValueBuilder {
 export declare class FieldType {
   list(): FieldType
   optional(): FieldType
+  equals(other: FieldType): boolean
 }
 
 export declare class FunctionLog {
