@@ -1,10 +1,12 @@
 import { Client } from '@notionhq/client';
-import { type UserMessage, type AssistantMessage } from '@baml/sage-interface';
+import { type UserMessage, type AssistantMessage, type SendFeedbackRequest } from '@baml/sage-interface';
 
 export interface NotionLogEntry {
   session_id: string;
   user_message: UserMessage;
   assistant_message: AssistantMessage;
+  feedback_type?: 'thumbs_up' | 'thumbs_down';
+  feedback_comment?: string;
 }
 
 export class NotionLogger {
@@ -105,6 +107,24 @@ export class NotionLogger {
           start: new Date().toISOString(),
         },
       },
+
+      // Feedback Type (Select field)
+      'Feedback Type': data.feedback_type ? {
+        select: {
+          name: data.feedback_type,
+        },
+      } : { select: null },
+
+      // Feedback Comment (Text field)
+      'Feedback Comment': data.feedback_comment ? {
+        rich_text: [
+          {
+            text: {
+              content: data.feedback_comment,
+            },
+          },
+        ],
+      } : { rich_text: [] },
     };
   };
 
@@ -118,9 +138,8 @@ export class NotionLogger {
         properties: Object.fromEntries(
           Object.entries(this.buildNotionProperties({
             session_id: 'test',
-            assistant_timestamp: 'test',
             user_message: { role: 'user', text: 'test' },
-            assistant_message: { role: 'assistant', text: 'test', ranked_docs: [] },
+            assistant_message: { role: 'assistant', text: 'test', message_id: 'test', ranked_docs: [] },
           })).map(([key, value]) => [
             key,
             // Extract just the type information from the property
@@ -166,11 +185,11 @@ export class NotionLogger {
   };
 
   /**
-   * Find a page in the database by session_id and assistant_timestamp
+   * Find a page in the database by session_id and response_id
    */
-  private findPageBySessionAndTimestamp = async (
+  private findPageBySessionAndResponseId = async (
     session_id: string,
-    assistant_timestamp: string
+    response_id: string
   ): Promise<string | null> => {
     try {
       const response = await this.notion.databases.query({
@@ -184,9 +203,9 @@ export class NotionLogger {
               },
             },
             {
-              property: 'Assistant Timestamp',
+              property: 'Response ID',
               rich_text: {
-                equals: assistant_timestamp,
+                equals: response_id,
               },
             },
           ],
@@ -206,18 +225,18 @@ export class NotionLogger {
   };
 
   /**
-   * Update the first row that matches session_id and assistant_timestamp
+   * Update the first row that matches session_id and response_id
    */
   updateEntry = async (entry: NotionLogEntry): Promise<string | null> => {
     // Find the existing page
-    const pageId = await this.findPageBySessionAndTimestamp(
+    const pageId = await this.findPageBySessionAndResponseId(
       entry.session_id,
-      entry.assistant_timestamp
+      entry.assistant_message.message_id
     );
 
     if (!pageId) {
       console.warn(
-        `No existing entry found for session_id: ${entry.session_id}, assistant_timestamp: ${entry.assistant_timestamp}`
+        `No existing entry found for session_id: ${entry.session_id}, response_id: ${entry.assistant_message.message_id}`
       );
       return null;
     }
@@ -254,6 +273,71 @@ export class NotionLogger {
     const createdId = await this.appendEntry(entry);
     return { id: createdId, operation: 'created' };
   };
+
+  /**
+   * Update feedback for entries based on session_id and message_ids from feedback request
+   */
+  updateFeedback = async (feedbackRequest: SendFeedbackRequest): Promise<{
+    updated: number;
+    failed: string[];
+  }> => {
+    const results = {
+      updated: 0,
+      failed: [] as string[],
+    };
+
+    // Find all assistant messages in the feedback request
+    const assistantMessages = feedbackRequest.messages.filter(
+      (msg) => msg.role === 'assistant'
+    ) as AssistantMessage[];
+
+    // Update each assistant message with feedback
+    for (const assistantMessage of assistantMessages) {
+      try {
+        const pageId = await this.findPageBySessionAndResponseId(
+          feedbackRequest.session_id,
+          assistantMessage.message_id
+        );
+
+        if (!pageId) {
+          results.failed.push(
+            `No entry found for session_id: ${feedbackRequest.session_id}, response_id: ${assistantMessage.message_id}`
+          );
+          continue;
+        }
+
+        // Update only the feedback properties
+        await this.notion.pages.update({
+          page_id: pageId,
+          properties: {
+            'Feedback Type': {
+              select: {
+                name: feedbackRequest.feedback_type,
+              },
+            },
+            'Feedback Comment': feedbackRequest.comment ? {
+              rich_text: [
+                {
+                  text: {
+                    content: feedbackRequest.comment,
+                  },
+                },
+              ],
+            } : { rich_text: [] },
+          },
+        });
+
+        results.updated++;
+      } catch (error) {
+        console.error(`Failed to update feedback for message ${assistantMessage.message_id}:`, error);
+        results.failed.push(
+          `Failed to update message ${assistantMessage.message_id}: ${error instanceof Error ? error.message : 'Unknown error'}`
+        );
+      }
+    }
+
+    return results;
+  };
 }
 
 // Export convenience functions for backward compatibility
@@ -273,4 +357,12 @@ export async function upsertNotionEntry(entry: NotionLogEntry): Promise<{
 }> {
   const logger = new NotionLogger();
   return logger.upsertEntry(entry);
+}
+
+export async function updateNotionFeedback(feedbackRequest: SendFeedbackRequest): Promise<{
+  updated: number;
+  failed: string[];
+}> {
+  const logger = new NotionLogger();
+  return logger.updateFeedback(feedbackRequest);
 }

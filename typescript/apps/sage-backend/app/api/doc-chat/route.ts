@@ -30,7 +30,6 @@ export async function POST(httpRequest: NextRequest) {
     setImmediate(() => {
       notionLogger.appendEntry({
         session_id: request.session_id,
-        assistant_timestamp: new Date().toISOString(),
         user_message: request.message,
         assistant_message: result.message,
       });

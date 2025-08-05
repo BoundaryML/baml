@@ -2,6 +2,7 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { SendFeedbackRequestSchema } from '@baml/sage-interface';
 import { SlackFeedbackLogger } from '../../../lib/slack-api';
+import { updateNotionFeedback } from '../../../lib/notion-api';
 
 const slack = new SlackFeedbackLogger();
 
@@ -24,8 +25,11 @@ export async function POST(request: NextRequest) {
 
     const feedbackData = reqBody.data;
 
-    // Deliberately do not await this, so that the request can return immediately.
+    // Deliberately do not await these, so that the request can return immediately.
     slack.sendFeedback(feedbackData);
+    updateNotionFeedback(feedbackData).catch(error => {
+      console.error('Failed to update Notion feedback:', error);
+    });
 
     return NextResponse.json({
       enqueued: true,
