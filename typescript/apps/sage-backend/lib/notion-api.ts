@@ -313,8 +313,10 @@ export class NotionLogger {
     if (assistantMessages.length > 1) {
       throw new Error('More than one assistant message in feedback request');
     }
-
-    const assistantMessage = assistantMessages[0]!;
+    const assistantMessage = assistantMessages[0];
+    if (!assistantMessage) {
+      throw new Error('No assistant message in feedback request');
+    }
 
     // Update each assistant message with feedback
     try {

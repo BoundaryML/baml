@@ -3,7 +3,7 @@ import { type SendFeedbackRequest, type Message } from '@baml/sage-interface';
 
 export class SlackFeedbackLogger {
   private slack: WebClient;
-  private channel: string = '#support-docs';
+  private channel = '#support-docs';
 
   constructor() {
     const token = process.env.SLACK_BOUNDARY_BOT_TOKEN;
@@ -49,7 +49,7 @@ export class SlackFeedbackLogger {
 
               return {
                 type: 'text',
-                text: text + '\n\n',
+                text: `${text}\n\n`,
               };
             }),
           },
