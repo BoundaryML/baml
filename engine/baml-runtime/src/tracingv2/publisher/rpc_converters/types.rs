@@ -64,7 +64,8 @@ impl<'a, T: HasType<type_meta::NonStreaming>> IntoRpcEvent<'a, runtime_api::Baml
                                 Some(idx) => runtime_api::TypeIndex::Index(idx),
                                 None => {
                                     baml_log::warn!(
-                                        "Could not determine union variant index for value type."
+                                        "Unexpected Error. Please report this error on https://github.com/boundaryml/baml/issues.\nCould not determine union variant index for value type: {} for value {}",
+                                        type_ref, value
                                     );
                                     runtime_api::TypeIndex::NotFound
                                 }
@@ -99,19 +100,29 @@ fn matches_value_with_rpc_type<T: HasType<type_meta::NonStreaming>>(
             TypeReferenceWithMetadata::Enum { type_id, .. },
         ) => {
             // Compare the enum name with the type_id name
-            let type_id_name = type_id.0.to_string();
-            enum_name == &type_id_name
+            enum_name == type_id.0.name()
         }
         (
             BamlValueWithMeta::Class(class_name, _, _),
             TypeReferenceWithMetadata::Class { type_id, .. },
         ) => {
             // Compare the class name with the type_id name
-            let type_id_name = type_id.0.to_string();
-            class_name == &type_id_name
+            class_name == type_id.0.name()
         }
-        (BamlValueWithMeta::List(_, _), TypeReferenceWithMetadata::List(_, _)) => true,
-        (BamlValueWithMeta::Map(_, _), TypeReferenceWithMetadata::Map { .. }) => true,
+        (
+            BamlValueWithMeta::List(list_values, _),
+            TypeReferenceWithMetadata::List(inner_type, _),
+        ) => list_values
+            .iter()
+            .all(|value| matches_value_with_rpc_type(value, inner_type, lookup)),
+        (
+            BamlValueWithMeta::Map(map_values, _),
+            TypeReferenceWithMetadata::Map { key, value, .. },
+        ) => map_values.iter().all(|(map_key, map_value)| {
+            // TODO: Validate key type
+            // matches_value_with_rpc_type(map_key, key, lookup)
+            matches_value_with_rpc_type(map_value, value, lookup)
+        }),
         (BamlValueWithMeta::Media(media, _), TypeReferenceWithMetadata::Media(media_type, _)) => {
             matches!(
                 (&media.media_type, media_type),
