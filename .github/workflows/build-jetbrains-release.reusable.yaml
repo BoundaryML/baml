@@ -37,6 +37,7 @@ defaults:
 jobs:
   # Prepare environment and build the plugin
   build:
+    environment: release
     name: Build
     runs-on: ubuntu-latest
     outputs:
@@ -78,6 +79,13 @@ jobs:
         with:
           name: baml-jetbrains-zip-${{ steps.properties.outputs.version }}
           path: ./jetbrains/build/distributions/*
+
+      - name: List downloaded extension zips
+        run: ls -la ./jetbrains/build/distributions/
+      - name: Publish to JetBrains Marketplace
+        run: cd ./jetbrains && ./gradlew publishPlugin
+        env:
+          INTELLIJ_PLATFORM_PUBLISH_TOKEN: ${{ secrets.SAM_INTELLIJ_PLATFORM_PUBLISH_TOKEN }}
 
   # # Run tests and upload a code coverage report
   # test:
