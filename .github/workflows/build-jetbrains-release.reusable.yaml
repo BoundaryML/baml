@@ -37,7 +37,6 @@ defaults:
 jobs:
   # Prepare environment and build the plugin
   build:
-    environment: release
     name: Build
     runs-on: ubuntu-latest
     outputs:
