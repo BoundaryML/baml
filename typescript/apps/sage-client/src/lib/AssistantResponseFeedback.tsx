@@ -63,7 +63,14 @@ export const AssistantResponseFeedback: React.FC<AssistantResponseFeedbackProps>
         session_id: sessionId,
         feedback_type: feedbackModal.feedbackType,
         comment: feedbackComment || undefined,
-        messages: transformMessagesForAPI(messages)
+        messages: transformMessagesForAPI(
+          messages.slice(
+            messages
+              .map((m, i) => m.role === 'assistant' ? i : -1)
+              .filter(i => i !== -1)
+              .slice(-2)[0]
+          )
+        )
       };
 
       const response = await fetch(FEEDBACK_API_ENDPOINT, {
