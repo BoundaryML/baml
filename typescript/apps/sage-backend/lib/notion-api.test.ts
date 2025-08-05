@@ -17,20 +17,20 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { NotionLogger, type NotionLogEntry } from './notion-api';
-import { type UserMessage, type AssistantMessage } from '@baml/sage-interface';
+import { type UserMessage, type AssistantMessage, type SendFeedbackRequest } from '@baml/sage-interface';
 
 // Test data
 const testSessionId = `test_session_${Date.now()}`;
-const testTimestamp = new Date().toISOString();
 
 const testUserMessage: UserMessage = {
   role: 'user',
-  text: 'How do I use BAML with TypeScript for testing?',
-  language_preference: 'en'
+  text: 'notion-api.test.ts: How do I use BAML with TypeScript for testing?',
+  language_preference: 'python'
 };
 
 const testAssistantMessage: AssistantMessage = {
   role: 'assistant',
+  message_id: 'msg-2025-08-05T19:24:53.414Z',
   text: 'You can use BAML with TypeScript by installing the package and following the quickstart guide. This is a test message.',
   ranked_docs: [
     {
@@ -52,7 +52,6 @@ const testAssistantMessage: AssistantMessage = {
 
 const testEntry: NotionLogEntry = {
   session_id: testSessionId,
-  assistant_timestamp: testTimestamp,
   user_message: testUserMessage,
   assistant_message: testAssistantMessage
 };
@@ -74,210 +73,186 @@ describe('NotionLogger Integration Tests', () => {
     console.log(`Search for session_id: ${testSessionId} to find test entries.`);
   });
 
-  it.only('should create a new log entry', async () => {
-    console.log('📝 Testing appendEntry...');
-    
-    const pageId = await logger.appendEntry(testEntry);
-    
-    expect(pageId).toBeDefined();
-    expect(typeof pageId).toBe('string');
-    expect(pageId.length).toBeGreaterThan(0);
-    
-    createdPageId = pageId;
-    console.log(`✅ Created page with ID: ${pageId}`);
-  }, 30000); // 30 second timeout for API calls
-
-  it('should update an existing log entry', async () => {
-    console.log('✏️ Testing updateEntry...');
-    
-    // Modify the entry
-    const updatedEntry: NotionLogEntry = {
-      ...testEntry,
-      user_message: {
-        ...testUserMessage,
-        text: 'How do I use BAML with TypeScript? (UPDATED)'
-      },
-      assistant_message: {
-        ...testAssistantMessage,
-        text: 'Updated answer: You can use BAML with TypeScript by following these updated steps...'
-      }
-    };
-    
-    const updatedPageId = await logger.updateEntry(updatedEntry);
-    
-    expect(updatedPageId).toBeDefined();
-    expect(updatedPageId).toBe(createdPageId);
-    console.log(`✅ Updated page with ID: ${updatedPageId}`);
-  }, 30000);
-
-  it('should return null when trying to update non-existent entry', async () => {
-    console.log('🔍 Testing updateEntry with non-existent entry...');
-    
-    const nonExistentEntry: NotionLogEntry = {
-      ...testEntry,
-      session_id: 'non_existent_session',
-      assistant_timestamp: 'non_existent_timestamp'
-    };
-    
-    const result = await logger.updateEntry(nonExistentEntry);
-    
-    expect(result).toBeNull();
-    console.log('✅ Correctly returned null for non-existent entry');
-  }, 30000);
-
-  it('should upsert (update existing entry)', async () => {
-    console.log('🔄 Testing upsertEntry with existing entry...');
-    
-    const upsertEntry: NotionLogEntry = {
-      ...testEntry,
-      assistant_message: {
-        ...testAssistantMessage,
-        text: 'Upserted answer: This entry was updated via upsert operation.'
-      }
-    };
-    
-    const result = await logger.upsertEntry(upsertEntry);
-    
-    expect(result.id).toBeDefined();
-    expect(result.operation).toBe('updated');
-    expect(result.id).toBe(createdPageId);
-    console.log(`✅ Upserted (updated) page with ID: ${result.id}`);
-  }, 30000);
-
-  it('should upsert (create new entry)', async () => {
-    console.log('➕ Testing upsertEntry with new entry...');
-    
-    const newTimestamp = new Date(Date.now() + 1000).toISOString();
-    const newEntry: NotionLogEntry = {
-      ...testEntry,
-      assistant_timestamp: newTimestamp,
-      user_message: {
-        ...testUserMessage,
-        text: 'This is a new entry created via upsert'
-      }
-    };
-    
-    const result = await logger.upsertEntry(newEntry);
-    
-    expect(result.id).toBeDefined();
-    expect(result.operation).toBe('created');
-    expect(result.id).not.toBe(createdPageId);
-    console.log(`✅ Upserted (created) new page with ID: ${result.id}`);
-  }, 30000);
-
-  it('should handle entries with minimal data', async () => {
-    console.log('📋 Testing with minimal data...');
-    
-    const minimalUserMessage: UserMessage = {
-      role: 'user',
-      text: 'Minimal test question'
-    };
-    
-    const minimalAssistantMessage: AssistantMessage = {
-      role: 'assistant',
-      text: 'Minimal test answer',
-      ranked_docs: []
-    };
-    
-    const minimalEntry: NotionLogEntry = {
-      session_id: `minimal_${testSessionId}`,
-      assistant_timestamp: new Date().toISOString(),
-      user_message: minimalUserMessage,
-      assistant_message: minimalAssistantMessage
-    };
-    
-    const pageId = await logger.appendEntry(minimalEntry);
-    
-    expect(pageId).toBeDefined();
-    expect(typeof pageId).toBe('string');
-    console.log(`✅ Created minimal entry with ID: ${pageId}`);
-  }, 30000);
-
-  it('should handle entries with null assistant text', async () => {
-    console.log('🚫 Testing with null assistant text...');
-    
-    const nullTextAssistantMessage: AssistantMessage = {
-      role: 'assistant',
-      text: null,
-      ranked_docs: [
-        {
-          title: 'Test Doc',
-          url: 'https://example.com',
-          relevance: 'relevant'
-        }
-      ],
-      suggested_messages: ['Try this', 'Or this']
-    };
-    
-    const nullTextEntry: NotionLogEntry = {
-      session_id: `null_text_${testSessionId}`,
-      assistant_timestamp: new Date().toISOString(),
-      user_message: testUserMessage,
-      assistant_message: nullTextAssistantMessage
-    };
-    
-    const pageId = await logger.appendEntry(nullTextEntry);
-    
-    expect(pageId).toBeDefined();
-    expect(typeof pageId).toBe('string');
-    console.log(`✅ Created entry with null text with ID: ${pageId}`);
-  }, 30000);
-
-  it.only('should get the database schema', async () => {
-    console.log('🔍 Testing getDatabaseSchema...');
-    const schema = await logger.getDatabaseSchema();
-    console.log(schema);
-  }, 30000);
-});
-
-// Run the tests if this file is executed directly
-if (import.meta.url === `file://${process.argv[1]}`) {
-  console.log('🚀 Running Notion API integration tests directly...');
-  
-  // Simple test runner for direct execution
-  async function runTests() {
-    try {
-      console.log('Environment check...');
-      if (!process.env.NOTION_BOUNDARY_BOT_TOKEN || !process.env.NOTION_ASK_BAAAML_DATABASE_ID) {
-        throw new Error('Missing required environment variables');
-      }
-      
-      const logger = new NotionLogger();
-      console.log('✅ NotionLogger initialized successfully');
-      
-      console.log('\n📝 Testing appendEntry...');
+  describe('appendEntry', () => {
+    it('should successfully append a new log entry to Notion database', async () => {
+      // Act
       const pageId = await logger.appendEntry(testEntry);
-      console.log(`✅ Created entry: ${pageId}`);
+
+      // Assert
+      expect(pageId).toBeDefined();
+      expect(typeof pageId).toBe('string');
+      expect(pageId.length).toBeGreaterThan(0);
       
-      console.log('\n✏️ Testing updateEntry...');
-      const updatedEntry = {
+      // Store the page ID for use in other tests
+      createdPageId = pageId;
+      
+      console.log(`✅ Created Notion page with ID: ${pageId}`);
+    }, 30000); // 30 second timeout for API call
+
+    it('should handle entry with all optional fields', async () => {
+      const entryWithFeedback: NotionLogEntry = {
         ...testEntry,
+        session_id: `${testSessionId}_with_feedback`,
         assistant_message: {
           ...testAssistantMessage,
-          text: 'Updated via direct test run'
-        }
+          message_id: `msg-2025-08-05T19:24:53.415Z`
+        },
+        feedback_type: 'thumbs_up',
+        feedback_comment: 'This response was very helpful!'
       };
-      const updatedId = await logger.updateEntry(updatedEntry);
-      console.log(`✅ Updated entry: ${updatedId}`);
+
+      // Act
+      const pageId = await logger.appendEntry(entryWithFeedback);
+
+      // Assert
+      expect(pageId).toBeDefined();
+      expect(typeof pageId).toBe('string');
       
-      console.log('\n🔄 Testing upsertEntry...');
-      const upsertResult = await logger.upsertEntry({
-        ...testEntry,
-        assistant_timestamp: new Date().toISOString(),
-        user_message: {
-          ...testUserMessage,
-          text: 'Direct test upsert'
-        }
-      });
-      console.log(`✅ Upserted entry: ${upsertResult.id} (${upsertResult.operation})`);
+      console.log(`✅ Created Notion page with feedback: ${pageId}`);
+    }, 30000);
+  });
+
+  describe('updateFeedback', () => {
+    it('should successfully update feedback for an existing entry', async () => {
+      // First ensure we have a page to update
+      if (!createdPageId) {
+        const pageId = await logger.appendEntry(testEntry);
+        createdPageId = pageId;
+      }
+
+      // Create feedback request
+      const feedbackRequest: SendFeedbackRequest = {
+        session_id: testSessionId,
+        messages: [testUserMessage, testAssistantMessage],
+        feedback_type: 'thumbs_up',
+        comment: 'Great response! Very helpful.'
+      };
+
+      // Act
+      const result = await logger.updateFeedback(feedbackRequest);
+
+      // Assert
+      expect(result).toBeDefined();
+      expect(result.pageId).toBeDefined();
+      expect(typeof result.pageId).toBe('string');
       
-      console.log('\n🎉 All tests completed successfully!');
+      console.log(`✅ Updated feedback for page: ${result.pageId}`);
+    }, 30000);
+
+    it('should handle feedback with thumbs_down and long comment', async () => {
+      const feedbackRequest: SendFeedbackRequest = {
+        session_id: testSessionId,
+        messages: [testUserMessage, testAssistantMessage],
+        feedback_type: 'thumbs_down',
+        comment: 'This response was not accurate. It failed to address the specific TypeScript integration issues I mentioned. The documentation links were generic and not helpful for my use case. I need more specific examples.'
+      };
+
+      // Act
+      const result = await logger.updateFeedback(feedbackRequest);
+
+      // Assert
+      expect(result).toBeDefined();
+      expect(result.pageId).toBeDefined();
       
-    } catch (error) {
-      console.error('❌ Test failed:', error);
-      process.exit(1);
-    }
-  }
-  
-  runTests();
-}
+      console.log(`✅ Updated feedback with thumbs_down: ${result.pageId}`);
+    }, 30000);
+
+    it('should handle feedback without comment', async () => {
+      const feedbackRequest: SendFeedbackRequest = {
+        session_id: testSessionId,
+        messages: [testUserMessage, testAssistantMessage],
+        feedback_type: 'thumbs_up'
+        // No comment field
+      };
+
+      // Act
+      const result = await logger.updateFeedback(feedbackRequest);
+
+      // Assert
+      expect(result).toBeDefined();
+      expect(result.pageId).toBeDefined();
+      
+      console.log(`✅ Updated feedback without comment: ${result.pageId}`);
+    }, 30000);
+
+    it('should return null pageId when entry is not found', async () => {
+      const nonExistentFeedbackRequest: SendFeedbackRequest = {
+        session_id: 'non_existent_session_12345',
+        messages: [
+          testUserMessage,
+          {
+            ...testAssistantMessage,
+            message_id: 'non_existent_message_id_12345'
+          }
+        ],
+        feedback_type: 'thumbs_up',
+        comment: 'This should not find any entry'
+      };
+
+      // Act
+      const result = await logger.updateFeedback(nonExistentFeedbackRequest);
+
+      // Assert
+      expect(result).toBeDefined();
+      expect(result.pageId).toBeNull();
+      
+      console.log(`✅ Correctly returned null for non-existent entry`);
+    }, 30000);
+
+    it('should handle multiple assistant messages (should fail)', async () => {
+      const multipleAssistantRequest: SendFeedbackRequest = {
+        session_id: testSessionId,
+        messages: [
+          testUserMessage,
+          testAssistantMessage,
+          {
+            ...testAssistantMessage,
+            message_id: 'second_assistant_message'
+          }
+        ],
+        feedback_type: 'thumbs_up'
+      };
+
+      // Act & Assert
+      await expect(logger.updateFeedback(multipleAssistantRequest))
+        .rejects
+        .toThrow('More than one assistant message in feedback request');
+      
+      console.log(`✅ Correctly rejected multiple assistant messages`);
+    }, 30000);
+  });
+
+  describe('toUrl', () => {
+    it('should generate correct Notion URL format', () => {
+      const testPageId = '246bb2d2-6216-8152-8dfa-cb306212b8e0';
+      
+      // Act
+      const url = logger.toUrl({ pageId: testPageId });
+      
+      // Assert
+      expect(url).toBeDefined();
+      expect(url).toMatch(/^https:\/\/www\.notion\.so\/gloochat\//);
+      expect(url).toContain('?v=');
+      expect(url).toContain('&p=');
+      expect(url).toContain('&pm=s');
+      expect(url).not.toContain('-'); // Should not contain hyphens in IDs
+      
+      console.log(`✅ Generated URL: ${url}`);
+    });
+
+    it('should handle pageId with and without hyphens', () => {
+      const pageIdWithHyphens = '246bb2d2-6216-8152-8dfa-cb306212b8e0';
+      const pageIdWithoutHyphens = '246bb2d2621681528dfacb306212b8e0';
+      
+      // Act
+      const url1 = logger.toUrl({ pageId: pageIdWithHyphens });
+      const url2 = logger.toUrl({ pageId: pageIdWithoutHyphens });
+      
+      // Assert - Both should produce the same clean URL
+      expect(url1).toBe(url2);
+      expect(url1).toContain('246bb2d2621681528dfacb306212b8e0');
+      
+      console.log(`✅ Both formats produce same URL: ${url1}`);
+    });
+  });
+});
