@@ -117,7 +117,7 @@ tb.User.remove_property('address')
 print(tb.User.list_properties())
 
 # Remove all properties of the class.
-tb.User.clear()
+tb.User.reset()
 ```
 </Tab>
 
@@ -132,11 +132,11 @@ tb.User.addProperty('address', tb.string())
 // Remove a property from the existing class.
 tb.User.removeProperty('address')
 
-// List the properties of the class as {name: field_type}
+// List the properties of the class as Array<[name, field_type]>
 console.log(tb.User.listProperties())
 
 // Remove all properties of the class.
-tb.User.clear()
+tb.User.reset()
 ```
 </Tab>
 
@@ -209,11 +209,11 @@ address.add_property("city", tb.string())
 # Remove a property from the new class.
 address.remove_property("city")
 
-# List the properties of the class as [(name, field_type)]
+# List the properties of the class as Array<[name, field_type]>
 print(address.list_properties())
 
 # Remove all properties of the class.
-address.clear()
+address.reset()
 
 # Attach new types to existing BAML type
 tb.User.add_property("hobbies", hobbies.type().list())
@@ -242,7 +242,7 @@ address.removeProperty("city")
 console.log(address.listProperties())
 
 // Remove all properties of the class.
-address.clear()
+address.reset()
 
 // Attach new types to existing BAML type
 tb.User.addProperty("hobbies", hobbies.type().list())
