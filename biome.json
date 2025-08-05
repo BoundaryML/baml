@@ -24,6 +24,7 @@
       "**/.turbo/**",
       "**/coverage/**",
       "engine/**",
+      "typescript/**",
       "integ-tests/**",
       "tools/**",
       "patches/**",
