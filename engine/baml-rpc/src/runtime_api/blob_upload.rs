@@ -5,6 +5,8 @@ use crate::{rpc::ApiEndpoint, s3::S3UploadMetadata};
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CreateBlobBatchUploadUrlRequest {
     pub blob_metadata: Vec<BlobMetadataItem>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub baml_runtime: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
