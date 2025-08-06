@@ -600,8 +600,15 @@ function CustomSearchBox({
     return () => document.removeEventListener('keydown', handleGlobalKeyDown);
   }, [isFocused]);
 
+  const handleFormSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (inputValue.trim()) {
+      handleAskAI();
+    }
+  };
+
   return (
-    <div style={{ position: 'relative', width: '100%' }}>
+    <form onSubmit={handleFormSubmit} style={{ position: 'relative', width: '100%' }}>
       <div
         style={{
           position: 'relative',
@@ -777,7 +784,7 @@ function CustomSearchBox({
         query={inputValue}
         isFocused={isFocused}
       />
-    </div>
+    </form>
   );
 }
 

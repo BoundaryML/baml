@@ -74,7 +74,9 @@ jobs:
 
       - name: Pull sage-backend out of monorepo
         working-directory: ./typescript
-        run: pnpm --filter=sage-backend deploy ../sage-backend
+        run: |
+          echo "injectWorkspacePackages: true" >>../pnpm-workspace.yaml
+          pnpm --filter=sage-backend deploy ../sage-backend
 
       - name: Install dependencies and build
         run: |
@@ -111,7 +113,7 @@ jobs:
     permissions: write-all
     defaults:
       run:
-        working-directory: ../sage-backend
+        working-directory: typescript/apps/sage-backend
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -119,7 +121,7 @@ jobs:
       - name: Setup Node.js and pnpm
         uses: ./.github/actions/setup-node
         with:
-          install-dependencies: true
+          install-dependencies: false
 
       - name: Set environment variables
         run: |
@@ -131,5 +133,6 @@ jobs:
 
       - name: Update pinecone
         run: |
+          pnpm --filter=sage-backend install
           pnpm tsx tools/update-pinecone.ts
           
