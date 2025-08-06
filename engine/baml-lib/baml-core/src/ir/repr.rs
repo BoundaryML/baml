@@ -30,10 +30,7 @@ use internal_llm_client::{ClientProvider, ClientSpec, UnresolvedClientProperty};
 use serde::Serialize;
 
 use super::builtin::{builtin_classes, builtin_generic_fn, builtin_ir, is_builtin_identifier};
-use crate::{
-    validate::validation_pipeline::validations::expr_typecheck::infer_types_in_context,
-    Configuration,
-};
+use crate::Configuration;
 
 /// This class represents the intermediate representation of the BAML AST.
 /// It is a representation of the BAML AST that is easier to work with than the
@@ -819,13 +816,6 @@ impl IntermediateRepr {
         repr.clients.sort_by(|a, b| a.elem.name.cmp(&b.elem.name));
         repr.retry_policies
             .sort_by(|a, b| a.elem.name.0.cmp(&b.elem.name.0));
-
-        let mut typing_context = initial_typing_context(&repr);
-        for expr_fn in repr.expr_fns.iter_mut() {
-            let expr = expr_fn.elem.expr.clone();
-            let inferred_expr = infer_types_in_context(&mut typing_context, Arc::new(expr));
-            expr_fn.elem.expr = Arc::unwrap_or_clone(inferred_expr);
-        }
 
         // Strip out builtin classes.
         repr.classes

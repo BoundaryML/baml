@@ -3617,6 +3617,7 @@ name = "internal-baml-core"
 version = "0.202.1"
 dependencies = [
  "anyhow",
+ "baml-compiler",
  "baml-derive",
  "baml-rpc",
  "baml-types",
