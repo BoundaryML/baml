@@ -1,8 +1,4 @@
-import {
-  type Message,
-  type QueryRequest,
-  QueryResponseSchema,
-} from '@baml/sage-interface';
+import { type Message, type QueryRequest, QueryResponseSchema } from '@baml/sage-interface';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import React, { useRef, useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
@@ -86,7 +82,7 @@ const postDocChat = async (req: QueryRequest) => {
 const API_ENDPOINT =
   process.env.NODE_ENV === 'development'
     ? 'http://localhost:4000/api/doc-chat'
-    : 'https://boundary-tools-backend.vercel.app/api/doc-chat';
+    : 'https://boundary-sage-backend.vercel.app/api/ask-baml-chat';
 
 const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) => {
   const [messages, setMessages] = useAtom(messagesAtom);
