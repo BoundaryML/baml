@@ -1,5 +1,5 @@
 import { SlackFeedbackLogger } from '@/lib/slack-api';
-import type { SendFeedbackRequest } from '@baml/boundary-tools-interface';
+import type { SendFeedbackRequest } from '@baml/sage-interface';
 import { describe, it } from 'vitest';
 
 describe('SlackFeedbackLogger', () => {

@@ -2,7 +2,7 @@ import {
   type Message,
   type QueryRequest,
   QueryResponseSchema,
-} from '@baml/boundary-tools-interface';
+} from '@baml/sage-interface';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import React, { useRef, useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';

@@ -4,7 +4,7 @@ import type { NextConfig } from 'next';
 const nextConfig: NextConfig = {
   /* config options here */
   output: 'standalone',
-  transpilePackages: ['@baml/boundary-tools-interface'],
+  transpilePackages: ['@baml/sage-interface'],
 };
 
 export default withBaml()(nextConfig);

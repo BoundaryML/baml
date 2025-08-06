@@ -1,6 +1,6 @@
 'use server';
 
-import type { QueryRequest, QueryResponse } from '@baml/boundary-tools-interface';
+import type { QueryRequest, QueryResponse } from '@baml/sage-interface';
 import { b } from '../../baml_client';
 import { searchPinecone } from '../../lib/pinecone-api';
 

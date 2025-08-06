@@ -1,5 +1,5 @@
 'use client';
-import type { QueryRequest, QueryResponse } from '@baml/boundary-tools-interface';
+import type { QueryRequest, QueryResponse } from '@baml/sage-interface';
 import { useEffect, useState } from 'react';
 import { submitQuery } from './actions/query';
 import { PLACEHOLDER_QUERIES } from './eval-data';

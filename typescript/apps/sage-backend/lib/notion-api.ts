@@ -2,7 +2,7 @@ import type {
   AssistantMessage,
   SendFeedbackRequest,
   UserMessage,
-} from '@baml/boundary-tools-interface';
+} from '@baml/sage-interface';
 import { Client, type CreatePageParameters } from '@notionhq/client';
 
 export interface NotionLogEntry {

@@ -1,5 +1,5 @@
 {
-  "name": "boundary-tools-backend",
+  "name": "sage-backend",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -10,7 +10,7 @@
     "test": "vitest"
   },
   "dependencies": {
-    "@baml/boundary-tools-interface": "workspace:*",
+    "@baml/sage-interface": "workspace:*",
     "@boundaryml/baml": "^0.202.1",
     "@boundaryml/baml-nextjs-plugin": "^0.1.0",
     "@notionhq/client": "^4.0.1",

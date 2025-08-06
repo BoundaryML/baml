@@ -1,4 +1,4 @@
-import type { SendFeedbackRequest } from '@baml/boundary-tools-interface';
+import type { SendFeedbackRequest } from '@baml/sage-interface';
 import { useAtomValue } from 'jotai';
 import { ThumbsDown, ThumbsUp } from 'lucide-react';
 import type React from 'react';

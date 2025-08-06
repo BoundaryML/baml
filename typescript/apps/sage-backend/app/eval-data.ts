@@ -1,4 +1,4 @@
-import type { QueryRequest } from '@baml/boundary-tools-interface';
+import type { QueryRequest } from '@baml/sage-interface';
 
 // Define the placeholder queries with optional inspect notes
 export const PLACEHOLDER_QUERIES: {

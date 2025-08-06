@@ -1,4 +1,4 @@
-import type { SendFeedbackRequest } from '@baml/boundary-tools-interface';
+import type { SendFeedbackRequest } from '@baml/sage-interface';
 import { WebClient } from '@slack/web-api';
 
 export class SlackFeedbackLogger {
