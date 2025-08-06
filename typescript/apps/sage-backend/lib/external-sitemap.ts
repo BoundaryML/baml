@@ -1,5 +1,4 @@
 import * as cheerio from 'cheerio';
-import type { CorpusDocument } from './pinecone-api';
 
 export interface BlogSitemapEntry {
   type: 'blog';
@@ -36,39 +35,25 @@ export async function fetchBlogEntryList(): Promise<BlogSitemapEntry[]> {
     const $ = cheerio.load(html);
     const blogEntries: BlogSitemapEntry[] = [];
 
-    // Find blog post cards by looking for the title h3 elements
-    $('h3.tracking-tight.text-xl.font-normal').each((_, element) => {
-      const $title = $(element);
+    // Find blog post links and extract titles from h3 elements within them
+    $('a[href^="/blog/"]').each((_, element) => {
+      const $link = $(element);
+      const url = $link.attr('href');
+
+      if (!url || !url.startsWith('/blog/')) return;
+
+      // Find the title within this link's h3 element
+      const $title = $link.find('h3');
       const title = $title.text().trim();
 
       if (!title) return;
 
-      // Find the link - look for the closest ancestor with a href or a "Read more" link
-      let $linkContainer = $title.closest('a[href*="/blog/"]');
-      if (!$linkContainer.length) {
-        // If title isn't in a link, look for a "Read more" link in the same card
-        $linkContainer = $title
-          .closest('div')
-          .find('a[href*="/blog/"]')
-          .first();
-      }
-
-      let url = $linkContainer.attr('href');
-      if (!url) return;
-
-      // Normalize the url
-      if (url.startsWith('https://boundaryml.com')) {
-        url = url.replace('https://boundaryml.com', '');
-      }
-      if (!url.startsWith('/blog/')) {
-        return;
-      }
-      url = `https://boundaryml.com${url}`;
+      const fullUrl = `https://boundaryml.com${url}`;
 
       blogEntries.push({
         type: 'blog',
         title,
-        url,
+        url: fullUrl,
       });
     });
 
@@ -83,9 +68,7 @@ function extractTextFromHtml(html: string): string {
   const $ = cheerio.load(html);
 
   // Remove unwanted elements
-  $(
-    'script, style, nav, header, footer, .navigation, .sidebar, .ads, .cookie-banner, .header, .footer',
-  ).remove();
+  $('script, style, nav, header, footer, .navigation, .sidebar, .ads, .cookie-banner, .header, .footer').remove();
 
   // Try to find main content area
   let content = '';
@@ -114,9 +97,7 @@ function extractTextFromHtml(html: string): string {
 
   // If no main content found, try body with unwanted elements removed
   if (!content) {
-    $(
-      'header, footer, nav, aside, .header, .footer, .nav, .sidebar, .menu, .navigation',
-    ).remove();
+    $('header, footer, nav, aside, .header, .footer, .nav, .sidebar, .menu, .navigation').remove();
     content = $('body').text().trim();
   }
 
@@ -144,9 +125,7 @@ export async function fetchBlogContent(url: string): Promise<string> {
       throw new Error('Could not extract meaningful content from blog post');
     }
 
-    console.log(
-      `✓ Successfully extracted ${content.length} characters from ${url}`,
-    );
+    console.log(`✓ Successfully extracted ${content.length} characters from ${url}`);
     return content;
   } catch (error) {
     console.error(`✗ Error fetching blog content from ${url}:`, error);

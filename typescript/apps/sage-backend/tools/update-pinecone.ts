@@ -20,7 +20,6 @@ async function waitForPineconeReady(queries: string[]) {
         },
       },
     );
-    console.log('---');
   }
 }
 

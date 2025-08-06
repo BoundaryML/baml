@@ -233,18 +233,20 @@ async function upsertToPinecone(embeddingsWithMetadata: EmbeddingWithMetadata[])
  */
 export async function populatePinecone(docsYmlPath: string): Promise<void> {
   const BLOG_FETCH_CONCURRENCY = new Sema(10);
-  const ALLOW_CACHE = false;
+  const USE_CACHE = { readFromFile: false, writeToFile: false };
 
   const sitemapEntries = await (async () => {
     const SITEMAP_CACHE_PATH = './sitemap.json';
-    if (ALLOW_CACHE && existsSync(SITEMAP_CACHE_PATH)) {
+    if (USE_CACHE.readFromFile && existsSync(SITEMAP_CACHE_PATH)) {
       return JSON.parse(readFileSync(SITEMAP_CACHE_PATH, 'utf-8')) as SitemapEntry[];
     }
     const generator = new SitemapGenerator(docsYmlPath);
     const sitemap = await generator.generateSitemap({
       includeBlogPosts: true,
     });
-    writeFileSync(SITEMAP_CACHE_PATH, JSON.stringify(sitemap, null, 2));
+    if (USE_CACHE.writeToFile) {
+      writeFileSync(SITEMAP_CACHE_PATH, JSON.stringify(sitemap, null, 2));
+    }
     return sitemap;
   })();
   console.log(`Loaded ${sitemapEntries.length} sitemap entries`);

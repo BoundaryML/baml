@@ -4,12 +4,7 @@ import matter from 'gray-matter';
 import { parse as parseYaml } from 'yaml';
 import { z } from 'zod';
 import urljoin from 'url-join';
-import {
-  BlogSitemapEntry,
-  OTHER_WEBSITES,
-  fetchBlogEntryList,
-  ExternalSitemapEntry,
-} from './external-sitemap';
+import { BlogSitemapEntry, OTHER_WEBSITES, fetchBlogEntryList, ExternalSitemapEntry } from './external-sitemap';
 
 export type FernSitemapEntry = {
   type: 'fern';
@@ -19,10 +14,7 @@ export type FernSitemapEntry = {
   href: string;
 };
 
-export type SitemapEntry =
-  | FernSitemapEntry
-  | BlogSitemapEntry
-  | ExternalSitemapEntry;
+export type SitemapEntry = FernSitemapEntry | BlogSitemapEntry | ExternalSitemapEntry;
 
 // Type definitions for OOP refactor
 export interface TabInfo {
@@ -110,8 +102,7 @@ export function slugify(text: string): string {
     .join('');
 
   // Pattern to match: consecutive caps, title case words, single caps, numbers (including underscores in words)
-  const pattern =
-    /[A-Z]{2,}(?=[A-Z][a-z_]+|[0-9]|\s|$)|[A-Z]?[a-z_]+|[A-Z]|[0-9_]+/g;
+  const pattern = /[A-Z]{2,}(?=[A-Z][a-z_]+|[0-9]|\s|$)|[A-Z]?[a-z_]+|[A-Z]|[0-9_]+/g;
   const words = normalized.match(pattern) || [];
 
   return words.join('-').toLowerCase();
@@ -239,9 +230,7 @@ export class SitemapGenerator {
       const currentSections = [...sections, newSectionInfo];
 
       for (const contentItem of item.contents) {
-        entries.push(
-          ...this.processNavigationItem(contentItem, tab, currentSections),
-        );
+        entries.push(...this.processNavigationItem(contentItem, tab, currentSections));
       }
     }
 
@@ -258,19 +247,13 @@ export class SitemapGenerator {
       ];
 
       // From packages/fdr-sdk/src/navigation/versions/v1/slugjoin.ts
-      const pageHref = urljoin(pageSlug)
-        .replaceAll('//*', '/')
-        .replace(/^\//, '')
-        .replace(/\/$/, '');
+      const pageHref = urljoin(pageSlug).replaceAll('//*', '/').replace(/^\/*/, '/').replace(/\/*$/, '');
 
       entries.push({
         type: 'fern',
         filepath: mdxPath,
         displayTitle: mdxFrontmatter.title || item.page || 'PLACEHOLDER',
-        displaySection: [
-          tab.tabDisplayName,
-          ...sections.map((s) => s.sectionDisplayName),
-        ],
+        displaySection: [tab.tabDisplayName, ...sections.map((s) => s.sectionDisplayName)],
         href: tab.tabId === 'home' ? 'home' : (mdxFrontmatter.slug ?? pageHref),
       });
     }
