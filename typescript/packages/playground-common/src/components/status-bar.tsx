@@ -63,7 +63,7 @@ const BreakpointBadge: React.FC = () => {
     <TooltipProvider delayDuration={300}>
       <Tooltip>
         <TooltipTrigger asChild>
-          <div className="px-2 py-1 bg-muted/50 rounded-md border text-[10px] font-mono text-muted-foreground">
+          <div className="px-2 py-1 bg-accent rounded-md border text-[10px] font-mono text-muted-foreground">
             {breakpoint}
           </div>
         </TooltipTrigger>

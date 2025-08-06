@@ -2374,7 +2374,13 @@ class DummyOutputBuilder(DummyOutputAst):
         return self._bldr.property(name).type(type)
 
     def list_properties(self) -> typing.List[typing.Tuple[str, baml_py.ClassPropertyBuilder]]:
-        return [(name, self._bldr.property(name)) for name in self._properties]
+        return self._bldr.list_properties()
+
+    def remove_property(self, name: str) -> None:
+        self._bldr.remove_property(name)
+
+    def reset(self) -> None:
+        self._bldr.reset()
 
     
 
@@ -2428,7 +2434,13 @@ class DynInputOutputBuilder(DynInputOutputAst):
         return self._bldr.property(name).type(type)
 
     def list_properties(self) -> typing.List[typing.Tuple[str, baml_py.ClassPropertyBuilder]]:
-        return [(name, self._bldr.property(name)) for name in self._properties]
+        return self._bldr.list_properties()
+
+    def remove_property(self, name: str) -> None:
+        self._bldr.remove_property(name)
+
+    def reset(self) -> None:
+        self._bldr.reset()
 
     
 
@@ -2478,7 +2490,13 @@ class DynamicClassOneBuilder(DynamicClassOneAst):
         return self._bldr.property(name).type(type)
 
     def list_properties(self) -> typing.List[typing.Tuple[str, baml_py.ClassPropertyBuilder]]:
-        return [(name, self._bldr.property(name)) for name in self._properties]
+        return self._bldr.list_properties()
+
+    def remove_property(self, name: str) -> None:
+        self._bldr.remove_property(name)
+
+    def reset(self) -> None:
+        self._bldr.reset()
 
     
 
@@ -2524,7 +2542,13 @@ class DynamicClassTwoBuilder(DynamicClassTwoAst):
         return self._bldr.property(name).type(type)
 
     def list_properties(self) -> typing.List[typing.Tuple[str, baml_py.ClassPropertyBuilder]]:
-        return [(name, self._bldr.property(name)) for name in self._properties]
+        return self._bldr.list_properties()
+
+    def remove_property(self, name: str) -> None:
+        self._bldr.remove_property(name)
+
+    def reset(self) -> None:
+        self._bldr.reset()
 
     
 
@@ -2582,7 +2606,13 @@ class DynamicOutputBuilder(DynamicOutputAst):
         return self._bldr.property(name).type(type)
 
     def list_properties(self) -> typing.List[typing.Tuple[str, baml_py.ClassPropertyBuilder]]:
-        return [(name, self._bldr.property(name)) for name in self._properties]
+        return self._bldr.list_properties()
+
+    def remove_property(self, name: str) -> None:
+        self._bldr.remove_property(name)
+
+    def reset(self) -> None:
+        self._bldr.reset()
 
     
 
@@ -2628,7 +2658,13 @@ class DynamicSchemaBuilder(DynamicSchemaAst):
         return self._bldr.property(name).type(type)
 
     def list_properties(self) -> typing.List[typing.Tuple[str, baml_py.ClassPropertyBuilder]]:
-        return [(name, self._bldr.property(name)) for name in self._properties]
+        return self._bldr.list_properties()
+
+    def remove_property(self, name: str) -> None:
+        self._bldr.remove_property(name)
+
+    def reset(self) -> None:
+        self._bldr.reset()
 
     
 
@@ -4551,7 +4587,13 @@ class OriginalBBuilder(OriginalBAst):
         return self._bldr.property(name).type(type)
 
     def list_properties(self) -> typing.List[typing.Tuple[str, baml_py.ClassPropertyBuilder]]:
-        return [(name, self._bldr.property(name)) for name in self._properties]
+        return self._bldr.list_properties()
+
+    def remove_property(self, name: str) -> None:
+        self._bldr.remove_property(name)
+
+    def reset(self) -> None:
+        self._bldr.reset()
 
     
 
@@ -4601,7 +4643,13 @@ class PersonBuilder(PersonAst):
         return self._bldr.property(name).type(type)
 
     def list_properties(self) -> typing.List[typing.Tuple[str, baml_py.ClassPropertyBuilder]]:
-        return [(name, self._bldr.property(name)) for name in self._properties]
+        return self._bldr.list_properties()
+
+    def remove_property(self, name: str) -> None:
+        self._bldr.remove_property(name)
+
+    def reset(self) -> None:
+        self._bldr.reset()
 
     
 
@@ -5290,7 +5338,13 @@ class SomeClassNestedDynamicBuilder(SomeClassNestedDynamicAst):
         return self._bldr.property(name).type(type)
 
     def list_properties(self) -> typing.List[typing.Tuple[str, baml_py.ClassPropertyBuilder]]:
-        return [(name, self._bldr.property(name)) for name in self._properties]
+        return self._bldr.list_properties()
+
+    def remove_property(self, name: str) -> None:
+        self._bldr.remove_property(name)
+
+    def reset(self) -> None:
+        self._bldr.reset()
 
     
 
