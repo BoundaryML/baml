@@ -13,7 +13,7 @@ import { Label } from '@baml/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@baml/ui/tabs';
 import { Code, Info, Link as LinkIcon } from 'lucide-react';
 import dynamic from 'next/dynamic';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { SiReact } from 'react-icons/si';
 
 const ProjectView = dynamic(() => import('./ProjectView'), { ssr: false });
@@ -26,8 +26,15 @@ interface EmbedDialogProps {
 
 export function EmbedDialog({ open, onOpenChange, shareId }: EmbedDialogProps) {
   const [activeTab, setActiveTab] = useState('link');
+  const [generatedUrl, setGeneratedUrl] = useState('');
 
-  const generatedUrl = shareId ? `${window?.location.origin}/${shareId}` : '';
+  useEffect(() => {
+    if (shareId && typeof window !== 'undefined') {
+      setGeneratedUrl(`${window.location.origin}/${shareId}`);
+    } else {
+      setGeneratedUrl('');
+    }
+  }, [shareId]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
