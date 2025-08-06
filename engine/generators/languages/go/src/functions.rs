@@ -38,6 +38,28 @@ fn render_function_stream(
     stream_template.render()
 }
 
+fn render_function_parse(
+    function: &FunctionGo,
+    pkg: &CurrentRenderPackage,
+) -> Result<String, askama::Error> {
+    let parse_template = FunctionParseTemplate {
+        r#fn: function,
+        pkg,
+    };
+    parse_template.render()
+}
+
+fn render_function_parse_stream(
+    function: &FunctionGo,
+    pkg: &CurrentRenderPackage,
+) -> Result<String, askama::Error> {
+    let parse_stream_template = FunctionParseStreamTemplate {
+        r#fn: function,
+        pkg,
+    };
+    parse_stream_template.render()
+}
+
 /// We use doc comments to render the functions.
 ///
 /// ```askama
@@ -132,6 +154,84 @@ pub fn render_functions_stream(
     .render()
 }
 
+/// ```askama
+/// package baml_client
+///
+/// import (
+///     "context"
+///
+///     "{{ go_mod_name }}/baml_client/types"
+///     "{{ go_mod_name }}/baml_client/stream_types"
+///     baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
+/// )
+///
+/// type parse struct {}
+/// var Parse = &parse{}
+///
+/// {% for function in functions %}
+/// {{ crate::functions::render_function_parse(function, pkg)? }}
+/// {% endfor %}
+/// ```
+#[derive(askama::Template)]
+#[template(in_doc = true, ext = "txt", escape = "none")]
+struct FunctionsParseTemplate<'a> {
+    functions: &'a [FunctionGo],
+    pkg: &'a CurrentRenderPackage,
+    go_mod_name: &'a str,
+}
+
+/// ```askama
+/// package baml_client
+///
+/// import (
+///     "context"
+///
+///     "{{ go_mod_name }}/baml_client/types"
+///     "{{ go_mod_name }}/baml_client/stream_types"
+///     baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
+/// )
+///
+/// type parse_stream struct {}
+/// var ParseStream = &parse_stream{}
+///
+/// {% for function in functions %}
+/// {{ crate::functions::render_function_parse_stream(function, pkg)? }}
+/// {% endfor %}
+/// ```
+#[derive(askama::Template)]
+#[template(in_doc = true, ext = "txt", escape = "none")]
+struct FunctionsParseStreamTemplate<'a> {
+    functions: &'a [FunctionGo],
+    pkg: &'a CurrentRenderPackage,
+    go_mod_name: &'a str,
+}
+
+pub fn render_functions_parse(
+    functions: &[FunctionGo],
+    pkg: &CurrentRenderPackage,
+    go_mod_name: &str,
+) -> Result<String, askama::Error> {
+    FunctionsParseTemplate {
+        functions,
+        pkg,
+        go_mod_name,
+    }
+    .render()
+}
+
+pub fn render_functions_parse_stream(
+    functions: &[FunctionGo],
+    pkg: &CurrentRenderPackage,
+    go_mod_name: &str,
+) -> Result<String, askama::Error> {
+    FunctionsParseStreamTemplate {
+        functions,
+        pkg,
+        go_mod_name,
+    }
+    .render()
+}
+
 #[derive(askama::Template)]
 #[template(path = "function.go.j2", escape = "none")]
 struct FunctionTemplate<'a> {
@@ -142,6 +242,20 @@ struct FunctionTemplate<'a> {
 #[derive(askama::Template)]
 #[template(path = "function.stream.go.j2", escape = "none")]
 struct FunctionStreamTemplate<'a> {
+    r#fn: &'a FunctionGo,
+    pkg: &'a CurrentRenderPackage,
+}
+
+#[derive(askama::Template)]
+#[template(path = "function.parse.go.j2", escape = "none")]
+struct FunctionParseTemplate<'a> {
+    r#fn: &'a FunctionGo,
+    pkg: &'a CurrentRenderPackage,
+}
+
+#[derive(askama::Template)]
+#[template(path = "function.parse_stream.go.j2", escape = "none")]
+struct FunctionParseStreamTemplate<'a> {
     r#fn: &'a FunctionGo,
     pkg: &'a CurrentRenderPackage,
 }

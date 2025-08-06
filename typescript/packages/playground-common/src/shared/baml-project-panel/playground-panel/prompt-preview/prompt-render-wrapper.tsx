@@ -27,9 +27,9 @@ const FunctionMetadata: React.FC = () => {
 
   // Hide text when sidebar is open or on smaller screens
   const getButtonTextClass = () => {
-    if (isSidebarOpen) {
-      return 'font-mono text-xs hidden truncate max-w-48';
-    }
+    // if (isSidebarOpen) {
+    //   return 'font-mono text-xs hidden truncate max-w-48';
+    // }
     return 'font-mono text-xs hidden md:inline truncate max-w-48';
   };
 

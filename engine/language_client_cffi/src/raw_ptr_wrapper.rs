@@ -12,12 +12,14 @@ use baml_runtime::{
     tracingv2::storage::storage::{
         Collector, FunctionLog, LLMCall, LLMStreamCall, StreamTiming, Timing, Usage,
     },
-    type_builder::TypeBuilder,
     BamlRuntime,
 };
 use baml_types::{
     tracing::events::{HTTPBody, HTTPRequest, HTTPResponse, SSEEvent},
     BamlMedia, TypeIR,
+};
+use type_builder::objects::{
+    ClassBuilder, ClassPropertyBuilder, EnumBuilder, EnumValueBuilder, TypeBuilder,
 };
 
 use crate::{
@@ -111,7 +113,11 @@ define_raw_ptr_types! {
     SSEEvent => SSEEvent as SSEEventWrapper: "SSEEvent" (Object::SseResponse),
     BamlMedia => Media as MediaWrapper: "Media" (Object::MediaImage, Object::MediaAudio, Object::MediaPdf, Object::MediaVideo),
     TypeBuilder,
-    TypeIR => TypeDef as TypeWrapper: "Type" (Object::Type)
+    EnumBuilder,
+    EnumValueBuilder,
+    ClassBuilder,
+    ClassPropertyBuilder,
+    TypeIR => TypeDef as TypeWrapper: "Type" (Object::Type),
 }
 
 fn create_media_object(
@@ -177,6 +183,12 @@ impl RawPtrType {
         base64: Option<&str>,
     ) -> Result<MediaWrapper, String> {
         create_media_object(baml_types::BamlMediaType::Video, mime_type, url, base64)
+    }
+
+    #[export_baml_new_fn(ObjectTypeBuilder)]
+    fn new_type_builder() -> Result<TypeBuilderWrapper, String> {
+        let type_builder = TypeBuilder::default();
+        Ok(TypeBuilderWrapper::from_object(type_builder))
     }
 }
 

@@ -109,21 +109,6 @@ export async function resolveCliPath(
   const packageJson = await import('../../../../package.json');
   const bundledVersion = packageJson.version as string;
 
-  // Always use CLI from node_modules/@baml/cli/dist if present
-  const bundledCliActualPath = getBundledCliPath(context);
-  if (bundledCliActualPath) {
-    await cacheBundledCli(
-      context,
-      bundledCliActualPath,
-      bundledVersion,
-      bamlOutputChannel,
-    );
-    bamlOutputChannel.appendLine(
-      `Using CLI from node_modules: ${bundledCliActualPath}`,
-    );
-    return bundledCliActualPath;
-  }
-
   // Check if requested version matches bundled version
   if (
     semver.valid(requestedVersion) &&
@@ -133,10 +118,21 @@ export async function resolveCliPath(
     console.log(
       `Requested version (${requestedVersion}) matches bundled version (${bundledVersion}).`,
     );
+    bamlOutputChannel.appendLine(
+      `Requested version (${requestedVersion}) matches bundled version (${bundledVersion}).`,
+    );
 
+    // Use CLI from node_modules/@baml/cli/dist if present
+    const bundledCliActualPath = getBundledCliPath(context);
     if (bundledCliActualPath) {
+      await cacheBundledCli(
+        context,
+        bundledCliActualPath,
+        bundledVersion,
+        bamlOutputChannel,
+      );
       bamlOutputChannel.appendLine(
-        `Using bundled CLI path: ${bundledCliActualPath}`,
+        `Using CLI from node_modules: ${bundledCliActualPath}`,
       );
       return bundledCliActualPath;
     }
@@ -146,7 +142,7 @@ export async function resolveCliPath(
     );
   } else {
     bamlOutputChannel.appendLine(
-      `Requested version (${requestedVersion}) does not match bundled version (${bundledVersion}).`,
+      `Requested version (${requestedVersion}) does not match bundled version (${bundledVersion}). Will download specific version.`,
     );
   }
 
@@ -177,6 +173,19 @@ export async function resolveCliPath(
   if (
     !backoffManager.shouldAttemptDownload(requestedVersion, bamlOutputChannel)
   ) {
+    console.log(`Download blocked by backoff for version ${requestedVersion}. Falling back to bundled CLI.`);
+    bamlOutputChannel.appendLine(
+      `Download blocked by backoff for version ${requestedVersion}. Falling back to bundled CLI.`,
+    );
+    
+    const bundledCliActualPath = getBundledCliPath(context);
+    if (bundledCliActualPath) {
+      bamlOutputChannel.appendLine(
+        `Using bundled CLI as fallback: ${bundledCliActualPath}`,
+      );
+      return bundledCliActualPath;
+    }
+    
     return null;
   }
 
@@ -220,8 +229,22 @@ export async function resolveCliPath(
     return downloadedPath;
   }
 
+  // Download failed - fallback to bundled CLI
+  console.log(`Download failed for version ${requestedVersion}. Falling back to bundled CLI.`);
   bamlOutputChannel.appendLine(
-    `ERROR: Failed to resolve CLI path for version ${requestedVersion} after download attempt.`,
+    `ERROR: Failed to resolve CLI path for version ${requestedVersion} after download attempt. Falling back to bundled CLI.`,
+  );
+  
+  const bundledCliActualPath = getBundledCliPath(context);
+  if (bundledCliActualPath) {
+    bamlOutputChannel.appendLine(
+      `Using bundled CLI as fallback: ${bundledCliActualPath}`,
+    );
+    return bundledCliActualPath;
+  }
+
+  bamlOutputChannel.appendLine(
+    `ERROR: No bundled CLI available as fallback for version ${requestedVersion}.`,
   );
   return null;
 }

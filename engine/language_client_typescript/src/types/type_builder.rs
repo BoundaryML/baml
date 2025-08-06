@@ -1,7 +1,10 @@
+use std::{collections::BTreeMap, ops::Deref};
+
 // This file provides the native bindings between our Rust implementation and TypeScript
 // We use NAPI-RS to expose Rust functionality to JavaScript/TypeScript
 use baml_runtime::type_builder::{self, WithMeta};
 use baml_types::{ir_type::UnionConstructor, BamlValue};
+use napi::{bindgen_prelude::Array, Env};
 use napi_derive::napi;
 
 // Create TypeScript-compatible wrappers for our Rust types
@@ -60,13 +63,19 @@ impl Default for TypeBuilder {
 impl TypeBuilder {
     #[napi(constructor)]
     pub fn new() -> Self {
-        type_builder::TypeBuilder::new().into()
+        let tb = type_builder::TypeBuilder::new();
+        tb.into()
+    }
+
+    #[napi]
+    pub fn reset(&self) {
+        self.inner.reset();
     }
 
     #[napi]
     pub fn get_enum(&self, name: String) -> EnumBuilder {
         EnumBuilder {
-            inner: self.inner.r#enum(&name),
+            inner: self.inner.upsert_enum(&name),
             name,
         }
     }
@@ -74,7 +83,7 @@ impl TypeBuilder {
     #[napi]
     pub fn get_class(&self, name: String) -> ClassBuilder {
         ClassBuilder {
-            inner: self.inner.class(&name),
+            inner: self.inner.upsert_class(&name),
             name,
         }
     }
@@ -173,13 +182,18 @@ impl FieldType {
     pub fn optional(&self) -> FieldType {
         self.inner.lock().unwrap().clone().as_optional().into()
     }
+
+    #[napi]
+    pub fn equals(&self, other: &FieldType) -> bool {
+        self.inner.lock().unwrap().deref() == other.inner.lock().unwrap().deref()
+    }
 }
 
 #[napi]
 impl EnumBuilder {
     #[napi]
     pub fn value(&self, name: String) -> EnumValueBuilder {
-        self.inner.lock().unwrap().value(&name).into()
+        self.inner.lock().unwrap().upsert_value(&name).into()
     }
 
     #[napi]
@@ -236,13 +250,45 @@ impl EnumValueBuilder {
 #[napi]
 impl ClassBuilder {
     #[napi]
+    pub fn list_properties(&self, env: Env) -> napi::Result<Array> {
+        let properties = self
+            .inner
+            .lock()
+            .unwrap()
+            .list_properties_key_value()
+            .into_iter()
+            .map(|(name, prop)| (name, ClassPropertyBuilder::from(prop)));
+
+        let mut js_array = env.create_array(properties.len() as u32)?;
+
+        for (i, (name, prop_builder)) in properties.enumerate() {
+            let mut tuple = env.create_array(2)?;
+            tuple.set(0, env.create_string(&name)?)?;
+            tuple.set(1, prop_builder.into_instance(env)?)?;
+            js_array.set(i as u32, tuple)?;
+        }
+
+        Ok(js_array)
+    }
+
+    #[napi]
+    pub fn remove_property(&self, name: String) {
+        self.inner.lock().unwrap().remove_property(&name);
+    }
+
+    #[napi]
+    pub fn reset(&self) {
+        self.inner.lock().unwrap().reset();
+    }
+
+    #[napi]
     pub fn field(&self) -> FieldType {
         baml_types::TypeIR::class(&self.name).into()
     }
 
     #[napi]
     pub fn property(&self, name: String) -> ClassPropertyBuilder {
-        self.inner.lock().unwrap().property(&name).into()
+        self.inner.lock().unwrap().upsert_property(&name).into()
     }
 }
 
@@ -253,8 +299,20 @@ impl ClassPropertyBuilder {
         self.inner
             .lock()
             .unwrap()
-            .r#type(field_type.inner.lock().unwrap().clone());
+            .set_type(field_type.inner.lock().unwrap().clone());
         self.inner.clone().into()
+    }
+
+    #[napi]
+    pub fn get_type(&self) -> napi::Result<FieldType> {
+        self.inner
+            .lock()
+            .unwrap()
+            .r#type()
+            .map(FieldType::from)
+            .ok_or_else(|| crate::errors::from_anyhow_error(anyhow::anyhow!(
+                "attempted to read a property that has no defined type, this is likely an internal bug"
+            )))
     }
 
     #[napi]

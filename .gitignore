@@ -79,6 +79,7 @@ $RECYCLE.BIN/
 .nfs*
 .node_repl_history
 .npm
+.pnpm-store/
 .nuxt
 .nyc_output
 .nyc_output/

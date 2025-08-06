@@ -323,6 +323,7 @@ body#fern-docs #fern-header .md\:h-\(--header-height-real\) {
 body#fern-docs .fern-sidebar-link[data-state="active"] span {
   color: var(--accent-primary) !important;
   font-weight: 600 !important;
+  font-family: var(--font-geist-sans);
 }
 
 body#fern-docs #fern-sidebar {

@@ -23,6 +23,16 @@ impl MediaWrapper {
     }
 
     #[export_baml_fn]
+    fn is_url(&self) -> bool {
+        matches!(self.inner.content, baml_types::BamlMediaContent::Url(_))
+    }
+
+    #[export_baml_fn]
+    fn is_base64(&self) -> bool {
+        matches!(self.inner.content, baml_types::BamlMediaContent::Base64(_))
+    }
+
+    #[export_baml_fn]
     fn as_url(&self) -> Result<Option<BamlValue>, String> {
         match &self.inner.content {
             baml_types::BamlMediaContent::Url(media_url) => {

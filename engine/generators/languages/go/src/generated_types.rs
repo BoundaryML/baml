@@ -119,7 +119,7 @@ mod type_aliases {
 ///     baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 /// )
 ///
-/// type Checked[T any] baml.Checked[T]
+/// type Checked[T any] = baml.Checked[T]
 ///
 /// type Image baml.Image
 /// type Audio baml.Audio
@@ -197,6 +197,72 @@ pub(crate) fn render_go_stream_types_utils(
 
     GoStreamTypesUtils {}.render()
 }
+
+mod type_builder {
+    use super::*;
+
+    #[derive(askama::Template)]
+    #[template(path = "type_builder_enums.go.j2", escape = "none")]
+    pub struct TypeBuilderEnumsGo<'a> {
+        pub enums: &'a [EnumGo<'a>],
+    }
+
+    #[derive(askama::Template)]
+    #[template(path = "type_builder_classes.go.j2", escape = "none")]
+    pub struct TypeBuilderClassesGo<'a> {
+        pub classes: &'a [ClassGo<'a>],
+    }
+
+    #[derive(askama::Template)]
+    #[template(path = "type_builder.go.j2", escape = "none")]
+    pub struct TypeBuilderGo {}
+
+    impl<'a> EnumGo<'a> {
+        pub fn builder(&self) -> &str {
+            if self.dynamic {
+                "Builder"
+            } else {
+                "View"
+            }
+        }
+    }
+
+    impl<'a> ClassGo<'a> {
+        pub fn builder(&self) -> &str {
+            if self.dynamic {
+                "Builder"
+            } else {
+                "View"
+            }
+        }
+    }
+}
+
+pub(crate) fn render_type_builder_common(
+    _enums: &[EnumGo],
+    _classes: &[ClassGo],
+    _pkg: &CurrentRenderPackage,
+) -> Result<String, askama::Error> {
+    use askama::Template;
+    type_builder::TypeBuilderGo {}.render()
+}
+
+pub(crate) fn render_type_builder_enums(
+    enums: &[EnumGo],
+    _pkg: &CurrentRenderPackage,
+) -> Result<String, askama::Error> {
+    use askama::Template;
+    type_builder::TypeBuilderEnumsGo { enums }.render()
+}
+
+pub(crate) fn render_type_builder_classes(
+    classes: &[ClassGo],
+    _pkg: &CurrentRenderPackage,
+) -> Result<String, askama::Error> {
+    use askama::Template;
+    type_builder::TypeBuilderClassesGo { classes }.render()
+}
+
 /// A list of types in Go.
 ///
 /// ```askama

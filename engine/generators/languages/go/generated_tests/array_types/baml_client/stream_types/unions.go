@@ -153,7 +153,7 @@ func (u *Union3ProductOrTagOrUser) IsUser() bool {
 	return u.variant == "User"
 }
 
-func (u *Union3ProductOrTagOrUser) User() *User {
+func (u *Union3ProductOrTagOrUser) AsUser() *User {
 	if u.variant != "User" {
 		return nil
 	}
@@ -183,7 +183,7 @@ func (u *Union3ProductOrTagOrUser) IsProduct() bool {
 	return u.variant == "Product"
 }
 
-func (u *Union3ProductOrTagOrUser) Product() *Product {
+func (u *Union3ProductOrTagOrUser) AsProduct() *Product {
 	if u.variant != "Product" {
 		return nil
 	}
@@ -213,7 +213,7 @@ func (u *Union3ProductOrTagOrUser) IsTag() bool {
 	return u.variant == "Tag"
 }
 
-func (u *Union3ProductOrTagOrUser) Tag() *Tag {
+func (u *Union3ProductOrTagOrUser) AsTag() *Tag {
 	if u.variant != "Tag" {
 		return nil
 	}

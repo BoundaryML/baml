@@ -79,6 +79,9 @@ func (r *BamlRuntime) CallFunction(ctx context.Context, functionName string, enc
 		for {
 			select {
 			case <-ctx.Done():
+				return_channel <- ResultCallback{
+					Error: ctx.Err(),
+				}
 				close(return_channel)
 				return
 			case result := <-callback:
@@ -123,4 +126,33 @@ func (r *BamlRuntime) CallFunctionStream(ctx context.Context, functionName strin
 	}
 
 	return callback, nil
+}
+
+func (r *BamlRuntime) CallFunctionParse(ctx context.Context, functionName string, encoded_args []byte) (any, error) {
+	callback_id, callback := create_unique_id(ctx, nil)
+
+	result, err := baml_go.CallFunctionParseFromC(r.runtime, functionName, encoded_args, callback_id)
+	if err != nil {
+		return nil, err
+	}
+
+	if result != nil {
+		result_str := (*string)(result)
+		return nil, errors.New(*result_str)
+	}
+
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case result := <-callback:
+		if result.Error != nil {
+			return nil, result.Error
+		}
+
+		if result.HasData {
+			return result.Data, nil
+		} else {
+			return result.StreamData, nil
+		}
+	}
 }

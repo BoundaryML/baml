@@ -28,6 +28,7 @@ pub enum ResponseOutputType {
     FileSearchCall,
     FunctionCall,
     Reasoning,
+    ComputerCall,
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]

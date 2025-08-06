@@ -135,7 +135,7 @@ func (u *Union2KdarkOrKlight) IsKlight() bool {
 	return u.variant == "Klight"
 }
 
-func (u *Union2KdarkOrKlight) Klight() *string {
+func (u *Union2KdarkOrKlight) AsKlight() *string {
 	if u.variant != "Klight" {
 		return nil
 	}
@@ -167,7 +167,7 @@ func (u *Union2KdarkOrKlight) IsKdark() bool {
 	return u.variant == "Kdark"
 }
 
-func (u *Union2KdarkOrKlight) Kdark() *string {
+func (u *Union2KdarkOrKlight) AsKdark() *string {
 	if u.variant != "Kdark" {
 		return nil
 	}
@@ -288,7 +288,7 @@ func (u *Union2KgridOrKlist) IsKgrid() bool {
 	return u.variant == "Kgrid"
 }
 
-func (u *Union2KgridOrKlist) Kgrid() *string {
+func (u *Union2KgridOrKlist) AsKgrid() *string {
 	if u.variant != "Kgrid" {
 		return nil
 	}
@@ -320,7 +320,7 @@ func (u *Union2KgridOrKlist) IsKlist() bool {
 	return u.variant == "Klist"
 }
 
-func (u *Union2KgridOrKlist) Klist() *string {
+func (u *Union2KgridOrKlist) AsKlist() *string {
 	if u.variant != "Klist" {
 		return nil
 	}
@@ -459,7 +459,7 @@ func (u *Union3BoolOrIntOrString) IsString() bool {
 	return u.variant == "String"
 }
 
-func (u *Union3BoolOrIntOrString) String() *string {
+func (u *Union3BoolOrIntOrString) AsString() *string {
 	if u.variant != "String" {
 		return nil
 	}
@@ -489,7 +489,7 @@ func (u *Union3BoolOrIntOrString) IsInt() bool {
 	return u.variant == "Int"
 }
 
-func (u *Union3BoolOrIntOrString) Int() *int64 {
+func (u *Union3BoolOrIntOrString) AsInt() *int64 {
 	if u.variant != "Int" {
 		return nil
 	}
@@ -519,7 +519,7 @@ func (u *Union3BoolOrIntOrString) IsBool() bool {
 	return u.variant == "Bool"
 }
 
-func (u *Union3BoolOrIntOrString) Bool() *bool {
+func (u *Union3BoolOrIntOrString) AsBool() *bool {
 	if u.variant != "Bool" {
 		return nil
 	}
@@ -662,7 +662,7 @@ func (u *Union3KdailyOrKimmediateOrKweekly) IsKimmediate() bool {
 	return u.variant == "Kimmediate"
 }
 
-func (u *Union3KdailyOrKimmediateOrKweekly) Kimmediate() *string {
+func (u *Union3KdailyOrKimmediateOrKweekly) AsKimmediate() *string {
 	if u.variant != "Kimmediate" {
 		return nil
 	}
@@ -696,7 +696,7 @@ func (u *Union3KdailyOrKimmediateOrKweekly) IsKdaily() bool {
 	return u.variant == "Kdaily"
 }
 
-func (u *Union3KdailyOrKimmediateOrKweekly) Kdaily() *string {
+func (u *Union3KdailyOrKimmediateOrKweekly) AsKdaily() *string {
 	if u.variant != "Kdaily" {
 		return nil
 	}
@@ -730,7 +730,7 @@ func (u *Union3KdailyOrKimmediateOrKweekly) IsKweekly() bool {
 	return u.variant == "Kweekly"
 }
 
-func (u *Union3KdailyOrKimmediateOrKweekly) Kweekly() *string {
+func (u *Union3KdailyOrKimmediateOrKweekly) AsKweekly() *string {
 	if u.variant != "Kweekly" {
 		return nil
 	}
@@ -873,7 +873,7 @@ func (u *Union3KdoneOrKin_progressOrKtodo) IsKtodo() bool {
 	return u.variant == "Ktodo"
 }
 
-func (u *Union3KdoneOrKin_progressOrKtodo) Ktodo() *string {
+func (u *Union3KdoneOrKin_progressOrKtodo) AsKtodo() *string {
 	if u.variant != "Ktodo" {
 		return nil
 	}
@@ -907,7 +907,7 @@ func (u *Union3KdoneOrKin_progressOrKtodo) IsKin_progress() bool {
 	return u.variant == "Kin_progress"
 }
 
-func (u *Union3KdoneOrKin_progressOrKtodo) Kin_progress() *string {
+func (u *Union3KdoneOrKin_progressOrKtodo) AsKin_progress() *string {
 	if u.variant != "Kin_progress" {
 		return nil
 	}
@@ -941,7 +941,7 @@ func (u *Union3KdoneOrKin_progressOrKtodo) IsKdone() bool {
 	return u.variant == "Kdone"
 }
 
-func (u *Union3KdoneOrKin_progressOrKtodo) Kdone() *string {
+func (u *Union3KdoneOrKin_progressOrKtodo) AsKdone() *string {
 	if u.variant != "Kdone" {
 		return nil
 	}
@@ -1084,7 +1084,7 @@ func (u *Union3KfriendsOrKprivateOrKpublic) IsKpublic() bool {
 	return u.variant == "Kpublic"
 }
 
-func (u *Union3KfriendsOrKprivateOrKpublic) Kpublic() *string {
+func (u *Union3KfriendsOrKprivateOrKpublic) AsKpublic() *string {
 	if u.variant != "Kpublic" {
 		return nil
 	}
@@ -1118,7 +1118,7 @@ func (u *Union3KfriendsOrKprivateOrKpublic) IsKprivate() bool {
 	return u.variant == "Kprivate"
 }
 
-func (u *Union3KfriendsOrKprivateOrKpublic) Kprivate() *string {
+func (u *Union3KfriendsOrKprivateOrKpublic) AsKprivate() *string {
 	if u.variant != "Kprivate" {
 		return nil
 	}
@@ -1152,7 +1152,7 @@ func (u *Union3KfriendsOrKprivateOrKpublic) IsKfriends() bool {
 	return u.variant == "Kfriends"
 }
 
-func (u *Union3KfriendsOrKprivateOrKpublic) Kfriends() *string {
+func (u *Union3KfriendsOrKprivateOrKpublic) AsKfriends() *string {
 	if u.variant != "Kfriends" {
 		return nil
 	}
@@ -1295,7 +1295,7 @@ func (u *Union3KhighOrKlowOrKmedium) IsKlow() bool {
 	return u.variant == "Klow"
 }
 
-func (u *Union3KhighOrKlowOrKmedium) Klow() *string {
+func (u *Union3KhighOrKlowOrKmedium) AsKlow() *string {
 	if u.variant != "Klow" {
 		return nil
 	}
@@ -1329,7 +1329,7 @@ func (u *Union3KhighOrKlowOrKmedium) IsKmedium() bool {
 	return u.variant == "Kmedium"
 }
 
-func (u *Union3KhighOrKlowOrKmedium) Kmedium() *string {
+func (u *Union3KhighOrKlowOrKmedium) AsKmedium() *string {
 	if u.variant != "Kmedium" {
 		return nil
 	}
@@ -1363,7 +1363,7 @@ func (u *Union3KhighOrKlowOrKmedium) IsKhigh() bool {
 	return u.variant == "Khigh"
 }
 
-func (u *Union3KhighOrKlowOrKmedium) Khigh() *string {
+func (u *Union3KhighOrKlowOrKmedium) AsKhigh() *string {
 	if u.variant != "Khigh" {
 		return nil
 	}
@@ -1528,7 +1528,7 @@ func (u *Union4KactiveOrKcancelledOrKcompletedOrKplanning) IsKplanning() bool {
 	return u.variant == "Kplanning"
 }
 
-func (u *Union4KactiveOrKcancelledOrKcompletedOrKplanning) Kplanning() *string {
+func (u *Union4KactiveOrKcancelledOrKcompletedOrKplanning) AsKplanning() *string {
 	if u.variant != "Kplanning" {
 		return nil
 	}
@@ -1564,7 +1564,7 @@ func (u *Union4KactiveOrKcancelledOrKcompletedOrKplanning) IsKactive() bool {
 	return u.variant == "Kactive"
 }
 
-func (u *Union4KactiveOrKcancelledOrKcompletedOrKplanning) Kactive() *string {
+func (u *Union4KactiveOrKcancelledOrKcompletedOrKplanning) AsKactive() *string {
 	if u.variant != "Kactive" {
 		return nil
 	}
@@ -1600,7 +1600,7 @@ func (u *Union4KactiveOrKcancelledOrKcompletedOrKplanning) IsKcompleted() bool {
 	return u.variant == "Kcompleted"
 }
 
-func (u *Union4KactiveOrKcancelledOrKcompletedOrKplanning) Kcompleted() *string {
+func (u *Union4KactiveOrKcancelledOrKcompletedOrKplanning) AsKcompleted() *string {
 	if u.variant != "Kcompleted" {
 		return nil
 	}
@@ -1636,7 +1636,7 @@ func (u *Union4KactiveOrKcancelledOrKcompletedOrKplanning) IsKcancelled() bool {
 	return u.variant == "Kcancelled"
 }
 
-func (u *Union4KactiveOrKcancelledOrKcompletedOrKplanning) Kcancelled() *string {
+func (u *Union4KactiveOrKcancelledOrKcompletedOrKplanning) AsKcancelled() *string {
 	if u.variant != "Kcancelled" {
 		return nil
 	}
@@ -1801,7 +1801,7 @@ func (u *Union4KenterpriseOrKlargeOrKmediumOrKsmall) IsKsmall() bool {
 	return u.variant == "Ksmall"
 }
 
-func (u *Union4KenterpriseOrKlargeOrKmediumOrKsmall) Ksmall() *string {
+func (u *Union4KenterpriseOrKlargeOrKmediumOrKsmall) AsKsmall() *string {
 	if u.variant != "Ksmall" {
 		return nil
 	}
@@ -1837,7 +1837,7 @@ func (u *Union4KenterpriseOrKlargeOrKmediumOrKsmall) IsKmedium() bool {
 	return u.variant == "Kmedium"
 }
 
-func (u *Union4KenterpriseOrKlargeOrKmediumOrKsmall) Kmedium() *string {
+func (u *Union4KenterpriseOrKlargeOrKmediumOrKsmall) AsKmedium() *string {
 	if u.variant != "Kmedium" {
 		return nil
 	}
@@ -1873,7 +1873,7 @@ func (u *Union4KenterpriseOrKlargeOrKmediumOrKsmall) IsKlarge() bool {
 	return u.variant == "Klarge"
 }
 
-func (u *Union4KenterpriseOrKlargeOrKmediumOrKsmall) Klarge() *string {
+func (u *Union4KenterpriseOrKlargeOrKmediumOrKsmall) AsKlarge() *string {
 	if u.variant != "Klarge" {
 		return nil
 	}
@@ -1909,7 +1909,7 @@ func (u *Union4KenterpriseOrKlargeOrKmediumOrKsmall) IsKenterprise() bool {
 	return u.variant == "Kenterprise"
 }
 
-func (u *Union4KenterpriseOrKlargeOrKmediumOrKsmall) Kenterprise() *string {
+func (u *Union4KenterpriseOrKlargeOrKmediumOrKsmall) AsKenterprise() *string {
 	if u.variant != "Kenterprise" {
 		return nil
 	}

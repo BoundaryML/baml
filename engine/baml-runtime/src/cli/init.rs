@@ -1,8 +1,13 @@
-use std::{env, fs, io::Write, path::PathBuf, process::Command, time::Duration};
+use std::{
+    env, fs,
+    io::Write,
+    path::{Path, PathBuf},
+    process::Command,
+    time::Duration,
+};
 
 use anyhow::Result;
 use baml_types::GeneratorOutputType;
-use include_dir::include_dir;
 use which::which;
 
 use crate::cli::init_ui::{show_error, InitUIContext, StepStatus};
@@ -29,8 +34,8 @@ Examples: "go", "java", "php", "ruby", "rust".  See full list at https://github.
     openapi_client_type: Option<String>,
 }
 
-static SAMPLE_PROJECT: include_dir::Dir =
-    include_dir!("$CARGO_MANIFEST_DIR/src/cli/initial_project");
+const CLIENTS_BAML: &str = include_str!("initial_project/baml_src/clients.baml");
+const RESUME_BAML: &str = include_str!("initial_project/baml_src/resume.baml");
 
 /// TODO: one problem with this impl - this requires all users to install openapi-generator the same way
 fn infer_openapi_command() -> Result<&'static str> {
@@ -247,25 +252,24 @@ fn download_vsix(url: &str, filename: &str) -> Result<PathBuf> {
     Ok(vsix_path)
 }
 
+const BAML_MDC: &str = include_str!("initial_project/baml.mdc");
+
 fn copy_cursor_rules(dest_path: &std::path::Path) {
-    // Check if baml.mdc exists in the sample project
-    if let Some(baml_mdc_file) = SAMPLE_PROJECT.get_file("baml.mdc") {
-        let cursor_rules_dir = dest_path.join(".cursor").join("rules");
+    let cursor_rules_dir = dest_path.join(".cursor").join("rules");
 
-        // Create the .cursor/rules directory if it doesn't exist
-        if let Err(e) = fs::create_dir_all(&cursor_rules_dir) {
-            baml_log::info!("Could not create .cursor/rules directory: {}", e);
-            return;
-        }
+    // Create the .cursor/rules directory if it doesn't exist
+    if let Err(e) = fs::create_dir_all(&cursor_rules_dir) {
+        baml_log::info!("Could not create .cursor/rules directory: {}", e);
+        return;
+    }
 
-        let cursor_rules_file = cursor_rules_dir.join("baml.mdc");
+    let cursor_rules_file = cursor_rules_dir.join("baml.mdc");
 
-        // Write the baml.mdc file
-        if let Err(e) = fs::write(&cursor_rules_file, baml_mdc_file.contents()) {
-            baml_log::info!("Could not copy baml.mdc to .cursor/rules: {}", e);
-        } else {
-            // Successfully set up cursor rules
-        }
+    // Write the baml.mdc file
+    if let Err(e) = fs::write(&cursor_rules_file, BAML_MDC) {
+        baml_log::info!("Could not copy baml.mdc to .cursor/rules: {}", e);
+    } else {
+        // Successfully set up cursor rules
     }
 }
 
@@ -366,11 +370,63 @@ fn install_extension_manually(editor: &str) {
     }
 }
 
+fn detect_python_project_type(path: &Path) -> Option<GeneratorOutputType> {
+    // Check for uv.lock first (uv projects)
+    if path.join("uv.lock").exists() {
+        return Some(GeneratorOutputType::PythonPydantic);
+    }
+
+    // Check for pyproject.toml
+    if path.join("pyproject.toml").exists() {
+        return Some(GeneratorOutputType::PythonPydantic);
+    }
+
+    // Check for requirements.txt or setup.py
+    if path.join("requirements.txt").exists() || path.join("setup.py").exists() {
+        return Some(GeneratorOutputType::PythonPydantic);
+    }
+
+    None
+}
+
+fn detect_project_type(path: &Path) -> Option<GeneratorOutputType> {
+    // Check for Python project indicators first
+    if let Some(python_type) = detect_python_project_type(path) {
+        return Some(python_type);
+    }
+
+    // Check for Node.js project
+    if path.join("package.json").exists() {
+        return Some(GeneratorOutputType::Typescript);
+    }
+
+    // Check for Ruby project
+    if path.join("Gemfile").exists() {
+        return Some(GeneratorOutputType::RubySorbet);
+    }
+
+    // Check for Go project
+    if path.join("go.mod").exists() {
+        return Some(GeneratorOutputType::Go);
+    }
+
+    None
+}
+
 impl InitArgs {
     pub fn run(&self, defaults: super::RuntimeCliDefaults) -> Result<()> {
         // Initialize UI context
         let mut ui_context = InitUIContext::new(env::var("BAML_NO_UI").is_err())?;
-        let output_type = self.client_type.unwrap_or(defaults.output_type);
+
+        // Detect project type if not explicitly provided
+        let output_type = if let Some(client_type) = self.client_type {
+            client_type
+        } else if let Some(detected_type) = detect_project_type(&self.dest) {
+            // baml_log::info!("Detected project type: {:?}", detected_type);
+            detected_type
+        } else {
+            defaults.output_type
+        };
 
         // If the destination directory already contains a baml_src directory, we don't want to overwrite it.
         let baml_src = self.dest.join("baml_src");
@@ -418,17 +474,9 @@ impl InitArgs {
         let dest_baml_src = self.dest.join("baml_src");
         fs::create_dir_all(&dest_baml_src)?;
 
-        // Extract files from baml_src directory only
-        for file in SAMPLE_PROJECT.files() {
-            let file_path = file.path();
-            if let Ok(relative_path) = file_path.strip_prefix("baml_src/") {
-                let dest_file = dest_baml_src.join(relative_path);
-                if let Some(parent) = dest_file.parent() {
-                    fs::create_dir_all(parent)?;
-                }
-                fs::write(&dest_file, file.contents())?;
-            }
-        }
+        // Create the initial BAML files
+        fs::write(dest_baml_src.join("clients.baml"), CLIENTS_BAML)?;
+        fs::write(dest_baml_src.join("resume.baml"), RESUME_BAML)?;
         ui_context.complete_step();
         // Step 3: Generate configuration
         ui_context.set_step_status(2, StepStatus::InProgress);
@@ -633,9 +681,10 @@ generator target {{
 
 #[cfg(test)]
 mod tests {
-    use std::env;
+    use std::{env, fs};
 
     use pretty_assertions::assert_eq;
+    use tempfile::TempDir;
 
     use super::*;
 
@@ -810,5 +859,73 @@ generator target {{
                 env!("CARGO_PKG_VERSION")
             ).trim_start()
         );
+    }
+
+    #[test]
+    fn test_detect_python_project_types() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path().to_path_buf();
+
+        // Test uv.lock detection
+        fs::write(path.join("uv.lock"), "").unwrap();
+        assert_eq!(
+            detect_project_type(&path),
+            Some(GeneratorOutputType::PythonPydantic)
+        );
+        fs::remove_file(path.join("uv.lock")).unwrap();
+
+        // Test pyproject.toml detection
+        fs::write(path.join("pyproject.toml"), "[project]\nname = \"test\"").unwrap();
+        assert_eq!(
+            detect_project_type(&path),
+            Some(GeneratorOutputType::PythonPydantic)
+        );
+        fs::remove_file(path.join("pyproject.toml")).unwrap();
+
+        // Test requirements.txt detection
+        fs::write(path.join("requirements.txt"), "numpy==1.0.0").unwrap();
+        assert_eq!(
+            detect_project_type(&path),
+            Some(GeneratorOutputType::PythonPydantic)
+        );
+        fs::remove_file(path.join("requirements.txt")).unwrap();
+
+        // Test setup.py detection
+        fs::write(path.join("setup.py"), "from setuptools import setup").unwrap();
+        assert_eq!(
+            detect_project_type(&path),
+            Some(GeneratorOutputType::PythonPydantic)
+        );
+        fs::remove_file(path.join("setup.py")).unwrap();
+    }
+
+    #[test]
+    fn test_detect_other_project_types() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path().to_path_buf();
+
+        // Test Node.js detection
+        fs::write(path.join("package.json"), "{}").unwrap();
+        assert_eq!(
+            detect_project_type(&path),
+            Some(GeneratorOutputType::Typescript)
+        );
+        fs::remove_file(path.join("package.json")).unwrap();
+
+        // Test Ruby detection
+        fs::write(path.join("Gemfile"), "source 'https://rubygems.org'").unwrap();
+        assert_eq!(
+            detect_project_type(&path),
+            Some(GeneratorOutputType::RubySorbet)
+        );
+        fs::remove_file(path.join("Gemfile")).unwrap();
+
+        // Test Go detection
+        fs::write(path.join("go.mod"), "module example.com/test").unwrap();
+        assert_eq!(detect_project_type(&path), Some(GeneratorOutputType::Go));
+        fs::remove_file(path.join("go.mod")).unwrap();
+
+        // Test no detection
+        assert_eq!(detect_project_type(&path), None);
     }
 }

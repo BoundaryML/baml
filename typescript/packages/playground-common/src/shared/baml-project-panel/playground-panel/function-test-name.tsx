@@ -63,7 +63,6 @@ export const FunctionTestName: React.FC<FunctionTestNameProps> = ({
   const tc = useAtomValue(testcaseAtom);
   const functions = useAtomValue(functionsAtom);
   const setSelectedItem = useSetAtom(selectedItemAtom);
-  console.log('fn', fn?.name, 'tc', tc?.name);
 
   const createSpan = (span: {
     start: number;

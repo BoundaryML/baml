@@ -20,7 +20,8 @@ use crate::jsonish;
 
 pub struct ParsingContext<'a> {
     pub scope: Vec<String>,
-    visited: HashSet<(String, jsonish::Value)>,
+    visited_during_coerce: HashSet<(String, jsonish::Value)>,
+    visited_during_try_cast: HashSet<(String, jsonish::Value)>,
     /// THIS IS A TEMPORARY HACK (ask vaibhav)
     pub do_not_use_mode: baml_types::StreamingMode,
     pub of: &'a OutputFormatContent,
@@ -40,7 +41,8 @@ impl ParsingContext<'_> {
     ) -> ParsingContext<'_> {
         ParsingContext {
             scope: Vec::new(),
-            visited: HashSet::new(),
+            visited_during_coerce: HashSet::new(),
+            visited_during_try_cast: HashSet::new(),
             do_not_use_mode: mode,
             of,
         }
@@ -51,7 +53,8 @@ impl ParsingContext<'_> {
         new_scope.push(scope.to_string());
         ParsingContext {
             scope: new_scope,
-            visited: self.visited.clone(),
+            visited_during_coerce: self.visited_during_coerce.clone(),
+            visited_during_try_cast: self.visited_during_try_cast.clone(),
             of: self.of,
             do_not_use_mode: self.do_not_use_mode,
         }
@@ -63,12 +66,19 @@ impl ParsingContext<'_> {
     pub(crate) fn visit_class_value_pair(
         &self,
         cls_value_pair: (String, jsonish::Value),
+        is_coerce: bool,
     ) -> ParsingContext {
-        let mut new_visited = self.visited.clone();
-        new_visited.insert(cls_value_pair);
+        let mut new_visited_coerce = self.visited_during_coerce.clone();
+        let mut new_visited_try_cast = self.visited_during_try_cast.clone();
+        if is_coerce {
+            new_visited_coerce.insert(cls_value_pair);
+        } else {
+            new_visited_try_cast.insert(cls_value_pair);
+        }
         ParsingContext {
             scope: self.scope.clone(),
-            visited: new_visited,
+            visited_during_coerce: new_visited_coerce,
+            visited_during_try_cast: new_visited_try_cast,
             of: self.of,
             do_not_use_mode: self.do_not_use_mode,
         }
@@ -270,6 +280,13 @@ pub trait TypeCoercer {
         target: &TypeIR,
         value: Option<&crate::jsonish::Value>,
     ) -> Result<BamlValueWithFlags, ParsingError>;
+
+    fn try_cast(
+        &self,
+        ctx: &ParsingContext,
+        target: &TypeIR,
+        value: Option<&crate::jsonish::Value>,
+    ) -> Option<BamlValueWithFlags>;
 }
 
 pub trait DefaultValue {

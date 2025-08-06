@@ -5,8 +5,6 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@baml/ui/collapsible';
-/* eslint-disable @typescript-eslint/no-floating-promises */
-import { cn } from '@baml/ui/lib/utils';
 import {
   Sidebar,
   SidebarContent,
@@ -31,11 +29,7 @@ import {
 import * as React from 'react';
 import { selectedItemAtom } from '../atoms';
 import { useRunBamlTests } from '../prompt-preview/test-panel/test-runner';
-import {
-  functionsAreStaleAtom,
-  functionsAtom,
-  isSidebarOpenAtom,
-} from './atoms';
+import { functionsAtom, isSidebarOpenAtom } from './atoms';
 import { FunctionItem } from './function-item';
 import { SearchForm } from './search-form';
 import { TestItem } from './test-item';
@@ -50,7 +44,6 @@ export function TestingSidebar() {
     new Set(),
   );
   const runBamlTests = useRunBamlTests();
-  const functionsAreStale = useAtomValue(functionsAreStaleAtom);
   const selectedItem = useAtomValue(selectedItemAtom);
 
   const filteredFunctions = functions.filter(
@@ -98,137 +91,124 @@ export function TestingSidebar() {
     openCollapsibles.size === filteredFunctions.length &&
     filteredFunctions.length > 0;
 
-  const maybe_mask = functionsAreStale ? 'pointer-events-none opacity-50' : '';
-
   return (
-    <div className={cn('flex relative h-full', maybe_mask)}>
-      <Sidebar
-        variant="inset"
-        collapsible="offcanvas"
-        side="right"
-        className="h-full border-l"
-      >
-        <SidebarHeader>
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <div className="flex items-center gap-2">
-                <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
-                  <FlaskConical className="size-4" />
-                </div>
-                <div className="flex flex-col gap-0.5 leading-none">
-                  <span className="font-medium">BAML Tests</span>
-                </div>
+    // <div className={cn('flex relative h-full')}>
+    <Sidebar variant="inset" collapsible="offcanvas" side="right">
+      <SidebarHeader>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <div className="flex items-center gap-2">
+              <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
+                <FlaskConical className="size-4" />
               </div>
-            </SidebarMenuItem>
-          </SidebarMenu>
-          <SearchForm searchTerm={searchTerm} onSearchChange={setSearchTerm} />
-        </SidebarHeader>
-        <SidebarContent>
-          <div className="flex-1 min-h-0 overflow-y-auto">
-            {filteredFunctions.length === 0 && (
-              <div className="flex flex-col items-center justify-center mt-4">
-                <span className="text-muted-foreground">
-                  No functions found
-                </span>
+              <div className="flex flex-col gap-0.5 leading-none">
+                <span className="font-medium">BAML Tests</span>
               </div>
-            )}
-            {filteredFunctions.length > 0 && (
-              <SidebarGroup>
-                <SidebarMenu>
-                  <SidebarMenuItem>
-                    <SidebarMenuButton
-                      onClick={handleRunFilteredTests}
-                      className="flex justify-between items-center w-full cursor-pointer"
-                    >
-                      <span>Run all tests</span>
-                      <Play className="w-3 h-3" />
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                </SidebarMenu>
-              </SidebarGroup>
-            )}
-            {filteredFunctions.length > 0 && <SidebarSeparator />}
+            </div>
+          </SidebarMenuItem>
+        </SidebarMenu>
+        <SearchForm searchTerm={searchTerm} onSearchChange={setSearchTerm} />
+      </SidebarHeader>
+      <SidebarContent>
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          {filteredFunctions.length === 0 && (
+            <div className="flex flex-col items-center justify-center mt-4">
+              <span className="text-muted-foreground">No functions found</span>
+            </div>
+          )}
+          {filteredFunctions.length > 0 && (
             <SidebarGroup>
               <SidebarMenu>
-                {filteredFunctions.length > 0 && (
-                  <SidebarMenuItem>
-                    <SidebarMenuButton
-                      onClick={handleToggleAll}
-                      className="flex justify-between items-center py-1 w-full"
-                      size="sm"
-                    >
-                      <span className="text-xs">
-                        {isAllExpanded ? 'Collapse all' : 'Expand all'}
-                      </span>
-                      {isAllExpanded ? (
-                        <ChevronUp className="w-3 h-3" />
-                      ) : (
-                        <ChevronDown className="w-3 h-3" />
-                      )}
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                )}
-                {filteredFunctions.map((func) => (
-                  <Collapsible
-                    key={func.name}
-                    open={openCollapsibles.has(func.name)}
-                    onOpenChange={() => handleToggleCollapsible(func.name)}
-                    className="group/collapsible"
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    onClick={handleRunFilteredTests}
+                    className="flex justify-between items-center w-full cursor-pointer"
                   >
-                    <SidebarMenuItem>
-                      <FunctionItem
-                        functionName={func.name}
-                        tests={func.tests}
-                      />
-                      {func.tests?.length > 0 && (
-                        <>
-                          <CollapsibleTrigger asChild>
-                            <SidebarMenuAction className="bg-sidebar-accent text-sidebar-accent-foreground left-2 data-[state=open]:rotate-90 cursor-pointer">
-                              <ChevronRight />
-                            </SidebarMenuAction>
-                          </CollapsibleTrigger>
-                          <SidebarMenuAction
-                            className="cursor-pointer"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              const testsToRun = func.tests.map((test) => ({
-                                functionName: func.name,
-                                testName: test,
-                              }));
-                              runBamlTests(testsToRun);
-                            }}
-                          >
-                            <Play />
-                          </SidebarMenuAction>
-                        </>
-                      )}
-                      {func.tests?.length ? (
-                        <CollapsibleContent>
-                          <SidebarMenuSub className="pl-8 pr-0 mr-0">
-                            {func.tests.map((test) => (
-                              <TestItem
-                                key={test}
-                                label={test}
-                                isSelected={
-                                  selectedItem?.[0] === func.name &&
-                                  selectedItem?.[1] === test
-                                }
-                                searchTerm={searchTerm}
-                                functionName={func.name}
-                              />
-                            ))}
-                          </SidebarMenuSub>
-                        </CollapsibleContent>
-                      ) : null}
-                    </SidebarMenuItem>
-                  </Collapsible>
-                ))}
+                    <span>Run all tests</span>
+                    <Play className="w-3 h-3" />
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroup>
-          </div>
-        </SidebarContent>
-        <SidebarRail />
-      </Sidebar>
-    </div>
+          )}
+          {filteredFunctions.length > 0 && <SidebarSeparator />}
+          <SidebarGroup>
+            <SidebarMenu>
+              {filteredFunctions.length > 0 && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    onClick={handleToggleAll}
+                    className="flex justify-between items-center py-1 w-full"
+                    size="sm"
+                  >
+                    <span className="text-xs">
+                      {isAllExpanded ? 'Collapse all' : 'Expand all'}
+                    </span>
+                    {isAllExpanded ? (
+                      <ChevronUp className="w-3 h-3" />
+                    ) : (
+                      <ChevronDown className="w-3 h-3" />
+                    )}
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
+              {filteredFunctions.map((func) => (
+                <Collapsible
+                  key={func.name}
+                  open={openCollapsibles.has(func.name)}
+                  onOpenChange={() => handleToggleCollapsible(func.name)}
+                  className="group/collapsible"
+                >
+                  <SidebarMenuItem>
+                    <FunctionItem functionName={func.name} tests={func.tests} />
+                    {func.tests?.length > 0 && (
+                      <>
+                        <CollapsibleTrigger asChild>
+                          <SidebarMenuAction className="bg-sidebar-accent text-sidebar-accent-foreground left-2 data-[state=open]:rotate-90 cursor-pointer">
+                            <ChevronRight />
+                          </SidebarMenuAction>
+                        </CollapsibleTrigger>
+                        <SidebarMenuAction
+                          className="cursor-pointer"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const testsToRun = func.tests.map((test) => ({
+                              functionName: func.name,
+                              testName: test,
+                            }));
+                            runBamlTests(testsToRun);
+                          }}
+                        >
+                          <Play />
+                        </SidebarMenuAction>
+                      </>
+                    )}
+                    {func.tests?.length ? (
+                      <CollapsibleContent>
+                        <SidebarMenuSub className="pl-8 pr-0 mr-0">
+                          {func.tests.map((test) => (
+                            <TestItem
+                              key={test}
+                              label={test}
+                              isSelected={
+                                selectedItem?.[0] === func.name &&
+                                selectedItem?.[1] === test
+                              }
+                              searchTerm={searchTerm}
+                              functionName={func.name}
+                            />
+                          ))}
+                        </SidebarMenuSub>
+                      </CollapsibleContent>
+                    ) : null}
+                  </SidebarMenuItem>
+                </Collapsible>
+              ))}
+            </SidebarMenu>
+          </SidebarGroup>
+        </div>
+      </SidebarContent>
+      <SidebarRail />
+    </Sidebar>
   );
 }

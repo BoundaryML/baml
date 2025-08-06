@@ -1,0 +1,45 @@
+/// Parse version of {{ fn.name }} (Takes in string and returns {{ fn.return_type.serialize_type(pkg) }})
+{% if let Some(doc) = fn.documentation -%}
+{{ crate::utils::prefix_lines(doc, "// ") }}
+{% endif -%}
+func (*parse) {{ fn.name }}(text string, opts ...CallOptionFunc) ({{ fn.return_type.serialize_type(pkg) }}, error) {
+
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
+
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ "text": text, "stream": false },
+        Env: getEnvVars(callOpts.env),
+    }
+
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
+
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
+
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
+
+    encoded, err := args.Encode()
+    if err != nil {
+        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+        // and include the type of the args you're passing in.
+        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: {{ fn.name }}: %w", err)
+        panic(wrapped_err)
+    }
+
+    result, err := bamlRuntime.CallFunctionParse(context.Background(), "{{ fn.name }}", encoded)
+    if err != nil {
+        return {{ fn.return_type.zero_value(pkg) }}, err
+    }
+
+    casted := {{ fn.return_type.cast_from_function("result", pkg) }}
+
+    return casted, nil
+}

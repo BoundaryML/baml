@@ -40,16 +40,20 @@ impl TypeBuilder {
         }
     }
 
+    pub fn reset(&self) {
+        self.inner.reset();
+    }
+
     pub fn r#enum(&self, name: String) -> EnumBuilder {
         EnumBuilder {
-            inner: self.inner.r#enum(name.as_str()),
+            inner: self.inner.upsert_enum(name.as_str()),
             name: name.to_string(),
         }
     }
 
     pub fn class(&self, name: String) -> ClassBuilder {
         ClassBuilder {
-            inner: self.inner.class(name.as_str()),
+            inner: self.inner.upsert_class(name.as_str()),
             name: name.to_string(),
         }
     }
@@ -141,6 +145,8 @@ impl TypeBuilder {
         cls.define_singleton_method("new", function!(TypeBuilder::new, 0))?;
         cls.define_method("to_s", method!(TypeBuilder::to_s, 0))?;
         cls.define_method("enum", method!(TypeBuilder::r#enum, 1))?;
+        // TODO: Not exposed, Ruby doesn't work right now.
+        // cls.define_method("reset", method!(TypeBuilder::reset, 0))?;
         // "class" is used by Kernel: https://ruby-doc.org/core-3.0.2/Kernel.html#method-i-class
         cls.define_method("class_", method!(TypeBuilder::class, 1))?;
         cls.define_method("list", method!(TypeBuilder::list, 1))?;
@@ -189,7 +195,11 @@ unsafe impl TryConvertOwned for &FieldType {}
 
 impl EnumBuilder {
     pub fn value(&self, name: String) -> EnumValueBuilder {
-        self.inner.lock().unwrap().value(name.as_str()).into()
+        self.inner
+            .lock()
+            .unwrap()
+            .upsert_value(name.as_str())
+            .into()
     }
 
     pub fn alias(&self, alias: Option<String>) -> Self {
@@ -252,12 +262,24 @@ impl EnumValueBuilder {
 }
 
 impl ClassBuilder {
+    pub fn reset(&self) {
+        self.inner.lock().unwrap().reset();
+    }
+
+    pub fn remove_property(&self, name: String) {
+        self.inner.lock().unwrap().remove_property(name.as_str());
+    }
+
     pub fn field(&self) -> FieldType {
         baml_types::TypeIR::class(&self.name).into()
     }
 
     pub fn property(&self, name: String) -> ClassPropertyBuilder {
-        self.inner.lock().unwrap().property(name.as_str()).into()
+        self.inner
+            .lock()
+            .unwrap()
+            .upsert_property(name.as_str())
+            .into()
     }
 
     pub fn define_in_ruby(module: &RModule) -> Result<()> {
@@ -265,6 +287,9 @@ impl ClassBuilder {
 
         cls.define_method("field", method!(ClassBuilder::field, 0))?;
         cls.define_method("property", method!(ClassBuilder::property, 1))?;
+        // TODO: Not exposed, Ruby doesn't work right now.
+        // cls.define_method("reset", method!(ClassBuilder::reset, 0))?;
+        // cls.define_method("remove_property", method!(ClassBuilder::remove_property, 1))?;
 
         Ok(())
     }
@@ -275,7 +300,7 @@ impl ClassPropertyBuilder {
         self.inner
             .lock()
             .unwrap()
-            .r#type(r#type.inner.lock().unwrap().clone());
+            .set_type(r#type.inner.lock().unwrap().clone());
         self.inner.clone().into()
     }
 

@@ -1,0 +1,37 @@
+{
+  "name": "sage-backend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --port 4000",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@boundaryml/baml": "^0.202.1",
+    "@boundaryml/baml-nextjs-plugin": "^0.1.0",
+    "@pinecone-database/pinecone": "^6.1.2",
+    "cheerio": "^1.1.2",
+    "next": "15.4",
+    "openai": "4.87.3",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "lodash": "4.17.21",
+    "vercel": "^44.5.5",
+    "yaml": "^2.8.0",
+    "zod": "^4.0.10"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/cheerio": "^0.22.35",
+    "@types/lodash": "4.17.17",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "gray-matter": "^4.0.3",
+    "tailwindcss": "^4",
+    "tsx": "^4.20.3",
+    "typescript": "^5"
+  }
+}

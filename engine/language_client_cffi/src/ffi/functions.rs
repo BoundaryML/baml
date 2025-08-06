@@ -6,7 +6,10 @@ use baml_types::BamlValue;
 use once_cell::sync::Lazy;
 
 use super::*;
-use crate::ffi::{callbacks::safe_trigger_callback, utils::handle_ffi_error};
+use crate::ffi::{
+    callbacks::{safe_trigger_callback, send_error_to_callback, send_result_to_callback},
+    utils::handle_ffi_error,
+};
 
 /// cbindgen:ignore
 static RUNTIME: Lazy<Arc<tokio::runtime::Runtime>> =
@@ -23,6 +26,20 @@ pub extern "C" fn call_function_from_c(
     id: u32,
 ) -> *const libc::c_void {
     match call_function_from_c_inner(runtime, function_name, encoded_args, length, id) {
+        Ok(_) => null(),
+        Err(e) => handle_ffi_error(e),
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn call_function_parse_from_c(
+    runtime: *const libc::c_void,
+    function_name: *const c_char,
+    encoded_args: *const libc::c_char,
+    length: usize,
+    id: u32,
+) -> *const libc::c_void {
+    match call_function_parse_from_c_inner(runtime, function_name, encoded_args, length, id) {
         Ok(_) => null(),
         Err(e) => handle_ffi_error(e),
     }
@@ -52,6 +69,7 @@ fn call_function_from_c_inner(
         client_registry,
         env_vars,
         collectors,
+        type_builder,
     } = BamlFunctionArguments::from_c_buffer(encoded_args, length)?;
 
     let ctx = runtime.create_ctx_manager(BamlValue::String("cffi".to_string()), None);
@@ -61,12 +79,14 @@ fn call_function_from_c_inner(
     let rt = RUNTIME.clone();
     rt.spawn(async move {
         let result = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| async {
+            // TODO: There's a race condition bug here. Technically we should COPY the type builder, not just clone it.
+            let type_builder = type_builder.map(|t| t.type_builder.as_ref().clone());
             runtime
                 .call_function(
                     func_name,
                     &kwargs,
                     &ctx,
-                    None,
+                    type_builder.as_ref(),
                     client_registry.as_ref(),
                     collectors.map(|c| c.iter().map(|c| c.deref().clone()).collect()),
                     env_vars,
@@ -90,6 +110,98 @@ fn call_function_from_c_inner(
 
         let (final_result, _) = result;
         safe_trigger_callback(id, true, final_result, runtime);
+    });
+
+    Ok(())
+}
+
+fn call_function_parse_from_c_inner(
+    runtime: *const libc::c_void,
+    function_name: *const c_char,
+    encoded_args: *const libc::c_char,
+    length: usize,
+    id: u32,
+) -> Result<()> {
+    // Safety: assume that the pointers provided are valid.
+    let runtime = unsafe { &*(runtime as *const BamlRuntime) };
+
+    // Convert the function name.
+    let func_name = match unsafe { CStr::from_ptr(function_name) }.to_str() {
+        Ok(s) => s.to_owned(),
+        Err(_) => {
+            return Err(anyhow::anyhow!("Failed to convert function name to string"));
+        }
+    };
+
+    // Convert keyword arguments.
+    let BamlFunctionArguments {
+        kwargs,
+        client_registry,
+        env_vars,
+        collectors,
+        type_builder,
+    } = BamlFunctionArguments::from_c_buffer(encoded_args, length)?;
+
+    let ctx = runtime.create_ctx_manager(BamlValue::String("cffi".to_string()), None);
+    let text = match kwargs.get("text") {
+        Some(t) => match t.as_str() {
+            Some(s) => s.to_string(),
+            None => {
+                return Err(anyhow::anyhow!("text is not a string"));
+            }
+        },
+        None => {
+            return Err(anyhow::anyhow!("text is required"));
+        }
+    };
+    let allow_stream_types = match kwargs.get("stream") {
+        Some(s) => match s.as_bool() {
+            Some(b) => b,
+            None => {
+                return Err(anyhow::anyhow!("stream is not a boolean"));
+            }
+        },
+        None => false,
+    };
+
+    // Spawn an async task to await the future and call the callback when done.
+    // Ensure that a Tokio runtime is running in your application.
+    let rt = RUNTIME.clone();
+    rt.spawn(async move {
+        let result = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| async {
+            // TODO: There's a race condition bug here. Technically we should COPY the type builder, not just clone it.
+            let type_builder = type_builder.map(|t| t.type_builder.as_ref().clone());
+            runtime.parse_llm_response(
+                func_name,
+                text,
+                allow_stream_types,
+                &ctx,
+                type_builder.as_ref(),
+                client_registry.as_ref(),
+                env_vars,
+            )
+        })) {
+            Ok(future) => future.await,
+            Err(panic_info) => {
+                // Handle the panic case - create an error result
+                let error_msg = if let Some(s) = panic_info.downcast_ref::<&str>() {
+                    format!("Function panicked: {s}")
+                } else if let Some(s) = panic_info.downcast_ref::<String>() {
+                    format!("Function panicked: {s}")
+                } else {
+                    "Function panicked with unknown error".to_string()
+                };
+
+                Err(anyhow::anyhow!(error_msg))
+            }
+        };
+
+        match result {
+            Ok(result) => send_result_to_callback(id, !allow_stream_types, &result, runtime),
+            Err(e) => {
+                send_error_to_callback(id, &e);
+            }
+        };
     });
 
     Ok(())
@@ -135,14 +247,17 @@ fn call_function_stream_from_c_inner(
         client_registry,
         env_vars,
         collectors,
+        type_builder,
     } = BamlFunctionArguments::from_c_buffer(encoded_args, length)?;
 
     let ctx = runtime.create_ctx_manager(BamlValue::String("cffi".to_string()), None);
+    // TODO: There's a race condition bug here. Technically we should COPY the type builder, not just clone it.
+    let type_builder = type_builder.map(|t| t.type_builder.as_ref().clone());
     let mut stream = match runtime.stream_function(
         func_name,
         &kwargs,
         &ctx,
-        None,
+        type_builder.as_ref(),
         client_registry.as_ref(),
         collectors.map(|c| c.iter().map(|c| c.deref().clone()).collect()),
         env_vars,

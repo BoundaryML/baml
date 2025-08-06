@@ -111,7 +111,7 @@ export class WebviewPanelHost {
   ) {
     if (WebviewPanelHost.currentPanel) {
       // If the webview panel already exists reveal it
-      WebviewPanelHost.currentPanel._panel.reveal(ViewColumn.Beside);
+      WebviewPanelHost.currentPanel._panel.reveal(ViewColumn.Beside, true);
     } else {
       // If a webview panel does not already exist create and show a new one
       const panel = window.createWebviewPanel(

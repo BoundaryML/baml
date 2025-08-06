@@ -48,7 +48,9 @@ func (c *SimpleClass) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) 
 			})
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class SimpleClass", key))
+
 		}
 	}
 

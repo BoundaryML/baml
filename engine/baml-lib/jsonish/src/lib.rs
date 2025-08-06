@@ -274,9 +274,10 @@ pub fn from_str(
 
     log::debug!("Parsed JSONish (step 2 of parsing): {parsed_value:#?}");
 
-    let value: BamlValue = parsed_value.clone().into();
+    // let value: BamlValue = parsed_value.clone().into();
     // println!("from_str value: {value}");
     // println!("-------------------------------------------------");
+    // parsed_value.clear_flags();
 
     Ok(parsed_value)
 }

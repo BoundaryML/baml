@@ -1,3 +1,4 @@
+use baml_runtime::TypeIR;
 use baml_types::{
     baml_value::TypeQuery, ir_type::TypeGeneric, type_meta, BamlValueWithMeta, HasType, ToUnionName,
 };
@@ -45,10 +46,11 @@ fn maybe_wrap_union_impl<TypeLookups, T>(
     holder: CffiValueHolder,
     lookup: &TypeLookups,
     get_target_type: impl Fn(&TypeGeneric<T>) -> TypeGeneric<T>,
+    to_current_type: impl Fn(&TypeIR) -> TypeGeneric<T>,
     mode: baml_types::StreamingMode,
 ) -> CffiValueHolder
 where
-    TypeLookups: baml_types::baml_value::TypeLookups,
+    TypeLookups: baml_types::baml_value::TypeLookupsMeta<T>,
     for<'a> BamlValueWithMeta<Meta<'a, T>>: HasType<T> + TypeQuery<T>,
     T: std::hash::Hash + std::cmp::Eq,
     TypeGeneric<T>: std::fmt::Display,
@@ -61,19 +63,14 @@ where
             return holder;
         }
 
-        let options = match union_type_generic.view() {
-            baml_types::ir_type::UnionTypeViewGeneric::Null
-            | baml_types::ir_type::UnionTypeViewGeneric::Optional(..) => return holder,
-            baml_types::ir_type::UnionTypeViewGeneric::OneOf(type_generics) => type_generics,
-            baml_types::ir_type::UnionTypeViewGeneric::OneOfOptional(type_generics) => {
-                type_generics
-            }
+        let Some((value_type_index, options)) = union_type_generic
+            .selected_type_index(&real_type, lookup)
+            .unwrap_or_else(|_| {
+                panic!("Failed to find target_type in options: {real_type} -> {target_type}")
+            })
+        else {
+            return holder;
         };
-
-        let value_type_index = options
-            .iter()
-            .position(|t| real_type == **t)
-            .expect("Failed to find target_type in options");
 
         let variant_name = options[value_type_index].to_union_name();
 
@@ -137,6 +134,7 @@ where
                     .to_non_streaming_type(lookup),
                 other => other.clone(),
             },
+            |field_type| field_type.to_non_streaming_type(lookup),
             baml_types::StreamingMode::NonStreaming,
         )
     }
@@ -166,6 +164,7 @@ where
                     .to_streaming_type(lookup),
                 other => other.clone(),
             },
+            |field_type| field_type.to_streaming_type(lookup),
             baml_types::StreamingMode::Streaming,
         )
     }
@@ -217,7 +216,11 @@ where
                 BamlValueWithMeta::Bool(val, _) => Value::BoolValue(*val),
                 BamlValueWithMeta::Map(index_map, _) => {
                     let TypeGeneric::Map(key_type, value_type, _) = value.real_type(lookup) else {
-                        panic!("Map type is not a map");
+                        panic!(
+                            "Map type is not a map: {} -> {}",
+                            value.field_type(),
+                            value.real_type(lookup)
+                        );
                     };
 
                     let map = CffiValueMap {
@@ -320,7 +323,7 @@ where
                                 ),
                             })
                             .collect(),
-                        dynamic_fields: vec![],
+                        // dynamic_fields: vec![],
                     })
                 }
                 BamlValueWithMeta::Null(_) => Value::NullValue(CffiValueNull {}),

@@ -370,6 +370,33 @@ pub trait TypeLookupsMeta<T>: TypeLookups {
     fn expand_recursive_type(&self, type_alias: &str) -> anyhow::Result<TypeGeneric<T>>;
 }
 
+impl<Base: TypeLookups> TypeLookupsMeta<type_meta::IR> for Base {
+    fn expand_recursive_type(&self, type_alias: &str) -> anyhow::Result<TypeIR> {
+        match self.expand_recursive_type(type_alias) {
+            Ok(t) => Ok(t.clone()),
+            Err(e) => Err(e),
+        }
+    }
+}
+
+impl<Base: TypeLookups> TypeLookupsMeta<type_meta::NonStreaming> for Base {
+    fn expand_recursive_type(&self, type_alias: &str) -> anyhow::Result<TypeNonStreaming> {
+        match self.expand_recursive_type(type_alias) {
+            Ok(t) => Ok(t.to_non_streaming_type(self)),
+            Err(e) => Err(e),
+        }
+    }
+}
+
+impl<Base: TypeLookups> TypeLookupsMeta<type_meta::Streaming> for Base {
+    fn expand_recursive_type(&self, type_alias: &str) -> anyhow::Result<TypeStreaming> {
+        match self.expand_recursive_type(type_alias) {
+            Ok(t) => Ok(t.to_streaming_type(self)),
+            Err(e) => Err(e),
+        }
+    }
+}
+
 pub trait TypeQuery<T> {
     fn real_type(&self, lookup: &impl TypeLookups) -> TypeGeneric<T>;
     fn is_type(&self, field_type: &TypeGeneric<T>, lookup: &impl TypeLookups) -> bool;
@@ -386,15 +413,16 @@ impl<T: HasType<type_meta::IR>> TypeQuery<type_meta::IR> for BamlValueWithMeta<T
     fn real_type(&self, lookup: &impl TypeLookups) -> TypeGeneric<type_meta::IR> {
         let field_type = self.field_type();
 
-        let field_type = match field_type {
-            TypeGeneric::RecursiveTypeAlias { name, .. } => lookup
+        let mut field_type = field_type;
+        while let TypeGeneric::RecursiveTypeAlias { name, .. } = field_type {
+            field_type = lookup
                 .expand_recursive_type(name)
-                .expect("Recursive type alias not found"),
-            _ => field_type,
-        };
+                .expect("Recursive type alias not found");
+        }
+        let field_type = field_type;
 
         if let TypeIR::Union(options, _) = field_type {
-            return match options.view() {
+            let field_type = match options.view() {
                 UnionTypeViewGeneric::Null => TypeGeneric::null(),
                 UnionTypeViewGeneric::Optional(field_type) => {
                     if self.is_type(field_type, lookup) {
@@ -413,6 +441,16 @@ impl<T: HasType<type_meta::IR>> TypeQuery<type_meta::IR> for BamlValueWithMeta<T
                     .find(|t| self.is_type(t, lookup))
                     .map_or_else(TypeIR::null, |t| t.clone()),
             };
+            if &field_type == self.field_type() {
+                return field_type.clone();
+            }
+            if let TypeGeneric::RecursiveTypeAlias { name, .. } = field_type {
+                let expanded_type = lookup
+                    .expand_recursive_type(name.as_str())
+                    .expect("Recursive type alias not found");
+                return expanded_type.clone();
+            }
+            return field_type;
         }
         field_type.clone()
     }
@@ -511,16 +549,17 @@ impl<T: HasType<type_meta::NonStreaming>> TypeQuery<type_meta::NonStreaming>
     fn real_type(&self, lookup: &impl TypeLookups) -> TypeNonStreaming {
         let field_type = self.field_type();
 
-        let field_type = match field_type {
-            TypeGeneric::RecursiveTypeAlias { name, .. } => &lookup
-                .expand_recursive_type(name)
+        let mut field_type = field_type.clone();
+        while let TypeGeneric::RecursiveTypeAlias { name, .. } = field_type {
+            field_type = lookup
+                .expand_recursive_type(name.as_str())
                 .expect("Recursive type alias not found")
-                .to_non_streaming_type(lookup),
-            _ => field_type,
-        };
+                .to_non_streaming_type(lookup);
+        }
+        let field_type = field_type;
 
         if let TypeGeneric::Union(options, _) = field_type {
-            return match options.view() {
+            let field_type = match options.view() {
                 UnionTypeViewGeneric::Null => TypeGeneric::null(),
                 UnionTypeViewGeneric::Optional(field_type) => {
                     if self.is_type(field_type, lookup) {
@@ -539,6 +578,16 @@ impl<T: HasType<type_meta::NonStreaming>> TypeQuery<type_meta::NonStreaming>
                     .find(|t| self.is_type(t, lookup))
                     .map_or_else(TypeGeneric::null, |t| t.clone()),
             };
+            if &field_type == self.field_type() {
+                return field_type.clone();
+            }
+            if let TypeGeneric::RecursiveTypeAlias { name, .. } = field_type {
+                let expanded_type = lookup
+                    .expand_recursive_type(name.as_str())
+                    .expect("Recursive type alias not found");
+                return expanded_type.to_non_streaming_type(lookup);
+            }
+            return field_type;
         }
         field_type.clone()
     }
@@ -637,16 +686,17 @@ impl<T: HasType<type_meta::Streaming>> TypeQuery<type_meta::Streaming> for BamlV
     fn real_type(&self, lookup: &impl TypeLookups) -> TypeStreaming {
         let field_type = self.field_type();
 
-        let field_type = match field_type {
-            TypeGeneric::RecursiveTypeAlias { name, .. } => &lookup
-                .expand_recursive_type(name)
+        let mut field_type = field_type.clone();
+        while let TypeGeneric::RecursiveTypeAlias { name, .. } = field_type {
+            field_type = lookup
+                .expand_recursive_type(name.as_str())
                 .expect("Recursive type alias not found")
-                .to_streaming_type(lookup),
-            _ => field_type,
-        };
+                .to_streaming_type(lookup);
+        }
+        let field_type = field_type;
 
         if let TypeGeneric::Union(options, _) = field_type {
-            return match options.view() {
+            let field_type = match options.view() {
                 UnionTypeViewGeneric::Null => TypeGeneric::null(),
                 UnionTypeViewGeneric::Optional(field_type) => {
                     if self.is_type(field_type, lookup) {
@@ -665,6 +715,16 @@ impl<T: HasType<type_meta::Streaming>> TypeQuery<type_meta::Streaming> for BamlV
                     .find(|t| self.is_type(t, lookup))
                     .map_or_else(TypeGeneric::null, |t| t.clone()),
             };
+            if &field_type == self.field_type() {
+                return field_type.clone();
+            }
+            if let TypeGeneric::RecursiveTypeAlias { name, .. } = field_type {
+                let expanded_type = lookup
+                    .expand_recursive_type(name.as_str())
+                    .expect("Recursive type alias not found");
+                return expanded_type.to_streaming_type(lookup);
+            }
+            return field_type;
         }
         field_type.clone()
     }

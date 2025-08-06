@@ -20,6 +20,12 @@ impl Token {
 }
 
 impl VertexAuth {
+    pub async fn get_or_create(auth_strategy: &ResolvedGcpAuthStrategy) -> Result<Arc<VertexAuth>> {
+        // For WASM, just create new instances without caching
+        let auth = Arc::new(Self::new(auth_strategy).await?);
+        Ok(auth)
+    }
+
     pub async fn new(auth_strategy: &ResolvedGcpAuthStrategy) -> Result<Self> {
         Ok(match auth_strategy {
             ResolvedGcpAuthStrategy::MaybeFilePath(str)
@@ -69,15 +75,15 @@ impl VertexAuth {
         }
     }
 
-    pub async fn project_id(&self) -> Result<String> {
+    pub async fn project_id(&self) -> Result<Arc<str>> {
         match &self.0 {
-            Some(service_account) => Ok(service_account.project_id.clone()),
+            Some(service_account) => Ok(service_account.project_id.clone().into()),
             None => {
                 let cred_provider = get_js_callback_provider()?;
                 let gcp_creds = cred_provider.gcp_req().await.context(
                     "Failed to load GCP creds: try running `gcloud auth application-default login`",
                 )?;
-                Ok(gcp_creds.project_id)
+                Ok(gcp_creds.project_id.into())
             }
         }
     }

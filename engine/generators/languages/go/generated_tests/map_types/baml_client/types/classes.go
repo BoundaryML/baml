@@ -58,7 +58,9 @@ func (c *ComplexMaps) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) 
 			c.MapArray = baml.Decode(valueHolder).Interface().([]map[string]string)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class ComplexMaps", key))
+
 		}
 	}
 
@@ -121,7 +123,9 @@ func (c *Config) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.Debug = baml.Decode(valueHolder).Interface().(bool)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class Config", key))
+
 		}
 	}
 
@@ -184,7 +188,9 @@ func (c *EdgeCaseMaps) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap)
 			c.UnionValues = baml.Decode(valueHolder).Interface().(map[string]Union3BoolOrIntOrString)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class EdgeCaseMaps", key))
+
 		}
 	}
 
@@ -249,7 +255,9 @@ func (c *MixedKeyMaps) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap)
 			c.LiteralMap = baml.Decode(valueHolder).Interface().(map[string]Config)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class MixedKeyMaps", key))
+
 		}
 	}
 
@@ -318,7 +326,9 @@ func (c *NestedMaps) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.MapOfMaps = baml.Decode(valueHolder).Interface().(map[string]map[string]float64)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class NestedMaps", key))
+
 		}
 	}
 
@@ -385,7 +395,9 @@ func (c *Product) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.Tags = baml.Decode(valueHolder).Interface().([]string)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class Product", key))
+
 		}
 	}
 
@@ -454,7 +466,9 @@ func (c *SimpleMaps) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.IntToString = baml.Decode(valueHolder).Interface().(map[string]string)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class SimpleMaps", key))
+
 		}
 	}
 
@@ -521,7 +535,9 @@ func (c *User) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.Active = baml.Decode(valueHolder).Interface().(bool)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class User", key))
+
 		}
 	}
 
