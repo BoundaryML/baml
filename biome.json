@@ -7,23 +7,20 @@
     "defaultBranch": "main"
   },
   "files": {
-    "include": [
-      "*.ts",
-      "*.tsx",
-      "!baml_client/**/*.ts",
-      "!baml_client/**/*.tsx"
-    ]
+    "include": ["*.ts", "*.tsx", "!baml_client/**/*.ts", "!baml_client/**/*.tsx"]
   },
   "json": {
     "formatter": {
       "enabled": true,
       "indentStyle": "space",
-      "indentWidth": 2
+      "indentWidth": 2,
+      "lineWidth": 120
     }
   },
   "formatter": {
     "enabled": true,
-    "indentStyle": "space"
+    "indentStyle": "space",
+    "lineWidth": 120
   },
   "linter": {
     "enabled": true,

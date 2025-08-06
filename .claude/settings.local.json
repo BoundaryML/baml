@@ -42,7 +42,8 @@
       "Bash(npm run:*)",
       "Bash(npx biome check:*)",
       "Bash(npx tsc:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "WebFetch(domain:www.npmjs.com)"
     ],
     "deny": []
   }
