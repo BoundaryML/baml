@@ -128,3 +128,6 @@ export const resetSessionAtom = atom(null, (get, set) => {
   set(sessionIdAtom, newSessionData.sessionId);
   set(baseMessagesAtom, []);
 });
+
+// Atom for external query requests (from search bar, etc.)
+export const pendingQueryAtom = atom<string | null>(null);

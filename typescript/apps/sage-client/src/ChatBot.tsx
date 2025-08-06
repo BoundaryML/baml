@@ -8,6 +8,7 @@ import {
   messagesAtom,
   sessionIdAtom,
   resetSessionAtom,
+  pendingQueryAtom,
 } from './store';
 import {
   Message,
@@ -97,7 +98,7 @@ const ChatBot: React.FC<ChatBotProps> = ({
   const resetSession = useSetAtom(resetSessionAtom);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [pendingQuery, setPendingQuery] = useState<string | null>(null);
+  const [pendingQuery, setPendingQuery] = useAtom(pendingQueryAtom);
   // Add width state for resizing
   const [width, setWidth] = useState(400);
   const [isResizing, setIsResizing] = useState(false);
@@ -209,7 +210,7 @@ const ChatBot: React.FC<ChatBotProps> = ({
       sendMessage(pendingQuery);
       setPendingQuery(null);
     }
-  }, [pendingQuery, isLoading]);
+  }, [pendingQuery, isLoading, setPendingQuery]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

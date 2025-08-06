@@ -1,8 +1,9 @@
-import { Provider } from 'jotai';
-import React from 'react';
+import { Provider, useSetAtom } from 'jotai';
+import React, { useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import AlgoliaSearch from './AlgoliaSearch';
 import ChatBot from './ChatBot';
+import { pendingQueryAtom } from './store';
 
 // Constants from original custom.js
 const PANEL_W = 380;
@@ -12,6 +13,7 @@ const OPEN = 'baml-ai-open';
 let chatbotRoot: any = null;
 let chatbotContainer: HTMLElement | null = null;
 let isOpen = false;
+let pendingQueryToSet: string | null = null;
 
 // Helper functions from original custom.js
 const css = (s: string) => {
@@ -130,6 +132,33 @@ body.resizing {
 }
 `);
 
+// Query Bridge component to connect ChatbotManager with Jotai
+function QueryBridge() {
+  const setPendingQuery = useSetAtom(pendingQueryAtom);
+  
+  useEffect(() => {
+    // Check for pending query every time component renders
+    if (pendingQueryToSet) {
+      setPendingQuery(pendingQueryToSet);
+      pendingQueryToSet = null;
+    }
+  });
+  
+  // Also set up a global function for ChatbotManager to trigger re-render
+  useEffect(() => {
+    (window as any).__triggerQueryBridge = () => {
+      // Force a re-render by updating a dummy state
+      setPendingQuery((prev) => prev);
+    };
+    
+    return () => {
+      delete (window as any).__triggerQueryBridge;
+    };
+  }, [setPendingQuery]);
+  
+  return null;
+}
+
 // Error boundary component
 class ErrorBoundary extends React.Component<
   { children: React.ReactNode; fallback?: React.ReactNode },
@@ -177,6 +206,7 @@ const ChatbotManager = {
             fallback={<div className="baml-error">Chatbot failed to load</div>}
           >
             <Provider>
+              <QueryBridge />
               <ChatBot isOpen={flag} onClose={() => this.setOpen(false)} />
             </Provider>
           </ErrorBoundary>,
@@ -221,6 +251,7 @@ const ChatbotManager = {
           fallback={<div className="baml-error">Chatbot failed to load</div>}
         >
           <Provider>
+            <QueryBridge />
             <ChatBot isOpen={false} onClose={() => this.setOpen(false)} />
           </Provider>
         </ErrorBoundary>,
@@ -231,17 +262,16 @@ const ChatbotManager = {
   },
 
   openWithQuery(query: string) {
-    // Store AI context for the chatbot
-    localStorage.setItem(
-      'baml-ai-context',
-      JSON.stringify({
-        query: query,
-        timestamp: Date.now(),
-      }),
-    );
-
+    // Set the pending query
+    pendingQueryToSet = query;
+    
     this.initialize();
     this.setOpen(true);
+    
+    // Trigger the QueryBridge to pick up the pending query
+    if ((window as any).__triggerQueryBridge) {
+      (window as any).__triggerQueryBridge();
+    }
   },
 
   cleanup() {
