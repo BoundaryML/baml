@@ -6,20 +6,6 @@ import { parse as parseYaml } from 'yaml';
 import { z } from 'zod';
 import urljoin from 'url-join';
 
-// export interface SitemapEntry {
-//   displayTitle: string;
-//   path?: string; // Optional for blog/external entries
-//   url?: string; // Used for blog/external entries
-//   type: 'internal' | 'external'; // New field for entry type
-//   slug: string[];
-//   href?: string;
-//   description?: string;
-//   sectionDisplayPath?: string;
-//   layout?: string;
-//   'hide-toc'?: boolean;
-//   [key: string]: any; // Allow other frontmatter fields
-// }
-
 export type SitemapEntry =
   | {
       type: 'internal';
@@ -186,10 +172,10 @@ export function extractMdxMetadata(filePath: string): Record<string, any> {
 }
 
 /**
- * Helper function to slugify text (matches Python implementation, preserves underscores)
+ * Helper function to slugify text (matches Python implementation)
  */
 export function slugify(text: string): string {
-  // Replace non-alphanumeric characters with spaces (preserving underscores as alnum)
+  // Replace non-alphanumeric characters with spaces
   const normalized = text
     .split('')
     .map((c) => (/[a-zA-Z0-9]/.test(c) ? c : ' '))
@@ -385,54 +371,8 @@ export class SitemapGenerator {
       return {};
     }
   }
-
-  private buildSlugComponents(
-    tab: TabInfo,
-    sections: SectionInfo[],
-    pageSlug?: string,
-  ): string[] {
-    const components = [tab.tabSlug];
-
-    for (const section of sections) {
-      // Use provided slug or generate from display name
-      const sectionSlug =
-        section.sectionSlug || slugify(section.sectionDisplayName);
-      if (sectionSlug) {
-        components.push(sectionSlug);
-      }
-    }
-
-    if (pageSlug) {
-      components.push(pageSlug);
-    }
-
-    return components;
-  }
 }
 
-/**
- * Helper function to read internal doc content from the fern directory
- */
-export function readInternalDocContent(docPath: string): string {
-  try {
-    // Assume docs are in the fern directory relative to the sage directory
-    const fullPath = join('../fern', docPath);
-    const content = readFileSync(fullPath, 'utf8');
-
-    // Remove frontmatter if present
-    const frontmatterRegex = /^---\s*\n[\s\S]*?\n---\s*\n/;
-    const cleanContent = content.replace(frontmatterRegex, '').trim();
-
-    return cleanContent;
-  } catch (error) {
-    console.error(`Error reading internal doc ${docPath}:`, error);
-    return `Document: ${docPath}`;
-  }
-}
-
-/**
- * Helper function to extract clean text content from HTML
- */
 export function extractTextFromHtml(html: string): string {
   const $ = cheerio.load(html);
 
@@ -510,22 +450,6 @@ export async function fetchBlogContent(url: string): Promise<string> {
     // Return a minimal fallback content
     return `Blog post: ${url}\nTitle: ${url.split('/').pop()?.replace(/-/g, ' ') || 'Blog Post'}`;
   }
-}
-
-/**
- * Get all internal documents from the sitemap
- */
-export function getInternalDocs(sitemap?: SitemapEntry[]): SitemapEntry[] {
-  const sitemapEntries = sitemap || loadSitemap();
-  return sitemapEntries.filter((entry) => entry.type === 'internal');
-}
-
-/**
- * Get all external blog posts from the sitemap
- */
-export function getExternalBlogs(sitemap?: SitemapEntry[]): SitemapEntry[] {
-  const sitemapEntries = sitemap || loadSitemap();
-  return sitemapEntries.filter((entry) => entry.type === 'external');
 }
 
 /**
