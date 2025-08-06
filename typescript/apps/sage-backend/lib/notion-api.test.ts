@@ -15,11 +15,7 @@
  *    pnpm test notion-api-test
  */
 
-import type {
-  AssistantMessage,
-  SendFeedbackRequest,
-  UserMessage,
-} from '@baml/sage-interface';
+import type { AssistantMessage, SendFeedbackRequest, UserMessage } from '@baml/sage-interface';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { type NotionLogEntry, NotionLogger } from './notion-api';
 

@@ -1,8 +1,4 @@
-import type {
-  AssistantMessage,
-  SendFeedbackRequest,
-  UserMessage,
-} from '@baml/sage-interface';
+import type { AssistantMessage, SendFeedbackRequest, UserMessage } from '@baml/sage-interface';
 import { Client, type CreatePageParameters } from '@notionhq/client';
 
 export interface NotionLogEntry {

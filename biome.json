@@ -8,12 +8,6 @@
   },
   "files": {
     "include": [
-      "!baml_client/*.ts",
-      "!baml_client/*.tsx",
-      "typescript/apps/ask-baml-client/**/*.ts",
-      "typescript/apps/ask-baml-client/**/*.tsx",
-      "typescript/apps/sage-backend/**/*.ts",
-      "typescript/apps/sage-backend/**/*.tsx",
       "typescript/packages/sage-interface/**/*.ts",
       "typescript/packages/sage-interface/**/*.tsx"
     ]
