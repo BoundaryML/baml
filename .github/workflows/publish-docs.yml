@@ -89,12 +89,11 @@ jobs:
       - name: Pull sage-backend out of monorepo
         working-directory: ./typescript
         run: |
-          pnpm config set inject-workspace-packages true
+          pnpm --filter=sage-backend install
           pnpm --filter=sage-backend deploy ../sage-backend
 
       - name: Install dependencies and build
         run: |
-          pnpm install
           pnpm baml-cli generate
           if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/canary" ]; then
             echo TARGET_ENV=prod >>$GITHUB_ENV
