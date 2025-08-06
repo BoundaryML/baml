@@ -932,7 +932,7 @@ version = "0.202.1"
 dependencies = [
  "anyhow",
  "baml-types",
- "internal-baml-core",
+ "internal-baml-ast",
  "internal-baml-diagnostics",
  "internal-baml-parser-database",
  "itertools 0.14.0",

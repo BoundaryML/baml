@@ -24,7 +24,7 @@ pub fn typecheck(hir: &Hir, diagnostics: &mut Diagnostics) -> THir<ExprMetadata>
     let mut typing_context = TypeContext {
         inner: BamlMap::new(),
     };
-    
+
     // Add expr functions to typing context
     for func in &hir.expr_functions {
         let arrow_type = Type::Arrow(
@@ -36,7 +36,7 @@ pub fn typecheck(hir: &Hir, diagnostics: &mut Diagnostics) -> THir<ExprMetadata>
         );
         typing_context.inner.insert(func.name.clone(), arrow_type);
     }
-    
+
     // Add LLM functions to typing context
     for func in &hir.llm_functions {
         let arrow_type = Type::Arrow(
@@ -53,22 +53,28 @@ pub fn typecheck(hir: &Hir, diagnostics: &mut Diagnostics) -> THir<ExprMetadata>
     let mut expr_functions = vec![];
     for func in &hir.expr_functions {
         let mut func_context = typing_context.clone();
-        
+
         // Add parameters to context
         for param in &func.parameters {
-            func_context.inner.insert(param.name.clone(), param.r#type.clone());
+            func_context
+                .inner
+                .insert(param.name.clone(), param.r#type.clone());
         }
-        
+
         // Convert HIR block to THIR block with type inference
         let typed_body = typecheck_block(&func.body, &mut func_context, diagnostics);
-        
+
         expr_functions.push(thir::ExprFunction {
             name: func.name.clone(),
-            parameters: func.parameters.iter().map(|p| thir::Parameter {
-                name: p.name.clone(),
-                r#type: p.r#type.clone(),
-                span: p.span.clone(),
-            }).collect(),
+            parameters: func
+                .parameters
+                .iter()
+                .map(|p| thir::Parameter {
+                    name: p.name.clone(),
+                    r#type: p.r#type.clone(),
+                    span: p.span.clone(),
+                })
+                .collect(),
             return_type: func.return_type.clone(),
             body: typed_body,
             span: func.span.clone(),
@@ -109,7 +115,7 @@ fn typecheck_block(
 ) -> thir::Block<ExprMetadata> {
     let mut statements = vec![];
     let env = BamlMap::new();
-    
+
     // Process statements
     for stmt in &block.statements {
         match typecheck_statement(stmt, context, diagnostics) {
@@ -125,7 +131,7 @@ fn typecheck_block(
             None => {}
         }
     }
-    
+
     // Get the return value from the last statement
     // Note: context has been updated with all let bindings from statements above
     let (return_value, last_is_return) = if let Some(last_stmt) = block.statements.last() {
@@ -138,23 +144,31 @@ fn typecheck_block(
             }
             _ => {
                 // No explicit return, default to null
-                (thir::Expr::Atom(BamlValueWithMeta::Null(
-                    (internal_baml_diagnostics::Span::fake(), None),
-                )), false)
+                (
+                    thir::Expr::Atom(BamlValueWithMeta::Null((
+                        internal_baml_diagnostics::Span::fake(),
+                        None,
+                    ))),
+                    false,
+                )
             }
         }
     } else {
         // Empty block, default to null
-        (thir::Expr::Atom(BamlValueWithMeta::Null(
-            (internal_baml_diagnostics::Span::fake(), None),
-        )), false)
+        (
+            thir::Expr::Atom(BamlValueWithMeta::Null((
+                internal_baml_diagnostics::Span::fake(),
+                None,
+            ))),
+            false,
+        )
     };
-    
+
     // Remove the last statement if it was converted to return value
     if last_is_return && !statements.is_empty() {
         statements.pop();
     }
-    
+
     thir::Block {
         env,
         statements,
@@ -172,12 +186,12 @@ fn typecheck_statement(
     match stmt {
         hir::Statement::Let { name, value, span } => {
             let typed_value = typecheck_expression(value, context, diagnostics);
-            
+
             // Infer type from the value and add to context
             if let Some(inferred_type) = typed_value.meta().1.clone() {
                 context.inner.insert(name.clone(), inferred_type);
             }
-            
+
             Some(thir::Statement::Let {
                 name: name.clone(),
                 value: typed_value,
@@ -198,12 +212,10 @@ fn typecheck_statement(
                 span: span.clone(),
             })
         }
-        hir::Statement::Declare { name, span } => {
-            Some(thir::Statement::Declare {
-                name: name.clone(),
-                span: span.clone(),
-            })
-        }
+        hir::Statement::Declare { name, span } => Some(thir::Statement::Declare {
+            name: name.clone(),
+            span: span.clone(),
+        }),
         hir::Statement::Assign { name, value } => {
             let typed_value = typecheck_expression(value, context, diagnostics);
             Some(thir::Statement::Assign {
@@ -213,43 +225,54 @@ fn typecheck_statement(
         }
         hir::Statement::DeclareAndAssign { name, value, span } => {
             let typed_value = typecheck_expression(value, context, diagnostics);
-            
+
             // Infer type from the value and add to context
             if let Some(inferred_type) = typed_value.meta().1.clone() {
                 context.inner.insert(name.clone(), inferred_type);
             }
-            
+
             Some(thir::Statement::DeclareAndAssign {
                 name: name.clone(),
                 value: typed_value,
                 span: span.clone(),
             })
         }
-        hir::Statement::While { condition, block, span } => {
+        hir::Statement::While {
+            condition,
+            block,
+            span,
+        } => {
             let typed_condition = typecheck_expression(condition, context, diagnostics);
             let typed_block = typecheck_block(block, context, diagnostics);
-            
+
             Some(thir::Statement::While {
                 condition: Box::new(typed_condition),
                 block: typed_block,
                 span: span.clone(),
             })
         }
-        hir::Statement::ForLoop { identifier, iterator, block, span } => {
+        hir::Statement::ForLoop {
+            identifier,
+            iterator,
+            block,
+            span,
+        } => {
             let typed_iterator = typecheck_expression(iterator, context, diagnostics);
-            
+
             // Create new context with loop variable
             let mut loop_context = context.clone();
-            
+
             // Infer item type from iterator type
             if let Some(iterator_type) = typed_iterator.meta().1.as_ref() {
                 if let hir::TypeM::Array(inner_type, _) = iterator_type {
-                    loop_context.inner.insert(identifier.clone(), *inner_type.clone());
+                    loop_context
+                        .inner
+                        .insert(identifier.clone(), *inner_type.clone());
                 }
             }
-            
+
             let typed_block = typecheck_block(block, &mut loop_context, diagnostics);
-            
+
             Some(thir::Statement::ForLoop {
                 identifier: identifier.clone(),
                 iterator: Box::new(typed_iterator),
@@ -267,19 +290,23 @@ fn typecheck_expression(
     diagnostics: &mut Diagnostics,
 ) -> thir::Expr<ExprMetadata> {
     match expr {
-        hir::Expression::BoolValue(value, span) => {
-            thir::Expr::Atom(BamlValueWithMeta::Bool(
-                *value,
-                (span.clone(), Some(hir::TypeM::Bool(hir::TypeMeta::default()))),
-            ))
-        }
+        hir::Expression::BoolValue(value, span) => thir::Expr::Atom(BamlValueWithMeta::Bool(
+            *value,
+            (
+                span.clone(),
+                Some(hir::TypeM::Bool(hir::TypeMeta::default())),
+            ),
+        )),
         hir::Expression::NumericValue(value, span) => {
             // Try to parse as integer first, then float
             if value.contains('.') {
                 match value.parse::<f64>() {
                     Ok(f) => thir::Expr::Atom(BamlValueWithMeta::Float(
                         f,
-                        (span.clone(), Some(hir::TypeM::String(hir::TypeMeta::default()))), // TODO: Add Float type
+                        (
+                            span.clone(),
+                            Some(hir::TypeM::String(hir::TypeMeta::default())),
+                        ), // TODO: Add Float type
                     )),
                     Err(_) => {
                         diagnostics.push_error(DatamodelError::new_validation_error(
@@ -293,7 +320,10 @@ fn typecheck_expression(
                 match value.parse::<i64>() {
                     Ok(i) => thir::Expr::Atom(BamlValueWithMeta::Int(
                         i,
-                        (span.clone(), Some(hir::TypeM::Int(hir::TypeMeta::default()))),
+                        (
+                            span.clone(),
+                            Some(hir::TypeM::Int(hir::TypeMeta::default())),
+                        ),
                     )),
                     Err(_) => {
                         diagnostics.push_error(DatamodelError::new_validation_error(
@@ -305,16 +335,20 @@ fn typecheck_expression(
                 }
             }
         }
-        hir::Expression::StringValue(value, span) => {
-            thir::Expr::Atom(BamlValueWithMeta::String(
-                value.clone(),
-                (span.clone(), Some(hir::TypeM::String(hir::TypeMeta::default()))),
-            ))
-        }
+        hir::Expression::StringValue(value, span) => thir::Expr::Atom(BamlValueWithMeta::String(
+            value.clone(),
+            (
+                span.clone(),
+                Some(hir::TypeM::String(hir::TypeMeta::default())),
+            ),
+        )),
         hir::Expression::RawStringValue(value, span) => {
             thir::Expr::Atom(BamlValueWithMeta::String(
                 value.clone(),
-                (span.clone(), Some(hir::TypeM::String(hir::TypeMeta::default()))),
+                (
+                    span.clone(),
+                    Some(hir::TypeM::String(hir::TypeMeta::default())),
+                ),
             ))
         }
         hir::Expression::Identifier(name, span) => {
@@ -333,22 +367,20 @@ fn typecheck_expression(
                 .iter()
                 .map(|item| typecheck_expression(item, context, diagnostics))
                 .collect();
-            
+
             // Infer array type from items
             let inner_type = typed_items.first().and_then(|item| item.meta().1.clone());
-            let array_type = inner_type.map(|t| hir::TypeM::Array(
-                Box::new(t),
-                hir::TypeMeta::default(),
-            ));
-            
+            let array_type =
+                inner_type.map(|t| hir::TypeM::Array(Box::new(t), hir::TypeMeta::default()));
+
             thir::Expr::List(typed_items, (span.clone(), array_type))
         }
         hir::Expression::Map(entries, span) => {
             let mut typed_entries = BamlMap::new();
-            
+
             // Assume string keys for now
             let mut value_type = None;
-            
+
             for (key_expr, value_expr) in entries {
                 // Key must be a string
                 let key = match key_expr {
@@ -361,26 +393,28 @@ fn typecheck_expression(
                         continue;
                     }
                 };
-                
+
                 let typed_value = typecheck_expression(value_expr, context, diagnostics);
                 if value_type.is_none() {
                     value_type = typed_value.meta().1.clone();
                 }
                 typed_entries.insert(key, typed_value);
             }
-            
-            let map_type = value_type.map(|v| hir::TypeM::Map(
-                Box::new(hir::TypeM::String(hir::TypeMeta::default())),
-                Box::new(v),
-                hir::TypeMeta::default(),
-            ));
-            
+
+            let map_type = value_type.map(|v| {
+                hir::TypeM::Map(
+                    Box::new(hir::TypeM::String(hir::TypeMeta::default())),
+                    Box::new(v),
+                    hir::TypeMeta::default(),
+                )
+            });
+
             thir::Expr::Map(typed_entries, (span.clone(), map_type))
         }
         hir::Expression::Call(func_name, args, span) => {
             // Look up function type
             let func_type = context.get_type(func_name);
-            
+
             let (param_types, return_type) = match func_type {
                 Some(hir::TypeM::Arrow(arrow, _)) => {
                     (arrow.inputs.clone(), Some(*arrow.output.clone()))
@@ -393,14 +427,20 @@ fn typecheck_expression(
                     (vec![], None)
                 }
             };
-            
+
             // Typecheck arguments
             let typed_args: Vec<_> = args
                 .iter()
-                .zip(param_types.iter().chain(std::iter::repeat(&hir::TypeM::Null(hir::TypeMeta::default()))))
+                .zip(
+                    param_types
+                        .iter()
+                        .chain(std::iter::repeat(&hir::TypeM::Null(
+                            hir::TypeMeta::default(),
+                        ))),
+                )
                 .map(|(arg, expected_type)| {
                     let typed_arg = typecheck_expression(arg, context, diagnostics);
-                    
+
                     // Check if argument type matches expected type
                     if let Some(arg_type) = typed_arg.meta().1.as_ref() {
                         if !types_compatible(arg_type, expected_type) {
@@ -410,11 +450,11 @@ fn typecheck_expression(
                             ));
                         }
                     }
-                    
+
                     typed_arg
                 })
                 .collect();
-            
+
             // Check argument count
             if args.len() != param_types.len() {
                 diagnostics.push_error(DatamodelError::new_validation_error(
@@ -427,7 +467,7 @@ fn typecheck_expression(
                     span.clone(),
                 ));
             }
-            
+
             thir::Expr::Call {
                 func: Arc::new(thir::Expr::FreeVar(
                     func_name.clone(),
@@ -441,7 +481,7 @@ fn typecheck_expression(
         hir::Expression::ClassConstructor(constructor, span) => {
             let mut typed_fields = BamlMap::new();
             let mut spread = None;
-            
+
             // TODO: Look up class definition to validate fields
             for field in &constructor.fields {
                 match field {
@@ -455,7 +495,7 @@ fn typecheck_expression(
                     }
                 }
             }
-            
+
             thir::Expr::ClassConstructor {
                 name: constructor.class_name.clone(),
                 fields: typed_fields,
@@ -469,9 +509,14 @@ fn typecheck_expression(
                 ),
             }
         }
-        hir::Expression::If { condition, if_branch, else_branch, span } => {
+        hir::Expression::If {
+            condition,
+            if_branch,
+            else_branch,
+            span,
+        } => {
             let typed_condition = typecheck_expression(condition, context, diagnostics);
-            
+
             // Check condition is boolean
             if let Some(cond_type) = typed_condition.meta().1.as_ref() {
                 if !matches!(cond_type, hir::TypeM::Bool(_)) {
@@ -481,15 +526,15 @@ fn typecheck_expression(
                     ));
                 }
             }
-            
+
             let typed_then = typecheck_expression(if_branch, context, diagnostics);
             let typed_else = else_branch
                 .as_ref()
                 .map(|e| Arc::new(typecheck_expression(e, context, diagnostics)));
-            
+
             // Infer type from branches
             let if_type = typed_then.meta().1.clone();
-            
+
             thir::Expr::If(
                 Arc::new(typed_condition),
                 Arc::new(typed_then),
@@ -500,7 +545,7 @@ fn typecheck_expression(
         hir::Expression::ArrayAccess { base, index, span } => {
             let typed_base = typecheck_expression(base, context, diagnostics);
             let typed_index = typecheck_expression(index, context, diagnostics);
-            
+
             // Infer result type from base type
             let result_type = match typed_base.meta().1.as_ref() {
                 Some(hir::TypeM::Array(inner, _)) => {
@@ -524,7 +569,7 @@ fn typecheck_expression(
                     None
                 }
             };
-            
+
             thir::Expr::ArrayAccess {
                 base: Arc::new(typed_base),
                 index: Arc::new(typed_index),
@@ -533,7 +578,7 @@ fn typecheck_expression(
         }
         hir::Expression::FieldAccess { base, field, span } => {
             let typed_base = typecheck_expression(base, context, diagnostics);
-            
+
             // TODO: Look up field type from class definition
             let field_type = match typed_base.meta().1.as_ref() {
                 Some(hir::TypeM::ClassName(class_name, _)) => {
@@ -548,7 +593,7 @@ fn typecheck_expression(
                     None
                 }
             };
-            
+
             thir::Expr::FieldAccess {
                 base: Arc::new(typed_base),
                 field: field.clone(),
@@ -597,22 +642,12 @@ mod tests {
     use internal_baml_diagnostics::Diagnostics;
 
     /// Test helper to generate HIR from BAML source without validation
-    fn hir_from_source(source: &str) -> (Hir, Diagnostics) {
-        use internal_baml_parser_database::ParserDatabase;
-        
-        let mut diagnostics = Diagnostics::new(PathBuf::from("test.baml"));
-        let path = PathBuf::from("test.baml");
-        let source_file = internal_baml_diagnostics::SourceFile::from((path.clone(), source));
-        
+    fn hir_from_source(source: &'static str) -> (Hir, Diagnostics) {
         // Parse the source to AST
-        let (ast, parse_diag) = internal_baml_core::internal_baml_ast::parse(&path, &source_file)
-            .unwrap_or_else(|e| panic!("Parse error: {:?}", e));
-        
-        // Create parser database and add parsed AST
-        let mut db = ParserDatabase::new();
-        db.add_ast(ast);
-        
-        (Hir::from_ast(&db.ast), diagnostics)
+        let (parse_db, parse_diag) =
+            crate::test::ast_and_diagnostics(source).expect("Could not parse");
+
+        (Hir::from_ast(&parse_db.ast), parse_diag)
     }
 
     #[test]
@@ -625,18 +660,20 @@ mod tests {
           a
         }
         "##;
-        
+
         let (hir, mut diagnostics) = hir_from_source(source);
         assert!(!diagnostics.has_errors(), "Should parse without errors");
-        
+
         let thir = typecheck(&hir, &mut diagnostics);
         assert!(!diagnostics.has_errors(), "Should typecheck without errors");
-        
+
         // Find the test function
-        let test_fn = thir.expr_functions.iter()
+        let test_fn = thir
+            .expr_functions
+            .iter()
             .find(|f| f.name == "test_primitives")
             .expect("Should have test_primitives function");
-        
+
         // Check that the let statement has the correct inferred type
         if let Some(thir::Statement::Let { value, .. }) = test_fn.body.statements.first() {
             value
@@ -649,7 +686,7 @@ mod tests {
             panic!("Expected let statement");
         }
     }
-    
+
     #[test]
     fn typecheck_function_calls() {
         let source = r##"
@@ -662,18 +699,20 @@ mod tests {
           result
         }
         "##;
-        
+
         let (hir, mut diagnostics) = hir_from_source(source);
         assert!(!diagnostics.has_errors(), "Should parse without errors");
-        
+
         let thir = typecheck(&hir, &mut diagnostics);
         assert!(!diagnostics.has_errors(), "Should typecheck without errors");
-        
+
         // Find the test function
-        let test_fn = thir.expr_functions.iter()
+        let test_fn = thir
+            .expr_functions
+            .iter()
             .find(|f| f.name == "test_call")
             .expect("Should have test_call function");
-        
+
         // Check that the let statement has a function call with the correct return type
         if let Some(thir::Statement::Let { value, .. }) = test_fn.body.statements.first() {
             match value {
@@ -689,7 +728,7 @@ mod tests {
             panic!("Expected let statement");
         }
     }
-    
+
     #[test]
     fn typecheck_array_access() {
         let source = r##"
@@ -698,19 +737,20 @@ mod tests {
           arr[0]
         }
         "##;
-        
+
         let (hir, mut diagnostics) = hir_from_source(source);
         assert!(!diagnostics.has_errors(), "Should parse without errors");
-        
+
         let thir = typecheck(&hir, &mut diagnostics);
-        
-        
+
         assert!(!diagnostics.has_errors(), "Should typecheck without errors");
-        
-        let test_fn = thir.expr_functions.iter()
+
+        let test_fn = thir
+            .expr_functions
+            .iter()
             .find(|f| f.name == "test_array")
             .expect("Should have test_array function");
-        
+
         // Check array access type
         match &test_fn.body.return_value {
             thir::Expr::ArrayAccess { meta, .. } => {
@@ -722,7 +762,7 @@ mod tests {
             _ => panic!("Expected array access"),
         }
     }
-    
+
     // Note: If expression test removed due to BAML syntax parsing issues in test setup.
     // The core typechecking logic for if expressions is implemented and works correctly.
 }

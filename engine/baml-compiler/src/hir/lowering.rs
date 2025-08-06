@@ -3,7 +3,7 @@
 //! This files contains the convertions between Baml AST nodes to HIR nodes.
 
 use baml_types::{type_meta::base::StreamingBehavior, Constraint, ConstraintLevel, TypeValue};
-use internal_baml_core::ast::{self, App, Attribute, WithName, WithSpan};
+use internal_baml_ast::ast::{self, App, Attribute, WithName, WithSpan};
 use internal_baml_diagnostics::Span;
 
 use crate::hir::{
@@ -540,7 +540,7 @@ mod tests {
     use super::*;
 
     /// Test helper to generate HIR from BAML source
-    fn hir_from_source(source: &str) -> String {
+    fn hir_from_source(source: &'static str) -> String {
         let parser_db = crate::test::ast(source).unwrap_or_else(|e| panic!("{}", e));
         let hir = Hir::from_ast(&parser_db.ast);
         hir.pretty_print()

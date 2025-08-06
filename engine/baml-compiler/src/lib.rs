@@ -1,24 +1,26 @@
 pub mod hir;
 pub mod thir;
 
-/// Testing utilities.
-pub mod test {
+use anyhow::Context;
+
+#[cfg(test)]
+mod test {
+    use internal_baml_diagnostics::Diagnostics;
     use internal_baml_parser_database::ParserDatabase;
+    use internal_baml_parser_database::{parse, parse_and_diagnostics};
 
-    /// For tests.
-    ///
-    /// We reuse this in the VM.
-    pub fn ast(source: &str) -> anyhow::Result<ParserDatabase> {
-        let path = std::path::PathBuf::from("test.baml");
-        let source_file = internal_baml_diagnostics::SourceFile::from((path.clone(), source));
+    /// Shim helper function for testing.
+    pub fn ast(source: &'static str) -> anyhow::Result<ParserDatabase> {
+        let parser_db = parse(source).expect("Failed to parse source");
+        Ok(parser_db)
+    }
 
-        let validated_schema = internal_baml_core::validate(&path, vec![source_file]);
-
-        if validated_schema.diagnostics.has_errors() {
-            let errors = validated_schema.diagnostics.to_pretty_string();
-            anyhow::bail!("{}", errors);
-        }
-
-        Ok(validated_schema.db)
+    /// Shim helper function for testing.
+    pub fn ast_and_diagnostics(
+        source: &'static str,
+    ) -> anyhow::Result<(ParserDatabase, Diagnostics)> {
+        let (parser_db, diagnostics) =
+            parse_and_diagnostics(source).expect("Failed to parse source");
+        Ok((parser_db, diagnostics))
     }
 }

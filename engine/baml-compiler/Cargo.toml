@@ -8,7 +8,7 @@ license-file.workspace = true
 
 [dependencies]
 baml-types = { path = "../baml-lib/baml-types" }
-internal-baml-core = { path = "../baml-lib/baml-core" }
+internal-baml-ast = { path = "../baml-lib/ast" }
 internal-baml-diagnostics = { path = "../baml-lib/diagnostics" }
 internal-baml-parser-database = { path = "../baml-lib/parser-database" }
 anyhow = { workspace = true }
