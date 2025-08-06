@@ -36,6 +36,8 @@ jobs:
         run: pnpm install && pnpm run build
 
       - name: Generate preview URL
+        env:
+          FERN_TOKEN: ${{ secrets.FERN_TOKEN }}
         run: |
           fern check --strict-broken-links
           if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/canary" ]; then
