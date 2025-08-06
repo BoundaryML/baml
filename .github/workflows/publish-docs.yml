@@ -113,7 +113,7 @@ jobs:
           PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
           SLACK_BOUNDARY_BOT_TOKEN: ${{ secrets.SLACK_BOUNDARY_BOT_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_ASK_BAML_PROJECT_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_SAGE_PROJECT_ID }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN_SAM }}
         run: |
           pnpm vercel pull --environment $TARGET_ENV --yes --token=${{ secrets.VERCEL_TOKEN_SAM }}
@@ -122,7 +122,7 @@ jobs:
       - name: Deploy preview backend
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_ASK_BAML_PROJECT_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_SAGE_PROJECT_ID }}
         run: |
           pnpm vercel deploy --target $TARGET_ENV --prebuilt --token=${{ secrets.VERCEL_TOKEN_SAM }} | tee preview_url.txt
 
