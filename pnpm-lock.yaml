@@ -31,6 +31,9 @@ importers:
       typescript:
         specifier: 5.8.3
         version: 5.8.3
+      vercel:
+        specifier: ^44.5.5
+        version: 44.5.5(@swc/core@1.12.7)(rollup@4.43.0)
       vitest:
         specifier: 3.2.3
         version: 3.2.3(@edge-runtime/vm@3.2.0)(@types/debug@4.1.12)(@types/node@24.0.3)(jiti@2.4.2)(jsdom@20.0.3(canvas@2.11.2))(lightningcss@1.30.1)(terser@5.43.1)(tsx@4.20.3)(yaml@2.8.0)
@@ -537,9 +540,6 @@ importers:
       url-join:
         specifier: ^5.0.0
         version: 5.0.0
-      vercel:
-        specifier: ^44.5.5
-        version: 44.5.5(@swc/core@1.12.7)(rollup@4.43.0)
       vitest:
         specifier: ^3.2.4
         version: 3.2.4(@edge-runtime/vm@3.2.0)(@types/debug@4.1.12)(@types/node@20.17.17)(jiti@2.4.2)(jsdom@20.0.3(canvas@2.11.2))(lightningcss@1.30.1)(terser@5.43.1)(tsx@4.20.3)(yaml@2.8.0)
@@ -661,7 +661,7 @@ importers:
         version: 5.8.3
       webpack:
         specifier: ^5.88.0
-        version: 5.99.9(esbuild@0.25.2)(webpack-cli@5.1.4)
+        version: 5.99.9(@swc/core@1.12.7)(esbuild@0.25.2)(webpack-cli@5.1.4)
       webpack-cli:
         specifier: ^5.1.4
         version: 5.1.4(webpack@5.99.9)
@@ -892,7 +892,7 @@ importers:
         version: 24.0.3
       '@types/webpack':
         specifier: 5.28.5
-        version: 5.28.5
+        version: 5.28.5(@swc/core@1.12.7)
       next:
         specifier: 15.3.3
         version: 15.3.3(@opentelemetry/api@1.9.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
@@ -17879,11 +17879,11 @@ snapshots:
 
   '@types/vscode@1.96.0': {}
 
-  '@types/webpack@5.28.5':
+  '@types/webpack@5.28.5(@swc/core@1.12.7)':
     dependencies:
       '@types/node': 20.17.17
       tapable: 2.2.2
-      webpack: 5.99.9
+      webpack: 5.99.9(@swc/core@1.12.7)
     transitivePeerDependencies:
       - '@swc/core'
       - esbuild
@@ -18468,17 +18468,17 @@ snapshots:
 
   '@webpack-cli/configtest@2.1.1(webpack-cli@5.1.4)(webpack@5.99.9)':
     dependencies:
-      webpack: 5.99.9(esbuild@0.25.2)(webpack-cli@5.1.4)
+      webpack: 5.99.9(@swc/core@1.12.7)(esbuild@0.25.2)(webpack-cli@5.1.4)
       webpack-cli: 5.1.4(webpack@5.99.9)
 
   '@webpack-cli/info@2.0.2(webpack-cli@5.1.4)(webpack@5.99.9)':
     dependencies:
-      webpack: 5.99.9(esbuild@0.25.2)(webpack-cli@5.1.4)
+      webpack: 5.99.9(@swc/core@1.12.7)(esbuild@0.25.2)(webpack-cli@5.1.4)
       webpack-cli: 5.1.4(webpack@5.99.9)
 
   '@webpack-cli/serve@2.0.5(webpack-cli@5.1.4)(webpack@5.99.9)':
     dependencies:
-      webpack: 5.99.9(esbuild@0.25.2)(webpack-cli@5.1.4)
+      webpack: 5.99.9(@swc/core@1.12.7)(esbuild@0.25.2)(webpack-cli@5.1.4)
       webpack-cli: 5.1.4(webpack@5.99.9)
 
   '@xtuc/ieee754@1.2.0': {}
@@ -19427,7 +19427,7 @@ snapshots:
       postcss-value-parser: 4.2.0
       semver: 7.7.2
     optionalDependencies:
-      webpack: 5.99.9(esbuild@0.25.2)(webpack-cli@5.1.4)
+      webpack: 5.99.9(@swc/core@1.12.7)(esbuild@0.25.2)(webpack-cli@5.1.4)
 
   css-select@5.1.0:
     dependencies:
@@ -24922,7 +24922,7 @@ snapshots:
 
   style-loader@4.0.0(webpack@5.99.9):
     dependencies:
-      webpack: 5.99.9(esbuild@0.25.2)(webpack-cli@5.1.4)
+      webpack: 5.99.9(@swc/core@1.12.7)(esbuild@0.25.2)(webpack-cli@5.1.4)
 
   style-mod@4.1.2: {}
 
@@ -25085,6 +25085,18 @@ snapshots:
       ansi-escapes: 4.3.2
       supports-hyperlinks: 2.3.0
 
+  terser-webpack-plugin@5.3.14(@swc/core@1.12.7)(esbuild@0.25.2)(webpack@5.99.9):
+    dependencies:
+      '@jridgewell/trace-mapping': 0.3.25
+      jest-worker: 27.5.1
+      schema-utils: 4.3.2
+      serialize-javascript: 6.0.2
+      terser: 5.43.1
+      webpack: 5.99.9(@swc/core@1.12.7)(esbuild@0.25.2)(webpack-cli@5.1.4)
+    optionalDependencies:
+      '@swc/core': 1.12.7
+      esbuild: 0.25.2
+
   terser-webpack-plugin@5.3.14(@swc/core@1.12.7)(webpack@5.99.9(@swc/core@1.12.7)):
     dependencies:
       '@jridgewell/trace-mapping': 0.3.25
@@ -25095,26 +25107,6 @@ snapshots:
       webpack: 5.99.9(@swc/core@1.12.7)
     optionalDependencies:
       '@swc/core': 1.12.7
-
-  terser-webpack-plugin@5.3.14(esbuild@0.25.2)(webpack@5.99.9):
-    dependencies:
-      '@jridgewell/trace-mapping': 0.3.25
-      jest-worker: 27.5.1
-      schema-utils: 4.3.2
-      serialize-javascript: 6.0.2
-      terser: 5.43.1
-      webpack: 5.99.9(esbuild@0.25.2)(webpack-cli@5.1.4)
-    optionalDependencies:
-      esbuild: 0.25.2
-
-  terser-webpack-plugin@5.3.14(webpack@5.99.9):
-    dependencies:
-      '@jridgewell/trace-mapping': 0.3.25
-      jest-worker: 27.5.1
-      schema-utils: 4.3.2
-      serialize-javascript: 6.0.2
-      terser: 5.43.1
-      webpack: 5.99.9
 
   terser@5.43.1:
     dependencies:
@@ -25297,7 +25289,7 @@ snapshots:
       semver: 7.7.2
       source-map: 0.7.4
       typescript: 5.8.3
-      webpack: 5.99.9(esbuild@0.25.2)(webpack-cli@5.1.4)
+      webpack: 5.99.9(@swc/core@1.12.7)(esbuild@0.25.2)(webpack-cli@5.1.4)
 
   ts-morph@12.0.0:
     dependencies:
@@ -26190,7 +26182,7 @@ snapshots:
       import-local: 3.2.0
       interpret: 3.1.1
       rechoir: 0.8.0
-      webpack: 5.99.9(esbuild@0.25.2)(webpack-cli@5.1.4)
+      webpack: 5.99.9(@swc/core@1.12.7)(esbuild@0.25.2)(webpack-cli@5.1.4)
       webpack-merge: 5.10.0
 
   webpack-merge@5.10.0:
@@ -26203,37 +26195,6 @@ snapshots:
 
   webpack-virtual-modules@0.6.2:
     optional: true
-
-  webpack@5.99.9:
-    dependencies:
-      '@types/eslint-scope': 3.7.7
-      '@types/estree': 1.0.8
-      '@types/json-schema': 7.0.15
-      '@webassemblyjs/ast': 1.14.1
-      '@webassemblyjs/wasm-edit': 1.14.1
-      '@webassemblyjs/wasm-parser': 1.14.1
-      acorn: 8.15.0
-      browserslist: 4.25.1
-      chrome-trace-event: 1.0.4
-      enhanced-resolve: 5.18.2
-      es-module-lexer: 1.7.0
-      eslint-scope: 5.1.1
-      events: 3.3.0
-      glob-to-regexp: 0.4.1
-      graceful-fs: 4.2.11
-      json-parse-even-better-errors: 2.3.1
-      loader-runner: 4.3.0
-      mime-types: 2.1.35
-      neo-async: 2.6.2
-      schema-utils: 4.3.2
-      tapable: 2.2.2
-      terser-webpack-plugin: 5.3.14(webpack@5.99.9)
-      watchpack: 2.4.4
-      webpack-sources: 3.3.3
-    transitivePeerDependencies:
-      - '@swc/core'
-      - esbuild
-      - uglify-js
 
   webpack@5.99.9(@swc/core@1.12.7):
     dependencies:
@@ -26266,7 +26227,7 @@ snapshots:
       - esbuild
       - uglify-js
 
-  webpack@5.99.9(esbuild@0.25.2)(webpack-cli@5.1.4):
+  webpack@5.99.9(@swc/core@1.12.7)(esbuild@0.25.2)(webpack-cli@5.1.4):
     dependencies:
       '@types/eslint-scope': 3.7.7
       '@types/estree': 1.0.8
@@ -26289,7 +26250,7 @@ snapshots:
       neo-async: 2.6.2
       schema-utils: 4.3.2
       tapable: 2.2.2
-      terser-webpack-plugin: 5.3.14(esbuild@0.25.2)(webpack@5.99.9)
+      terser-webpack-plugin: 5.3.14(@swc/core@1.12.7)(esbuild@0.25.2)(webpack@5.99.9)
       watchpack: 2.4.4
       webpack-sources: 3.3.3
     optionalDependencies:

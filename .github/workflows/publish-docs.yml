@@ -72,6 +72,20 @@ jobs:
         working-directory: .
         run: npm install -g fern-api
 
+      # We need to do this `deploy` step because we're relying on a pnpm workspace and Vercel doesn't play nice with this:
+      #   
+      #   - doing normal `vercel deploy` is confusing, because the monorepo can be either promptfiddle or ask-baml-backend
+      #   - doing `vercel build` in the monorepo and then `deploy --prebuilt` results in this error:
+      #
+      #       Using prebuilt build artifacts...
+      #       [Error: ENOENT: no such file or directory, lstat '/node_modules/.pnpm/next@15.4.3_@opentelemetry+api@1.9.0_react-dom@19.1.0_react@19.1.0__react@19.1.0/node_modules/next/dist/compiled/jest-worker/processChild.js'] {
+      #         errno: -2,
+      #         code: 'ENOENT',
+      #         syscall: 'lstat',
+      #         path: '/node_modules/.pnpm/next@15.4.3_@opentelemetry+api@1.9.0_react-dom@19.1.0_react@19.1.0__react@19.1.0/node_modules/next/dist/compiled/jest-worker/processChild.js'
+      #       }}
+      #
+      # So our current solution is to do this mechanism.
       - name: Pull sage-backend out of monorepo
         working-directory: ./typescript
         run: |
