@@ -1,5 +1,5 @@
 import { WebClient } from '@slack/web-api';
-import { type SendFeedbackRequest, type Message } from '@baml/sage-interface';
+import type { SendFeedbackRequest } from '@baml/sage-interface';
 
 export class SlackFeedbackLogger {
   private slack: WebClient;
