@@ -192,7 +192,7 @@ export function slugify(text: string): string {
   // Replace non-alphanumeric characters with spaces (preserving underscores as alnum)
   const normalized = text
     .split('')
-    .map((c) => (/[a-zA-Z0-9_]/.test(c) ? c : ' '))
+    .map((c) => (/[a-zA-Z0-9]/.test(c) ? c : ' '))
     .join('');
 
   // Pattern to match: consecutive caps, title case words, single caps, numbers (including underscores in words)
@@ -341,13 +341,14 @@ export class SitemapGenerator {
 
     if ('page' in item) {
       // Handle page item
-      const mdxPath = join(this.docsRoot, item.path);
+      const basePath = item.path;
+      const mdxPath = join(this.docsRoot, basePath);
       const mdxFrontmatter = this.readMdxFrontmatter(mdxPath);
 
       const pageSlug = [
         tab.tabSlug,
         ...sections.map((s) => s.sectionSlug || slugify(s.sectionDisplayName)),
-        mdxFrontmatter.slug || item.slug || slugify(item.page),
+        item.slug || slugify(item.page),
       ];
 
       // From packages/fdr-sdk/src/navigation/versions/v1/slugjoin.ts
@@ -364,7 +365,7 @@ export class SitemapGenerator {
           tab.tabDisplayName,
           ...sections.map((s) => s.sectionDisplayName),
         ],
-        href: tab.tabId === 'home' ? 'home' : pageHref,
+        href: tab.tabId === 'home' ? 'home' : (mdxFrontmatter.slug ?? pageHref),
       });
     }
 
