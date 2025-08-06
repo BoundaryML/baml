@@ -114,7 +114,7 @@ jobs:
       - name: Deploy preview backend
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_SAGE_BACKEND }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_ASK_BAML_PROJECT_ID }}
         run: |
           pnpm vercel deploy --target $TARGET_ENV --prebuilt --token=${{ secrets.VERCEL_TOKEN_SAM }} | tee preview_url.txt
 
