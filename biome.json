@@ -8,13 +8,14 @@
   },
   "files": {
     "include": [
+      "!baml_client/*.ts",
+      "!baml_client/*.tsx",
       "typescript/apps/ask-baml-client/**/*.ts",
       "typescript/apps/ask-baml-client/**/*.tsx",
       "typescript/apps/boundary-tools-backend/**/*.ts",
       "typescript/apps/boundary-tools-backend/**/*.tsx",
       "typescript/packages/boundary-tools-interface/**/*.ts",
-      "typescript/packages/boundary-tools-interface/**/*.tsx",
-      "!baml_client"
+      "typescript/packages/boundary-tools-interface/**/*.tsx"
     ]
   },
   "json": {

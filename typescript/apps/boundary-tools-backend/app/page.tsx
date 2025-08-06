@@ -2,7 +2,7 @@
 import type { QueryRequest, QueryResponse } from '@baml/boundary-tools-interface';
 import { useEffect, useState } from 'react';
 import { submitQuery } from './actions/query';
-import { PLACEHOLDER_QUERIES } from './eval_data';
+import { PLACEHOLDER_QUERIES } from './eval-data';
 async function hashQueryRequest(request: QueryRequest): Promise<string> {
   const sortedRequest = JSON.stringify(request, Object.keys(request).sort());
   const encoder = new TextEncoder();
