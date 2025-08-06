@@ -1,5 +1,5 @@
 {
-  "name": "@baml/sage-interface",
+  "name": "@baml/boundary-tools-interface",
   "version": "0.1.0",
   "description": "Shared types and interfaces for BAML Sage components",
   "main": "dist/index.js",

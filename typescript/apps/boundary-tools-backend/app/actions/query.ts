@@ -1,7 +1,7 @@
 'use server';
 
 import { b } from '../../baml_client';
-import type { QueryRequest, QueryResponse } from '@baml/sage-interface';
+import type { QueryRequest, QueryResponse } from '@baml/boundary-tools-interface';
 import { searchPinecone } from '../../lib/pinecone-api';
 
 export async function submitQuery(

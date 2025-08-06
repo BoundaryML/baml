@@ -21,7 +21,7 @@ import type {
   UserMessage,
   AssistantMessage,
   SendFeedbackRequest,
-} from '@baml/sage-interface';
+} from '@baml/boundary-tools-interface';
 
 // Test data
 const testSessionId = `test_session_${Date.now()}`;

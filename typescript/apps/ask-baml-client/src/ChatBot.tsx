@@ -4,7 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import BamlLambWhite from './baml-lamb-white.svg';
 import { type StoredMessage, messagesAtom, sessionIdAtom, resetSessionAtom, pendingQueryAtom } from './store';
-import { Message, type QueryRequest, QueryResponseSchema } from '@baml/sage-interface';
+import { Message, type QueryRequest, QueryResponseSchema } from '@baml/boundary-tools-interface';
 import { AssistantResponseFeedback } from './lib/AssistantResponseFeedback';
 
 const OPEN_BY_DEFAULT = true;

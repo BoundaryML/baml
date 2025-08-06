@@ -3,7 +3,7 @@ import type {
   UserMessage,
   AssistantMessage,
   SendFeedbackRequest,
-} from '@baml/sage-interface';
+} from '@baml/boundary-tools-interface';
 
 export interface NotionLogEntry {
   session_id: string;

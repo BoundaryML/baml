@@ -2,7 +2,7 @@ import type React from 'react';
 import { useState } from 'react';
 import { ThumbsUp, ThumbsDown } from 'lucide-react';
 import { useAtomValue } from 'jotai';
-import type { SendFeedbackRequest } from '@baml/sage-interface';
+import type { SendFeedbackRequest } from '@baml/boundary-tools-interface';
 import { sessionIdAtom, messagesAtom } from '../store';
 
 interface AssistantResponseFeedbackProps {

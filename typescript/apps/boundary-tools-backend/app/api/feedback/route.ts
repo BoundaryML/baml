@@ -1,6 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import { SendFeedbackRequestSchema } from '@baml/sage-interface';
+import { SendFeedbackRequestSchema } from '@baml/boundary-tools-interface';
 import { SlackFeedbackLogger } from '@/lib/slack-api';
 import { NotionLogger } from '@/lib/notion-api';
 

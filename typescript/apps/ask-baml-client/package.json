@@ -1,5 +1,5 @@
 {
-  "name": "fern-sage-chatbot",
+  "name": "ask-baml-client",
   "version": "1.0.0",
   "description": "TSX React chatbot for Fern documentation",
   "main": "index.js",
@@ -9,7 +9,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@baml/sage-interface": "workspace:*",
+    "@baml/boundary-tools-interface": "workspace:*",
     "@baml/ui": "workspace:*",
     "@radix-ui/react-slot": "1.2.3",
     "algoliasearch": "^5.34.1",

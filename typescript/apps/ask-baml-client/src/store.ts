@@ -1,5 +1,5 @@
 import { atom } from 'jotai';
-import type { UserMessage, AssistantMessage } from '@baml/sage-interface';
+import type { UserMessage, AssistantMessage } from '@baml/boundary-tools-interface';
 
 export type StoredMessage = {
   id: string;
