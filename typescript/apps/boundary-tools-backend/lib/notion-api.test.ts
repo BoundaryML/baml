@@ -15,13 +15,13 @@
  *    pnpm test notion-api-test
  */
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { NotionLogger, type NotionLogEntry } from './notion-api';
 import type {
-  UserMessage,
   AssistantMessage,
   SendFeedbackRequest,
+  UserMessage,
 } from '@baml/boundary-tools-interface';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { type NotionLogEntry, NotionLogger } from './notion-api';
 
 // Test data
 const testSessionId = `test_session_${Date.now()}`;
@@ -48,10 +48,7 @@ const testAssistantMessage: AssistantMessage = {
       relevance: 'relevant',
     },
   ],
-  suggested_messages: [
-    'Can you show me an example?',
-    'How do I handle errors?',
-  ],
+  suggested_messages: ['Can you show me an example?', 'How do I handle errors?'],
 };
 
 const testEntry: NotionLogEntry = {
@@ -76,9 +73,7 @@ describe('NotionLogger Integration Tests', () => {
     console.log(
       "🧹 Test completed. Note: Test entries remain in Notion database as API doesn't support deletion.",
     );
-    console.log(
-      `Search for session_id: ${testSessionId} to find test entries.`,
-    );
+    console.log(`Search for session_id: ${testSessionId} to find test entries.`);
   });
 
   describe('appendEntry', () => {
@@ -223,9 +218,9 @@ describe('NotionLogger Integration Tests', () => {
       };
 
       // Act & Assert
-      await expect(
-        logger.updateFeedback(multipleAssistantRequest),
-      ).rejects.toThrow('More than one assistant message in feedback request');
+      await expect(logger.updateFeedback(multipleAssistantRequest)).rejects.toThrow(
+        'More than one assistant message in feedback request',
+      );
 
       console.log(`✅ Correctly rejected multiple assistant messages`);
     }, 30000);

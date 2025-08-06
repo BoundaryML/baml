@@ -1,9 +1,9 @@
-import { Client, type CreatePageParameters } from '@notionhq/client';
 import type {
-  UserMessage,
   AssistantMessage,
   SendFeedbackRequest,
+  UserMessage,
 } from '@baml/boundary-tools-interface';
+import { Client, type CreatePageParameters } from '@notionhq/client';
 
 export interface NotionLogEntry {
   session_id: string;
@@ -22,15 +22,11 @@ export class NotionLogger {
     const databaseId = process.env.NOTION_ASK_BAML_LOGS_DATABASE_ID;
 
     if (!token) {
-      throw new Error(
-        'NOTION_BOUNDARY_BOT_TOKEN environment variable is required',
-      );
+      throw new Error('NOTION_BOUNDARY_BOT_TOKEN environment variable is required');
     }
 
     if (!databaseId) {
-      throw new Error(
-        'NOTION_ASK_BAML_LOGS_DATABASE_ID environment variable is required',
-      );
+      throw new Error('NOTION_ASK_BAML_LOGS_DATABASE_ID environment variable is required');
     }
 
     this.notion = new Client({ auth: token });
@@ -40,11 +36,7 @@ export class NotionLogger {
   private buildNotionProperties = (
     data: NotionLogEntry,
   ): NonNullable<CreatePageParameters['properties']> => {
-    const {
-      text: userMessageText,
-      role: _userRole,
-      ...userMessageRest
-    } = data.user_message;
+    const { text: userMessageText, role: _userRole, ...userMessageRest } = data.user_message;
     const {
       text: assistantMessageText,
       role: _assistantRole,
@@ -80,10 +72,7 @@ export class NotionLogger {
         'Feedback Type': {
           select: {
             name: data.feedback_type,
-            color:
-              data.feedback_type === 'thumbs_up'
-                ? ('green' as const)
-                : ('red' as const),
+            color: data.feedback_type === 'thumbs_up' ? ('green' as const) : ('red' as const),
           },
         },
       }),
@@ -355,10 +344,7 @@ export class NotionLogger {
 
       return { pageId };
     } catch (error) {
-      console.error(
-        `Failed to update feedback for message ${assistantMessage.message_id}:`,
-        error,
-      );
+      console.error(`Failed to update feedback for message ${assistantMessage.message_id}:`, error);
       return { pageId: null };
     }
   };

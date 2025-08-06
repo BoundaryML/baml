@@ -1,12 +1,10 @@
 'use server';
 
-import { b } from '../../baml_client';
 import type { QueryRequest, QueryResponse } from '@baml/boundary-tools-interface';
+import { b } from '../../baml_client';
 import { searchPinecone } from '../../lib/pinecone-api';
 
-export async function submitQuery(
-  request: QueryRequest,
-): Promise<QueryResponse> {
+export async function submitQuery(request: QueryRequest): Promise<QueryResponse> {
   const docs = await searchPinecone(request.message.text);
   const pineconeRankedDocs = docs.map((doc) => ({
     title: doc.title,
@@ -34,9 +32,7 @@ export async function submitQuery(
 
   // Merge titles from rankedDocs into plan.ranked_docs
   const relevantDocs = (plan.ranked_docs ?? []).map((planDoc) => {
-    const matchingRankedDoc = pineconeRankedDocs.find(
-      (rd) => rd.title === planDoc.title,
-    );
+    const matchingRankedDoc = pineconeRankedDocs.find((rd) => rd.title === planDoc.title);
     return {
       title: planDoc.title,
       url: matchingRankedDoc?.url ?? '',
@@ -50,9 +46,7 @@ export async function submitQuery(
       role: 'assistant',
       message_id: `msg-${new Date().toISOString()}`,
       text: plan.answer,
-      ranked_docs: Array.from(
-        new Map(relevantDocs.map((doc) => [doc.url, doc])).values(),
-      ),
+      ranked_docs: Array.from(new Map(relevantDocs.map((doc) => [doc.url, doc])).values()),
       suggested_messages: plan.refine_query?.suggested_queries,
     },
   };

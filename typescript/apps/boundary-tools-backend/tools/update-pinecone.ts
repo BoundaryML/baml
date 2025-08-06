@@ -9,7 +9,10 @@ async function waitForPineconeReady(queries: string[]) {
         if (results.length === 0) {
           throw new Error('No results found yet');
         }
-        console.log('Got query results', { query, results: results.map(({ title, url }) => `${title} (${url})`) });
+        console.log('Got query results', {
+          query,
+          results: results.map(({ title, url }) => `${title} (${url})`),
+        });
       },
       {
         retries: 30, // 30 retries × 2s = 60s max

@@ -1,5 +1,5 @@
+import type { AssistantMessage, UserMessage } from '@baml/boundary-tools-interface';
 import { atom } from 'jotai';
-import type { UserMessage, AssistantMessage } from '@baml/boundary-tools-interface';
 
 export type StoredMessage = {
   id: string;
@@ -55,7 +55,11 @@ const getSessionData = (): SessionData => {
     if (stored) {
       const parsed = JSON.parse(stored);
       // Validate structure and that sessionId starts with 'sess-'
-      if (parsed.sessionId?.startsWith('sess-') && Array.isArray(parsed.messages) && parsed.createdAt) {
+      if (
+        parsed.sessionId?.startsWith('sess-') &&
+        Array.isArray(parsed.messages) &&
+        parsed.createdAt
+      ) {
         return {
           ...parsed,
           messages: parsed.messages.map((msg: any) => ({

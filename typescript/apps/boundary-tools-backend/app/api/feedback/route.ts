@@ -1,8 +1,8 @@
+import { NotionLogger } from '@/lib/notion-api';
+import { SlackFeedbackLogger } from '@/lib/slack-api';
+import { SendFeedbackRequestSchema } from '@baml/boundary-tools-interface';
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import { SendFeedbackRequestSchema } from '@baml/boundary-tools-interface';
-import { SlackFeedbackLogger } from '@/lib/slack-api';
-import { NotionLogger } from '@/lib/notion-api';
 
 const slack = new SlackFeedbackLogger();
 const notionLogger = new NotionLogger();
@@ -28,11 +28,8 @@ export async function POST(request: NextRequest) {
 
     // Deliberately do not await these, so that the request can return immediately.
     (async () => {
-      const { pageId: notionPageId } =
-        await notionLogger.updateFeedback(feedbackData);
-      const notionLink = notionPageId
-        ? notionLogger.toUrl({ pageId: notionPageId })
-        : undefined;
+      const { pageId: notionPageId } = await notionLogger.updateFeedback(feedbackData);
+      const notionLink = notionPageId ? notionLogger.toUrl({ pageId: notionPageId }) : undefined;
       console.info('notionLink', notionLink);
       await slack.sendFeedback({ ...feedbackData, notionLink });
     })();

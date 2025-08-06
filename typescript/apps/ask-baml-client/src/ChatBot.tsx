@@ -1,11 +1,21 @@
+import {
+  type Message,
+  type QueryRequest,
+  QueryResponseSchema,
+} from '@baml/boundary-tools-interface';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import React, { useRef, useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import BamlLambWhite from './baml-lamb-white.svg';
-import { type StoredMessage, messagesAtom, sessionIdAtom, resetSessionAtom, pendingQueryAtom } from './store';
-import { Message, type QueryRequest, QueryResponseSchema } from '@baml/boundary-tools-interface';
 import { AssistantResponseFeedback } from './lib/AssistantResponseFeedback';
+import {
+  type StoredMessage,
+  messagesAtom,
+  pendingQueryAtom,
+  resetSessionAtom,
+  sessionIdAtom,
+} from './store';
 
 const OPEN_BY_DEFAULT = true;
 const SESSION_STORAGE_KEY = 'baml-ai-context';
@@ -33,7 +43,9 @@ const transformMessagesForAPI = (messages: StoredMessage[]): Array<Message> => {
 };
 
 // Serialize errors to storable format
-const serializeError = (error: unknown): { message: string; code?: string; statusCode?: number } => {
+const serializeError = (
+  error: unknown,
+): { message: string; code?: string; statusCode?: number } => {
   if (error instanceof Error) {
     const serialized: { message: string; code?: string; statusCode?: number } = {
       message: error.message,
@@ -144,7 +156,9 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
       };
 
       // Replace progress message with success message
-      setMessages(messagesWithProgress.map((msg) => (msg.id === progressMessage.id ? successMessage : msg)));
+      setMessages(
+        messagesWithProgress.map((msg) => (msg.id === progressMessage.id ? successMessage : msg)),
+      );
 
       // Auto-navigate to first very-relevant doc on same domain if available
       if (data.message.ranked_docs && data.message.ranked_docs.length > 0) {
@@ -174,7 +188,9 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
       };
 
       // Replace progress message with error message
-      setMessages(messagesWithProgress.map((msg) => (msg.id === progressMessage.id ? errorMessage : msg)));
+      setMessages(
+        messagesWithProgress.map((msg) => (msg.id === progressMessage.id ? errorMessage : msg)),
+      );
     } finally {
       setIsLoading(false);
     }
@@ -472,8 +488,8 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
               Welcome to BAML Assistant
             </div>
             <div style={{ fontSize: '14px', lineHeight: '1.5' }}>
-              I'm here to help you with the BAML documentation. Ask me anything about functions, types, clients, or
-              examples!
+              I'm here to help you with the BAML documentation. Ask me anything about functions,
+              types, clients, or examples!
             </div>
           </div>
         )}
@@ -545,13 +561,22 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
               <div
                 style={{
                   padding: '12px 16px',
-                  borderRadius: message.role === 'user' ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
+                  borderRadius:
+                    message.role === 'user' ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
                   fontSize: '14px',
                   lineHeight: '1.5',
                   backgroundColor:
-                    message.role === 'user' ? '#7d47e3' : message.role === 'assistant/error' ? '#fef2f2' : '#ffffff',
+                    message.role === 'user'
+                      ? '#7d47e3'
+                      : message.role === 'assistant/error'
+                        ? '#fef2f2'
+                        : '#ffffff',
                   color:
-                    message.role === 'user' ? '#ffffff' : message.role === 'assistant/error' ? '#dc2626' : '#111827',
+                    message.role === 'user'
+                      ? '#ffffff'
+                      : message.role === 'assistant/error'
+                        ? '#dc2626'
+                        : '#111827',
                   wordWrap: 'break-word',
                   border: message.role === 'user' ? 'none' : '1px solid #e5e7eb',
                   boxShadow: 'none',
@@ -567,13 +592,16 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
                       const statusCode = message.error.statusCode;
 
                       if (errorMsg.includes('fetch')) {
-                        errorText = 'Unable to connect to the AI service. Please check your connection and try again.';
+                        errorText =
+                          'Unable to connect to the AI service. Please check your connection and try again.';
                       } else if (statusCode === 429) {
                         errorText = 'Too many requests. Please wait a moment and try again.';
                       } else if (statusCode === 500) {
-                        errorText = 'Server error occurred. The AI service may be temporarily unavailable.';
+                        errorText =
+                          'Server error occurred. The AI service may be temporarily unavailable.';
                       } else if (statusCode === 404) {
-                        errorText = 'AI service endpoint not found. Please check the configuration.';
+                        errorText =
+                          'AI service endpoint not found. Please check the configuration.';
                       } else if (errorMsg.includes('HTTP error!')) {
                         errorText = `Service error: ${errorMsg}. Please try again.`;
                       } else if (errorMsg.includes('JSON')) {
@@ -588,7 +616,9 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
                     remarkPlugins={[remarkGfm]}
                     components={{
                       // Custom styles for markdown elements
-                      p: ({ children }) => <p style={{ margin: '0 0 12px 0', lineHeight: '1.6' }}>{children}</p>,
+                      p: ({ children }) => (
+                        <p style={{ margin: '0 0 12px 0', lineHeight: '1.6' }}>{children}</p>
+                      ),
                       h1: ({ children }) => (
                         <h1
                           style={{
@@ -636,7 +666,8 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
                               padding: '2px 6px',
                               borderRadius: '4px',
                               fontSize: '13px',
-                              fontFamily: 'Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+                              fontFamily:
+                                'Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
                               color: '#d63384',
                             }}
                           >
@@ -652,7 +683,8 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
                               backgroundColor: '#f8f9fa',
                               padding: '12px',
                               overflow: 'auto',
-                              fontFamily: 'Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+                              fontFamily:
+                                'Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
                             }}
                           >
                             <code style={{ backgroundColor: 'transparent' }}>
@@ -772,7 +804,9 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
                 ) : null}
 
                 {/* Feedback buttons for assistant messages */}
-                {message.role === 'assistant' && <AssistantResponseFeedback messageId={message.message_id} />}
+                {message.role === 'assistant' && (
+                  <AssistantResponseFeedback messageId={message.message_id} />
+                )}
 
                 {message.role === 'assistant/error' && (
                   <div style={{ marginTop: '12px' }}>
@@ -833,145 +867,149 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
               </div>
 
               {/* Related docs */}
-              {message.role === 'assistant' && message.ranked_docs && message.ranked_docs.length > 0 && (
-                <div
-                  style={{
-                    fontSize: '12px',
-                    color: '#6b7280',
-                    padding: '12px',
-                    backgroundColor: '#ffffff',
-                    borderRadius: '8px',
-                    border: '1px solid #e5e7eb',
-                  }}
-                >
+              {message.role === 'assistant' &&
+                message.ranked_docs &&
+                message.ranked_docs.length > 0 && (
                   <div
                     style={{
-                      fontWeight: '600',
-                      marginBottom: '8px',
-                      color: '#374151',
+                      fontSize: '12px',
+                      color: '#6b7280',
+                      padding: '12px',
+                      backgroundColor: '#ffffff',
+                      borderRadius: '8px',
+                      border: '1px solid #e5e7eb',
                     }}
                   >
-                    📖 Related documentation:
-                  </div>
-                  {message.ranked_docs.map((doc) => (
-                    <div key={doc.url} style={{ marginBottom: '4px' }}>
-                      <a
-                        href={doc.url}
-                        onClick={(e) => {
-                          // Only redirect if very-relevant and same domain, otherwise use normal link behavior
-                          if (doc.relevance === 'very-relevant' && doc.url.startsWith('/')) {
-                            e.preventDefault();
-                            // Use the global navigateToDoc function to navigate while keeping chat open
-                            if ((window as any).navigateToDoc) {
-                              (window as any).navigateToDoc(
-                                { u: doc.url, t: doc.title, sel: 'article' },
-                                message.text || '',
-                              );
-                            } else {
-                              // Fallback to normal navigation if navigateToDoc is not available
-                              window.location.href = doc.url;
-                            }
-                          }
-                          // For non-very-relevant docs or external links, let the default link behavior handle it
-                        }}
-                        style={{
-                          color: '#7d47e3',
-                          textDecoration: 'none',
-                          fontSize: '12px',
-                          transition: 'all 0.2s ease',
-                          fontWeight: '500',
-                          cursor: 'pointer',
-                        }}
-                        onMouseOver={(e) => {
-                          e.currentTarget.style.textDecoration = 'underline';
-                          e.currentTarget.style.color = '#6b3bc9';
-                        }}
-                        onFocus={(e) => {
-                          e.currentTarget.style.textDecoration = 'underline';
-                          e.currentTarget.style.color = '#6b3bc9';
-                        }}
-                        onMouseOut={(e) => {
-                          e.currentTarget.style.textDecoration = 'none';
-                          e.currentTarget.style.color = '#7d47e3';
-                        }}
-                        onBlur={(e) => {
-                          e.currentTarget.style.textDecoration = 'none';
-                          e.currentTarget.style.color = '#7d47e3';
-                        }}
-                      >
-                        {doc.title}
-                      </a>
+                    <div
+                      style={{
+                        fontWeight: '600',
+                        marginBottom: '8px',
+                        color: '#374151',
+                      }}
+                    >
+                      📖 Related documentation:
                     </div>
-                  ))}
-                </div>
-              )}
+                    {message.ranked_docs.map((doc) => (
+                      <div key={doc.url} style={{ marginBottom: '4px' }}>
+                        <a
+                          href={doc.url}
+                          onClick={(e) => {
+                            // Only redirect if very-relevant and same domain, otherwise use normal link behavior
+                            if (doc.relevance === 'very-relevant' && doc.url.startsWith('/')) {
+                              e.preventDefault();
+                              // Use the global navigateToDoc function to navigate while keeping chat open
+                              if ((window as any).navigateToDoc) {
+                                (window as any).navigateToDoc(
+                                  { u: doc.url, t: doc.title, sel: 'article' },
+                                  message.text || '',
+                                );
+                              } else {
+                                // Fallback to normal navigation if navigateToDoc is not available
+                                window.location.href = doc.url;
+                              }
+                            }
+                            // For non-very-relevant docs or external links, let the default link behavior handle it
+                          }}
+                          style={{
+                            color: '#7d47e3',
+                            textDecoration: 'none',
+                            fontSize: '12px',
+                            transition: 'all 0.2s ease',
+                            fontWeight: '500',
+                            cursor: 'pointer',
+                          }}
+                          onMouseOver={(e) => {
+                            e.currentTarget.style.textDecoration = 'underline';
+                            e.currentTarget.style.color = '#6b3bc9';
+                          }}
+                          onFocus={(e) => {
+                            e.currentTarget.style.textDecoration = 'underline';
+                            e.currentTarget.style.color = '#6b3bc9';
+                          }}
+                          onMouseOut={(e) => {
+                            e.currentTarget.style.textDecoration = 'none';
+                            e.currentTarget.style.color = '#7d47e3';
+                          }}
+                          onBlur={(e) => {
+                            e.currentTarget.style.textDecoration = 'none';
+                            e.currentTarget.style.color = '#7d47e3';
+                          }}
+                        >
+                          {doc.title}
+                        </a>
+                      </div>
+                    ))}
+                  </div>
+                )}
 
               {/* Suggestions */}
-              {message.role === 'assistant' && message.suggested_messages && message.suggested_messages.length > 0 && (
-                <div
-                  style={{
-                    fontSize: '12px',
-                    color: '#6b7280',
-                    padding: '12px',
-                    backgroundColor: '#ffffff',
-                    borderRadius: '8px',
-                    border: '1px solid #e5e7eb',
-                  }}
-                >
+              {message.role === 'assistant' &&
+                message.suggested_messages &&
+                message.suggested_messages.length > 0 && (
                   <div
                     style={{
-                      fontWeight: '600',
-                      marginBottom: '8px',
-                      color: '#374151',
+                      fontSize: '12px',
+                      color: '#6b7280',
+                      padding: '12px',
+                      backgroundColor: '#ffffff',
+                      borderRadius: '8px',
+                      border: '1px solid #e5e7eb',
                     }}
                   >
-                    💡 Suggested follow-ups:
-                  </div>
-                  {message.suggested_messages.map((suggestion, index) => (
-                    <div key={index} style={{ marginBottom: '4px' }}>
-                      <button
-                        onClick={() => sendMessage(suggestion)}
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          color: '#7d47e3',
-                          textDecoration: 'none',
-                          fontSize: '12px',
-                          transition: 'all 0.2s ease',
-                          fontWeight: '500',
-                          cursor: 'pointer',
-                          padding: '4px 8px',
-                          textAlign: 'left',
-                          width: '100%',
-                          borderRadius: '4px',
-                        }}
-                        onMouseOver={(e) => {
-                          e.currentTarget.style.backgroundColor = '#f3f4f6';
-                          e.currentTarget.style.textDecoration = 'underline';
-                          e.currentTarget.style.color = '#6b3bc9';
-                        }}
-                        onFocus={(e) => {
-                          e.currentTarget.style.backgroundColor = '#f3f4f6';
-                          e.currentTarget.style.textDecoration = 'underline';
-                          e.currentTarget.style.color = '#6b3bc9';
-                        }}
-                        onMouseOut={(e) => {
-                          e.currentTarget.style.backgroundColor = 'transparent';
-                          e.currentTarget.style.textDecoration = 'none';
-                          e.currentTarget.style.color = '#7d47e3';
-                        }}
-                        onBlur={(e) => {
-                          e.currentTarget.style.backgroundColor = 'transparent';
-                          e.currentTarget.style.textDecoration = 'none';
-                          e.currentTarget.style.color = '#7d47e3';
-                        }}
-                      >
-                        {suggestion}
-                      </button>
+                    <div
+                      style={{
+                        fontWeight: '600',
+                        marginBottom: '8px',
+                        color: '#374151',
+                      }}
+                    >
+                      💡 Suggested follow-ups:
                     </div>
-                  ))}
-                </div>
-              )}
+                    {message.suggested_messages.map((suggestion, index) => (
+                      <div key={index} style={{ marginBottom: '4px' }}>
+                        <button
+                          onClick={() => sendMessage(suggestion)}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: '#7d47e3',
+                            textDecoration: 'none',
+                            fontSize: '12px',
+                            transition: 'all 0.2s ease',
+                            fontWeight: '500',
+                            cursor: 'pointer',
+                            padding: '4px 8px',
+                            textAlign: 'left',
+                            width: '100%',
+                            borderRadius: '4px',
+                          }}
+                          onMouseOver={(e) => {
+                            e.currentTarget.style.backgroundColor = '#f3f4f6';
+                            e.currentTarget.style.textDecoration = 'underline';
+                            e.currentTarget.style.color = '#6b3bc9';
+                          }}
+                          onFocus={(e) => {
+                            e.currentTarget.style.backgroundColor = '#f3f4f6';
+                            e.currentTarget.style.textDecoration = 'underline';
+                            e.currentTarget.style.color = '#6b3bc9';
+                          }}
+                          onMouseOut={(e) => {
+                            e.currentTarget.style.backgroundColor = 'transparent';
+                            e.currentTarget.style.textDecoration = 'none';
+                            e.currentTarget.style.color = '#7d47e3';
+                          }}
+                          onBlur={(e) => {
+                            e.currentTarget.style.backgroundColor = 'transparent';
+                            e.currentTarget.style.textDecoration = 'none';
+                            e.currentTarget.style.color = '#7d47e3';
+                          }}
+                        >
+                          {suggestion}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
             </div>
           );
         })}

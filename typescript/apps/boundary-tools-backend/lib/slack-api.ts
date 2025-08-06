@@ -1,5 +1,5 @@
-import { WebClient } from '@slack/web-api';
 import type { SendFeedbackRequest } from '@baml/boundary-tools-interface';
+import { WebClient } from '@slack/web-api';
 
 export class SlackFeedbackLogger {
   private slack: WebClient;
@@ -9,9 +9,7 @@ export class SlackFeedbackLogger {
     const token = process.env.SLACK_BOUNDARY_BOT_TOKEN;
 
     if (!token) {
-      throw new Error(
-        'SLACK_BOUNDARY_BOT_TOKEN environment variable is required',
-      );
+      throw new Error('SLACK_BOUNDARY_BOT_TOKEN environment variable is required');
     }
 
     this.slack = new WebClient(token);
@@ -20,9 +18,7 @@ export class SlackFeedbackLogger {
   /**
    * Send feedback to Slack using blocks for better formatting
    */
-  sendFeedback = async (
-    request: SendFeedbackRequest & { notionLink?: string },
-  ): Promise<any> => {
+  sendFeedback = async (request: SendFeedbackRequest & { notionLink?: string }): Promise<any> => {
     const blocks = [
       {
         type: 'section',
@@ -91,9 +87,7 @@ export class SlackFeedbackLogger {
 }
 
 // Export convenience functions for backward compatibility
-export async function sendFeedbackToSlack(
-  feedback: SendFeedbackRequest,
-): Promise<any> {
+export async function sendFeedbackToSlack(feedback: SendFeedbackRequest): Promise<any> {
   const logger = new SlackFeedbackLogger();
   return logger.sendFeedback(feedback);
 }

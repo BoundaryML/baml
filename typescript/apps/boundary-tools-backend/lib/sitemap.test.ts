@@ -1,7 +1,7 @@
-import { describe, it, beforeAll, afterAll, expect } from 'vitest';
 import { type ChildProcess, spawn } from 'node:child_process';
-import { SitemapGenerator, slugify } from './sitemap';
 import { Sema } from 'async-sema';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { SitemapGenerator, slugify } from './sitemap';
 
 const TEST_DOCS_PATH = '/Users/sam/baml2/fern/docs.yml';
 
@@ -216,9 +216,7 @@ describe('Sitemap Generation and Validation', () => {
         console.log('Fern stdout:', output); // Debug output
 
         // Look for the specific ready message
-        const readyMatch = output.match(
-          /Development server ready on (http:\/\/localhost:\d+)/,
-        );
+        const readyMatch = output.match(/Development server ready on (http:\/\/localhost:\d+)/);
         if (readyMatch) {
           fernUrl = readyMatch[1];
           console.log(`✅ Fern server ready at: ${fernUrl}`);
@@ -261,9 +259,7 @@ describe('Sitemap Generation and Validation', () => {
       fetches.push(
         (async () => {
           // Clean URL construction to avoid double slashes
-          const cleanHref = entry.href.startsWith('/')
-            ? entry.href.slice(1)
-            : entry.href;
+          const cleanHref = entry.href.startsWith('/') ? entry.href.slice(1) : entry.href;
           const url = `${fernUrl}/${cleanHref}`;
           try {
             await concurrentRequestsSemaphore.acquire();

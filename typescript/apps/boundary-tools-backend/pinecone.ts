@@ -1,4 +1,4 @@
-import { populatePinecone, searchPinecone } from './lib/pinecone-api';
+import { populatePinecone } from './lib/pinecone-api';
 
 async function main() {
   await populatePinecone('/Users/sam/baml2/fern/docs.yml');

@@ -23,16 +23,11 @@ const css = (s: string) => {
 };
 
 const whenReady = (f: () => void) =>
-  document.readyState === 'loading'
-    ? document.addEventListener('DOMContentLoaded', f)
-    : f();
+  document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', f) : f();
 
 // Highlight functionality from original custom.js
 function navigateToDoc(hit: any, q: string) {
-  localStorage.setItem(
-    'baml-hl',
-    JSON.stringify({ url: hit.u, text: q, sel: hit.sel }),
-  );
+  localStorage.setItem('baml-hl', JSON.stringify({ url: hit.u, text: q, sel: hit.sel }));
 
   fetch(hit.u, { credentials: 'same-origin' })
     .then((r) => r.text())
@@ -57,15 +52,10 @@ function highlightFromStore() {
 
   whenReady(() => {
     const scope =
-      document.querySelector(data.sel) ||
-      document.querySelector('main') ||
-      document.body;
+      document.querySelector(data.sel) || document.querySelector('main') || document.body;
     if (!scope) return;
     const walker = document.createTreeWalker(scope, NodeFilter.SHOW_TEXT);
-    const re = new RegExp(
-      data.text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
-      'gi',
-    );
+    const re = new RegExp(data.text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
     let added = 0;
     while (walker.nextNode() && added < 20) {
       const n = walker.currentNode as Text;
@@ -135,7 +125,7 @@ body.resizing {
 // Query Bridge component to connect ChatbotManager with Jotai
 function QueryBridge() {
   const setPendingQuery = useSetAtom(pendingQueryAtom);
-  
+
   useEffect(() => {
     // Check for pending query every time component renders
     if (pendingQueryToSet) {
@@ -143,19 +133,19 @@ function QueryBridge() {
       pendingQueryToSet = null;
     }
   });
-  
+
   // Also set up a global function for ChatbotManager to trigger re-render
   useEffect(() => {
     (window as any).__triggerQueryBridge = () => {
       // Force a re-render by updating a dummy state
       setPendingQuery((prev) => prev);
     };
-    
+
     return () => {
       delete (window as any).__triggerQueryBridge;
     };
   }, [setPendingQuery]);
-  
+
   return null;
 }
 
@@ -182,8 +172,7 @@ class ErrorBoundary extends React.Component<
       return (
         this.props.fallback || (
           <div className="baml-error">
-            Something went wrong with the search interface. Please refresh the
-            page.
+            Something went wrong with the search interface. Please refresh the page.
           </div>
         )
       );
@@ -202,9 +191,7 @@ const ChatbotManager = {
     if (chatbotRoot && chatbotContainer) {
       try {
         chatbotRoot.render(
-          <ErrorBoundary
-            fallback={<div className="baml-error">Chatbot failed to load</div>}
-          >
+          <ErrorBoundary fallback={<div className="baml-error">Chatbot failed to load</div>}>
             <Provider>
               <QueryBridge />
               <ChatBot isOpen={flag} onClose={() => this.setOpen(false)} />
@@ -247,9 +234,7 @@ const ChatbotManager = {
 
       // Initial render with closed state
       chatbotRoot.render(
-        <ErrorBoundary
-          fallback={<div className="baml-error">Chatbot failed to load</div>}
-        >
+        <ErrorBoundary fallback={<div className="baml-error">Chatbot failed to load</div>}>
           <Provider>
             <QueryBridge />
             <ChatBot isOpen={false} onClose={() => this.setOpen(false)} />
@@ -264,10 +249,10 @@ const ChatbotManager = {
   openWithQuery(query: string) {
     // Set the pending query
     pendingQueryToSet = query;
-    
+
     this.initialize();
     this.setOpen(true);
-    
+
     // Trigger the QueryBridge to pick up the pending query
     if ((window as any).__triggerQueryBridge) {
       (window as any).__triggerQueryBridge();
@@ -311,15 +296,9 @@ function updateSearchInterface() {
       };
 
       searchInterfaceRoot.render(
-        <ErrorBoundary
-          fallback={<div className="baml-error">Search failed to load</div>}
-        >
+        <ErrorBoundary fallback={<div className="baml-error">Search failed to load</div>}>
           <Provider>
-            <AlgoliaSearch
-              onAskAI={handleAskAI}
-              onToggleAI={handleToggleAI}
-              isAIOpen={isOpen}
-            />
+            <AlgoliaSearch onAskAI={handleAskAI} onToggleAI={handleToggleAI} isAIOpen={isOpen} />
           </Provider>
         </ErrorBoundary>,
       );
@@ -337,9 +316,7 @@ function initializeSearchInterface() {
   const tryInitialize = () => {
     if (initialized) return true;
 
-    const searchTarget = document.querySelector(
-      '[data-search], .fern-search, [class*="search"]',
-    );
+    const searchTarget = document.querySelector('[data-search], .fern-search, [class*="search"]');
 
     if (!searchTarget) return false;
 
@@ -374,15 +351,9 @@ function initializeSearchInterface() {
       };
 
       searchInterfaceRoot.render(
-        <ErrorBoundary
-          fallback={<div className="baml-error">Search failed to load</div>}
-        >
+        <ErrorBoundary fallback={<div className="baml-error">Search failed to load</div>}>
           <Provider>
-            <AlgoliaSearch
-              onAskAI={handleAskAI}
-              onToggleAI={handleToggleAI}
-              isAIOpen={isOpen}
-            />
+            <AlgoliaSearch onAskAI={handleAskAI} onToggleAI={handleToggleAI} isAIOpen={isOpen} />
           </Provider>
         </ErrorBoundary>,
       );
@@ -422,9 +393,7 @@ function initializeSearchInterface() {
   // Cleanup observer after 10 seconds to prevent memory leaks
   setTimeout(() => {
     if (observer && !initialized) {
-      console.warn(
-        'Search interface not found after 10 seconds, stopping observer',
-      );
+      console.warn('Search interface not found after 10 seconds, stopping observer');
       observer.disconnect();
       observer = null;
     }
@@ -435,10 +404,7 @@ function initializeSearchInterface() {
 declare global {
   interface Window {
     initFernChatbot: (options?: { apiEndpoint?: string }) => void;
-    navigateToDoc: (
-      hit: { u: string; t: string; sel?: string },
-      q: string,
-    ) => void;
+    navigateToDoc: (hit: { u: string; t: string; sel?: string }, q: string) => void;
     __fernChatbotCleanup?: () => void;
   }
 }

@@ -68,7 +68,9 @@ function extractTextFromHtml(html: string): string {
   const $ = cheerio.load(html);
 
   // Remove unwanted elements
-  $('script, style, nav, header, footer, .navigation, .sidebar, .ads, .cookie-banner, .header, .footer').remove();
+  $(
+    'script, style, nav, header, footer, .navigation, .sidebar, .ads, .cookie-banner, .header, .footer',
+  ).remove();
 
   // Try to find main content area
   let content = '';

@@ -1,15 +1,16 @@
-import { Pinecone } from '@pinecone-database/pinecone';
-import OpenAI from 'openai';
-import { type FernDoc, SitemapEntry, SitemapGenerator, slugify } from './sitemap';
-import matter from 'gray-matter';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { Pinecone } from '@pinecone-database/pinecone';
+import { Sema } from 'async-sema';
+import matter from 'gray-matter';
+import { chunk } from 'lodash';
+import OpenAI from 'openai';
 import z from 'zod';
 import { fetchBlogContent } from './external-sitemap';
-import { Sema } from 'async-sema';
-import { chunk } from 'lodash';
+import { type SitemapEntry, SitemapGenerator } from './sitemap';
 
 const EMBEDDING_MODEL = 'text-embedding-3-large';
-const PINECONE_INDEX_NAME = process.env.NODE_ENV === 'production' ? 'ask-baml-prod' : 'ask-baml-dev';
+const PINECONE_INDEX_NAME =
+  process.env.NODE_ENV === 'production' ? 'ask-baml-prod' : 'ask-baml-dev';
 console.log('Using pinecone index:', PINECONE_INDEX_NAME);
 
 const openaiClient = new OpenAI({

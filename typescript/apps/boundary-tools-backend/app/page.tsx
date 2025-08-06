@@ -1,8 +1,8 @@
 'use client';
+import type { QueryRequest, QueryResponse } from '@baml/boundary-tools-interface';
 import { useEffect, useState } from 'react';
 import { submitQuery } from './actions/query';
 import { PLACEHOLDER_QUERIES } from './eval_data';
-import { type QueryRequest, type QueryResponse } from '@baml/boundary-tools-interface';
 async function hashQueryRequest(request: QueryRequest): Promise<string> {
   const sortedRequest = JSON.stringify(request, Object.keys(request).sort());
   const encoder = new TextEncoder();
@@ -80,9 +80,7 @@ export default function Home() {
   }: { queryIndex: number; allowCache: boolean }) => {
     setQueryResults((prev) =>
       prev.map((item, i) =>
-        i === queryIndex
-          ? { ...item, isLoading: true, error: null, response: null }
-          : item,
+        i === queryIndex ? { ...item, isLoading: true, error: null, response: null } : item,
       ),
     );
 
@@ -103,9 +101,7 @@ export default function Home() {
       }
 
       setQueryResults((prev) =>
-        prev.map((item, i) =>
-          i === queryIndex ? { ...item, response, isLoading: false } : item,
-        ),
+        prev.map((item, i) => (i === queryIndex ? { ...item, response, isLoading: false } : item)),
       );
     } catch (err) {
       setQueryResults((prev) =>
@@ -125,18 +121,14 @@ export default function Home() {
   // Function to retry all queries
   const retryAllQueries = async () => {
     await Promise.all(
-      PLACEHOLDER_QUERIES.map((_, index) =>
-        runQuery({ queryIndex: index, allowCache: false }),
-      ),
+      PLACEHOLDER_QUERIES.map((_, index) => runQuery({ queryIndex: index, allowCache: false })),
     );
   };
 
   // Run all queries on mount
   useEffect(() => {
     Promise.all(
-      PLACEHOLDER_QUERIES.map((_, index) =>
-        runQuery({ queryIndex: index, allowCache: true }),
-      ),
+      PLACEHOLDER_QUERIES.map((_, index) => runQuery({ queryIndex: index, allowCache: true })),
     );
   }, []);
 
@@ -182,16 +174,12 @@ export default function Home() {
               <tr
                 key={index}
                 className={`border-b border-gray-200 dark:border-gray-700 hover:bg-blue-50 dark:hover:bg-blue-900/20 ${
-                  index % 2 === 0
-                    ? 'bg-white dark:bg-gray-800'
-                    : 'bg-gray-100 dark:bg-gray-700'
+                  index % 2 === 0 ? 'bg-white dark:bg-gray-800' : 'bg-gray-100 dark:bg-gray-700'
                 }`}
               >
                 <td className="px-4 py-4 align-middle">
                   <button
-                    onClick={() =>
-                      runQuery({ queryIndex: index, allowCache: false })
-                    }
+                    onClick={() => runQuery({ queryIndex: index, allowCache: false })}
                     disabled={item.isLoading}
                     className="text-xs px-3 py-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded transition-colors"
                   >
@@ -207,17 +195,13 @@ export default function Home() {
                   {item.isLoading && (
                     <div className="flex items-center space-x-2">
                       <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-                      <span className="text-sm text-gray-600 dark:text-gray-400">
-                        Loading...
-                      </span>
+                      <span className="text-sm text-gray-600 dark:text-gray-400">Loading...</span>
                     </div>
                   )}
 
                   {item.error && (
                     <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded">
-                      <p className="text-sm text-red-800 dark:text-red-200">
-                        {item.error}
-                      </p>
+                      <p className="text-sm text-red-800 dark:text-red-200">{item.error}</p>
                     </div>
                   )}
 
@@ -282,9 +266,7 @@ export default function Home() {
                                 key={msgIndex}
                                 className="p-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded text-xs mb-1"
                               >
-                                <p className="text-blue-800 dark:text-blue-200">
-                                  {message}
-                                </p>
+                                <p className="text-blue-800 dark:text-blue-200">{message}</p>
                               </div>
                             ),
                           )}

@@ -1,8 +1,8 @@
+import { NotionLogger } from '@/lib/notion-api';
+import { QueryRequestSchema } from '@baml/boundary-tools-interface';
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { submitQuery } from '../../actions/query';
-import { QueryRequestSchema } from '@baml/boundary-tools-interface';
-import { NotionLogger } from '@/lib/notion-api';
 
 const notionLogger = new NotionLogger();
 
@@ -40,9 +40,6 @@ export async function POST(httpRequest: NextRequest) {
     return NextResponse.json(result);
   } catch (error) {
     console.error('Error in doc-chat API:', error);
-    return NextResponse.json(
-      { error, message: 'Internal server error' },
-      { status: 500 },
-    );
+    return NextResponse.json({ error, message: 'Internal server error' }, { status: 500 });
   }
 }

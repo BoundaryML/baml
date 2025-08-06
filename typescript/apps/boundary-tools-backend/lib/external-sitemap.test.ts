@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fetchBlogEntryList, fetchBlogContent } from './external-sitemap';
+import { fetchBlogContent, fetchBlogEntryList } from './external-sitemap';
 
 describe('external-sitemap', () => {
   it('should call fetchBlogEntryList', async () => {
@@ -8,7 +8,9 @@ describe('external-sitemap', () => {
   });
 
   it('should call fetchBlogContent', async () => {
-    const content = await fetchBlogContent('https://www.boundaryml.com/blog/schema-aligned-parsing');
+    const content = await fetchBlogContent(
+      'https://www.boundaryml.com/blog/schema-aligned-parsing',
+    );
     expect(content).toContain('The most common way to extract structured data');
   });
 });

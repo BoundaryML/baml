@@ -1,10 +1,15 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import matter from 'gray-matter';
+import urljoin from 'url-join';
 import { parse as parseYaml } from 'yaml';
 import { z } from 'zod';
-import urljoin from 'url-join';
-import { BlogSitemapEntry, OTHER_WEBSITES, fetchBlogEntryList, ExternalSitemapEntry } from './external-sitemap';
+import {
+  type BlogSitemapEntry,
+  type ExternalSitemapEntry,
+  OTHER_WEBSITES,
+  fetchBlogEntryList,
+} from './external-sitemap';
 
 export type FernSitemapEntry = {
   type: 'fern';
@@ -247,7 +252,10 @@ export class SitemapGenerator {
       ];
 
       // From packages/fdr-sdk/src/navigation/versions/v1/slugjoin.ts
-      const pageHref = urljoin(pageSlug).replaceAll('//*', '/').replace(/^\/*/, '/').replace(/\/*$/, '');
+      const pageHref = urljoin(pageSlug)
+        .replaceAll('//*', '/')
+        .replace(/^\/*/, '/')
+        .replace(/\/*$/, '');
 
       entries.push({
         type: 'fern',

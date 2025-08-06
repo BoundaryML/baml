@@ -1,9 +1,9 @@
+import type { SendFeedbackRequest } from '@baml/boundary-tools-interface';
+import { useAtomValue } from 'jotai';
+import { ThumbsDown, ThumbsUp } from 'lucide-react';
 import type React from 'react';
 import { useState } from 'react';
-import { ThumbsUp, ThumbsDown } from 'lucide-react';
-import { useAtomValue } from 'jotai';
-import type { SendFeedbackRequest } from '@baml/boundary-tools-interface';
-import { sessionIdAtom, messagesAtom } from '../store';
+import { messagesAtom, sessionIdAtom } from '../store';
 
 interface AssistantResponseFeedbackProps {
   messageId: string;
@@ -14,7 +14,9 @@ const FEEDBACK_API_ENDPOINT =
     ? 'http://localhost:4000/api/feedback'
     : 'https://boundary-tools-backend.vercel.app/api/feedback';
 
-export const AssistantResponseFeedback: React.FC<AssistantResponseFeedbackProps> = ({ messageId }) => {
+export const AssistantResponseFeedback: React.FC<AssistantResponseFeedbackProps> = ({
+  messageId,
+}) => {
   const sessionId = useAtomValue(sessionIdAtom);
   const messages = useAtomValue(messagesAtom);
   const [feedbackModal, setFeedbackModal] = useState<{
@@ -47,7 +49,9 @@ export const AssistantResponseFeedback: React.FC<AssistantResponseFeedbackProps>
 
     try {
       // Find the assistant message with the specified messageId
-      const assistantMessageIndex = messages.findIndex((m) => m.role === 'assistant' && m.message_id === messageId);
+      const assistantMessageIndex = messages.findIndex(
+        (m) => m.role === 'assistant' && m.message_id === messageId,
+      );
 
       if (assistantMessageIndex === -1) {
         throw new Error('Could not find the assistant message');
@@ -111,7 +115,9 @@ export const AssistantResponseFeedback: React.FC<AssistantResponseFeedbackProps>
       console.log('Feedback submitted successfully');
     } catch (error) {
       console.error('Error submitting feedback:', error);
-      setErrorMessage(error instanceof Error ? error.message : 'Failed to submit feedback. Please try again.');
+      setErrorMessage(
+        error instanceof Error ? error.message : 'Failed to submit feedback. Please try again.',
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -213,7 +219,8 @@ export const AssistantResponseFeedback: React.FC<AssistantResponseFeedbackProps>
               padding: '24px',
               maxWidth: '400px',
               width: '100%',
-              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+              boxShadow:
+                '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
               fontFamily: 'Inter, system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
             }}
             onClick={(e) => e.stopPropagation()}
@@ -399,7 +406,8 @@ export const AssistantResponseFeedback: React.FC<AssistantResponseFeedbackProps>
               padding: '24px',
               maxWidth: '400px',
               width: '100%',
-              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+              boxShadow:
+                '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
               fontFamily: 'Inter, system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
             }}
             onClick={(e) => e.stopPropagation()}

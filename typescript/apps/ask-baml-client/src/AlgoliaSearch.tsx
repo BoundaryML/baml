@@ -3,12 +3,7 @@
 import { liteClient as algoliasearch } from 'algoliasearch/lite';
 import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
-import {
-  Configure,
-  InstantSearch,
-  useHits,
-  useSearchBox,
-} from 'react-instantsearch';
+import { Configure, InstantSearch, useHits, useSearchBox } from 'react-instantsearch';
 import { z } from 'zod';
 import BamlLambWhite from './baml-lamb-white.svg';
 
@@ -118,13 +113,9 @@ function Hit({
 }) {
   const [showTooltip, setShowTooltip] = useState(false);
 
-  const highlightedTitle =
-    hit._highlightResult?.title?.value || hit.title || 'Untitled';
+  const highlightedTitle = hit._highlightResult?.title?.value || hit.title || 'Untitled';
   const highlightedDescription =
-    hit._highlightResult?.content?.value ||
-    hit._snippetResult?.content?.value ||
-    hit.content ||
-    '';
+    hit._highlightResult?.content?.value || hit._snippetResult?.content?.value || hit.content || '';
 
   // Determine document type based on URL path
   const getDocumentType = (pathname: string): string => {
@@ -134,9 +125,7 @@ function Hit({
     return 'document';
   };
 
-  const documentType = getDocumentType(
-    hit.pathname || hit.canonicalPathname || '',
-  );
+  const documentType = getDocumentType(hit.pathname || hit.canonicalPathname || '');
 
   // Truncate description for display
   const truncateText = (text: string, maxLength: number) => {
@@ -352,12 +341,7 @@ function CloseIcon() {
       aria-label="Close"
     >
       <title>Close</title>
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={2}
-        d="M6 18L18 6M6 6l12 12"
-      />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
     </svg>
   );
 }
@@ -551,14 +535,10 @@ function CustomSearchBox({
 
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      setSelectedIndex((prev) =>
-        prev < totalSelectableItems - 1 ? prev + 1 : -1,
-      );
+      setSelectedIndex((prev) => (prev < totalSelectableItems - 1 ? prev + 1 : -1));
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      setSelectedIndex((prev) =>
-        prev > -1 ? prev - 1 : totalSelectableItems - 1,
-      );
+      setSelectedIndex((prev) => (prev > -1 ? prev - 1 : totalSelectableItems - 1));
     } else if (e.key === 'Enter') {
       e.preventDefault();
       if (selectedIndex === 0 && inputValue.trim()) {
@@ -748,16 +728,12 @@ function CustomSearchBox({
               boxShadow: '0 1px 2px rgba(0, 0, 0, 0.1)',
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.background = isAIOpen
-                ? '#4b5563'
-                : '#6d28d9';
+              e.currentTarget.style.background = isAIOpen ? '#4b5563' : '#6d28d9';
               e.currentTarget.style.transform = 'translateY(-0.5px)';
               e.currentTarget.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.15)';
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.background = isAIOpen
-                ? '#6b7280'
-                : '#7c3aed';
+              e.currentTarget.style.background = isAIOpen ? '#6b7280' : '#7c3aed';
               e.currentTarget.style.transform = 'translateY(0)';
               e.currentTarget.style.boxShadow = '0 1px 2px rgba(0, 0, 0, 0.1)';
             }}
@@ -830,11 +806,7 @@ function CustomHits({
     >
       {/* Ask with AI option */}
       {onAskAI && actualQuery.trim() && (
-        <AskWithAIOption
-          isSelected={selectedIndex === 0}
-          onClick={onAskAI}
-          query={actualQuery}
-        />
+        <AskWithAIOption isSelected={selectedIndex === 0} onClick={onAskAI} query={actualQuery} />
       )}
 
       {/* Search results */}
@@ -842,9 +814,7 @@ function CustomHits({
         const adjustedIndex = actualQuery.trim() ? index + 1 : index;
         const isSelected = selectedIndex === adjustedIndex;
 
-        return (
-          <Hit key={hit.objectID} hit={hit} isKeyboardSelected={isSelected} />
-        );
+        return <Hit key={hit.objectID} hit={hit} isKeyboardSelected={isSelected} />;
       })}
 
       {/* No results message when there are no hits but there's a query */}
@@ -857,9 +827,7 @@ function CustomHits({
             fontSize: '14px',
           }}
         >
-          <div style={{ marginBottom: '6px' }}>
-            No results found for "{actualQuery}"
-          </div>
+          <div style={{ marginBottom: '6px' }}>No results found for "{actualQuery}"</div>
           {onAskAI && (
             <button
               type="button"
@@ -914,9 +882,7 @@ export default function AlgoliaSearch({
         }
       } catch (err) {
         if (mounted) {
-          setError(
-            err instanceof Error ? err.message : 'Failed to initialize search',
-          );
+          setError(err instanceof Error ? err.message : 'Failed to initialize search');
           setIsLoading(false);
         }
       }
@@ -1003,18 +969,10 @@ export default function AlgoliaSearch({
           highlightPostTag="__/ais-highlight__"
           distinct={true}
           analytics={true}
-          analyticsTags={[
-            'desktop',
-            'docs.boundaryml.com',
-            'search-v3-enhanced',
-          ]}
+          analyticsTags={['desktop', 'docs.boundaryml.com', 'search-v3-enhanced']}
         />
 
-        <CustomSearchBox
-          onAskAI={handleAskAI}
-          onToggleAI={handleToggleAI}
-          isAIOpen={isAIOpen}
-        />
+        <CustomSearchBox onAskAI={handleAskAI} onToggleAI={handleToggleAI} isAIOpen={isAIOpen} />
       </InstantSearch>
     </div>
   );
