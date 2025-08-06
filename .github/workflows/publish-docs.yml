@@ -39,6 +39,7 @@ jobs:
         env:
           FERN_TOKEN: ${{ secrets.FERN_TOKEN }}
         run: |
+          set -euxo pipefail
           fern check --strict-broken-links
           if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/canary" ]; then
             OUTPUT=$(fern generate --docs 2>&1) || true
