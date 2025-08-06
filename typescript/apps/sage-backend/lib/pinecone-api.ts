@@ -244,7 +244,7 @@ async function upsertToPinecone(
 /**
  * Main function to populate Pinecone with documents from sitemap
  */
-export async function populatePinecone(): Promise<void> {
+export async function populatePinecone(docsYmlPath: string): Promise<void> {
   const BLOG_FETCH_CONCURRENCY = new Sema(10);
   const ALLOW_CACHE = false;
 
@@ -255,7 +255,7 @@ export async function populatePinecone(): Promise<void> {
         readFileSync(SITEMAP_CACHE_PATH, 'utf-8'),
       ) as SitemapEntry[];
     }
-    const generator = new SitemapGenerator('/Users/sam/baml2/fern/docs.yml');
+    const generator = new SitemapGenerator(docsYmlPath);
     const sitemap = await generator.generateSitemap({
       includeBlogPosts: true,
     });

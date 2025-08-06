@@ -136,5 +136,5 @@ jobs:
           PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
         run: |
           pnpm --filter=sage-backend install
-          pnpm tsx tools/update-pinecone.ts
+          pnpm tsx tools/update-pinecone.ts ../../fern/docs.yml
           
