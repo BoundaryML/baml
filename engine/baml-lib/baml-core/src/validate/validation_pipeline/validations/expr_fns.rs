@@ -78,9 +78,13 @@ pub(super) fn validate_expr_fns(ctx: &mut Context<'_>) {
         scope.extend(taken_names.iter().cloned());
         expr_fn.expr_fn().body.stmts.iter().for_each(|s| {
             validate_stmt(ctx, s, &scope);
-            scope.insert(s.identifier().name().to_string());
+            if matches!(s, Stmt::ForLoop(_) | Stmt::Let(_)) {
+                scope.insert(s.identifier().name().to_string());
+            }
         });
-        validate_expression(ctx, &expr_fn.expr_fn().body.expr, &scope);
+        if let Some(expr) = &expr_fn.expr_fn().body.expr {
+            validate_expression(ctx, expr, &scope);
+        }
     }
 
     for toplevel_assignment in ctx.db.walk_toplevel_assignments() {
@@ -114,7 +118,12 @@ fn validate_stmt(ctx: &mut Context<'_>, stmt: &Stmt, scope: &HashSet<String>) {
             }
 
             // Validate the loop body expression
-            validate_expression(ctx, &stmt.body.expr, &loop_scope);
+            if let Some(expr) = &stmt.body.expr {
+                validate_expression(ctx, expr, &loop_scope);
+            }
+        }
+        Stmt::Expression(expr) => {
+            validate_expression(ctx, expr, scope);
         }
     }
 }
@@ -208,9 +217,13 @@ fn validate_expression(ctx: &mut Context<'_>, expr: &Expression, scope: &HashSet
             let mut scope = scope.clone();
             for stmt in block.stmts.iter() {
                 validate_stmt(ctx, stmt, &scope);
-                scope.insert(stmt.identifier().name().to_string());
+                if matches!(stmt, Stmt::Let(_) | Stmt::ForLoop(_)) {
+                    scope.insert(stmt.identifier().name().to_string());
+                }
             }
-            validate_expression(ctx, &block.expr, &scope);
+            if let Some(expr) = &block.expr {
+                validate_expression(ctx, expr, &scope);
+            }
         }
         Expression::If(cond, then, else_, span) => {
             validate_expression(ctx, cond, scope);

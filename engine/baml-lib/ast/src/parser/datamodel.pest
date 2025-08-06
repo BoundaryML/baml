@@ -232,11 +232,24 @@ top_level_assignment = { stmt }
 expr_fn = { ("function" | "fn") ~ identifier ~ named_argument_list ~ ARROW? ~ field_type_chain? ~ expr_block }
 
 // Body of a function (including curly brackets).
-expr_block = { BLOCK_OPEN ~ NEWLINE? ~ (stmt | comment_block | empty_lines)* ~ expression ~ NEWLINE? ~ BLOCK_CLOSE }
+expr_block = { BLOCK_OPEN ~ NEWLINE? ~ (stmt | comment_block | empty_lines)* ~ expression? ~ NEWLINE? ~ BLOCK_CLOSE }
 
 // Statement.
-// Currently the only statement is a let-binding.
-stmt = { ((let_expr ~ SEMICOLON?) | for_loop) ~ trailing_comment? ~ NEWLINE? }
+// TODO: Most language allow any arbitrary expression as a statement. For example,
+// you should be able to do this:
+//
+// let x = 1;
+// 2 + 2;  // Random expression as a statement.
+//
+// For now we only allow function calls, most other expressions don't make sense
+// at least at first glance, but imagine something like
+//
+// call_func(1) + call_func(2);
+//
+// With operator overloading (implicit function call) + side effects.
+//
+// Just allow any expr and fix the parser.
+stmt = { (((let_expr | fn_app | generic_fn_app) ~ SEMICOLON?) | for_loop | if_expression) ~ trailing_comment? ~ NEWLINE? }
 
 // Let-binding statement.
 let_expr = { "let" ~ identifier ~ "=" ~ expression }
@@ -247,9 +260,7 @@ fn_args = { expression? ~ ("," ~ expression)* }
 fn_app = { identifier ~ "(" ~ fn_args ~ ")" }
 
 // If expression.
-if_expression = { "if" ~ expression ~ NEWLINE? ~
-   "{"~ NEWLINE? ~ expression ~ NEWLINE? ~ "}" ~
-   ( "else" ~ "{"~ NEWLINE? ~ expression ~ NEWLINE? ~ "}" )? }
+if_expression = { "if" ~ expression ~ expr_block ~ ( "else" ~ expr_block )? }
 
 // For loop, e.g.
 // for (r in resumes) {

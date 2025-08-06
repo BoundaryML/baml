@@ -451,7 +451,11 @@ mod tests {
                     Expression::ExprBlock(ExpressionBlock { stmts, expr }, _) => {
                         assert_eq!(stmts.len(), 1);
                         assert_eq!(stmts[0].identifier().name(), "y");
-                        assert!(matches!(expr.as_ref(), Expression::App(_)));
+                        assert!(expr.as_ref().is_some());
+                        assert!(matches!(
+                            expr.as_ref().unwrap().as_ref(),
+                            Expression::App(_)
+                        ));
                     }
                     _ => panic!("Expected ExpressionBlock"),
                 }

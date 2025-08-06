@@ -16,6 +16,8 @@ pub fn compile(ast: &ParserDatabase) -> anyhow::Result<BamlVmProgram> {
     // Stage 1: AST -> HIR
     let hir = hir::Hir::from_ast(&ast.ast);
 
+    eprintln!("HIR:\n{:#?}", hir);
+
     // Stage 2: HIR -> Bytecode
     compile_hir_to_bytecode(&hir)
 }
@@ -257,7 +259,12 @@ impl<'g> HirCompiler<'g> {
             self.compile_statement(statement);
         }
 
-        self.exit_scope();
+        let scope_has_ending_expr = matches!(
+            block.statements.last(),
+            Some(hir::Statement::Expression { .. })
+        );
+
+        self.exit_scope(scope_has_ending_expr);
     }
 
     fn compile_block(&mut self, block: &hir::Block) {
@@ -298,6 +305,19 @@ impl<'g> HirCompiler<'g> {
                 self.compile_expression(expr);
             }
 
+            hir::Statement::SemicolonExpression { expr, .. } => {
+                self.compile_expression(expr);
+
+                // This could be a function call or any other random expression
+                // like:
+                //
+                // 2 + 2;
+                //
+                // But since the result is not stored anywhere (not a let
+                // binding) then implicitly drop the value.
+                self.emit(Instruction::Pop(1));
+            }
+
             hir::Statement::ForLoop {
                 identifier,
                 iterator,
@@ -320,7 +340,7 @@ impl<'g> HirCompiler<'g> {
                 let exit_jump = self.emit(Instruction::JumpIfFalse(0));
 
                 // Pop condition
-                self.emit(Instruction::Pop);
+                self.emit(Instruction::Pop(1));
 
                 // Compile loop body
                 self.compile_block(block);
@@ -334,7 +354,7 @@ impl<'g> HirCompiler<'g> {
                 self.patch_jump(exit_jump);
 
                 // Pop condition
-                self.emit(Instruction::Pop);
+                self.emit(Instruction::Pop(1));
             }
         }
     }
@@ -488,7 +508,7 @@ impl<'g> HirCompiler<'g> {
                 // Skip the `if { ... }` branch when condition is false. We'll
                 // patch this offset later when we know how many instructions to
                 // jump over, so we'll store a reference to this instruction.
-                self.emit(Instruction::Pop);
+                self.emit(Instruction::Pop(1));
 
                 // Compile the `if { ... }` branch.
                 self.compile_expression(if_branch);
@@ -505,7 +525,7 @@ impl<'g> HirCompiler<'g> {
                 // start of whatever code we have after an `if { ... }` branch
                 // without an `else` statement. Either way, we still have to
                 // discard the condition value.
-                self.emit(Instruction::Pop);
+                self.emit(Instruction::Pop(1));
 
                 // Compile the `else { ... }` branch if it exists.
                 if let Some(else_branch) = else_branch {
@@ -568,8 +588,8 @@ impl<'g> HirCompiler<'g> {
             Instruction::Jump(offset) | Instruction::JumpIfFalse(offset) => {
                 *offset = (destination - instruction_ptr) as isize;
             }
-            _ => unreachable!(
-                "expected jump instruction at index {instruction_ptr}, but got {:?}",
+            _ => panic!(
+                "compiler bug: expected jump instruction at index {instruction_ptr}, but got {:?}",
                 self.bytecode.instructions[instruction_ptr]
             ),
         }
@@ -601,7 +621,7 @@ impl<'g> HirCompiler<'g> {
     }
 
     /// Drops the current block scope we're in.
-    fn exit_scope(&mut self) {
+    fn exit_scope(&mut self, scope_has_ending_expr: bool) {
         let scope = self
             .scopes
             .pop()
@@ -611,7 +631,13 @@ impl<'g> HirCompiler<'g> {
 
         // Depth 0 is function body block. That one ends with return.
         if scope.depth >= 1 && !scope.locals.is_empty() {
-            self.emit(Instruction::EndBlock(scope.locals.len()));
+            // Keep value on top of stack if block has a return expression.
+            // Otherwise just pop locals.
+            if scope_has_ending_expr {
+                self.emit(Instruction::PopReplace(scope.locals.len()));
+            } else {
+                self.emit(Instruction::Pop(scope.locals.len()));
+            }
 
             for local in scope.locals {
                 self.locals.remove(&local);
@@ -698,7 +724,7 @@ mod tests {
     }
 
     #[test]
-    fn if_else_statement() -> anyhow::Result<()> {
+    fn if_else_return_expr() -> anyhow::Result<()> {
         assert_compiles(Program {
             source: "
                 fn main(b: bool) -> int {
@@ -710,11 +736,162 @@ mod tests {
                 vec![
                     Instruction::LoadVar(1),
                     Instruction::JumpIfFalse(4),
-                    Instruction::Pop,
+                    Instruction::Pop(1),
                     Instruction::LoadConst(0),
                     Instruction::Jump(3),
-                    Instruction::Pop,
+                    Instruction::Pop(1),
                     Instruction::LoadConst(1),
+                    Instruction::Return,
+                ],
+            )],
+        })
+    }
+
+    #[test]
+    fn if_else_return_expr_with_locals() -> anyhow::Result<()> {
+        assert_compiles(Program {
+            source: "
+                fn main(b: bool) -> int {
+                    if b {
+                        let a = 1;
+                        a
+                    } else {
+                        let a = 2;
+                        a
+                    }
+                }
+            ",
+            expected: vec![(
+                "main",
+                vec![
+                    Instruction::LoadVar(1),
+                    Instruction::JumpIfFalse(6),
+                    Instruction::Pop(1),
+                    Instruction::LoadConst(0),
+                    Instruction::LoadVar(2),
+                    Instruction::PopReplace(1),
+                    Instruction::Jump(5),
+                    Instruction::Pop(1),
+                    Instruction::LoadConst(1),
+                    Instruction::LoadVar(2),
+                    Instruction::PopReplace(1),
+                    Instruction::Return,
+                ],
+            )],
+        })
+    }
+
+    #[test]
+    fn if_else_assignment() -> anyhow::Result<()> {
+        assert_compiles(Program {
+            source: "
+                fn main(b: bool) -> int {
+                    let i = if b { 1 } else { 2 };
+                    i
+                }
+            ",
+            expected: vec![(
+                "main",
+                vec![
+                    Instruction::LoadVar(1),
+                    Instruction::JumpIfFalse(4),
+                    Instruction::Pop(1),
+                    Instruction::LoadConst(0),
+                    Instruction::Jump(3),
+                    Instruction::Pop(1),
+                    Instruction::LoadConst(1),
+                    Instruction::LoadVar(2),
+                    Instruction::Return,
+                ],
+            )],
+        })
+    }
+
+    #[test]
+    fn if_else_assignment_with_locals() -> anyhow::Result<()> {
+        assert_compiles(Program {
+            source: "
+                fn main(b: bool) -> int {
+                    let i = if b {
+                        let a = 1;
+                        a
+                    } else {
+                        let a = 2;
+                        a
+                    };
+
+                    i
+                }
+            ",
+            expected: vec![(
+                "main",
+                vec![
+                    Instruction::LoadVar(1),
+                    Instruction::JumpIfFalse(6),
+                    Instruction::Pop(1),
+                    Instruction::LoadConst(0),
+                    Instruction::LoadVar(2),
+                    Instruction::PopReplace(1),
+                    Instruction::Jump(5),
+                    Instruction::Pop(1),
+                    Instruction::LoadConst(1),
+                    Instruction::LoadVar(2),
+                    Instruction::PopReplace(1),
+                    Instruction::LoadVar(2),
+                    Instruction::Return,
+                ],
+            )],
+        })
+    }
+
+    #[test]
+    fn if_else_normal_statement() -> anyhow::Result<()> {
+        assert_compiles(Program {
+            source: "
+                fn identity(i: int) -> int {
+                    i
+                }
+
+                fn main(b: bool) -> int {
+                    let a = 1;
+
+                    if b {
+                        let x = 1;
+                        let y = 2;
+                        identity(x);
+                    } else {
+                        let x = 3;
+                        let y = 4;
+                        identity(y);
+                    }
+
+                    a
+                }
+            ",
+            expected: vec![(
+                "main",
+                vec![
+                    Instruction::LoadConst(0),
+                    Instruction::LoadVar(1),
+                    Instruction::JumpIfFalse(10),
+                    Instruction::Pop(1),
+                    Instruction::LoadConst(1),
+                    Instruction::LoadConst(2),
+                    Instruction::LoadGlobal(0),
+                    Instruction::LoadVar(3),
+                    Instruction::Call(1),
+                    Instruction::Pop(1),
+                    Instruction::Pop(2),
+                    Instruction::Jump(9),
+                    Instruction::Pop(1),
+                    Instruction::LoadConst(3),
+                    Instruction::LoadConst(4),
+                    Instruction::LoadGlobal(0),
+                    Instruction::LoadVar(4),
+                    Instruction::Call(1),
+                    Instruction::Pop(1),
+                    Instruction::Pop(2),
+                    Instruction::LoadVar(2),
                     Instruction::Return,
                 ],
             )],
@@ -844,7 +1021,7 @@ mod tests {
                 vec![
                     Instruction::LoadConst(0),
                     Instruction::LoadVar(1),
-                    Instruction::EndBlock(1),
+                    Instruction::PopReplace(1),
                     Instruction::LoadVar(1),
                     Instruction::Return,
                 ],

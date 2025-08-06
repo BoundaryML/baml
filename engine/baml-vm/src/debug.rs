@@ -112,8 +112,8 @@ pub fn display_instruction(
             format!("({})", display_value(&globals[*index], objects))
         }
 
-        Instruction::Pop
-        | Instruction::EndBlock(_)
+        Instruction::Pop(_)
+        | Instruction::PopReplace(_)
         | Instruction::AllocArray(_)
         | Instruction::DispatchFuture(_)
         | Instruction::Await
@@ -173,7 +173,7 @@ fn instruction_color(instruction: &Instruction) -> Color {
         Instruction::Call(_) => Color::Magenta,
 
         // Return instructions.
-        Instruction::Return | Instruction::Pop | Instruction::EndBlock(_) => Color::Red,
+        Instruction::Return | Instruction::Pop(_) | Instruction::PopReplace(_) => Color::Red,
 
         // Alloc instructions.
         Instruction::AllocInstance(_) | Instruction::AllocArray(_) => Color::Cyan,

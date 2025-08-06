@@ -15,7 +15,7 @@ pub mod test {
         let source_file = internal_baml_diagnostics::SourceFile::from((path.clone(), source));
 
         let validated_schema = internal_baml_core::validate(&path, vec![source_file]);
-
+        // eprintln!("{:#?}", validated_schema.db.ast);
         if validated_schema.diagnostics.has_errors() {
             let errors = validated_schema.diagnostics.to_pretty_string();
             anyhow::bail!("{}", errors);

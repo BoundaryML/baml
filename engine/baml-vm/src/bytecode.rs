@@ -78,12 +78,14 @@ pub enum Instruction {
     /// object's fields array.
     StoreField(usize),
 
-    /// Pop the top of [`crate::Vm::stack`] (the evaluation stack).
-    Pop,
-
-    /// End a nested block.
+    /// Pop N values from the top of [`crate::Vm::stack`] (the evaluation stack).
     ///
-    /// Format: `END_BLOCK n` where `n` is the number of locals in the block's
+    /// Format: `POP n` where `n` is the number of values to pop.
+    Pop(usize),
+
+    /// End a nested block and put the result value on top of the stack.
+    ///
+    /// Format: `POP_REPLACE n` where `n` is the number of locals in the block's
     /// scope.
     ///
     /// This is instruction is necessary to support "blocks as expressions".
@@ -97,14 +99,7 @@ pub enum Instruction {
     ///     };
     /// }
     /// ```
-    ///
-    /// Technicaly we could emit [`Instruction::StoreVar`] to store the block in
-    /// `a` and then emit one [`Instruction::Pop`] for each scoped local. But
-    /// if we have many locals we would need a specialized `POP_N` instruction
-    /// that pops more than one local in once VM cycle, so since we need a new
-    /// instruction anyway we'll just use this one that is similar to
-    /// [`Instruction::Return`] but for scoped blocks.
-    EndBlock(usize),
+    PopReplace(usize),
 
     /// Jump to another instruction.
     ///
@@ -179,10 +174,10 @@ impl std::fmt::Display for Instruction {
             Instruction::StoreGlobal(i) => write!(f, "STORE_GLOBAL {i}"),
             Instruction::LoadField(i) => write!(f, "LOAD_FIELD {i}"),
             Instruction::StoreField(i) => write!(f, "STORE_FIELD {i}"),
-            Instruction::Pop => f.write_str("POP"),
-            Instruction::EndBlock(n) => write!(f, "END_BLOCK {n}"),
-            Instruction::Jump(o) => write!(f, "JUMP {o}"),
-            Instruction::JumpIfFalse(o) => write!(f, "JUMP_IF_FALSE {o}"),
+            Instruction::Pop(n) => write!(f, "POP {n}"),
+            Instruction::PopReplace(n) => write!(f, "POP_SCOPE {n}"),
+            Instruction::Jump(o) => write!(f, "JUMP {o:+}"),
+            Instruction::JumpIfFalse(o) => write!(f, "JUMP_IF_FALSE {o:+}"),
             Instruction::AllocArray(n) => write!(f, "ALLOC_ARRAY {n}"),
             Instruction::AllocInstance(i) => write!(f, "ALLOC_INSTANCE {i}"),
             Instruction::DispatchFuture(i) => write!(f, "DISPATCH_FUTURE {i}"),

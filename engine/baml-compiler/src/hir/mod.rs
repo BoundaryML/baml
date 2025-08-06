@@ -119,9 +119,15 @@ pub enum Statement {
     /// Declare a (mutable) reference.
     /// There is no span because it is never present in the source AST.
     /// This is a desugaring from `if` expressions.
-    Declare { name: String, span: Span },
+    Declare {
+        name: String,
+        span: Span,
+    },
     /// Assign a mutable variable.
-    Assign { name: String, value: Expression },
+    Assign {
+        name: String,
+        value: Expression,
+    },
     /// Declare and assign a mutable reference in one statement.
     DeclareAndAssign {
         name: String,
@@ -129,9 +135,20 @@ pub enum Statement {
         span: Span,
     },
     /// Return from a function.
-    Return { expr: Expression, span: Span },
+    Return {
+        expr: Expression,
+        span: Span,
+    },
     /// Evaluate an expression as the final value of a block (without returning from function).
-    Expression { expr: Expression, span: Span },
+    Expression {
+        expr: Expression,
+        span: Span,
+    },
+    // Expression ending in semicolon.
+    SemicolonExpression {
+        expr: Expression,
+        span: Span,
+    },
     While {
         condition: Box<Expression>,
         block: Block,

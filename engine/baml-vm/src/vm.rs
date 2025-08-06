@@ -724,17 +724,17 @@ impl Vm {
                     function = self.objects[frame.function].as_function()?;
                 }
 
-                Instruction::Pop => {
-                    self.stack.pop();
+                Instruction::Pop(n) => {
+                    self.stack.drain(self.stack.len() - n..);
                 }
 
-                Instruction::EndBlock(n) => {
+                Instruction::PopReplace(n) => {
                     let Some(value) = self.stack.pop() else {
                         return Err(InternalError::UnexpectedEmptyStack.into());
                     };
 
                     // Pop the last `n` locals from the stack.
-                    self.stack.drain(self.stack.len() - n..).for_each(drop);
+                    self.stack.drain(self.stack.len() - n..);
 
                     // Push the value back on top of the stack.
                     self.stack.push(value);

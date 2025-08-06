@@ -72,6 +72,15 @@ pub fn parse_top_level_assignment(
 
             None
         }
+
+        Stmt::Expression(expr) => {
+            diagnostics.push_error(DatamodelError::new_static(
+                "expressions are not allowed at top level, only let statements are allowed",
+                expr.span().clone(),
+            ));
+
+            None
+        }
     }
 }
 
@@ -127,6 +136,9 @@ pub fn parse_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
             })
         }
         Rule::for_loop => parse_for_loop(stmt_token, diagnostics),
+        Rule::if_expression => parse_if_expression(stmt_token, diagnostics).map(Stmt::Expression),
+        Rule::fn_app => parse_fn_app(stmt_token, diagnostics).map(Stmt::Expression),
+        Rule::generic_fn_app => parse_generic_fn_app(stmt_token, diagnostics).map(Stmt::Expression),
         _ => {
             diagnostics.push_error(DatamodelError::new_static(
                 "Expected let expression or for loop",
@@ -175,12 +187,16 @@ pub fn parse_expr_block(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Optio
                 }
             }
             Rule::BLOCK_CLOSE => {
-                if expr.is_none() {
-                    diagnostics.push_error(DatamodelError::new_static(
-                        "Function must end in an expression.",
-                        span.clone(),
-                    ));
-                }
+                // Commentend out because we can't have blocks without return
+                // expressions otherwise. Plus we need functions with no return
+                // types as well.
+
+                // if expr.is_none() {
+                //     diagnostics.push_error(DatamodelError::new_static(
+                //         "Function must end in an expression.",
+                //         span.clone(),
+                //     ));
+                // }
                 break;
             }
             Rule::NEWLINE => {
@@ -202,9 +218,24 @@ pub fn parse_expr_block(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Optio
             }
         }
     }
-    expr.map(|e| ExpressionBlock {
+
+    // Special case for returning if expressions.
+    // TODO: Likely there's no need to separate statements and final expression
+    // since a statement can now be an expression. We just need to allow any
+    // random expression as a statement as mentioned in the grammar file.
+    let return_expr = if let [Stmt::Expression(Expression::If(..))] = stmts.as_slice() {
+        let Stmt::Expression(e) = stmts.remove(0) else {
+            unreachable!();
+        };
+
+        Some(Box::new(e))
+    } else {
+        expr.map(Box::new)
+    };
+
+    Some(ExpressionBlock {
         stmts,
-        expr: Box::new(e),
+        expr: return_expr,
     })
 }
 
@@ -289,12 +320,20 @@ pub fn parse_if_expression(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Op
     let span = diagnostics.span(token.as_span());
     let mut tokens = token.into_inner();
     let condition = parse_expression(tokens.next()?, diagnostics)?;
-    let then_branch = parse_expression(tokens.next()?, diagnostics)?;
-    let else_branch = parse_expression(tokens.next()?, diagnostics);
+
+    // TODO: Some weird parsing going on here, figure out rules and spans.
+    let then_branch_expr_block = tokens.next()?;
+    let then_branch_span = diagnostics.span(then_branch_expr_block.as_span());
+    let then_branch = parse_expr_block(then_branch_expr_block, diagnostics)?;
+
+    let else_branch_expr_block = tokens.next()?;
+    let else_branch_span = diagnostics.span(else_branch_expr_block.as_span());
+    let else_branch = parse_expr_block(else_branch_expr_block, diagnostics);
+
     Some(Expression::If(
         Box::new(condition),
-        Box::new(then_branch),
-        else_branch.map(Box::new),
+        Box::new(Expression::ExprBlock(then_branch, then_branch_span)),
+        else_branch.map(|e| Box::new(Expression::ExprBlock(e, else_branch_span))),
         span,
     ))
 }
