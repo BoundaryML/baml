@@ -1,7 +1,7 @@
 import { populatePinecone, searchPinecone } from './lib/pinecone-api';
 
 async function main() {
-  await populatePinecone();
+  await populatePinecone('/Users/sam/baml2/fern/docs.yml');
   // await testPopulatePinecone();
 
   // const results = await searchPinecone('is there a baml zed extension?');

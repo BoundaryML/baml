@@ -200,7 +200,7 @@ export default function Home() {
                 </td>
                 <td className="px-6 py-4 align-middle">
                   <p className="text-sm text-gray-700 dark:text-gray-300">
-                    {item.queryData.input.query}
+                    {item.queryData.input.message.text}
                   </p>
                 </td>
                 <td className="px-6 py-4">
@@ -221,20 +221,20 @@ export default function Home() {
                     </div>
                   )}
 
-                  {item.response && item.response.answer && (
+                  {item.response && item.response.message.text && (
                     <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded">
                       <p className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap">
-                        {item.response.answer}
+                        {item.response.message.text}
                       </p>
                     </div>
                   )}
                 </td>
                 <td className="px-6 py-4 max-w-96">
-                  {item.response?.ranked_docs &&
-                    item.response.ranked_docs.length > 0 && (
+                  {item.response?.message.ranked_docs &&
+                    item.response.message.ranked_docs.length > 0 && (
                       <div className="max-w-96">
                         <div>
-                          {item.response.ranked_docs.map((doc) => (
+                          {item.response.message.ranked_docs.map((doc: any) => (
                             <div
                               key={doc.url}
                               className="p-2 bg-gray-50 dark:bg-gray-700/50 rounded text-xs mb-1"
@@ -272,12 +272,12 @@ export default function Home() {
                     )}
                 </td>
                 <td className="px-6 py-4">
-                  {item.response?.suggested_messages &&
-                    item.response.suggested_messages.length > 0 && (
+                  {item.response?.message.suggested_messages &&
+                    item.response.message.suggested_messages.length > 0 && (
                       <div>
                         <div>
-                          {item.response.suggested_messages.map(
-                            (message, msgIndex) => (
+                          {item.response.message.suggested_messages.map(
+                            (message: any, msgIndex: any) => (
                               <div
                                 key={msgIndex}
                                 className="p-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded text-xs mb-1"

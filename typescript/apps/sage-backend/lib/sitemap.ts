@@ -6,12 +6,8 @@ import { z } from 'zod';
 import urljoin from 'url-join';
 import {
   BlogSitemapEntry,
-  OtherWebsite,
   OTHER_WEBSITES,
   fetchBlogEntryList,
-  extractTextFromHtml,
-  fetchBlogContent,
-  processExternalBlogs,
   ExternalSitemapEntry,
 } from './external-sitemap';
 

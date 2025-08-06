@@ -64,13 +64,35 @@ export const AssistantResponseFeedback: React.FC<
       }
       messagesToSend.push(messages[assistantMessageIndex]);
 
+      // Filter and transform messages to match the expected type
+      const filteredMessages = messagesToSend
+        .filter((msg): msg is Extract<typeof msg, { role: 'user' | 'assistant' }> => 
+          msg !== undefined && (msg.role === 'user' || msg.role === 'assistant')
+        )
+        .map((msg) => {
+          if (msg.role === 'user') {
+            return {
+              role: 'user' as const,
+              text: msg.text,
+              language_preference: msg.language_preference,
+            };
+          } else {
+            // msg.role === 'assistant'
+            return {
+              role: 'assistant' as const,
+              message_id: msg.message_id,
+              ranked_docs: msg.ranked_docs,
+              text: msg.text,
+              suggested_messages: msg.suggested_messages,
+            };
+          }
+        });
+
       const feedbackRequest: SendFeedbackRequest = {
         session_id: sessionId,
         feedback_type: feedbackModal.feedbackType,
         comment: feedbackComment || undefined,
-        messages: messagesToSend.filter(
-          (msg) => msg.role === 'user' || msg.role === 'assistant',
-        ),
+        messages: filteredMessages,
       };
 
       const response = await fetch(FEEDBACK_API_ENDPOINT, {

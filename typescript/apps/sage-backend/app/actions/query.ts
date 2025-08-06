@@ -9,9 +9,9 @@ export async function submitQuery(
 ): Promise<QueryResponse> {
   const docs = await searchPinecone(request.message.text);
   const pineconeRankedDocs = docs.map((doc) => ({
-    title: (doc.metadata?.title ?? '') as string,
-    url: (doc.metadata?.slug ?? '') as string,
-    body: (doc.metadata?.body ?? '') as string,
+    title: doc.title,
+    url: doc.url,
+    body: doc.body,
   }));
 
   const plan = await b.PlanQuery({
