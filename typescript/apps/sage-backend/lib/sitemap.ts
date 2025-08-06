@@ -344,7 +344,7 @@ export class SitemapGenerator {
         .replace(/\/$/, '');
 
       entries.push({
-        type: 'internal',
+        type: 'fern',
         filepath: mdxPath,
         displayTitle: mdxFrontmatter.title || item.page || 'PLACEHOLDER',
         displaySection: [
