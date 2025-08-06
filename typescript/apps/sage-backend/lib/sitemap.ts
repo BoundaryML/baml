@@ -1,24 +1,32 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import * as cheerio from 'cheerio';
 import matter from 'gray-matter';
 import { parse as parseYaml } from 'yaml';
 import { z } from 'zod';
 import urljoin from 'url-join';
+import {
+  BlogSitemapEntry,
+  OtherWebsite,
+  OTHER_WEBSITES,
+  fetchBlogEntryList,
+  extractTextFromHtml,
+  fetchBlogContent,
+  processExternalBlogs,
+  ExternalSitemapEntry,
+} from './external-sitemap';
+
+export type FernSitemapEntry = {
+  type: 'fern';
+  displayTitle: string;
+  displaySection: string[];
+  filepath: string;
+  href: string;
+};
 
 export type SitemapEntry =
-  | {
-      type: 'fern';
-      displayTitle: string;
-      displaySection: string[];
-      filepath: string;
-      href: string;
-    }
-  | {
-      type: 'external';
-      displayTitle: string;
-      url: string;
-    };
+  | FernSitemapEntry
+  | BlogSitemapEntry
+  | ExternalSitemapEntry;
 
 // Type definitions for OOP refactor
 export interface TabInfo {
@@ -38,18 +46,6 @@ export interface FernDoc {
   body: string;
   title: string;
   chunkIndex?: number;
-}
-
-// Interface for blog entry
-export interface BlogEntry {
-  url: string;
-  title: string;
-}
-
-// Interface for other websites
-export interface OtherWebsite {
-  page: string;
-  url: string;
 }
 
 const PageFrontmatterSchema = z.object({
@@ -92,70 +88,6 @@ export const DocsConfigSchema = z.object({
   tabs: z.record(z.string(), TabNodeSchema),
   navigation: z.array(NavigationNodeSchema),
 });
-
-// Other websites to include in sitemap
-const OTHER_WEBSITES: OtherWebsite[] = [
-  {
-    page: 'Prompt Fiddle, the BAML playground',
-    url: 'https://promptfiddle.com',
-  },
-];
-
-/**
- * Function to fetch blog entries from boundaryml.com/blog
- */
-export async function fetchBlogEntryList(): Promise<BlogEntry[]> {
-  try {
-    const response = await fetch('https://boundaryml.com/blog');
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const html = await response.text();
-    const $ = cheerio.load(html);
-    const blogEntries: BlogEntry[] = [];
-
-    // Find blog post cards by looking for the title h3 elements
-    $('h3.tracking-tight.text-xl.font-normal').each((_, element) => {
-      const $title = $(element);
-      const title = $title.text().trim();
-
-      if (!title) return;
-
-      // Find the link - look for the closest ancestor with a href or a "Read more" link
-      let $linkContainer = $title.closest('a[href*="/blog/"]');
-      if (!$linkContainer.length) {
-        // If title isn't in a link, look for a "Read more" link in the same card
-        $linkContainer = $title
-          .closest('div')
-          .find('a[href*="/blog/"]')
-          .first();
-      }
-
-      let url = $linkContainer.attr('href');
-      if (!url) return;
-
-      // Normalize the url
-      if (url.startsWith('https://boundaryml.com')) {
-        url = url.replace('https://boundaryml.com', '');
-      }
-      if (!url.startsWith('/blog/')) {
-        return;
-      }
-      url = `https://boundaryml.com${url}`;
-
-      blogEntries.push({
-        url,
-        title,
-      });
-    });
-
-    return blogEntries;
-  } catch (error) {
-    console.error(`Error fetching blog links: ${error}`);
-    throw error;
-  }
-}
 
 /**
  * Function to extract frontmatter from MDX files
@@ -247,7 +179,11 @@ export class SitemapGenerator {
   /**
    * Generate the complete sitemap
    */
-  async generateSitemap(): Promise<SitemapEntry[]> {
+  async generateSitemap({
+    includeBlogPosts = true,
+  }: {
+    includeBlogPosts?: boolean;
+  } = {}): Promise<SitemapEntry[]> {
     const sitemap: SitemapEntry[] = [];
 
     // Process each navigation item from docs
@@ -272,29 +208,17 @@ export class SitemapGenerator {
         sitemap.push(...entries);
       }
     }
+    console.log('blogposts', includeBlogPosts);
 
-    // // Fetch and add blog entries
-    // try {
-    //   const blogEntries = await fetchBlogEntryList();
-    //   for (const blogEntry of blogEntries) {
-    //     sitemap.push({
-    //       title: blogEntry.title,
-    //       url: blogEntry.url,
-    //       type: 'external',
-    //     });
-    //   }
-    // } catch (error) {
-    //   console.warn('Failed to fetch blog entries:', error);
-    // }
+    if (includeBlogPosts) {
+      try {
+        sitemap.push(...(await fetchBlogEntryList()));
+      } catch (error) {
+        console.warn('Failed to fetch blog entries:', error);
+      }
+    }
 
-    // // Add other websites
-    // for (const website of OTHER_WEBSITES) {
-    //   sitemap.push({
-    //     title: website.page,
-    //     url: website.url,
-    //     type: 'external',
-    //   });
-    // }
+    sitemap.push(...OTHER_WEBSITES);
 
     return sitemap;
   }
@@ -306,8 +230,8 @@ export class SitemapGenerator {
     item: z.infer<typeof PageNodeSchema> | z.infer<typeof SectionNodeSchema>,
     tab: TabInfo,
     sections: SectionInfo[],
-  ): SitemapEntry[] {
-    const entries: SitemapEntry[] = [];
+  ): FernSitemapEntry[] {
+    const entries: FernSitemapEntry[] = [];
 
     if ('section' in item) {
       // Handle section item - recursively process contents
@@ -371,122 +295,4 @@ export class SitemapGenerator {
       return {};
     }
   }
-}
-
-export function extractTextFromHtml(html: string): string {
-  const $ = cheerio.load(html);
-
-  // Remove unwanted elements
-  $(
-    'script, style, nav, header, footer, .navigation, .sidebar, .ads, .cookie-banner, .header, .footer',
-  ).remove();
-
-  // Try to find main content area
-  let content = '';
-  const contentSelectors = [
-    'main article',
-    'main',
-    'article',
-    '.post-content',
-    '.entry-content',
-    '.blog-content',
-    '.content',
-    '[role="main"]',
-    '.post-body',
-    '.article-content',
-  ];
-
-  for (const selector of contentSelectors) {
-    const element = $(selector);
-    if (element.length) {
-      const text = element.text().trim();
-      if (text.length > content.length) {
-        content = text;
-      }
-    }
-  }
-
-  // If no main content found, try body with unwanted elements removed
-  if (!content) {
-    $(
-      'header, footer, nav, aside, .header, .footer, .nav, .sidebar, .menu, .navigation',
-    ).remove();
-    content = $('body').text().trim();
-  }
-
-  // Clean up whitespace and normalize
-  content = content
-    .replace(/\s+/g, ' ')
-    .replace(/\n\s*\n/g, '\n')
-    .trim();
-
-  return content;
-}
-
-/**
- * Helper function to fetch and clean blog content from external URLs
- */
-export async function fetchBlogContent(url: string): Promise<string> {
-  try {
-    console.log(`Fetching blog content from: ${url}`);
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const html = await response.text();
-    const content = extractTextFromHtml(html);
-
-    if (!content || content.length < 100) {
-      throw new Error('Could not extract meaningful content from blog post');
-    }
-
-    console.log(
-      `✓ Successfully extracted ${content.length} characters from ${url}`,
-    );
-    return content;
-  } catch (error) {
-    console.error(`✗ Error fetching blog content from ${url}:`, error);
-    // Return a minimal fallback content
-    return `Blog post: ${url}\nTitle: ${url.split('/').pop()?.replace(/-/g, ' ') || 'Blog Post'}`;
-  }
-}
-
-/**
- * Process external blog posts into FernDoc format
- */
-export async function processExternalBlogs(
-  externalBlogs: SitemapEntry[],
-): Promise<FernDoc[]> {
-  const fernDocs: FernDoc[] = [];
-
-  for (const entry of externalBlogs) {
-    if (!entry.url) {
-      console.warn(
-        `Skipping external entry without URL: ${entry.displayTitle}`,
-      );
-      continue;
-    }
-
-    try {
-      const content = await fetchBlogContent(entry.url);
-      // Use the full URL as the slug for external content
-      const slug = entry.url;
-
-      fernDocs.push({
-        slug: slug,
-        path: entry.url,
-        body: content,
-        title: entry.displayTitle,
-      });
-      console.log(`✓ Processed external blog: ${entry.displayTitle}`);
-    } catch (error) {
-      console.error(
-        `✗ Failed to process external blog ${entry.displayTitle}:`,
-        error,
-      );
-    }
-  }
-
-  return fernDocs;
 }

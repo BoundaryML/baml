@@ -1,5 +1,5 @@
 import { describe, it } from 'vitest';
-import { SlackFeedbackLogger } from './slack-api';
+import { SlackFeedbackLogger } from '@/lib/slack-api';
 import type { SendFeedbackRequest } from '@baml/sage-interface';
 
 describe('SlackFeedbackLogger', () => {

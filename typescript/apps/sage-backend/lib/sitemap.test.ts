@@ -1,6 +1,6 @@
 import { describe, it, beforeAll, afterAll, expect } from 'vitest';
 import { type ChildProcess, spawn } from 'node:child_process';
-import { SitemapGenerator, slugify, type SitemapEntry } from './sitemap';
+import { SitemapGenerator, slugify } from './sitemap';
 import { Sema } from 'async-sema';
 
 const TEST_DOCS_PATH = '/Users/sam/baml2/fern/docs.yml';
@@ -247,7 +247,9 @@ describe('Sitemap Generation and Validation', () => {
 
   it('should build sitemap and validate all links', async () => {
     const generator = new SitemapGenerator(TEST_DOCS_PATH);
-    const entries = await generator.generateSitemap();
+    const entries = await generator.generateSitemap({
+      includeBlogPosts: false,
+    });
 
     const fetches = [];
 

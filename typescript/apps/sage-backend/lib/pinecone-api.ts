@@ -1,13 +1,18 @@
 import { Pinecone } from '@pinecone-database/pinecone';
 import OpenAI from 'openai';
 import {
-  loadSitemap,
-  getInternalDocs,
-  getExternalBlogs,
-  processInternalDocs,
-  processExternalBlogs,
   type FernDoc,
+  SitemapEntry,
+  SitemapGenerator,
+  slugify,
 } from './sitemap';
+import matter from 'gray-matter';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import z from 'zod';
+import { fetchBlogContent } from './external-sitemap';
+import { Sema } from 'async-sema';
+
+const EMBEDDING_MODEL = 'text-embedding-3-large';
 
 const openaiClient = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY ?? '',
@@ -17,11 +22,24 @@ const pineconeClient = new Pinecone({
   apiKey: process.env.PINECONE_API_KEY ?? '',
 });
 
-const pineconeIndex = pineconeClient.Index('baml-index-sage');
+const pineconeIndex = pineconeClient.Index(
+  process.env.NODE_ENV === 'production'
+    ? 'baml-index-sage'
+    : 'baml-index-sage-test',
+);
+
+const CorpusDocumentSchema = z.object({
+  title: z.string(),
+  url: z.string(),
+  body: z.string(),
+  chunkIndex: z.number().optional(),
+});
+
+export type CorpusDocument = z.infer<typeof CorpusDocumentSchema>;
 
 export interface EmbeddingWithMetadata {
   embedding: number[];
-  document: FernDoc;
+  document: CorpusDocument;
 }
 
 /**
@@ -143,19 +161,24 @@ export function chunkMarkdown(text: string, maxChunkSize = 3000): string[] {
  * Generate embeddings for text chunks and prepare for Pinecone upsert
  */
 async function generateEmbeddingsForDocs(
-  docs: FernDoc[],
+  docs: CorpusDocument[],
 ): Promise<EmbeddingWithMetadata[]> {
-  const chunkedDocs: { doc: FernDoc; chunk: string; chunkIndex: number }[] =
-    docs.flatMap((doc: FernDoc) => {
-      const chunks = chunkMarkdown(doc.body);
-      return chunks.map((chunk, chunkIndex) => ({
-        doc,
-        chunk,
-        chunkIndex,
-      }));
-    });
+  const chunkedDocs: {
+    doc: CorpusDocument;
+    chunk: string;
+    chunkIndex: number;
+  }[] = docs.flatMap((doc: CorpusDocument) => {
+    const chunks = chunkMarkdown(doc.body);
+    return chunks.map((chunk, chunkIndex) => ({
+      doc,
+      chunk,
+      chunkIndex,
+    }));
+  });
 
-  console.log(`Created ${chunkedDocs.length} chunks from ${docs.length} documents`);
+  console.log(
+    `Created ${chunkedDocs.length} chunks from ${docs.length} documents`,
+  );
 
   // Generate embeddings for all chunks
   const embeddingsWithMetadata: EmbeddingWithMetadata[] = await Promise.all(
@@ -164,7 +187,7 @@ async function generateEmbeddingsForDocs(
       const estimatedTokens = estimateTokens(chunk);
       if (estimatedTokens > 7500) {
         console.warn(
-          `⚠️  Chunk ${chunkIndex} for ${doc.slug} is large: ~${estimatedTokens} tokens (${chunk.length} chars)`,
+          `⚠️  Chunk ${chunkIndex} for ${doc.url} is large: ~${estimatedTokens} tokens (${chunk.length} chars)`,
         );
         // Truncate if still too large
         if (estimatedTokens > 8000) {
@@ -181,8 +204,7 @@ async function generateEmbeddingsForDocs(
       return {
         embedding: embeddingResponse.data[0].embedding,
         document: {
-          slug: doc.slug,
-          path: doc.path,
+          url: doc.url,
           body: chunk,
           title: doc.title,
           chunkIndex,
@@ -197,14 +219,15 @@ async function generateEmbeddingsForDocs(
 /**
  * Upsert embeddings to Pinecone in batches
  */
-async function upsertToPinecone(embeddingsWithMetadata: EmbeddingWithMetadata[]): Promise<void> {
+async function upsertToPinecone(
+  embeddingsWithMetadata: EmbeddingWithMetadata[],
+): Promise<void> {
   // Prepare records for Pinecone using the combined data
   const records = embeddingsWithMetadata.map(({ embedding, document }) => ({
-    id: `${document.slug.replace(/[^a-zA-Z0-9-_]/g, '_')}-chunk-${document.chunkIndex}`,
+    id: `${slugify(document.title)}-chunk-${document.chunkIndex}`,
     values: embedding,
     metadata: {
-      slug: document.slug,
-      path: document.path,
+      slug: document.url,
       body: document.body,
       title: document.title,
     },
@@ -222,224 +245,90 @@ async function upsertToPinecone(embeddingsWithMetadata: EmbeddingWithMetadata[])
  * Main function to populate Pinecone with documents from sitemap
  */
 export async function populatePinecone(): Promise<void> {
-  // Read sitemap.json which contains all documentation sources
-  const sitemap = loadSitemap();
-  console.log(`Found ${sitemap.length} total entries in sitemap`);
+  const BLOG_FETCH_CONCURRENCY = new Sema(10);
+  const ALLOW_CACHE = false;
 
-  // Separate internal docs and external blog posts
-  const internalDocs = getInternalDocs(sitemap);
-  const externalBlogs = getExternalBlogs(sitemap);
+  const sitemapEntries = await (async () => {
+    const SITEMAP_CACHE_PATH = './sitemap.json';
+    if (ALLOW_CACHE && existsSync(SITEMAP_CACHE_PATH)) {
+      return JSON.parse(
+        readFileSync(SITEMAP_CACHE_PATH, 'utf-8'),
+      ) as SitemapEntry[];
+    }
+    const generator = new SitemapGenerator('/Users/sam/baml2/fern/docs.yml');
+    const sitemap = await generator.generateSitemap({
+      includeBlogPosts: true,
+    });
+    writeFileSync(SITEMAP_CACHE_PATH, JSON.stringify(sitemap, null, 2));
+    return sitemap;
+  })();
+  console.log(`Loaded ${sitemapEntries.length} sitemap entries`);
 
+  const fernCorpusDocs = sitemapEntries
+    .filter((entry) => entry.type === 'fern')
+    .map((entry) => ({
+      title: entry.displayTitle,
+      url: entry.href,
+      body: matter(readFileSync(entry.filepath, 'utf-8')).content,
+    }));
+  const blogCorpusDocs = await Promise.all(
+    sitemapEntries
+      .filter((entry) => entry.type === 'blog')
+      .map(async (entry) => {
+        try {
+          await BLOG_FETCH_CONCURRENCY.acquire();
+          return {
+            title: entry.title,
+            url: entry.url,
+            body: await fetchBlogContent(entry.url),
+          };
+        } finally {
+          BLOG_FETCH_CONCURRENCY.release();
+        }
+      }),
+  );
+  const otherCorpusDocs = sitemapEntries
+    .filter((entry) => entry.type === 'other')
+    .map((entry) => ({
+      title: entry.title,
+      url: entry.url,
+      body: entry.title,
+    }));
   console.log(
-    `Processing ${internalDocs.length} internal docs and ${externalBlogs.length} external blog posts`,
+    `Loaded ${fernCorpusDocs.length} fern corpus docs, ${blogCorpusDocs.length} blog corpus docs, and ${otherCorpusDocs.length} other corpus docs`,
   );
 
-  // Delete all existing records once before starting
-  try {
-    await pineconeIndex.deleteAll();
-    console.log('Cleared existing Pinecone records');
-  } catch (e) {
-    console.log('No existing records to delete');
-  }
-
-  // Process internal docs first
-  const internalFernDocs = processInternalDocs(internalDocs);
-
-  // Process external blog posts
-  const externalFernDocs = await processExternalBlogs(externalBlogs);
-
-  // Combine all documents
-  const allDocs = [...internalFernDocs, ...externalFernDocs];
-  console.log(`Total documents to process: ${allDocs.length}`);
-
-  // Process docs in batches of 10
-  for (let i = 0; i < allDocs.length; i += 10) {
-    const batch = allDocs.slice(i, i + 10);
-    console.log(
-      `Processing batch ${Math.floor(i / 10) + 1}/${Math.ceil(allDocs.length / 10)}`,
-    );
-
-    // Generate embeddings for the batch
-    const embeddingsWithMetadata = await generateEmbeddingsForDocs(batch);
-
-    // Upsert to Pinecone
-    await upsertToPinecone(embeddingsWithMetadata);
-  }
-
+  const embeddingsWithMetadata = await generateEmbeddingsForDocs([
+    ...fernCorpusDocs,
+    ...blogCorpusDocs,
+    ...otherCorpusDocs,
+  ]);
   console.log(
-    `✅ Successfully populated Pinecone with ${allDocs.length} documents`,
+    `Computed embeddings for ${embeddingsWithMetadata.length} chunks`,
   );
-}
 
-/**
- * Test function to verify populate works with a small subset
- */
-export async function testPopulatePinecone(): Promise<boolean> {
-  try {
-    // Read sitemap and take a small sample
-    const sitemap = loadSitemap();
-
-    const sampleInternal = getInternalDocs(sitemap).slice(0, 2);
-    const sampleExternal = getExternalBlogs(sitemap).slice(0, 1);
-
-    console.log(
-      `Testing with ${sampleInternal.length} internal docs and ${sampleExternal.length} external blogs`,
-    );
-
-    // Test internal doc processing
-    const internalFernDocs = processInternalDocs(sampleInternal);
-    for (const doc of internalFernDocs) {
-      console.log(`✓ Internal doc "${doc.title}": ${doc.body.length} characters`);
-    }
-
-    // Test external blog processing
-    const externalFernDocs = await processExternalBlogs(sampleExternal);
-    for (const doc of externalFernDocs) {
-      console.log(`✓ External blog "${doc.title}": ${doc.body.length} characters`);
-      console.log(doc.body.slice(0, 200));
-    }
-
-    console.log('✅ Test completed successfully');
-    return true;
-  } catch (error) {
-    console.error('❌ Test failed:', error);
-    return false;
-  }
+  await upsertToPinecone(embeddingsWithMetadata);
+  console.log(
+    `✅ Successfully populated Pinecone with ${embeddingsWithMetadata.length} chunks`,
+  );
 }
 
 /**
  * Search Pinecone for relevant documents using vector similarity
  */
-export async function searchPinecone(query: string, count = 5) {
+export async function searchPinecone(query: string) {
   const results = await pineconeIndex.query({
     vector: await openaiClient.embeddings
       .create({
-        model: 'text-embedding-3-large',
+        model: EMBEDDING_MODEL,
         input: query,
       })
       .then((res) => res.data[0].embedding),
-    topK: count,
+    topK: 7,
     includeMetadata: true,
   });
-  console.log('Got matches', results.matches.length);
-  return results.matches;
-}
-
-/**
- * Copy vectors from baml-index to baml-index-sage (utility function)
- */
-export async function copyPineconeIndex(): Promise<void> {
-  const sourceIndex = pineconeClient.Index('baml-index');
-  const targetIndex = pineconeClient.Index('baml-index-sage');
-
-  try {
-    // Get index statistics to understand the data size
-    const stats = await sourceIndex.describeIndexStats();
-    console.log('Source index stats:', stats);
-
-    const totalVectors = stats.totalRecordCount || 0;
-    if (totalVectors === 0) {
-      console.log('No vectors found in source index');
-      return;
-    }
-
-    console.log(
-      `Copying ${totalVectors} vectors from baml-index to baml-index-sage...`,
-    );
-
-    // We need to query in batches since Pinecone doesn't have a "list all" operation
-    const batchSize = 1000;
-    let copiedCount = 0;
-
-    // Get all unique namespaces first
-    const namespaces = Object.keys(stats.namespaces || { '': stats });
-
-    for (const namespace of namespaces) {
-      console.log(`Processing namespace: ${namespace || 'default'}`);
-
-      // Query with a zero vector to get vectors (this is a workaround)
-      const queryOptions = {
-        topK: Math.min(batchSize, 10000), // Pinecone max is 10000
-        includeMetadata: true,
-        includeValues: true,
-      };
-
-      // We need to provide a vector for the query, so we'll use a dummy vector
-      let vectorDimension = 3072; // Default for text-embedding-3-large
-
-      try {
-        // Try to get a sample vector to determine dimensions
-        const sampleQueryOptions = {
-          ...queryOptions,
-          vector: new Array(vectorDimension).fill(0),
-          topK: 1,
-        };
-
-        const sampleQuery = namespace
-          ? await sourceIndex.namespace(namespace).query(sampleQueryOptions)
-          : await sourceIndex.query(sampleQueryOptions);
-
-        if (sampleQuery.matches.length > 0) {
-          vectorDimension =
-            sampleQuery.matches[0].values?.length || vectorDimension;
-        }
-      } catch (e) {
-        console.log(
-          'Could not determine vector dimension, using default:',
-          vectorDimension,
-        );
-      }
-
-      // Query all vectors in this namespace
-      const finalQueryOptions = {
-        ...queryOptions,
-        vector: new Array(vectorDimension).fill(0),
-        topK: 10000, // Get as many as possible
-      };
-
-      const queryResult = namespace
-        ? await sourceIndex.namespace(namespace).query(finalQueryOptions)
-        : await sourceIndex.query(finalQueryOptions);
-
-      const vectors = queryResult.matches;
-      console.log(
-        `Found ${vectors.length} vectors in namespace: ${namespace || 'default'}`,
-      );
-
-      if (vectors.length === 0) continue;
-
-      // Prepare records for upsert
-      const records = vectors.map((match) => ({
-        id: match.id,
-        values: match.values || [],
-        metadata: match.metadata || {},
-      }));
-
-      // Upsert in smaller batches
-      const upsertBatchSize = 100;
-      for (let i = 0; i < records.length; i += upsertBatchSize) {
-        const batch = records.slice(i, i + upsertBatchSize);
-
-        if (namespace) {
-          await targetIndex.namespace(namespace).upsert(batch);
-        } else {
-          await targetIndex.upsert(batch);
-        }
-
-        copiedCount += batch.length;
-        console.log(`Copied ${copiedCount}/${totalVectors} vectors...`);
-      }
-    }
-
-    console.log(
-      `Successfully copied ${copiedCount} vectors from baml-index to baml-index-sage`,
-    );
-
-    // Verify the copy
-    const targetStats = await targetIndex.describeIndexStats();
-    console.log('Target index stats after copy:', targetStats);
-  } catch (error) {
-    console.error('Error copying Pinecone index:', error);
-    throw error;
-  }
+  console.info(`Found ${results.matches.length} matches in pinecone for query`);
+  return results.matches.map((match) =>
+    CorpusDocumentSchema.parse(match.metadata),
+  );
 }

@@ -105,3 +105,31 @@ jobs:
         uses: thollander/actions-comment-pull-request@v3.0.1
         with:
           file-path: ../sage-backend/preview_url.txt
+  
+  pinecone:
+    runs-on: ubuntu-latest
+    permissions: write-all
+    defaults:
+      run:
+        working-directory: ../sage-backend
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js and pnpm
+        uses: ./.github/actions/setup-node
+        with:
+          install-dependencies: true
+
+      - name: Set environment variables
+        run: |
+          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/canary" ]; then
+            echo NODE_ENV=production >>$GITHUB_ENV
+          else
+            echo NODE_ENV=development >>$GITHUB_ENV
+          fi
+
+      - name: Update pinecone
+        run: |
+          pnpm tsx tools/update-pinecone.ts
+          

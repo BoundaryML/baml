@@ -39,8 +39,10 @@
       "Bash(npm run lint)",
       "Bash(npm run format:*)",
       "Bash(npm run:*)",
-      "Bash(npx biome check:*)"
+      "Bash(npx biome check:*)",
+      "Bash(npx tsc:*)"
     ],
     "deny": []
-  }
+  },
+  "$schema": "https://json.schemastore.org/claude-code-settings.json"
 }

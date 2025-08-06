@@ -1,908 +1,1363 @@
 [
   {
-    "title": "What is BAML?",
-    "path": "01-guide/what-are-function-definitions.mdx",
-    "section": "Guide > Introduction",
-    "slug": "/guide/introduction/what-is-baml",
-    "type": "internal"
-  },
-  {
-    "title": "What is baml_src?",
-    "path": "01-guide/what-is-baml_src.mdx",
-    "section": "Guide > Introduction",
-    "slug": "/guide/introduction/baml_src",
-    "type": "internal"
-  },
-  {
-    "title": "What is baml_client?",
-    "path": "01-guide/what-is-baml_client.mdx",
-    "section": "Guide > Introduction",
-    "slug": "/guide/introduction/baml_client",
-    "type": "internal"
-  },
-  {
-    "title": "VSCode Extension",
-    "path": "01-guide/01-editors/vscode.mdx",
-    "section": "Guide > Installation: Editors",
-    "slug": "/guide/installation-editors/vs-code-extension",
-    "type": "internal"
-  },
-  {
-    "title": "Cursor",
-    "path": "01-guide/01-editors/cursor.mdx",
-    "section": "Guide > Installation: Editors",
-    "slug": "/guide/installation-editors/cursor-extension",
-    "type": "internal"
-  },
-  {
-    "title": "Others",
-    "path": "01-guide/01-editors/others.mdx",
-    "section": "Guide > Installation: Editors",
-    "slug": "/guide/installation-editors/others",
-    "type": "internal"
-  },
-  {
-    "title": "Python",
-    "path": "01-guide/02-languages/python.mdx",
-    "section": "Guide > Installation: Language",
-    "slug": "/guide/installation-language/python",
-    "type": "internal"
-  },
-  {
-    "title": "Typescript",
-    "path": "01-guide/02-languages/typescript.mdx",
-    "section": "Guide > Installation: Language",
-    "slug": "/guide/installation-language/typescript",
-    "type": "internal"
-  },
-  {
-    "title": "Ruby",
-    "path": "01-guide/02-languages/ruby.mdx",
-    "section": "Guide > Installation: Language",
-    "slug": "/guide/installation-language/ruby",
-    "type": "internal"
-  },
-  {
-    "title": "REST API (other languages)",
-    "path": "01-guide/02-languages/rest.mdx",
-    "section": "Guide > Installation: Language",
-    "slug": "/guide/installation-language/rest-api-other-languages",
-    "type": "internal"
-  },
-  {
-    "title": "React/Next.js Setup",
-    "path": "01-guide/08-frameworks/01-react-nextjs/01-quick-start.mdx",
-    "section": "Guide > Framework Integration > React/Next.js",
-    "slug": "/guide/framework-integration/react-next-js/quick-start",
-    "type": "internal"
-  },
-  {
-    "title": "Building a Chatbot with BAML React Hooks",
-    "path": "01-guide/08-frameworks/01-react-nextjs/02-chatbot.mdx",
-    "section": "Guide > Framework Integration > React/Next.js",
-    "description": "Learn to build a streaming chatbot using BAML React hooks and Next.js",
-    "slug": "/guide/framework-integration/react-next-js/building-a-chatbot",
-    "type": "internal"
-  },
-  {
-    "title": "Set Environment Variables",
-    "path": "01-guide/03-development/environment-variables.mdx",
-    "section": "Guide > Development",
-    "slug": "/guide/development/environment-variables",
-    "type": "internal"
-  },
-  {
-    "title": "Terminal Logs",
-    "path": "01-guide/03-development/terminal-logs.mdx",
-    "section": "Guide > Development",
-    "slug": "/guide/development/terminal-logs",
-    "type": "internal"
-  },
-  {
-    "title": "Upgrading BAML / Fixing Version Mismatches",
-    "path": "01-guide/03-development/upgrade-baml-versions.mdx",
-    "section": "Guide > Development",
-    "slug": "/guide/development/upgrade-baml-versions",
-    "type": "internal"
-  },
-  {
-    "title": "AWS",
-    "path": "01-guide/03-development/deploying/aws.mdx",
-    "section": "Guide > Development > Deploying",
-    "slug": "/guide/development/deploying/aws",
-    "type": "internal"
-  },
-  {
-    "title": "Docker",
-    "path": "01-guide/03-development/deploying/docker.mdx",
-    "section": "Guide > Development > Deploying",
-    "slug": "/guide/development/deploying/docker",
-    "type": "internal"
-  },
-  {
-    "title": "OpenAPI",
-    "path": "01-guide/03-development/deploying/openapi.mdx",
-    "section": "Guide > Development > Deploying",
-    "slug": "/guide/development/deploying/docker-rest-api",
-    "type": "internal"
-  },
-  {
-    "title": "Prompting in BAML",
-    "path": "01-guide/04-baml-basics/my-first-function.mdx",
-    "section": "Guide > BAML Basics",
-    "slug": "/guide/baml-basics/prompting-with-baml",
-    "type": "internal"
-  },
-  {
-    "title": "Switching LLMs",
-    "path": "01-guide/04-baml-basics/switching-llms.mdx",
-    "section": "Guide > BAML Basics",
-    "slug": "/guide/baml-basics/switching-llms",
-    "type": "internal"
-  },
-  {
-    "title": "Testing functions",
-    "path": "01-guide/04-baml-basics/testing-functions.mdx",
-    "section": "Guide > BAML Basics",
-    "slug": "/guide/baml-basics/testing-functions",
-    "type": "internal"
-  },
-  {
-    "title": "Streaming",
-    "path": "01-guide/04-baml-basics/streaming.mdx",
-    "section": "Guide > BAML Basics",
-    "slug": "/guide/baml-basics/streaming",
-    "type": "internal"
-  },
-  {
-    "title": "Multi-Modal (Images / Audio)",
-    "path": "01-guide/04-baml-basics/multi-modal.mdx",
-    "section": "Guide > BAML Basics",
-    "slug": "/guide/baml-basics/multi-modal",
-    "type": "internal"
-  },
-  {
-    "title": "Error Handling",
-    "path": "01-guide/04-baml-basics/error-handling.mdx",
-    "section": "Guide > BAML Basics",
-    "slug": "/guide/baml-basics/error-handling",
-    "type": "internal"
-  },
-  {
-    "title": "Concurrent function calls",
-    "path": "01-guide/04-baml-basics/concurrent-calls.mdx",
-    "section": "Guide > BAML Basics",
-    "slug": "/guide/baml-basics/concurrent-calls",
-    "type": "internal"
-  },
-  {
-    "title": "Collector",
-    "path": "01-guide/05-baml-advanced/collector.mdx",
-    "section": "Guide > BAML Advanced",
-    "slug": "/guide/baml-advanced/collector-track-tokens",
-    "type": "internal"
-  },
-  {
-    "title": "Client Registry",
-    "path": "01-guide/05-baml-advanced/client-registry.mdx",
-    "section": "Guide > BAML Advanced",
-    "slug": "/guide/baml-advanced/llm-client-registry",
-    "type": "internal"
-  },
-  {
-    "title": "Reusing Prompt Snippets",
-    "path": "01-guide/05-baml-advanced/reusing-prompt-snippets.mdx",
-    "section": "Guide > BAML Advanced",
-    "slug": "/guide/baml-advanced/reusing-prompt-snippets",
-    "type": "internal"
-  },
-  {
-    "title": "Prompt Caching / Message Role Metadata",
-    "path": "01-guide/05-baml-advanced/prompt-caching.mdx",
-    "section": "Guide > BAML Advanced",
-    "slug": "/guide/baml-advanced/prompt-caching-message-role-metadata",
-    "type": "internal"
-  },
-  {
-    "title": "Checks and Asserts",
-    "path": "01-guide/05-baml-advanced/checks-and-asserts.mdx",
-    "section": "Guide > BAML Advanced",
-    "slug": "/guide/baml-advanced/checks-and-asserts",
-    "type": "internal"
-  },
-  {
-    "title": "Modular API",
-    "path": "01-guide/05-baml-advanced/modular-api.mdx",
-    "section": "Guide > BAML Advanced",
-    "slug": "/guide/baml-advanced/modular-api",
-    "type": "internal"
-  },
-  {
-    "title": "Boundary Studio",
-    "path": "01-guide/07-observability/studio.mdx",
-    "section": "Guide > Boundary Cloud > Observability",
-    "slug": "/guide/boundary-cloud/observability/tracking-usage",
-    "type": "internal"
-  },
-  {
-    "title": "Comparing Marvin",
-    "path": "01-guide/09-comparisons/marvin.mdx",
-    "section": "Guide > Comparisons",
-    "slug": "/guide/comparisons/baml-vs-marvin",
-    "type": "internal"
-  },
-  {
-    "title": "Comparing Pydantic",
-    "path": "01-guide/09-comparisons/pydantic.mdx",
-    "section": "Guide > Comparisons",
-    "slug": "/guide/comparisons/baml-vs-pydantic",
-    "type": "internal"
-  },
-  {
-    "title": "Contact",
-    "path": "01-guide/contact.mdx",
-    "slug": "/guide/contact",
-    "type": "internal"
-  },
-  {
-    "title": "Interactive Examples",
-    "path": "02-examples/interactive-examples.mdx",
-    "slug": "/examples/interactive-examples",
-    "type": "internal"
-  },
-  {
-    "title": "Reduce Hallucinations",
-    "path": "01-guide/06-prompt-engineering/hallucinations.mdx",
-    "section": "Examples > Prompt Engineering",
-    "slug": "/examples/prompt-engineering/reducing-hallucinations",
-    "type": "internal"
-  },
-  {
-    "title": "Classification",
-    "path": "01-guide/06-prompt-engineering/classification.mdx",
-    "section": "Examples > Prompt Engineering",
-    "slug": "/examples/prompt-engineering/classification",
-    "type": "internal"
-  },
-  {
-    "title": "Chat",
-    "path": "01-guide/06-prompt-engineering/chat-history.mdx",
-    "section": "Examples > Prompt Engineering",
-    "slug": "/examples/prompt-engineering/chat",
-    "type": "internal"
-  },
-  {
-    "title": "Tools / Function Calling",
-    "path": "01-guide/06-prompt-engineering/tools.mdx",
-    "section": "Examples > Prompt Engineering",
-    "slug": "/examples/prompt-engineering/tools-function-calling",
-    "type": "internal"
-  },
-  {
-    "title": "Chain-of-Thought Prompting",
-    "path": "01-guide/06-prompt-engineering/chain-of-thought.mdx",
-    "section": "Examples > Prompt Engineering",
-    "slug": "/examples/prompt-engineering/chain-of-thought",
-    "type": "internal"
-  },
-  {
-    "title": "Creating a Classification Function with Symbol Tuning",
-    "path": "01-guide/06-prompt-engineering/symbol-tuning.mdx",
-    "section": "Examples > Prompt Engineering",
-    "slug": "/examples/prompt-engineering/symbol-tuning",
-    "type": "internal"
-  },
-  {
-    "title": "PII Data Extraction / Scrubbing",
-    "path": "01-guide/06-prompt-engineering/pii-data-extraction.mdx",
-    "section": "Examples > Prompt Engineering",
-    "slug": "/examples/prompt-engineering/pii-data-extraction-scrubbing",
-    "type": "internal"
-  },
-  {
-    "title": "Action Item Extraction",
-    "path": "01-guide/06-prompt-engineering/action-items.mdx",
-    "section": "Examples > Prompt Engineering",
-    "slug": "/examples/prompt-engineering/action-item-extraction",
-    "type": "internal"
-  },
-  {
-    "title": "Retrieval-Augmented Generation (RAG)",
-    "path": "01-guide/06-prompt-engineering/rag.mdx",
-    "section": "Examples > Prompt Engineering",
-    "slug": "/examples/prompt-engineering/retrieval-augmented-generation",
-    "type": "internal"
-  },
-  {
-    "title": "BAML Reference",
-    "path": "03-reference/overview.mdx",
-    "slug": "/ref/overview",
-    "type": "internal"
-  },
-  {
-    "title": "init",
-    "path": "03-reference/baml-cli/init.mdx",
-    "section": "BAML Reference > baml-cli",
-    "slug": "/ref/baml-cli/init",
-    "type": "internal"
-  },
-  {
-    "title": "generate",
-    "path": "03-reference/baml-cli/generate.mdx",
-    "section": "BAML Reference > baml-cli",
-    "slug": "/ref/baml-cli/generate",
-    "type": "internal"
-  },
-  {
-    "title": "test",
-    "path": "03-reference/baml-cli/test.mdx",
-    "section": "BAML Reference > baml-cli",
-    "slug": "/ref/baml-cli/test",
-    "type": "internal"
-  },
-  {
-    "title": "serve",
-    "path": "03-reference/baml-cli/serve.mdx",
-    "section": "BAML Reference > baml-cli",
-    "slug": "/ref/baml-cli/serve",
-    "type": "internal"
-  },
-  {
-    "title": "dev",
-    "path": "03-reference/baml-cli/dev.mdx",
-    "section": "BAML Reference > baml-cli",
-    "slug": "/ref/baml-cli/dev",
-    "type": "internal"
-  },
-  {
-    "title": "fmt",
-    "path": "03-reference/baml-cli/fmt.mdx",
-    "section": "BAML Reference > baml-cli",
-    "slug": "/ref/baml-cli/fmt",
-    "type": "internal"
-  },
-  {
-    "title": "comments",
-    "path": "03-reference/baml/comments.mdx",
-    "section": "BAML Reference > Language Reference > General BAML Syntax",
-    "slug": "/ref/baml/general-baml-syntax/comments",
-    "type": "internal"
-  },
-  {
-    "title": "Environment Variables",
-    "path": "03-reference/baml/env-vars.mdx",
-    "section": "BAML Reference > Language Reference > General BAML Syntax",
-    "slug": "/ref/baml/general-baml-syntax/environment-variables",
-    "type": "internal"
-  },
-  {
-    "title": "string",
-    "path": "03-reference/baml/string.mdx",
-    "section": "BAML Reference > Language Reference > General BAML Syntax",
-    "slug": "/ref/baml/general-baml-syntax/string",
-    "type": "internal"
-  },
-  {
-    "title": "int / float",
-    "path": "03-reference/baml/int-float.mdx",
-    "section": "BAML Reference > Language Reference > General BAML Syntax",
-    "slug": "/ref/baml/general-baml-syntax/int-float",
-    "type": "internal"
-  },
-  {
-    "title": "bool",
-    "path": "03-reference/baml/bool.mdx",
-    "section": "BAML Reference > Language Reference > General BAML Syntax",
-    "slug": "/ref/baml/general-baml-syntax/bool",
-    "type": "internal"
-  },
-  {
-    "title": "array (list)",
-    "path": "03-reference/baml/array.mdx",
-    "section": "BAML Reference > Language Reference > General BAML Syntax",
-    "slug": "/ref/baml/general-baml-syntax/array-list",
-    "type": "internal"
-  },
-  {
-    "title": "map (dictionary)",
-    "path": "03-reference/baml/map.mdx",
-    "section": "BAML Reference > Language Reference > General BAML Syntax",
-    "slug": "/ref/baml/general-baml-syntax/map-dictionary",
-    "type": "internal"
-  },
-  {
-    "title": "Image / Audio / Pdf / Video",
-    "path": "03-reference/baml/media.mdx",
-    "section": "BAML Reference > Language Reference > General BAML Syntax",
-    "slug": "/ref/baml/general-baml-syntax/media",
-    "type": "internal"
-  },
-  {
-    "title": "Types",
-    "path": "03-reference/baml/types.mdx",
-    "section": "BAML Reference > Language Reference",
-    "slug": "/ref/baml/types",
-    "type": "internal"
-  },
-  {
-    "title": "function",
-    "path": "03-reference/baml/function.mdx",
-    "section": "BAML Reference > Language Reference",
-    "slug": "/ref/baml/function",
-    "type": "internal"
-  },
-  {
-    "title": "test",
-    "path": "03-reference/baml/test.mdx",
-    "section": "BAML Reference > Language Reference",
-    "slug": "/ref/baml/test",
-    "type": "internal"
-  },
-  {
-    "title": "LLM Clients (client<llm>)",
-    "path": "03-reference/baml/client-llm.mdx",
-    "section": "BAML Reference > Language Reference",
-    "slug": "/ref/baml/client-llm",
-    "type": "internal"
-  },
-  {
-    "title": "class",
-    "path": "03-reference/baml/class.mdx",
-    "section": "BAML Reference > Language Reference",
-    "slug": "/ref/baml/class",
-    "type": "internal"
-  },
-  {
-    "title": "enum",
-    "path": "03-reference/baml/enum.mdx",
-    "section": "BAML Reference > Language Reference",
-    "slug": "/ref/baml/enum",
-    "type": "internal"
-  },
-  {
-    "title": "generator",
-    "path": "03-reference/generator.mdx",
-    "section": "BAML Reference > Language Reference",
-    "slug": "/ref/baml/generator",
-    "type": "internal"
-  },
-  {
-    "title": "Collector",
-    "path": "03-reference/baml_client/collector.mdx",
-    "section": "BAML Reference > Generated baml_client",
-    "slug": "/ref/baml_client/collector",
-    "type": "internal"
-  },
-  {
-    "title": "config (logging / environment variables)",
-    "path": "03-reference/baml_client/config.mdx",
-    "section": "BAML Reference > Generated baml_client",
-    "slug": "/ref/baml_client/config",
-    "type": "internal"
-  },
-  {
-    "title": "AsyncClient / SyncClient",
-    "path": "03-reference/baml_client/client.mdx",
-    "section": "BAML Reference > Generated baml_client",
-    "slug": "/ref/baml_client/client",
-    "type": "internal"
-  },
-  {
-    "title": "TypeBuilder",
-    "path": "03-reference/baml_client/typebuilder.mdx",
-    "section": "BAML Reference > Generated baml_client",
-    "slug": "/ref/baml_client/type-builder",
-    "type": "internal"
-  },
-  {
-    "title": "Client Registry",
-    "path": "01-guide/05-baml-advanced/client-registry.mdx",
-    "section": "BAML Reference > Generated baml_client",
-    "slug": "/ref/baml_client/client-registry",
-    "type": "internal"
-  },
-  {
-    "title": "Image / Audio / Pdf / Video",
-    "path": "03-reference/baml_client/media.mdx",
-    "section": "BAML Reference > Generated baml_client",
-    "description": "Learn how to handle image, audio, Pdf, and video inputs in BAML functions",
-    "slug": "/ref/baml_client/media",
-    "type": "internal"
-  },
-  {
-    "title": "Image",
-    "path": "03-reference/baml_client/image.mdx",
-    "section": "BAML Reference > Generated baml_client",
-    "description": "Learn how to handle image inputs in BAML functions",
-    "slug": "/ref/baml_client/image",
-    "type": "internal"
-  },
-  {
-    "title": "Audio",
-    "path": "03-reference/baml_client/audio.mdx",
-    "section": "BAML Reference > Generated baml_client",
-    "description": "Learn how to handle audio inputs in BAML functions",
-    "slug": "/ref/baml_client/audio",
-    "type": "internal"
-  },
-  {
-    "title": "Pdf",
-    "path": "03-reference/baml_client/pdf.mdx",
-    "section": "BAML Reference > Generated baml_client",
-    "description": "Learn how to handle Pdf inputs in BAML functions",
-    "slug": "/ref/baml_client/pdf",
-    "type": "internal"
-  },
-  {
-    "title": "Video",
-    "path": "03-reference/baml_client/video.mdx",
-    "section": "BAML Reference > Generated baml_client",
-    "description": "Learn how to handle video inputs in BAML functions",
-    "slug": "/ref/baml_client/video",
-    "type": "internal"
-  },
-  {
-    "title": "BAML Error Types",
-    "path": "03-reference/baml_client/errors/overview.mdx",
-    "section": "BAML Reference > Generated baml_client > Errors",
-    "description": "Technical reference for BAML error handling classes",
-    "slug": "/ref/baml_client/errors/overview",
-    "type": "internal"
-  },
-  {
-    "title": "BamlValidationError",
-    "path": "03-reference/baml_client/errors/baml-validation-error.mdx",
-    "section": "BAML Reference > Generated baml_client > Errors",
-    "description": "Technical reference for the BamlValidationError class",
-    "slug": "/ref/baml_client/errors/baml-validation-error",
-    "type": "internal"
-  },
-  {
-    "title": "BamlClientFinishReasonError",
-    "path": "03-reference/baml_client/errors/baml-client-finish-reason-error.mdx",
-    "section": "BAML Reference > Generated baml_client > Errors",
-    "description": "Technical reference for the BamlClientFinishReasonError class",
-    "slug": "/ref/baml_client/errors/baml-client-finish-reason-error",
-    "type": "internal"
-  },
-  {
-    "title": "Generated Hooks Reference",
-    "path": "03-reference/baml_client/react-nextjs/use-function-name.mdx",
-    "section": "BAML Reference > Generated baml_client > React/Next.js",
-    "description": "Technical reference for BAML's auto-generated React hooks",
-    "slug": "/ref/baml_client/react-next-js/use-function-name-hook",
-    "type": "internal"
-  },
-  {
-    "title": "Hook Input Type Reference",
-    "path": "03-reference/baml_client/react-nextjs/hook-input.mdx",
-    "section": "BAML Reference > Generated baml_client > React/Next.js",
-    "description": "Technical reference for the BAML React hook input type",
-    "slug": "/ref/baml_client/react-next-js/hook-input",
-    "type": "internal"
-  },
-  {
-    "title": "Hook Output Type Reference",
-    "path": "03-reference/baml_client/react-nextjs/hook-output.mdx",
-    "section": "BAML Reference > Generated baml_client > React/Next.js",
-    "description": "Technical reference for the BAML React hook output type",
-    "slug": "/ref/baml_client/react-next-js/hook-output",
-    "type": "internal"
-  },
-  {
-    "title": "Hook Data Type Reference",
-    "path": "03-reference/baml_client/react-nextjs/hook-data.mdx",
-    "section": "BAML Reference > Generated baml_client > React/Next.js",
-    "description": "Technical reference for the BAML React hook data type",
-    "slug": "/ref/baml_client/react-next-js/hook-data",
-    "type": "internal"
-  },
-  {
-    "title": "What are attributes?",
-    "path": "03-reference/baml/attributes/attributes-overview.mdx",
-    "section": "BAML Reference > Attributes",
-    "slug": "/ref/attributes/what-are-attributes",
-    "type": "internal"
-  },
-  {
-    "title": "@alias / @@alias",
-    "path": "03-reference/baml/attributes/alias.mdx",
-    "section": "BAML Reference > Attributes",
-    "slug": "/ref/attributes/alias",
-    "type": "internal"
-  },
-  {
-    "title": "@description / @@description",
-    "path": "03-reference/baml/attributes/description.mdx",
-    "section": "BAML Reference > Attributes",
-    "slug": "/ref/attributes/description",
-    "type": "internal"
-  },
-  {
-    "title": "@skip",
-    "path": "03-reference/baml/attributes/skip.mdx",
-    "section": "BAML Reference > Attributes",
-    "slug": "/ref/attributes/skip",
-    "type": "internal"
-  },
-  {
-    "title": "@assert",
-    "path": "03-reference/baml/attributes/assert.mdx",
-    "section": "BAML Reference > Attributes",
-    "slug": "/ref/attributes/assert",
-    "type": "internal"
-  },
-  {
-    "title": "@check",
-    "path": "03-reference/baml/attributes/check.mdx",
-    "section": "BAML Reference > Attributes",
-    "slug": "/ref/attributes/check",
-    "type": "internal"
-  },
-  {
-    "title": "Jinja in Attributes",
-    "path": "03-reference/baml/attributes/jinja-checks-and-asserts.mdx",
-    "section": "BAML Reference > Attributes",
-    "slug": "/ref/attributes/jinja-in-attributes",
-    "type": "internal"
-  },
-  {
-    "title": "@@dynamic",
-    "path": "03-reference/baml/attributes/dynamic.mdx",
-    "section": "BAML Reference > Attributes",
-    "slug": "/ref/attributes/dynamic",
-    "type": "internal"
-  },
-  {
-    "title": "LLM Clients (client<llm>)",
-    "path": "03-reference/baml/client-llm.mdx",
-    "section": "BAML Reference > LLM Client Providers",
-    "slug": "/ref/llm-client-providers/overview",
-    "type": "internal"
-  },
-  {
-    "title": "aws-bedrock",
-    "path": "03-reference/baml/clients/providers/aws-bedrock.mdx",
-    "section": "BAML Reference > LLM Client Providers",
-    "subtitle": "AWS Bedrock provider for BAML",
-    "slug": "/ref/llm-client-providers/aws-bedrock",
-    "type": "internal"
-  },
-  {
-    "title": "anthropic",
-    "path": "03-reference/baml/clients/providers/anthropic.mdx",
-    "section": "BAML Reference > LLM Client Providers",
-    "slug": "/ref/llm-client-providers/anthropic",
-    "type": "internal"
-  },
-  {
-    "title": "google-ai",
-    "path": "03-reference/baml/clients/providers/google-ai.mdx",
-    "section": "BAML Reference > LLM Client Providers",
-    "slug": "/ref/llm-client-providers/google-ai-gemini",
-    "type": "internal"
-  },
-  {
-    "title": "vertex-ai",
-    "path": "03-reference/baml/clients/providers/vertex.mdx",
-    "section": "BAML Reference > LLM Client Providers",
-    "slug": "/ref/llm-client-providers/google-vertex",
-    "type": "internal"
-  },
-  {
-    "title": "openai",
-    "path": "03-reference/baml/clients/providers/openai.mdx",
-    "section": "BAML Reference > LLM Client Providers",
-    "slug": "/ref/llm-client-providers/open-ai",
-    "type": "internal"
-  },
-  {
-    "title": "openai-responses",
-    "path": "03-reference/baml/clients/providers/openai-responses.mdx",
-    "section": "BAML Reference > LLM Client Providers",
-    "slug": "/ref/llm-client-providers/open-ai-responses-api",
-    "type": "internal"
-  },
-  {
-    "title": "azure-openai",
-    "path": "03-reference/baml/clients/providers/azure.mdx",
-    "section": "BAML Reference > LLM Client Providers",
-    "slug": "/ref/llm-client-providers/open-ai-from-azure",
-    "type": "internal"
-  },
-  {
-    "title": "openai-generic",
-    "path": "03-reference/baml/clients/providers/openai-generic.mdx",
-    "section": "BAML Reference > LLM Client Providers",
-    "slug": "/ref/llm-client-providers/openai-generic",
-    "type": "internal"
-  },
-  {
-    "title": "Azure AI Foundary",
-    "path": "03-reference/baml/clients/providers/azure-ai-foundary.mdx",
-    "section": "BAML Reference > LLM Client Providers",
-    "slug": "/ref/llm-client-providers/azure-ai-foundary",
-    "type": "internal"
-  },
-  {
-    "title": "Cerebras",
-    "path": "03-reference/baml/clients/providers/cerebras.mdx",
-    "section": "BAML Reference > LLM Client Providers",
-    "slug": "/ref/llm-client-providers/cerebras",
-    "type": "internal"
-  },
-  {
-    "title": "groq",
-    "path": "03-reference/baml/clients/providers/groq.mdx",
-    "section": "BAML Reference > LLM Client Providers",
-    "slug": "/ref/llm-client-providers/groq",
-    "type": "internal"
-  },
-  {
-    "title": "huggingface",
-    "path": "03-reference/baml/clients/providers/huggingface.mdx",
-    "section": "BAML Reference > LLM Client Providers",
-    "slug": "/ref/llm-client-providers/huggingface",
-    "type": "internal"
-  },
-  {
-    "title": "Keywords AI",
-    "path": "03-reference/baml/clients/providers/keywordsai.mdx",
-    "section": "BAML Reference > LLM Client Providers",
-    "slug": "/ref/llm-client-providers/keywordsai",
-    "type": "internal"
-  },
-  {
-    "title": "llama-api",
-    "path": "03-reference/baml/clients/providers/llama-api.mdx",
-    "section": "BAML Reference > LLM Client Providers",
-    "slug": "/ref/llm-client-providers/llama-api",
-    "type": "internal"
-  },
-  {
-    "title": "litellm",
-    "path": "03-reference/baml/clients/providers/litellm.mdx",
-    "section": "BAML Reference > LLM Client Providers",
-    "slug": "/ref/llm-client-providers/litellm",
-    "type": "internal"
-  },
-  {
-    "title": "LMStudio",
-    "path": "03-reference/baml/clients/providers/lmstudio.mdx",
-    "section": "BAML Reference > LLM Client Providers",
-    "slug": "/ref/llm-client-providers/lmstudio",
-    "type": "internal"
-  },
-  {
-    "title": "ollama",
-    "path": "03-reference/baml/clients/providers/ollama.mdx",
-    "section": "BAML Reference > LLM Client Providers",
-    "slug": "/ref/llm-client-providers/ollama",
-    "type": "internal"
-  },
-  {
-    "title": "openrouter",
-    "path": "03-reference/baml/clients/providers/openrouter.mdx",
-    "section": "BAML Reference > LLM Client Providers",
-    "slug": "/ref/llm-client-providers/openrouter",
-    "type": "internal"
-  },
-  {
-    "title": "Tinfoil",
-    "path": "03-reference/baml/clients/providers/tinfoil.mdx",
-    "section": "BAML Reference > LLM Client Providers",
-    "slug": "/ref/llm-client-providers/tinfoil",
-    "type": "internal"
-  },
-  {
-    "title": "Together AI",
-    "path": "03-reference/baml/clients/providers/together.mdx",
-    "section": "BAML Reference > LLM Client Providers",
-    "slug": "/ref/llm-client-providers/together",
-    "type": "internal"
-  },
-  {
-    "title": "Unify AI",
-    "path": "03-reference/baml/clients/providers/unify.mdx",
-    "section": "BAML Reference > LLM Client Providers",
-    "slug": "/ref/llm-client-providers/unify",
-    "type": "internal"
-  },
-  {
-    "title": "vLLM",
-    "path": "03-reference/baml/clients/providers/vllm.mdx",
-    "section": "BAML Reference > LLM Client Providers",
-    "slug": "/ref/llm-client-providers/vllm",
-    "type": "internal"
-  },
-  {
-    "title": "retry_policy",
-    "path": "03-reference/baml/clients/strategy/retry.mdx",
-    "section": "BAML Reference > LLM Client Strategies",
-    "slug": "/ref/llm-client-strategies/retry-policy",
-    "type": "internal"
-  },
-  {
-    "title": "fallback",
-    "path": "03-reference/baml/clients/strategy/fallback.mdx",
-    "section": "BAML Reference > LLM Client Strategies",
-    "slug": "/ref/llm-client-strategies/fallback",
-    "type": "internal"
-  },
-  {
-    "title": "round-robin",
-    "path": "03-reference/baml/clients/strategy/round-robin.mdx",
-    "section": "BAML Reference > LLM Client Strategies",
-    "slug": "/ref/llm-client-strategies/round-robin",
-    "type": "internal"
-  },
-  {
-    "title": "What is Jinja / Cookbook",
-    "path": "03-reference/baml/prompt-syntax/what-is-jinja.mdx",
-    "section": "BAML Reference > Prompt Syntax",
-    "slug": "/ref/prompt-syntax/what-is-jinja",
-    "type": "internal"
-  },
-  {
-    "title": "ctx (accessing metadata)",
-    "path": "03-reference/baml/prompt-syntax/ctx.mdx",
-    "section": "BAML Reference > Prompt Syntax",
-    "slug": "/ref/prompt-syntax/ctx-client",
-    "type": "internal"
-  },
-  {
-    "title": "Variables",
-    "path": "03-reference/baml/prompt-syntax/variables.mdx",
-    "section": "BAML Reference > Prompt Syntax",
-    "slug": "/ref/prompt-syntax/variables",
-    "type": "internal"
-  },
-  {
-    "title": "Conditionals",
-    "path": "03-reference/baml/prompt-syntax/conditionals.mdx",
-    "section": "BAML Reference > Prompt Syntax",
-    "slug": "/ref/prompt-syntax/conditionals",
-    "type": "internal"
-  },
-  {
-    "title": "Loops",
-    "path": "03-reference/baml/prompt-syntax/loops.mdx",
-    "section": "BAML Reference > Prompt Syntax",
-    "slug": "/ref/prompt-syntax/loops",
-    "type": "internal"
-  },
-  {
-    "title": "baml.cliPath",
-    "path": "03-reference/vscode-ext/clipath.mdx",
-    "section": "BAML Reference > Editor Extension Settings",
-    "slug": "/ref/editor-extension-settings/baml-cli-path",
-    "type": "internal"
-  },
-  {
-    "title": "baml.generateCodeOnSave",
-    "path": "03-reference/vscode-ext/generateCodeOnSave.mdx",
-    "section": "BAML Reference > Editor Extension Settings",
-    "slug": "/ref/editor-extension-settings/baml-generate-code-on-save",
-    "type": "internal"
-  },
-  {
-    "title": "baml.enablePlaygroundProxy",
-    "path": "03-reference/vscode-ext/enablePlaygroundProxy.mdx",
-    "section": "BAML Reference > Editor Extension Settings",
-    "slug": "/ref/editor-extension-settings/baml-enable-playground-proxy",
-    "type": "internal"
-  },
-  {
-    "title": "baml.syncExtensionToGeneratorVersion",
-    "path": "03-reference/vscode-ext/syncExtensionToGeneratorVersion.mdx",
-    "section": "BAML Reference > Editor Extension Settings",
-    "slug": "/ref/editor-extension-settings/baml-sync-extension-to-generator-version",
-    "type": "internal"
-  },
-  {
-    "title": "Changelog",
-    "path": "pages/changelog.mdx",
-    "slug": "/changelog/changelog",
-    "type": "internal"
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/pages/welcome.mdx",
+    "displayTitle": "🏠 Welcome",
+    "displaySection": [
+      "Home"
+    ],
+    "href": "home"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/01-guide/what-are-function-definitions.mdx",
+    "displayTitle": "What is BAML?",
+    "displaySection": [
+      "Guide",
+      "Introduction"
+    ],
+    "href": "guide/introduction/what-is-baml"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/01-guide/what-is-baml_src.mdx",
+    "displayTitle": "What is baml_src?",
+    "displaySection": [
+      "Guide",
+      "Introduction"
+    ],
+    "href": "guide/introduction/baml_src"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/01-guide/what-is-baml_client.mdx",
+    "displayTitle": "What is baml_client?",
+    "displaySection": [
+      "Guide",
+      "Introduction"
+    ],
+    "href": "guide/introduction/baml_client"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/01-guide/01-editors/vscode.mdx",
+    "displayTitle": "VSCode Extension",
+    "displaySection": [
+      "Guide",
+      "Installation: Editors"
+    ],
+    "href": "guide/installation-editors/vs-code-extension"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/01-guide/01-editors/cursor.mdx",
+    "displayTitle": "Cursor",
+    "displaySection": [
+      "Guide",
+      "Installation: Editors"
+    ],
+    "href": "guide/installation-editors/cursor-extension"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/01-guide/01-editors/others.mdx",
+    "displayTitle": "Others",
+    "displaySection": [
+      "Guide",
+      "Installation: Editors"
+    ],
+    "href": "guide/installation-editors/others"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/01-guide/02-languages/python.mdx",
+    "displayTitle": "Python",
+    "displaySection": [
+      "Guide",
+      "Installation: Language"
+    ],
+    "href": "guide/installation-language/python"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/01-guide/02-languages/typescript.mdx",
+    "displayTitle": "Typescript",
+    "displaySection": [
+      "Guide",
+      "Installation: Language"
+    ],
+    "href": "guide/installation-language/typescript"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/01-guide/02-languages/ruby.mdx",
+    "displayTitle": "Ruby",
+    "displaySection": [
+      "Guide",
+      "Installation: Language"
+    ],
+    "href": "guide/installation-language/ruby"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/01-guide/02-languages/rest.mdx",
+    "displayTitle": "REST API (other languages)",
+    "displaySection": [
+      "Guide",
+      "Installation: Language"
+    ],
+    "href": "guide/installation-language/rest-api-other-languages"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/01-guide/08-frameworks/01-react-nextjs/01-quick-start.mdx",
+    "displayTitle": "React/Next.js Setup",
+    "displaySection": [
+      "Guide",
+      "Framework Integration",
+      "React/Next.js"
+    ],
+    "href": "guide/framework-integration/react-next-js/quick-start"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/01-guide/08-frameworks/01-react-nextjs/02-chatbot.mdx",
+    "displayTitle": "Building a Chatbot with BAML React Hooks",
+    "displaySection": [
+      "Guide",
+      "Framework Integration",
+      "React/Next.js"
+    ],
+    "href": "guide/framework-integration/react-next-js/building-a-chatbot"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/01-guide/03-development/environment-variables.mdx",
+    "displayTitle": "Set Environment Variables",
+    "displaySection": [
+      "Guide",
+      "Development"
+    ],
+    "href": "/guide/development/environment-variables"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/01-guide/03-development/terminal-logs.mdx",
+    "displayTitle": "Terminal Logs",
+    "displaySection": [
+      "Guide",
+      "Development"
+    ],
+    "href": "/guide/development/terminal-logs"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/01-guide/03-development/upgrade-baml-versions.mdx",
+    "displayTitle": "Upgrading BAML / Fixing Version Mismatches",
+    "displaySection": [
+      "Guide",
+      "Development"
+    ],
+    "href": "/guide/development/upgrade-baml-versions"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/01-guide/03-development/deploying/aws.mdx",
+    "displayTitle": "AWS",
+    "displaySection": [
+      "Guide",
+      "Development",
+      "Deploying"
+    ],
+    "href": "guide/development/deploying/aws"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/01-guide/03-development/deploying/docker.mdx",
+    "displayTitle": "Docker",
+    "displaySection": [
+      "Guide",
+      "Development",
+      "Deploying"
+    ],
+    "href": "guide/development/deploying/docker"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/01-guide/03-development/deploying/openapi.mdx",
+    "displayTitle": "OpenAPI",
+    "displaySection": [
+      "Guide",
+      "Development",
+      "Deploying"
+    ],
+    "href": "guide/development/deploying/docker-rest-api"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/01-guide/04-baml-basics/my-first-function.mdx",
+    "displayTitle": "Prompting in BAML",
+    "displaySection": [
+      "Guide",
+      "BAML Basics"
+    ],
+    "href": "guide/baml-basics/prompting-with-baml"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/01-guide/04-baml-basics/switching-llms.mdx",
+    "displayTitle": "Switching LLMs",
+    "displaySection": [
+      "Guide",
+      "BAML Basics"
+    ],
+    "href": "guide/baml-basics/switching-llms"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/01-guide/04-baml-basics/testing-functions.mdx",
+    "displayTitle": "Testing functions",
+    "displaySection": [
+      "Guide",
+      "BAML Basics"
+    ],
+    "href": "/guide/baml-basics/testing-functions"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/01-guide/04-baml-basics/streaming.mdx",
+    "displayTitle": "Streaming",
+    "displaySection": [
+      "Guide",
+      "BAML Basics"
+    ],
+    "href": "/guide/baml-basics/streaming"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/01-guide/04-baml-basics/multi-modal.mdx",
+    "displayTitle": "Multi-Modal (Images / Audio)",
+    "displaySection": [
+      "Guide",
+      "BAML Basics"
+    ],
+    "href": "/guide/baml-basics/multi-modal"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/01-guide/04-baml-basics/error-handling.mdx",
+    "displayTitle": "Error Handling",
+    "displaySection": [
+      "Guide",
+      "BAML Basics"
+    ],
+    "href": "guide/baml-basics/error-handling"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/01-guide/04-baml-basics/concurrent-calls.mdx",
+    "displayTitle": "Concurrent function calls",
+    "displaySection": [
+      "Guide",
+      "BAML Basics"
+    ],
+    "href": "/guide/baml-basics/concurrent-calls"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/01-guide/05-baml-advanced/collector.mdx",
+    "displayTitle": "Collector",
+    "displaySection": [
+      "Guide",
+      "BAML Advanced"
+    ],
+    "href": "guide/baml-advanced/collector-track-tokens"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/01-guide/05-baml-advanced/client-registry.mdx",
+    "displayTitle": "Client Registry",
+    "displaySection": [
+      "Guide",
+      "BAML Advanced"
+    ],
+    "href": "guide/baml-advanced/llm-client-registry"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/01-guide/05-baml-advanced/dynamic-types.mdx",
+    "displayTitle": "Dynamic Types - TypeBuilder",
+    "displaySection": [
+      "Guide",
+      "BAML Advanced"
+    ],
+    "href": "guide/baml-advanced/dynamic-types"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/01-guide/05-baml-advanced/reusing-prompt-snippets.mdx",
+    "displayTitle": "Reusing Prompt Snippets",
+    "displaySection": [
+      "Guide",
+      "BAML Advanced"
+    ],
+    "href": "guide/baml-advanced/reusing-prompt-snippets"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/01-guide/05-baml-advanced/prompt-caching.mdx",
+    "displayTitle": "Prompt Caching / Message Role Metadata",
+    "displaySection": [
+      "Guide",
+      "BAML Advanced"
+    ],
+    "href": "guide/baml-advanced/prompt-caching-message-role-metadata"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/01-guide/05-baml-advanced/checks-and-asserts.mdx",
+    "displayTitle": "Checks and Asserts",
+    "displaySection": [
+      "Guide",
+      "BAML Advanced"
+    ],
+    "href": "guide/baml-advanced/checks-and-asserts"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/01-guide/05-baml-advanced/modular-api.mdx",
+    "displayTitle": "Modular API",
+    "displaySection": [
+      "Guide",
+      "BAML Advanced"
+    ],
+    "href": "guide/baml-advanced/modular-api"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/01-guide/07-observability/studio.mdx",
+    "displayTitle": "Boundary Studio",
+    "displaySection": [
+      "Guide",
+      "Boundary Cloud",
+      "Observability"
+    ],
+    "href": "guide/boundary-cloud/observability/tracking-usage"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/01-guide/09-comparisons/marvin.mdx",
+    "displayTitle": "Comparing Marvin",
+    "displaySection": [
+      "Guide",
+      "Comparisons"
+    ],
+    "href": "guide/comparisons/baml-vs-marvin"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/01-guide/09-comparisons/pydantic.mdx",
+    "displayTitle": "Comparing Pydantic",
+    "displaySection": [
+      "Guide",
+      "Comparisons"
+    ],
+    "href": "guide/comparisons/baml-vs-pydantic"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/01-guide/contact.mdx",
+    "displayTitle": "Contact",
+    "displaySection": [
+      "Guide"
+    ],
+    "href": "guide/contact"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/02-examples/interactive-examples.mdx",
+    "displayTitle": "Interactive Examples",
+    "displaySection": [
+      "Examples"
+    ],
+    "href": "examples/interactive-examples"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/01-guide/06-prompt-engineering/hallucinations.mdx",
+    "displayTitle": "Reduce Hallucinations",
+    "displaySection": [
+      "Examples",
+      "Prompt Engineering"
+    ],
+    "href": "examples/prompt-engineering/reducing-hallucinations"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/01-guide/06-prompt-engineering/classification.mdx",
+    "displayTitle": "Classification",
+    "displaySection": [
+      "Examples",
+      "Prompt Engineering"
+    ],
+    "href": "examples/prompt-engineering/classification"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/01-guide/06-prompt-engineering/chat-history.mdx",
+    "displayTitle": "Chat",
+    "displaySection": [
+      "Examples",
+      "Prompt Engineering"
+    ],
+    "href": "examples/prompt-engineering/chat"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/01-guide/06-prompt-engineering/tools.mdx",
+    "displayTitle": "Tools / Function Calling",
+    "displaySection": [
+      "Examples",
+      "Prompt Engineering"
+    ],
+    "href": "examples/prompt-engineering/tools-function-calling"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/01-guide/06-prompt-engineering/chain-of-thought.mdx",
+    "displayTitle": "Chain-of-Thought Prompting",
+    "displaySection": [
+      "Examples",
+      "Prompt Engineering"
+    ],
+    "href": "examples/prompt-engineering/chain-of-thought"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/01-guide/06-prompt-engineering/symbol-tuning.mdx",
+    "displayTitle": "Creating a Classification Function with Symbol Tuning",
+    "displaySection": [
+      "Examples",
+      "Prompt Engineering"
+    ],
+    "href": "examples/prompt-engineering/symbol-tuning"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/01-guide/06-prompt-engineering/pii-data-extraction.mdx",
+    "displayTitle": "PII Data Extraction / Scrubbing",
+    "displaySection": [
+      "Examples",
+      "Prompt Engineering"
+    ],
+    "href": "examples/prompt-engineering/pii-data-extraction-scrubbing"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/01-guide/06-prompt-engineering/action-items.mdx",
+    "displayTitle": "Action Item Extraction",
+    "displaySection": [
+      "Examples",
+      "Prompt Engineering"
+    ],
+    "href": "examples/prompt-engineering/action-item-extraction"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/01-guide/06-prompt-engineering/rag.mdx",
+    "displayTitle": "Retrieval-Augmented Generation (RAG)",
+    "displaySection": [
+      "Examples",
+      "Prompt Engineering"
+    ],
+    "href": "examples/prompt-engineering/retrieval-augmented-generation"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/overview.mdx",
+    "displayTitle": "BAML Reference",
+    "displaySection": [
+      "BAML Reference"
+    ],
+    "href": "ref/overview"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml-cli/init.mdx",
+    "displayTitle": "init",
+    "displaySection": [
+      "BAML Reference",
+      "baml-cli"
+    ],
+    "href": "ref/baml-cli/init"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml-cli/generate.mdx",
+    "displayTitle": "generate",
+    "displaySection": [
+      "BAML Reference",
+      "baml-cli"
+    ],
+    "href": "ref/baml-cli/generate"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml-cli/test.mdx",
+    "displayTitle": "test",
+    "displaySection": [
+      "BAML Reference",
+      "baml-cli"
+    ],
+    "href": "ref/baml-cli/test"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml-cli/serve.mdx",
+    "displayTitle": "serve",
+    "displaySection": [
+      "BAML Reference",
+      "baml-cli"
+    ],
+    "href": "ref/baml-cli/serve"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml-cli/dev.mdx",
+    "displayTitle": "dev",
+    "displaySection": [
+      "BAML Reference",
+      "baml-cli"
+    ],
+    "href": "ref/baml-cli/dev"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml-cli/fmt.mdx",
+    "displayTitle": "fmt",
+    "displaySection": [
+      "BAML Reference",
+      "baml-cli"
+    ],
+    "href": "ref/baml-cli/fmt"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml/comments.mdx",
+    "displayTitle": "comments",
+    "displaySection": [
+      "BAML Reference",
+      "Language Reference",
+      "General BAML Syntax"
+    ],
+    "href": "ref/baml/general-baml-syntax/comments"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml/env-vars.mdx",
+    "displayTitle": "Environment Variables",
+    "displaySection": [
+      "BAML Reference",
+      "Language Reference",
+      "General BAML Syntax"
+    ],
+    "href": "ref/baml/general-baml-syntax/environment-variables"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml/string.mdx",
+    "displayTitle": "string",
+    "displaySection": [
+      "BAML Reference",
+      "Language Reference",
+      "General BAML Syntax"
+    ],
+    "href": "ref/baml/general-baml-syntax/string"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml/int-float.mdx",
+    "displayTitle": "int / float",
+    "displaySection": [
+      "BAML Reference",
+      "Language Reference",
+      "General BAML Syntax"
+    ],
+    "href": "ref/baml/general-baml-syntax/int-float"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml/bool.mdx",
+    "displayTitle": "bool",
+    "displaySection": [
+      "BAML Reference",
+      "Language Reference",
+      "General BAML Syntax"
+    ],
+    "href": "ref/baml/general-baml-syntax/bool"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml/array.mdx",
+    "displayTitle": "array (list)",
+    "displaySection": [
+      "BAML Reference",
+      "Language Reference",
+      "General BAML Syntax"
+    ],
+    "href": "ref/baml/general-baml-syntax/array-list"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml/map.mdx",
+    "displayTitle": "map (dictionary)",
+    "displaySection": [
+      "BAML Reference",
+      "Language Reference",
+      "General BAML Syntax"
+    ],
+    "href": "ref/baml/general-baml-syntax/map-dictionary"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml/media.mdx",
+    "displayTitle": "Image / Audio / Pdf / Video",
+    "displaySection": [
+      "BAML Reference",
+      "Language Reference",
+      "General BAML Syntax"
+    ],
+    "href": "ref/baml/general-baml-syntax/media"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml/types.mdx",
+    "displayTitle": "Types",
+    "displaySection": [
+      "BAML Reference",
+      "Language Reference"
+    ],
+    "href": "ref/baml/types"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml/function.mdx",
+    "displayTitle": "function",
+    "displaySection": [
+      "BAML Reference",
+      "Language Reference"
+    ],
+    "href": "ref/baml/function"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml/test.mdx",
+    "displayTitle": "test",
+    "displaySection": [
+      "BAML Reference",
+      "Language Reference"
+    ],
+    "href": "ref/baml/test"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml/template_string.mdx",
+    "displayTitle": "template_string",
+    "displaySection": [
+      "BAML Reference",
+      "Language Reference"
+    ],
+    "href": "ref/baml/template-string"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml/client-llm.mdx",
+    "displayTitle": "LLM Clients (client<llm>)",
+    "displaySection": [
+      "BAML Reference",
+      "Language Reference"
+    ],
+    "href": "ref/baml/client-llm"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml/class.mdx",
+    "displayTitle": "class",
+    "displaySection": [
+      "BAML Reference",
+      "Language Reference"
+    ],
+    "href": "ref/baml/class"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml/enum.mdx",
+    "displayTitle": "enum",
+    "displaySection": [
+      "BAML Reference",
+      "Language Reference"
+    ],
+    "href": "ref/baml/enum"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/generator.mdx",
+    "displayTitle": "generator",
+    "displaySection": [
+      "BAML Reference",
+      "Language Reference"
+    ],
+    "href": "ref/baml/generator"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml_client/with_options.mdx",
+    "displayTitle": "with_options",
+    "displaySection": [
+      "BAML Reference",
+      "Generated baml_client"
+    ],
+    "href": "ref/baml_client/with-options"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml_client/collector.mdx",
+    "displayTitle": "Collector",
+    "displaySection": [
+      "BAML Reference",
+      "Generated baml_client"
+    ],
+    "href": "ref/baml_client/collector"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml_client/config.mdx",
+    "displayTitle": "config (logging / environment variables)",
+    "displaySection": [
+      "BAML Reference",
+      "Generated baml_client"
+    ],
+    "href": "ref/baml_client/config"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml_client/client.mdx",
+    "displayTitle": "AsyncClient / SyncClient",
+    "displaySection": [
+      "BAML Reference",
+      "Generated baml_client"
+    ],
+    "href": "ref/baml_client/client"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml_client/typebuilder.mdx",
+    "displayTitle": "TypeBuilder",
+    "displaySection": [
+      "BAML Reference",
+      "Generated baml_client"
+    ],
+    "href": "ref/baml_client/type-builder"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/01-guide/05-baml-advanced/client-registry.mdx",
+    "displayTitle": "Client Registry",
+    "displaySection": [
+      "BAML Reference",
+      "Generated baml_client"
+    ],
+    "href": "ref/baml_client/client-registry"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml_client/media.mdx",
+    "displayTitle": "Image / Audio / Pdf / Video",
+    "displaySection": [
+      "BAML Reference",
+      "Generated baml_client"
+    ],
+    "href": "ref/baml_client/media"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml_client/image.mdx",
+    "displayTitle": "Image",
+    "displaySection": [
+      "BAML Reference",
+      "Generated baml_client"
+    ],
+    "href": "ref/baml_client/image"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml_client/audio.mdx",
+    "displayTitle": "Audio",
+    "displaySection": [
+      "BAML Reference",
+      "Generated baml_client"
+    ],
+    "href": "ref/baml_client/audio"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml_client/pdf.mdx",
+    "displayTitle": "Pdf",
+    "displaySection": [
+      "BAML Reference",
+      "Generated baml_client"
+    ],
+    "href": "ref/baml_client/pdf"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml_client/video.mdx",
+    "displayTitle": "Video",
+    "displaySection": [
+      "BAML Reference",
+      "Generated baml_client"
+    ],
+    "href": "ref/baml_client/video"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml_client/errors/overview.mdx",
+    "displayTitle": "BAML Error Types",
+    "displaySection": [
+      "BAML Reference",
+      "Generated baml_client",
+      "Errors"
+    ],
+    "href": "ref/baml_client/errors/overview"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml_client/errors/baml-validation-error.mdx",
+    "displayTitle": "BamlValidationError",
+    "displaySection": [
+      "BAML Reference",
+      "Generated baml_client",
+      "Errors"
+    ],
+    "href": "ref/baml_client/errors/baml-validation-error"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml_client/errors/baml-client-finish-reason-error.mdx",
+    "displayTitle": "BamlClientFinishReasonError",
+    "displaySection": [
+      "BAML Reference",
+      "Generated baml_client",
+      "Errors"
+    ],
+    "href": "ref/baml_client/errors/baml-client-finish-reason-error"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml_client/react-nextjs/use-function-name.mdx",
+    "displayTitle": "Generated Hooks Reference",
+    "displaySection": [
+      "BAML Reference",
+      "Generated baml_client",
+      "React/Next.js"
+    ],
+    "href": "ref/baml_client/react-next-js/use-function-name-hook"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml_client/react-nextjs/hook-input.mdx",
+    "displayTitle": "Hook Input Type Reference",
+    "displaySection": [
+      "BAML Reference",
+      "Generated baml_client",
+      "React/Next.js"
+    ],
+    "href": "ref/baml_client/react-next-js/hook-input"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml_client/react-nextjs/hook-output.mdx",
+    "displayTitle": "Hook Output Type Reference",
+    "displaySection": [
+      "BAML Reference",
+      "Generated baml_client",
+      "React/Next.js"
+    ],
+    "href": "ref/baml_client/react-next-js/hook-output"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml_client/react-nextjs/hook-data.mdx",
+    "displayTitle": "Hook Data Type Reference",
+    "displaySection": [
+      "BAML Reference",
+      "Generated baml_client",
+      "React/Next.js"
+    ],
+    "href": "ref/baml_client/react-next-js/hook-data"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml/attributes/attributes-overview.mdx",
+    "displayTitle": "What are attributes?",
+    "displaySection": [
+      "BAML Reference",
+      "Attributes"
+    ],
+    "href": "ref/attributes/what-are-attributes"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml/attributes/alias.mdx",
+    "displayTitle": "@alias / @@alias",
+    "displaySection": [
+      "BAML Reference",
+      "Attributes"
+    ],
+    "href": "ref/attributes/alias"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml/attributes/description.mdx",
+    "displayTitle": "@description / @@description",
+    "displaySection": [
+      "BAML Reference",
+      "Attributes"
+    ],
+    "href": "ref/attributes/description"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml/attributes/skip.mdx",
+    "displayTitle": "@skip",
+    "displaySection": [
+      "BAML Reference",
+      "Attributes"
+    ],
+    "href": "ref/attributes/skip"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml/attributes/assert.mdx",
+    "displayTitle": "@assert",
+    "displaySection": [
+      "BAML Reference",
+      "Attributes"
+    ],
+    "href": "ref/attributes/assert"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml/attributes/check.mdx",
+    "displayTitle": "@check",
+    "displaySection": [
+      "BAML Reference",
+      "Attributes"
+    ],
+    "href": "ref/attributes/check"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml/attributes/jinja-checks-and-asserts.mdx",
+    "displayTitle": "Jinja in Attributes",
+    "displaySection": [
+      "BAML Reference",
+      "Attributes"
+    ],
+    "href": "ref/attributes/jinja-in-attributes"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml/attributes/dynamic.mdx",
+    "displayTitle": "@@dynamic",
+    "displaySection": [
+      "BAML Reference",
+      "Attributes"
+    ],
+    "href": "ref/attributes/dynamic"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml/client-llm.mdx",
+    "displayTitle": "LLM Clients (client<llm>)",
+    "displaySection": [
+      "BAML Reference",
+      "LLM Client Providers"
+    ],
+    "href": "ref/llm-client-providers/overview"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml/clients/providers/aws-bedrock.mdx",
+    "displayTitle": "aws-bedrock",
+    "displaySection": [
+      "BAML Reference",
+      "LLM Client Providers"
+    ],
+    "href": "ref/llm-client-providers/aws-bedrock"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml/clients/providers/anthropic.mdx",
+    "displayTitle": "anthropic",
+    "displaySection": [
+      "BAML Reference",
+      "LLM Client Providers"
+    ],
+    "href": "ref/llm-client-providers/anthropic"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml/clients/providers/google-ai.mdx",
+    "displayTitle": "google-ai",
+    "displaySection": [
+      "BAML Reference",
+      "LLM Client Providers"
+    ],
+    "href": "ref/llm-client-providers/google-ai-gemini"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml/clients/providers/vertex.mdx",
+    "displayTitle": "vertex-ai",
+    "displaySection": [
+      "BAML Reference",
+      "LLM Client Providers"
+    ],
+    "href": "ref/llm-client-providers/google-vertex"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml/clients/providers/openai.mdx",
+    "displayTitle": "openai",
+    "displaySection": [
+      "BAML Reference",
+      "LLM Client Providers"
+    ],
+    "href": "ref/llm-client-providers/open-ai"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml/clients/providers/openai-responses.mdx",
+    "displayTitle": "openai-responses",
+    "displaySection": [
+      "BAML Reference",
+      "LLM Client Providers"
+    ],
+    "href": "ref/llm-client-providers/open-ai-responses-api"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml/clients/providers/azure.mdx",
+    "displayTitle": "azure-openai",
+    "displaySection": [
+      "BAML Reference",
+      "LLM Client Providers"
+    ],
+    "href": "ref/llm-client-providers/open-ai-from-azure"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml/clients/providers/openai-generic.mdx",
+    "displayTitle": "openai-generic",
+    "displaySection": [
+      "BAML Reference",
+      "LLM Client Providers"
+    ],
+    "href": "ref/llm-client-providers/openai-generic"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml/clients/providers/azure-ai-foundary.mdx",
+    "displayTitle": "Azure AI Foundary",
+    "displaySection": [
+      "BAML Reference",
+      "LLM Client Providers"
+    ],
+    "href": "ref/llm-client-providers/azure-ai-foundary"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml/clients/providers/cerebras.mdx",
+    "displayTitle": "Cerebras",
+    "displaySection": [
+      "BAML Reference",
+      "LLM Client Providers"
+    ],
+    "href": "ref/llm-client-providers/cerebras"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml/clients/providers/groq.mdx",
+    "displayTitle": "groq",
+    "displaySection": [
+      "BAML Reference",
+      "LLM Client Providers"
+    ],
+    "href": "ref/llm-client-providers/groq"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml/clients/providers/huggingface.mdx",
+    "displayTitle": "huggingface",
+    "displaySection": [
+      "BAML Reference",
+      "LLM Client Providers"
+    ],
+    "href": "ref/llm-client-providers/huggingface"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml/clients/providers/keywordsai.mdx",
+    "displayTitle": "Keywords AI",
+    "displaySection": [
+      "BAML Reference",
+      "LLM Client Providers"
+    ],
+    "href": "ref/llm-client-providers/keywordsai"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml/clients/providers/llama-api.mdx",
+    "displayTitle": "llama-api",
+    "displaySection": [
+      "BAML Reference",
+      "LLM Client Providers"
+    ],
+    "href": "ref/llm-client-providers/llama-api"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml/clients/providers/litellm.mdx",
+    "displayTitle": "litellm",
+    "displaySection": [
+      "BAML Reference",
+      "LLM Client Providers"
+    ],
+    "href": "ref/llm-client-providers/litellm"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml/clients/providers/lmstudio.mdx",
+    "displayTitle": "LMStudio",
+    "displaySection": [
+      "BAML Reference",
+      "LLM Client Providers"
+    ],
+    "href": "ref/llm-client-providers/lmstudio"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml/clients/providers/ollama.mdx",
+    "displayTitle": "ollama",
+    "displaySection": [
+      "BAML Reference",
+      "LLM Client Providers"
+    ],
+    "href": "ref/llm-client-providers/ollama"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml/clients/providers/openrouter.mdx",
+    "displayTitle": "openrouter",
+    "displaySection": [
+      "BAML Reference",
+      "LLM Client Providers"
+    ],
+    "href": "ref/llm-client-providers/openrouter"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml/clients/providers/tinfoil.mdx",
+    "displayTitle": "Tinfoil",
+    "displaySection": [
+      "BAML Reference",
+      "LLM Client Providers"
+    ],
+    "href": "ref/llm-client-providers/tinfoil"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml/clients/providers/together.mdx",
+    "displayTitle": "Together AI",
+    "displaySection": [
+      "BAML Reference",
+      "LLM Client Providers"
+    ],
+    "href": "ref/llm-client-providers/together"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml/clients/providers/unify.mdx",
+    "displayTitle": "Unify AI",
+    "displaySection": [
+      "BAML Reference",
+      "LLM Client Providers"
+    ],
+    "href": "ref/llm-client-providers/unify"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml/clients/providers/vllm.mdx",
+    "displayTitle": "vLLM",
+    "displaySection": [
+      "BAML Reference",
+      "LLM Client Providers"
+    ],
+    "href": "ref/llm-client-providers/vllm"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml/clients/strategy/retry.mdx",
+    "displayTitle": "retry_policy",
+    "displaySection": [
+      "BAML Reference",
+      "LLM Client Strategies"
+    ],
+    "href": "ref/llm-client-strategies/retry-policy"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml/clients/strategy/fallback.mdx",
+    "displayTitle": "fallback",
+    "displaySection": [
+      "BAML Reference",
+      "LLM Client Strategies"
+    ],
+    "href": "ref/llm-client-strategies/fallback"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml/clients/strategy/round-robin.mdx",
+    "displayTitle": "round-robin",
+    "displaySection": [
+      "BAML Reference",
+      "LLM Client Strategies"
+    ],
+    "href": "ref/llm-client-strategies/round-robin"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml/prompt-syntax/what-is-jinja.mdx",
+    "displayTitle": "What is Jinja / Cookbook",
+    "displaySection": [
+      "BAML Reference",
+      "Prompt Syntax"
+    ],
+    "href": "ref/prompt-syntax/what-is-jinja"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml/prompt-syntax/output-format.mdx",
+    "displayTitle": "ctx.output_format",
+    "displaySection": [
+      "BAML Reference",
+      "Prompt Syntax"
+    ],
+    "href": "ref/prompt-syntax/ctx-output-format"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml/prompt-syntax/ctx.mdx",
+    "displayTitle": "ctx (accessing metadata)",
+    "displaySection": [
+      "BAML Reference",
+      "Prompt Syntax"
+    ],
+    "href": "ref/prompt-syntax/ctx-client"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml/prompt-syntax/role.mdx",
+    "displayTitle": "_.role",
+    "displaySection": [
+      "BAML Reference",
+      "Prompt Syntax"
+    ],
+    "href": "ref/prompt-syntax/role"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml/prompt-syntax/variables.mdx",
+    "displayTitle": "Variables",
+    "displaySection": [
+      "BAML Reference",
+      "Prompt Syntax"
+    ],
+    "href": "ref/prompt-syntax/variables"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml/prompt-syntax/conditionals.mdx",
+    "displayTitle": "Conditionals",
+    "displaySection": [
+      "BAML Reference",
+      "Prompt Syntax"
+    ],
+    "href": "ref/prompt-syntax/conditionals"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/baml/prompt-syntax/loops.mdx",
+    "displayTitle": "Loops",
+    "displaySection": [
+      "BAML Reference",
+      "Prompt Syntax"
+    ],
+    "href": "ref/prompt-syntax/loops"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/vscode-ext/clipath.mdx",
+    "displayTitle": "baml.cliPath",
+    "displaySection": [
+      "BAML Reference",
+      "Editor Extension Settings"
+    ],
+    "href": "ref/editor-extension-settings/baml-cli-path"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/vscode-ext/generateCodeOnSave.mdx",
+    "displayTitle": "baml.generateCodeOnSave",
+    "displaySection": [
+      "BAML Reference",
+      "Editor Extension Settings"
+    ],
+    "href": "ref/editor-extension-settings/baml-generate-code-on-save"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/vscode-ext/enablePlaygroundProxy.mdx",
+    "displayTitle": "baml.enablePlaygroundProxy",
+    "displaySection": [
+      "BAML Reference",
+      "Editor Extension Settings"
+    ],
+    "href": "ref/editor-extension-settings/baml-enable-playground-proxy"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/03-reference/vscode-ext/syncExtensionToGeneratorVersion.mdx",
+    "displayTitle": "baml.syncExtensionToGeneratorVersion",
+    "displaySection": [
+      "BAML Reference",
+      "Editor Extension Settings"
+    ],
+    "href": "ref/editor-extension-settings/baml-sync-extension-to-generator-version"
+  },
+  {
+    "type": "fern",
+    "filepath": "/Users/sam/baml2/fern/pages/changelog.mdx",
+    "displayTitle": "Changelog",
+    "displaySection": [
+      "Changelog"
+    ],
+    "href": "changelog/changelog"
+  },
+  {
+    "type": "other",
+    "title": "Prompt Fiddle, the BAML playground",
+    "url": "https://promptfiddle.com"
   }
 ]
