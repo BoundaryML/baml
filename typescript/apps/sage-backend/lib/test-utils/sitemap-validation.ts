@@ -41,16 +41,11 @@ export async function validateEntryWithSemaphore(
     return { entry, isValid: true };
   }
 
-  // Skip entries without slugs
-  if (!entry.slug2) {
-    return { entry, isValid: false, error: 'No slug defined' };
-  }
-
   // Acquire semaphore permit before making request
   await semaphore.acquire();
 
   try {
-    const url = `${BASE_URL}/${entry.url2}`;
+    const url = `${BASE_URL}/${entry.href}`;
     console.info('validating', url);
     const response = await fetch(url, {
       method: 'GET',
@@ -80,7 +75,7 @@ export async function validateEntryWithSemaphore(
 export async function validateSitemap(
   sitemap: SitemapEntry[],
   maxConcurrency: number = MAX_CONCURRENT_REQUESTS,
-  verbose: boolean = true,
+  verbose = true,
 ): Promise<SitemapValidationResult> {
   if (verbose) {
     console.log(
@@ -124,7 +119,7 @@ export async function validateSitemap(
       console.log(`❌ Invalid Entries:`);
       for (const { entry, status, error } of invalidEntries) {
         const reason = error || `HTTP ${status}`;
-        console.log(`   • ${entry.title} (${entry.slug}) - ${reason}`);
+        console.log(`   • ${entry.displayTitle} (${entry.slug}) - ${reason}`);
       }
     }
   }
@@ -214,7 +209,7 @@ export function validateSitemapEntryStructure(entry: SitemapEntry): {
 } {
   const errors: string[] = [];
 
-  if (!entry.title || typeof entry.title !== 'string') {
+  if (!entry.displayTitle || typeof entry.displayTitle !== 'string') {
     errors.push('Missing or invalid title');
   }
 

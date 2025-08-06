@@ -6,20 +6,43 @@ import { parse as parseYaml } from 'yaml';
 import { z } from 'zod';
 import urljoin from 'url-join';
 
-export interface SitemapEntry {
-  title: string;
-  path?: string; // Optional for blog/external entries
-  url?: string; // Used for blog/external entries
-  type: 'internal' | 'external'; // New field for entry type
-  // MDX frontmatter metadata
-  slug?: string;
-  slug2?: string[]; // Individual slug components (tab slug, section slug, ..., page slug)
-  url2?: string; // Built from slug2 using urljoin logic
-  description?: string;
-  section?: string;
-  layout?: string;
-  'hide-toc'?: boolean;
-  [key: string]: any; // Allow other frontmatter fields
+// export interface SitemapEntry {
+//   displayTitle: string;
+//   path?: string; // Optional for blog/external entries
+//   url?: string; // Used for blog/external entries
+//   type: 'internal' | 'external'; // New field for entry type
+//   slug: string[];
+//   href?: string;
+//   description?: string;
+//   sectionDisplayPath?: string;
+//   layout?: string;
+//   'hide-toc'?: boolean;
+//   [key: string]: any; // Allow other frontmatter fields
+// }
+
+export type SitemapEntry =
+  | {
+      type: 'internal';
+      displayTitle: string;
+      displaySection: string[];
+      href: string;
+    }
+  | {
+      type: 'external';
+      displayTitle: string;
+      url: string;
+    };
+
+// Type definitions for OOP refactor
+export interface TabInfo {
+  tabId: string;
+  tabDisplayName: string;
+  tabSlug: string;
+}
+
+export interface SectionInfo {
+  sectionDisplayName: string;
+  sectionSlug?: string;
 }
 
 export interface FernDoc {
@@ -42,39 +65,45 @@ export interface OtherWebsite {
   url: string;
 }
 
+const PageFrontmatterSchema = z.object({
+  title: z.string().optional(),
+  slug: z.string().optional(),
+  description: z.string().optional(),
+});
+
 // Zod schema for the docs.yml navigation structure
-const TabSchema = z.object({
-  'display-name': z.string().optional(),
-  icon: z.string().optional(),
+const TabNodeSchema = z.object({
+  'display-name': z.string(),
+  icon: z.string(),
   slug: z.string().optional(),
   href: z.string().optional(),
 });
 
-const PageSchema = z.object({
+const PageNodeSchema = z.object({
   page: z.string(),
   path: z.string(),
   icon: z.string().optional(),
   slug: z.string().optional(),
 });
 
-const SectionSchema = z.object({
+const SectionNodeSchema = z.object({
   section: z.string(),
   icon: z.string().optional(),
   slug: z.string().optional(),
   get contents() {
-    return z.array(z.union([PageSchema, SectionSchema]));
+    return z.array(z.union([PageNodeSchema, SectionNodeSchema]));
   },
 });
 
-const NavigationItemSchema = z.object({
+const NavigationNodeSchema = z.object({
   tab: z.string(),
-  layout: z.array(z.union([PageSchema, SectionSchema])).optional(),
+  layout: z.array(z.union([PageNodeSchema, SectionNodeSchema])).optional(),
 });
 
 export const DocsConfigSchema = z.object({
   title: z.string(),
-  tabs: z.record(z.string(), TabSchema),
-  navigation: z.array(NavigationItemSchema),
+  tabs: z.record(z.string(), TabNodeSchema),
+  navigation: z.array(NavigationNodeSchema),
 });
 
 // Other websites to include in sitemap
@@ -221,158 +250,217 @@ export function generateSlug(
 }
 
 /**
- * Recursive function to process navigation items
+ * SitemapGenerator class that encapsulates sitemap generation logic and state
  */
-function processNavigationItem(
-  item: z.infer<typeof PageSchema> | z.infer<typeof SectionSchema>,
-  tabDisplayName: string,
-  tabSlug: string,
-  sectionDisplayPath: string | undefined,
-  sectionSlugPath: string | undefined,
-  docsRoot: string,
-): SitemapEntry[] {
-  const entries: SitemapEntry[] = [];
+export class SitemapGenerator {
+  private docsRoot: string;
+  private config: z.infer<typeof DocsConfigSchema>;
 
-  if ('page' in item) {
-    // Handle page item
-    const mdxPath = join(docsRoot, item.path);
-    const metadata = extractMdxMetadata(mdxPath);
+  constructor(docsYmlPath: string) {
+    this.docsRoot = dirname(docsYmlPath);
 
-    const fullSectionPath = sectionDisplayPath
-      ? `${tabDisplayName} > ${sectionDisplayPath}`
-      : undefined;
-    const slugSectionPath = sectionSlugPath
-      ? `${tabSlug} > ${sectionSlugPath}`
-      : undefined;
+    // Read and parse docs.yml
+    const docsContent = readFileSync(docsYmlPath, 'utf-8');
+    const docsConfig = parseYaml(docsContent);
 
-    // Determine slug: docs.yml slug > frontmatter slug > generated slug
-    let finalSlug: string;
-    let finalSlug2: string[];
+    // Validate with Zod schema
+    this.config = DocsConfigSchema.parse(docsConfig);
+  }
 
-    const configuredSlug = item.slug || metadata.slug;
-    if (!configuredSlug) {
-      const slugResult = generateSlug(tabSlug, slugSectionPath, item.page);
-      finalSlug = slugResult.slug;
-      finalSlug2 = slugResult.slug2;
-    } else if (!configuredSlug.startsWith('/')) {
-      // If slug is relative, prefix it with tab and section
-      const slugResult = generateSlug(tabSlug, slugSectionPath, configuredSlug);
-      finalSlug = slugResult.slug;
-      finalSlug2 = slugResult.slug2;
-    } else {
-      // Use configured absolute slug
-      finalSlug = configuredSlug;
-      // For absolute slugs, split by '/' and filter out empty parts
-      finalSlug2 = configuredSlug.split('/').filter((part) => part.length > 0);
+  /**
+   * Generate the complete sitemap
+   */
+  async generateSitemap(): Promise<SitemapEntry[]> {
+    const sitemap: SitemapEntry[] = [];
+
+    // Process each navigation item from docs
+    for (const navItem of this.config.navigation) {
+      const tabId = navItem.tab;
+      const tabInfo = this.config.tabs[tabId];
+
+      // Create TabInfo object
+      const tab: TabInfo = {
+        tabId,
+        tabDisplayName: tabInfo['display-name'],
+        tabSlug: tabInfo.slug || tabId,
+      };
+
+      // Skip tabs without layout (like external links)
+      if (!navItem.layout) {
+        continue;
+      }
+
+      for (const layoutItem of navItem.layout) {
+        const entries = this.processNavigationItem(layoutItem, tab, []);
+        sitemap.push(...entries);
+      }
     }
 
-    // Generate url2 from slug2
-    const finalUrl2 = buildUrl2FromSlug2(finalSlug2);
+    // // Fetch and add blog entries
+    // try {
+    //   const blogEntries = await fetchBlogEntryList();
+    //   for (const blogEntry of blogEntries) {
+    //     sitemap.push({
+    //       title: blogEntry.title,
+    //       url: blogEntry.url,
+    //       type: 'external',
+    //     });
+    //   }
+    // } catch (error) {
+    //   console.warn('Failed to fetch blog entries:', error);
+    // }
 
-    entries.push({
-      title: item.page,
-      path: item.path,
-      section: fullSectionPath,
-      ...metadata, // Spread all frontmatter metadata
-      slug: finalSlug,
-      slug2: finalSlug2,
-      url2: finalUrl2,
-      type: 'internal',
-    });
-  } else if ('section' in item) {
-    // Handle section item - recursively process contents
-    const sectionDisplayName = sectionDisplayPath
-      ? `${sectionDisplayPath} > ${item.section}`
-      : item.section;
-    const sectionSlugName = sectionSlugPath
-      ? `${sectionSlugPath} > ${item.slug || slugify(item.section)}`
-      : item.slug || slugify(item.section);
+    // // Add other websites
+    // for (const website of OTHER_WEBSITES) {
+    //   sitemap.push({
+    //     title: website.page,
+    //     url: website.url,
+    //     type: 'external',
+    //   });
+    // }
 
-    for (const contentItem of item.contents) {
-      entries.push(
-        ...processNavigationItem(
-          contentItem,
-          tabDisplayName,
-          tabSlug,
-          sectionDisplayName,
-          sectionSlugName,
-          docsRoot,
-        ),
-      );
+    return sitemap;
+  }
+
+  /**
+   * Process navigation items recursively
+   */
+  private processNavigationItem(
+    item: z.infer<typeof PageNodeSchema> | z.infer<typeof SectionNodeSchema>,
+    tab: TabInfo,
+    sections: SectionInfo[],
+  ): SitemapEntry[] {
+    const entries: SitemapEntry[] = [];
+
+    if ('section' in item) {
+      // Handle section item - recursively process contents
+      const newSectionInfo: SectionInfo = {
+        sectionDisplayName: item.section,
+        sectionSlug: item.slug, // Optional - will be auto-generated if not provided
+      };
+
+      const currentSections = [...sections, newSectionInfo];
+
+      for (const contentItem of item.contents) {
+        entries.push(
+          ...this.processNavigationItem(contentItem, tab, currentSections),
+        );
+      }
+    }
+
+    if ('page' in item) {
+      // Handle page item
+      const mdxPath = join(this.docsRoot, item.path);
+      const mdxFrontmatter = this.readMdxFrontmatter(mdxPath);
+
+      // Build display path
+      const fullSectionPath = this.buildDisplayPath(tab, sections);
+
+      const pageSlug = this.buildSlugComponents(tab, sections, item.slug);
+
+      // From packages/fdr-sdk/src/navigation/versions/v1/slugjoin.ts
+      const pageHref = urljoin(pageSlug)
+        .replaceAll('//*', '/')
+        .replace(/^\//, '')
+        .replace(/\/$/, '');
+
+      entries.push({
+        type: 'internal',
+        displayTitle: mdxFrontmatter.title || item.page || 'PLACEHOLDER',
+        displaySection: [
+          tab.tabDisplayName,
+          ...sections.map((s) => s.sectionDisplayName),
+        ],
+        href: pageHref,
+      });
+    }
+
+    return entries;
+  }
+
+  /**
+   * Extract frontmatter from MDX files
+   */
+  private readMdxFrontmatter(filePath: string) {
+    try {
+      const content = readFileSync(filePath, 'utf-8');
+      const { data } = matter(content);
+      return PageFrontmatterSchema.parse(data);
+    } catch (error) {
+      console.warn(`Failed to read MDX file: ${filePath}`, error);
+      return {};
     }
   }
 
-  return entries;
+  /**
+   * Build display path from tab and sections
+   */
+  private buildDisplayPath(
+    tab: TabInfo,
+    sections: SectionInfo[],
+  ): string | undefined {
+    if (sections.length === 0) {
+      return undefined;
+    }
+
+    const parts = [tab.tabDisplayName];
+    for (const section of sections) {
+      parts.push(section.sectionDisplayName);
+    }
+
+    return parts.join(' > ');
+  }
+
+  /**
+   * Build slug components from tab and sections
+   */
+  private buildSlugComponents(
+    tab: TabInfo,
+    sections: SectionInfo[],
+    pageSlug?: string,
+  ): string[] {
+    const components = [tab.tabSlug];
+
+    for (const section of sections) {
+      // Use provided slug or generate from display name
+      const sectionSlug =
+        section.sectionSlug || slugify(section.sectionDisplayName);
+      if (sectionSlug) {
+        components.push(sectionSlug);
+      }
+    }
+
+    if (pageSlug) {
+      components.push(pageSlug);
+    }
+
+    return components;
+  }
+
+  /**
+   * Resolve slug with priority: configured > frontmatter > generated
+   */
+  private resolveSlug(
+    configuredSlug: string | undefined,
+    metadata: any,
+    fallbackName: string,
+  ): string {
+    const candidateSlug = configuredSlug || metadata.slug;
+    if (candidateSlug) {
+      return candidateSlug;
+    }
+    return slugify(fallbackName);
+  }
 }
 
 /**
- * Main function to generate sitemap from docs.yml
+ * Main function to generate sitemap from docs.yml (for backward compatibility)
  */
 export async function generateSitemap(
   docsYmlPath: string,
 ): Promise<SitemapEntry[]> {
-  const docsRoot = dirname(docsYmlPath);
-
-  // Read and parse docs.yml
-  const docsContent = readFileSync(docsYmlPath, 'utf-8');
-  const docsConfig = parseYaml(docsContent);
-
-  // Validate with Zod schema
-  const validatedConfig = DocsConfigSchema.parse(docsConfig);
-
-  const sitemap: SitemapEntry[] = [];
-
-  // Process each navigation item from docs
-  for (const navItem of validatedConfig.navigation) {
-    const tabInfo = validatedConfig.tabs[navItem.tab];
-    const tabDisplayName = tabInfo?.['display-name'] || navItem.tab;
-    const tabSlug = tabInfo?.slug || navItem.tab;
-
-    // Skip tabs without layout (like external links)
-    if (!navItem.layout) {
-      continue;
-    }
-
-    for (const layoutItem of navItem.layout) {
-      const entries = processNavigationItem(
-        layoutItem,
-        tabDisplayName,
-        tabSlug,
-        undefined,
-        undefined,
-        docsRoot,
-      );
-      // Add type: 'internal' to all doc entries
-      for (const entry of entries) {
-        sitemap.push({ ...entry, type: 'internal' });
-      }
-    }
-  }
-
-  // // Fetch and add blog entries
-  // try {
-  //   const blogEntries = await fetchBlogEntryList();
-  //   for (const blogEntry of blogEntries) {
-  //     sitemap.push({
-  //       title: blogEntry.title,
-  //       url: blogEntry.url,
-  //       type: 'external',
-  //     });
-  //   }
-  // } catch (error) {
-  //   console.warn('Failed to fetch blog entries:', error);
-  // }
-
-  // // Add other websites
-  // for (const website of OTHER_WEBSITES) {
-  //   sitemap.push({
-  //     title: website.page,
-  //     url: website.url,
-  //     type: 'external',
-  //   });
-  // }
-
-  return sitemap;
+  const generator = new SitemapGenerator(docsYmlPath);
+  return generator.generateSitemap();
 }
 
 /**
@@ -517,7 +605,7 @@ export function processInternalDocs(internalDocs: SitemapEntry[]): FernDoc[] {
   for (const entry of internalDocs) {
     if (!entry.path || !entry.slug) {
       console.warn(
-        `Skipping internal doc without path or slug: ${entry.title}`,
+        `Skipping internal doc without path or slug: ${entry.displayTitle}`,
       );
       continue;
     }
@@ -528,11 +616,14 @@ export function processInternalDocs(internalDocs: SitemapEntry[]): FernDoc[] {
         slug: entry.slug,
         path: entry.path,
         body: content,
-        title: entry.title,
+        title: entry.displayTitle,
       });
-      console.log(`✓ Processed internal doc: ${entry.title}`);
+      console.log(`✓ Processed internal doc: ${entry.displayTitle}`);
     } catch (error) {
-      console.error(`✗ Failed to process internal doc ${entry.title}:`, error);
+      console.error(
+        `✗ Failed to process internal doc ${entry.displayTitle}:`,
+        error,
+      );
     }
   }
 
@@ -549,7 +640,9 @@ export async function processExternalBlogs(
 
   for (const entry of externalBlogs) {
     if (!entry.url) {
-      console.warn(`Skipping external entry without URL: ${entry.title}`);
+      console.warn(
+        `Skipping external entry without URL: ${entry.displayTitle}`,
+      );
       continue;
     }
 
@@ -562,11 +655,14 @@ export async function processExternalBlogs(
         slug: slug,
         path: entry.url,
         body: content,
-        title: entry.title,
+        title: entry.displayTitle,
       });
-      console.log(`✓ Processed external blog: ${entry.title}`);
+      console.log(`✓ Processed external blog: ${entry.displayTitle}`);
     } catch (error) {
-      console.error(`✗ Failed to process external blog ${entry.title}:`, error);
+      console.error(
+        `✗ Failed to process external blog ${entry.displayTitle}:`,
+        error,
+      );
     }
   }
 
