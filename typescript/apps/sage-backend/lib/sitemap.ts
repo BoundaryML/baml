@@ -203,16 +203,6 @@ export function slugify(text: string): string {
 }
 
 /**
- * Helper function to build url2 from slug2 components
- */
-export function buildUrl2FromSlug2(slug2: string[]): string {
-  return urljoin(...slug2.map((part) => part.trim()))
-    .replaceAll('//*', '/')
-    .replace(/^\//, '')
-    .replace(/\/$/, '');
-}
-
-/**
  * Function to generate slug and slug2 from tab/section/title
  */
 export function generateSlug(
@@ -353,10 +343,11 @@ export class SitemapGenerator {
       const mdxPath = join(this.docsRoot, item.path);
       const mdxFrontmatter = this.readMdxFrontmatter(mdxPath);
 
-      // Build display path
-      const fullSectionPath = this.buildDisplayPath(tab, sections);
-
-      const pageSlug = this.buildSlugComponents(tab, sections, item.slug);
+      const pageSlug = this.buildSlugComponents(
+        tab,
+        sections,
+        mdxFrontmatter.slug || item.slug || slugify(item.page.toLowerCase()),
+      );
 
       // From packages/fdr-sdk/src/navigation/versions/v1/slugjoin.ts
       const pageHref = urljoin(pageSlug)

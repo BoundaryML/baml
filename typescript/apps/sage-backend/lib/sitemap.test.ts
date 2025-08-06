@@ -91,12 +91,13 @@ describe('Sitemap Generation and Validation', () => {
       );
     }
 
-    const results = await Promise.allSettled(fetches);
-    const validResults = results.filter(
+    const results = (await Promise.allSettled(fetches)).filter(
       (result) => result.status === 'fulfilled',
     );
+    const failed = results.filter((result) => result.value.success === false);
     console.info('Final results:');
-    console.info(`✅ Valid results: ${validResults.length}`);
-    console.info(`❌ Invalid results: ${results.length - validResults.length}`);
+    console.info(`✅ Valid results: ${results.length - failed.length}`);
+    console.warn(`❌ Invalid results: ${failed.length}`);
+    console.warn(failed.map((result) => result.value.entry.href));
   }, 30000);
 });
