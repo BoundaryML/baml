@@ -75,7 +75,7 @@ jobs:
       - name: Pull sage-backend out of monorepo
         working-directory: ./typescript
         run: |
-          echo "injectWorkspacePackages: true" >>../pnpm-workspace.yaml
+          pnpm config set inject-workspace-packages true
           pnpm --filter=sage-backend deploy ../sage-backend
 
       - name: Install dependencies and build
