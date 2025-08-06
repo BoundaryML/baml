@@ -12,10 +12,10 @@
       "!baml_client/*.tsx",
       "typescript/apps/ask-baml-client/**/*.ts",
       "typescript/apps/ask-baml-client/**/*.tsx",
-      "typescript/apps/boundary-tools-backend/**/*.ts",
-      "typescript/apps/boundary-tools-backend/**/*.tsx",
-      "typescript/packages/boundary-tools-interface/**/*.ts",
-      "typescript/packages/boundary-tools-interface/**/*.tsx"
+      "typescript/apps/sage-backend/**/*.ts",
+      "typescript/apps/sage-backend/**/*.tsx",
+      "typescript/packages/sage-interface/**/*.ts",
+      "typescript/packages/sage-interface/**/*.tsx"
     ]
   },
   "json": {

@@ -62,7 +62,7 @@ jobs:
       name: ${{ github.ref == 'refs/heads/canary' && 'boundary-tools-prod' || 'boundary-tools-dev' }}
     defaults:
       run:
-        working-directory: ../boundary-tools-backend
+        working-directory: ../sage-backend
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -90,11 +90,11 @@ jobs:
       #       }}
       #
       # So our current solution is to do this mechanism.
-      - name: Pull boundary-tools-backend out of monorepo
+      - name: Pull sage-backend out of monorepo
         working-directory: ./typescript
         run: |
-          pnpm --filter=boundary-tools-backend install
-          pnpm --filter=boundary-tools-backend deploy ../boundary-tools-backend
+          pnpm --filter=sage-backend install
+          pnpm --filter=sage-backend deploy ../sage-backend
 
       - name: Install dependencies and build
         run: |
@@ -130,7 +130,7 @@ jobs:
         if: github.event_name == 'pull_request'
         uses: thollander/actions-comment-pull-request@v3.0.1
         with:
-          file-path: ../boundary-tools-backend/preview_url.txt
+          file-path: ../sage-backend/preview_url.txt
   
   pinecone:
     runs-on: ubuntu-latest
@@ -138,7 +138,7 @@ jobs:
       name: ${{ github.ref == 'refs/heads/canary' && 'boundary-tools-prod' || 'boundary-tools-dev' }}
     defaults:
       run:
-        working-directory: typescript/apps/boundary-tools-backend
+        working-directory: typescript/apps/sage-backend
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -161,6 +161,6 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
         run: |
-          pnpm --filter=boundary-tools-backend install
+          pnpm --filter=sage-backend install
           pnpm tsx tools/update-pinecone.ts ../../../fern/docs.yml
           
