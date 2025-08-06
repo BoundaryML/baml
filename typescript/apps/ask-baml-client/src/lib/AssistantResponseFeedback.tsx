@@ -12,7 +12,7 @@ interface AssistantResponseFeedbackProps {
 const FEEDBACK_API_ENDPOINT =
   process.env.NODE_ENV === 'development'
     ? 'http://localhost:4000/api/feedback'
-    : 'https://ask-baml-backend.vercel.app/api/feedback';
+    : 'https://boundary-tools-backend.vercel.app/api/feedback';
 
 export const AssistantResponseFeedback: React.FC<AssistantResponseFeedbackProps> = ({ messageId }) => {
   const sessionId = useAtomValue(sessionIdAtom);

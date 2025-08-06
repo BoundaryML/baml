@@ -74,7 +74,7 @@ const postDocChat = async (req: QueryRequest) => {
 const API_ENDPOINT =
   process.env.NODE_ENV === 'development'
     ? 'http://localhost:4000/api/doc-chat'
-    : 'https://ask-baml-backend.vercel.app/api/doc-chat';
+    : 'https://boundary-tools-backend.vercel.app/api/doc-chat';
 
 const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) => {
   const [messages, setMessages] = useAtom(messagesAtom);
