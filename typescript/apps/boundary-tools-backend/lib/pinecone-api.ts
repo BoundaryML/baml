@@ -9,7 +9,7 @@ import { Sema } from 'async-sema';
 import { chunk } from 'lodash';
 
 const EMBEDDING_MODEL = 'text-embedding-3-large';
-const PINECONE_INDEX_NAME = process.env.NODE_ENV === 'production' ? 'baml-index-sage' : 'baml-index-sage-test';
+const PINECONE_INDEX_NAME = process.env.NODE_ENV === 'production' ? 'ask-baml-prod' : 'ask-baml-dev';
 console.log('Using pinecone index:', PINECONE_INDEX_NAME);
 
 const openaiClient = new OpenAI({
