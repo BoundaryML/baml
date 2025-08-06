@@ -16,6 +16,9 @@ jobs:
   docs:
     runs-on: ubuntu-latest
     permissions: write-all
+    environment:
+      name: ${{ github.ref == 'refs/heads/canary' && 'boundary-tools-prod' || 'boundary-tools-dev' }}
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -56,6 +59,8 @@ jobs:
   backend:
     runs-on: ubuntu-latest
     permissions: write-all
+    environment:
+      name: ${{ github.ref == 'refs/heads/canary' && 'boundary-tools-prod' || 'boundary-tools-dev' }}
     defaults:
       run:
         working-directory: ../sage-backend
@@ -121,7 +126,8 @@ jobs:
   
   pinecone:
     runs-on: ubuntu-latest
-    permissions: write-all
+    environment:
+      name: ${{ github.ref == 'refs/heads/canary' && 'boundary-tools-prod' || 'boundary-tools-dev' }}
     defaults:
       run:
         working-directory: typescript/apps/sage-backend
