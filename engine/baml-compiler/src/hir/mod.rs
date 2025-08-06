@@ -42,13 +42,98 @@ pub enum TypeM<M> {
     ClassName(String, M),
     EnumName(String, M),
     Union(Vec<TypeM<M>>, M),
+    Arrow(Arrow<M>, M),
+}
+
+impl<T: Default> TypeM<T> {
+    pub fn int() -> Self {
+        Self::Int(T::default())
+    }
+}
+
+impl Type {
+    #[track_caller]
+    pub fn assert_eq_up_to_span(&self, other: &Type) {
+        match (self, other) {
+            (TypeM::Int(a), TypeM::Int(b)) => assert!(a.eq_up_to_span(b)),
+            (TypeM::Int(_), _) => panic!("Int type mismatch"),
+            (TypeM::String(a), TypeM::String(b)) => assert!(a.eq_up_to_span(b)),
+            (TypeM::String(_), _) => panic!("String type mismatch"),
+            (TypeM::Bool(a), TypeM::Bool(b)) => assert!(a.eq_up_to_span(b)),
+            (TypeM::Bool(_), _) => panic!("Bool type mismatch"),
+            (TypeM::Null(a), TypeM::Null(b)) => assert!(a.eq_up_to_span(b)),
+            (TypeM::Null(_), _) => panic!("Null type mismatch"),
+            (TypeM::Array(a, a_meta), TypeM::Array(b, b_meta)) => {
+                a.assert_eq_up_to_span(b);
+                assert!(a_meta.eq_up_to_span(b_meta));
+            }
+            (TypeM::Array(_, _), _) => panic!("Array type mismatch"),
+            (TypeM::Map(a, b, a_meta), TypeM::Map(c, d, b_meta)) => {
+                a.assert_eq_up_to_span(c);
+                b.assert_eq_up_to_span(d);
+                assert!(a_meta.eq_up_to_span(b_meta));
+            }
+            (TypeM::Map(_, _, _), _) => panic!("Map type mismatch"),
+            (TypeM::ClassName(a, a_meta), TypeM::ClassName(b, b_meta)) => {
+                assert!(a == b);
+                assert!(a_meta.eq_up_to_span(b_meta));
+            }
+            (TypeM::ClassName(_, _), _) => panic!("Class name type mismatch"),
+            (TypeM::EnumName(a, a_meta), TypeM::EnumName(b, b_meta)) => {
+                assert!(a == b);
+                assert!(a_meta.eq_up_to_span(b_meta));
+            }
+            (TypeM::EnumName(_, _), _) => panic!("Enum name type mismatch"),
+            (TypeM::Union(a, a_meta), TypeM::Union(b, b_meta)) => {
+                assert!(a.len() == b.len());
+                a.iter()
+                    .zip(b.iter())
+                    .for_each(|(a, b)| a.assert_eq_up_to_span(b));
+                assert!(a_meta.eq_up_to_span(b_meta));
+            }
+            (TypeM::Union(_, _), _) => panic!("Union type mismatch"),
+            (TypeM::Arrow(a, a_meta), TypeM::Arrow(b, b_meta)) => {
+                assert!(a.inputs.len() == b.inputs.len());
+                a.inputs
+                    .iter()
+                    .zip(b.inputs.iter())
+                    .for_each(|(a, b)| a.assert_eq_up_to_span(b));
+                a.output.assert_eq_up_to_span(&b.output);
+                assert!(a_meta.eq_up_to_span(b_meta));
+            }
+            (TypeM::Arrow(_, _), _) => panic!("Arrow type mismatch"),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
-struct TypeMeta {
-    span: Span,
-    constraints: Vec<Constraint>,
-    streaming_behavior: StreamingBehavior,
+pub struct Arrow<M> {
+    pub inputs: Vec<TypeM<M>>,
+    pub output: Box<TypeM<M>>,
+}
+
+#[derive(Clone, Debug)]
+pub struct TypeMeta {
+    pub span: Span,
+    pub constraints: Vec<Constraint>,
+    pub streaming_behavior: StreamingBehavior,
+}
+
+impl TypeMeta {
+    #[track_caller]
+    pub fn eq_up_to_span(&self, other: &TypeMeta) -> bool {
+        self.constraints == other.constraints && self.streaming_behavior == other.streaming_behavior
+    }
+}
+
+impl Default for TypeMeta {
+    fn default() -> Self {
+        Self {
+            span: Span::fake(),
+            constraints: vec![],
+            streaming_behavior: StreamingBehavior::default(),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -152,7 +237,7 @@ pub enum Statement {
 pub enum Expression {
     ArrayAccess {
         base: Box<Expression>,
-        index: String,
+        index: Box<Expression>,
         span: Span,
     },
     FieldAccess {

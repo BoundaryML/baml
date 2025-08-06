@@ -159,6 +159,7 @@ impl TypeM<TypeMeta> {
             TypeM::ClassName(_, meta) => meta,
             TypeM::EnumName(_, meta) => meta,
             TypeM::Union(_, meta) => meta,
+            TypeM::Arrow(_, meta) => meta,
         }
     }
 
@@ -182,6 +183,7 @@ impl TypeM<TypeMeta> {
             TypeM::ClassName(_, _) => false,
             TypeM::EnumName(_, _) => false,
             TypeM::Null(_) => false,
+            TypeM::Arrow(_, _) => true,
         }
     }
 }
@@ -374,9 +376,9 @@ impl Expression {
         temp_counter: &mut usize,
     ) -> Self {
         match expr {
-            ast::Expression::ArrayAccess(base, field, span) => Expression::ArrayAccess {
+            ast::Expression::ArrayAccess(base, index, span) => Expression::ArrayAccess {
                 base: Box::new(Self::from_ast(base, statements, temp_counter)),
-                index: field.to_string(),
+                index: Box::new(Self::from_ast(index, statements, temp_counter)),
                 span: span.clone(),
             },
             ast::Expression::FieldAccess(base, field, span) => Expression::FieldAccess {

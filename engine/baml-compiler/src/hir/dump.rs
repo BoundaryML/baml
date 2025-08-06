@@ -3,8 +3,8 @@
 use pretty::RcDoc;
 
 use crate::hir::{
-    Block, Class, ClassConstructorField, Enum, EnumVariant, ExprFunction, Expression, Field, Hir,
-    LlmFunction, Parameter, Statement, TypeM, TypeMeta,
+    Arrow, Block, Class, ClassConstructorField, Enum, EnumVariant, ExprFunction, Expression, Field,
+    Hir, LlmFunction, Parameter, Statement, TypeM, TypeMeta,
 };
 
 impl Hir {
@@ -71,6 +71,13 @@ impl TypeM<TypeMeta> {
                     .append(RcDoc::text(")"))
             }
             TypeM::Null(_) => RcDoc::text("null"),
+            TypeM::Arrow(Arrow { inputs, output }, _) => RcDoc::text("(")
+                .append(RcDoc::intersperse(
+                    inputs.iter().map(|i| i.to_doc()),
+                    RcDoc::text(", "),
+                ))
+                .append(RcDoc::text(") -> "))
+                .append(output.to_doc()),
         };
 
         let mut doc = base;
@@ -257,6 +264,19 @@ impl Block {
 impl Expression {
     pub fn to_doc(&self) -> RcDoc<'static, ()> {
         match self {
+            Expression::ArrayAccess { base, index, .. } => RcDoc::text("base[index]")
+                .append(RcDoc::space())
+                .append(base.to_doc())
+                .append(RcDoc::space())
+                .append(RcDoc::text("["))
+                .append(index.to_doc())
+                .append(RcDoc::text("]")),
+            Expression::FieldAccess { base, field, .. } => RcDoc::text("base.field")
+                .append(RcDoc::space())
+                .append(base.to_doc())
+                .append(RcDoc::space())
+                .append(RcDoc::text("."))
+                .append(RcDoc::text(field.clone())),
             Expression::BoolValue(val, _) => RcDoc::text(val.to_string()),
             Expression::NumericValue(val, _) => RcDoc::text(val.clone()),
             Expression::Identifier(name, _) => RcDoc::text(name.clone()),

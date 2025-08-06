@@ -1,8 +1,5 @@
-mod codegen;
 pub mod hir;
 pub mod thir;
-
-pub use codegen::compile;
 
 /// Testing utilities.
 pub mod test {
