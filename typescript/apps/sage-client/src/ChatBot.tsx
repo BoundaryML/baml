@@ -21,13 +21,14 @@ const transformMessagesForAPI = (messages: StoredMessage[]): Array<Message> => {
   return messages
     .filter((msg) => msg.role === 'user' || msg.role === 'assistant')
     .map((msg) => {
-      if (msg.role === 'user') {
-        return msg; // UserMessage is already correct
-      } else if (msg.role === 'assistant') {
-        return msg; // AssistantMessage is already correct
+      switch (msg.role) {
+        case 'user':
+          return msg;
+        case 'assistant':
+          return msg;
+        default:
+          throw new Error('Unexpected message type in transform');
       }
-      // This should never happen due to the filter, but TypeScript needs it
-      throw new Error('Unexpected message type in transform');
     });
 };
 
@@ -44,7 +45,7 @@ const serializeError = (error: unknown): { message: string; code?: string; statu
     if (error.message.includes('HTTP error! status:')) {
       const match = error.message.match(/status: (\d+)/);
       if (match) {
-        serialized.statusCode = parseInt(match[1]!);
+        serialized.statusCode = Number.parseInt(match[1]!);
       }
     }
 
@@ -73,7 +74,7 @@ const postDocChat = async (req: QueryRequest) => {
 const API_ENDPOINT =
   process.env.NODE_ENV === 'development'
     ? 'http://localhost:4000/api/doc-chat'
-    : 'https://baml-sage-backend.vercel.app/api/doc-chat';
+    : 'https://ask-baml-backend.vercel.app/api/doc-chat';
 
 const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) => {
   const [messages, setMessages] = useAtom(messagesAtom);

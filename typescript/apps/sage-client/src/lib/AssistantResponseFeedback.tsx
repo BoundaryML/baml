@@ -12,11 +12,9 @@ interface AssistantResponseFeedbackProps {
 const FEEDBACK_API_ENDPOINT =
   process.env.NODE_ENV === 'development'
     ? 'http://localhost:4000/api/feedback'
-    : 'https://baml-sage-backend.vercel.app/api/feedback';
+    : 'https://ask-baml-backend.vercel.app/api/feedback';
 
-export const AssistantResponseFeedback: React.FC<
-  AssistantResponseFeedbackProps
-> = ({ messageId }) => {
+export const AssistantResponseFeedback: React.FC<AssistantResponseFeedbackProps> = ({ messageId }) => {
   const sessionId = useAtomValue(sessionIdAtom);
   const messages = useAtomValue(messagesAtom);
   const [feedbackModal, setFeedbackModal] = useState<{
@@ -49,9 +47,7 @@ export const AssistantResponseFeedback: React.FC<
 
     try {
       // Find the assistant message with the specified messageId
-      const assistantMessageIndex = messages.findIndex(
-        (m) => m.role === 'assistant' && m.message_id === messageId,
-      );
+      const assistantMessageIndex = messages.findIndex((m) => m.role === 'assistant' && m.message_id === messageId);
 
       if (assistantMessageIndex === -1) {
         throw new Error('Could not find the assistant message');
@@ -66,8 +62,9 @@ export const AssistantResponseFeedback: React.FC<
 
       // Filter and transform messages to match the expected type
       const filteredMessages = messagesToSend
-        .filter((msg): msg is Extract<typeof msg, { role: 'user' | 'assistant' }> => 
-          msg !== undefined && (msg.role === 'user' || msg.role === 'assistant')
+        .filter(
+          (msg): msg is Extract<typeof msg, { role: 'user' | 'assistant' }> =>
+            msg !== undefined && (msg.role === 'user' || msg.role === 'assistant'),
         )
         .map((msg) => {
           if (msg.role === 'user') {
@@ -114,11 +111,7 @@ export const AssistantResponseFeedback: React.FC<
       console.log('Feedback submitted successfully');
     } catch (error) {
       console.error('Error submitting feedback:', error);
-      setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : 'Failed to submit feedback. Please try again.',
-      );
+      setErrorMessage(error instanceof Error ? error.message : 'Failed to submit feedback. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -220,10 +213,8 @@ export const AssistantResponseFeedback: React.FC<
               padding: '24px',
               maxWidth: '400px',
               width: '100%',
-              boxShadow:
-                '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
-              fontFamily:
-                'Inter, system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+              fontFamily: 'Inter, system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
             }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -270,11 +261,7 @@ export const AssistantResponseFeedback: React.FC<
                 value={feedbackComment}
                 onChange={(e) => setFeedbackComment(e.target.value)}
                 onKeyDown={(e) => {
-                  if (
-                    e.key === 'Enter' &&
-                    (e.metaKey || e.ctrlKey) &&
-                    !isSubmitting
-                  ) {
+                  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !isSubmitting) {
                     e.preventDefault();
                     submitFeedback();
                   }
@@ -412,10 +399,8 @@ export const AssistantResponseFeedback: React.FC<
               padding: '24px',
               maxWidth: '400px',
               width: '100%',
-              boxShadow:
-                '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
-              fontFamily:
-                'Inter, system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+              fontFamily: 'Inter, system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
             }}
             onClick={(e) => e.stopPropagation()}
           >
