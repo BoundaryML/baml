@@ -1,11 +1,6 @@
 import { describe, it, beforeAll, afterAll, expect } from 'vitest';
-import { ChildProcess, spawn } from 'node:child_process';
-import {
-  generateSitemap,
-  SitemapGenerator,
-  slugify,
-  type SitemapEntry,
-} from './sitemap';
+import { type ChildProcess, spawn } from 'node:child_process';
+import { SitemapGenerator, slugify, type SitemapEntry } from './sitemap';
 import { Sema } from 'async-sema';
 
 const TEST_DOCS_PATH = '/Users/sam/baml2/fern/docs.yml';
@@ -202,8 +197,7 @@ describe('Sitemap Generation and Validation', () => {
   const concurrentRequestsSemaphore = new Sema(MAX_CONCURRENT_REQUESTS);
 
   let fernProcess: ChildProcess;
-  let baseUrl: string;
-  let sitemapEntries: SitemapEntry[] = [];
+  let fernUrl: string;
 
   beforeAll(async () => {
     fernProcess = spawn('npx', ['fern', 'docs', 'dev'], {
@@ -226,8 +220,8 @@ describe('Sitemap Generation and Validation', () => {
           /Development server ready on (http:\/\/localhost:\d+)/,
         );
         if (readyMatch) {
-          baseUrl = readyMatch[1];
-          console.log(`✅ Fern server ready at: ${baseUrl}`);
+          fernUrl = readyMatch[1];
+          console.log(`✅ Fern server ready at: ${fernUrl}`);
           clearTimeout(timeout);
           // Give the server a moment to fully initialize
           setTimeout(() => resolve(void 0), 2000);
@@ -258,7 +252,7 @@ describe('Sitemap Generation and Validation', () => {
     const fetches = [];
 
     for (const entry of entries) {
-      if (entry.type === 'external') {
+      if (entry.type !== 'fern') {
         continue;
       }
 
@@ -268,7 +262,7 @@ describe('Sitemap Generation and Validation', () => {
           const cleanHref = entry.href.startsWith('/')
             ? entry.href.slice(1)
             : entry.href;
-          const url = `${baseUrl}/${cleanHref}`;
+          const url = `${fernUrl}/${cleanHref}`;
           try {
             await concurrentRequestsSemaphore.acquire();
             const response = await fetch(url, {

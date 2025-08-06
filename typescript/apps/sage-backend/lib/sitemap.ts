@@ -8,7 +8,7 @@ import urljoin from 'url-join';
 
 export type SitemapEntry =
   | {
-      type: 'internal';
+      type: 'fern';
       displayTitle: string;
       displaySection: string[];
       filepath: string;
