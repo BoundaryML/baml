@@ -154,34 +154,3 @@ export async function fetchBlogContent(url: string): Promise<string> {
     return `Blog post: ${url}\nTitle: ${url.split('/').pop()?.replace(/-/g, ' ') || 'Blog Post'}`;
   }
 }
-
-/**
- * Process external blog posts into FernDoc format
- */
-export async function processExternalBlogs(
-  blogEntries: BlogSitemapEntry[],
-): Promise<CorpusDocument[]> {
-  const docs: CorpusDocument[] = [];
-
-  for (const entry of blogEntries) {
-    if (!entry.url) {
-      console.warn(`Skipping external entry without URL: ${entry.title}`);
-      continue;
-    }
-
-    try {
-      const content = await fetchBlogContent(entry.url);
-
-      docs.push({
-        title: entry.title,
-        url: entry.url,
-        body: content,
-      });
-      console.log(`✓ Processed external blog: ${entry.title}`);
-    } catch (error) {
-      console.error(`✗ Failed to process external blog ${entry.title}:`, error);
-    }
-  }
-
-  return docs;
-}

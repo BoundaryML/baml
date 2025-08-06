@@ -6,8 +6,8 @@ import { ErrorBoundary } from 'react-error-boundary';
 import { PHProvider, RB2BElement } from './_components/PosthogProvider';
 import { ThemeProvider } from './_components/ThemeProvider';
 import '@baml/ui/globals.css';
-import PostHogPageView from './PostHogPageView';
 import { cn } from '@baml/ui/lib/utils';
+import PostHogPageView from './PostHogPageView';
 
 import { GeistMono } from 'geist/font/mono';
 import { GeistSans } from 'geist/font/sans';
@@ -33,18 +33,16 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-
-
       <RB2BElement />
       <PHProvider>
-      <body
-      className={cn(
-        'bg-background text-foreground relative min-h-screen font-sans antialiased',
-        GeistSans.variable,
-        GeistMono.variable,
-      )}
-    >
-          <ErrorBoundary fallback={<div></div>}>
+        <body
+          className={cn(
+            'bg-background text-foreground relative min-h-screen font-sans antialiased',
+            GeistSans.variable,
+            GeistMono.variable,
+          )}
+        >
+          <ErrorBoundary fallback={null}>
             <PostHogPageView />
           </ErrorBoundary>
           <ThemeProvider
@@ -61,8 +59,8 @@ export default function RootLayout({
             {/* <PromptPreview /> */}
             {/* </JotaiProvider> */}
             <Toaster />
-        </ThemeProvider>
-      </body>
+          </ThemeProvider>
+        </body>
       </PHProvider>
     </html>
   );

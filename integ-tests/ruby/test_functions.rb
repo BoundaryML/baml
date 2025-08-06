@@ -569,5 +569,4 @@ describe "ruby<->baml integration tests" do
     final = stream.get_final_response
     puts final.to_json
   end
-
 end
