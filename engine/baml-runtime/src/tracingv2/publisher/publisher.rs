@@ -49,6 +49,12 @@ enum PublisherMessage {
     Shutdown(tokio::sync::oneshot::Sender<()>),
 }
 
+enum BlobUploaderMessage {
+    Upload,
+    Flush(tokio::sync::oneshot::Sender<()>),
+    Shutdown(tokio::sync::oneshot::Sender<()>),
+}
+
 /// Global publisher channel.
 /// When the module is first used, we create an unbounded channel and then spawn the publisher task.
 static PUBLISHING_CHANNEL: OnceCell<mpsc::UnboundedSender<PublisherMessage>> = OnceCell::new();
@@ -216,18 +222,31 @@ pub fn start_publisher(
     // Use get_or_init to ensure thread-safe initialization
     let channel = PUBLISHING_CHANNEL.get_or_init(|| {
         let (tx, rx) = mpsc::unbounded_channel::<PublisherMessage>();
-        let mut publisher = TracePublisher::new(rx, lookup.clone());
+        let (blob_tx, blob_rx) = mpsc::unbounded_channel::<BlobUploaderMessage>();
+        
+        let mut publisher = TracePublisher::new(rx, lookup.clone(), blob_tx.clone());
+        let mut blob_uploader = BlobUploader::new(blob_rx, lookup.clone());
 
         #[cfg(not(target_arch = "wasm32"))]
         {
+            // Spawn the main publisher task
             let handle = rt.spawn(async move { publisher.run().await });
             PUBLISHING_TASK.get_or_init(|| Arc::new(handle));
+            
+            // Spawn the blob uploader task
+            rt.spawn(async move { blob_uploader.run().await });
         }
 
         #[cfg(target_arch = "wasm32")]
-        wasm_bindgen_futures::spawn_local(async move {
-            publisher.run().await;
-        });
+        {
+            wasm_bindgen_futures::spawn_local(async move {
+                publisher.run().await;
+            });
+            
+            wasm_bindgen_futures::spawn_local(async move {
+                blob_uploader.run().await;
+            });
+        }
 
         tx
     });
@@ -261,10 +280,20 @@ struct TracePublisher {
     batch_size: usize,
     rx: mpsc::UnboundedReceiver<PublisherMessage>,
     lookup: Arc<RuntimeAST>,
+    blob_tx: mpsc::UnboundedSender<BlobUploaderMessage>,
+}
+
+struct BlobUploader {
+    rx: mpsc::UnboundedReceiver<BlobUploaderMessage>,
+    lookup: Arc<RuntimeAST>,
 }
 
 impl TracePublisher {
-    pub fn new(rx: mpsc::UnboundedReceiver<PublisherMessage>, lookup: Arc<RuntimeAST>) -> Self {
+    pub fn new(
+        rx: mpsc::UnboundedReceiver<PublisherMessage>,
+        lookup: Arc<RuntimeAST>,
+        blob_tx: mpsc::UnboundedSender<BlobUploaderMessage>,
+    ) -> Self {
         let batch_size = lookup
             .ast
             .env_var("BAML_TRACE_BATCH_SIZE")
@@ -275,6 +304,7 @@ impl TracePublisher {
             rx,
             batch_size,
             lookup,
+            blob_tx,
         }
     }
 
@@ -285,7 +315,6 @@ impl TracePublisher {
     pub async fn run(&mut self) {
         let mut buffer: Vec<Arc<TraceEventWithMeta>> = Vec::new();
         let mut tick_interval = interval(Duration::from_secs(2));
-        let mut blob_upload_interval = interval(Duration::from_secs(2)); // Upload blobs every 2 seconds
 
         tracing::debug!(
             message = "Starting publisher loop",
@@ -315,6 +344,8 @@ impl TracePublisher {
                             buffer.push(event);
                             if buffer.len() >= self.batch_size {
                                 self.process_batch(std::mem::take(&mut buffer)).await;
+                                // Trigger blob upload after batch processing
+                                let _ = self.blob_tx.send(BlobUploaderMessage::Upload);
                             }
 
                         },
@@ -323,8 +354,10 @@ impl TracePublisher {
                             if !buffer.is_empty() {
                                 self.process_batch(std::mem::take(&mut buffer)).await;
                             }
-                            // Upload any pending blobs
-                            self.process_blob_uploads().await;
+                            // Flush blob uploader and wait for completion
+                            let (blob_ack_tx, blob_ack_rx) = tokio::sync::oneshot::channel();
+                            let _ = self.blob_tx.send(BlobUploaderMessage::Flush(blob_ack_tx));
+                            let _ = blob_ack_rx.await;
                             // Signal flush completion.
                             let _ = flush_ack.send(());
                         },
@@ -332,8 +365,10 @@ impl TracePublisher {
                             if !buffer.is_empty() {
                                 self.process_batch(std::mem::take(&mut buffer)).await;
                             }
-                            // Upload any remaining blobs before shutdown
-                            self.process_blob_uploads().await;
+                            // Shutdown blob uploader and wait for completion
+                            let (blob_ack_tx, blob_ack_rx) = tokio::sync::oneshot::channel();
+                            let _ = self.blob_tx.send(BlobUploaderMessage::Shutdown(blob_ack_tx));
+                            let _ = blob_ack_rx.await;
                             let _ = shutdown_ack.send(());
                             break;
                         }
@@ -347,15 +382,9 @@ impl TracePublisher {
                     }
                     if !buffer.is_empty() {
                         self.process_batch(std::mem::take(&mut buffer)).await;
+                        // Trigger blob upload after batch processing
+                        let _ = self.blob_tx.send(BlobUploaderMessage::Upload);
                     }
-                }
-                // Periodic upload of pending blobs
-                _ = blob_upload_interval.tick() => {
-                    if self.lookup.api_key().is_none() {
-                        tracing::debug!("Skipping blob upload because BOUNDARY_API_KEY is not set");
-                        continue;
-                    }
-                    self.process_blob_uploads().await;
                 }
             }
         }
@@ -564,6 +593,142 @@ impl TracePublisher {
         }
     }
 
+    // Remove the process_blob_uploads method as it's now handled by BlobUploader
+
+    /// Process a batch of events.
+    ///
+    /// This method:
+    ///   1. Converts events to RPC format with blob extraction.
+    ///   2. Serializes the events into JSON.
+    ///   3. Uploads the JSON to S3 via presigned URL.
+    async fn process_batch_impl(&self, batch: Vec<Arc<TraceEventWithMeta>>) -> Result<()> {
+        // log::info!("Processing {:#?}", batch);
+        // Assemble the upload request structure.
+        let trace_event_batch = TraceEventBatch {
+            events: batch
+                .iter()
+                .map(|e| to_rpc_event(e, self.lookup.as_ref()))
+                .collect(),
+        };
+
+        // log::info!("trace_event_batch={:#?}", trace_event_batch);
+
+        // tracing::info!(
+        //     message = "Trying to upload trace events",
+        //     batch_size = batch.len()
+        // );
+
+        // Serialize to JSON.
+        // #[cfg(not(target_arch = "wasm32"))]
+        // {
+        //     use tokio::fs::OpenOptions;
+        //     if let Ok(mut file) = OpenOptions::new()
+        //         .create(true)
+        //         .append(true)
+        //         .open("/tmp/trace_events.json")
+        //         .await
+        //     {
+        //         for e in trace_event_batch.events.iter() {
+        //             if let Ok(json) = serde_json::to_string(e) {
+        //                 use tokio::io::AsyncWriteExt;
+        //                 if let Err(e) = file.write_all(format!("{}\n", json).as_bytes()).await {
+        //                     log::error!("Failed to write to trace file: {}", e);
+        //                 }
+        //             }
+        //         }
+        //     }
+        // }
+
+        // Upload via HTTP with retry logic.
+        // TODO watch out with time crate
+
+        let upload_url_details = match self
+            .lookup
+            .api_request::<CreateTraceEventUploadUrl>(CreateTraceEventUploadUrlRequest {
+                baml_runtime: Some(env!("CARGO_PKG_VERSION").to_string()),
+            })
+            .await
+        {
+            Ok(response) => response,
+            Err(e) => {
+                log::debug!("Failed to upload trace events: {e}");
+                return Err(e.into());
+            }
+        };
+
+        self.lookup
+            .client
+            .put(upload_url_details.upload_url)
+            .json(&trace_event_batch)
+            .headers(
+                upload_url_details
+                    .upload_metadata
+                    // S3 upload URL shoves the project_id into S3ObjectMetadata
+                    // When we process the S3 Upload notification, the Queue processor
+                    // relies on this metadata to determine the project_id.
+                    .as_reqwest_headers()
+                    .context(format!(
+                        "Failed to convert {} to HeaderMap",
+                        type_name::<S3UploadMetadata>(),
+                    ))?,
+            )
+            .send()
+            .await
+            .context("Failed to upload trace events to S3")?;
+
+        tracing::debug!("Successfully uploaded batch of {} events", batch.len());
+        Ok(())
+    }
+}
+
+trait AsReqwestHeaders {
+    fn as_reqwest_headers(&self) -> Result<HeaderMap>;
+}
+
+impl BlobUploader {
+    pub fn new(rx: mpsc::UnboundedReceiver<BlobUploaderMessage>, lookup: Arc<RuntimeAST>) -> Self {
+        Self { rx, lookup }
+    }
+
+    pub async fn run(&mut self) {
+        let mut upload_interval = interval(Duration::from_secs(2));
+
+        tracing::debug!("Starting blob uploader loop");
+
+        loop {
+            tokio::select! {
+                Some(message) = self.rx.recv() => {
+                    if self.lookup.api_key().is_none() {
+                        tracing::debug!("Skipping blob upload because BOUNDARY_API_KEY is not set");
+                        continue;
+                    }
+
+                    match message {
+                        BlobUploaderMessage::Upload => {
+                            self.process_blob_uploads().await;
+                        },
+                        BlobUploaderMessage::Flush(flush_ack) => {
+                            self.process_blob_uploads().await;
+                            let _ = flush_ack.send(());
+                        },
+                        BlobUploaderMessage::Shutdown(shutdown_ack) => {
+                            self.process_blob_uploads().await;
+                            let _ = shutdown_ack.send(());
+                            break;
+                        }
+                    }
+                }
+                _ = upload_interval.tick() => {
+                    if self.lookup.api_key().is_none() {
+                        tracing::debug!("Skipping blob upload because BOUNDARY_API_KEY is not set");
+                        continue;
+                    }
+                    self.process_blob_uploads().await;
+                }
+            }
+        }
+    }
+
     async fn process_blob_uploads(&self) {
         let blob_cache = self.lookup.blob_cache();
         let result = self.process_blob_uploads_impl(blob_cache).await;
@@ -669,95 +834,6 @@ impl TracePublisher {
         tracing::debug!("Successfully uploaded {} blobs", blobs_to_upload.len());
         Ok(())
     }
-
-    /// Process a batch of events.
-    ///
-    /// This method:
-    ///   1. Converts events to RPC format with blob extraction.
-    ///   2. Serializes the events into JSON.
-    ///   3. Uploads the JSON to S3 via presigned URL.
-    async fn process_batch_impl(&self, batch: Vec<Arc<TraceEventWithMeta>>) -> Result<()> {
-        // log::info!("Processing {:#?}", batch);
-        // Assemble the upload request structure.
-        let trace_event_batch = TraceEventBatch {
-            events: batch
-                .iter()
-                .map(|e| to_rpc_event(e, self.lookup.as_ref()))
-                .collect(),
-        };
-
-        // log::info!("trace_event_batch={:#?}", trace_event_batch);
-
-        // tracing::info!(
-        //     message = "Trying to upload trace events",
-        //     batch_size = batch.len()
-        // );
-
-        // Serialize to JSON.
-        // #[cfg(not(target_arch = "wasm32"))]
-        // {
-        //     use tokio::fs::OpenOptions;
-        //     if let Ok(mut file) = OpenOptions::new()
-        //         .create(true)
-        //         .append(true)
-        //         .open("/tmp/trace_events.json")
-        //         .await
-        //     {
-        //         for e in trace_event_batch.events.iter() {
-        //             if let Ok(json) = serde_json::to_string(e) {
-        //                 use tokio::io::AsyncWriteExt;
-        //                 if let Err(e) = file.write_all(format!("{}\n", json).as_bytes()).await {
-        //                     log::error!("Failed to write to trace file: {}", e);
-        //                 }
-        //             }
-        //         }
-        //     }
-        // }
-
-        // Upload via HTTP with retry logic.
-        // TODO watch out with time crate
-
-        let upload_url_details = match self
-            .lookup
-            .api_request::<CreateTraceEventUploadUrl>(CreateTraceEventUploadUrlRequest {
-                baml_runtime: Some(env!("CARGO_PKG_VERSION").to_string()),
-            })
-            .await
-        {
-            Ok(response) => response,
-            Err(e) => {
-                log::debug!("Failed to upload trace events: {e}");
-                return Err(e.into());
-            }
-        };
-
-        self.lookup
-            .client
-            .put(upload_url_details.upload_url)
-            .json(&trace_event_batch)
-            .headers(
-                upload_url_details
-                    .upload_metadata
-                    // S3 upload URL shoves the project_id into S3ObjectMetadata
-                    // When we process the S3 Upload notification, the Queue processor
-                    // relies on this metadata to determine the project_id.
-                    .as_reqwest_headers()
-                    .context(format!(
-                        "Failed to convert {} to HeaderMap",
-                        type_name::<S3UploadMetadata>(),
-                    ))?,
-            )
-            .send()
-            .await
-            .context("Failed to upload trace events to S3")?;
-
-        tracing::debug!("Successfully uploaded batch of {} events", batch.len());
-        Ok(())
-    }
-}
-
-trait AsReqwestHeaders {
-    fn as_reqwest_headers(&self) -> Result<HeaderMap>;
 }
 
 impl AsReqwestHeaders for S3UploadMetadata {
