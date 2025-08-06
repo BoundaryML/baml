@@ -25,6 +25,7 @@ export type SitemapEntry =
       type: 'internal';
       displayTitle: string;
       displaySection: string[];
+      filepath: string;
       href: string;
     }
   | {
@@ -343,11 +344,11 @@ export class SitemapGenerator {
       const mdxPath = join(this.docsRoot, item.path);
       const mdxFrontmatter = this.readMdxFrontmatter(mdxPath);
 
-      const pageSlug = this.buildSlugComponents(
-        tab,
-        sections,
-        mdxFrontmatter.slug || item.slug || slugify(item.page.toLowerCase()),
-      );
+      const pageSlug = [
+        tab.tabSlug,
+        ...sections.map((s) => s.sectionSlug || slugify(s.sectionDisplayName)),
+        mdxFrontmatter.slug || item.slug || slugify(item.page),
+      ];
 
       // From packages/fdr-sdk/src/navigation/versions/v1/slugjoin.ts
       const pageHref = urljoin(pageSlug)
@@ -357,12 +358,13 @@ export class SitemapGenerator {
 
       entries.push({
         type: 'internal',
+        filepath: mdxPath,
         displayTitle: mdxFrontmatter.title || item.page || 'PLACEHOLDER',
         displaySection: [
           tab.tabDisplayName,
           ...sections.map((s) => s.sectionDisplayName),
         ],
-        href: pageHref,
+        href: tab.tabId === 'home' ? 'home' : pageHref,
       });
     }
 
@@ -383,28 +385,6 @@ export class SitemapGenerator {
     }
   }
 
-  /**
-   * Build display path from tab and sections
-   */
-  private buildDisplayPath(
-    tab: TabInfo,
-    sections: SectionInfo[],
-  ): string | undefined {
-    if (sections.length === 0) {
-      return undefined;
-    }
-
-    const parts = [tab.tabDisplayName];
-    for (const section of sections) {
-      parts.push(section.sectionDisplayName);
-    }
-
-    return parts.join(' > ');
-  }
-
-  /**
-   * Build slug components from tab and sections
-   */
   private buildSlugComponents(
     tab: TabInfo,
     sections: SectionInfo[],
@@ -426,46 +406,6 @@ export class SitemapGenerator {
     }
 
     return components;
-  }
-
-  /**
-   * Resolve slug with priority: configured > frontmatter > generated
-   */
-  private resolveSlug(
-    configuredSlug: string | undefined,
-    metadata: any,
-    fallbackName: string,
-  ): string {
-    const candidateSlug = configuredSlug || metadata.slug;
-    if (candidateSlug) {
-      return candidateSlug;
-    }
-    return slugify(fallbackName);
-  }
-}
-
-/**
- * Main function to generate sitemap from docs.yml (for backward compatibility)
- */
-export async function generateSitemap(
-  docsYmlPath: string,
-): Promise<SitemapEntry[]> {
-  const generator = new SitemapGenerator(docsYmlPath);
-  return generator.generateSitemap();
-}
-
-/**
- * Load and parse the sitemap.json file
- */
-export function loadSitemap(): SitemapEntry[] {
-  try {
-    const sitemap: SitemapEntry[] = JSON.parse(
-      readFileSync('./sitemap.json', 'utf8'),
-    );
-    return sitemap;
-  } catch (error) {
-    console.error('Error loading sitemap.json:', error);
-    throw new Error('Failed to load sitemap.json');
   }
 }
 
@@ -585,40 +525,6 @@ export function getInternalDocs(sitemap?: SitemapEntry[]): SitemapEntry[] {
 export function getExternalBlogs(sitemap?: SitemapEntry[]): SitemapEntry[] {
   const sitemapEntries = sitemap || loadSitemap();
   return sitemapEntries.filter((entry) => entry.type === 'external');
-}
-
-/**
- * Process internal documents into FernDoc format
- */
-export function processInternalDocs(internalDocs: SitemapEntry[]): FernDoc[] {
-  const fernDocs: FernDoc[] = [];
-
-  for (const entry of internalDocs) {
-    if (!entry.path || !entry.slug) {
-      console.warn(
-        `Skipping internal doc without path or slug: ${entry.displayTitle}`,
-      );
-      continue;
-    }
-
-    try {
-      const content = readInternalDocContent(entry.path);
-      fernDocs.push({
-        slug: entry.slug,
-        path: entry.path,
-        body: content,
-        title: entry.displayTitle,
-      });
-      console.log(`✓ Processed internal doc: ${entry.displayTitle}`);
-    } catch (error) {
-      console.error(
-        `✗ Failed to process internal doc ${entry.displayTitle}:`,
-        error,
-      );
-    }
-  }
-
-  return fernDocs;
 }
 
 /**

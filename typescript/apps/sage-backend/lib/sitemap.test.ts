@@ -1,6 +1,10 @@
 import { describe, it, beforeAll, afterAll } from 'vitest';
 import { writeFileSync, unlinkSync, existsSync } from 'node:fs';
-import { generateSitemap, type SitemapEntry } from './sitemap';
+import {
+  generateSitemap,
+  SitemapGenerator,
+  type SitemapEntry,
+} from './sitemap';
 import {
   validateSitemap,
   calculateValidationStats,
@@ -54,7 +58,8 @@ describe('Sitemap Generation and Validation', () => {
   // }, 60000); // 60 second timeout for setup
 
   it('should build sitemap and validate all links', async () => {
-    const entries = await generateSitemap(TEST_DOCS_PATH);
+    const generator = new SitemapGenerator(TEST_DOCS_PATH);
+    const entries = await generator.generateSitemap();
 
     const fetches = [];
 
@@ -83,7 +88,7 @@ describe('Sitemap Generation and Validation', () => {
             console.error(
               `❌ Failed to fetch ${url}: ${error} (${entry.displaySection.join(' > ')} > ${entry.displayTitle})`,
             );
-            return { entry, success: false };
+            return { entry, success: false, error };
           } finally {
             semaphore.release();
           }
@@ -98,6 +103,6 @@ describe('Sitemap Generation and Validation', () => {
     console.info('Final results:');
     console.info(`✅ Valid results: ${results.length - failed.length}`);
     console.warn(`❌ Invalid results: ${failed.length}`);
-    console.warn(failed.map((result) => result.value.entry.href));
+    console.warn(failed.map((result) => result.value.entry));
   }, 30000);
 });
