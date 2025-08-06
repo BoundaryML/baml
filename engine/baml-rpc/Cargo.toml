@@ -47,6 +47,7 @@ web-time.workspace = true
 static_assertions.workspace = true
 baml-ids.workspace = true
 serde_with = "3.12.0"
+sha2 = "0.10.9"
 
 
 [features]

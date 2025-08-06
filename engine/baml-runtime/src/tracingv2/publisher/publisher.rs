@@ -10,6 +10,10 @@ use std::{
 use anyhow::{Context, Result};
 use baml_rpc::{
     ast::tops::{FunctionDefinition, SourceCode, AST},
+    runtime_api::{
+        BlobBatchUploadS3File, BlobMetadataItem, BlobUploadItem, CreateBlobBatchUploadUrl,
+        CreateBlobBatchUploadUrlRequest, CreateBlobBatchUploadUrlResponse,
+    },
     ApiEndpoint, BamlSrcUploadS3File, CheckBamlSrcUpload, CheckBamlSrcUploadRequest,
     CreateTraceEventUploadUrl, CreateTraceEventUploadUrlRequest, CreateTraceEventUploadUrlResponse,
     NamedType, S3UploadMetadata, TraceEventBatch, TypeDefinition, TypeDefinitionSource,
@@ -30,7 +34,9 @@ use tracing::field;
 #[cfg(target_family = "wasm")]
 use wasmtimer::tokio::*;
 
-use super::rpc_converters::{to_rpc_event, IRRpcState, IntoRpcEvent, TypeLookup};
+use super::rpc_converters::{
+    to_rpc_event, BlobRefCache, BlobStorage, IRRpcState, IntoRpcEvent, TypeLookup,
+};
 use crate::{
     runtime::{AstSignatureWrapper, InternalBamlRuntime},
     tracingv2::storage::interface::TraceEventWithMeta,
@@ -81,6 +87,8 @@ struct RuntimeAST {
     ast: Arc<AstSignatureWrapper>,
     #[serde(skip)]
     pub client: reqwest::Client,
+    #[serde(skip)]
+    blob_cache: BlobRefCache,
 }
 
 impl RuntimeAST {
@@ -179,6 +187,12 @@ impl TypeLookup for RuntimeAST {
     }
 }
 
+impl BlobStorage for RuntimeAST {
+    fn blob_cache(&self) -> &BlobRefCache {
+        &self.blob_cache
+    }
+}
+
 pub fn start_publisher(
     lookup: Arc<AstSignatureWrapper>,
     #[cfg(not(target_arch = "wasm32"))] rt: Arc<tokio::runtime::Runtime>,
@@ -196,6 +210,7 @@ pub fn start_publisher(
     let lookup = Arc::new(RuntimeAST {
         ast: lookup,
         client: reqwest::Client::new(),
+        blob_cache: BlobRefCache::new(),
     });
 
     // Use get_or_init to ensure thread-safe initialization
@@ -270,6 +285,7 @@ impl TracePublisher {
     pub async fn run(&mut self) {
         let mut buffer: Vec<Arc<TraceEventWithMeta>> = Vec::new();
         let mut tick_interval = interval(Duration::from_secs(2));
+        let mut blob_upload_interval = interval(Duration::from_secs(2)); // Upload blobs every 2 seconds
 
         tracing::debug!(
             message = "Starting publisher loop",
@@ -307,6 +323,8 @@ impl TracePublisher {
                             if !buffer.is_empty() {
                                 self.process_batch(std::mem::take(&mut buffer)).await;
                             }
+                            // Upload any pending blobs
+                            self.process_blob_uploads().await;
                             // Signal flush completion.
                             let _ = flush_ack.send(());
                         },
@@ -314,6 +332,8 @@ impl TracePublisher {
                             if !buffer.is_empty() {
                                 self.process_batch(std::mem::take(&mut buffer)).await;
                             }
+                            // Upload any remaining blobs before shutdown
+                            self.process_blob_uploads().await;
                             let _ = shutdown_ack.send(());
                             break;
                         }
@@ -328,6 +348,14 @@ impl TracePublisher {
                     if !buffer.is_empty() {
                         self.process_batch(std::mem::take(&mut buffer)).await;
                     }
+                }
+                // Periodic upload of pending blobs
+                _ = blob_upload_interval.tick() => {
+                    if self.lookup.api_key().is_none() {
+                        tracing::debug!("Skipping blob upload because BOUNDARY_API_KEY is not set");
+                        continue;
+                    }
+                    self.process_blob_uploads().await;
                 }
             }
         }
@@ -530,101 +558,124 @@ impl TracePublisher {
     }
 
     async fn process_batch(&self, batch: Vec<Arc<TraceEventWithMeta>>) {
-        let batch_result = self.process_batch_with_splitting(batch).await;
+        let batch_result = self.process_batch_impl(batch).await;
         if let Err(e) = batch_result {
-            baml_log::debug!("Failed to upload trace events after retries: {:?}", e);
+            baml_log::debug!("Failed to upload trace events: {:?}", e);
         }
     }
 
-    /// Process a batch with automatic splitting on failure.
-    /// If a batch fails to upload, we'll recursively split it in half and retry.
-    /// This helps with payload size limits, rate limiting, and transient network issues.
-    /// We only allow 2 splits maximum before giving up.
-    async fn process_batch_with_splitting(
-        &self,
-        batch: Vec<Arc<TraceEventWithMeta>>,
-    ) -> Result<()> {
-        // Allow maximum of 2 splits before giving up
-        let max_splits = 1;
-
-        self.process_batch_recursive(batch, max_splits).await
+    async fn process_blob_uploads(&self) {
+        let blob_cache = self.lookup.blob_cache();
+        let result = self.process_blob_uploads_impl(blob_cache).await;
+        if let Err(e) = result {
+            tracing::debug!("Failed to upload blobs: {}", e);
+        }
     }
 
-    /// Recursively process batches, splitting on failure until we reach maximum splits.
-    async fn process_batch_recursive(
-        &self,
-        batch: Vec<Arc<TraceEventWithMeta>>,
-        splits_remaining: usize,
-    ) -> Result<()> {
-        // Try to upload the batch
-        match self.process_batch_impl(batch.clone()).await {
-            Ok(()) => {
-                tracing::debug!("Successfully uploaded batch of {} events", batch.len());
-                Ok(())
-            }
+    async fn process_blob_uploads_impl(&self, blob_cache: &BlobRefCache) -> Result<()> {
+        let pending_blobs = blob_cache.get_pending_blobs();
+
+        if pending_blobs.is_empty() {
+            return Ok(());
+        }
+
+        tracing::debug!("Uploading {} pending blobs", pending_blobs.len());
+
+        // Prepare metadata for the API request
+        let blob_metadata: Vec<BlobMetadataItem> = pending_blobs
+            .iter()
+            .map(|blob| BlobMetadataItem {
+                blob_hash: blob.metadata.blob_hash.clone(),
+                function_call_id: blob.metadata.function_call_id.clone(),
+                media_type: blob.metadata.media_type.clone(),
+                size_bytes: blob.metadata.size_bytes,
+            })
+            .collect();
+
+        // Get upload URL and check which blobs already exist
+        let upload_response = match self
+            .lookup
+            .api_request::<CreateBlobBatchUploadUrl>(CreateBlobBatchUploadUrlRequest {
+                blob_metadata,
+            })
+            .await
+        {
+            Ok(response) => response,
             Err(e) => {
-                // If no more splits remaining, give up
-                if splits_remaining == 0 {
-                    log::info!(
-                        "Failed to upload batch of {} events after maximum splits: {}",
-                        batch.len(),
-                        e
-                    );
-                    return Err(e);
-                }
-
-                // Split the batch in half and retry each half
-                let mid = batch.len() / 2;
-                let (first_half, second_half) = batch.split_at(mid);
-
-                tracing::debug!(
-                    "Batch upload failed (size: {}), splitting into {} and {} events (splits remaining: {}): {}",
-                    batch.len(),
-                    first_half.len(),
-                    second_half.len(),
-                    splits_remaining - 1,
-                    e
-                );
-
-                // Process both halves recursively with Box::pin
-                let first_result = Box::pin(
-                    self.process_batch_recursive(first_half.to_vec(), splits_remaining - 1),
-                )
-                .await;
-                let second_result = Box::pin(
-                    self.process_batch_recursive(second_half.to_vec(), splits_remaining - 1),
-                )
-                .await;
-
-                // If either half failed, propagate the error
-                match (first_result, second_result) {
-                    (Ok(()), Ok(())) => {
-                        tracing::debug!("Successfully uploaded split batches");
-                        Ok(())
-                    }
-                    (Err(e1), Ok(())) => {
-                        log::info!("First half failed: {e1}");
-                        Err(e1)
-                    }
-                    (Ok(()), Err(e2)) => {
-                        log::info!("Second half failed: {e2}");
-                        Err(e2)
-                    }
-                    (Err(e1), Err(e2)) => {
-                        log::debug!("Both halves failed - first: {e1}, second: {e2}");
-                        Err(e1) // Return the first error
-                    }
-                }
+                tracing::error!("Failed to get blob upload URL: {}", e);
+                return Err(e.into());
             }
+        };
+
+        // Filter out blobs that already exist
+        let blobs_to_upload: Vec<_> = pending_blobs
+            .into_iter()
+            .filter(|blob| {
+                !upload_response
+                    .exclude_blobs
+                    .contains(&blob.metadata.blob_hash)
+            })
+            .collect();
+
+        if blobs_to_upload.is_empty() {
+            tracing::debug!("All blobs already exist, skipping upload");
+            // Mark all as uploaded since they exist
+            let all_hashes: Vec<String> = blob_cache
+                .get_pending_blobs()
+                .iter()
+                .map(|b| b.metadata.blob_hash.clone())
+                .collect();
+            blob_cache.mark_blobs_uploaded(&all_hashes);
+            return Ok(());
         }
+
+        // Prepare the upload payload
+        let upload_items: Vec<BlobUploadItem> = blobs_to_upload
+            .iter()
+            .map(|blob| BlobUploadItem {
+                function_call_id: blob.metadata.function_call_id.clone(),
+                blob_hash: blob.metadata.blob_hash.clone(),
+                payload: blob.content.clone(),
+                media_type: blob.metadata.media_type.clone(),
+            })
+            .collect();
+
+        let batch_file = BlobBatchUploadS3File {
+            blobs: upload_items,
+        };
+
+        // Upload to S3
+        self.lookup
+            .client
+            .put(&upload_response.s3_presigned_url)
+            .json(&batch_file)
+            .headers(
+                upload_response
+                    .upload_metadata
+                    .as_reqwest_headers()
+                    .context("Failed to convert upload metadata to headers")?,
+            )
+            .send()
+            .await
+            .context("Failed to upload blob batch to S3")?;
+
+        // Mark uploaded blobs as processed
+        let uploaded_hashes: Vec<String> = blobs_to_upload
+            .iter()
+            .map(|b| b.metadata.blob_hash.clone())
+            .collect();
+        blob_cache.mark_blobs_uploaded(&uploaded_hashes);
+
+        tracing::debug!("Successfully uploaded {} blobs", blobs_to_upload.len());
+        Ok(())
     }
 
     /// Process a batch of events.
     ///
-    /// In this example we:
-    ///   1. Serialize the events into JSON.
-    ///   2. Append the JSON to a file (using async file I/O on macOS).
-    ///   3. Post the JSON to an HTTP API with up to 3 retries.
+    /// This method:
+    ///   1. Converts events to RPC format with blob extraction.
+    ///   2. Serializes the events into JSON.
+    ///   3. Uploads the JSON to S3 via presigned URL.
     async fn process_batch_impl(&self, batch: Vec<Arc<TraceEventWithMeta>>) -> Result<()> {
         // log::info!("Processing {:#?}", batch);
         // Assemble the upload request structure.
@@ -700,6 +751,7 @@ impl TracePublisher {
             .await
             .context("Failed to upload trace events to S3")?;
 
+        tracing::debug!("Successfully uploaded batch of {} events", batch.len());
         Ok(())
     }
 }

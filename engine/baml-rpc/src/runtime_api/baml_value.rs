@@ -163,4 +163,5 @@ pub enum MediaValue<'a> {
     Url(Cow<'a, str>),
     Base64(Cow<'a, str>),
     FilePath(Cow<'a, str>),
+    BlobRef(Cow<'a, str>), // Hash reference to a blob stored in S3
 }
