@@ -24,7 +24,7 @@ node = "lts"     # For pnpm
 "pipx:maturin" = "latest"
 
 # Node tools
-"npm:pnpm" = "9.12.0"
+"npm:pnpm" = "10.14.0"
 "npm:@infisical/cli" = "latest"
 
 [settings]

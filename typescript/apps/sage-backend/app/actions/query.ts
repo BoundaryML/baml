@@ -1,50 +1,38 @@
 'use server';
 
-import { z } from 'zod';
+import type { QueryRequest, QueryResponse } from '@baml/sage-interface';
 import { b } from '../../baml_client';
-import type { QueryRequest } from '../types';
-import { searchPinecone } from './rag';
+import { searchPinecone } from '../../lib/pinecone-api';
 
-// Define the Zod schema for the response
-const QueryResponseSchema = z.object({
-  ranked_docs: z.array(
-    z.object({
-      title: z.string(),
-      url: z.string(),
-      relevance: z.enum(['very-relevant', 'relevant', 'not-relevant']),
-    }),
-  ),
-  answer: z.string().optional().or(z.null()),
-  suggested_messages: z.array(z.string()).optional(),
-});
-
-export type QueryResponse = z.infer<typeof QueryResponseSchema>;
-
-export async function submitQuery(
-  queryRequest: QueryRequest,
-): Promise<QueryResponse> {
-  const docs = await searchPinecone(queryRequest.query);
+export async function submitQuery(request: QueryRequest): Promise<QueryResponse> {
+  const docs = await searchPinecone(request.message.text);
   const pineconeRankedDocs = docs.map((doc) => ({
-    title: (doc.metadata?.title ?? '') as string,
-    url: (doc.metadata?.slug ?? '') as string,
-    body: (doc.metadata?.body ?? '') as string,
+    title: doc.title,
+    url: doc.url,
+    body: doc.body,
   }));
 
   const plan = await b.PlanQuery({
-    text: queryRequest.query,
-    language_preference: queryRequest.language_preference,
+    text: request.message.text,
+    language_preference: request.message.language_preference,
     context_docs: pineconeRankedDocs.map((doc) => ({
       title: doc.title,
       body: doc.body,
     })),
-    prev_messages: queryRequest.prev_messages,
+    prev_messages: request.prev_messages.map((msg) => {
+      if (msg.role === 'assistant') {
+        return {
+          role: 'assistant',
+          text: msg.text ?? '',
+        };
+      }
+      return msg;
+    }),
   });
 
   // Merge titles from rankedDocs into plan.ranked_docs
   const relevantDocs = (plan.ranked_docs ?? []).map((planDoc) => {
-    const matchingRankedDoc = pineconeRankedDocs.find(
-      (rd) => rd.title === planDoc.title,
-    );
+    const matchingRankedDoc = pineconeRankedDocs.find((rd) => rd.title === planDoc.title);
     return {
       title: planDoc.title,
       url: matchingRankedDoc?.url ?? '',
@@ -52,13 +40,14 @@ export async function submitQuery(
     };
   });
 
-  const resp = {
-    answer: plan.answer,
-    ranked_docs: Array.from(
-      new Map(relevantDocs.map((doc) => [doc.url, doc])).values(),
-    ),
-    suggested_messages: plan.refine_query?.suggested_queries,
+  return {
+    session_id: request.session_id,
+    message: {
+      role: 'assistant',
+      message_id: `msg-${new Date().toISOString()}`,
+      text: plan.answer,
+      ranked_docs: Array.from(new Map(relevantDocs.map((doc) => [doc.url, doc])).values()),
+      suggested_messages: plan.refine_query?.suggested_queries,
+    },
   };
-
-  return resp;
 }
