@@ -260,7 +260,7 @@ fn_args = { expression? ~ ("," ~ expression)* }
 fn_app = { identifier ~ "(" ~ fn_args ~ ")" }
 
 // If expression.
-if_expression = { "if" ~ expression ~ expr_block ~ ( "else" ~ expr_block )? }
+if_expression = { "if" ~ expression ~ expr_block ~ ( "else" ~ (expr_block | if_expression) )? }
 
 // For loop, e.g.
 // for (r in resumes) {

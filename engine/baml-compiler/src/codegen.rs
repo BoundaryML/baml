@@ -899,6 +899,174 @@ mod tests {
     }
 
     #[test]
+    fn else_if_return_expr() -> anyhow::Result<()> {
+        assert_compiles(Program {
+            source: "
+                fn main(a: bool, b: bool) -> int {
+                    if a {
+                        1
+                    } else if b {
+                        2
+                    } else {
+                        3
+                    }
+                }
+            ",
+            expected: vec![(
+                "main",
+                vec![
+                    Instruction::LoadVar(1),
+                    Instruction::JumpIfFalse(4),
+                    Instruction::Pop(1),
+                    Instruction::LoadConst(0),
+                    Instruction::Jump(9),
+                    Instruction::Pop(1),
+                    Instruction::LoadVar(2),
+                    Instruction::JumpIfFalse(4),
+                    Instruction::Pop(1),
+                    Instruction::LoadConst(1),
+                    Instruction::Jump(3),
+                    Instruction::Pop(1),
+                    Instruction::LoadConst(2),
+                    Instruction::Return,
+                ],
+            )],
+        })
+    }
+
+    #[test]
+    fn else_if_return_expr_with_locals() -> anyhow::Result<()> {
+        assert_compiles(Program {
+            source: "
+                fn main(a: bool, b: bool) -> int {
+                    if a {
+                        let x = 1;
+                        x
+                    } else if b {
+                        let y = 2;
+                        y
+                    } else {
+                        let z = 3;
+                        z
+                    }
+                }
+            ",
+            expected: vec![(
+                "main",
+                vec![
+                    Instruction::LoadVar(1),
+                    Instruction::JumpIfFalse(6),
+                    Instruction::Pop(1),
+                    Instruction::LoadConst(0),
+                    Instruction::LoadVar(3),
+                    Instruction::PopReplace(1),
+                    Instruction::Jump(13),
+                    Instruction::Pop(1),
+                    Instruction::LoadVar(2),
+                    Instruction::JumpIfFalse(6),
+                    Instruction::Pop(1),
+                    Instruction::LoadConst(1),
+                    Instruction::LoadVar(3),
+                    Instruction::PopReplace(1),
+                    Instruction::Jump(5),
+                    Instruction::Pop(1),
+                    Instruction::LoadConst(2),
+                    Instruction::LoadVar(3),
+                    Instruction::PopReplace(1),
+                    Instruction::Return,
+                ],
+            )],
+        })
+    }
+
+    #[test]
+    fn else_if_assignment() -> anyhow::Result<()> {
+        assert_compiles(Program {
+            source: "
+                fn main(a: bool, b: bool) -> int {
+                    let result = if a {
+                        1
+                    } else if b {
+                        2
+                    } else {
+                        3
+                    };
+
+                    result
+                }
+            ",
+            expected: vec![(
+                "main",
+                vec![
+                    Instruction::LoadVar(1),
+                    Instruction::JumpIfFalse(4),
+                    Instruction::Pop(1),
+                    Instruction::LoadConst(0),
+                    Instruction::Jump(9),
+                    Instruction::Pop(1),
+                    Instruction::LoadVar(2),
+                    Instruction::JumpIfFalse(4),
+                    Instruction::Pop(1),
+                    Instruction::LoadConst(1),
+                    Instruction::Jump(3),
+                    Instruction::Pop(1),
+                    Instruction::LoadConst(2),
+                    Instruction::LoadVar(3),
+                    Instruction::Return,
+                ],
+            )],
+        })
+    }
+
+    #[test]
+    fn else_if_assignment_with_locals() -> anyhow::Result<()> {
+        assert_compiles(Program {
+            source: "
+                fn main(a: bool, b: bool) -> int {
+                    let result = if a {
+                        let x = 1;
+                        x
+                    } else if b {
+                        let y = 2;
+                        y
+                    } else {
+                        let z = 3;
+                        z
+                    };
+
+                    result
+                }
+            ",
+            expected: vec![(
+                "main",
+                vec![
+                    Instruction::LoadVar(1),
+                    Instruction::JumpIfFalse(6),
+                    Instruction::Pop(1),
+                    Instruction::LoadConst(0),
+                    Instruction::LoadVar(3),
+                    Instruction::PopReplace(1),
+                    Instruction::Jump(13),
+                    Instruction::Pop(1),
+                    Instruction::LoadVar(2),
+                    Instruction::JumpIfFalse(6),
+                    Instruction::Pop(1),
+                    Instruction::LoadConst(1),
+                    Instruction::LoadVar(3),
+                    Instruction::PopReplace(1),
+                    Instruction::Jump(5),
+                    Instruction::Pop(1),
+                    Instruction::LoadConst(2),
+                    Instruction::LoadVar(3),
+                    Instruction::PopReplace(1),
+                    Instruction::LoadVar(3),
+                    Instruction::Return,
+                ],
+            )],
+        })
+    }
+
+    #[test]
     fn array_constructor() -> anyhow::Result<()> {
         assert_compiles(Program {
             source: "

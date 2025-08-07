@@ -928,7 +928,7 @@ dependencies = [
 
 [[package]]
 name = "baml-compiler"
-version = "0.202.1"
+version = "0.204.0"
 dependencies = [
  "anyhow",
  "baml-types",
@@ -1317,7 +1317,7 @@ dependencies = [
 
 [[package]]
 name = "baml-vm"
-version = "0.202.1"
+version = "0.204.0"
 dependencies = [
  "anyhow",
  "baml-compiler",

@@ -175,7 +175,7 @@ impl std::fmt::Display for Instruction {
             Instruction::LoadField(i) => write!(f, "LOAD_FIELD {i}"),
             Instruction::StoreField(i) => write!(f, "STORE_FIELD {i}"),
             Instruction::Pop(n) => write!(f, "POP {n}"),
-            Instruction::PopReplace(n) => write!(f, "POP_SCOPE {n}"),
+            Instruction::PopReplace(n) => write!(f, "POP_REPLACE {n}"),
             Instruction::Jump(o) => write!(f, "JUMP {o:+}"),
             Instruction::JumpIfFalse(o) => write!(f, "JUMP_IF_FALSE {o:+}"),
             Instruction::AllocArray(n) => write!(f, "ALLOC_ARRAY {n}"),
