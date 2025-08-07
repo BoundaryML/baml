@@ -165,3 +165,4 @@ typescript/apps/vscode-ext/dist/playground
 # mise
 .mise.local.toml
 .mise.*.local.toml
+.claude/settings.local.json
