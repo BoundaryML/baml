@@ -218,6 +218,9 @@ impl<'g> HirCompiler<'g> {
         }
     }
 
+    /// Main entry point.
+    ///
+    /// Here we compile a source function into a [`Function`] VM struct.
     fn compile_function(&mut self, func: &hir::ExprFunction) -> anyhow::Result<Function> {
         // Compile statements in the function body.
         self.compile_block_with_parameters(&func.body, &func.parameters);
@@ -248,6 +251,9 @@ impl<'g> HirCompiler<'g> {
         })
     }
 
+    /// Entry for function or scope compilations.
+    ///
+    /// Functions have parameters so we need to track those as well.
     fn compile_block_with_parameters(&mut self, block: &hir::Block, parameters: &[hir::Parameter]) {
         self.enter_scope();
 
@@ -267,10 +273,12 @@ impl<'g> HirCompiler<'g> {
         self.exit_scope(scope_has_ending_expr);
     }
 
+    /// Used to compile nested blocks within functions.
     fn compile_block(&mut self, block: &hir::Block) {
         self.compile_block_with_parameters(block, &[]);
     }
 
+    /// A statement is anything that does not produce a value by itself.
     fn compile_statement(&mut self, statement: &hir::Statement) {
         match statement {
             hir::Statement::Let { name, value, .. } => {
