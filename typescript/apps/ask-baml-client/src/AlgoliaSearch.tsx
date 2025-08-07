@@ -471,11 +471,12 @@ function AskWithAIOption({
 function CustomSearchBox({
   onAskAI,
   onToggleAI,
+  isAIOpen,
 }: {
   onAskAI: (query: string) => void;
   onToggleAI?: () => void;
+  isAIOpen?: boolean;
 }) {
-  const isAIOpen = useAtomValue(chatbotIsOpenAtom);
   const { query, refine } = useSearchBox();
   const { hits } = useHits();
   const [inputValue, setInputValue] = useState(query);
@@ -854,9 +855,11 @@ function CustomHits({
 export default function AlgoliaSearch({
   onAskAI,
   onToggleAI,
+  isAIOpen,
 }: {
   onAskAI?: (query: string) => void;
   onToggleAI?: () => void;
+  isAIOpen?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [searchClient, setSearchClient] = useState<any>(null);
@@ -970,7 +973,7 @@ export default function AlgoliaSearch({
           analyticsTags={['desktop', 'docs.boundaryml.com', 'search-v3-enhanced']}
         />
 
-        <CustomSearchBox onAskAI={handleAskAI} onToggleAI={handleToggleAI} />
+        <CustomSearchBox onAskAI={handleAskAI} onToggleAI={handleToggleAI} isAIOpen={isAIOpen} />
       </InstantSearch>
     </div>
   );

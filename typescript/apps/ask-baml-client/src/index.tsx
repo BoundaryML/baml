@@ -143,11 +143,14 @@ function FernChatbotApp() {
     document.body.classList.toggle(OPEN, isOpen);
   }, [isOpen]);
 
-  // Expose functions for non-React contexts (minimal bridge)
+  // Expose functions for non-React contexts and sync search interface
   useEffect(() => {
     atomStateRef.isOpen = isOpen;
     setAtomState = setIsOpen;
     getAtomState = () => isOpen;
+    
+    // Update search interface when chatbot state changes
+    updateSearchInterface();
   }, [isOpen, setIsOpen]);
 
   return <ChatBot />;
@@ -286,7 +289,8 @@ function SearchInterfaceWithState() {
     ChatbotManager.toggle();
   };
 
-  return <AlgoliaSearch onAskAI={handleAskAI} onToggleAI={handleToggleAI} />;
+  // Use the global bridge state since search interface has separate Provider context
+  return <AlgoliaSearch onAskAI={handleAskAI} onToggleAI={handleToggleAI} isAIOpen={atomStateRef.isOpen} />;
 }
 
 // Function to update search interface with current AI state
@@ -387,6 +391,11 @@ function initializeSearchInterface() {
       observer = null;
     }
   }, 10000);
+}
+
+// Create a single provider instance that will be shared globally
+function createGlobalProvider() {
+  return React.createElement(Provider, null);
 }
 
 // Global initialization function that Fern can call
