@@ -52,13 +52,15 @@ impl TypeM<TypeMeta> {
         let meta = self.get_meta();
         let base = match self {
             TypeM::Int(_) => RcDoc::text("int"),
+            TypeM::Float(_) => RcDoc::text("float"),
             TypeM::String(_) => RcDoc::text("string"),
             TypeM::Bool(_) => RcDoc::text("bool"),
             TypeM::Array(inner, _) => RcDoc::text("array").append(inner.to_doc()),
-            TypeM::Map(key, value, _) => RcDoc::text("map")
+            TypeM::Map(key, value, _) => RcDoc::text("map<")
                 .append(key.to_doc())
-                .append(RcDoc::text(":"))
-                .append(value.to_doc()),
+                .append(RcDoc::text(", "))
+                .append(value.to_doc())
+                .append(RcDoc::text(">")),
             TypeM::ClassName(name, _) => RcDoc::text(name.clone()),
             TypeM::EnumName(name, _) => RcDoc::text(name.clone()),
             TypeM::Union(types, _) => {

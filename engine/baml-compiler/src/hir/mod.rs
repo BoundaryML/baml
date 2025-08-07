@@ -36,6 +36,7 @@ pub type Type = TypeM<TypeMeta>;
 pub enum TypeM<M> {
     Int(M),
     String(M),
+    Float(M),
     Bool(M),
     Null(M),
     Array(Box<TypeM<M>>, M),
@@ -58,6 +59,8 @@ impl Type {
         match (self, other) {
             (TypeM::Int(a), TypeM::Int(b)) => assert!(a.eq_up_to_span(b)),
             (TypeM::Int(_), _) => panic!("Int type mismatch"),
+            (TypeM::Float(a), TypeM::Float(b)) => assert!(a.eq_up_to_span(b)),
+            (TypeM::Float(_), _) => panic!("Float type mismatch"),
             (TypeM::String(a), TypeM::String(b)) => assert!(a.eq_up_to_span(b)),
             (TypeM::String(_), _) => panic!("String type mismatch"),
             (TypeM::Bool(a), TypeM::Bool(b)) => assert!(a.eq_up_to_span(b)),

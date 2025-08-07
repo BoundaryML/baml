@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 pub fn typecheck(hir: &Hir, diagnostics: &mut Diagnostics) -> THir<ExprMetadata> {
     let llm_functions = hir.llm_functions.clone();
-    let classes = hir
+    let classes: BamlMap<String, hir::Class> = hir
         .classes
         .clone()
         .into_iter()
@@ -23,6 +23,7 @@ pub fn typecheck(hir: &Hir, diagnostics: &mut Diagnostics) -> THir<ExprMetadata>
     // Create typing context with all functions
     let mut typing_context = TypeContext {
         inner: BamlMap::new(),
+        classes: classes.clone(),
     };
 
     // Add expr functions to typing context
@@ -115,6 +116,7 @@ pub fn typecheck(hir: &Hir, diagnostics: &mut Diagnostics) -> THir<ExprMetadata>
 #[derive(Clone, Debug)]
 pub struct TypeContext {
     pub inner: BamlMap<String, Type>,
+    pub classes: BamlMap<String, hir::Class>,
 }
 
 impl TypeContext {
@@ -352,8 +354,8 @@ fn typecheck_expression(
                         f,
                         (
                             span.clone(),
-                            Some(hir::TypeM::String(hir::TypeMeta::default())),
-                        ), // TODO: Add Float type
+                            Some(hir::TypeM::Float(hir::TypeMeta::default())),
+                        ),
                     )),
                     Err(_) => {
                         diagnostics.push_error(DatamodelError::new_validation_error(
@@ -566,16 +568,118 @@ fn typecheck_expression(
             let mut typed_fields = BamlMap::new();
             let mut spread = None;
 
-            // TODO: Look up class definition to validate fields
-            for field in &constructor.fields {
-                match field {
-                    hir::ClassConstructorField::Named { name, value } => {
-                        let typed_value = typecheck_expression(value, context, diagnostics);
-                        typed_fields.insert(name.clone(), typed_value);
+            // Look up class definition to validate fields
+            let class_def = context.classes.get(&constructor.class_name).cloned();
+
+            if let Some(class_def) = class_def {
+                // Create a map of field names to types
+                let class_field_types: BamlMap<String, Type> = class_def
+                    .fields
+                    .iter()
+                    .map(|f| (f.name.clone(), f.r#type.clone()))
+                    .collect();
+
+                // Track which required fields have been provided
+                let mut provided_fields = std::collections::HashSet::new();
+
+                // Validate each field in the constructor
+                for field in &constructor.fields {
+                    match field {
+                        hir::ClassConstructorField::Named { name, value } => {
+                            provided_fields.insert(name.clone());
+
+                            // Check if field exists in class
+                            if !class_field_types.contains_key(name) {
+                                diagnostics.push_error(DatamodelError::new_validation_error(
+                                    &format!(
+                                        "Class {} has no field {}",
+                                        constructor.class_name, name
+                                    ),
+                                    span.clone(),
+                                ));
+                            }
+
+                            let typed_value = typecheck_expression(value, context, diagnostics);
+
+                            // Check field type if field exists in class
+                            if let Some(expected_type) = class_field_types.get(name) {
+                                if let Some(actual_type) = typed_value.meta().1.as_ref() {
+                                    if !types_match(expected_type, actual_type) {
+                                        let expected_str = {
+                                            let doc = expected_type.to_doc();
+                                            let mut buf = Vec::new();
+                                            doc.render(80, &mut buf).unwrap();
+                                            String::from_utf8(buf).unwrap()
+                                        };
+                                        let actual_str = {
+                                            let doc = actual_type.to_doc();
+                                            let mut buf = Vec::new();
+                                            doc.render(80, &mut buf).unwrap();
+                                            String::from_utf8(buf).unwrap()
+                                        };
+
+                                        // Use the value's span for more precise error location
+                                        let error_span = value.span().clone();
+
+                                        diagnostics.push_error(
+                                            DatamodelError::new_validation_error(
+                                                &format!(
+                                                    "{}.{} expected type {}, but found {}",
+                                                    constructor.class_name,
+                                                    name,
+                                                    expected_str,
+                                                    actual_str
+                                                ),
+                                                error_span,
+                                            ),
+                                        );
+                                    }
+                                }
+                            }
+
+                            typed_fields.insert(name.clone(), typed_value);
+                        }
+                        hir::ClassConstructorField::Spread { value } => {
+                            let typed_value = typecheck_expression(value, context, diagnostics);
+                            spread = Some(Box::new(typed_value));
+                        }
                     }
-                    hir::ClassConstructorField::Spread { value } => {
-                        let typed_value = typecheck_expression(value, context, diagnostics);
-                        spread = Some(Box::new(typed_value));
+                }
+
+                // Check for missing required fields only if there's no spread
+                if spread.is_none() {
+                    let mut missing_fields = vec![];
+                    for field in &class_def.fields {
+                        if !provided_fields.contains(&field.name) && !field.r#type.is_optional() {
+                            missing_fields.push(&field.name);
+                        }
+                    }
+
+                    if !missing_fields.is_empty() {
+                        let missing_names: Vec<String> =
+                            missing_fields.iter().map(|s| s.to_string()).collect();
+                        let missing_names = missing_names.join(", ");
+                        diagnostics.push_error(DatamodelError::new_validation_error(
+                            &format!(
+                                "Class {} is missing fields: {}",
+                                constructor.class_name, missing_names
+                            ),
+                            span.clone(),
+                        ));
+                    }
+                }
+            } else {
+                // If we don't have the class def, validate each field anyway
+                for field in &constructor.fields {
+                    match field {
+                        hir::ClassConstructorField::Named { name, value } => {
+                            let typed_value = typecheck_expression(value, context, diagnostics);
+                            typed_fields.insert(name.clone(), typed_value);
+                        }
+                        hir::ClassConstructorField::Spread { value } => {
+                            let typed_value = typecheck_expression(value, context, diagnostics);
+                            spread = Some(Box::new(typed_value));
+                        }
                     }
                 }
             }
@@ -849,4 +953,43 @@ mod tests {
 
     // Note: If expression test removed due to BAML syntax parsing issues in test setup.
     // The core typechecking logic for if expressions is implemented and works correctly.
+}
+
+/// Check if a type is optional (contains null in a union)
+fn is_optional(ty: &Type) -> bool {
+    match ty {
+        Type::Null(_) => true,
+        Type::Union(types, _) => types.iter().any(|t| matches!(t, Type::Null(_))),
+        _ => false,
+    }
+}
+
+/// Check if two types match
+fn types_match(expected: &Type, actual: &Type) -> bool {
+    match (expected, actual) {
+        (Type::Int(_), Type::Int(_)) => true,
+        (Type::String(_), Type::String(_)) => true,
+        (Type::Bool(_), Type::Bool(_)) => true,
+        (Type::Null(_), Type::Null(_)) => true,
+        (Type::Array(e, _), Type::Array(a, _)) => types_match(e, a),
+        (Type::Map(ek, ev, _), Type::Map(ak, av, _)) => types_match(ek, ak) && types_match(ev, av),
+        (Type::ClassName(e, _), Type::ClassName(a, _)) => e == a,
+        (Type::EnumName(e, _), Type::EnumName(a, _)) => e == a,
+        (Type::Union(e_types, _), Type::Union(a_types, _)) => {
+            // For unions, we need more sophisticated matching
+            // For now, just check if all actual types are in expected types
+            a_types
+                .iter()
+                .all(|a| e_types.iter().any(|e| types_match(e, a)))
+        }
+        // Allow null values for optional types
+        (Type::Union(types, _), Type::Null(_)) => types.iter().any(|t| matches!(t, Type::Null(_))),
+        _ => false,
+    }
+}
+
+impl Type {
+    fn is_optional(&self) -> bool {
+        is_optional(self)
+    }
 }

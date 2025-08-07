@@ -168,6 +168,7 @@ impl TypeM<TypeMeta> {
         match self {
             TypeM::Int(meta) => meta,
             TypeM::String(meta) => meta,
+            TypeM::Float(meta) => meta,
             TypeM::Bool(meta) => meta,
             TypeM::Null(meta) => meta,
             TypeM::Array(_, meta) => meta,
@@ -192,6 +193,7 @@ impl TypeM<TypeMeta> {
         match self {
             TypeM::Union(_, _) => true,
             TypeM::Int(_) => false,
+            TypeM::Float(_) => false,
             TypeM::String(_) => false,
             TypeM::Bool(_) => false,
             TypeM::Array(_, _) => false,
