@@ -7,6 +7,8 @@ Remaining work items, in priority answer:
 [ ] copy chat-sdk.dev’s UI https://chat-sdk.dev/
     [ ] want to allow edit-and-retry, for example
         (this is partially done, see packages/ui/chatbot)
+[ ] index headings of each document, to be able to suggest links to
+    individual headings when suggesting destinations
 [ ] improve the underlying prompt
     [ ] standalone queries like "alias" or "type builder" sometimes result in
         "please provide a complete query" from the chatbot
