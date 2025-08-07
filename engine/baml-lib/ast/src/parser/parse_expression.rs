@@ -22,7 +22,7 @@ pub(crate) fn parse_expression(
         Rule::config_primary_expression => {
             // Unwrap the config_primary_expression and parse its child
             let inner_child = first_child.into_inner().next()?;
-            parse_primary_expression(inner_child, diagnostics)
+            parse_config_primary_expression(inner_child, diagnostics)
         }
         _ => unreachable_rule!(first_child, Rule::expression),
     }
@@ -268,6 +268,104 @@ fn parse_map_key(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expression {
         };
     }
     unreachable!("Encountered impossible map key during parsing")
+}
+
+fn parse_config_primary_expression(
+    token: Pair<'_>,
+    diagnostics: &mut internal_baml_diagnostics::Diagnostics,
+) -> Option<Expression> {
+    let span = diagnostics.span(token.as_span());
+    match token.as_rule() {
+        Rule::numeric_literal => Some(Expression::NumericValue(token.as_str().into(), span)),
+        Rule::string_literal => Some(parse_string_literal(token, diagnostics)),
+        Rule::array_expression => Some(parse_array(token, diagnostics)),
+        Rule::jinja_expression => Some(parse_jinja_expression(token, diagnostics)),
+        Rule::config_map_expression => Some(parse_config_map(token, diagnostics)),
+        Rule::identifier => Some(Expression::Identifier(parse_identifier(
+            token,
+            diagnostics,
+        ))),
+        _ => unreachable_rule!(token, Rule::config_primary_expression),
+    }
+}
+
+fn parse_config_map(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expression {
+    let mut entries: Vec<(Expression, Expression)> = vec![];
+    let span = token.as_span();
+
+    for current in token.into_inner() {
+        match current.as_rule() {
+            Rule::config_map_entry => {
+                if let Some(f) = parse_config_map_entry(current, diagnostics) {
+                    entries.push(f)
+                }
+            }
+            Rule::BLOCK_LEVEL_CATCH_ALL => {}
+            _ => parsing_catch_all(current, "config map key value"),
+        }
+    }
+
+    Expression::Map(entries, diagnostics.span(span))
+}
+
+fn parse_config_map_entry(
+    token: Pair<'_>,
+    diagnostics: &mut Diagnostics,
+) -> Option<(Expression, Expression)> {
+    assert_correct_parser!(token, Rule::config_map_entry);
+
+    let mut key = None;
+    let mut value = None;
+    let token_span = token.as_span(); // Store the span before moving token
+
+    for current in token.into_inner() {
+        match current.as_rule() {
+            Rule::config_map_key => key = Some(parse_config_map_key(current, diagnostics)),
+            Rule::config_expression => value = parse_expression(current, diagnostics),
+            Rule::ENTRY_CATCH_ALL => {
+                diagnostics.push_error(
+                    internal_baml_diagnostics::DatamodelError::new_validation_error(
+                        "This map entry is missing a valid value or has an incorrect syntax.",
+                        diagnostics.span(token_span), // Use the stored span here
+                    ),
+                );
+                return None;
+            }
+            Rule::BLOCK_LEVEL_CATCH_ALL => {}
+            _ => parsing_catch_all(current, "config dict entry"),
+        }
+    }
+
+    match (key, value) {
+        (Some(key), Some(value)) => Some((key, value)),
+        (Some(_), None) => {
+            diagnostics.push_error(
+                internal_baml_diagnostics::DatamodelError::new_validation_error(
+                    "This map entry is missing a valid value or has an incorrect syntax.",
+                    diagnostics.span(token_span), // Use the stored span here
+                ),
+            );
+            None
+        }
+        _ => None,
+    }
+}
+
+fn parse_config_map_key(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expression {
+    assert_correct_parser!(token, Rule::config_map_key);
+
+    let span = diagnostics.span(token.as_span());
+    if let Some(current) = token.into_inner().next() {
+        return match current.as_rule() {
+            Rule::identifier => Expression::Identifier(parse_identifier(current, diagnostics)),
+            Rule::quoted_string_literal => Expression::StringValue(
+                current.into_inner().next().unwrap().as_str().to_string(),
+                span,
+            ),
+            _ => unreachable_rule!(current, Rule::config_map_key),
+        };
+    }
+    unreachable!("Encountered impossible config map key during parsing")
 }
 
 pub(super) fn parse_raw_string(token: Pair<'_>, diagnostics: &mut Diagnostics) -> RawString {
