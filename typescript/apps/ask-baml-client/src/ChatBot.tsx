@@ -92,12 +92,20 @@ const ChatBot: React.FC<{}> = () => {
   }, [isOpen]);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (messagesEndRef.current?.parentElement) {
+      messagesEndRef.current.parentElement.scrollTop = messagesEndRef.current.parentElement.scrollHeight;
+    }
   };
 
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  useEffect(() => {
+    if (isOpen && messages.length > 0) {
+      scrollToBottom();
+    }
+  }, [isOpen, messages.length]);
 
   // Clear chat functionality - now resets session ID too
   const clearChat = () => {
