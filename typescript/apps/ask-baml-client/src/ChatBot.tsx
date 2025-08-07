@@ -1,6 +1,7 @@
 import { type Message, type QueryRequest, QueryResponseSchema } from '@baml/sage-interface';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import React, { useRef, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import BamlLambWhite from './baml-lamb-white.svg';
@@ -11,6 +12,7 @@ import {
   pendingQueryAtom,
   resetSessionAtom,
   sessionIdAtom,
+  chatbotIsOpenAtom,
 } from './store';
 import { CHAT_ENDPOINT } from './constants';
 
@@ -19,8 +21,6 @@ const SESSION_STORAGE_KEY = 'baml-ai-context';
 
 interface ChatBotProps {
   apiEndpoint?: string;
-  isOpen?: boolean;
-  onClose?: () => void;
 }
 
 // Transform messages for API format
@@ -80,17 +80,39 @@ const postDocChat = async (req: QueryRequest) => {
   return QueryResponseSchema.parse(data);
 };
 
-const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) => {
+const ChatBot: React.FC<ChatBotProps> = () => {
   const [messages, setMessages] = useAtom(messagesAtom);
   const sessionId = useAtomValue(sessionIdAtom);
   const resetSession = useSetAtom(resetSessionAtom);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [pendingQuery, setPendingQuery] = useAtom(pendingQueryAtom);
+  const isOpen = useAtomValue(chatbotIsOpenAtom);
+  const setIsOpen = useSetAtom(chatbotIsOpenAtom);
   // Add width state for resizing
   const [width, setWidth] = useState(400);
   const [isResizing, setIsResizing] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  
+  // Create and manage portal container
+  const [portalContainer] = useState(() => {
+    const container = document.createElement('div');
+    container.id = 'baml-chatbot-portal';
+    container.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2000;';
+    return container;
+  });
+
+  useEffect(() => {
+    // Add portal container to body when component mounts
+    document.body.appendChild(portalContainer);
+    
+    // Cleanup when component unmounts
+    return () => {
+      if (document.body.contains(portalContainer)) {
+        document.body.removeChild(portalContainer);
+      }
+    };
+  }, [portalContainer]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -210,9 +232,7 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
   };
 
   const handleClose = () => {
-    if (onClose) {
-      onClose();
-    }
+    setIsOpen(false);
   };
 
   // Add resize handlers
@@ -278,7 +298,7 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
 
   console.log('messages', messages);
 
-  return (
+  const chatbotUI = (
     <div
       style={{
         position: 'fixed',
@@ -295,6 +315,7 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
         zIndex: 2000,
         fontFamily: 'Inter, system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
         overflow: 'hidden',
+        pointerEvents: 'auto', // Enable pointer events for the chatbot itself
       }}
     >
       {/* Resize Handle */}
@@ -1122,6 +1143,8 @@ const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) 
       </style>
     </div>
   );
+
+  return createPortal(chatbotUI, portalContainer);
 };
 
 export default ChatBot;

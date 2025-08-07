@@ -252,7 +252,7 @@ export class SitemapGenerator {
       ];
 
       // From packages/fdr-sdk/src/navigation/versions/v1/slugjoin.ts
-      const pageHref = urljoin(pageSlug)
+      const pageHref = (mdxFrontmatter.slug ?? urljoin(pageSlug))
         .replaceAll('//*', '/')
         .replace(/^\/*/, '/')
         .replace(/\/*$/, '');
@@ -262,7 +262,7 @@ export class SitemapGenerator {
         filepath: mdxPath,
         displayTitle: mdxFrontmatter.title || item.page || 'PLACEHOLDER',
         displaySection: [tab.tabDisplayName, ...sections.map((s) => s.sectionDisplayName)],
-        href: tab.tabId === 'home' ? 'home' : (mdxFrontmatter.slug ?? pageHref),
+        href: tab.tabId === 'home' ? 'home' : pageHref,
       });
     }
 

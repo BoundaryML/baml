@@ -1,9 +1,9 @@
-import { Provider, useSetAtom } from 'jotai';
-import React, { useEffect } from 'react';
+import { Provider, useAtom, useSetAtom, useAtomValue } from 'jotai';
+import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import AlgoliaSearch from './AlgoliaSearch';
 import ChatBot from './ChatBot';
-import { pendingQueryAtom } from './store';
+import { pendingQueryAtom, chatbotIsOpenAtom } from './store';
 
 // Constants from original custom.js
 const PANEL_W = 380;
@@ -11,9 +11,12 @@ const OPEN = 'baml-ai-open';
 
 // Global state for chatbot
 let chatbotRoot: any = null;
-let chatbotContainer: HTMLElement | null = null;
-let isOpen = false;
 let pendingQueryToSet: string | null = null;
+
+// Bridge to sync atom state with non-React contexts
+let atomStateRef = { isOpen: false };
+let setAtomState: ((value: boolean) => void) | null = null;
+let getAtomState: (() => boolean) | null = null;
 
 // Helper functions from original custom.js
 const css = (s: string) => {
@@ -149,6 +152,26 @@ function QueryBridge() {
   return null;
 }
 
+// State Bridge component to sync atom state with non-React contexts
+function StateBridge() {
+  const [isOpen, setIsOpen] = useAtom(chatbotIsOpenAtom);
+
+  useEffect(() => {
+    // Update the reference and setter for non-React contexts
+    atomStateRef.isOpen = isOpen;
+    setAtomState = setIsOpen;
+    getAtomState = () => isOpen;
+    
+    // Update body class for CSS transitions
+    document.body.classList.toggle(OPEN, isOpen);
+
+    // Update search interface when state changes
+    updateSearchInterface();
+  }, [isOpen, setIsOpen]);
+
+  return null;
+}
+
 // Error boundary component
 class ErrorBoundary extends React.Component<
   { children: React.ReactNode; fallback?: React.ReactNode },
@@ -185,16 +208,18 @@ class ErrorBoundary extends React.Component<
 // Centralized chatbot management
 const ChatbotManager = {
   setOpen(flag: boolean) {
-    isOpen = flag;
-    document.body.classList.toggle(OPEN, flag);
+    if (setAtomState) {
+      setAtomState(flag);
+    }
 
-    if (chatbotRoot && chatbotContainer) {
+    if (chatbotRoot) {
       try {
         chatbotRoot.render(
           <ErrorBoundary fallback={<div className="baml-error">Chatbot failed to load</div>}>
             <Provider>
+              <StateBridge />
               <QueryBridge />
-              <ChatBot isOpen={flag} onClose={() => this.setOpen(false)} />
+              <ChatBot />
             </Provider>
           </ErrorBoundary>,
         );
@@ -205,17 +230,14 @@ const ChatbotManager = {
 
     // Trigger resize after DOM changes
     setTimeout(() => window.dispatchEvent(new Event('resize')), 10);
-
-    // Update search interface to reflect AI state
-    updateSearchInterface();
   },
 
   toggle() {
-    this.setOpen(!isOpen);
+    this.setOpen(!atomStateRef.isOpen);
   },
 
   initialize() {
-    if (chatbotRoot && chatbotContainer) {
+    if (chatbotRoot) {
       return; // Already initialized
     }
 
@@ -226,18 +248,22 @@ const ChatbotManager = {
         existing.remove();
       }
 
-      chatbotContainer = document.createElement('div');
+      // Create a container for the React root - the portal will manage its own DOM
+      const chatbotContainer = document.createElement('div');
       chatbotContainer.id = 'fern-chatbot-root';
+      chatbotContainer.style.display = 'none'; // Hidden since portal manages its own DOM
       document.body.appendChild(chatbotContainer);
 
       chatbotRoot = createRoot(chatbotContainer);
 
-      // Initial render with closed state
+      // Initial render - state is managed by atom
+      // The StateBridge will automatically sync the atom state and apply it
       chatbotRoot.render(
         <ErrorBoundary fallback={<div className="baml-error">Chatbot failed to load</div>}>
           <Provider>
+            <StateBridge />
             <QueryBridge />
-            <ChatBot isOpen={false} onClose={() => this.setOpen(false)} />
+            <ChatBot />
           </Provider>
         </ErrorBoundary>,
       );
@@ -269,12 +295,25 @@ const ChatbotManager = {
       chatbotRoot = null;
     }
 
-    if (chatbotContainer) {
-      chatbotContainer.remove();
-      chatbotContainer = null;
+    // Clean up the hidden container
+    const container = document.getElementById('fern-chatbot-root');
+    if (container) {
+      container.remove();
     }
 
-    isOpen = false;
+    // Clean up portal containers that might still exist
+    const portalContainers = document.querySelectorAll('#baml-chatbot-portal');
+    portalContainers.forEach(container => container.remove());
+
+    // Reset atom state
+    if (setAtomState) {
+      setAtomState(false);
+    }
+    
+    // Clear bridge references
+    setAtomState = null;
+    getAtomState = null;
+    atomStateRef.isOpen = false;
     document.body.classList.remove(OPEN);
   },
 };
@@ -298,7 +337,7 @@ function updateSearchInterface() {
       searchInterfaceRoot.render(
         <ErrorBoundary fallback={<div className="baml-error">Search failed to load</div>}>
           <Provider>
-            <AlgoliaSearch onAskAI={handleAskAI} onToggleAI={handleToggleAI} isAIOpen={isOpen} />
+            <AlgoliaSearch onAskAI={handleAskAI} onToggleAI={handleToggleAI} isAIOpen={atomStateRef.isOpen} />
           </Provider>
         </ErrorBoundary>,
       );
@@ -353,7 +392,7 @@ function initializeSearchInterface() {
       searchInterfaceRoot.render(
         <ErrorBoundary fallback={<div className="baml-error">Search failed to load</div>}>
           <Provider>
-            <AlgoliaSearch onAskAI={handleAskAI} onToggleAI={handleToggleAI} isAIOpen={isOpen} />
+            <AlgoliaSearch onAskAI={handleAskAI} onToggleAI={handleToggleAI} isAIOpen={atomStateRef.isOpen} />
           </Provider>
         </ErrorBoundary>,
       );
