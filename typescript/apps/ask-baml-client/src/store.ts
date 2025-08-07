@@ -1,5 +1,9 @@
 import type { AssistantMessage, UserMessage } from '@baml/sage-interface';
 import { atom } from 'jotai';
+import { atomWithStorage } from 'jotai/utils';
+
+const CHATBOT_OPEN_STORAGE_KEY = 'baml-chatbot-open';
+const SESSION_STORAGE_KEY = 'baml-chat-session';
 
 export type StoredMessage = {
   id: string;
@@ -19,8 +23,6 @@ export type StoredMessage = {
       role: 'assistant/progress';
     }
 );
-
-const SESSION_STORAGE_KEY = 'baml-chat-session';
 
 interface SessionData {
   sessionId: string;
@@ -132,35 +134,8 @@ export const resetSessionAtom = atom(null, (get, set) => {
 // Atom for external query requests (from search bar, etc.)
 export const pendingQueryAtom = atom<string | null>(null);
 
-// Session storage key for chatbot open state
-const CHATBOT_OPEN_STORAGE_KEY = 'baml-chatbot-open';
-
-// Helper to get chatbot open state from session storage
-const getChatbotOpenState = (): boolean => {
-  try {
-    const stored = sessionStorage.getItem(CHATBOT_OPEN_STORAGE_KEY);
-    return stored === 'true';
-  } catch (error) {
-    // Fallback if sessionStorage is not available
-    return false;
-  }
-};
-
-// Helper to save chatbot open state to session storage
-const saveChatbotOpenState = (isOpen: boolean) => {
-  try {
-    sessionStorage.setItem(CHATBOT_OPEN_STORAGE_KEY, isOpen.toString());
-  } catch (error) {
-    // Ignore save errors if sessionStorage is not available
-    console.warn('Failed to save chatbot state:', error);
-  }
-};
-
 // Atom for chatbot open state with session storage persistence
-export const chatbotIsOpenAtom = atom(
-  getChatbotOpenState(),
-  (get, set, newValue: boolean) => {
-    set(chatbotIsOpenAtom, newValue);
-    saveChatbotOpenState(newValue);
-  }
+export const chatbotIsOpenAtom = atomWithStorage(
+  CHATBOT_OPEN_STORAGE_KEY,
+  false,
 );
