@@ -22,6 +22,10 @@ impl Hir {
             global_assignments: baml_types::BamlMap::new(),
         };
 
+        // Add builtin classes and enums first
+        hir.classes.extend(crate::builtin::builtin_classes());
+        hir.enums.extend(crate::builtin::builtin_enums());
+
         for top in &ast.tops {
             match top {
                 ast::Top::Function(function) => {

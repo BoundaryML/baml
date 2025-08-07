@@ -1,3 +1,4 @@
+pub mod builtin;
 pub mod hir;
 pub mod thir;
 

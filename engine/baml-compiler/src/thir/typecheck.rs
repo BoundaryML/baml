@@ -49,6 +49,14 @@ pub fn typecheck(hir: &Hir, diagnostics: &mut Diagnostics) -> THir<ExprMetadata>
         typing_context.inner.insert(func.name.clone(), arrow_type);
     }
 
+    // Add builtin functions to typing context
+    // std::fetch_value<T>(std::Request) -> T
+    // This is a generic function that takes a Request and returns any type T
+    // For now, we'll add a placeholder - this should be handled more generically in the future
+    let generic_return_type = Type::String(hir::TypeMeta::default()); // Placeholder for generic T
+    let fetch_value_type = crate::builtin::std_fetch_value_signature(generic_return_type);
+    typing_context.inner.insert(crate::builtin::functions::FETCH_VALUE.to_string(), fetch_value_type);
+
     // Add global assignments to typing context
     for (name, global_expr) in &hir.global_assignments {
         // First typecheck the global assignment to infer its type
