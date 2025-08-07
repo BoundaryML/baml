@@ -19,15 +19,15 @@ fn track_walk(node: &ast::Stmt<'_>, state: &mut PredefinedTypes) {
         ast::Stmt::EmitRaw(_) => {}
         ast::Stmt::ForLoop(stmt) => {
             let iter_type = evaluate_type(&stmt.iter, state);
-            let iter_type = if iter_type.is_err() {
-                state.errors_mut().extend(iter_type.err().unwrap());
-                Type::Unknown
-            } else {
-                match iter_type.unwrap() {
+            let iter_type = if let Ok(t) = iter_type {
+                match t {
                     Type::List(t) => *t,
                     Type::Map(k, _) => *k,
                     _ => Type::Unknown,
                 }
+            } else {
+                state.errors_mut().extend(iter_type.err().unwrap());
+                Type::Unknown
             };
 
             let _filter_type = stmt.filter_expr.as_ref().map(|x| evaluate_type(x, state));
