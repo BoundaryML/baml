@@ -100,7 +100,7 @@ jobs:
         run: |
           pnpm baml-cli generate
           if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/canary" ]; then
-            echo TARGET_ENV=prod >>$GITHUB_ENV
+            echo TARGET_ENV=production >>$GITHUB_ENV
           else
             echo TARGET_ENV=preview >>$GITHUB_ENV
           fi
@@ -151,9 +151,9 @@ jobs:
       - name: Set environment variables
         run: |
           if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/canary" ]; then
-            echo NODE_ENV=production >>$GITHUB_ENV
+            echo PINECONE_ENV=prod >>$GITHUB_ENV
           else
-            echo NODE_ENV=development >>$GITHUB_ENV
+            echo PINECONE_ENV=dev >>$GITHUB_ENV
           fi
 
       - name: Update pinecone

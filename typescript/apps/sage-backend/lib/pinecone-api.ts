@@ -10,7 +10,9 @@ import { type SitemapEntry, SitemapGenerator } from './sitemap';
 
 const EMBEDDING_MODEL = 'text-embedding-3-large';
 const PINECONE_INDEX_NAME =
-  process.env.NODE_ENV === 'production' ? 'ask-baml-prod' : 'ask-baml-dev';
+  process.env.PINECONE_ENV === 'prod' || process.env.PINECONE_ENV === 'production'
+    ? 'ask-baml-prod'
+    : 'ask-baml-dev';
 console.log('Using pinecone index:', PINECONE_INDEX_NAME);
 
 const openaiClient = new OpenAI({
