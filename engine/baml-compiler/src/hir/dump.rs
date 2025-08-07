@@ -4,7 +4,7 @@ use pretty::RcDoc;
 
 use crate::hir::{
     Arrow, Block, Class, ClassConstructorField, Enum, EnumVariant, ExprFunction, Expression, Field,
-    Hir, LlmFunction, Parameter, Statement, TypeM, TypeMeta,
+    Hir, LlmFunction, Parameter, Statement, TypeArg, TypeM, TypeMeta,
 };
 
 impl Hir {
@@ -338,17 +338,34 @@ impl Expression {
                 doc
             }
             Expression::JinjaExpressionValue(val, _) => RcDoc::text(val.clone()),
-            Expression::Call(name, args, _) => RcDoc::text(name.clone())
-                .append(RcDoc::text("("))
-                .append(if args.is_empty() {
-                    RcDoc::nil()
+            Expression::Call {
+                function,
+                type_args,
+                args,
+                ..
+            } => {
+                let mut doc = function.to_doc();
+                let mut doc = if !type_args.is_empty() {
+                    doc.append(RcDoc::text("<"))
+                        .append(RcDoc::intersperse(
+                            type_args.iter().map(|arg| arg.to_doc()),
+                            RcDoc::text(","),
+                        ))
+                        .append(RcDoc::text(">"))
                 } else {
-                    RcDoc::intersperse(
-                        args.iter().map(|arg| arg.to_doc()).collect::<Vec<_>>(),
-                        RcDoc::text(",").append(RcDoc::space()),
-                    )
-                })
-                .append(RcDoc::text(")")),
+                    doc
+                };
+                doc.append(RcDoc::text("("))
+                    .append(if args.is_empty() {
+                        RcDoc::nil()
+                    } else {
+                        RcDoc::intersperse(
+                            args.iter().map(|arg| arg.to_doc()).collect::<Vec<_>>(),
+                            RcDoc::text(",").append(RcDoc::space()),
+                        )
+                    })
+                    .append(RcDoc::text(")"))
+            }
             Expression::ClassConstructor(cc, _) => RcDoc::text(cc.class_name.clone())
                 .append(RcDoc::space())
                 .append(RcDoc::text("{"))
@@ -368,6 +385,15 @@ impl Expression {
                 .append(block.to_doc().nest(2))
                 .append(RcDoc::hardline())
                 .append(RcDoc::text("}")),
+        }
+    }
+}
+
+impl TypeArg {
+    pub fn to_doc(&self) -> RcDoc<'static, ()> {
+        match self {
+            TypeArg::Type(ty) => ty.to_doc(),
+            TypeArg::TypeName(name) => RcDoc::text(name.clone()),
         }
     }
 }

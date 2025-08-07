@@ -260,12 +260,27 @@ pub enum Expression {
     Array(Vec<Expression>, Span),
     Map(Vec<(Expression, Expression)>, Span),
     JinjaExpressionValue(String, Span),
-    Call(String, Vec<Expression>, Span),
+    Call {
+        function: Box<Expression>,
+        type_args: Vec<TypeArg>,
+        args: Vec<Expression>,
+        span: Span,
+    },
     // Lambda(ArgumentsList, Box<ExpressionBlock>, Span), // TODO.
     // MethodCall(Box<Expression>, String, Vec<Expression>), // TODO.
     ClassConstructor(ClassConstructor, Span),
     /// Expression block - has its own scope with statements and evaluates to a value
     ExpressionBlock(Box<Block>, Span),
+}
+
+/// A type argument to a generic function call.
+///
+/// std.fetch_value<int>(...) == TypeArg::Type(int),
+/// std.fetch_value<T>(...) == TypeArg::TypeName("T")
+#[derive(Clone, Debug)]
+pub enum TypeArg {
+    Type(TypeM<TypeMeta>),
+    TypeName(String),
 }
 
 // TODO: struct Expr {kind: ExprKind, span: Span}
@@ -283,7 +298,7 @@ impl Expression {
             Expression::Array(_, span) => span.clone(),
             Expression::Map(_, span) => span.clone(),
             Expression::JinjaExpressionValue(_, span) => span.clone(),
-            Expression::Call(_, _, span) => span.clone(),
+            Expression::Call { span, .. } => span.clone(),
             Expression::ClassConstructor(_, span) => span.clone(),
             Expression::ExpressionBlock(_, span) => span.clone(),
         }

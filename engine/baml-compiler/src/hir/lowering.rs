@@ -8,7 +8,7 @@ use internal_baml_diagnostics::Span;
 
 use crate::hir::{
     Block, Class, ClassConstructor, ClassConstructorField, Enum, EnumVariant, ExprFunction,
-    Expression, Field, Hir, LlmFunction, Parameter, Statement, TypeM, TypeMeta,
+    Expression, Field, Hir, LlmFunction, Parameter, Statement, TypeArg, TypeM, TypeMeta,
 };
 
 impl Hir {
@@ -40,8 +40,13 @@ impl Hir {
                     // Add toplevel assignments to global_assignments for HIR typechecking
                     let mut statements = vec![];
                     let mut temp_counter = 0;
-                    let value = Expression::from_ast(&assignment.stmt.expr, &mut statements, &mut temp_counter);
-                    hir.global_assignments.insert(assignment.stmt.identifier.to_string(), value);
+                    let value = Expression::from_ast(
+                        &assignment.stmt.expr,
+                        &mut statements,
+                        &mut temp_counter,
+                    );
+                    hir.global_assignments
+                        .insert(assignment.stmt.identifier.to_string(), value);
                 }
                 _ => {}
             }
@@ -419,14 +424,35 @@ impl Expression {
                 span.clone(),
             ),
             ast::Expression::App(App {
-                name, args, span, ..
-            }) => Expression::Call(
-                name.to_string(),
-                args.iter()
-                    .map(|arg| Self::from_ast(arg, statements, temp_counter))
-                    .collect(),
-                span.clone(),
-            ),
+                name,
+                type_args,
+                args,
+                span,
+                ..
+            }) => {
+                // Note: AST function calls are always just names next to argument lists.
+                // Later, we will be able to call any expression that is a function.
+                // e.g. foo.name_callback(name),
+                // but we don't support this in the AST yet.
+                let hir_name = Expression::Identifier(name.to_string(), name.span().clone());
+                // Note: User calls of generic functions always use concrete types - this
+                // is enforced in the AST. At some point in the future, we may allow the
+                // user to instantiate generic functions with type variables. But we don't
+                // support this yet.
+                let hir_type_args = type_args
+                    .iter()
+                    .map(|arg| TypeArg::Type(TypeM::from_ast(arg)))
+                    .collect();
+                Expression::Call {
+                    function: Box::new(hir_name),
+                    type_args: hir_type_args,
+                    args: args
+                        .iter()
+                        .map(|arg| Self::from_ast(arg, statements, temp_counter))
+                        .collect(),
+                    span: span.clone(),
+                }
+            }
             ast::Expression::Map(pairs, span) => Expression::Map(
                 pairs
                     .iter()

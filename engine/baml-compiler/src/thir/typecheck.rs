@@ -55,13 +55,16 @@ pub fn typecheck(hir: &Hir, diagnostics: &mut Diagnostics) -> THir<ExprMetadata>
     // For now, we'll add a placeholder - this should be handled more generically in the future
     let generic_return_type = Type::String(hir::TypeMeta::default()); // Placeholder for generic T
     let fetch_value_type = crate::builtin::std_fetch_value_signature(generic_return_type);
-    typing_context.inner.insert(crate::builtin::functions::FETCH_VALUE.to_string(), fetch_value_type);
+    typing_context.inner.insert(
+        crate::builtin::functions::FETCH_VALUE.to_string(),
+        fetch_value_type,
+    );
 
     // Add global assignments to typing context
     for (name, global_expr) in &hir.global_assignments {
         // First typecheck the global assignment to infer its type
-        let typed_global_expr = typecheck_expression(global_expr, &typing_context, diagnostics);
-        
+        let typed_global_expr = typecheck_expression(global_expr, &mut typing_context, diagnostics);
+
         // Add the inferred type to the context
         if let Some(inferred_type) = typed_global_expr.meta().1.clone() {
             typing_context.inner.insert(name.clone(), inferred_type);
@@ -119,6 +122,10 @@ impl TypeContext {
         self.inner.get(name)
     }
 
+    pub fn infer_type(&mut self, expr: &hir::Expression) -> Option<Type> {
+        todo!()
+    }
+
     pub fn local_assignment(self, name: &str, r#type: Type) -> Self {
         let mut env_copy = self.clone();
         env_copy.inner.insert(name.to_string(), r#type);
@@ -159,7 +166,10 @@ fn typecheck_block(
                 // For expression statements that are the last statement, we already processed them above
                 // so we need to avoid calling typecheck_expression again to prevent duplicate errors.
                 // Instead, find the corresponding typed statement and extract its return value.
-                if let Some(thir::Statement::Expression { expr: typed_expr, .. }) = statements.last() {
+                if let Some(thir::Statement::Expression {
+                    expr: typed_expr, ..
+                }) = statements.last()
+                {
                     (typed_expr.clone(), true)
                 } else {
                     // Fallback if we can't find the typed statement
@@ -169,7 +179,10 @@ fn typecheck_block(
             hir::Statement::Return { expr, .. } => {
                 // For return statements that are the last statement, we already processed them above
                 // so we need to avoid calling typecheck_expression again to prevent duplicate errors.
-                if let Some(thir::Statement::FunctionReturn { expr: typed_expr, .. }) = statements.last() {
+                if let Some(thir::Statement::FunctionReturn {
+                    expr: typed_expr, ..
+                }) = statements.last()
+                {
                     (typed_expr.clone(), true)
                 } else {
                     // Fallback if we can't find the typed statement
@@ -320,7 +333,7 @@ fn typecheck_statement(
 /// Typecheck an expression and infer its type
 fn typecheck_expression(
     expr: &hir::Expression,
-    context: &TypeContext,
+    context: &mut TypeContext,
     diagnostics: &mut Diagnostics,
 ) -> thir::Expr<ExprMetadata> {
     match expr {
@@ -445,17 +458,32 @@ fn typecheck_expression(
 
             thir::Expr::Map(typed_entries, (span.clone(), map_type))
         }
-        hir::Expression::Call(func_name, args, span) => {
+        hir::Expression::Call {
+            function,
+            type_args,
+            args,
+            span,
+        } => {
             // Look up function type
-            let func_type = context.get_type(func_name);
+            let func_type = context.infer_type(function);
+            let func_name = match function.as_ref() {
+                hir::Expression::Identifier(name, _) => name.clone(),
+                _ => {
+                    diagnostics.push_error(DatamodelError::new_validation_error(
+                        "Calling functions with non-identifier expressions is not yet supported",
+                        span.clone(),
+                    ));
+                    "unknown".to_string()
+                }
+            };
 
-            let (param_types, return_type) = match func_type {
+            let (param_types, return_type) = match &func_type {
                 Some(hir::TypeM::Arrow(arrow, _)) => {
                     (arrow.inputs.clone(), Some(*arrow.output.clone()))
                 }
                 _ => {
                     diagnostics.push_error(DatamodelError::new_validation_error(
-                        &format!("Unknown function: {}", func_name),
+                        &format!("Unknown function{}", func_name),
                         span.clone(),
                     ));
                     (vec![], None)
@@ -505,9 +533,21 @@ fn typecheck_expression(
             thir::Expr::Call {
                 func: Arc::new(thir::Expr::FreeVar(
                     func_name.clone(),
-                    (span.clone(), func_type.cloned()),
+                    (span.clone(), func_type.clone()),
                 )),
-                type_args: vec![],
+                type_args: type_args
+                    .iter()
+                    .map(|arg| match arg {
+                        hir::TypeArg::Type(ty) => ty.clone(),
+                        hir::TypeArg::TypeName(name) => {
+                            diagnostics.push_error(DatamodelError::new_validation_error(
+                                &format!("Generic function calls with type names are not yet supported: {}", name),
+                                span.clone(),
+                            ));
+                            hir::TypeM::ClassName(name.clone(), hir::TypeMeta::default())
+                        }
+                    })
+                    .collect(),
                 args: typed_args,
                 meta: (span.clone(), return_type),
             }
