@@ -189,6 +189,7 @@ const ChatBot: React.FC<{}> = () => {
 
   // Handle pending query from Ask Baaaaml functionality
   useEffect(() => {
+    console.log('pendingQuery', pendingQuery);
     if (pendingQuery && !isLoading) {
       sendMessage(pendingQuery);
       setPendingQuery(null);

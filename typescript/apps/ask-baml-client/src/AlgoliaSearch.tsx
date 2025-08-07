@@ -853,10 +853,10 @@ function CustomHits({
 
 export default function AlgoliaSearch({
   onAskBaml,
-  onToggleAI,
+  onToggleChatbot,
 }: {
-  onAskBaml?: (query: string) => void;
-  onToggleAI?: () => void;
+  onAskBaml: (query: string) => void;
+  onToggleChatbot: () => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [searchClient, setSearchClient] = useState<any>(null);
@@ -900,8 +900,8 @@ export default function AlgoliaSearch({
   };
 
   const handleToggleAI = () => {
-    if (onToggleAI) {
-      onToggleAI();
+    if (onToggleChatbot) {
+      onToggleChatbot();
     }
   };
 
