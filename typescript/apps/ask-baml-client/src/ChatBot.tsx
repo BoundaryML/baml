@@ -1,7 +1,6 @@
 import { type Message, type QueryRequest, QueryResponseSchema } from '@baml/sage-interface';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import React, { useRef, useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import BamlLambWhite from './baml-lamb-white.svg';
@@ -87,25 +86,10 @@ const ChatBot: React.FC<{}> = () => {
   const [isResizing, setIsResizing] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
-  // Create and manage portal container
-  const [portalContainer] = useState(() => {
-    const container = document.createElement('div');
-    container.id = 'baml-chatbot-portal';
-    container.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2000;';
-    return container;
-  });
-
+  // Manage body class for CSS transitions when chatbot opens/closes
   useEffect(() => {
-    // Add portal container to body when component mounts
-    document.body.appendChild(portalContainer);
-    
-    // Cleanup when component unmounts
-    return () => {
-      if (document.body.contains(portalContainer)) {
-        document.body.removeChild(portalContainer);
-      }
-    };
-  }, [portalContainer]);
+    document.body.classList.toggle('baml-ai-open', isOpen);
+  }, [isOpen]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -1032,7 +1016,7 @@ const ChatBot: React.FC<{}> = () => {
           borderTop: '1px solid #e5e7eb',
           backgroundColor: '#ffffff',
           gap: '12px',
-          alignItems: 'flex-end',
+          alignItems: 'center',
         }}
       >
         <div style={{ flex: 1, position: 'relative' }}>
@@ -1085,6 +1069,10 @@ const ChatBot: React.FC<{}> = () => {
             fontSize: '14px',
             transition: 'all 0.2s ease',
             minWidth: '64px',
+            height: '44px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
           }}
           onMouseOver={(e) => {
             if (input.trim() && !isLoading) {
@@ -1137,7 +1125,7 @@ const ChatBot: React.FC<{}> = () => {
     </div>
   );
 
-  return createPortal(chatbotUI, portalContainer);
+  return chatbotUI;
 };
 
 export default ChatBot;
