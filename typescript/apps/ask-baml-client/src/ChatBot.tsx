@@ -1013,6 +1013,7 @@ const ChatBot: React.FC<{}> = () => {
         onSubmit={handleSubmit}
         style={{
           display: 'flex',
+          flexDirection: 'row',
           padding: '16px 24px',
           borderTop: '1px solid #e5e7eb',
           backgroundColor: '#ffffff',
@@ -1020,42 +1021,41 @@ const ChatBot: React.FC<{}> = () => {
           alignItems: 'center',
         }}
       >
-        <div style={{ flex: 1, position: 'relative' }}>
-          <textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                sendMessage(input);
-              }
-            }}
-            placeholder="Ask me anything about BAML..."
-            disabled={isLoading}
-            rows={1}
-            style={{
-              width: '100%',
-              minHeight: '44px',
-              maxHeight: '120px',
-              padding: '12px 16px',
-              border: '1px solid #e5e7eb',
-              borderRadius: '12px',
-              fontSize: '14px',
-              outline: 'none',
-              fontFamily: 'inherit',
-              backgroundColor: '#ffffff',
-              color: '#111827',
-              resize: 'none',
-              transition: 'border-color 0.2s ease',
-            }}
-            onFocus={(e) => {
-              e.currentTarget.style.borderColor = '#7d47e3';
-            }}
-            onBlur={(e) => {
-              e.currentTarget.style.borderColor = '#e5e7eb';
-            }}
-          />
-        </div>
+        <textarea
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              sendMessage(input);
+            }
+          }}
+          placeholder="Ask me anything about BAML..."
+          disabled={isLoading}
+          rows={1}
+          style={{
+            width: '100%',
+            minHeight: '44px',
+            maxHeight: '120px',
+            padding: '12px 16px',
+            border: '1px solid #e5e7eb',
+            borderRadius: '12px',
+            fontSize: '14px',
+            outline: 'none',
+            fontFamily: 'inherit',
+            backgroundColor: '#ffffff',
+            color: '#111827',
+            resize: 'none',
+            transition: 'border-color 0.2s ease',
+            display: 'flex',
+          }}
+          onFocus={(e) => {
+            e.currentTarget.style.borderColor = '#7d47e3';
+          }}
+          onBlur={(e) => {
+            e.currentTarget.style.borderColor = '#e5e7eb';
+          }}
+        />
         <button
           type="submit"
           disabled={isLoading || !input.trim()}
@@ -1070,7 +1070,7 @@ const ChatBot: React.FC<{}> = () => {
             fontSize: '14px',
             transition: 'all 0.2s ease',
             minWidth: '64px',
-            height: '44px',
+            height: '100%',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
