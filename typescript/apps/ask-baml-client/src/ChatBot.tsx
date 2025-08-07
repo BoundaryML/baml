@@ -16,13 +16,6 @@ import {
 } from './store';
 import { CHAT_ENDPOINT } from './constants';
 
-const OPEN_BY_DEFAULT = true;
-const SESSION_STORAGE_KEY = 'baml-ai-context';
-
-interface ChatBotProps {
-  apiEndpoint?: string;
-}
-
 // Transform messages for API format
 const transformMessagesForAPI = (messages: StoredMessage[]): Array<Message> => {
   return messages
@@ -80,7 +73,7 @@ const postDocChat = async (req: QueryRequest) => {
   return QueryResponseSchema.parse(data);
 };
 
-const ChatBot: React.FC<ChatBotProps> = () => {
+const ChatBot: React.FC<{}> = () => {
   const [messages, setMessages] = useAtom(messagesAtom);
   const sessionId = useAtomValue(sessionIdAtom);
   const resetSession = useSetAtom(resetSessionAtom);
