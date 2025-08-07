@@ -439,9 +439,9 @@ impl<'g> HirCompiler<'g> {
                 }
             }
 
-            hir::Expression::ClassConstructor(cc, _) => {
-                let Some(&class_index) = self.globals.get(&cc.class_name) else {
-                    panic!("undefined class: {}", cc.class_name);
+            hir::Expression::ClassConstructor(constructor, _) => {
+                let Some(&class_index) = self.globals.get(&constructor.class_name) else {
+                    panic!("undefined class: {}", constructor.class_name);
                 };
 
                 // Allocate instance
@@ -450,17 +450,17 @@ impl<'g> HirCompiler<'g> {
                 let mut defined_named_fields = std::collections::HashSet::new();
 
                 // Process fields in order
-                for field in &cc.fields {
+                for field in &constructor.fields {
                     match field {
                         hir::ClassConstructorField::Named { name, value } => {
                             self.compile_expression(value);
 
-                            let Some(classes) = self.classes.get(&cc.class_name) else {
-                                panic!("undefined class: {}", cc.class_name);
+                            let Some(classes) = self.classes.get(&constructor.class_name) else {
+                                panic!("undefined class: {}", constructor.class_name);
                             };
 
                             let Some(&field_index) = classes.get(name) else {
-                                panic!("undefined field: {}.{}", cc.class_name, name);
+                                panic!("undefined field: {}.{}", constructor.class_name, name);
                             };
 
                             self.emit(Instruction::StoreField(field_index));
@@ -474,8 +474,8 @@ impl<'g> HirCompiler<'g> {
                             let spread_local = self.locals.len() + 2;
                             self.emit(Instruction::LoadVar(spread_local - 1));
 
-                            let Some(classes) = self.classes.get(&cc.class_name) else {
-                                panic!("undefined class: {}", cc.class_name);
+                            let Some(classes) = self.classes.get(&constructor.class_name) else {
+                                panic!("undefined class: {}", constructor.class_name);
                             };
 
                             for (field_name, &field_index) in classes {
