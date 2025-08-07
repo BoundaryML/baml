@@ -135,7 +135,7 @@ export const resetSessionAtom = atom(null, (get, set) => {
 export const pendingQueryAtom = atom<string | null>(null);
 
 // Atom for chatbot open state with session storage persistence
-export const chatbotIsOpenAtom = atomWithStorage(
+export const isChatbotOpenAtom = atomWithStorage(
   CHATBOT_OPEN_STORAGE_KEY,
   false,
 );

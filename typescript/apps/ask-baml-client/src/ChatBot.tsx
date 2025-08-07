@@ -11,7 +11,7 @@ import {
   pendingQueryAtom,
   resetSessionAtom,
   sessionIdAtom,
-  chatbotIsOpenAtom,
+  isChatbotOpenAtom,
 } from './store';
 import { CHAT_ENDPOINT } from './constants';
 
@@ -79,8 +79,8 @@ const ChatBot: React.FC<{}> = () => {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [pendingQuery, setPendingQuery] = useAtom(pendingQueryAtom);
-  const isOpen = useAtomValue(chatbotIsOpenAtom);
-  const setIsOpen = useSetAtom(chatbotIsOpenAtom);
+  const isOpen = useAtomValue(isChatbotOpenAtom);
+  const setIsOpen = useSetAtom(isChatbotOpenAtom);
   // Add width state for resizing
   const [width, setWidth] = useState(400);
   const [isResizing, setIsResizing] = useState(false);

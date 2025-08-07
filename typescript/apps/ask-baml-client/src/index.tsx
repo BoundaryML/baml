@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import AlgoliaSearch from './AlgoliaSearch';
 import ChatBot from './ChatBot';
-import { pendingQueryAtom, chatbotIsOpenAtom } from './store';
+import { pendingQueryAtom, isChatbotOpenAtom } from './store';
 
 
 // Global state for chatbot
@@ -124,7 +124,7 @@ body.resizing {
 // Main Fern Chatbot App component
 function FernChatbotApp() {
   const setPendingQuery = useSetAtom(pendingQueryAtom);
-  const setIsOpen = useSetAtom(chatbotIsOpenAtom);
+  const setIsOpen = useSetAtom(isChatbotOpenAtom);
 
   // Handle pending queries from external calls
   useEffect(() => {

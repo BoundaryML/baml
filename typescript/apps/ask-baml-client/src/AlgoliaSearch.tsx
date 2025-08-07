@@ -8,7 +8,7 @@ import { Configure, InstantSearch, useHits, useSearchBox } from 'react-instantse
 import { z } from 'zod';
 import BamlLambWhite from './baml-lamb-white.svg';
 import { ALGOLIA_SEARCH_CREDENTIALS_ENDPOINT, ALGOLIA_SEARCH_INDEX_NAME } from './constants';
-import { chatbotIsOpenAtom } from './store';
+import { isChatbotOpenAtom } from './store';
 
 
 // Zod schema for API response validation
@@ -481,7 +481,7 @@ function CustomSearchBox({
   const [isFocused, setIsFocused] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const inputRef = useRef<HTMLInputElement>(null);
-  const isAIOpen = useAtomValue(chatbotIsOpenAtom);
+  const isChatbotOpen = useAtomValue(isChatbotOpenAtom);
 
   useEffect(() => {
     setInputValue(query);
@@ -711,7 +711,7 @@ function CustomSearchBox({
             onClick={handleToggleAI}
             style={{
               padding: '6px 10px',
-              background: isAIOpen ? '#6b7280' : '#7c3aed',
+              background: isChatbotOpen ? '#6b7280' : '#7c3aed',
               border: 'none',
               borderRadius: '6px',
               color: 'white',
@@ -728,17 +728,17 @@ function CustomSearchBox({
               boxShadow: '0 1px 2px rgba(0, 0, 0, 0.1)',
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.background = isAIOpen ? '#4b5563' : '#6d28d9';
+              e.currentTarget.style.background = isChatbotOpen ? '#4b5563' : '#6d28d9';
               e.currentTarget.style.transform = 'translateY(-0.5px)';
               e.currentTarget.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.15)';
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.background = isAIOpen ? '#6b7280' : '#7c3aed';
+              e.currentTarget.style.background = isChatbotOpen ? '#6b7280' : '#7c3aed';
               e.currentTarget.style.transform = 'translateY(0)';
               e.currentTarget.style.boxShadow = '0 1px 2px rgba(0, 0, 0, 0.1)';
             }}
           >
-            {isAIOpen ? (
+            {isChatbotOpen ? (
               <>
                 <CloseIcon />
                 Close
