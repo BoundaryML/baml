@@ -1,14 +1,14 @@
 'use client';
 
 import { liteClient as algoliasearch } from 'algoliasearch/lite';
-import { useAtomValue } from 'jotai';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { Configure, InstantSearch, useHits, useSearchBox } from 'react-instantsearch';
 import { z } from 'zod';
 import BamlLambWhite from './baml-lamb-white.svg';
 import { ALGOLIA_SEARCH_CREDENTIALS_ENDPOINT, ALGOLIA_SEARCH_INDEX_NAME } from './constants';
-import { isChatbotOpenAtom } from './store';
+import { isChatbotOpenAtom, pendingQueryAtom } from './store';
 
 
 // Zod schema for API response validation
@@ -469,10 +469,10 @@ function AskWithAIOption({
 
 // Custom SearchBox with integrated controls
 function CustomSearchBox({
-  onAskBaml,
+  // onAskBaml,
   onToggleChatbot,
 }: {
-  onAskBaml: (query: string) => void;
+  // onAskBaml: (query: string) => void;
   onToggleChatbot: () => void;
 }) {
   const { query, refine } = useSearchBox();
@@ -481,7 +481,8 @@ function CustomSearchBox({
   const [isFocused, setIsFocused] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const inputRef = useRef<HTMLInputElement>(null);
-  const isChatbotOpen = useAtomValue(isChatbotOpenAtom);
+  const [isChatbotOpen, setIsChatbotOpen] = useAtom(isChatbotOpenAtom);
+  const setPendingQuery = useSetAtom(pendingQueryAtom);
 
   useEffect(() => {
     setInputValue(query);
@@ -517,14 +518,10 @@ function CustomSearchBox({
   };
 
   const handleAskAI = () => {
-    onAskBaml(inputValue);
+    setPendingQuery(inputValue);
+    setIsChatbotOpen(true)
+    // onAskBaml(inputValue);
     setIsFocused(false);
-  };
-
-  const handleToggleAI = () => {
-    if (onToggleChatbot) {
-      onToggleChatbot();
-    }
   };
 
   // Calculate total selectable items: Ask Baaaml option (when query exists) + search results
@@ -852,10 +849,10 @@ function CustomHits({
 }
 
 export default function AlgoliaSearch({
-  onAskBaml,
+  // onAskBaml,
   onToggleChatbot,
 }: {
-  onAskBaml: (query: string) => void;
+  // onAskBaml: (query: string) => void;
   onToggleChatbot: () => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -958,7 +955,7 @@ export default function AlgoliaSearch({
           analyticsTags={['desktop', 'docs.boundaryml.com', 'search-v3-enhanced']}
         />
 
-        <CustomSearchBox onAskBaml={onAskBaml} onToggleChatbot={onToggleChatbot} />
+        <CustomSearchBox onToggleChatbot={onToggleChatbot} />
       </InstantSearch>
     </div>
   );

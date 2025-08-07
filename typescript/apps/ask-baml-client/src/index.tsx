@@ -183,6 +183,7 @@ class ErrorBoundary extends React.Component<
 // Simplified chatbot coordinator (minimal interface)
 const ChatbotManager = {
   openWithQuery(query: string) {
+    console.log('openWithQuery', query);
     // Set the pending query for React to pick up
     pendingQueryToSet = query;
     
@@ -288,7 +289,7 @@ function initializeSearchInterface() {
 
       searchInterfaceRoot.render(
         <ErrorBoundary fallback={<div className="baml-error">Search failed to load</div>}>
-            <AlgoliaSearch onAskBaml={(query: string) => ChatbotManager.openWithQuery(query)} onToggleChatbot={() => ChatbotManager.toggle()} />
+            <AlgoliaSearch onToggleChatbot={() => ChatbotManager.toggle()} />
         </ErrorBoundary>,
       );
 

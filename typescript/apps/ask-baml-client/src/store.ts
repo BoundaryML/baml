@@ -1,5 +1,5 @@
 import type { AssistantMessage, UserMessage } from '@baml/sage-interface';
-import { atom } from 'jotai';
+import { atom, useAtom, useSetAtom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
 
 const CHATBOT_OPEN_STORAGE_KEY = 'baml-chatbot-open';
@@ -139,3 +139,17 @@ export const isChatbotOpenAtom = atomWithStorage(
   CHATBOT_OPEN_STORAGE_KEY,
   false,
 );
+
+export const useChatbot = () => {
+  const [pendingQuery, setPendingQuery] = useAtom(pendingQueryAtom);
+  const [isChatbotOpen, setIsChatbotOpen] = useAtom(isChatbotOpenAtom);
+
+  return {
+    pendingQuery,
+    isChatbotOpen,
+    openChatbotWithQuery: (query: string) => {
+      setPendingQuery(query);
+      setIsChatbotOpen(true);
+    },
+  };
+};
