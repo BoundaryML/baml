@@ -469,11 +469,11 @@ function AskWithAIOption({
 
 // Custom SearchBox with integrated controls
 function CustomSearchBox({
-  onAskBaml: onAskAI,
-  onToggleAI,
+  onAskBaml,
+  onToggleChatbot,
 }: {
   onAskBaml: (query: string) => void;
-  onToggleAI?: () => void;
+  onToggleChatbot: () => void;
 }) {
   const { query, refine } = useSearchBox();
   const { hits } = useHits();
@@ -517,13 +517,13 @@ function CustomSearchBox({
   };
 
   const handleAskAI = () => {
-    onAskAI(inputValue);
+    onAskBaml(inputValue);
     setIsFocused(false);
   };
 
   const handleToggleAI = () => {
-    if (onToggleAI) {
-      onToggleAI();
+    if (onToggleChatbot) {
+      onToggleChatbot();
     }
   };
 
@@ -708,7 +708,7 @@ function CustomSearchBox({
           {/* Ask Baaaml / Close button */}
           <button
             type="button"
-            onClick={handleToggleAI}
+            onClick={onToggleChatbot}
             style={{
               padding: '6px 10px',
               background: isChatbotOpen ? '#6b7280' : '#7c3aed',
@@ -893,18 +893,6 @@ export default function AlgoliaSearch({
     };
   }, []);
 
-  const handleAskBaml = (query: string) => {
-    if (onAskBaml) {
-      onAskBaml(query);
-    }
-  };
-
-  const handleToggleAI = () => {
-    if (onToggleChatbot) {
-      onToggleChatbot();
-    }
-  };
-
   if (isLoading) {
     return (
       <div style={{ position: 'relative', width: '100%' }}>
@@ -970,7 +958,7 @@ export default function AlgoliaSearch({
           analyticsTags={['desktop', 'docs.boundaryml.com', 'search-v3-enhanced']}
         />
 
-        <CustomSearchBox onAskBaml={handleAskBaml} onToggleAI={handleToggleAI} />
+        <CustomSearchBox onAskBaml={onAskBaml} onToggleChatbot={onToggleChatbot} />
       </InstantSearch>
     </div>
   );
