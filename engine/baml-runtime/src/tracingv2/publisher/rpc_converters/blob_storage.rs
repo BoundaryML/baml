@@ -1,3 +1,4 @@
+use crate::tracingv2::publisher::publisher::BlobUploaderMessage;
 use baml_rpc::runtime_api::baml_value::{BamlValue, MediaValue, ValueContent};
 use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
@@ -6,7 +7,6 @@ use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
-use crate::tracingv2::publisher::publisher::BlobUploaderMessage;
 
 /// Represents a blob that needs to be uploaded
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -92,7 +92,7 @@ impl BlobRefCache {
 
         let mut blobs = self.blobs.lock().unwrap();
         let is_new_blob = !blobs.contains_key(&blob_hash);
-        
+
         let entry = blobs
             .entry(blob_hash.clone())
             .or_insert_with(|| (base64_content.as_bytes().to_vec(), HashSet::new()));
@@ -110,12 +110,12 @@ impl BlobRefCache {
                     },
                     content: base64_content.as_bytes().to_vec(),
                 };
-                
+
                 // Create the message using a different approach to avoid circular imports
                 match upload_tx.send(BlobUploaderMessage::QueueBlob(blob_with_content)) {
                     Ok(_) => {
                         log::info!("Queued blob {} for immediate upload", blob_hash);
-                    },
+                    }
                     Err(e) => {
                         log::warn!("Failed to queue blob for upload: {}", e);
                     }
@@ -131,14 +131,14 @@ impl BlobRefCache {
 
     /// Mark a function call as started
     pub fn start_function_call(&self, function_call_id: &str) {
-        log::info!("Starting function call: {}", function_call_id);
+        // log::info!("Starting function call: {}", function_call_id);
         let mut active_calls = self.active_calls.lock().unwrap();
         active_calls.insert(function_call_id.to_string());
     }
 
     /// Mark a function call as completed and clean up unused blobs
     pub fn end_function_call(&self, function_call_id: &str) {
-        log::info!("Ending function call: {}", function_call_id);
+        // log::info!("Ending function call: {}", function_call_id);
         let mut active_calls = self.active_calls.lock().unwrap();
         active_calls.remove(function_call_id);
 
@@ -169,7 +169,10 @@ impl BlobRefCache {
             .iter()
             .filter_map(|(hash, (content, refs))| {
                 if refs.contains(function_call_id) {
-                    Some((String::from_utf8_lossy(content).to_string(), Self::format_blob_ref(hash)))
+                    Some((
+                        String::from_utf8_lossy(content).to_string(),
+                        Self::format_blob_ref(hash),
+                    ))
                 } else {
                     None
                 }
@@ -197,7 +200,11 @@ impl BlobRefCache {
     #[cfg(test)]
     pub fn get_blob_content(&self, blob_ref: &str) -> Option<Vec<u8>> {
         if let Some(hash) = Self::extract_hash_from_ref(blob_ref) {
-            self.blobs.lock().unwrap().get(hash).map(|(content, _)| content.clone())
+            self.blobs
+                .lock()
+                .unwrap()
+                .get(hash)
+                .map(|(content, _)| content.clone())
         } else {
             None
         }
@@ -207,7 +214,12 @@ impl BlobRefCache {
     #[cfg(test)]
     pub fn get_blob_ref_count(&self, blob_ref: &str) -> usize {
         if let Some(hash) = Self::extract_hash_from_ref(blob_ref) {
-            self.blobs.lock().unwrap().get(hash).map(|(_, refs)| refs.len()).unwrap_or(0)
+            self.blobs
+                .lock()
+                .unwrap()
+                .get(hash)
+                .map(|(_, refs)| refs.len())
+                .unwrap_or(0)
         } else {
             0
         }
@@ -223,7 +235,9 @@ impl BlobRefCache {
     #[cfg(test)]
     pub fn blob_has_ref(&self, blob_ref: &str, function_call_id: &str) -> bool {
         if let Some(hash) = Self::extract_hash_from_ref(blob_ref) {
-            self.blobs.lock().unwrap()
+            self.blobs
+                .lock()
+                .unwrap()
                 .get(hash)
                 .map(|(_, refs)| refs.contains(function_call_id))
                 .unwrap_or(false)
@@ -319,7 +333,10 @@ mod tests {
         // Verify blob is stored in internal cache
         assert_eq!(cache.blob_count(), 1);
         assert!(cache.has_blob(&hash));
-        assert_eq!(cache.get_blob_content(&hash).unwrap(), base64_content.as_bytes());
+        assert_eq!(
+            cache.get_blob_content(&hash).unwrap(),
+            base64_content.as_bytes()
+        );
         assert!(cache.blob_has_ref(&hash, function_call_id));
 
         // Verify we can retrieve blobs for this function
@@ -435,20 +452,23 @@ mod tests {
         // Should have the blob stored in cache
         assert_eq!(cache.blob_count(), 1);
         assert!(cache.has_blob(&blob_hash));
-        assert_eq!(cache.get_blob_content(&blob_hash).unwrap(), base64_content.as_bytes());
+        assert_eq!(
+            cache.get_blob_content(&blob_hash).unwrap(),
+            base64_content.as_bytes()
+        );
     }
 
     #[test]
     fn test_hash_generation_consistency() {
         let cache = BlobRefCache::new();
-        
+
         // Same content should generate same hash
         let content = "same content";
         let hash1 = BlobRefCache::hash_blob(content.as_bytes());
         let hash2 = BlobRefCache::hash_blob(content.as_bytes());
         assert_eq!(hash1, hash2);
 
-        // Different content should generate different hashes  
+        // Different content should generate different hashes
         let hash3 = BlobRefCache::hash_blob("different content".as_bytes());
         assert_ne!(hash1, hash3);
     }
@@ -463,7 +483,7 @@ mod tests {
 
         // Store a blob for this function
         let hash = cache.store_blob("func-1", "test content", None);
-        
+
         // End the function call
         cache.end_function_call("func-1");
         assert!(!cache.is_function_active("func-1"));
