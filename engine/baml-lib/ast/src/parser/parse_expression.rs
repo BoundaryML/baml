@@ -19,6 +19,11 @@ pub(crate) fn parse_expression(
     let first_child = token.into_inner().next()?;
     match first_child.as_rule() {
         Rule::postfix_expression => parse_postfix_expression(first_child, diagnostics),
+        Rule::config_primary_expression => {
+            // Unwrap the config_primary_expression and parse its child
+            let inner_child = first_child.into_inner().next()?;
+            parse_primary_expression(inner_child, diagnostics)
+        }
         _ => unreachable_rule!(first_child, Rule::expression),
     }
 }

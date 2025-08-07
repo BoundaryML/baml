@@ -29,7 +29,7 @@ value_expression_block    = { value_expression_keyword ~ identifier ~ named_argu
 value_expression_contents = {
     (type_builder_block | value_expression | comment_block | block_attribute | empty_lines | BLOCK_LEVEL_CATCH_ALL)*
 }
-value_expression          = { identifier ~ expression? ~ (NEWLINE? ~ field_attribute)* ~ trailing_comment? }
+value_expression          = { identifier ~ config_expression? ~ (NEWLINE? ~ field_attribute)* ~ trailing_comment? }
 
 // ######################################
 // Type builder
@@ -136,6 +136,28 @@ primary_expression = {
 }
 ARRAY_CATCH_ALL   =  { !"]" ~ CATCH_ALL }
 ENTRY_CATCH_ALL   =  { field_attribute | BLOCK_LEVEL_CATCH_ALL }
+
+// ######################################
+// Config expressions for value_expression blocks
+// ######################################
+// Like expression, but prioritizes string literals over identifiers
+// to allow unquoted strings like "python/pydantic" to parse correctly
+config_expression = { config_primary_expression }
+
+config_primary_expression = {
+    jinja_expression |
+    config_map_expression |
+    array_expression |
+    numeric_literal |
+    string_literal |
+    identifier
+}
+
+config_map_key   = { identifier | quoted_string_literal }
+config_map_entry = { (comment_block | empty_lines)* ~ config_map_key ~ (config_expression | ENTRY_CATCH_ALL)? ~ trailing_comment? }
+
+config_map_expression    =  { "{" ~ empty_lines? ~ (config_map_entry ~ (splitter ~ config_map_entry)*)? ~ (comment_block | empty_lines)* ~ "}" }
+
 // ######################################
 // Literals / Values
 // ######################################

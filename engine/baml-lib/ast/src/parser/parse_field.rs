@@ -39,6 +39,7 @@ pub(crate) fn parse_value_expr(
                 };
             }
             Rule::expression => field_type = Some(parse_expression(current, diagnostics)),
+            Rule::config_expression => field_type = Some(parse_expression(current, diagnostics)),
 
             _ => parsing_catch_all(current, "field"),
         }
