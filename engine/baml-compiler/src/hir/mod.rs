@@ -27,6 +27,7 @@ pub struct Hir {
     pub llm_functions: Vec<LlmFunction>,
     pub classes: Vec<Class>,
     pub enums: Vec<Enum>,
+    pub global_assignments: baml_types::BamlMap<String, Expression>,
 }
 
 pub type Type = TypeM<TypeMeta>;

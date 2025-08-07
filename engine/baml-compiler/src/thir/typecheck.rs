@@ -49,6 +49,17 @@ pub fn typecheck(hir: &Hir, diagnostics: &mut Diagnostics) -> THir<ExprMetadata>
         typing_context.inner.insert(func.name.clone(), arrow_type);
     }
 
+    // Add global assignments to typing context
+    for (name, global_expr) in &hir.global_assignments {
+        // First typecheck the global assignment to infer its type
+        let typed_global_expr = typecheck_expression(global_expr, &typing_context, diagnostics);
+        
+        // Add the inferred type to the context
+        if let Some(inferred_type) = typed_global_expr.meta().1.clone() {
+            typing_context.inner.insert(name.clone(), inferred_type);
+        }
+    }
+
     // Typecheck expr functions
     let mut expr_functions = vec![];
     for func in &hir.expr_functions {
@@ -137,10 +148,25 @@ fn typecheck_block(
     let (return_value, last_is_return) = if let Some(last_stmt) = block.statements.last() {
         match last_stmt {
             hir::Statement::Expression { expr, .. } => {
-                (typecheck_expression(expr, context, diagnostics), true)
+                // For expression statements that are the last statement, we already processed them above
+                // so we need to avoid calling typecheck_expression again to prevent duplicate errors.
+                // Instead, find the corresponding typed statement and extract its return value.
+                if let Some(thir::Statement::Expression { expr: typed_expr, .. }) = statements.last() {
+                    (typed_expr.clone(), true)
+                } else {
+                    // Fallback if we can't find the typed statement
+                    (typecheck_expression(expr, context, diagnostics), true)
+                }
             }
             hir::Statement::Return { expr, .. } => {
-                (typecheck_expression(expr, context, diagnostics), true)
+                // For return statements that are the last statement, we already processed them above
+                // so we need to avoid calling typecheck_expression again to prevent duplicate errors.
+                if let Some(thir::Statement::FunctionReturn { expr: typed_expr, .. }) = statements.last() {
+                    (typed_expr.clone(), true)
+                } else {
+                    // Fallback if we can't find the typed statement
+                    (typecheck_expression(expr, context, diagnostics), true)
+                }
             }
             _ => {
                 // No explicit return, default to null

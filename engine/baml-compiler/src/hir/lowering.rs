@@ -19,6 +19,7 @@ impl Hir {
             llm_functions: vec![],
             classes: vec![],
             enums: vec![],
+            global_assignments: baml_types::BamlMap::new(),
         };
 
         for top in &ast.tops {
@@ -31,7 +32,13 @@ impl Hir {
                 }
                 ast::Top::Class(class) => hir.classes.push(Class::from_ast(class)),
                 ast::Top::Enum(enum_def) => hir.enums.push(Enum::from_ast(enum_def)),
-
+                ast::Top::TopLevelAssignment(assignment) => {
+                    // Add toplevel assignments to global_assignments for HIR typechecking
+                    let mut statements = vec![];
+                    let mut temp_counter = 0;
+                    let value = Expression::from_ast(&assignment.stmt.expr, &mut statements, &mut temp_counter);
+                    hir.global_assignments.insert(assignment.stmt.identifier.to_string(), value);
+                }
                 _ => {}
             }
         }
