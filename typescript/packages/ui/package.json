@@ -34,6 +34,7 @@
     "@radix-ui/react-tooltip": "1.2.7",
     "@tailwindcss/typography": "0.5.16",
     "class-variance-authority": "0.7.1",
+    "classnames": "^2.5.1",
     "clsx": "2.1.1",
     "cmdk": "1.1.1",
     "cobe": "0.6.4",

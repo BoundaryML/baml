@@ -4,9 +4,9 @@ const VALIDATIONS_ROOT_DIR: &str = "tests/validation_files";
 const HIR_ROOT_DIR: &str = "tests/hir_files";
 const BYTECODE_ROOT_DIR: &str = "tests/bytecode_files";
 const CARGO_MANIFEST_DIR: &str = env!("CARGO_MANIFEST_DIR");
-const BAML_CLI_INIT_DIR: &str = concat!("/../../baml-runtime/src/cli/initial_project/baml_src");
+const BAML_CLI_INIT_DIR: &str = "/../../baml-runtime/src/cli/initial_project/baml_src";
 const PROMPT_FIDDLE_EXAMPLE_DIR: &str =
-    concat!("/../../../typescript/apps/fiddle-web-app/public/_examples/all-projects/baml_src");
+    "/../../../typescript/apps/fiddle-web-app/public/_examples/all-projects/baml_src";
 
 fn main() {
     if std::env::var("SKIP_BAML_VALIDATION").unwrap_or_default() == "1" {

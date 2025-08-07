@@ -62,14 +62,8 @@ impl SyncNotificationHandler for DidOpenTextDocumentHandler {
             .to_file_path()
             .internal_error_msg(&format!("Could not convert URL '{url}' to file path"))?;
 
-        let project = session.get_or_create_project(&file_path);
-        if project.is_none() {
-            tracing::error!("Failed to get or create project for path: {:?}", file_path);
-            show_err_msg!("Failed to get or create project for path: {:?}", file_path);
-        } else {
-            let project = project.unwrap();
-            let version = project.lock().unwrap().get_common_generator_version();
-            if let Ok(version) = version {
+        if let Some(project) = session.get_or_create_project(&file_path) {
+            if let Ok(version) = project.lock().unwrap().get_common_generator_version() {
                 notifier
                     .0
                     .send(lsp_server::Message::Notification(
@@ -88,7 +82,11 @@ impl SyncNotificationHandler for DidOpenTextDocumentHandler {
                     ))
                     .internal_error()?;
             }
+        } else {
+            tracing::error!("Failed to get or create project for path: {:?}", file_path);
+            show_err_msg!("Failed to get or create project for path: {:?}", file_path);
         }
+
         // session.open_text_document(
         //     DocumentKey::from_path(&file_path, &file_path).internal_error()?,
         //     TextDocument::new(params.text_document.text, params.text_document.version),
