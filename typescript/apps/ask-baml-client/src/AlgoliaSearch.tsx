@@ -1,12 +1,14 @@
 'use client';
 
 import { liteClient as algoliasearch } from 'algoliasearch/lite';
+import { useAtomValue } from 'jotai';
 import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { Configure, InstantSearch, useHits, useSearchBox } from 'react-instantsearch';
 import { z } from 'zod';
 import BamlLambWhite from './baml-lamb-white.svg';
 import { ALGOLIA_SEARCH_CREDENTIALS_ENDPOINT, ALGOLIA_SEARCH_INDEX_NAME } from './constants';
+import { chatbotIsOpenAtom } from './store';
 
 
 // Zod schema for API response validation
@@ -469,12 +471,11 @@ function AskWithAIOption({
 function CustomSearchBox({
   onAskAI,
   onToggleAI,
-  isAIOpen,
 }: {
   onAskAI: (query: string) => void;
   onToggleAI?: () => void;
-  isAIOpen?: boolean;
 }) {
+  const isAIOpen = useAtomValue(chatbotIsOpenAtom);
   const { query, refine } = useSearchBox();
   const { hits } = useHits();
   const [inputValue, setInputValue] = useState(query);
@@ -853,11 +854,9 @@ function CustomHits({
 export default function AlgoliaSearch({
   onAskAI,
   onToggleAI,
-  isAIOpen,
 }: {
   onAskAI?: (query: string) => void;
   onToggleAI?: () => void;
-  isAIOpen?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [searchClient, setSearchClient] = useState<any>(null);
@@ -971,7 +970,7 @@ export default function AlgoliaSearch({
           analyticsTags={['desktop', 'docs.boundaryml.com', 'search-v3-enhanced']}
         />
 
-        <CustomSearchBox onAskAI={handleAskAI} onToggleAI={handleToggleAI} isAIOpen={isAIOpen} />
+        <CustomSearchBox onAskAI={handleAskAI} onToggleAI={handleToggleAI} />
       </InstantSearch>
     </div>
   );

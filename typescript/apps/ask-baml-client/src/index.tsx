@@ -125,51 +125,32 @@ body.resizing {
 }
 `);
 
-// Query Bridge component to connect ChatbotManager with Jotai
-function QueryBridge() {
+// Main Fern Chatbot App component
+function FernChatbotApp() {
+  const [isOpen, setIsOpen] = useAtom(chatbotIsOpenAtom);
   const setPendingQuery = useSetAtom(pendingQueryAtom);
 
+  // Handle pending queries from external calls
   useEffect(() => {
-    // Check for pending query every time component renders
     if (pendingQueryToSet) {
       setPendingQuery(pendingQueryToSet);
       pendingQueryToSet = null;
     }
   });
 
-  // Also set up a global function for ChatbotManager to trigger re-render
+  // Manage body class for CSS transitions
   useEffect(() => {
-    (window as any).__triggerQueryBridge = () => {
-      // Force a re-render by updating a dummy state
-      setPendingQuery((prev) => prev);
-    };
+    document.body.classList.toggle(OPEN, isOpen);
+  }, [isOpen]);
 
-    return () => {
-      delete (window as any).__triggerQueryBridge;
-    };
-  }, [setPendingQuery]);
-
-  return null;
-}
-
-// State Bridge component to sync atom state with non-React contexts
-function StateBridge() {
-  const [isOpen, setIsOpen] = useAtom(chatbotIsOpenAtom);
-
+  // Expose functions for non-React contexts (minimal bridge)
   useEffect(() => {
-    // Update the reference and setter for non-React contexts
     atomStateRef.isOpen = isOpen;
     setAtomState = setIsOpen;
     getAtomState = () => isOpen;
-    
-    // Update body class for CSS transitions
-    document.body.classList.toggle(OPEN, isOpen);
-
-    // Update search interface when state changes
-    updateSearchInterface();
   }, [isOpen, setIsOpen]);
 
-  return null;
+  return <ChatBot />;
 }
 
 // Error boundary component
@@ -205,35 +186,24 @@ class ErrorBoundary extends React.Component<
   }
 }
 
-// Centralized chatbot management
+// Simplified chatbot coordinator (minimal interface)
 const ChatbotManager = {
-  setOpen(flag: boolean) {
+  openWithQuery(query: string) {
+    // Set the pending query for React to pick up
+    pendingQueryToSet = query;
+    
+    // Initialize if needed and open
+    this.initialize();
     if (setAtomState) {
-      setAtomState(flag);
+      setAtomState(true);
     }
-
-    if (chatbotRoot) {
-      try {
-        chatbotRoot.render(
-          <ErrorBoundary fallback={<div className="baml-error">Chatbot failed to load</div>}>
-            <Provider>
-              <StateBridge />
-              <QueryBridge />
-              <ChatBot />
-            </Provider>
-          </ErrorBoundary>,
-        );
-      } catch (error) {
-        console.error('Failed to render chatbot:', error);
-      }
-    }
-
-    // Trigger resize after DOM changes
-    setTimeout(() => window.dispatchEvent(new Event('resize')), 10);
   },
 
   toggle() {
-    this.setOpen(!atomStateRef.isOpen);
+    this.initialize();
+    if (setAtomState) {
+      setAtomState(!atomStateRef.isOpen);
+    }
   },
 
   initialize() {
@@ -248,7 +218,7 @@ const ChatbotManager = {
         existing.remove();
       }
 
-      // Create a container for the React root - the portal will manage its own DOM
+      // Create a container for the React root
       const chatbotContainer = document.createElement('div');
       chatbotContainer.id = 'fern-chatbot-root';
       chatbotContainer.style.display = 'none'; // Hidden since portal manages its own DOM
@@ -256,32 +226,16 @@ const ChatbotManager = {
 
       chatbotRoot = createRoot(chatbotContainer);
 
-      // Initial render - state is managed by atom
-      // The StateBridge will automatically sync the atom state and apply it
+      // Render the simplified app - state is managed by React + atoms
       chatbotRoot.render(
         <ErrorBoundary fallback={<div className="baml-error">Chatbot failed to load</div>}>
           <Provider>
-            <StateBridge />
-            <QueryBridge />
-            <ChatBot />
+            <FernChatbotApp />
           </Provider>
         </ErrorBoundary>,
       );
     } catch (error) {
       console.error('Failed to initialize chatbot:', error);
-    }
-  },
-
-  openWithQuery(query: string) {
-    // Set the pending query
-    pendingQueryToSet = query;
-
-    this.initialize();
-    this.setOpen(true);
-
-    // Trigger the QueryBridge to pick up the pending query
-    if ((window as any).__triggerQueryBridge) {
-      (window as any).__triggerQueryBridge();
     }
   },
 
@@ -321,23 +275,28 @@ const ChatbotManager = {
 // Search interface root reference
 let searchInterfaceRoot: any = null;
 
+// Component that subscribes to chatbot state and renders search interface
+function SearchInterfaceWithState() {
+  const handleAskAI = (query: string) => {
+    ChatbotManager.openWithQuery(query);
+  };
+
+  const handleToggleAI = () => {
+    ChatbotManager.initialize();
+    ChatbotManager.toggle();
+  };
+
+  return <AlgoliaSearch onAskAI={handleAskAI} onToggleAI={handleToggleAI} />;
+}
+
 // Function to update search interface with current AI state
 function updateSearchInterface() {
   if (searchInterfaceRoot) {
     try {
-      const handleAskAI = (query: string) => {
-        ChatbotManager.openWithQuery(query);
-      };
-
-      const handleToggleAI = () => {
-        ChatbotManager.initialize();
-        ChatbotManager.toggle();
-      };
-
       searchInterfaceRoot.render(
         <ErrorBoundary fallback={<div className="baml-error">Search failed to load</div>}>
           <Provider>
-            <AlgoliaSearch onAskAI={handleAskAI} onToggleAI={handleToggleAI} isAIOpen={atomStateRef.isOpen} />
+            <SearchInterfaceWithState />
           </Provider>
         </ErrorBoundary>,
       );
@@ -380,19 +339,10 @@ function initializeSearchInterface() {
       // Render Algolia search component with error boundary
       searchInterfaceRoot = createRoot(algoliaContainer);
 
-      const handleAskAI = (query: string) => {
-        ChatbotManager.openWithQuery(query);
-      };
-
-      const handleToggleAI = () => {
-        ChatbotManager.initialize();
-        ChatbotManager.toggle();
-      };
-
       searchInterfaceRoot.render(
         <ErrorBoundary fallback={<div className="baml-error">Search failed to load</div>}>
           <Provider>
-            <AlgoliaSearch onAskAI={handleAskAI} onToggleAI={handleToggleAI} isAIOpen={atomStateRef.isOpen} />
+            <SearchInterfaceWithState />
           </Provider>
         </ErrorBoundary>,
       );
