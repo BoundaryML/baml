@@ -693,14 +693,20 @@ impl BamlRuntime {
                         .expr_fns
                         .iter()
                         .any(|f| f.elem.name == function_name);
+                    let call_id_stack = rctx.call_id_stack.clone();
                     if !is_expr_fn {
-                        let call_id_stack = rctx.call_id_stack.clone();
                         // TODO: is this the right naming?
                         let prepared_func =
                             match self.inner.prepare_function(function_name.clone(), params) {
                                 Ok(prepared_func) => prepared_func,
                                 Err(e) => {
-                                    return (e.into(), curr_call_id);
+                                    let err_anyhow = e.into_error();
+                                    let trace_event = TraceEvent::new_function_end(
+                                        call_id_stack.clone(),
+                                        Err((&err_anyhow).to_baml_error()),
+                                    );
+                                    BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
+                                    return (Err(err_anyhow), curr_call_id);
                                 }
                             };
 
@@ -824,14 +830,37 @@ impl BamlRuntime {
                                 total_tokens: Some(100),
                             },
                         });
-                        Ok(FunctionResult::new(
+                        let result: Result<FunctionResult> = Ok(FunctionResult::new(
                             OrchestrationScope { scope: vec![] },
                             llm_response,
                             res,
-                        ))
+                        ));
+
+                        let trace_event = TraceEvent::new_function_end(
+                            call_id_stack.clone(),
+                            match &result {
+                                Ok(result) => match result.result_with_constraints_content() {
+                                    Ok(value) => Ok(value
+                                        .0
+                                        .map_meta(|f| f.3.to_non_streaming_type(self.inner.ir()))),
+                                    Err(e) => Err((&e).to_baml_error()),
+                                },
+                                Err(e) => Err(e.to_baml_error()),
+                            },
+                        );
+                        BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
+
+                        result
                     }
                 }
-                Err(e) => Err(e),
+                Err(e) => {
+                    let trace_event = TraceEvent::new_function_end(
+                        call.new_call_id_stack.clone(),
+                        Err((&e).to_baml_error()),
+                    );
+                    BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
+                    Err(e)
+                }
             };
 
         #[cfg(not(target_arch = "wasm32"))]
