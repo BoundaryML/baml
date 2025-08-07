@@ -465,7 +465,6 @@ fn typecheck_expression(
             span,
         } => {
             // Look up function type
-            let func_type = context.infer_type(function);
             let func_name = match function.as_ref() {
                 hir::Expression::Identifier(name, _) => name.clone(),
                 _ => {
@@ -476,6 +475,17 @@ fn typecheck_expression(
                     "unknown".to_string()
                 }
             };
+            let func_type = context.get_type(&func_name).cloned();
+
+            // TODO: Handle generics uniformly, not with this kind of one-off handler.
+            if func_name == crate::builtin::functions::FETCH_VALUE {
+                if type_args.is_empty() {
+                    diagnostics.push_error(DatamodelError::new_validation_error(
+                        "Generic function std::fetch_value must have a type argument. Try adding a type argument like this: std::fetch_value<Type>",
+                        function.span().clone(),
+                    ));
+                }
+            }
 
             let (param_types, return_type) = match &func_type {
                 Some(hir::TypeM::Arrow(arrow, _)) => {
