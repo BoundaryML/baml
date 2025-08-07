@@ -62,7 +62,7 @@ fn extract_blobs_from_trace_data<'a>(
 
     // Get all blob replacements for this function call upfront
     let blob_replacements = blob_cache.get_blobs_for_function(call_id);
-    log::info!("Blob replacements: {:?}", blob_replacements.len());
+    // log::info!("Blob replacements: {:?}", blob_replacements.len());
 
     match trace_data {
         TraceData::FunctionStart { args, .. } => {
@@ -245,7 +245,10 @@ mod tests {
                     // Should have stored the blob in cache
                     assert_eq!(cache.blob_count(), 1);
                     assert!(cache.has_blob(hash.as_ref()));
-                    assert_eq!(cache.get_blob_content(hash.as_ref()).unwrap(), b"aGVsbG8gd29ybGQ="); // "hello world" base64
+                    assert_eq!(
+                        cache.get_blob_content(hash.as_ref()).unwrap(),
+                        b"aGVsbG8gd29ybGQ="
+                    ); // "hello world" base64
                     assert!(cache.blob_has_ref(hash.as_ref(), function_call_id));
                 }
                 _ => panic!("Expected BlobRef, got {:?}", media.value),
@@ -440,7 +443,10 @@ mod tests {
         // Should have the blob stored
         assert_eq!(cache.blob_count(), 1);
         assert!(cache.has_blob(&blob_hash));
-        assert_eq!(cache.get_blob_content(&blob_hash).unwrap(), base64_content.as_bytes());
+        assert_eq!(
+            cache.get_blob_content(&blob_hash).unwrap(),
+            base64_content.as_bytes()
+        );
         assert!(cache.blob_has_ref(&blob_hash, function_call_id));
     }
 
@@ -493,8 +499,14 @@ mod tests {
         // Check both blobs were stored correctly
         assert!(cache.has_blob(&blob1_hash));
         assert!(cache.has_blob(&blob2_hash));
-        assert_eq!(cache.get_blob_content(&blob1_hash).unwrap(), base64_1.as_bytes());
-        assert_eq!(cache.get_blob_content(&blob2_hash).unwrap(), base64_2.as_bytes());
+        assert_eq!(
+            cache.get_blob_content(&blob1_hash).unwrap(),
+            base64_1.as_bytes()
+        );
+        assert_eq!(
+            cache.get_blob_content(&blob2_hash).unwrap(),
+            base64_2.as_bytes()
+        );
         assert!(cache.blob_has_ref(&blob1_hash, function_call_id));
         assert!(cache.blob_has_ref(&blob2_hash, function_call_id));
     }
@@ -528,7 +540,10 @@ mod tests {
         // Should only have the one stored blob
         assert_eq!(cache.blob_count(), 1);
         assert!(cache.has_blob(&blob_hash));
-        assert_eq!(cache.get_blob_content(&blob_hash).unwrap(), stored_base64.as_bytes());
+        assert_eq!(
+            cache.get_blob_content(&blob_hash).unwrap(),
+            stored_base64.as_bytes()
+        );
         assert!(cache.blob_has_ref(&blob_hash, function_call_id));
     }
 
@@ -577,7 +592,10 @@ mod tests {
         // Should have stored the blob
         assert_eq!(cache.blob_count(), 1);
         assert!(cache.has_blob(&blob_hash));
-        assert_eq!(cache.get_blob_content(&blob_hash).unwrap(), base64_content.as_bytes());
+        assert_eq!(
+            cache.get_blob_content(&blob_hash).unwrap(),
+            base64_content.as_bytes()
+        );
         assert!(cache.blob_has_ref(&blob_hash, function_call_id));
     }
 
@@ -654,7 +672,10 @@ mod tests {
                         // Verify the blob was stored in cache
                         assert_eq!(cache.blob_count(), 1);
                         assert!(cache.has_blob(blob_hash.as_ref()));
-                        assert_eq!(cache.get_blob_content(blob_hash.as_ref()).unwrap(), b"dGVzdCBpbWFnZSBkYXRh");
+                        assert_eq!(
+                            cache.get_blob_content(blob_hash.as_ref()).unwrap(),
+                            b"dGVzdCBpbWFnZSBkYXRh"
+                        );
                         assert!(cache.blob_has_ref(blob_hash.as_ref(), function_call_id));
                     }
                     _ => panic!("Expected BlobRef, got {:?}", media.value),
@@ -729,7 +750,10 @@ mod tests {
         // Should still have the blob stored
         assert_eq!(cache.blob_count(), 1);
         assert!(cache.has_blob(&blob_hash));
-        assert_eq!(cache.get_blob_content(&blob_hash).unwrap(), base64_content.as_bytes());
+        assert_eq!(
+            cache.get_blob_content(&blob_hash).unwrap(),
+            base64_content.as_bytes()
+        );
         assert!(cache.blob_has_ref(&blob_hash, function_call_id));
     }
 }
