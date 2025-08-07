@@ -289,7 +289,7 @@ function initializeSearchInterface() {
 
       searchInterfaceRoot.render(
         <ErrorBoundary fallback={<div className="baml-error">Search failed to load</div>}>
-            <AlgoliaSearch onToggleChatbot={() => ChatbotManager.toggle()} />
+          <AlgoliaSearch onToggleChatbot={() => ChatbotManager.toggle()} />
         </ErrorBoundary>,
       );
 

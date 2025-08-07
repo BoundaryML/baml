@@ -139,17 +139,3 @@ export const isChatbotOpenAtom = atomWithStorage(
   CHATBOT_OPEN_STORAGE_KEY,
   false,
 );
-
-export const useChatbot = () => {
-  const [pendingQuery, setPendingQuery] = useAtom(pendingQueryAtom);
-  const [isChatbotOpen, setIsChatbotOpen] = useAtom(isChatbotOpenAtom);
-
-  return {
-    pendingQuery,
-    isChatbotOpen,
-    openChatbotWithQuery: (query: string) => {
-      setPendingQuery(query);
-      setIsChatbotOpen(true);
-    },
-  };
-};

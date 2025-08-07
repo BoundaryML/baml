@@ -10,6 +10,19 @@ import BamlLambWhite from './baml-lamb-white.svg';
 import { ALGOLIA_SEARCH_CREDENTIALS_ENDPOINT, ALGOLIA_SEARCH_INDEX_NAME } from './constants';
 import { isChatbotOpenAtom, pendingQueryAtom } from './store';
 
+const useChatbot = () => {
+  const [pendingQuery, setPendingQuery] = useAtom(pendingQueryAtom);
+  const [isChatbotOpen, setIsChatbotOpen] = useAtom(isChatbotOpenAtom);
+
+  return {
+    pendingQuery,
+    isChatbotOpen,
+    openChatbotWithQuery: (query: string) => {
+      setPendingQuery(query);
+      setIsChatbotOpen(true);
+    },
+  };
+};
 
 // Zod schema for API response validation
 const SearchCredentialsSchema = z.object({
@@ -469,10 +482,8 @@ function AskWithAIOption({
 
 // Custom SearchBox with integrated controls
 function CustomSearchBox({
-  // onAskBaml,
   onToggleChatbot,
 }: {
-  // onAskBaml: (query: string) => void;
   onToggleChatbot: () => void;
 }) {
   const { query, refine } = useSearchBox();
@@ -481,8 +492,7 @@ function CustomSearchBox({
   const [isFocused, setIsFocused] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const inputRef = useRef<HTMLInputElement>(null);
-  const [isChatbotOpen, setIsChatbotOpen] = useAtom(isChatbotOpenAtom);
-  const setPendingQuery = useSetAtom(pendingQueryAtom);
+  const { isChatbotOpen, openChatbotWithQuery } = useChatbot();
 
   useEffect(() => {
     setInputValue(query);
@@ -518,9 +528,7 @@ function CustomSearchBox({
   };
 
   const handleAskAI = () => {
-    setPendingQuery(inputValue);
-    setIsChatbotOpen(true)
-    // onAskBaml(inputValue);
+    openChatbotWithQuery(inputValue);
     setIsFocused(false);
   };
 
@@ -849,10 +857,8 @@ function CustomHits({
 }
 
 export default function AlgoliaSearch({
-  // onAskBaml,
   onToggleChatbot,
 }: {
-  // onAskBaml: (query: string) => void;
   onToggleChatbot: () => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
