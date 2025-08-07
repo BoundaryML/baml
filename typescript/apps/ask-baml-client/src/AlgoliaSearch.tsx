@@ -6,9 +6,8 @@ import { useEffect, useRef, useState } from 'react';
 import { Configure, InstantSearch, useHits, useSearchBox } from 'react-instantsearch';
 import { z } from 'zod';
 import BamlLambWhite from './baml-lamb-white.svg';
+import { ALGOLIA_SEARCH_CREDENTIALS_ENDPOINT, ALGOLIA_SEARCH_INDEX_NAME } from './constants';
 
-const SEARCH_INDEX_NAME = 'fern_docs_search';
-const API_ENDPOINT = 'https://docs.boundaryml.com/api/fern-docs/search/v2/key';
 
 // Zod schema for API response validation
 const SearchCredentialsSchema = z.object({
@@ -21,7 +20,7 @@ type SearchCredentials = z.infer<typeof SearchCredentialsSchema>;
 // Function to fetch Algolia search credentials from API
 async function fetchSearchCredentials(): Promise<SearchCredentials> {
   try {
-    const response = await fetch(API_ENDPOINT);
+    const response = await fetch(ALGOLIA_SEARCH_CREDENTIALS_ENDPOINT);
     if (!response.ok) {
       throw new Error(`Failed to fetch search credentials: ${response.status}`);
     }
@@ -954,7 +953,7 @@ export default function AlgoliaSearch({
   return (
     <div ref={containerRef} style={{ position: 'relative', width: '100%' }}>
       <InstantSearch
-        indexName={SEARCH_INDEX_NAME}
+        indexName={ALGOLIA_SEARCH_INDEX_NAME}
         searchClient={searchClient}
         future={{
           preserveSharedStateOnUnmount: true,

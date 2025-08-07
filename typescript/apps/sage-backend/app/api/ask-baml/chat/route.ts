@@ -2,7 +2,7 @@ import { NotionLogger } from '@/lib/notion-api';
 import { QueryRequestSchema } from '@baml/sage-interface';
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import { submitQuery } from '../../actions/query';
+import { submitQuery } from '@/app/actions/query';
 
 const notionLogger = new NotionLogger();
 

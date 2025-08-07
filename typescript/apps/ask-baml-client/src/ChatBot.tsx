@@ -12,6 +12,7 @@ import {
   resetSessionAtom,
   sessionIdAtom,
 } from './store';
+import { CHAT_ENDPOINT } from './constants';
 
 const OPEN_BY_DEFAULT = true;
 const SESSION_STORAGE_KEY = 'baml-ai-context';
@@ -63,7 +64,7 @@ const serializeError = (
 };
 
 const postDocChat = async (req: QueryRequest) => {
-  const response = await fetch(API_ENDPOINT, {
+  const response = await fetch(CHAT_ENDPOINT, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -78,11 +79,6 @@ const postDocChat = async (req: QueryRequest) => {
   const data = await response.json();
   return QueryResponseSchema.parse(data);
 };
-
-const API_ENDPOINT =
-  process.env.NODE_ENV === 'development'
-    ? 'http://localhost:4000/api/doc-chat'
-    : 'https://boundary-sage-backend.vercel.app/api/ask-baml-chat';
 
 const ChatBot: React.FC<ChatBotProps> = ({ isOpen = OPEN_BY_DEFAULT, onClose }) => {
   const [messages, setMessages] = useAtom(messagesAtom);

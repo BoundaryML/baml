@@ -4,15 +4,11 @@ import { ThumbsDown, ThumbsUp } from 'lucide-react';
 import type React from 'react';
 import { useState } from 'react';
 import { messagesAtom, sessionIdAtom } from '../store';
+import { FEEDBACK_ENDPOINT } from '../constants';
 
 interface AssistantResponseFeedbackProps {
   messageId: string;
 }
-
-const FEEDBACK_API_ENDPOINT =
-  process.env.NODE_ENV === 'development'
-    ? 'http://localhost:4000/api/feedback'
-    : 'https://boundary-sage-backend.vercel.app/api/ask-baml-feedback';
 
 export const AssistantResponseFeedback: React.FC<AssistantResponseFeedbackProps> = ({
   messageId,
@@ -96,7 +92,7 @@ export const AssistantResponseFeedback: React.FC<AssistantResponseFeedbackProps>
         messages: filteredMessages,
       };
 
-      const response = await fetch(FEEDBACK_API_ENDPOINT, {
+      const response = await fetch(FEEDBACK_ENDPOINT, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
