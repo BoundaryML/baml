@@ -28,10 +28,11 @@ export async function POST(request: NextRequest) {
 
     // Deliberately do not await these, so that the request can return immediately.
     (async () => {
+      console.info('Feedback will be logged to Notion and Slack');
       const { pageId: notionPageId } = await notionLogger.updateFeedback(feedbackData);
       const notionLink = notionPageId ? notionLogger.toUrl({ pageId: notionPageId }) : undefined;
-      console.info('notionLink', notionLink);
       await slack.sendFeedback({ ...feedbackData, notionLink });
+      console.info('Feedback logged to Notion and Slack');
     })();
 
     return NextResponse.json({
