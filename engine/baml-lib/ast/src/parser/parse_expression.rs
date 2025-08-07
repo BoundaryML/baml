@@ -34,7 +34,7 @@ fn parse_postfix_expression(
 ) -> Option<Expression> {
     let mut inner = token.into_inner();
     let primary = inner.next()?;
-    
+
     // Check if the primary token is actually a primary_expression rule
     let mut expr = match primary.as_rule() {
         Rule::primary_expression => {
@@ -42,9 +42,9 @@ fn parse_postfix_expression(
             let primary_inner = primary.into_inner().next()?;
             parse_primary_expression(primary_inner, diagnostics)?
         }
-        _ => parse_primary_expression(primary, diagnostics)?
+        _ => parse_primary_expression(primary, diagnostics)?,
     };
-    
+
     for postfix_op in inner {
         match postfix_op.as_rule() {
             Rule::postfix_operator => {
@@ -55,7 +55,11 @@ fn parse_postfix_expression(
                             let mut accessor_inner = op.into_inner();
                             if let Some(index_expr) = accessor_inner.next() {
                                 if let Some(index) = parse_expression(index_expr, diagnostics) {
-                                    expr = Expression::ArrayAccess(Box::new(expr), Box::new(index), span);
+                                    expr = Expression::ArrayAccess(
+                                        Box::new(expr),
+                                        Box::new(index),
+                                        span,
+                                    );
                                 }
                             }
                         }
@@ -74,7 +78,7 @@ fn parse_postfix_expression(
             _ => unreachable_rule!(postfix_op, Rule::postfix_expression),
         }
     }
-    
+
     Some(expr)
 }
 
@@ -101,16 +105,14 @@ fn parse_primary_expression(
         Rule::array_expression => Some(parse_array(token, diagnostics)),
         Rule::jinja_expression => Some(parse_jinja_expression(token, diagnostics)),
 
-        Rule::identifier => Some(Expression::Identifier(parse_identifier(
-            token,
-            diagnostics,
-        ))),
+        Rule::identifier => Some(Expression::Identifier(parse_identifier(token, diagnostics))),
         Rule::class_constructor => Some(parse_class_constructor(token, diagnostics)),
         Rule::fn_app => parse_fn_app(token, diagnostics),
         Rule::generic_fn_app => parse_generic_fn_app(token, diagnostics),
         Rule::lambda => parse_lambda(token, diagnostics),
-        Rule::expr_block => parse_expr_block(token, diagnostics)
-            .map(|block| Expression::ExprBlock(block, span)),
+        Rule::expr_block => {
+            parse_expr_block(token, diagnostics).map(|block| Expression::ExprBlock(block, span))
+        }
         Rule::if_expression => parse_if_expression(token, diagnostics),
 
         Rule::BLOCK_LEVEL_CATCH_ALL => {
@@ -255,7 +257,9 @@ fn parse_map_key(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expression {
     let span = diagnostics.span(token.as_span());
     if let Some(current) = token.into_inner().next() {
         return match current.as_rule() {
-            Rule::identifier => Expression::Identifier(parse_identifier(current, diagnostics)),
+            Rule::identifier => {
+                Expression::StringValue(parse_identifier(current, diagnostics).to_string(), span)
+            }
             Rule::quoted_string_literal => Expression::StringValue(
                 current.into_inner().next().unwrap().as_str().to_string(),
                 span,
@@ -281,10 +285,7 @@ fn parse_config_primary_expression(
         Rule::array_expression => Some(parse_array(token, diagnostics)),
         Rule::jinja_expression => Some(parse_jinja_expression(token, diagnostics)),
         Rule::config_map_expression => Some(parse_config_map(token, diagnostics)),
-        Rule::identifier => Some(Expression::Identifier(parse_identifier(
-            token,
-            diagnostics,
-        ))),
+        Rule::identifier => Some(Expression::Identifier(parse_identifier(token, diagnostics))),
         _ => unreachable_rule!(token, Rule::config_primary_expression),
     }
 }
