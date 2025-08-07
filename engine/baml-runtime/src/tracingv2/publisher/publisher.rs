@@ -751,7 +751,7 @@ impl BlobUploader {
                     }
                 }
                 _ = upload_interval.tick() => {
-                    log::info!("Blob uploader received tick");
+                    // log::info!("Blob uploader received tick");
                     if self.lookup.api_key().is_none() {
                         log::info!("Skipping blob upload because BOUNDARY_API_KEY is not set");
                         continue;
