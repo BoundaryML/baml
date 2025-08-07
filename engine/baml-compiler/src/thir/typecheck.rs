@@ -21,10 +21,8 @@ pub fn typecheck(hir: &Hir, diagnostics: &mut Diagnostics) -> THir<ExprMetadata>
         .collect();
 
     // Create typing context with all functions
-    let mut typing_context = TypeContext {
-        inner: BamlMap::new(),
-        classes: classes.clone(),
-    };
+    let mut typing_context = TypeContext::new();
+    typing_context.classes.extend(classes.clone());
 
     // Add expr functions to typing context
     for func in &hir.expr_functions {
@@ -120,6 +118,15 @@ pub struct TypeContext {
 }
 
 impl TypeContext {
+    pub fn new() -> Self {
+        let mut consts = BamlMap::new();
+        consts.insert("true".to_string(), Type::Bool(hir::TypeMeta::default()));
+        consts.insert("false".to_string(), Type::Bool(hir::TypeMeta::default()));
+        Self {
+            inner: consts,
+            classes: BamlMap::new(),
+        }
+    }
     pub fn get_type(&self, name: &str) -> Option<&Type> {
         self.inner.get(name)
     }

@@ -288,7 +288,8 @@ pub fn parse_if_expression(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Op
     assert_correct_parser!(token, Rule::if_expression);
     let span = diagnostics.span(token.as_span());
     let mut tokens = token.into_inner();
-    let condition = parse_expression(tokens.next()?, diagnostics)?;
+    let cond_token = tokens.next()?;
+    let condition = parse_expression(cond_token, diagnostics)?;
     let then_branch = parse_expression(tokens.next()?, diagnostics)?;
     let else_branch = parse_expression(tokens.next()?, diagnostics);
     Some(Expression::If(

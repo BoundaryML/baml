@@ -73,5 +73,5 @@ pub fn std_fetch_value_signature(return_type: Type) -> Type {
 }
 
 pub fn is_builtin_identifier(identifier: &str) -> bool {
-    identifier.starts_with("std::")
+    identifier.starts_with("std::") || identifier == "true" || identifier == "false"
 }
