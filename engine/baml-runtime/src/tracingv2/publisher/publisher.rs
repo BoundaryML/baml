@@ -786,7 +786,7 @@ impl BlobUploader {
             return Ok(());
         }
 
-        log::info!("Uploading {} blobs", blobs.len());
+        log::debug!("Uploading {} blobs", blobs.len());
 
         // Prepare metadata for the API request
         let blob_metadata: Vec<BlobMetadataItem> = blobs
@@ -814,7 +814,7 @@ impl BlobUploader {
                 return Err(e.into());
             }
         };
-        log::info!("upload_response={:?}", upload_response);
+        log::debug!("upload_response={:?}", upload_response);
 
         // Filter out blobs that already exist
         let blobs_to_upload: Vec<_> = blobs
@@ -827,7 +827,7 @@ impl BlobUploader {
             .collect();
 
         if blobs_to_upload.is_empty() {
-            log::info!("All blobs already exist, skipping upload");
+            log::debug!("All blobs already exist, skipping upload");
             return Ok(());
         }
 
@@ -868,7 +868,7 @@ impl BlobUploader {
 
         match upload_result {
             Ok(_) => {
-                log::info!("Successfully uploaded {} blobs", blobs_to_upload.len());
+                log::debug!("Successfully uploaded {} blobs", blobs_to_upload.len());
             }
             Err(e) => {
                 log::error!("Failed to upload blob batch to S3: {}", e);
