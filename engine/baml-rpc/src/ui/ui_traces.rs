@@ -81,6 +81,12 @@ pub struct ListTracesRequest {
     /// Number of traces to skip. Used for pagination. Defaults to 0 if not specified.
     #[ts(optional)]
     pub offset: Option<u32>,
+    /// Keyset cursor for pagination: fetch the next page after this id (Stripe-style).
+    #[ts(optional)]
+    pub starting_after: Option<String>,
+    /// Keyset cursor for pagination: fetch the previous page ending before this id (Stripe-style).
+    #[ts(optional)]
+    pub ending_before: Option<String>,
 
     // Lazy loading controls
     /// Whether to include direct children in the response. Defaults to false.
@@ -132,6 +138,8 @@ impl Default for ListTracesRequest {
             }),
             limit: Some(100),
             offset: Some(0),
+            starting_after: None,
+            ending_before: None,
             include_children: Some(false),
             max_depth: Some(1),
             children_limit: Some(50),
@@ -196,7 +204,15 @@ pub struct ListTracesResponse {
     pub type_definitions: Vec<ui_types::UiTypeDefinition>,
     #[ts(type = "number")]
     pub total_traces: u32, // For pagination
-    pub has_more: bool, // Whether there are more traces to load
+    /// Whether or not there are more elements available after this set.
+    /// If false, this set comprises the end of the list. (Stripe-style)
+    pub has_more: bool,
+    /// Cursor for next page (older items when ordering desc)
+    #[ts(optional)]
+    pub next_cursor: Option<String>,
+    /// Cursor for previous page (newer items when ordering desc)
+    #[ts(optional)]
+    pub prev_cursor: Option<String>,
 }
 
 pub struct ListTraces;
