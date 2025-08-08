@@ -624,7 +624,7 @@ fn typecheck_expression(
                             // Check field type if field exists in class
                             if let Some(expected_type) = class_field_types.get(name) {
                                 if let Some(actual_type) = typed_value.meta().1.as_ref() {
-                                    if !types_match(expected_type, actual_type) {
+                                    if !actual_type.is_subtype(expected_type) {
                                         let expected_str = {
                                             let doc = expected_type.to_doc();
                                             let mut buf = Vec::new();
@@ -975,41 +975,66 @@ mod tests {
     // The core typechecking logic for if expressions is implemented and works correctly.
 }
 
-/// Check if a type is optional (contains null in a union)
-fn is_optional(ty: &Type) -> bool {
-    match ty {
-        Type::Null(_) => true,
-        Type::Union(types, _) => types.iter().any(|t| matches!(t, Type::Null(_))),
-        _ => false,
-    }
-}
-
-/// Check if two types match
-fn types_match(expected: &Type, actual: &Type) -> bool {
-    match (expected, actual) {
-        (Type::Int(_), Type::Int(_)) => true,
-        (Type::String(_), Type::String(_)) => true,
-        (Type::Bool(_), Type::Bool(_)) => true,
-        (Type::Null(_), Type::Null(_)) => true,
-        (Type::Array(e, _), Type::Array(a, _)) => types_match(e, a),
-        (Type::Map(ek, ev, _), Type::Map(ak, av, _)) => types_match(ek, ak) && types_match(ev, av),
-        (Type::ClassName(e, _), Type::ClassName(a, _)) => e == a,
-        (Type::EnumName(e, _), Type::EnumName(a, _)) => e == a,
-        (Type::Union(e_types, _), Type::Union(a_types, _)) => {
-            // For unions, we need more sophisticated matching
-            // For now, just check if all actual types are in expected types
-            a_types
-                .iter()
-                .all(|a| e_types.iter().any(|e| types_match(e, a)))
-        }
-        // Allow null values for optional types
-        (Type::Union(types, _), Type::Null(_)) => types.iter().any(|t| matches!(t, Type::Null(_))),
-        _ => false,
-    }
-}
-
 impl Type {
-    fn is_optional(&self) -> bool {
-        is_optional(self)
+    /// Check if a type is optional (contains null in a union)
+    pub fn is_optional(&self) -> bool {
+        match self {
+            Type::Null(_) => true,
+            Type::Union(types, _) => types.iter().any(|t| matches!(t, Type::Null(_))),
+            _ => false,
+        }
+    }
+
+    /// Return true if `self` is a subtype of `expected`.
+    pub fn is_subtype(&self, expected: &Type) -> bool {
+        // Semantics similar to IR's `IntermediateRepr::is_subtype`:
+        // - Unions on the right: self <: (e1 | e2 | ...) if exists ei s.t. self <: ei
+        // - Unions on the left: (a1 | a2 | ...) <: expected if all ai <: expected
+        // - Arrays are covariant
+        // - Maps have contravariant keys and covariant values
+        match (self, expected) {
+            // Primitives
+            (Type::Int(_), Type::Int(_)) => true,
+            (Type::String(_), Type::String(_)) => true,
+            (Type::Bool(_), Type::Bool(_)) => true,
+            (Type::Float(_), Type::Float(_)) => true,
+            (Type::Null(_), Type::Null(_)) => true,
+
+            // Arrays: covariant element
+            (Type::Array(a_item, _), Type::Array(e_item, _)) => a_item.is_subtype(e_item),
+
+            // Maps: contravariant key, covariant value
+            (Type::Map(a_k, a_v, _), Type::Map(e_k, e_v, _)) => {
+                e_k.is_subtype(a_k) && a_v.is_subtype(e_v)
+            }
+
+            // Nominal types
+            (Type::ClassName(a, _), Type::ClassName(e, _)) => a == e,
+            (Type::EnumName(a, _), Type::EnumName(e, _)) => a == e,
+
+            // Function types: conservative check (same arity; covariant inputs/outputs)
+            (Type::Arrow(a_arrow, _), Type::Arrow(e_arrow, _)) => {
+                if a_arrow.inputs.len() != e_arrow.inputs.len() {
+                    return false;
+                }
+                if !a_arrow
+                    .inputs
+                    .iter()
+                    .zip(e_arrow.inputs.iter())
+                    .all(|(a_in, e_in)| a_in.is_subtype(e_in))
+                {
+                    return false;
+                }
+                a_arrow.output.is_subtype(&e_arrow.output)
+            }
+
+            // If expected is a union, self must be subtype of some branch
+            (a, Type::Union(e_items, _)) => e_items.iter().any(|e| a.is_subtype(e)),
+
+            // If self is a union, every branch must be a subtype of expected
+            (Type::Union(a_items, _), e) => a_items.iter().all(|a| a.is_subtype(e)),
+
+            _ => false,
+        }
     }
 }
