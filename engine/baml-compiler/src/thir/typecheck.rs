@@ -155,12 +155,7 @@ fn typecheck_block(
     for stmt in &block.statements {
         match typecheck_statement(stmt, context, diagnostics) {
             Some(typed_stmt) => {
-                // Update context with let bindings
-                if let thir::Statement::Let { name, value, .. } = &typed_stmt {
-                    if let Some(inferred_type) = value.meta().1.clone() {
-                        context.inner.insert(name.clone(), inferred_type);
-                    }
-                }
+                // Context is already updated in typecheck_statement, no need to update again
                 statements.push(typed_stmt);
             }
             None => {}
@@ -243,9 +238,14 @@ fn typecheck_statement(
         hir::Statement::Let { name, value, span } => {
             let typed_value = typecheck_expression(value, context, diagnostics);
 
-            // Infer type from the value and add to context
+            // Always add to context, even if type is unknown
+            // This ensures the variable is defined even if its initializer has errors
             if let Some(inferred_type) = typed_value.meta().1.clone() {
                 context.inner.insert(name.clone(), inferred_type);
+            } else {
+                // Add with unknown type (represented as Int for now as a placeholder)
+                // This prevents "Unknown variable" errors for variables with invalid initializers
+                context.inner.insert(name.clone(), hir::TypeM::Int(hir::TypeMeta::default()));
             }
 
             Some(thir::Statement::Let {
@@ -282,9 +282,14 @@ fn typecheck_statement(
         hir::Statement::DeclareAndAssign { name, value, span } => {
             let typed_value = typecheck_expression(value, context, diagnostics);
 
-            // Infer type from the value and add to context
+            // Always add to context, even if type is unknown
+            // This ensures the variable is defined even if its initializer has errors
             if let Some(inferred_type) = typed_value.meta().1.clone() {
                 context.inner.insert(name.clone(), inferred_type);
+            } else {
+                // Add with unknown type (represented as Int for now as a placeholder)
+                // This prevents "Unknown variable" errors for variables with invalid initializers
+                context.inner.insert(name.clone(), hir::TypeM::Int(hir::TypeMeta::default()));
             }
 
             Some(thir::Statement::DeclareAndAssign {
@@ -412,7 +417,7 @@ fn typecheck_expression(
             let var_type = context.get_type(name).cloned();
             if var_type.is_none() {
                 diagnostics.push_error(DatamodelError::new_validation_error(
-                    &format!("Unknown identifier: {}", name),
+                    &format!("Unknown variable {}", name),
                     span.clone(),
                 ));
             }
@@ -496,48 +501,56 @@ fn typecheck_expression(
                 }
             }
 
-            let (param_types, return_type) = match &func_type {
+            let (param_types, return_type, is_known_function) = match &func_type {
                 Some(hir::TypeM::Arrow(arrow, _)) => {
-                    (arrow.inputs.clone(), Some(*arrow.output.clone()))
+                    (arrow.inputs.clone(), Some(*arrow.output.clone()), true)
                 }
                 _ => {
                     diagnostics.push_error(DatamodelError::new_validation_error(
-                        &format!("Unknown function{}", func_name),
+                        &format!("Unknown function {}", func_name),
                         span.clone(),
                     ));
-                    (vec![], None)
+                    (vec![], None, false)
                 }
             };
 
             // Typecheck arguments
-            let typed_args: Vec<_> = args
-                .iter()
-                .zip(
-                    param_types
-                        .iter()
-                        .chain(std::iter::repeat(&hir::TypeM::Null(
-                            hir::TypeMeta::default(),
-                        ))),
-                )
-                .map(|(arg, expected_type)| {
-                    let typed_arg = typecheck_expression(arg, context, diagnostics);
+            let typed_args: Vec<_> = if is_known_function {
+                // Only validate arguments for known functions
+                args
+                    .iter()
+                    .zip(
+                        param_types
+                            .iter()
+                            .chain(std::iter::repeat(&hir::TypeM::Null(
+                                hir::TypeMeta::default(),
+                            ))),
+                    )
+                    .map(|(arg, expected_type)| {
+                        let typed_arg = typecheck_expression(arg, context, diagnostics);
 
-                    // Check if argument type matches expected type
-                    if let Some(arg_type) = typed_arg.meta().1.as_ref() {
-                        if !types_compatible(arg_type, expected_type) {
-                            diagnostics.push_error(DatamodelError::new_validation_error(
-                                &format!("Type mismatch in argument"),
-                                arg.span(),
-                            ));
+                        // Check if argument type matches expected type
+                        if let Some(arg_type) = typed_arg.meta().1.as_ref() {
+                            if !types_compatible(arg_type, expected_type) {
+                                diagnostics.push_error(DatamodelError::new_validation_error(
+                                    &format!("Type mismatch in argument"),
+                                    arg.span(),
+                                ));
+                            }
                         }
-                    }
 
-                    typed_arg
-                })
-                .collect();
+                        typed_arg
+                    })
+                    .collect()
+            } else {
+                // For unknown functions, just typecheck arguments without validation
+                args.iter()
+                    .map(|arg| typecheck_expression(arg, context, diagnostics))
+                    .collect()
+            };
 
-            // Check argument count
-            if args.len() != param_types.len() {
+            // Check argument count only for known functions
+            if is_known_function && args.len() != param_types.len() {
                 diagnostics.push_error(DatamodelError::new_validation_error(
                     &format!(
                         "Function {} expects {} arguments, got {}",

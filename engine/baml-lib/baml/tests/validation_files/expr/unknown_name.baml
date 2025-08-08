@@ -31,19 +31,31 @@ function Go3(x:int) -> int {
 // 11 | 
 // 12 | function Go3(x:int) -> int {
 //    | 
-// error: Unknown variable a
+// error: Error validating: Unknown variable a
 //   -->  expr/unknown_name.baml:2
 //    | 
 //  1 | function Go(x: int) -> int {
 //  2 |     let y = a;
 //    | 
-// error: Unknown variable b
+// error: Error validating: Type mismatch in argument
 //   -->  expr/unknown_name.baml:9
 //    | 
 //  8 |     let a = z;
 //  9 |     Go(z,a,b)
 //    | 
-// error: Unknown function Unknown
+// error: Error validating: Unknown variable b
+//   -->  expr/unknown_name.baml:9
+//    | 
+//  8 |     let a = z;
+//  9 |     Go(z,a,b)
+//    | 
+// error: Error validating: Function Go expects 1 arguments, got 3
+//   -->  expr/unknown_name.baml:9
+//    | 
+//  8 |     let a = z;
+//  9 |     Go(z,a,b)
+//    | 
+// error: Error validating: Unknown function Unknown
 //   -->  expr/unknown_name.baml:13
 //    | 
 // 12 | function Go3(x:int) -> int {

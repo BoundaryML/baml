@@ -38,7 +38,8 @@
       "Bash(UPDATE_EXPECT=1 cargo test secure_types)",
       "Bash(rustc:*)",
       "Bash(UPDATE_EXPECT=1 cargo test client_period_in_model_type)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(UPDATE_EXPECT=1 cargo test expr_unknown_name)"
     ],
     "deny": []
   }
