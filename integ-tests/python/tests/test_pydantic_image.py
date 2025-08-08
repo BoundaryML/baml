@@ -8,35 +8,31 @@ class Foo(pydantic.BaseModel):
 
 
 def test_model_validate_success():
-    foo_inst = Foo.model_validate(
-        {"my_image": {"url": "https://example.com/image.png"}}
-    )
+    foo_inst = Foo.model_validate({"my_image": {"url": "https://example.com/test.png"}})
     assert isinstance(foo_inst.my_image, baml_py.Image)
 
     foo_inst = Foo.model_validate(
-        {"my_image": {"url": "https://example.com/image.png", "media_type": None}}
+        {"my_image": {"url": "https://example.com/test.png", "media_type": None}}
     )
     assert isinstance(foo_inst.my_image, baml_py.Image)
 
     foo_inst = Foo.model_validate(
         {
             "my_image": {
-                "url": "https://example.com/image.png",
+                "url": "https://example.com/test.png",
                 "media_type": "image/png",
             }
         }
     )
     assert isinstance(foo_inst.my_image, baml_py.Image)
 
-    foo_inst = Foo.model_validate(
-        {"my_image": {"base64": "iVBORw0KGgoAAAANSUhEUgAAAAUA"}}
-    )
+    foo_inst = Foo.model_validate({"my_image": {"base64": "AAA"}})
     assert isinstance(foo_inst.my_image, baml_py.Image)
 
     foo_inst = Foo.model_validate(
         {
             "my_image": {
-                "base64": "iVBORw0KGgoAAAANSUhEUgAAAAUA",
+                "base64": "AAA",
                 "media_type": None,
             }
         }
@@ -46,7 +42,7 @@ def test_model_validate_success():
     foo_inst = Foo.model_validate(
         {
             "my_image": {
-                "base64": "iVBORw0KGgoAAAANSUhEUgAAAAUA",
+                "base64": "AAA",
                 "media_type": "image/png",
             }
         }
@@ -64,17 +60,17 @@ def test_model_validate_failure():
 
 
 def test_model_dump():
-    foo_inst = Foo(my_image=baml_py.Image.from_url("https://example.com/image.png"))
-    assert foo_inst.model_dump() == {
-        "my_image": {"url": "https://example.com/image.png"}
-    }
+    foo_inst = Foo(my_image=baml_py.Image.from_url("https://example.com/test.png"))
+    assert foo_inst.model_dump() == {"my_image": {"url": "https://example.com/test.png"}}
 
     foo_inst = Foo(
-        my_image=baml_py.Image.from_base64("image/png", "iVBORw0KGgoAAAANSUhEUgAAAAUA")
+        my_image=baml_py.Image.from_base64("image/png", "AAA")
     )
     assert foo_inst.model_dump() == {
         "my_image": {
-            "base64": "iVBORw0KGgoAAAANSUhEUgAAAAUA",
+            "base64": "AAA",
             "media_type": "image/png",
         }
     }
+
+
