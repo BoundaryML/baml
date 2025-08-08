@@ -1,68 +1,80 @@
-import type { Metadata } from 'next';
+import path from 'path';
+import fs from 'fs/promises';
 import dynamic from 'next/dynamic';
-import { notFound } from 'next/navigation';
-import { decodeBase64 } from '../../../lib/base64';
-import type { BAMLProject } from '../../../lib/exampleProjects';
 
-const ProjectView = dynamic(
-  () => import('../../[project_id]/_components/ProjectView'),
-  { ssr: true },
-);
+const PromptPreview = dynamic(() => import('./clientwrapper'), {});
 
-interface EmbedPageProps {
-  params: Promise<{ encodedFunction: string }>;
-}
-
-export async function generateMetadata({
-  params,
-}: EmbedPageProps): Promise<Metadata> {
+// Function to load BAML file content from the file system
+async function loadBamlFile(exampleName: string): Promise<string> {
   try {
-    const { encodedFunction } = await params;
-
-    // Decode the function data
-    const decodedData = decodeBase64(encodedFunction);
-    const project = JSON.parse(decodedData);
-
-    return {
-      title: `${project.name} — Prompt Fiddle`,
-      description: project.description || 'Embedded BAML function',
-    };
-  } catch (error) {
-    console.error('Error generating metadata for embed:', error);
-    return {
-      title: 'Embedded BAML Function — Prompt Fiddle',
-      description: 'Embedded BAML function in the playground',
-    };
-  }
-}
-
-export default async function EmbedPage({ params }: EmbedPageProps) {
-  try {
-    const { encodedFunction } = await params;
-
-    // Decode the function data
-    const decodedData = decodeBase64(encodedFunction);
-
-    let project: BAMLProject;
-    try {
-      project = JSON.parse(decodedData);
-    } catch (error) {
-      console.error('Error parsing project:', error);
-      throw new Error('Invalid project structure');
+    // Sanitize the example name to prevent directory traversal attacks
+    const sanitizedExampleName = exampleName.replace(/[^a-zA-Z0-9-_]/g, '');
+    if (sanitizedExampleName !== exampleName) {
+      console.warn(
+        `Example name was sanitized from ${exampleName} to ${sanitizedExampleName}`,
+      );
     }
 
-    // Validate the project structure
-    if (!project.name || !project.files || !Array.isArray(project.files)) {
-      throw new Error('Invalid project structure');
-    }
-
-    return (
-      <main className="flex flex-col justify-between items-center min-h-screen font-sans bg-screen">
-        <ProjectView project={project} />
-      </main>
+    const filePath = path.join(
+      process.cwd(),
+      'public',
+      '_docs',
+      sanitizedExampleName,
+      'baml_src',
+      'main.baml',
     );
+
+    // Check if the file exists
+    try {
+      await fs.access(filePath);
+    } catch (error) {
+      console.warn(
+        `BAML file not found for example ${sanitizedExampleName}, falling back to default example`,
+      );
+      return loadBamlFile('default-example');
+    }
+
+    return await fs.readFile(filePath, 'utf-8');
   } catch (error) {
-    console.error('Error loading embedded function:', error);
-    notFound();
+    console.error(`Error loading BAML file for example ${exampleName}:`, error);
+    // Return default BAML content if all else fails
+    return `
+      function Hi() -> string {
+        client "openai/gpt-4o"
+        prompt #"
+          hi there
+        "#
+      }
+
+      test HiTest {
+        functions [Hi]
+        args {
+
+        }
+      }
+    `;
   }
+}
+
+export default async function EmbedComponent({
+  searchParams,
+}: {
+  searchParams: Promise<{ id: string }>;
+}) {
+  const params = await searchParams;
+  // Get example name from URL parameters, default to 'default-example' if not provided
+  const exampleName =
+    typeof params.id === 'string' ? params.id : 'default-example';
+  console.log('exampleName', exampleName);
+
+  // Load the BAML file content
+  const bamlContent = await loadBamlFile(exampleName);
+
+  return (
+    <div className="flex justify-center items-center h-screen rounded-lg border-2 border-purple-900/30 overflow-y-clip">
+      <div className="flex w-full h-full">
+        <PromptPreview bamlContent={bamlContent} />
+      </div>
+    </div>
+  );
 }

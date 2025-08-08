@@ -18,7 +18,7 @@ import { Code, ExternalLink, Info, Link as LinkIcon } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { useEffect, useState } from 'react';
 import { SiReact } from 'react-icons/si';
-import { encodeBase64 } from '../../lib/base64';
+import { createUrl } from '../actions';
 
 const ProjectView = dynamic(
   () => import('../[project_id]/_components/ProjectView'),
@@ -31,14 +31,13 @@ export default function EmbedPage() {
   const [generatedUrl, setGeneratedUrl] = useState('');
   const [activeTab, setActiveTab] = useState('link');
 
-  const generateEmbedUrl = () => {
+  const generateEmbedUrl = async () => {
     if (!bamlFunction.trim() || !projectName.trim()) {
       setGeneratedUrl('');
       return;
     }
 
     try {
-      // Create a project object similar to what the playground expects
       const project = {
         id: 'embed-project',
         name: projectName,
@@ -52,12 +51,8 @@ export default function EmbedPage() {
         ],
       };
 
-      // Encode the project data as base64
-      const jsonString = JSON.stringify(project);
-      const encodedData = encodeBase64(jsonString);
-
-      // Create the embed URL
-      const embedUrl = `${window?.location.origin}/embed/${encodedData}`;
+      const urlId = await createUrl(project as any);
+      const embedUrl = `${window?.location.origin}/embed/${urlId}`;
       setGeneratedUrl(embedUrl);
     } catch (error) {
       console.error('Error generating embed URL:', error);
@@ -100,7 +95,7 @@ function extractPersonInfo {
   // Auto-generate URL when inputs change
   // biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
   useEffect(() => {
-    generateEmbedUrl();
+    void generateEmbedUrl();
   }, [bamlFunction, projectName]);
 
   return (

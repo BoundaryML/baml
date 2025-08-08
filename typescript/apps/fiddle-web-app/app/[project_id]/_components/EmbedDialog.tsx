@@ -15,6 +15,10 @@ import { Code, Info, Link as LinkIcon } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { useState, useEffect } from 'react';
 import { SiReact } from 'react-icons/si';
+import { useAtomValue } from 'jotai';
+import { currentEditorFilesAtom } from '../_atoms/atoms';
+import { createUrl } from '../../../app/actions';
+import type { BAMLProject } from '../../../lib/exampleProjects';
 
 const ProjectView = dynamic(() => import('./ProjectView'), { ssr: false });
 
@@ -22,19 +26,51 @@ interface EmbedDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   shareId?: string;
+  project: BAMLProject;
+  projectName: string;
 }
 
-export function EmbedDialog({ open, onOpenChange, shareId }: EmbedDialogProps) {
+export function EmbedDialog({
+  open,
+  onOpenChange,
+  shareId,
+  project,
+  projectName,
+}: EmbedDialogProps) {
   const [activeTab, setActiveTab] = useState('link');
   const [generatedUrl, setGeneratedUrl] = useState('');
+  const editorFiles = useAtomValue(currentEditorFilesAtom);
 
   useEffect(() => {
-    if (shareId && typeof window !== 'undefined') {
-      setGeneratedUrl(`${window.location.origin}/${shareId}`);
-    } else {
-      setGeneratedUrl('');
-    }
-  }, [shareId]);
+    if (!open) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        if (typeof window === 'undefined') return;
+        // Always create a fresh share URL based on current editor state
+        const urlId = await createUrl({
+          ...project,
+          name: projectName,
+          files: editorFiles,
+        } as BAMLProject);
+        if (!cancelled) {
+          setGeneratedUrl(`${window.location.origin}/embed/${urlId}`);
+        }
+      } catch (e) {
+        // Fallback to provided shareId if creation fails
+        if (!cancelled) {
+          if (shareId && typeof window !== 'undefined') {
+            setGeneratedUrl(`${window.location.origin}/embed/${shareId}`);
+          } else {
+            setGeneratedUrl('');
+          }
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, project, projectName, editorFiles, shareId]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
