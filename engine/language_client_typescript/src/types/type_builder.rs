@@ -4,6 +4,7 @@ use std::{collections::BTreeMap, ops::Deref};
 // We use NAPI-RS to expose Rust functionality to JavaScript/TypeScript
 use baml_runtime::type_builder::{self, WithMeta};
 use baml_types::{ir_type::UnionConstructor, BamlValue};
+use napi::bindgen_prelude::JavaScriptClassExt;
 use napi::{bindgen_prelude::Array, Env};
 use napi_derive::napi;
 
@@ -280,7 +281,7 @@ impl EnumValueBuilder {
 #[napi]
 impl ClassBuilder {
     #[napi]
-    pub fn list_properties(&self, env: Env) -> napi::Result<Array> {
+    pub fn list_properties<'a>(&self, env: &'a Env) -> napi::Result<Array<'a>> {
         let properties = self
             .inner
             .lock()
@@ -294,7 +295,7 @@ impl ClassBuilder {
         for (i, (name, prop_builder)) in properties.enumerate() {
             let mut tuple = env.create_array(2)?;
             tuple.set(0, env.create_string(&name)?)?;
-            tuple.set(1, prop_builder.into_instance(env)?)?;
+            tuple.set(1, prop_builder.into_instance(&env)?)?;
             js_array.set(i as u32, tuple)?;
         }
 
