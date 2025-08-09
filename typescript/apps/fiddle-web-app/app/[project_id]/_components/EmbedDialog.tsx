@@ -20,6 +20,8 @@ import { currentEditorFilesAtom } from '../_atoms/atoms';
 import { createUrl } from '../../../app/actions';
 import type { BAMLProject } from '../../../lib/exampleProjects';
 import { usePathname } from 'next/navigation';
+import { Switch } from '@baml/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@baml/ui/select';
 
 const ProjectView = dynamic(() => import('./ProjectView'), { ssr: false });
 
@@ -42,6 +44,20 @@ export function EmbedDialog({
   const [generatedUrl, setGeneratedUrl] = useState('');
   const editorFiles = useAtomValue(currentEditorFilesAtom);
   const pathname = usePathname();
+  const [showFileTree, setShowFileTree] = useState<boolean>(false);
+  const [showPlayground, setShowPlayground] = useState<boolean>(true);
+  const [defaultFile, setDefaultFile] = useState<string>('');
+  const [showFile, setShowFile] = useState<boolean>(true);
+
+  const buildUrl = (origin: string, id: string) => {
+    const url = new URL(`${origin}/embed`);
+    url.searchParams.set('id', id);
+    if (showFileTree) url.searchParams.set('showFileTree', 'true');
+    if (!showPlayground) url.searchParams.set('showPlayground', 'false');
+    if (!showFile) url.searchParams.set('showFile', 'false');
+    if (defaultFile.trim()) url.searchParams.set('defaultFile', defaultFile.trim());
+    return url.toString();
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -61,13 +77,13 @@ export function EmbedDialog({
         }
 
         if (!cancelled) {
-          setGeneratedUrl(`${window.location.origin}/embed?id=${urlId}`);
+          setGeneratedUrl(buildUrl(window.location.origin, urlId));
         }
       } catch (e) {
         // Fallback to provided shareId if creation fails
         if (!cancelled) {
           if (shareId && typeof window !== 'undefined') {
-            setGeneratedUrl(`${window.location.origin}/embed?id=${shareId}`);
+            setGeneratedUrl(buildUrl(window.location.origin, shareId));
           } else {
             setGeneratedUrl('');
           }
@@ -77,7 +93,7 @@ export function EmbedDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, project, projectName, editorFiles, shareId, pathname]);
+  }, [open, project, projectName, editorFiles, shareId, pathname, showFileTree, showPlayground, defaultFile, showFile]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -94,6 +110,43 @@ export function EmbedDialog({
         </DialogHeader>
 
         <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-3 rounded-md border">
+            <div className="flex items-center justify-between gap-3">
+              <Label htmlFor="showFileTree">Show file tree</Label>
+              <Switch id="showFileTree" checked={showFileTree} onCheckedChange={(v) => setShowFileTree(!!v)} />
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <Label htmlFor="showPlayground">Show playground</Label>
+              <Switch id="showPlayground" checked={showPlayground} onCheckedChange={(v) => setShowPlayground(!!v)} />
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <Label htmlFor="showFile">Show file</Label>
+              <Switch id="showFile" checked={showFile} onCheckedChange={(v) => setShowFile(!!v)} />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="defaultFile">Default file</Label>
+              <Select
+                value={defaultFile || undefined}
+                onValueChange={(v) => setDefaultFile(v === '__none__' ? '' : v)}
+              >
+                <SelectTrigger id="defaultFile">
+                  <SelectValue placeholder="None" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">None</SelectItem>
+                  {editorFiles
+                    .map((f) => f.path)
+                    .filter((p) => p.endsWith('.baml'))
+                    .sort((a, b) => a.localeCompare(b))
+                    .map((path) => (
+                      <SelectItem key={path} value={path}>
+                        {path}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
           <div>
             <Label>How to Use</Label>
             <p className="text-sm text-muted-foreground mt-1">

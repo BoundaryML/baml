@@ -1,15 +1,32 @@
 import dynamic from 'next/dynamic'
 import { loadProject } from '../../lib/loadProject'
+import { BrandedLoading } from '../_components/BrandedLoading'
 
 const ClientWrapper = dynamic(() => import('./clientwrapper'), {})
 
 export default async function EmbedComponent({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string }>
+  searchParams: Promise<{
+    id?: string
+    showFileTree?: string
+    fileTree?: string
+    defaultFile?: string
+    showFile?: string
+    showPlayground?: string
+    playground?: string
+  }>
 }) {
   const params = await searchParams
   const id = typeof params.id === 'string' ? params.id : undefined
+  const parseBool = (v?: string) =>
+    typeof v === 'string' ? /^(1|true|yes|on)$/i.test(v) : undefined
+
+  const showFileTree = parseBool(params.showFileTree) ?? parseBool(params.fileTree) ?? false
+  const showPlayground = parseBool(params.showPlayground ?? params.playground)
+  const showFile = parseBool(params.showFile)
+  const defaultFile =
+    typeof params.defaultFile === 'string' ? params.defaultFile : undefined
 
   if (!id) {
     return <div className='flex items-center justify-center w-screen h-screen'>No project id provided</div>
