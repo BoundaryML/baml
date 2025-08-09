@@ -33,10 +33,6 @@
       "path": "release"
     },
     {
-      "name": "sage",
-      "path": "sage"
-    },
-    {
       "name": "tools",
       "path": "tools"
     },

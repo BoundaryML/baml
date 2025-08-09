@@ -1,5 +1,6 @@
 use std::{
     fmt,
+    ops::Deref,
     sync::{Arc, Mutex},
 };
 
@@ -104,6 +105,18 @@ impl ClassBuilder {
         }
     }
 
+    // TODO: Figure out captured lifetime issue and return Iterator.
+    // Iterator that holds mutex lock seems tricky.
+    pub fn list_properties_key_value(&self) -> Vec<(String, ClassPropertyBuilder)> {
+        self.properties
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|(name, prop)| (name.clone(), prop.lock().unwrap().deref().to_owned()))
+            .collect()
+    }
+
+    // TODO: Unify function above and this one (split because of CFFI).
     pub fn list_properties(&self) -> Vec<String> {
         let properties = self.properties.lock().unwrap();
         properties.keys().cloned().collect()
@@ -122,6 +135,15 @@ impl ClassBuilder {
                 meta: Default::default(),
             }))
         }))
+    }
+
+    pub fn remove_property(&self, name: &str) {
+        let mut properties = self.properties.lock().unwrap();
+        properties.shift_remove(name);
+    }
+
+    pub fn reset(&self) {
+        self.properties.lock().unwrap().clear();
     }
 }
 
@@ -498,6 +520,14 @@ impl TypeBuilder {
             recursive_type_aliases: Default::default(),
             recursive_classes: Default::default(),
         }
+    }
+
+    pub fn reset(&self) {
+        self.classes.lock().unwrap().clear();
+        self.enums.lock().unwrap().clear();
+        self.type_aliases.lock().unwrap().clear();
+        self.recursive_type_aliases.lock().unwrap().clear();
+        self.recursive_classes.lock().unwrap().clear();
     }
 
     pub fn upsert_class(&self, name: &str) -> Arc<Mutex<ClassBuilder>> {

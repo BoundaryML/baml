@@ -16,7 +16,7 @@ export const ApiKeysDialogContent: React.FC = () => {
     syncLocalApiKeys();
   }, [syncLocalApiKeys]);
   return (
-    <div className="space-y-2 h-full overflow-y-auto">
+    <div className="space-y-2 max-h-[70vh] overflow-y-auto">
       {/* Add New Api Key Form */}
       <div className="mb-4 p-4 rounded-md border border-border flex flex-col gap-2">
         <AddApiKeyForm />

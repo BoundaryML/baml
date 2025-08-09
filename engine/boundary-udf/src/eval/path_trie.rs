@@ -196,7 +196,6 @@ fn insert_into_trie_recursive<'src>(
                     results: vec![ret_handle],
                 }),
             });
-            return;
         }
         Some(child) => {
             // match as much of the path as possible.

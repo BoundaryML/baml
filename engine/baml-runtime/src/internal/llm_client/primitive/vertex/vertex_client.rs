@@ -210,7 +210,8 @@ impl RequestBuilder for VertexClient {
         // VertexAuth can not be built in the WASM environment.
         _expose_secrets: bool,
     ) -> Result<reqwest::RequestBuilder> {
-        let vertex_auth = super::auth::VertexAuth::new(&self.properties.auth_strategy).await?;
+        let vertex_auth =
+            super::auth::VertexAuth::get_or_create(&self.properties.auth_strategy).await?;
 
         let base_url = match &self.properties.base_url_or_location {
             BaseUrlOrLocation::BaseUrl(base_url) => base_url.to_string(),
