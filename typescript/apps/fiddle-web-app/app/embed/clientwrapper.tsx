@@ -77,34 +77,39 @@ const EventListener: React.FC = () => {
 };
 
 
+type EditorFile = { path: string; content: string };
+
 interface EmbedComponentProps {
-  bamlContent: string;
+  files: EditorFile[];
 }
 
-export default function EmbedComponent({ bamlContent }: EmbedComponentProps) {
+export default function EmbedComponent({ files }: EmbedComponentProps) {
   return (
     <JotaiProvider>
-      <EmbedComponentInner bamlContent={bamlContent} />
+      <EmbedComponentInner files={files} />
     </JotaiProvider>
   );
 }
 
-function EmbedComponentInner({ bamlContent }: EmbedComponentProps) {
-  const [files, setFiles] = useAtom(filesAtom);
+function EmbedComponentInner({ files }: EmbedComponentProps) {
+  const [editorFiles, setEditorFiles] = useAtom(filesAtom);
   const [isLoading, setIsLoading] = useState(true);
   const isWasmReady = useWaitForWasm();
   const activeFileNameAtomValue = useAtomValue(activeFileNameAtom);
 
   // Use fallback active file name when WASM is not ready
-  const activeFileName = isWasmReady ? activeFileNameAtomValue : 'main.baml';
+  const fallbackFileName = files.find((f) => f.path.endsWith('.baml'))?.path || 'main.baml';
+  const activeFileName = isWasmReady ? activeFileNameAtomValue : fallbackFileName;
 
   useEffect(() => {
-    // Set the files with the BAML content passed from the server
-    setFiles({
-      'main.baml': bamlContent,
-    });
+    // Populate files atom from provided project files
+    const record: Record<string, string> = {};
+    for (const f of files) {
+      record[f.path] = f.content;
+    }
+    setEditorFiles(record);
     setIsLoading(false);
-  }, [bamlContent, setFiles]);
+  }, [files, setEditorFiles]);
 
   // Wait for WASM to be ready before rendering
   if (isLoading || !isWasmReady) {
@@ -127,20 +132,19 @@ function EmbedComponentInner({ bamlContent }: EmbedComponentProps) {
             {activeFileName && (
               <CodeMirrorViewer
                 lang="baml"
-                fileContent={{
-                  code: files[activeFileName] || '',
+                 fileContent={{
+                  code: editorFiles[activeFileName] || '',
                   language: 'baml',
                   id: activeFileName,
                 }}
                 hideLineNumbers={true}
                 shouldScrollDown={false}
-                onContentChange={(v: string) => {
+                 onContentChange={(v: string) => {
                   const newFiles: Record<string, string> = {};
-                  Object.entries(files).map(([key, value]) => {
-                    const newVal = key === activeFileName ? v : value;
-                    newFiles[key] = newVal;
+                  Object.entries(editorFiles).forEach(([key, value]) => {
+                    newFiles[key] = key === activeFileName ? v : value;
                   });
-                  setFiles(newFiles);
+                  setEditorFiles(newFiles);
                 }}
               />
             )}

@@ -19,6 +19,7 @@ import { useAtomValue } from 'jotai';
 import { currentEditorFilesAtom } from '../_atoms/atoms';
 import { createUrl } from '../../../app/actions';
 import type { BAMLProject } from '../../../lib/exampleProjects';
+import { usePathname } from 'next/navigation';
 
 const ProjectView = dynamic(() => import('./ProjectView'), { ssr: false });
 
@@ -40,6 +41,7 @@ export function EmbedDialog({
   const [activeTab, setActiveTab] = useState('link');
   const [generatedUrl, setGeneratedUrl] = useState('');
   const editorFiles = useAtomValue(currentEditorFilesAtom);
+  const pathname = usePathname();
 
   useEffect(() => {
     if (!open) return;
@@ -47,20 +49,25 @@ export function EmbedDialog({
     (async () => {
       try {
         if (typeof window === 'undefined') return;
-        // Always create a fresh share URL based on current editor state
-        const urlId = await createUrl({
-          ...project,
-          name: projectName,
-          files: editorFiles,
-        } as BAMLProject);
+
+        // Prefer existing id from URL, otherwise create a new one like the Share button
+        let urlId = pathname?.split('/')[1];
+        if (!urlId || urlId === 'new-project') {
+          urlId = await createUrl({
+            ...project,
+            name: projectName,
+            files: editorFiles,
+          } as BAMLProject);
+        }
+
         if (!cancelled) {
-          setGeneratedUrl(`${window.location.origin}/embed/${urlId}`);
+          setGeneratedUrl(`${window.location.origin}/embed?id=${urlId}`);
         }
       } catch (e) {
         // Fallback to provided shareId if creation fails
         if (!cancelled) {
           if (shareId && typeof window !== 'undefined') {
-            setGeneratedUrl(`${window.location.origin}/embed/${shareId}`);
+            setGeneratedUrl(`${window.location.origin}/embed?id=${shareId}`);
           } else {
             setGeneratedUrl('');
           }
@@ -70,7 +77,7 @@ export function EmbedDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, project, projectName, editorFiles, shareId]);
+  }, [open, project, projectName, editorFiles, shareId, pathname]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
