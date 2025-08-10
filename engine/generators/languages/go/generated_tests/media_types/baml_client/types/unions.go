@@ -175,7 +175,7 @@ func (u *Union4AudioOrImageOrPDFOrVideo) IsImage() bool {
 	return u.variant == "Image"
 }
 
-func (u *Union4AudioOrImageOrPDFOrVideo) Image() *Image {
+func (u *Union4AudioOrImageOrPDFOrVideo) AsImage() *Image {
 	if u.variant != "Image" {
 		return nil
 	}
@@ -207,7 +207,7 @@ func (u *Union4AudioOrImageOrPDFOrVideo) IsAudio() bool {
 	return u.variant == "Audio"
 }
 
-func (u *Union4AudioOrImageOrPDFOrVideo) Audio() *Audio {
+func (u *Union4AudioOrImageOrPDFOrVideo) AsAudio() *Audio {
 	if u.variant != "Audio" {
 		return nil
 	}
@@ -239,7 +239,7 @@ func (u *Union4AudioOrImageOrPDFOrVideo) IsPDF() bool {
 	return u.variant == "PDF"
 }
 
-func (u *Union4AudioOrImageOrPDFOrVideo) PDF() *PDF {
+func (u *Union4AudioOrImageOrPDFOrVideo) AsPDF() *PDF {
 	if u.variant != "PDF" {
 		return nil
 	}
@@ -271,7 +271,7 @@ func (u *Union4AudioOrImageOrPDFOrVideo) IsVideo() bool {
 	return u.variant == "Video"
 }
 
-func (u *Union4AudioOrImageOrPDFOrVideo) Video() *Video {
+func (u *Union4AudioOrImageOrPDFOrVideo) AsVideo() *Video {
 	if u.variant != "Video" {
 		return nil
 	}

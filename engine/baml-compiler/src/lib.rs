@@ -1,6 +1,9 @@
 pub mod builtin;
 pub mod hir;
 pub mod thir;
+pub mod codegen;
+
+pub use codegen::compile;
 
 use anyhow::Context;
 

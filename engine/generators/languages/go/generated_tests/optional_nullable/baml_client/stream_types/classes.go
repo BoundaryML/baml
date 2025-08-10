@@ -52,7 +52,9 @@ func (c *ComplexOptional) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeM
 			c.Mapping = baml.Decode(valueHolder).Interface().(map[string]*OptionalValue)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class ComplexOptional", key))
+
 		}
 	}
 
@@ -139,7 +141,9 @@ func (c *MixedOptionalNullable) Decode(holder *cffi.CFFIValueClass, typeMap baml
 			c.TertiaryUser = baml.Decode(valueHolder).Interface().(*User)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class MixedOptionalNullable", key))
+
 		}
 	}
 
@@ -224,7 +228,9 @@ func (c *NullableTypes) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap
 			c.NullableObject = baml.Decode(valueHolder).Interface().(*User)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class NullableTypes", key))
+
 		}
 	}
 
@@ -289,7 +295,9 @@ func (c *OptionalData) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap)
 			c.Enabled = baml.Decode(valueHolder).Interface().(*bool)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class OptionalData", key))
+
 		}
 	}
 
@@ -368,7 +376,9 @@ func (c *OptionalFields) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMa
 			c.OptionalMap = baml.Decode(valueHolder).Interface().(*map[string]string)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class OptionalFields", key))
+
 		}
 	}
 
@@ -441,7 +451,9 @@ func (c *OptionalItem) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap)
 			c.Metadata = baml.Decode(valueHolder).Interface().(*map[string]string)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class OptionalItem", key))
+
 		}
 	}
 
@@ -498,7 +510,9 @@ func (c *OptionalValue) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap
 			c.Optional = baml.Decode(valueHolder).Interface().(*string)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class OptionalValue", key))
+
 		}
 	}
 
@@ -555,7 +569,9 @@ func (c *Product) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.Price = baml.Decode(valueHolder).Interface().(*float64)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class Product", key))
+
 		}
 	}
 
@@ -618,7 +634,9 @@ func (c *UnionWithNull) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap
 			c.ComplexUnion = baml.Decode(valueHolder).Interface().(*Union2ProductOrUser)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class UnionWithNull", key))
+
 		}
 	}
 
@@ -683,7 +701,9 @@ func (c *User) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.Phone = baml.Decode(valueHolder).Interface().(*string)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class User", key))
+
 		}
 	}
 

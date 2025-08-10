@@ -64,6 +64,10 @@ func (*stream) PersonTest(ctx context.Context, opts ...CallOptionFunc) (<-chan S
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues

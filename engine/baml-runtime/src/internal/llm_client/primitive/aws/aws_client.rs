@@ -674,8 +674,8 @@ impl WithStreamChat for AwsClient {
                     message: format!("{e:#?}"),
                     code: match e {
                         SdkError::ConstructionFailure(_) => ErrorCode::Other(2),
-                        SdkError::TimeoutError(_) => ErrorCode::Other(2),
-                        SdkError::DispatchFailure(_) => ErrorCode::Other(2),
+                        SdkError::TimeoutError(_) => ErrorCode::ServerError,
+                        SdkError::DispatchFailure(_) => ErrorCode::ServerError,
                         SdkError::ResponseError(e) => {
                             ErrorCode::UnsupportedResponse(e.raw().status().as_u16())
                         }

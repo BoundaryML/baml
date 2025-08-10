@@ -1,18 +1,22 @@
-import * as React from 'react';
-import { Search } from 'lucide-react';
 import { Label } from '@baml/ui/label';
 import {
   SidebarGroup,
   SidebarGroupContent,
   SidebarInput,
 } from '@baml/ui/sidebar';
+import { Search } from 'lucide-react';
+import type * as React from 'react';
 
 interface SearchFormProps extends React.ComponentProps<'form'> {
   searchTerm: string;
   onSearchChange: (value: string) => void;
 }
 
-export function SearchForm({ searchTerm, onSearchChange, ...props }: SearchFormProps) {
+export function SearchForm({
+  searchTerm,
+  onSearchChange,
+  ...props
+}: SearchFormProps) {
   return (
     <form {...props}>
       <SidebarGroup className="py-0">

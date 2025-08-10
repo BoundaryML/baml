@@ -11,7 +11,8 @@
     "integ-tests:dotenv": "tsc && pnpm test -- --silent false --testTimeout 30000",
     "generate": "baml-cli generate --from ../baml_src",
     "memory-test": "BAML_LOG=info infisical run --env=test -- pnpm test -- --silent false --testTimeout 60000 -t 'memory'",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:debug": "cd ../../engine/language_client_typescript && pnpm build:debug"
   },
   "keywords": [],
   "author": "",

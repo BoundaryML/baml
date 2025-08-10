@@ -38,9 +38,11 @@ func (m *mediaHolder) Encode() (*cffi.CFFIValueHolder, error) {
 		return nil, err
 	}
 	return &cffi.CFFIValueHolder{
-		Value: &cffi.CFFIValueHolder_MediaValue{
-			MediaValue: &cffi.CFFIValueMedia{
-				MediaObject: raw_objects.EncodeRawObject(m),
+		Value: &cffi.CFFIValueHolder_ObjectValue{
+			ObjectValue: &cffi.CFFIValueRawObject{
+				Object: &cffi.CFFIValueRawObject_Media{
+					Media: raw_objects.EncodeRawObject(m),
+				},
 			},
 		},
 		Type: &cffi.CFFIFieldTypeHolder{
@@ -151,6 +153,24 @@ func (m *mediaHolder) MimeType() (*string, error) {
 	}
 
 	return &as_mime_type, nil
+}
+
+func (m *mediaHolder) IsUrl() (bool, error) {
+	result, err := raw_objects.CallMethod(m, "is_url", nil)
+	if err != nil {
+		return false, fmt.Errorf("failed to get is url: %w", err)
+	}
+
+	return result.(bool), nil
+}
+
+func (m *mediaHolder) IsBase64() (bool, error) {
+	result, err := raw_objects.CallMethod(m, "is_base64", nil)
+	if err != nil {
+		return false, fmt.Errorf("failed to get is base64: %w", err)
+	}
+
+	return result.(bool), nil
 }
 
 func (m *mediaHolder) AsUrl() (*string, error) {

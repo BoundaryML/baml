@@ -21,6 +21,121 @@ use crate::deserializer::{
 type FieldValue = (Name, TypeIR, Option<String>, bool);
 
 impl TypeCoercer for Class {
+    fn try_cast(
+        &self,
+        ctx: &ParsingContext,
+        target: &TypeIR,
+        value: Option<&crate::jsonish::Value>,
+    ) -> Option<BamlValueWithFlags> {
+        // Only handle object values for class types
+        let Some(crate::jsonish::Value::Object(obj, completion_state)) = value else {
+            return None;
+        };
+
+        // If this class has @@stream.done and we're in streaming mode,
+        // reject incomplete objects
+        if self.streaming_behavior.done
+            && ctx.do_not_use_mode == baml_types::StreamingMode::Streaming
+            && completion_state == &baml_types::CompletionState::Incomplete
+        {
+            log::debug!(
+                "Class {} has @@stream.done but object is incomplete",
+                self.name.real_name()
+            );
+            return None;
+        }
+
+        let ctx = {
+            let cls_value_pair = (self.name.real_name().to_string(), value.unwrap().to_owned());
+
+            // If this combination has been visited bail out.
+            if ctx.visited_during_try_cast.contains(&cls_value_pair) {
+                return None;
+            }
+
+            // Mark this class as visited for the duration of this function
+            // call. Further recursion from within this function will see that
+            // the class has already been visited and stop recursing. Different
+            // calls to this function for other fields pointing to the same
+            // recursive class should start from scratch with an empty visited
+            // set so they will not fail because this class has already been
+            // coerced for a different field.
+            &ctx.visit_class_value_pair(cls_value_pair, false)
+        };
+
+        #[derive(Debug)]
+        enum Triple {
+            Pending,
+            NotPresent,
+            Present(Box<BamlValueWithFlags>),
+        }
+
+        let mut fill_result = self
+            .fields
+            .iter()
+            .map(|(name, field_type, _, streaming_needed)| {
+                (
+                    name.rendered_name(),
+                    (name, field_type, *streaming_needed, Triple::Pending),
+                )
+            })
+            .collect::<BamlMap<_, _>>();
+
+        let flags = DeserializerConditions::new();
+        for (k, v) in obj.iter() {
+            if let Some((_, field_type, streaming_needed, val)) = fill_result.get_mut(k.as_str()) {
+                if matches!(val, Triple::Present(_)) {
+                    continue;
+                }
+                if let Some(cast_value) = field_type.try_cast(ctx, field_type, Some(v)) {
+                    *val = Triple::Present(Box::new(cast_value));
+                } else {
+                    return None;
+                }
+            } else {
+                // In try_cast mode, reject objects with extra keys for stricter matching
+                return None;
+            }
+        }
+
+        let mut result = BamlMap::new();
+        for (_, (name, field_type, streaming_needed, val)) in fill_result.into_iter() {
+            if let Triple::Present(ref val_ref) = val {
+                // Check if field is required (non-optional) and is incomplete in streaming mode
+                if !field_type.is_optional()
+                    && ctx.do_not_use_mode == baml_types::StreamingMode::Streaming
+                    && val_ref
+                        .conditions()
+                        .flags
+                        .iter()
+                        .any(|f| matches!(f, Flag::Incomplete))
+                {
+                    return None;
+                }
+            }
+
+            if let Triple::Present(val) = val {
+                result.insert(name.real_name().to_string(), *val);
+            } else if field_type.is_optional() {
+                let mut null_value =
+                    BamlValueWithFlags::Null(field_type.clone(), Default::default());
+                null_value.add_flag(Flag::OptionalDefaultFromNoValue);
+                null_value.add_flag(Flag::Pending);
+                result.insert(name.real_name().to_string(), null_value);
+            } else {
+                return None;
+            }
+        }
+
+        let result = BamlValueWithFlags::Class(
+            self.name.real_name().into(),
+            flags.clone(),
+            target.clone(),
+            result,
+        );
+
+        Some(result)
+    }
     fn coerce(
         &self,
         ctx: &ParsingContext,
@@ -43,7 +158,7 @@ impl TypeCoercer for Class {
             let cls_value_pair = (self.name.real_name().to_string(), v.to_owned());
 
             // If this combination has been visited bail out.
-            if ctx.visited.contains(&cls_value_pair) {
+            if ctx.visited_during_coerce.contains(&cls_value_pair) {
                 return Err(ctx.error_circular_reference(self.name.real_name(), v));
             }
 
@@ -54,7 +169,7 @@ impl TypeCoercer for Class {
             // recursive class should start from scratch with an empty visited
             // set so they will not fail because this class has already been
             // coerced for a different field.
-            nested_ctx = Some(ctx.visit_class_value_pair(cls_value_pair));
+            nested_ctx = Some(ctx.visit_class_value_pair(cls_value_pair, true));
         }
 
         // Now just maintain the previous context or get the new one and proceed

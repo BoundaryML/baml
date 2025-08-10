@@ -1,6 +1,5 @@
 'use client';
 
-import React from 'react';
 import {
   Dialog,
   DialogContent,
@@ -8,15 +7,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@baml/ui/dialog';
-import { ApiKeysDialogContent } from './dialog-content';
 import { useAtom } from 'jotai';
+import type React from 'react';
 import { showApiKeyDialogAtom } from './atoms';
+import { ApiKeysDialogContent } from './dialog-content';
 
 export const ApiKeysDialog: React.FC = () => {
   const [showDialog, setShowDialog] = useAtom(showApiKeyDialogAtom);
   return (
     <Dialog open={showDialog} onOpenChange={setShowDialog}>
-      <DialogContent className="min-w-0 md:min-w-2xl">
+      <DialogContent className="min-w-11/12 md:min-w-2xl max-h-11/12">
         <DialogHeader>
           <DialogTitle>API Keys</DialogTitle>
           <DialogDescription>
@@ -33,9 +33,8 @@ export const ApiKeysDialog: React.FC = () => {
             </p>
           </DialogDescription>
         </DialogHeader>
-          <ApiKeysDialogContent />
+        <ApiKeysDialogContent />
       </DialogContent>
     </Dialog>
   );
 };
-

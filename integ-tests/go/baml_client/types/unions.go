@@ -131,7 +131,7 @@ func (u *Union2BoolOrFloat) IsFloat() bool {
 	return u.variant == "Float"
 }
 
-func (u *Union2BoolOrFloat) Float() *float64 {
+func (u *Union2BoolOrFloat) AsFloat() *float64 {
 	if u.variant != "Float" {
 		return nil
 	}
@@ -159,7 +159,7 @@ func (u *Union2BoolOrFloat) IsBool() bool {
 	return u.variant == "Bool"
 }
 
-func (u *Union2BoolOrFloat) Bool() *bool {
+func (u *Union2BoolOrFloat) AsBool() *bool {
 	if u.variant != "Bool" {
 		return nil
 	}
@@ -276,7 +276,7 @@ func (u *Union2BoolOrString) IsString() bool {
 	return u.variant == "String"
 }
 
-func (u *Union2BoolOrString) String() *string {
+func (u *Union2BoolOrString) AsString() *string {
 	if u.variant != "String" {
 		return nil
 	}
@@ -304,7 +304,7 @@ func (u *Union2BoolOrString) IsBool() bool {
 	return u.variant == "Bool"
 }
 
-func (u *Union2BoolOrString) Bool() *bool {
+func (u *Union2BoolOrString) AsBool() *bool {
 	if u.variant != "Bool" {
 		return nil
 	}
@@ -421,7 +421,7 @@ func (u *Union2EarthlingOrMartian) IsMartian() bool {
 	return u.variant == "Martian"
 }
 
-func (u *Union2EarthlingOrMartian) Martian() *Martian {
+func (u *Union2EarthlingOrMartian) AsMartian() *Martian {
 	if u.variant != "Martian" {
 		return nil
 	}
@@ -449,7 +449,7 @@ func (u *Union2EarthlingOrMartian) IsEarthling() bool {
 	return u.variant == "Earthling"
 }
 
-func (u *Union2EarthlingOrMartian) Earthling() *Earthling {
+func (u *Union2EarthlingOrMartian) AsEarthling() *Earthling {
 	if u.variant != "Earthling" {
 		return nil
 	}
@@ -566,7 +566,7 @@ func (u *Union2EmailAddressOrPhoneNumber) IsPhoneNumber() bool {
 	return u.variant == "PhoneNumber"
 }
 
-func (u *Union2EmailAddressOrPhoneNumber) PhoneNumber() *PhoneNumber {
+func (u *Union2EmailAddressOrPhoneNumber) AsPhoneNumber() *PhoneNumber {
 	if u.variant != "PhoneNumber" {
 		return nil
 	}
@@ -594,7 +594,7 @@ func (u *Union2EmailAddressOrPhoneNumber) IsEmailAddress() bool {
 	return u.variant == "EmailAddress"
 }
 
-func (u *Union2EmailAddressOrPhoneNumber) EmailAddress() *EmailAddress {
+func (u *Union2EmailAddressOrPhoneNumber) AsEmailAddress() *EmailAddress {
 	if u.variant != "EmailAddress" {
 		return nil
 	}
@@ -711,7 +711,7 @@ func (u *Union2EventOrResume) IsResume() bool {
 	return u.variant == "Resume"
 }
 
-func (u *Union2EventOrResume) Resume() *Resume {
+func (u *Union2EventOrResume) AsResume() *Resume {
 	if u.variant != "Resume" {
 		return nil
 	}
@@ -739,7 +739,7 @@ func (u *Union2EventOrResume) IsEvent() bool {
 	return u.variant == "Event"
 }
 
-func (u *Union2EventOrResume) Event() *Event {
+func (u *Union2EventOrResume) AsEvent() *Event {
 	if u.variant != "Event" {
 		return nil
 	}
@@ -856,7 +856,7 @@ func (u *Union2FloatOrInt) IsInt() bool {
 	return u.variant == "Int"
 }
 
-func (u *Union2FloatOrInt) Int() *int64 {
+func (u *Union2FloatOrInt) AsInt() *int64 {
 	if u.variant != "Int" {
 		return nil
 	}
@@ -884,7 +884,7 @@ func (u *Union2FloatOrInt) IsFloat() bool {
 	return u.variant == "Float"
 }
 
-func (u *Union2FloatOrInt) Float() *float64 {
+func (u *Union2FloatOrInt) AsFloat() *float64 {
 	if u.variant != "Float" {
 		return nil
 	}
@@ -1001,7 +1001,7 @@ func (u *Union2ImageOrString) IsImage() bool {
 	return u.variant == "Image"
 }
 
-func (u *Union2ImageOrString) Image() *Image {
+func (u *Union2ImageOrString) AsImage() *Image {
 	if u.variant != "Image" {
 		return nil
 	}
@@ -1029,7 +1029,7 @@ func (u *Union2ImageOrString) IsString() bool {
 	return u.variant == "String"
 }
 
-func (u *Union2ImageOrString) String() *string {
+func (u *Union2ImageOrString) AsString() *string {
 	if u.variant != "String" {
 		return nil
 	}
@@ -1146,7 +1146,7 @@ func (u *Union2IntOrString) IsString() bool {
 	return u.variant == "String"
 }
 
-func (u *Union2IntOrString) String() *string {
+func (u *Union2IntOrString) AsString() *string {
 	if u.variant != "String" {
 		return nil
 	}
@@ -1174,7 +1174,7 @@ func (u *Union2IntOrString) IsInt() bool {
 	return u.variant == "Int"
 }
 
-func (u *Union2IntOrString) Int() *int64 {
+func (u *Union2IntOrString) AsInt() *int64 {
 	if u.variant != "Int" {
 		return nil
 	}
@@ -1291,7 +1291,7 @@ func (u *Union2JsonTemplateOrSimpleTag) IsSimpleTag() bool {
 	return u.variant == "SimpleTag"
 }
 
-func (u *Union2JsonTemplateOrSimpleTag) SimpleTag() *SimpleTag {
+func (u *Union2JsonTemplateOrSimpleTag) AsSimpleTag() *SimpleTag {
 	if u.variant != "SimpleTag" {
 		return nil
 	}
@@ -1319,7 +1319,7 @@ func (u *Union2JsonTemplateOrSimpleTag) IsJsonTemplate() bool {
 	return u.variant == "JsonTemplate"
 }
 
-func (u *Union2JsonTemplateOrSimpleTag) JsonTemplate() *JsonTemplate {
+func (u *Union2JsonTemplateOrSimpleTag) AsJsonTemplate() *JsonTemplate {
 	if u.variant != "JsonTemplate" {
 		return nil
 	}
@@ -1440,7 +1440,7 @@ func (u *Union2KbarisaOrKox_burger) IsKbarisa() bool {
 	return u.variant == "Kbarisa"
 }
 
-func (u *Union2KbarisaOrKox_burger) Kbarisa() *string {
+func (u *Union2KbarisaOrKox_burger) AsKbarisa() *string {
 	if u.variant != "Kbarisa" {
 		return nil
 	}
@@ -1472,7 +1472,7 @@ func (u *Union2KbarisaOrKox_burger) IsKox_burger() bool {
 	return u.variant == "Kox_burger"
 }
 
-func (u *Union2KbarisaOrKox_burger) Kox_burger() *string {
+func (u *Union2KbarisaOrKox_burger) AsKox_burger() *string {
 	if u.variant != "Kox_burger" {
 		return nil
 	}
@@ -1593,7 +1593,7 @@ func (u *Union2KbreakfastOrKdinner) IsKbreakfast() bool {
 	return u.variant == "Kbreakfast"
 }
 
-func (u *Union2KbreakfastOrKdinner) Kbreakfast() *string {
+func (u *Union2KbreakfastOrKdinner) AsKbreakfast() *string {
 	if u.variant != "Kbreakfast" {
 		return nil
 	}
@@ -1625,7 +1625,7 @@ func (u *Union2KbreakfastOrKdinner) IsKdinner() bool {
 	return u.variant == "Kdinner"
 }
 
-func (u *Union2KbreakfastOrKdinner) Kdinner() *string {
+func (u *Union2KbreakfastOrKdinner) AsKdinner() *string {
 	if u.variant != "Kdinner" {
 		return nil
 	}
@@ -1746,7 +1746,7 @@ func (u *Union2KcuriosityOrKpersonal_finance) IsKcuriosity() bool {
 	return u.variant == "Kcuriosity"
 }
 
-func (u *Union2KcuriosityOrKpersonal_finance) Kcuriosity() *string {
+func (u *Union2KcuriosityOrKpersonal_finance) AsKcuriosity() *string {
 	if u.variant != "Kcuriosity" {
 		return nil
 	}
@@ -1778,7 +1778,7 @@ func (u *Union2KcuriosityOrKpersonal_finance) IsKpersonal_finance() bool {
 	return u.variant == "Kpersonal_finance"
 }
 
-func (u *Union2KcuriosityOrKpersonal_finance) Kpersonal_finance() *string {
+func (u *Union2KcuriosityOrKpersonal_finance) AsKpersonal_finance() *string {
 	if u.variant != "Kpersonal_finance" {
 		return nil
 	}
@@ -1895,7 +1895,7 @@ func (u *Union2ListBoolOrListInt) IsListBool() bool {
 	return u.variant == "ListBool"
 }
 
-func (u *Union2ListBoolOrListInt) ListBool() *[]bool {
+func (u *Union2ListBoolOrListInt) AsListBool() *[]bool {
 	if u.variant != "ListBool" {
 		return nil
 	}
@@ -1923,7 +1923,7 @@ func (u *Union2ListBoolOrListInt) IsListInt() bool {
 	return u.variant == "ListInt"
 }
 
-func (u *Union2ListBoolOrListInt) ListInt() *[]int64 {
+func (u *Union2ListBoolOrListInt) AsListInt() *[]int64 {
 	if u.variant != "ListInt" {
 		return nil
 	}
@@ -2040,7 +2040,7 @@ func (u *Union2ListNestedOrString) IsString() bool {
 	return u.variant == "String"
 }
 
-func (u *Union2ListNestedOrString) String() *string {
+func (u *Union2ListNestedOrString) AsString() *string {
 	if u.variant != "String" {
 		return nil
 	}
@@ -2068,7 +2068,7 @@ func (u *Union2ListNestedOrString) IsListNested() bool {
 	return u.variant == "ListNested"
 }
 
-func (u *Union2ListNestedOrString) ListNested() *[]Nested {
+func (u *Union2ListNestedOrString) AsListNested() *[]Nested {
 	if u.variant != "ListNested" {
 		return nil
 	}
@@ -2185,7 +2185,7 @@ func (u *Union2LiteralClassOneOrLiteralClassTwo) IsLiteralClassOne() bool {
 	return u.variant == "LiteralClassOne"
 }
 
-func (u *Union2LiteralClassOneOrLiteralClassTwo) LiteralClassOne() *LiteralClassOne {
+func (u *Union2LiteralClassOneOrLiteralClassTwo) AsLiteralClassOne() *LiteralClassOne {
 	if u.variant != "LiteralClassOne" {
 		return nil
 	}
@@ -2213,7 +2213,7 @@ func (u *Union2LiteralClassOneOrLiteralClassTwo) IsLiteralClassTwo() bool {
 	return u.variant == "LiteralClassTwo"
 }
 
-func (u *Union2LiteralClassOneOrLiteralClassTwo) LiteralClassTwo() *LiteralClassTwo {
+func (u *Union2LiteralClassOneOrLiteralClassTwo) AsLiteralClassTwo() *LiteralClassTwo {
 	if u.variant != "LiteralClassTwo" {
 		return nil
 	}
@@ -2330,7 +2330,7 @@ func (u *Union2MapStringKeyRecursiveUnionValueOrString) IsString() bool {
 	return u.variant == "String"
 }
 
-func (u *Union2MapStringKeyRecursiveUnionValueOrString) String() *string {
+func (u *Union2MapStringKeyRecursiveUnionValueOrString) AsString() *string {
 	if u.variant != "String" {
 		return nil
 	}
@@ -2358,7 +2358,7 @@ func (u *Union2MapStringKeyRecursiveUnionValueOrString) IsMapStringKeyRecursiveU
 	return u.variant == "MapStringKeyRecursiveUnionValue"
 }
 
-func (u *Union2MapStringKeyRecursiveUnionValueOrString) MapStringKeyRecursiveUnionValue() *map[string]RecursiveUnion {
+func (u *Union2MapStringKeyRecursiveUnionValueOrString) AsMapStringKeyRecursiveUnionValue() *map[string]RecursiveUnion {
 	if u.variant != "MapStringKeyRecursiveUnionValue" {
 		return nil
 	}
@@ -2475,7 +2475,7 @@ func (u *Union2NestedOrString) IsNested() bool {
 	return u.variant == "Nested"
 }
 
-func (u *Union2NestedOrString) Nested() *Nested {
+func (u *Union2NestedOrString) AsNested() *Nested {
 	if u.variant != "Nested" {
 		return nil
 	}
@@ -2503,7 +2503,7 @@ func (u *Union2NestedOrString) IsString() bool {
 	return u.variant == "String"
 }
 
-func (u *Union2NestedOrString) String() *string {
+func (u *Union2NestedOrString) AsString() *string {
 	if u.variant != "String" {
 		return nil
 	}
@@ -2620,7 +2620,7 @@ func (u *Union2OriginalAOrOriginalB) IsOriginalA() bool {
 	return u.variant == "OriginalA"
 }
 
-func (u *Union2OriginalAOrOriginalB) OriginalA() *OriginalA {
+func (u *Union2OriginalAOrOriginalB) AsOriginalA() *OriginalA {
 	if u.variant != "OriginalA" {
 		return nil
 	}
@@ -2648,7 +2648,7 @@ func (u *Union2OriginalAOrOriginalB) IsOriginalB() bool {
 	return u.variant == "OriginalB"
 }
 
-func (u *Union2OriginalAOrOriginalB) OriginalB() *OriginalB {
+func (u *Union2OriginalAOrOriginalB) AsOriginalB() *OriginalB {
 	if u.variant != "OriginalB" {
 		return nil
 	}
@@ -2765,7 +2765,7 @@ func (u *Union2StringOrTag) IsTag() bool {
 	return u.variant == "Tag"
 }
 
-func (u *Union2StringOrTag) Tag() *Tag {
+func (u *Union2StringOrTag) AsTag() *Tag {
 	if u.variant != "Tag" {
 		return nil
 	}
@@ -2793,7 +2793,7 @@ func (u *Union2StringOrTag) IsString() bool {
 	return u.variant == "String"
 }
 
-func (u *Union2StringOrTag) String() *string {
+func (u *Union2StringOrTag) AsString() *string {
 	if u.variant != "String" {
 		return nil
 	}
@@ -2932,7 +2932,7 @@ func (u *Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject) IsMemoryObject(
 	return u.variant == "MemoryObject"
 }
 
-func (u *Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject) MemoryObject() *MemoryObject {
+func (u *Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject) AsMemoryObject() *MemoryObject {
 	if u.variant != "MemoryObject" {
 		return nil
 	}
@@ -2962,7 +2962,7 @@ func (u *Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject) IsComplexMemory
 	return u.variant == "ComplexMemoryObject"
 }
 
-func (u *Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject) ComplexMemoryObject() *ComplexMemoryObject {
+func (u *Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject) AsComplexMemoryObject() *ComplexMemoryObject {
 	if u.variant != "ComplexMemoryObject" {
 		return nil
 	}
@@ -2992,7 +2992,7 @@ func (u *Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject) IsAnotherObject
 	return u.variant == "AnotherObject"
 }
 
-func (u *Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject) AnotherObject() *AnotherObject {
+func (u *Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject) AsAnotherObject() *AnotherObject {
 	if u.variant != "AnotherObject" {
 		return nil
 	}
@@ -3131,7 +3131,7 @@ func (u *Union3BookOrderOrFlightConfirmationOrGroceryReceipt) IsBookOrder() bool
 	return u.variant == "BookOrder"
 }
 
-func (u *Union3BookOrderOrFlightConfirmationOrGroceryReceipt) BookOrder() *BookOrder {
+func (u *Union3BookOrderOrFlightConfirmationOrGroceryReceipt) AsBookOrder() *BookOrder {
 	if u.variant != "BookOrder" {
 		return nil
 	}
@@ -3161,7 +3161,7 @@ func (u *Union3BookOrderOrFlightConfirmationOrGroceryReceipt) IsFlightConfirmati
 	return u.variant == "FlightConfirmation"
 }
 
-func (u *Union3BookOrderOrFlightConfirmationOrGroceryReceipt) FlightConfirmation() *FlightConfirmation {
+func (u *Union3BookOrderOrFlightConfirmationOrGroceryReceipt) AsFlightConfirmation() *FlightConfirmation {
 	if u.variant != "FlightConfirmation" {
 		return nil
 	}
@@ -3191,7 +3191,7 @@ func (u *Union3BookOrderOrFlightConfirmationOrGroceryReceipt) IsGroceryReceipt()
 	return u.variant == "GroceryReceipt"
 }
 
-func (u *Union3BookOrderOrFlightConfirmationOrGroceryReceipt) GroceryReceipt() *GroceryReceipt {
+func (u *Union3BookOrderOrFlightConfirmationOrGroceryReceipt) AsGroceryReceipt() *GroceryReceipt {
 	if u.variant != "GroceryReceipt" {
 		return nil
 	}
@@ -3334,7 +3334,7 @@ func (u *Union3BoolKTrueOrIntK1OrKstring_output) IsIntK1() bool {
 	return u.variant == "IntK1"
 }
 
-func (u *Union3BoolKTrueOrIntK1OrKstring_output) IntK1() *int64 {
+func (u *Union3BoolKTrueOrIntK1OrKstring_output) AsIntK1() *int64 {
 	if u.variant != "IntK1" {
 		return nil
 	}
@@ -3368,7 +3368,7 @@ func (u *Union3BoolKTrueOrIntK1OrKstring_output) IsBoolKTrue() bool {
 	return u.variant == "BoolKTrue"
 }
 
-func (u *Union3BoolKTrueOrIntK1OrKstring_output) BoolKTrue() *bool {
+func (u *Union3BoolKTrueOrIntK1OrKstring_output) AsBoolKTrue() *bool {
 	if u.variant != "BoolKTrue" {
 		return nil
 	}
@@ -3402,7 +3402,7 @@ func (u *Union3BoolKTrueOrIntK1OrKstring_output) IsKstring_output() bool {
 	return u.variant == "Kstring_output"
 }
 
-func (u *Union3BoolKTrueOrIntK1OrKstring_output) Kstring_output() *string {
+func (u *Union3BoolKTrueOrIntK1OrKstring_output) AsKstring_output() *string {
 	if u.variant != "Kstring_output" {
 		return nil
 	}
@@ -3541,7 +3541,7 @@ func (u *Union3FloatOrIntOrString) IsString() bool {
 	return u.variant == "String"
 }
 
-func (u *Union3FloatOrIntOrString) String() *string {
+func (u *Union3FloatOrIntOrString) AsString() *string {
 	if u.variant != "String" {
 		return nil
 	}
@@ -3571,7 +3571,7 @@ func (u *Union3FloatOrIntOrString) IsInt() bool {
 	return u.variant == "Int"
 }
 
-func (u *Union3FloatOrIntOrString) Int() *int64 {
+func (u *Union3FloatOrIntOrString) AsInt() *int64 {
 	if u.variant != "Int" {
 		return nil
 	}
@@ -3601,7 +3601,7 @@ func (u *Union3FloatOrIntOrString) IsFloat() bool {
 	return u.variant == "Float"
 }
 
-func (u *Union3FloatOrIntOrString) Float() *float64 {
+func (u *Union3FloatOrIntOrString) AsFloat() *float64 {
 	if u.variant != "Float" {
 		return nil
 	}
@@ -3762,7 +3762,7 @@ func (u *Union4BoolOrFloatOrIntOrString) IsInt() bool {
 	return u.variant == "Int"
 }
 
-func (u *Union4BoolOrFloatOrIntOrString) Int() *int64 {
+func (u *Union4BoolOrFloatOrIntOrString) AsInt() *int64 {
 	if u.variant != "Int" {
 		return nil
 	}
@@ -3794,7 +3794,7 @@ func (u *Union4BoolOrFloatOrIntOrString) IsString() bool {
 	return u.variant == "String"
 }
 
-func (u *Union4BoolOrFloatOrIntOrString) String() *string {
+func (u *Union4BoolOrFloatOrIntOrString) AsString() *string {
 	if u.variant != "String" {
 		return nil
 	}
@@ -3826,7 +3826,7 @@ func (u *Union4BoolOrFloatOrIntOrString) IsBool() bool {
 	return u.variant == "Bool"
 }
 
-func (u *Union4BoolOrFloatOrIntOrString) Bool() *bool {
+func (u *Union4BoolOrFloatOrIntOrString) AsBool() *bool {
 	if u.variant != "Bool" {
 		return nil
 	}
@@ -3858,7 +3858,7 @@ func (u *Union4BoolOrFloatOrIntOrString) IsFloat() bool {
 	return u.variant == "Float"
 }
 
-func (u *Union4BoolOrFloatOrIntOrString) Float() *float64 {
+func (u *Union4BoolOrFloatOrIntOrString) AsFloat() *float64 {
 	if u.variant != "Float" {
 		return nil
 	}
@@ -4023,7 +4023,7 @@ func (u *Union4KfourOrKoneOrKthreeOrKtwo) IsKone() bool {
 	return u.variant == "Kone"
 }
 
-func (u *Union4KfourOrKoneOrKthreeOrKtwo) Kone() *string {
+func (u *Union4KfourOrKoneOrKthreeOrKtwo) AsKone() *string {
 	if u.variant != "Kone" {
 		return nil
 	}
@@ -4059,7 +4059,7 @@ func (u *Union4KfourOrKoneOrKthreeOrKtwo) IsKtwo() bool {
 	return u.variant == "Ktwo"
 }
 
-func (u *Union4KfourOrKoneOrKthreeOrKtwo) Ktwo() *string {
+func (u *Union4KfourOrKoneOrKthreeOrKtwo) AsKtwo() *string {
 	if u.variant != "Ktwo" {
 		return nil
 	}
@@ -4095,7 +4095,7 @@ func (u *Union4KfourOrKoneOrKthreeOrKtwo) IsKthree() bool {
 	return u.variant == "Kthree"
 }
 
-func (u *Union4KfourOrKoneOrKthreeOrKtwo) Kthree() *string {
+func (u *Union4KfourOrKoneOrKthreeOrKtwo) AsKthree() *string {
 	if u.variant != "Kthree" {
 		return nil
 	}
@@ -4131,7 +4131,7 @@ func (u *Union4KfourOrKoneOrKthreeOrKtwo) IsKfour() bool {
 	return u.variant == "Kfour"
 }
 
-func (u *Union4KfourOrKoneOrKthreeOrKtwo) Kfour() *string {
+func (u *Union4KfourOrKoneOrKthreeOrKtwo) AsKfour() *string {
 	if u.variant != "Kfour" {
 		return nil
 	}
@@ -4336,7 +4336,7 @@ func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) IsInt() bool {
 	return u.variant == "Int"
 }
 
-func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) Int() *int64 {
+func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) AsInt() *int64 {
 	if u.variant != "Int" {
 		return nil
 	}
@@ -4372,7 +4372,7 @@ func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) IsString() bool 
 	return u.variant == "String"
 }
 
-func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) String() *string {
+func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) AsString() *string {
 	if u.variant != "String" {
 		return nil
 	}
@@ -4408,7 +4408,7 @@ func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) IsBool() bool {
 	return u.variant == "Bool"
 }
 
-func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) Bool() *bool {
+func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) AsBool() *bool {
 	if u.variant != "Bool" {
 		return nil
 	}
@@ -4444,7 +4444,7 @@ func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) IsFloat() bool {
 	return u.variant == "Float"
 }
 
-func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) Float() *float64 {
+func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) AsFloat() *float64 {
 	if u.variant != "Float" {
 		return nil
 	}
@@ -4480,7 +4480,7 @@ func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) IsJsonObject() b
 	return u.variant == "JsonObject"
 }
 
-func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) JsonObject() *JsonObject {
+func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) AsJsonObject() *JsonObject {
 	if u.variant != "JsonObject" {
 		return nil
 	}
@@ -4516,7 +4516,7 @@ func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) IsJsonArray() bo
 	return u.variant == "JsonArray"
 }
 
-func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) JsonArray() *JsonArray {
+func (u *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString) AsJsonArray() *JsonArray {
 	if u.variant != "JsonArray" {
 		return nil
 	}
@@ -4721,7 +4721,7 @@ func (u *Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString
 	return u.variant == "Int"
 }
 
-func (u *Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString) Int() *int64 {
+func (u *Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString) AsInt() *int64 {
 	if u.variant != "Int" {
 		return nil
 	}
@@ -4757,7 +4757,7 @@ func (u *Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString
 	return u.variant == "String"
 }
 
-func (u *Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString) String() *string {
+func (u *Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString) AsString() *string {
 	if u.variant != "String" {
 		return nil
 	}
@@ -4793,7 +4793,7 @@ func (u *Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString
 	return u.variant == "Bool"
 }
 
-func (u *Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString) Bool() *bool {
+func (u *Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString) AsBool() *bool {
 	if u.variant != "Bool" {
 		return nil
 	}
@@ -4829,7 +4829,7 @@ func (u *Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString
 	return u.variant == "Float"
 }
 
-func (u *Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString) Float() *float64 {
+func (u *Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString) AsFloat() *float64 {
 	if u.variant != "Float" {
 		return nil
 	}
@@ -4865,7 +4865,7 @@ func (u *Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString
 	return u.variant == "ListString"
 }
 
-func (u *Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString) ListString() *[]string {
+func (u *Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString) AsListString() *[]string {
 	if u.variant != "ListString" {
 		return nil
 	}
@@ -4901,7 +4901,7 @@ func (u *Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString
 	return u.variant == "MapStringKeyListStringValue"
 }
 
-func (u *Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString) MapStringKeyListStringValue() *map[string][]string {
+func (u *Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString) AsMapStringKeyListStringValue() *map[string][]string {
 	if u.variant != "MapStringKeyListStringValue" {
 		return nil
 	}

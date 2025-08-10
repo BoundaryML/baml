@@ -349,6 +349,15 @@ impl Block {
                         span: span.clone(),
                     });
                 }
+                ast::Stmt::Expression(expr) => {
+                    let mut temp_counter = 0;
+                    let mut lifted_statements = vec![];
+                    let lifted_expr = Expression::from_ast(expr, &mut lifted_statements, &mut temp_counter);
+                    statements.push(Statement::Expression {
+                        expr: lifted_expr,
+                        span: expr.span().clone(),
+                    });
+                }
             }
         }
 
@@ -356,27 +365,31 @@ impl Block {
         // Normal expression - but check for if expressions in nested contexts
         let mut temp_counter = 0;
         let mut lifted_statements = vec![];
-        let lifted_expr = Expression::from_ast(
-            block.expr.as_ref(),
-            &mut lifted_statements,
-            &mut temp_counter,
-        );
 
         // Add any lifted statements first
-        statements.extend(lifted_statements);
+        // TODO: Is this clone Ok? Or does lifted_statements need to be shared/modified?
+        statements.extend(lifted_statements.clone());
 
-        // Then add the final statement
-        statements.push(if is_function_body {
-            Statement::Return {
-                expr: lifted_expr,
-                span: block.expr.span().clone(),
-            }
-        } else {
-            Statement::Expression {
-                expr: lifted_expr,
-                span: block.expr.span().clone(),
-            }
-        });
+        if let Some(block_final_expr) = block.expr.as_ref() {
+            let lifted_expr = Expression::from_ast(
+                &block_final_expr,
+                &mut lifted_statements,
+                &mut temp_counter,
+            );
+            // Then add the final statement
+            statements.push(if is_function_body {
+                Statement::Return {
+                    expr: lifted_expr,
+                    span: block_final_expr.span().clone(),
+                }
+            } else {
+                Statement::Expression {
+                    expr: lifted_expr,
+                    span: block_final_expr.span().clone(),
+                }
+            });
+        }
+
 
         Block { statements }
     }

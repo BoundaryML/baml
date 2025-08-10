@@ -33,7 +33,7 @@ impl RequestHandler for DocumentDiagnosticRequestHandler {
 
 // // Consider fixing snapshots and running this on a background thread.
 impl BackgroundDocumentRequestHandler for DocumentDiagnosticRequestHandler {
-    fn document_url(params: &DocumentDiagnosticParams) -> std::borrow::Cow<Url> {
+    fn document_url(params: &DocumentDiagnosticParams) -> std::borrow::Cow<'_, Url> {
         Cow::Borrowed(&params.text_document.uri)
     }
 

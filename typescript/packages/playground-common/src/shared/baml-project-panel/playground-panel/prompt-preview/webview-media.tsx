@@ -61,7 +61,7 @@ const createBlobUrlFromBase64 = (base64DataUrl: string): string => {
 const getDisplayUrl = (url: string, mediaType: string): string => {
   if (url.startsWith('data:')) {
     const sizeMatch = url.match(/^data:[^;]+;base64,(.+)$/);
-    if (sizeMatch && sizeMatch[1]) {
+    if (sizeMatch?.[1]) {
       const base64Length = sizeMatch[1].length;
       const sizeInBytes = base64Length * 0.75;
       const sizeFormatted =
@@ -79,16 +79,19 @@ const getDisplayUrl = (url: string, mediaType: string): string => {
 const getFileFormat = (url: string, mediaType: string): string => {
   if (url.startsWith('data:')) {
     const mimeMatch = url.match(/data:([^;]+)/);
-    if (mimeMatch && mimeMatch[1]) {
+    if (mimeMatch?.[1]) {
       const mimeType = mimeMatch[1];
       // Extract format from mime type
       if (mimeType.includes('image/')) {
         return mimeType.replace('image/', '').toUpperCase();
-      } else if (mimeType.includes('audio/')) {
+      }
+      if (mimeType.includes('audio/')) {
         return mimeType.replace('audio/', '').toUpperCase();
-      } else if (mimeType.includes('application/pdf')) {
+      }
+      if (mimeType.includes('application/pdf')) {
         return 'PDF';
-      } else if (mimeType.includes('video/')) {
+      }
+      if (mimeType.includes('video/')) {
         return mimeType.replace('video/', '').toUpperCase();
       }
     }
@@ -96,7 +99,7 @@ const getFileFormat = (url: string, mediaType: string): string => {
     // Extract from URL extension
     const urlLower = url.toLowerCase();
     const extensionMatch = urlLower.match(/\.([a-z0-9]+)(?:\?|#|$)/);
-    if (extensionMatch && extensionMatch[1]) {
+    if (extensionMatch?.[1]) {
       return extensionMatch[1].toUpperCase();
     }
   }
@@ -107,7 +110,7 @@ const getFileFormat = (url: string, mediaType: string): string => {
 const getDataUriSize = (url: string): string => {
   if (url.startsWith('data:')) {
     const sizeMatch = url.match(/^data:[^;]+;base64,(.+)$/);
-    if (sizeMatch && sizeMatch[1]) {
+    if (sizeMatch?.[1]) {
       const base64Length = sizeMatch[1].length;
       const sizeInBytes = base64Length * 0.75;
       return sizeInBytes > 1048576
@@ -322,7 +325,7 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
 
   const renderMediaContent = () => {
     switch (bamlMediaType) {
-      case 'image':
+      case 'image': {
         const imageUrl = optimizedMediaUrl || '';
         if (!imageUrl) {
           return (
@@ -353,7 +356,8 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
             )}
           </div>
         );
-      case 'audio':
+      }
+      case 'audio': {
         const audioUrl = optimizedMediaUrl || '';
         if (!audioUrl) {
           return (
@@ -388,7 +392,8 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
             </audio>
           </div>
         );
-      case 'pdf':
+      }
+      case 'pdf': {
         const pdfUrl = optimizedMediaUrl || mediaUrl || '';
         if (!pdfUrl) {
           return (
@@ -403,6 +408,7 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
           );
         }
         return renderPdfContent(pdfUrl);
+      }
       case 'video':
         return renderVideoContent(mediaUrl || '');
       default:
@@ -658,13 +664,18 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
       >
         {/* Header with file type icon and link/copy */}
         {mediaUrl && (
-          <div
-            className="flex items-center justify-between px-3 py-2 border-b border-[var(--vscode-panel-border)] bg-[var(--vscode-sideBar-background)] cursor-pointer select-none overflow-hidden min-w-0"
+          <button
+            type="button"
+            className="flex items-center justify-between px-3 py-2 border-b border-[var(--vscode-panel-border)] bg-[var(--vscode-sideBar-background)] cursor-pointer select-none overflow-hidden min-w-0 w-full text-left"
             onClick={(e) => {
               setCollapsed(!collapsed);
             }}
-            tabIndex={0}
-            role="button"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                setCollapsed(!collapsed);
+              }
+            }}
             aria-expanded={!collapsed}
             style={{ userSelect: 'none' }}
           >
@@ -705,6 +716,11 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
             <div
               className="flex items-center ml-2 flex-nowrap gap-1 h-7"
               onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.stopPropagation();
+                }
+              }}
               style={{ maxWidth: 'calc(100% - 2rem)' }}
             >
               {isBase64 ? (
@@ -730,10 +746,10 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
                   {copyStatus === 'error' && <X className="w-3 h-3" />}
                   {copyStatus === 'idle' && <Copy className="w-3 h-3" />}
                   <span className="truncate">
-                    {copyStatus === 'copying' && `Copying...`}
-                    {copyStatus === 'success' && `Copied!`}
-                    {copyStatus === 'error' && `Failed`}
-                    {copyStatus === 'idle' && `Copy Base64`}
+                    {copyStatus === 'copying' && 'Copying...'}
+                    {copyStatus === 'success' && 'Copied!'}
+                    {copyStatus === 'error' && 'Failed'}
+                    {copyStatus === 'idle' && 'Copy Base64'}
                   </span>
                 </Button>
               ) : (
@@ -756,7 +772,7 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
                       {(() => {
                         const url = mediaUrl || '';
                         const urlParts = url.split('/');
-                        const filename = urlParts[urlParts.length - 1];
+                        const filename = urlParts.at(-1);
                         const cleanFilename = filename
                           ?.split('?')[0]
                           ?.split('#')[0];
@@ -765,7 +781,7 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
                           cleanFilename.length > 0 &&
                           cleanFilename.includes('.')
                         ) {
-                          return `Open ${cleanFilename.length > 20 ? cleanFilename.substring(0, 17) + '...' : cleanFilename}`;
+                          return `Open ${cleanFilename.length > 20 ? `${cleanFilename.substring(0, 17)}...` : cleanFilename}`;
                         }
                         return 'Open Link';
                       })()}
@@ -793,13 +809,11 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
                 )}
               </Button>
             </div>
-          </div>
+          </button>
         )}
 
         {/* Media content (collapsible) */}
-        {!collapsed && (
-          <div className="p-4 min-w-0">{renderMediaContent()}</div>
-        )}
+        {!collapsed && <div className="min-w-0">{renderMediaContent()}</div>}
       </div>
     </div>
   );

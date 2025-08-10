@@ -64,6 +64,10 @@ func (*stream) TestMediaArrayInputs(ctx context.Context, imageArray []types.Imag
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -140,6 +144,10 @@ func (*stream) TestMediaInput(ctx context.Context, media types.Union4AudioOrImag
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()

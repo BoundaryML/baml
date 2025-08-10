@@ -41,6 +41,10 @@ func AaaSamOutputFormat(ctx context.Context, recipe string, opts ...CallOptionFu
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -99,6 +103,10 @@ func AliasThatPointsToRecursiveType(ctx context.Context, data types.LinkedListAl
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -137,7 +145,7 @@ func AliasThatPointsToRecursiveType(ctx context.Context, data types.LinkedListAl
 	}
 }
 
-func AliasWithMultipleAttrs(ctx context.Context, money int64, opts ...CallOptionFunc) (int64, error) {
+func AliasWithMultipleAttrs(ctx context.Context, money int64, opts ...CallOptionFunc) (types.Checked[int64], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -157,6 +165,10 @@ func AliasWithMultipleAttrs(ctx context.Context, money int64, opts ...CallOption
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -165,33 +177,35 @@ func AliasWithMultipleAttrs(ctx context.Context, money int64, opts ...CallOption
 	if callOpts.onTick == nil {
 		result, err := bamlRuntime.CallFunction(ctx, "AliasWithMultipleAttrs", encoded, callOpts.onTick)
 		if err != nil {
-			return 0, err
+			return types.Checked[int64]{}, err
 		}
 
 		if result.Error != nil {
-			return 0, result.Error
+			return types.Checked[int64]{}, result.Error
 		}
 
-		casted := (result.Data).(int64)
+		casted := baml.CastChecked(result.Data, func(inner any) int64 {
+			return (inner).(int64)
+		})
 
 		return casted, nil
 	} else {
 		channel, err := bamlRuntime.CallFunctionStream(ctx, "AliasWithMultipleAttrs", encoded, callOpts.onTick)
 		if err != nil {
-			return 0, err
+			return types.Checked[int64]{}, err
 		}
 
 		for result := range channel {
 			if result.Error != nil {
-				return 0, result.Error
+				return types.Checked[int64]{}, result.Error
 			}
 
 			if result.HasData {
-				return result.Data.(int64), nil
+				return result.Data.(types.Checked[int64]), nil
 			}
 		}
 
-		return 0, fmt.Errorf("No data returned from stream")
+		return types.Checked[int64]{}, fmt.Errorf("No data returned from stream")
 	}
 }
 
@@ -213,6 +227,10 @@ func AliasedInputClass(ctx context.Context, input types.InputClass, opts ...Call
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -273,6 +291,10 @@ func AliasedInputClass2(ctx context.Context, input types.InputClass, opts ...Cal
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -329,6 +351,10 @@ func AliasedInputClassNested(ctx context.Context, input types.InputClassNested, 
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -389,6 +415,10 @@ func AliasedInputEnum(ctx context.Context, input types.AliasedEnum, opts ...Call
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -445,6 +475,10 @@ func AliasedInputList(ctx context.Context, input []types.AliasedEnum, opts ...Ca
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -505,6 +539,10 @@ func AllowedOptionals(ctx context.Context, optionals types.OptionalListAndMap, o
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -561,6 +599,10 @@ func AssertFn(ctx context.Context, a int64, opts ...CallOptionFunc) (int64, erro
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -621,6 +663,10 @@ func AudioInput(ctx context.Context, aud types.Audio, opts ...CallOptionFunc) (s
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -677,6 +723,10 @@ func AudioInputOpenai(ctx context.Context, aud types.Audio, prompt string, opts 
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -737,6 +787,10 @@ func BuildLinkedList(ctx context.Context, input []int64, opts ...CallOptionFunc)
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -793,6 +847,10 @@ func BuildTree(ctx context.Context, input types.BinaryNode, opts ...CallOptionFu
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -853,6 +911,10 @@ func ClassThatPointsToRecursiveClassThroughAlias(ctx context.Context, cls types.
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -909,6 +971,10 @@ func ClassifyDynEnumTwo(ctx context.Context, input string, opts ...CallOptionFun
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -969,6 +1035,10 @@ func ClassifyMessage(ctx context.Context, input string, opts ...CallOptionFunc) 
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -1025,6 +1095,10 @@ func ClassifyMessage2(ctx context.Context, input string, opts ...CallOptionFunc)
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -1085,6 +1159,10 @@ func ClassifyMessage3(ctx context.Context, input string, opts ...CallOptionFunc)
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -1141,6 +1219,10 @@ func Completion(ctx context.Context, prefix string, suffix string, language stri
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -1201,6 +1283,10 @@ func CustomTask(ctx context.Context, input string, opts ...CallOptionFunc) (type
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -1257,6 +1343,10 @@ func DescribeAudio(ctx context.Context, audio types.Audio, opts ...CallOptionFun
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -1317,6 +1407,10 @@ func DescribeAudio2(ctx context.Context, audio types.Audio, opts ...CallOptionFu
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -1373,6 +1467,10 @@ func DescribeImage(ctx context.Context, img types.Image, opts ...CallOptionFunc)
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -1433,6 +1531,10 @@ func DescribeImage2(ctx context.Context, classWithImage types.ClassWithImage, im
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -1489,6 +1591,10 @@ func DescribeImage3(ctx context.Context, classWithImage types.ClassWithImage, im
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -1549,6 +1655,10 @@ func DescribeImage4(ctx context.Context, classWithImage types.ClassWithImage, im
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -1605,6 +1715,10 @@ func DescribeMedia1599(ctx context.Context, img types.Image, client_sector strin
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -1665,6 +1779,10 @@ func DifferentiateUnions(ctx context.Context, opts ...CallOptionFunc) (types.Uni
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -1721,6 +1839,10 @@ func DummyOutputFunction(ctx context.Context, input string, opts ...CallOptionFu
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -1781,6 +1903,10 @@ func DynamicFunc(ctx context.Context, input types.DynamicClassOne, opts ...CallO
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -1837,6 +1963,10 @@ func DynamicInputOutput(ctx context.Context, input types.DynInputOutput, opts ..
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -1897,6 +2027,10 @@ func DynamicListInputOutput(ctx context.Context, input []types.DynInputOutput, o
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -1953,6 +2087,10 @@ func ExpectFailure(ctx context.Context, opts ...CallOptionFunc) (string, error) 
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -2013,6 +2151,10 @@ func ExtractContactInfo(ctx context.Context, document string, opts ...CallOption
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -2069,6 +2211,10 @@ func ExtractEntities(ctx context.Context, text string, opts ...CallOptionFunc) (
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -2129,6 +2275,10 @@ func ExtractHobby(ctx context.Context, text string, opts ...CallOptionFunc) ([]t
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -2185,6 +2335,10 @@ func ExtractNames(ctx context.Context, input string, opts ...CallOptionFunc) ([]
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -2245,6 +2399,10 @@ func ExtractPeople(ctx context.Context, text string, opts ...CallOptionFunc) ([]
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -2301,6 +2459,10 @@ func ExtractReceiptInfo(ctx context.Context, email string, reason types.Union2Kc
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -2361,6 +2523,10 @@ func ExtractResume(ctx context.Context, resume string, img *types.Image, opts ..
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -2417,6 +2583,10 @@ func ExtractResume2(ctx context.Context, resume string, opts ...CallOptionFunc) 
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -2477,6 +2647,10 @@ func FnClassOptionalOutput(ctx context.Context, input string, opts ...CallOption
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -2533,6 +2707,10 @@ func FnClassOptionalOutput2(ctx context.Context, input string, opts ...CallOptio
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -2593,6 +2771,10 @@ func FnEnumListOutput(ctx context.Context, input string, opts ...CallOptionFunc)
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -2649,6 +2831,10 @@ func FnEnumOutput(ctx context.Context, input string, opts ...CallOptionFunc) (ty
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -2709,6 +2895,10 @@ func FnLiteralClassInputOutput(ctx context.Context, input types.LiteralClassHell
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -2765,6 +2955,10 @@ func FnLiteralUnionClassInputOutput(ctx context.Context, input types.Union2Liter
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -2825,6 +3019,10 @@ func FnNamedArgsSingleStringOptional(ctx context.Context, myString *string, opts
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -2881,6 +3079,10 @@ func FnOutputBool(ctx context.Context, input string, opts ...CallOptionFunc) (bo
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -2941,6 +3143,10 @@ func FnOutputClass(ctx context.Context, input string, opts ...CallOptionFunc) (t
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -2997,6 +3203,10 @@ func FnOutputClassList(ctx context.Context, input string, opts ...CallOptionFunc
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -3057,6 +3267,10 @@ func FnOutputClassNested(ctx context.Context, input string, opts ...CallOptionFu
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -3113,6 +3327,10 @@ func FnOutputClassWithEnum(ctx context.Context, input string, opts ...CallOption
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -3173,6 +3391,10 @@ func FnOutputInt(ctx context.Context, input string, opts ...CallOptionFunc) (int
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -3229,6 +3451,10 @@ func FnOutputLiteralBool(ctx context.Context, input string, opts ...CallOptionFu
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -3289,6 +3515,10 @@ func FnOutputLiteralInt(ctx context.Context, input string, opts ...CallOptionFun
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -3345,6 +3575,10 @@ func FnOutputLiteralString(ctx context.Context, input string, opts ...CallOption
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -3405,6 +3639,10 @@ func FnOutputStringList(ctx context.Context, input string, opts ...CallOptionFun
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -3461,6 +3699,10 @@ func FnTestAliasedEnumOutput(ctx context.Context, input string, opts ...CallOpti
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -3521,6 +3763,10 @@ func FnTestClassAlias(ctx context.Context, input string, opts ...CallOptionFunc)
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -3577,6 +3823,10 @@ func FnTestNamedArgsSingleEnum(ctx context.Context, myArg types.NamedArgsSingleE
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -3637,6 +3887,10 @@ func GetDataType(ctx context.Context, text string, opts ...CallOptionFunc) (type
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -3693,6 +3947,10 @@ func GetOrderInfo(ctx context.Context, email types.Email, opts ...CallOptionFunc
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -3753,6 +4011,10 @@ func GetQuery(ctx context.Context, query string, opts ...CallOptionFunc) (types.
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -3809,6 +4071,10 @@ func InOutEnumMapKey(ctx context.Context, i1 map[types.MapKey]string, i2 map[typ
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -3869,6 +4135,10 @@ func InOutLiteralStringUnionMapKey(ctx context.Context, i1 map[types.Union4Kfour
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -3925,6 +4195,10 @@ func InOutSingleLiteralStringMapKey(ctx context.Context, m map[string]string, op
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -3985,6 +4259,10 @@ func JsonTypeAliasCycle(ctx context.Context, input types.JsonValue, opts ...Call
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -4041,6 +4319,10 @@ func LLMEcho(ctx context.Context, input string, opts ...CallOptionFunc) (string,
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -4101,6 +4383,10 @@ func LiteralUnionsTest(ctx context.Context, input string, opts ...CallOptionFunc
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -4139,6 +4425,68 @@ func LiteralUnionsTest(ctx context.Context, input string, opts ...CallOptionFunc
 	}
 }
 
+func LlmReturnNumber(ctx context.Context, n int64, opts ...CallOptionFunc) (int64, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"n": n},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	encoded, err := args.Encode()
+	if err != nil {
+		panic(err)
+	}
+
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "LlmReturnNumber", encoded, callOpts.onTick)
+		if err != nil {
+			return 0, err
+		}
+
+		if result.Error != nil {
+			return 0, result.Error
+		}
+
+		casted := (result.Data).(int64)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "LlmReturnNumber", encoded, callOpts.onTick)
+		if err != nil {
+			return 0, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return 0, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(int64), nil
+			}
+		}
+
+		return 0, fmt.Errorf("No data returned from stream")
+	}
+}
+
 func MakeBlockConstraint(ctx context.Context, opts ...CallOptionFunc) (types.Checked[types.BlockConstraint], error) {
 
 	var callOpts callOption
@@ -4159,6 +4507,10 @@ func MakeBlockConstraint(ctx context.Context, opts ...CallOptionFunc) (types.Che
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -4174,7 +4526,9 @@ func MakeBlockConstraint(ctx context.Context, opts ...CallOptionFunc) (types.Che
 			return types.Checked[types.BlockConstraint]{}, result.Error
 		}
 
-		casted := (result.Data).(types.Checked[types.BlockConstraint])
+		casted := baml.CastChecked(result.Data, func(inner any) types.BlockConstraint {
+			return (inner).(types.BlockConstraint)
+		})
 
 		return casted, nil
 	} else {
@@ -4215,6 +4569,10 @@ func MakeClassWithBlockDone(ctx context.Context, opts ...CallOptionFunc) (types.
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -4275,6 +4633,10 @@ func MakeClassWithExternalDone(ctx context.Context, opts ...CallOptionFunc) (typ
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -4331,6 +4693,10 @@ func MakeNestedBlockConstraint(ctx context.Context, opts ...CallOptionFunc) (typ
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -4391,6 +4757,10 @@ func MakeSemanticContainer(ctx context.Context, opts ...CallOptionFunc) (types.S
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -4447,6 +4817,10 @@ func MapAlias(ctx context.Context, m map[string][]string, opts ...CallOptionFunc
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -4507,6 +4881,10 @@ func MergeAliasAttributes(ctx context.Context, money int64, opts ...CallOptionFu
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -4563,6 +4941,10 @@ func MyFunc(ctx context.Context, input string, opts ...CallOptionFunc) (types.Dy
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -4623,6 +5005,10 @@ func NestedAlias(ctx context.Context, c types.Union6BoolOrFloatOrIntOrListString
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -4679,6 +5065,10 @@ func NullLiteralClassHello(ctx context.Context, s string, opts ...CallOptionFunc
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -4739,6 +5129,10 @@ func OpenAIWithAnthropicResponseHello(ctx context.Context, s string, opts ...Cal
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -4795,6 +5189,10 @@ func OptionalTest_Function(ctx context.Context, input string, opts ...CallOption
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -4855,6 +5253,10 @@ func PdfInput(ctx context.Context, pdf types.PDF, opts ...CallOptionFunc) (strin
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -4911,6 +5313,10 @@ func PdfInputAnthropic(ctx context.Context, pdf types.PDF, opts ...CallOptionFun
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -4971,6 +5377,10 @@ func PdfInputOpenai(ctx context.Context, pdf types.PDF, prompt string, opts ...C
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -5027,6 +5437,10 @@ func PdfInputVertex(ctx context.Context, pdf types.PDF, opts ...CallOptionFunc) 
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -5087,6 +5501,10 @@ func PredictAge(ctx context.Context, name string, opts ...CallOptionFunc) (types
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -5125,7 +5543,7 @@ func PredictAge(ctx context.Context, name string, opts ...CallOptionFunc) (types
 	}
 }
 
-func PredictAgeBare(ctx context.Context, inp string, opts ...CallOptionFunc) (int64, error) {
+func PredictAgeBare(ctx context.Context, inp string, opts ...CallOptionFunc) (types.Checked[int64], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -5145,6 +5563,10 @@ func PredictAgeBare(ctx context.Context, inp string, opts ...CallOptionFunc) (in
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -5153,33 +5575,35 @@ func PredictAgeBare(ctx context.Context, inp string, opts ...CallOptionFunc) (in
 	if callOpts.onTick == nil {
 		result, err := bamlRuntime.CallFunction(ctx, "PredictAgeBare", encoded, callOpts.onTick)
 		if err != nil {
-			return 0, err
+			return types.Checked[int64]{}, err
 		}
 
 		if result.Error != nil {
-			return 0, result.Error
+			return types.Checked[int64]{}, result.Error
 		}
 
-		casted := (result.Data).(int64)
+		casted := baml.CastChecked(result.Data, func(inner any) int64 {
+			return (inner).(int64)
+		})
 
 		return casted, nil
 	} else {
 		channel, err := bamlRuntime.CallFunctionStream(ctx, "PredictAgeBare", encoded, callOpts.onTick)
 		if err != nil {
-			return 0, err
+			return types.Checked[int64]{}, err
 		}
 
 		for result := range channel {
 			if result.Error != nil {
-				return 0, result.Error
+				return types.Checked[int64]{}, result.Error
 			}
 
 			if result.HasData {
-				return result.Data.(int64), nil
+				return result.Data.(types.Checked[int64]), nil
 			}
 		}
 
-		return 0, fmt.Errorf("No data returned from stream")
+		return types.Checked[int64]{}, fmt.Errorf("No data returned from stream")
 	}
 }
 
@@ -5201,6 +5625,10 @@ func PrimitiveAlias(ctx context.Context, p types.Union4BoolOrFloatOrIntOrString,
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -5261,6 +5689,10 @@ func PromptTestClaude(ctx context.Context, input string, opts ...CallOptionFunc)
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -5317,6 +5749,10 @@ func PromptTestClaudeChat(ctx context.Context, input string, opts ...CallOptionF
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -5377,6 +5813,10 @@ func PromptTestClaudeChatNoSystem(ctx context.Context, input string, opts ...Cal
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -5433,6 +5873,10 @@ func PromptTestOpenAI(ctx context.Context, input string, opts ...CallOptionFunc)
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -5493,6 +5937,10 @@ func PromptTestOpenAIChat(ctx context.Context, input string, opts ...CallOptionF
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -5549,6 +5997,10 @@ func PromptTestOpenAIChatNoSystem(ctx context.Context, input string, opts ...Cal
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -5609,6 +6061,10 @@ func PromptTestStreaming(ctx context.Context, input string, opts ...CallOptionFu
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -5665,6 +6121,10 @@ func RecursiveAliasCycle(ctx context.Context, input types.RecAliasOne, opts ...C
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -5725,6 +6185,10 @@ func RecursiveClassWithAliasIndirection(ctx context.Context, cls types.NodeWithA
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -5783,6 +6247,10 @@ func RecursiveUnionTest(ctx context.Context, input types.RecursiveUnion, opts ..
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -5821,7 +6289,7 @@ func RecursiveUnionTest(ctx context.Context, input types.RecursiveUnion, opts ..
 	}
 }
 
-func ReturnAliasWithMergedAttributes(ctx context.Context, money int64, opts ...CallOptionFunc) (int64, error) {
+func ReturnAliasWithMergedAttributes(ctx context.Context, money int64, opts ...CallOptionFunc) (types.Checked[int64], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -5841,6 +6309,10 @@ func ReturnAliasWithMergedAttributes(ctx context.Context, money int64, opts ...C
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -5849,33 +6321,35 @@ func ReturnAliasWithMergedAttributes(ctx context.Context, money int64, opts ...C
 	if callOpts.onTick == nil {
 		result, err := bamlRuntime.CallFunction(ctx, "ReturnAliasWithMergedAttributes", encoded, callOpts.onTick)
 		if err != nil {
-			return 0, err
+			return types.Checked[int64]{}, err
 		}
 
 		if result.Error != nil {
-			return 0, result.Error
+			return types.Checked[int64]{}, result.Error
 		}
 
-		casted := (result.Data).(int64)
+		casted := baml.CastChecked(result.Data, func(inner any) int64 {
+			return (inner).(int64)
+		})
 
 		return casted, nil
 	} else {
 		channel, err := bamlRuntime.CallFunctionStream(ctx, "ReturnAliasWithMergedAttributes", encoded, callOpts.onTick)
 		if err != nil {
-			return 0, err
+			return types.Checked[int64]{}, err
 		}
 
 		for result := range channel {
 			if result.Error != nil {
-				return 0, result.Error
+				return types.Checked[int64]{}, result.Error
 			}
 
 			if result.HasData {
-				return result.Data.(int64), nil
+				return result.Data.(types.Checked[int64]), nil
 			}
 		}
 
-		return 0, fmt.Errorf("No data returned from stream")
+		return types.Checked[int64]{}, fmt.Errorf("No data returned from stream")
 	}
 }
 
@@ -5897,6 +6371,10 @@ func ReturnFailingAssert(ctx context.Context, inp int64, opts ...CallOptionFunc)
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -5957,6 +6435,10 @@ func ReturnJsonEntry(ctx context.Context, s string, opts ...CallOptionFunc) (typ
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -6013,6 +6495,10 @@ func ReturnMalformedConstraints(ctx context.Context, a int64, opts ...CallOption
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -6073,6 +6559,10 @@ func SchemaDescriptions(ctx context.Context, input string, opts ...CallOptionFun
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -6129,6 +6619,10 @@ func SimpleRecursiveListAlias(ctx context.Context, input types.RecursiveListAlia
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -6189,6 +6683,10 @@ func SimpleRecursiveMapAlias(ctx context.Context, input types.RecursiveMapAlias,
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -6245,6 +6743,10 @@ func StreamBigNumbers(ctx context.Context, digits int64, opts ...CallOptionFunc)
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -6305,6 +6807,10 @@ func StreamFailingAssertion(ctx context.Context, theme string, length int64, opt
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -6361,6 +6867,10 @@ func StreamFailingCheck(ctx context.Context, theme string, length int64, opts ..
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -6421,6 +6931,10 @@ func StreamOneBigNumber(ctx context.Context, digits int64, opts ...CallOptionFun
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -6477,6 +6991,10 @@ func StreamUnionIntegers(ctx context.Context, digits int64, opts ...CallOptionFu
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -6537,6 +7055,10 @@ func StreamingCompoundNumbers(ctx context.Context, digits int64, yapping bool, o
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -6593,6 +7115,10 @@ func StructureDocument1559(ctx context.Context, document_txt string, opts ...Cal
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -6653,6 +7179,10 @@ func TakeRecAliasDep(ctx context.Context, input types.RecursiveAliasDependency, 
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -6709,6 +7239,10 @@ func TellStory(ctx context.Context, story string, opts ...CallOptionFunc) (strin
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -6769,6 +7303,10 @@ func TestAnthropic(ctx context.Context, input string, opts ...CallOptionFunc) (s
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -6825,6 +7363,10 @@ func TestAnthropicShorthand(ctx context.Context, input string, opts ...CallOptio
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -6885,6 +7427,10 @@ func TestAws(ctx context.Context, input string, opts ...CallOptionFunc) (string,
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -6941,6 +7487,10 @@ func TestAwsClaude37(ctx context.Context, input string, opts ...CallOptionFunc) 
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -7001,6 +7551,10 @@ func TestAwsInferenceProfile(ctx context.Context, input string, opts ...CallOpti
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -7057,6 +7611,10 @@ func TestAwsInvalidAccessKey(ctx context.Context, input string, opts ...CallOpti
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -7117,6 +7675,10 @@ func TestAwsInvalidProfile(ctx context.Context, input string, opts ...CallOption
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -7173,6 +7735,10 @@ func TestAwsInvalidRegion(ctx context.Context, input string, opts ...CallOptionF
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -7233,6 +7799,10 @@ func TestAwsInvalidSessionToken(ctx context.Context, input string, opts ...CallO
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -7289,6 +7859,10 @@ func TestAzure(ctx context.Context, input string, opts ...CallOptionFunc) (strin
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -7349,6 +7923,10 @@ func TestAzureFailure(ctx context.Context, input string, opts ...CallOptionFunc)
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -7405,6 +7983,10 @@ func TestAzureO1NoMaxTokens(ctx context.Context, input string, opts ...CallOptio
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -7465,6 +8047,10 @@ func TestAzureO1WithMaxCompletionTokens(ctx context.Context, input string, opts 
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -7521,6 +8107,10 @@ func TestAzureO1WithMaxTokens(ctx context.Context, input string, opts ...CallOpt
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -7581,6 +8171,10 @@ func TestAzureO3NoMaxTokens(ctx context.Context, input string, opts ...CallOptio
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -7637,6 +8231,10 @@ func TestAzureO3WithMaxCompletionTokens(ctx context.Context, input string, opts 
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -7697,6 +8295,10 @@ func TestAzureWithMaxTokens(ctx context.Context, input string, opts ...CallOptio
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -7753,6 +8355,10 @@ func TestCaching(ctx context.Context, input string, not_cached string, opts ...C
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -7813,6 +8419,10 @@ func TestFallbackClient(ctx context.Context, opts ...CallOptionFunc) (string, er
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -7869,6 +8479,10 @@ func TestFallbackStrategy(ctx context.Context, input string, opts ...CallOptionF
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -7929,6 +8543,10 @@ func TestFallbackToShorthand(ctx context.Context, input string, opts ...CallOpti
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -7985,6 +8603,10 @@ func TestFnNamedArgsSingleBool(ctx context.Context, myBool bool, opts ...CallOpt
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -8045,6 +8667,10 @@ func TestFnNamedArgsSingleClass(ctx context.Context, myArg types.NamedArgsSingle
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -8101,6 +8727,10 @@ func TestFnNamedArgsSingleEnumList(ctx context.Context, myArg []types.NamedArgsS
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -8161,6 +8791,10 @@ func TestFnNamedArgsSingleFloat(ctx context.Context, myFloat float64, opts ...Ca
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -8217,6 +8851,10 @@ func TestFnNamedArgsSingleInt(ctx context.Context, myInt int64, opts ...CallOpti
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -8277,6 +8915,10 @@ func TestFnNamedArgsSingleMapStringToClass(ctx context.Context, myMap map[string
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -8333,6 +8975,10 @@ func TestFnNamedArgsSingleMapStringToMap(ctx context.Context, myMap map[string]m
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -8393,6 +9039,10 @@ func TestFnNamedArgsSingleMapStringToString(ctx context.Context, myMap map[strin
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -8449,6 +9099,10 @@ func TestFnNamedArgsSingleString(ctx context.Context, myString string, opts ...C
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -8509,6 +9163,10 @@ func TestFnNamedArgsSingleStringArray(ctx context.Context, myStringArray []strin
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -8565,6 +9223,10 @@ func TestFnNamedArgsSingleStringList(ctx context.Context, myArg []string, opts .
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -8625,6 +9287,10 @@ func TestGemini(ctx context.Context, input string, opts ...CallOptionFunc) (stri
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -8681,6 +9347,10 @@ func TestGeminiOpenAiGeneric(ctx context.Context, opts ...CallOptionFunc) (strin
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -8741,6 +9411,10 @@ func TestGeminiSystem(ctx context.Context, input string, opts ...CallOptionFunc)
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -8797,6 +9471,10 @@ func TestGeminiSystemAsChat(ctx context.Context, input string, opts ...CallOptio
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -8857,6 +9535,10 @@ func TestGeminiThinking(ctx context.Context, input string, opts ...CallOptionFun
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -8913,6 +9595,10 @@ func TestGroq(ctx context.Context, input string, opts ...CallOptionFunc) (string
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -8973,6 +9659,10 @@ func TestImageInput(ctx context.Context, img types.Image, opts ...CallOptionFunc
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -9029,6 +9719,10 @@ func TestImageInputAnthropic(ctx context.Context, img types.Image, opts ...CallO
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -9089,6 +9783,10 @@ func TestImageListInput(ctx context.Context, imgs []types.Image, opts ...CallOpt
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -9145,6 +9843,10 @@ func TestMemory(ctx context.Context, input string, opts ...CallOptionFunc) (type
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -9205,6 +9907,10 @@ func TestMulticlassNamedArgs(ctx context.Context, myArg types.NamedArgsSingleCla
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -9261,6 +9967,10 @@ func TestNamedArgsLiteralBool(ctx context.Context, myBool bool, opts ...CallOpti
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -9321,6 +10031,10 @@ func TestNamedArgsLiteralInt(ctx context.Context, myInt int64, opts ...CallOptio
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -9377,6 +10091,10 @@ func TestNamedArgsLiteralString(ctx context.Context, myString string, opts ...Ca
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -9437,6 +10155,10 @@ func TestOllama(ctx context.Context, input string, opts ...CallOptionFunc) (*str
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -9493,6 +10215,10 @@ func TestOllamaHaiku(ctx context.Context, input string, opts ...CallOptionFunc) 
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -9553,6 +10279,10 @@ func TestOpenAI(ctx context.Context, input string, opts ...CallOptionFunc) (stri
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -9609,6 +10339,10 @@ func TestOpenAIDummyClient(ctx context.Context, input string, opts ...CallOption
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -9669,6 +10403,10 @@ func TestOpenAIGPT4oMini(ctx context.Context, input string, opts ...CallOptionFu
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -9725,6 +10463,10 @@ func TestOpenAIGPT4oMini2(ctx context.Context, input string, opts ...CallOptionF
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -9785,6 +10527,10 @@ func TestOpenAIGPT4oMini3(ctx context.Context, input string, opts ...CallOptionF
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -9841,6 +10587,10 @@ func TestOpenAILegacyProvider(ctx context.Context, input string, opts ...CallOpt
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -9901,6 +10651,10 @@ func TestOpenAIO1NoMaxTokens(ctx context.Context, input string, opts ...CallOpti
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -9957,6 +10711,10 @@ func TestOpenAIO1WithMaxCompletionTokens(ctx context.Context, input string, opts
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -10017,6 +10775,10 @@ func TestOpenAIO1WithMaxTokens(ctx context.Context, input string, opts ...CallOp
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -10073,6 +10835,10 @@ func TestOpenAIProviderWithResponsesType(ctx context.Context, input string, opts
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -10133,6 +10899,10 @@ func TestOpenAIResponses(ctx context.Context, input string, opts ...CallOptionFu
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -10189,6 +10959,10 @@ func TestOpenAIResponsesAutoType(ctx context.Context, input string, opts ...Call
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -10249,6 +11023,10 @@ func TestOpenAIResponsesConversation(ctx context.Context, topic string, opts ...
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -10305,6 +11083,10 @@ func TestOpenAIResponsesCustomURL(ctx context.Context, input string, opts ...Cal
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -10365,6 +11147,10 @@ func TestOpenAIResponsesDifferentModel(ctx context.Context, input string, opts .
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -10421,6 +11207,10 @@ func TestOpenAIResponsesEndpoint(ctx context.Context, input string, opts ...Call
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -10481,6 +11271,10 @@ func TestOpenAIResponsesExplicit(ctx context.Context, input string, opts ...Call
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -10537,6 +11331,10 @@ func TestOpenAIResponsesFunctionCall(ctx context.Context, query string, opts ...
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -10597,6 +11395,10 @@ func TestOpenAIResponsesImageInput(ctx context.Context, image types.Union2ImageO
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -10653,6 +11455,10 @@ func TestOpenAIResponsesReasoning(ctx context.Context, problem string, opts ...C
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -10713,6 +11519,10 @@ func TestOpenAIResponsesShorthand(ctx context.Context, input string, opts ...Cal
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -10769,6 +11579,10 @@ func TestOpenAIResponsesWebSearch(ctx context.Context, query string, opts ...Cal
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -10829,6 +11643,10 @@ func TestOpenAIResponsesWithOpenAIResponseType(ctx context.Context, input string
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -10885,6 +11703,10 @@ func TestOpenAIShorthand(ctx context.Context, input string, opts ...CallOptionFu
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -10945,6 +11767,10 @@ func TestOpenAIWithFinishReasonError(ctx context.Context, input string, opts ...
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -11001,6 +11827,10 @@ func TestOpenAIWithMaxTokens(ctx context.Context, input string, opts ...CallOpti
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -11061,6 +11891,10 @@ func TestOpenAIWithNullMaxTokens(ctx context.Context, input string, opts ...Call
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -11117,6 +11951,10 @@ func TestOpenRouterMistralSmall3_1_24b(ctx context.Context, input string, opts .
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -11177,6 +12015,10 @@ func TestRetryConstant(ctx context.Context, opts ...CallOptionFunc) (string, err
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -11233,6 +12075,10 @@ func TestRetryExponential(ctx context.Context, opts ...CallOptionFunc) (string, 
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -11293,6 +12139,10 @@ func TestRoundRobinStrategy(ctx context.Context, input string, opts ...CallOptio
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -11349,6 +12199,10 @@ func TestSingleFallbackClient(ctx context.Context, opts ...CallOptionFunc) (stri
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -11409,6 +12263,10 @@ func TestThinking(ctx context.Context, input string, opts ...CallOptionFunc) (ty
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -11465,6 +12323,10 @@ func TestUniverseQuestion(ctx context.Context, question types.UniverseQuestionIn
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -11525,6 +12387,10 @@ func TestVertex(ctx context.Context, input string, opts ...CallOptionFunc) (stri
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -11581,6 +12447,10 @@ func TestVertexClaude(ctx context.Context, input string, opts ...CallOptionFunc)
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -11641,6 +12511,10 @@ func TestVertexWithSystemInstructions(ctx context.Context, opts ...CallOptionFun
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -11697,6 +12571,10 @@ func UnionTest_Function(ctx context.Context, input types.Union2BoolOrString, opt
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -11757,6 +12635,10 @@ func UseBlockConstraint(ctx context.Context, inp types.BlockConstraintForParam, 
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -11813,6 +12695,10 @@ func UseMaintainFieldOrder(ctx context.Context, input types.MaintainFieldOrder, 
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -11873,6 +12759,10 @@ func UseMalformedConstraints(ctx context.Context, a types.MalformedConstraints2,
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -11929,6 +12819,10 @@ func UseNestedBlockConstraint(ctx context.Context, inp types.NestedBlockConstrai
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -11989,6 +12883,10 @@ func ValidateBasicResponses(ctx context.Context, input string, opts ...CallOptio
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -12045,6 +12943,10 @@ func ValidateResponseTypes(ctx context.Context, input string, opts ...CallOption
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -12105,6 +13007,10 @@ func VideoInputGemini(ctx context.Context, vid types.Video, opts ...CallOptionFu
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -12161,6 +13067,10 @@ func VideoInputVertex(ctx context.Context, vid types.Video, opts ...CallOptionFu
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()

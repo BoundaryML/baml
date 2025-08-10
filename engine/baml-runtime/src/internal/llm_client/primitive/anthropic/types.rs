@@ -1,3 +1,5 @@
+use std::string;
+
 use serde::{Deserialize, Serialize};
 
 // https://docs.anthropic.com/claude/reference/messages_post
@@ -141,9 +143,44 @@ pub struct ContentBlockDeltaChunk {
 #[derive(Debug, Deserialize, Clone, PartialEq, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ContentBlockDelta {
-    TextDelta { text: String },
-    SignatureDelta { signature: String },
-    ThinkingDelta { thinking: String },
+    TextDelta {
+        text: String,
+    },
+    SignatureDelta {
+        signature: String,
+    },
+    ThinkingDelta {
+        thinking: String,
+    },
+    ToolUse {
+        id: String,
+        input: serde_json::Value,
+        name: String,
+    },
+    ServerToolUse {
+        id: String,
+        input: serde_json::Value,
+        name: String,
+    },
+    WebSearchToolResult {
+        content: String,
+        tool_use_id: String,
+    },
+    CodeExecutionResult {
+        content: serde_json::Value,
+        tool_use_id: String,
+    },
+    MCPToolUse {
+        id: String,
+        input: serde_json::Value,
+        name: String,
+        server_name: String,
+    },
+    MCPToolResult {
+        content: String,
+        is_error: bool,
+        tool_use_id: String,
+    },
     Other,
 }
 

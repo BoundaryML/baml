@@ -42,6 +42,10 @@ func TestComplexUnions(ctx context.Context, input string, opts ...CallOptionFunc
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -98,6 +102,10 @@ func TestDiscriminatedUnions(ctx context.Context, input string, opts ...CallOpti
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -158,6 +166,10 @@ func TestPrimitiveUnions(ctx context.Context, input string, opts ...CallOptionFu
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -214,6 +226,10 @@ func TestUnionArrays(ctx context.Context, input string, opts ...CallOptionFunc) 
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()

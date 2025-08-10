@@ -50,7 +50,9 @@ func (c *BooleanLiterals) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeM
 			c.EitherBool = baml.Decode(valueHolder).Interface().(Union2BoolKFalseOrBoolKTrue)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class BooleanLiterals", key))
+
 		}
 	}
 
@@ -117,7 +119,9 @@ func (c *ComplexLiterals) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeM
 			c.Codes = baml.Decode(valueHolder).Interface().([]Union3IntK200OrIntK404OrIntK500)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class ComplexLiterals", key))
+
 		}
 	}
 
@@ -180,7 +184,9 @@ func (c *IntegerLiterals) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeM
 			c.MaxRetries = baml.Decode(valueHolder).Interface().(Union4IntK0OrIntK1OrIntK3OrIntK5)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class IntegerLiterals", key))
+
 		}
 	}
 
@@ -247,7 +253,9 @@ func (c *MixedLiterals) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap
 			c.ApiVersion = baml.Decode(valueHolder).Interface().(Union3Kv1OrKv2OrKv3)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class MixedLiterals", key))
+
 		}
 	}
 
@@ -310,7 +318,9 @@ func (c *StringLiterals) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMa
 			c.Method = baml.Decode(valueHolder).Interface().(Union4KDELETEOrKGETOrKPOSTOrKPUT)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class StringLiterals", key))
+
 		}
 	}
 

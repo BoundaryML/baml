@@ -131,7 +131,7 @@ func (u *Union2DataResponseOrErrorResponse) IsDataResponse() bool {
 	return u.variant == "DataResponse"
 }
 
-func (u *Union2DataResponseOrErrorResponse) DataResponse() *DataResponse {
+func (u *Union2DataResponseOrErrorResponse) AsDataResponse() *DataResponse {
 	if u.variant != "DataResponse" {
 		return nil
 	}
@@ -159,7 +159,7 @@ func (u *Union2DataResponseOrErrorResponse) IsErrorResponse() bool {
 	return u.variant == "ErrorResponse"
 }
 
-func (u *Union2DataResponseOrErrorResponse) ErrorResponse() *ErrorResponse {
+func (u *Union2DataResponseOrErrorResponse) AsErrorResponse() *ErrorResponse {
 	if u.variant != "ErrorResponse" {
 		return nil
 	}
@@ -276,7 +276,7 @@ func (u *Union2ProductOrUser) IsUser() bool {
 	return u.variant == "User"
 }
 
-func (u *Union2ProductOrUser) User() *User {
+func (u *Union2ProductOrUser) AsUser() *User {
 	if u.variant != "User" {
 		return nil
 	}
@@ -304,7 +304,7 @@ func (u *Union2ProductOrUser) IsProduct() bool {
 	return u.variant == "Product"
 }
 
-func (u *Union2ProductOrUser) Product() *Product {
+func (u *Union2ProductOrUser) AsProduct() *Product {
 	if u.variant != "Product" {
 		return nil
 	}
@@ -421,7 +421,7 @@ func (u *Union2RecursiveUnionOrString) IsString() bool {
 	return u.variant == "String"
 }
 
-func (u *Union2RecursiveUnionOrString) String() *string {
+func (u *Union2RecursiveUnionOrString) AsString() *string {
 	if u.variant != "String" {
 		return nil
 	}
@@ -449,7 +449,7 @@ func (u *Union2RecursiveUnionOrString) IsRecursiveUnion() bool {
 	return u.variant == "RecursiveUnion"
 }
 
-func (u *Union2RecursiveUnionOrString) RecursiveUnion() *RecursiveUnion {
+func (u *Union2RecursiveUnionOrString) AsRecursiveUnion() *RecursiveUnion {
 	if u.variant != "RecursiveUnion" {
 		return nil
 	}
@@ -588,7 +588,7 @@ func (u *Union3AdminOrProductOrUser) IsUser() bool {
 	return u.variant == "User"
 }
 
-func (u *Union3AdminOrProductOrUser) User() *User {
+func (u *Union3AdminOrProductOrUser) AsUser() *User {
 	if u.variant != "User" {
 		return nil
 	}
@@ -618,7 +618,7 @@ func (u *Union3AdminOrProductOrUser) IsProduct() bool {
 	return u.variant == "Product"
 }
 
-func (u *Union3AdminOrProductOrUser) Product() *Product {
+func (u *Union3AdminOrProductOrUser) AsProduct() *Product {
 	if u.variant != "Product" {
 		return nil
 	}
@@ -648,7 +648,7 @@ func (u *Union3AdminOrProductOrUser) IsAdmin() bool {
 	return u.variant == "Admin"
 }
 
-func (u *Union3AdminOrProductOrUser) Admin() *Admin {
+func (u *Union3AdminOrProductOrUser) AsAdmin() *Admin {
 	if u.variant != "Admin" {
 		return nil
 	}
@@ -787,7 +787,7 @@ func (u *Union3ApiErrorOrApiPendingOrApiSuccess) IsApiSuccess() bool {
 	return u.variant == "ApiSuccess"
 }
 
-func (u *Union3ApiErrorOrApiPendingOrApiSuccess) ApiSuccess() *ApiSuccess {
+func (u *Union3ApiErrorOrApiPendingOrApiSuccess) AsApiSuccess() *ApiSuccess {
 	if u.variant != "ApiSuccess" {
 		return nil
 	}
@@ -817,7 +817,7 @@ func (u *Union3ApiErrorOrApiPendingOrApiSuccess) IsApiError() bool {
 	return u.variant == "ApiError"
 }
 
-func (u *Union3ApiErrorOrApiPendingOrApiSuccess) ApiError() *ApiError {
+func (u *Union3ApiErrorOrApiPendingOrApiSuccess) AsApiError() *ApiError {
 	if u.variant != "ApiError" {
 		return nil
 	}
@@ -847,7 +847,7 @@ func (u *Union3ApiErrorOrApiPendingOrApiSuccess) IsApiPending() bool {
 	return u.variant == "ApiPending"
 }
 
-func (u *Union3ApiErrorOrApiPendingOrApiSuccess) ApiPending() *ApiPending {
+func (u *Union3ApiErrorOrApiPendingOrApiSuccess) AsApiPending() *ApiPending {
 	if u.variant != "ApiPending" {
 		return nil
 	}
@@ -986,7 +986,7 @@ func (u *Union3BirdOrCatOrDog) IsDog() bool {
 	return u.variant == "Dog"
 }
 
-func (u *Union3BirdOrCatOrDog) Dog() *Dog {
+func (u *Union3BirdOrCatOrDog) AsDog() *Dog {
 	if u.variant != "Dog" {
 		return nil
 	}
@@ -1016,7 +1016,7 @@ func (u *Union3BirdOrCatOrDog) IsCat() bool {
 	return u.variant == "Cat"
 }
 
-func (u *Union3BirdOrCatOrDog) Cat() *Cat {
+func (u *Union3BirdOrCatOrDog) AsCat() *Cat {
 	if u.variant != "Cat" {
 		return nil
 	}
@@ -1046,7 +1046,7 @@ func (u *Union3BirdOrCatOrDog) IsBird() bool {
 	return u.variant == "Bird"
 }
 
-func (u *Union3BirdOrCatOrDog) Bird() *Bird {
+func (u *Union3BirdOrCatOrDog) AsBird() *Bird {
 	if u.variant != "Bird" {
 		return nil
 	}
@@ -1185,7 +1185,7 @@ func (u *Union3CircleOrRectangleOrTriangle) IsCircle() bool {
 	return u.variant == "Circle"
 }
 
-func (u *Union3CircleOrRectangleOrTriangle) Circle() *Circle {
+func (u *Union3CircleOrRectangleOrTriangle) AsCircle() *Circle {
 	if u.variant != "Circle" {
 		return nil
 	}
@@ -1215,7 +1215,7 @@ func (u *Union3CircleOrRectangleOrTriangle) IsRectangle() bool {
 	return u.variant == "Rectangle"
 }
 
-func (u *Union3CircleOrRectangleOrTriangle) Rectangle() *Rectangle {
+func (u *Union3CircleOrRectangleOrTriangle) AsRectangle() *Rectangle {
 	if u.variant != "Rectangle" {
 		return nil
 	}
@@ -1245,7 +1245,7 @@ func (u *Union3CircleOrRectangleOrTriangle) IsTriangle() bool {
 	return u.variant == "Triangle"
 }
 
-func (u *Union3CircleOrRectangleOrTriangle) Triangle() *Triangle {
+func (u *Union3CircleOrRectangleOrTriangle) AsTriangle() *Triangle {
 	if u.variant != "Triangle" {
 		return nil
 	}
@@ -1384,7 +1384,7 @@ func (u *Union3ErrorOrSuccessOrWarning) IsSuccess() bool {
 	return u.variant == "Success"
 }
 
-func (u *Union3ErrorOrSuccessOrWarning) Success() *Success {
+func (u *Union3ErrorOrSuccessOrWarning) AsSuccess() *Success {
 	if u.variant != "Success" {
 		return nil
 	}
@@ -1414,7 +1414,7 @@ func (u *Union3ErrorOrSuccessOrWarning) IsWarning() bool {
 	return u.variant == "Warning"
 }
 
-func (u *Union3ErrorOrSuccessOrWarning) Warning() *Warning {
+func (u *Union3ErrorOrSuccessOrWarning) AsWarning() *Warning {
 	if u.variant != "Warning" {
 		return nil
 	}
@@ -1444,7 +1444,7 @@ func (u *Union3ErrorOrSuccessOrWarning) IsError() bool {
 	return u.variant == "Error"
 }
 
-func (u *Union3ErrorOrSuccessOrWarning) Error() *Error {
+func (u *Union3ErrorOrSuccessOrWarning) AsError() *Error {
 	if u.variant != "Error" {
 		return nil
 	}
@@ -1583,7 +1583,7 @@ func (u *Union3IntOrRecursiveUnionOrString) IsString() bool {
 	return u.variant == "String"
 }
 
-func (u *Union3IntOrRecursiveUnionOrString) String() *string {
+func (u *Union3IntOrRecursiveUnionOrString) AsString() *string {
 	if u.variant != "String" {
 		return nil
 	}
@@ -1613,7 +1613,7 @@ func (u *Union3IntOrRecursiveUnionOrString) IsInt() bool {
 	return u.variant == "Int"
 }
 
-func (u *Union3IntOrRecursiveUnionOrString) Int() *int64 {
+func (u *Union3IntOrRecursiveUnionOrString) AsInt() *int64 {
 	if u.variant != "Int" {
 		return nil
 	}
@@ -1643,7 +1643,7 @@ func (u *Union3IntOrRecursiveUnionOrString) IsRecursiveUnion() bool {
 	return u.variant == "RecursiveUnion"
 }
 
-func (u *Union3IntOrRecursiveUnionOrString) RecursiveUnion() *RecursiveUnion {
+func (u *Union3IntOrRecursiveUnionOrString) AsRecursiveUnion() *RecursiveUnion {
 	if u.variant != "RecursiveUnion" {
 		return nil
 	}

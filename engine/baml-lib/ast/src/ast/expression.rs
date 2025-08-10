@@ -189,7 +189,9 @@ impl fmt::Display for Expression {
                 for stmt in &block.stmts {
                     write!(f, "{stmt};")?;
                 }
-                write!(f, "{}", block.expr)?;
+                if let Some(expr) = &block.expr {
+                    write!(f, "{}", expr)?;
+                }
                 write!(f, "}}")
             }
             Expression::If(cond, then, else_, _span) => match else_ {
@@ -427,10 +429,7 @@ impl Expression {
             }
             (App(_), _) => panic!("Types do not match: {self:?} and {other:?}"),
             (ExprBlock(block1, _), ExprBlock(block2, _)) => {
-                for (stmt1, stmt2) in block1.stmts.iter().zip(block2.stmts.iter()) {
-                    stmt1.assert_eq_up_to_span(stmt2);
-                }
-                block1.expr.assert_eq_up_to_span(&block2.expr);
+                block1.assert_eq_up_to_span(&block2);
             }
             (ExprBlock(_, _), _) => panic!("Types do not match: {self:?} and {other:?}"),
             (If(cond1, then1, else1, _), If(cond2, then2, else2, _)) => {
@@ -605,7 +604,7 @@ impl ClassConstructorField {
 #[derive(Debug, Clone)]
 pub struct ExpressionBlock {
     pub stmts: Vec<Stmt>,
-    pub expr: Box<Expression>,
+    pub expr: Option<Box<Expression>>,
 }
 
 // TODO: How do we indent the inner statements?
@@ -615,7 +614,9 @@ impl fmt::Display for ExpressionBlock {
         for stmt in &self.stmts {
             write!(f, "{stmt}")?;
         }
-        write!(f, "{}", self.expr)?;
+        if let Some(expr) = &self.expr {
+            write!(f, "{}", expr)?;
+        }
         write!(f, "}}")
     }
 }
@@ -628,6 +629,11 @@ impl ExpressionBlock {
             .for_each(|(a, b)| {
                 a.assert_eq_up_to_span(b);
             });
-        self.expr.assert_eq_up_to_span(&other.expr);
+
+        match (&self.expr, &other.expr) {
+            (Some(expr1), Some(expr2)) => expr1.assert_eq_up_to_span(expr2),
+            (None, None) => {}
+            _ => panic!("Types do not match: {self:?} and {other:?}"),
+        }
     }
 }

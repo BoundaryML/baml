@@ -307,22 +307,31 @@ fn convert_function_body(
     function_body: ast::ExpressionBlock,
     db: &ParserDatabase,
 ) -> Result<Expr<ExprMetadata>> {
-    function_body.expr.repr(db).map(|fn_body| {
-        let mut stmts = function_body.stmts.clone();
-        stmts.reverse();
-        let expr = stmts
-            .iter()
-            .fold(fn_body, |acc, stmt| match stmt.body().repr(db) {
-                Ok(stmt_expr) => Expr::Let(
-                    stmt.identifier().name().to_string(),
-                    Arc::new(stmt_expr),
-                    Arc::new(acc),
-                    (stmt.span().clone(), None),
-                ),
-                Err(e) => acc,
-            });
-        expr
-    })
+    function_body
+        .expr
+        .map(|e| e.repr(db))
+        .unwrap_or_else(|| {
+            eprintln!("TODO @greg: convert blocks with no return types to lambda terms");
+            // Placeholder just to allow compilation.
+            Ok(Expr::Atom(BamlValueWithMeta::Null((Span::fake(), None))))
+        })
+        .map(|fn_body| {
+            let mut stmts = function_body.stmts.clone();
+            stmts.reverse();
+            let expr = stmts
+                .iter()
+                .filter(|stmt| matches!(stmt, ast::Stmt::Let(_))) // TODO: @greg
+                .fold(fn_body, |acc, stmt| match stmt.body().repr(db) {
+                    Ok(stmt_expr) => Expr::Let(
+                        stmt.identifier().name().to_string(),
+                        Arc::new(stmt_expr),
+                        Arc::new(acc),
+                        (stmt.span().clone(), None),
+                    ),
+                    Err(e) => acc,
+                });
+            expr
+        })
 }
 
 impl WithRepr<Expr<ExprMetadata>> for ast::Expression {

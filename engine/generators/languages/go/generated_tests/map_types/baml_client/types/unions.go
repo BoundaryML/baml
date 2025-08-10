@@ -153,7 +153,7 @@ func (u *Union3BoolOrIntOrString) IsString() bool {
 	return u.variant == "String"
 }
 
-func (u *Union3BoolOrIntOrString) String() *string {
+func (u *Union3BoolOrIntOrString) AsString() *string {
 	if u.variant != "String" {
 		return nil
 	}
@@ -183,7 +183,7 @@ func (u *Union3BoolOrIntOrString) IsInt() bool {
 	return u.variant == "Int"
 }
 
-func (u *Union3BoolOrIntOrString) Int() *int64 {
+func (u *Union3BoolOrIntOrString) AsInt() *int64 {
 	if u.variant != "Int" {
 		return nil
 	}
@@ -213,7 +213,7 @@ func (u *Union3BoolOrIntOrString) IsBool() bool {
 	return u.variant == "Bool"
 }
 
-func (u *Union3BoolOrIntOrString) Bool() *bool {
+func (u *Union3BoolOrIntOrString) AsBool() *bool {
 	if u.variant != "Bool" {
 		return nil
 	}

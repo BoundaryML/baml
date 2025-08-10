@@ -14,7 +14,6 @@ import {
 } from '@baml/ui/command';
 import { cn } from '@baml/ui/lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from '@baml/ui/popover';
-import { useSidebar } from '@baml/ui/sidebar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@baml/ui/tooltip';
 import { useAtomValue, useSetAtom } from 'jotai';
 import { atom } from 'jotai';
@@ -30,15 +29,8 @@ import {
 
 interface FunctionTestNameProps {
   functionName: string;
-  testName: string;
+  testName?: string | null;
   selected?: boolean;
-}
-
-interface StringSpan {
-  start: number;
-  end: number;
-  source_file: string;
-  value: string;
 }
 
 const functionsAtom = atom((get) => {
@@ -58,7 +50,6 @@ export const FunctionTestName: React.FC<FunctionTestNameProps> = ({
 }) => {
   const [functionOpen, setFunctionOpen] = useState(false);
   const [testOpen, setTestOpen] = useState(false);
-  const { open: isSidebarOpen } = useSidebar();
 
   const functionAtom = useMemo(
     () => functionObjectAtom(functionName),
@@ -88,27 +79,17 @@ export const FunctionTestName: React.FC<FunctionTestNameProps> = ({
   const currentFunction = functions.find((f) => f.name === functionName);
   const availableTests = currentFunction?.tests || [];
 
-  // Adjust max-width based on sidebar state
-  const getMaxWidthClass = () => {
-    if (isSidebarOpen) {
-      return 'max-w-[80px] sm:max-w-[120px] md:max-w-[150px]';
-    }
-    return 'max-w-[120px] sm:max-w-[240px] md:max-w-[300px]';
-  };
-
   return (
     <Breadcrumb>
-      <BreadcrumbList className="flex flex-nowrap overflow-x-auto">
-        <BreadcrumbItem className="flex items-center gap-1">
-          <div
-            className={`flex items-center gap-1 min-w-0 ${getMaxWidthClass()} shrink`}
-          >
+      <BreadcrumbList className="flex flex-nowrap overflow-hidden min-w-0">
+        <BreadcrumbItem className="flex items-center gap-1 min-w-0">
+          <div className="flex items-center gap-1 min-w-0 flex-1">
             <FunctionSquare className="size-4 mr-2 shrink-0" />
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
                   type="button"
-                  className="truncate min-w-0 whitespace-nowrap cursor-pointer hover:text-primary bg-transparent border-none p-0 text-left"
+                  className="truncate min-w-0 whitespace-nowrap cursor-pointer hover:text-primary bg-transparent border-none p-0 text-left flex-1"
                   onClick={() => {
                     if (fn?.span) {
                       vscode.postMessage({
@@ -125,7 +106,7 @@ export const FunctionTestName: React.FC<FunctionTestNameProps> = ({
             </Tooltip>
             <Popover open={functionOpen} onOpenChange={setFunctionOpen}>
               <PopoverTrigger asChild>
-                <Button variant="ghost" size="sm">
+                <Button variant="ghost" size="sm" className="shrink-0">
                   <ChevronDown className="h-4 w-4" />
                 </Button>
               </PopoverTrigger>
@@ -168,71 +149,70 @@ export const FunctionTestName: React.FC<FunctionTestNameProps> = ({
             </Popover>
           </div>
         </BreadcrumbItem>
-        {/* <BreadcrumbSeparator>/</BreadcrumbSeparator> */}
-        <BreadcrumbItem className="flex items-center gap-1">
-          <div
-            className={`flex items-center gap-1 min-w-0 ${getMaxWidthClass()} shrink`}
-          >
-            <FlaskConical className="size-4 mr-2 shrink-0" />
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  className="truncate min-w-0 whitespace-nowrap cursor-pointer hover:text-primary bg-transparent border-none p-0 text-left"
-                  onClick={() => {
-                    if (tc?.span) {
-                      vscode.postMessage({
-                        command: 'jumpToFile',
-                        span: createSpan(tc.span),
-                      });
-                    }
-                  }}
-                >
-                  {testName}
-                </button>
-              </TooltipTrigger>
-              <TooltipContent>{testName}</TooltipContent>
-            </Tooltip>
-            <Popover open={testOpen} onOpenChange={setTestOpen}>
-              <PopoverTrigger asChild>
-                <Button variant="ghost" size="sm">
-                  <ChevronDown className="h-4 w-4" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="min-w-fit p-0">
-                <Command>
-                  <CommandInput
-                    placeholder="Search tests..."
-                    className="!outline-none focus:!outline-none"
-                  />
-                  <CommandList>
-                    <CommandEmpty>No test found.</CommandEmpty>
-                    <CommandGroup>
-                      {availableTests.map((test) => (
-                        <CommandItem
-                          key={test}
-                          value={test}
-                          onSelect={() => {
-                            setSelectedItem(functionName, test);
-                            setTestOpen(false);
-                          }}
-                        >
-                          <Check
-                            className={cn(
-                              'mr-2 h-4 w-4',
-                              testName === test ? 'opacity-100' : 'opacity-0',
-                            )}
-                          />
-                          <span className="text-sm truncate">{test}</span>
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
-          </div>
-        </BreadcrumbItem>
+        {testName && (
+          <BreadcrumbItem className="flex items-center gap-1 min-w-0">
+            <div className="flex items-center gap-1 min-w-0 flex-1">
+              <FlaskConical className="size-4 mr-2 shrink-0" />
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    className="truncate min-w-0 whitespace-nowrap cursor-pointer hover:text-primary bg-transparent border-none p-0 text-left flex-1"
+                    onClick={() => {
+                      if (tc?.span) {
+                        vscode.postMessage({
+                          command: 'jumpToFile',
+                          span: createSpan(tc.span),
+                        });
+                      }
+                    }}
+                  >
+                    {testName}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>{testName}</TooltipContent>
+              </Tooltip>
+              <Popover open={testOpen} onOpenChange={setTestOpen}>
+                <PopoverTrigger asChild>
+                  <Button variant="ghost" size="sm" className="shrink-0">
+                    <ChevronDown className="h-4 w-4" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="min-w-fit p-0">
+                  <Command>
+                    <CommandInput
+                      placeholder="Search tests..."
+                      className="!outline-none focus:!outline-none"
+                    />
+                    <CommandList>
+                      <CommandEmpty>No test found.</CommandEmpty>
+                      <CommandGroup>
+                        {availableTests.map((test) => (
+                          <CommandItem
+                            key={test}
+                            value={test}
+                            onSelect={() => {
+                              setSelectedItem(functionName, test);
+                              setTestOpen(false);
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                'mr-2 h-4 w-4',
+                                testName === test ? 'opacity-100' : 'opacity-0',
+                              )}
+                            />
+                            <span className="text-sm truncate">{test}</span>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+          </BreadcrumbItem>
+        )}
       </BreadcrumbList>
     </Breadcrumb>
   );

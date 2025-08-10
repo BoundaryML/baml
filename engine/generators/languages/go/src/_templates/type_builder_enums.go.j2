@@ -1,0 +1,45 @@
+package type_builder
+
+import baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
+
+{% for enm in enums %}
+type {{enm.name}}Enum{{enm.builder()}} struct {
+    inner baml.EnumBuilder
+}
+
+func (t *{{enm.name}}Enum{{enm.builder()}}) ListValues() ([]EnumValue{{enm.builder()}}, error) {
+    result, err := t.inner.ListValues()
+	if err != nil {
+		return nil, err
+	}
+	builders := make([]EnumValue{{enm.builder()}}, len(result))
+	for i, p := range result {
+		builders[i] = p
+	}
+	return builders, nil
+}
+
+{% if enm.dynamic %}
+func (t *{{enm.name}}Enum{{enm.builder()}}) AddValue(value string) (EnumValue{{enm.builder()}}, error) {
+	return t.inner.AddValue(value)
+}
+{% endif %}
+
+{% for (val, _) in enm.values %}
+func (t *{{enm.name}}Enum{{enm.builder()}}) Value{{val|exported_name}}() (EnumValue{{enm.builder()}}, error) {
+    return t.inner.Value("{{val}}")
+}
+{% endfor %}
+
+func (t *TypeBuilder) {{enm.name}}() (*{{enm.name}}Enum{{enm.builder()}}, error) {
+	bld, err := t.inner.Enum("{{enm.name}}")
+	if err != nil {
+		return nil, err
+	}
+	return &{{enm.name}}Enum{{enm.builder()}}{inner: bld}, nil
+}
+
+func (t *{{enm.name}}Enum{{enm.builder()}}) Type() (baml.Type, error) {
+	return t.inner.Type()
+}
+{% endfor %}

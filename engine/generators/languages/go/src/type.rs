@@ -193,6 +193,9 @@ impl TypeGo {
         if matches!(self.meta().type_wrapper, TypeWrapper::Optional(_)) {
             return "nil".to_string();
         }
+        if matches!(self.meta().type_wrapper, TypeWrapper::Checked(_)) {
+            return format!("{}{{}}", self.serialize_type(pkg));
+        }
         match self {
             TypeGo::String(val, _) => val.as_ref().map_or("\"\"".to_string(), |v| {
                 format!("\"{}\"", v.replace("\"", "\\\"")).to_string()
@@ -275,7 +278,29 @@ impl TypeGo {
     }
 
     pub fn cast_from_function(&self, param: &str, pkg: &CurrentRenderPackage) -> String {
-        format!("({param}).({})", self.serialize_type(pkg))
+        if self.meta().is_checked() {
+            let mut without_checked = self.clone();
+            without_checked.meta_mut().type_wrapper.pop_checked();
+            format!(
+                "baml.CastChecked({param}, func(inner any) {t} {{
+                return {casted}
+            }})",
+                t = without_checked.serialize_type(pkg),
+                casted = without_checked.cast_from_function("inner", pkg)
+            )
+        } else if self.meta().wrap_stream_state {
+            let mut without_stream_state = self.clone();
+            without_stream_state.meta_mut().wrap_stream_state = false;
+            format!(
+                "baml.CastStreamState({param}, func(inner any) {t} {{
+                return {casted}
+            }})",
+                t = without_stream_state.serialize_type(pkg),
+                casted = without_stream_state.cast_from_function("inner", pkg)
+            )
+        } else {
+            format!("({param}).({})", self.serialize_type(pkg))
+        }
     }
 
     pub fn decode_from_any(&self, param: &str, pkg: &CurrentRenderPackage) -> String {

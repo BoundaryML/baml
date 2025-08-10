@@ -44,8 +44,20 @@ func decodeRawObjectImpl(rt unsafe.Pointer, cRaw *cffi.CFFIRawObject) (raw_objec
 		return newMedia(obj.MediaPdf.Pointer, rt, MediaType_PDF), nil
 	case *cffi.CFFIRawObject_MediaVideo:
 		return newMedia(obj.MediaVideo.Pointer, rt, MediaType_Video), nil
+	case *cffi.CFFIRawObject_Type:
+		return newType(obj.Type.Pointer, rt), nil
+	case *cffi.CFFIRawObject_TypeBuilder:
+		return newTypeBuilder(obj.TypeBuilder.Pointer, rt), nil
+	case *cffi.CFFIRawObject_EnumBuilder:
+		return newEnumBuilder(obj.EnumBuilder.Pointer, rt), nil
+	case *cffi.CFFIRawObject_ClassBuilder:
+		return newClassBuilder(obj.ClassBuilder.Pointer, rt), nil
+	case *cffi.CFFIRawObject_EnumValueBuilder:
+		return newEnumValueBuilder(obj.EnumValueBuilder.Pointer, rt), nil
+	case *cffi.CFFIRawObject_ClassPropertyBuilder:
+		return newClassPropertyBuilder(obj.ClassPropertyBuilder.Pointer, rt), nil
 	default:
-		return nil, fmt.Errorf("unexpected raw object type")
+		return nil, fmt.Errorf("unexpected raw object type %T", cRaw.Object)
 	}
 }
 

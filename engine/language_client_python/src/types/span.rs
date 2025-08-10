@@ -14,10 +14,11 @@ use crate::{
     runtime::BamlRuntime,
 };
 
-crate::lang_wrapper!(BamlSpan,
+crate::lang_wrapper!(
+  BamlSpan,
   Option<baml_runtime::tracing::TracingCall>,
   no_from,
-  rt: std::sync::Arc<baml_runtime::BamlRuntime>
+  rt: std::sync::Arc<crate::runtime::CoreBamlRuntime>
 );
 
 #[pymethods]

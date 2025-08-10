@@ -64,7 +64,9 @@ func (c *AllNullable) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) 
 			c.NullObject = baml.Decode(valueHolder).Interface().(*User)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class AllNullable", key))
+
 		}
 	}
 
@@ -137,7 +139,9 @@ func (c *BooleanEdgeCases) Decode(holder *cffi.CFFIValueClass, typeMap baml.Type
 			c.MixedBoolArray = baml.Decode(valueHolder).Interface().([]bool)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class BooleanEdgeCases", key))
+
 		}
 	}
 
@@ -208,7 +212,9 @@ func (c *CircularReference) Decode(holder *cffi.CFFIValueClass, typeMap baml.Typ
 			c.RelatedItems = baml.Decode(valueHolder).Interface().([]CircularReference)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class CircularReference", key))
+
 		}
 	}
 
@@ -267,7 +273,9 @@ func (c *DeepRecursion) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap
 			c.Next = baml.Decode(valueHolder).Interface().(*DeepRecursion)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class DeepRecursion", key))
+
 		}
 	}
 
@@ -332,7 +340,9 @@ func (c *EmptyCollections) Decode(holder *cffi.CFFIValueClass, typeMap baml.Type
 			c.EmptyNestedArray = baml.Decode(valueHolder).Interface().([][]string)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class EmptyCollections", key))
+
 		}
 	}
 
@@ -387,7 +397,9 @@ func (c *InnerNullable) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap
 			c.Value = baml.Decode(valueHolder).Interface().(*string)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class InnerNullable", key))
+
 		}
 	}
 
@@ -550,7 +562,9 @@ func (c *LargeStructure) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMa
 			c.Map5 = baml.Decode(valueHolder).Interface().(map[string]User)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class LargeStructure", key))
+
 		}
 	}
 
@@ -675,7 +689,9 @@ func (c *MixedEdgeCases) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMa
 			c.OptionalEverything = baml.Decode(valueHolder).Interface().(*OptionalEverything)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class MixedEdgeCases", key))
+
 		}
 	}
 
@@ -732,7 +748,9 @@ func (c *NestedNullable) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMa
 			c.Outer = baml.Decode(valueHolder).Interface().(*OuterNullable)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class NestedNullable", key))
+
 		}
 	}
 
@@ -787,7 +805,9 @@ func (c *NullEdgeCases) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap
 			c.NestedNull = baml.Decode(valueHolder).Interface().(*NestedNullable)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class NullEdgeCases", key))
+
 		}
 	}
 
@@ -874,7 +894,9 @@ func (c *NumberEdgeCases) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeM
 			c.NotANumber = baml.Decode(valueHolder).Interface().(*float64)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class NumberEdgeCases", key))
+
 		}
 	}
 
@@ -963,7 +985,9 @@ func (c *OptionalEverything) Decode(holder *cffi.CFFIValueClass, typeMap baml.Ty
 			c.OptObject = baml.Decode(valueHolder).Interface().(*User)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class OptionalEverything", key))
+
 		}
 	}
 
@@ -1022,7 +1046,9 @@ func (c *OuterNullable) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap
 			c.Inner = baml.Decode(valueHolder).Interface().(*InnerNullable)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class OuterNullable", key))
+
 		}
 	}
 
@@ -1081,7 +1107,9 @@ func (c *SomeNullable) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap)
 			c.NullInt = baml.Decode(valueHolder).Interface().(*int64)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class SomeNullable", key))
+
 		}
 	}
 
@@ -1162,7 +1190,9 @@ func (c *SpecialCharacters) Decode(holder *cffi.CFFIValueClass, typeMap baml.Typ
 			c.WithMixedSpecial = baml.Decode(valueHolder).Interface().(*string)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class SpecialCharacters", key))
+
 		}
 	}
 
@@ -1227,7 +1257,9 @@ func (c *User) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.Name = baml.Decode(valueHolder).Interface().(*string)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class User", key))
+
 		}
 	}
 
@@ -1292,7 +1324,9 @@ func (c *VeryLongStrings) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeM
 			c.ExtremelyLongString = baml.Decode(valueHolder).Interface().(*string)
 
 		default:
-			panic(fmt.Sprintf("unexpected field: %s", key))
+
+			panic(fmt.Sprintf("unexpected field: %s in class VeryLongStrings", key))
+
 		}
 	}
 

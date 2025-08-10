@@ -24,6 +24,10 @@ func (*stream) {{ fn.name }}(ctx context.Context{% for (name, go_type) in fn.arg
         args.Collectors = callOpts.collectors
     }
 
+    if callOpts.typeBuilder != nil {
+        args.TypeBuilder = callOpts.typeBuilder
+    }
+
     encoded, err := args.Encode()
     if err != nil {
         // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues

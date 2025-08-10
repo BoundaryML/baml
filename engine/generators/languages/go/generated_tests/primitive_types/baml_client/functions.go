@@ -42,6 +42,10 @@ func TestEmptyCollections(ctx context.Context, input string, opts ...CallOptionF
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -98,6 +102,10 @@ func TestMixedPrimitives(ctx context.Context, input string, opts ...CallOptionFu
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -158,6 +166,10 @@ func TestPrimitiveArrays(ctx context.Context, input string, opts ...CallOptionFu
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -214,6 +226,10 @@ func TestPrimitiveMaps(ctx context.Context, input string, opts ...CallOptionFunc
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -274,6 +290,10 @@ func TestPrimitiveTypes(ctx context.Context, input string, opts ...CallOptionFun
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -330,6 +350,10 @@ func TestTopLevelBool(ctx context.Context, input string, opts ...CallOptionFunc)
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()
@@ -390,6 +414,10 @@ func TestTopLevelFloat(ctx context.Context, input string, opts ...CallOptionFunc
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -448,6 +476,10 @@ func TestTopLevelInt(ctx context.Context, input string, opts ...CallOptionFunc) 
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -486,7 +518,7 @@ func TestTopLevelInt(ctx context.Context, input string, opts ...CallOptionFunc) 
 	}
 }
 
-func TestTopLevelNull(ctx context.Context, input string, opts ...CallOptionFunc) (*any, error) {
+func TestTopLevelNull(ctx context.Context, input string, opts ...CallOptionFunc) (any, error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -506,6 +538,10 @@ func TestTopLevelNull(ctx context.Context, input string, opts ...CallOptionFunc)
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -521,7 +557,7 @@ func TestTopLevelNull(ctx context.Context, input string, opts ...CallOptionFunc)
 			return nil, result.Error
 		}
 
-		casted := (result.Data).(*any)
+		casted := (result.Data).(any)
 
 		return casted, nil
 	} else {
@@ -536,7 +572,7 @@ func TestTopLevelNull(ctx context.Context, input string, opts ...CallOptionFunc)
 			}
 
 			if result.HasData {
-				return result.Data.(*any), nil
+				return result.Data.(any), nil
 			}
 		}
 
@@ -562,6 +598,10 @@ func TestTopLevelString(ctx context.Context, input string, opts ...CallOptionFun
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()

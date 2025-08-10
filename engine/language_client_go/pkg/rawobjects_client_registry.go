@@ -20,7 +20,7 @@ type ClientRegistry struct {
 	clients clientRegistryMap
 }
 
-func (c ClientRegistry) AddLlmClient(name string, provider string, options map[string]any) {
+func (c *ClientRegistry) AddLlmClient(name string, provider string, options map[string]any) {
 	if c.clients == nil {
 		c.clients = make(clientRegistryMap)
 	}
@@ -36,14 +36,14 @@ func (c *ClientRegistry) SetPrimaryClient(name string) {
 }
 
 func encodeClientRegistry(clientRegistryVal *ClientRegistry) (*cffi.CFFIClientRegistry, error) {
-
 	clientOffsets := make([]*cffi.CFFIClientProperty, 0, len(clientRegistryVal.clients))
-	for _, client := range clientRegistryVal.clients {
+	for name, client := range clientRegistryVal.clients {
 		options, err := serde.EncodeMapEntries(client.options, "client options")
 		if err != nil {
 			return nil, fmt.Errorf("encoding client options: %w", err)
 		}
 		clientOffsets = append(clientOffsets, &cffi.CFFIClientProperty{
+			Name:        name,
 			Provider:    client.provider,
 			RetryPolicy: client.retryPolicy,
 			Options:     options,

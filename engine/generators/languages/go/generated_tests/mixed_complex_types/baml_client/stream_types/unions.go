@@ -131,7 +131,7 @@ func (u *Union2ConditionOrSimpleCondition) IsCondition() bool {
 	return u.variant == "Condition"
 }
 
-func (u *Union2ConditionOrSimpleCondition) Condition() *Condition {
+func (u *Union2ConditionOrSimpleCondition) AsCondition() *Condition {
 	if u.variant != "Condition" {
 		return nil
 	}
@@ -159,7 +159,7 @@ func (u *Union2ConditionOrSimpleCondition) IsSimpleCondition() bool {
 	return u.variant == "SimpleCondition"
 }
 
-func (u *Union2ConditionOrSimpleCondition) SimpleCondition() *SimpleCondition {
+func (u *Union2ConditionOrSimpleCondition) AsSimpleCondition() *SimpleCondition {
 	if u.variant != "SimpleCondition" {
 		return nil
 	}
@@ -276,7 +276,7 @@ func (u *Union2ErrorOrSuccess) IsSuccess() bool {
 	return u.variant == "Success"
 }
 
-func (u *Union2ErrorOrSuccess) Success() *Success {
+func (u *Union2ErrorOrSuccess) AsSuccess() *Success {
 	if u.variant != "Success" {
 		return nil
 	}
@@ -304,7 +304,7 @@ func (u *Union2ErrorOrSuccess) IsError() bool {
 	return u.variant == "Error"
 }
 
-func (u *Union2ErrorOrSuccess) Error() *Error {
+func (u *Union2ErrorOrSuccess) AsError() *Error {
 	if u.variant != "Error" {
 		return nil
 	}
@@ -443,7 +443,7 @@ func (u *Union3DataObjectOrIntOrString) IsString() bool {
 	return u.variant == "String"
 }
 
-func (u *Union3DataObjectOrIntOrString) String() *string {
+func (u *Union3DataObjectOrIntOrString) AsString() *string {
 	if u.variant != "String" {
 		return nil
 	}
@@ -473,7 +473,7 @@ func (u *Union3DataObjectOrIntOrString) IsInt() bool {
 	return u.variant == "Int"
 }
 
-func (u *Union3DataObjectOrIntOrString) Int() *int64 {
+func (u *Union3DataObjectOrIntOrString) AsInt() *int64 {
 	if u.variant != "Int" {
 		return nil
 	}
@@ -503,7 +503,7 @@ func (u *Union3DataObjectOrIntOrString) IsDataObject() bool {
 	return u.variant == "DataObject"
 }
 
-func (u *Union3DataObjectOrIntOrString) DataObject() *DataObject {
+func (u *Union3DataObjectOrIntOrString) AsDataObject() *DataObject {
 	if u.variant != "DataObject" {
 		return nil
 	}
@@ -664,7 +664,7 @@ func (u *Union4IntOrListNodeOrMapStringKeyNodeValueOrString) IsString() bool {
 	return u.variant == "String"
 }
 
-func (u *Union4IntOrListNodeOrMapStringKeyNodeValueOrString) String() *string {
+func (u *Union4IntOrListNodeOrMapStringKeyNodeValueOrString) AsString() *string {
 	if u.variant != "String" {
 		return nil
 	}
@@ -696,7 +696,7 @@ func (u *Union4IntOrListNodeOrMapStringKeyNodeValueOrString) IsInt() bool {
 	return u.variant == "Int"
 }
 
-func (u *Union4IntOrListNodeOrMapStringKeyNodeValueOrString) Int() *int64 {
+func (u *Union4IntOrListNodeOrMapStringKeyNodeValueOrString) AsInt() *int64 {
 	if u.variant != "Int" {
 		return nil
 	}
@@ -728,7 +728,7 @@ func (u *Union4IntOrListNodeOrMapStringKeyNodeValueOrString) IsListNode() bool {
 	return u.variant == "ListNode"
 }
 
-func (u *Union4IntOrListNodeOrMapStringKeyNodeValueOrString) ListNode() *[]Node {
+func (u *Union4IntOrListNodeOrMapStringKeyNodeValueOrString) AsListNode() *[]Node {
 	if u.variant != "ListNode" {
 		return nil
 	}
@@ -760,7 +760,7 @@ func (u *Union4IntOrListNodeOrMapStringKeyNodeValueOrString) IsMapStringKeyNodeV
 	return u.variant == "MapStringKeyNodeValue"
 }
 
-func (u *Union4IntOrListNodeOrMapStringKeyNodeValueOrString) MapStringKeyNodeValue() *map[string]Node {
+func (u *Union4IntOrListNodeOrMapStringKeyNodeValueOrString) AsMapStringKeyNodeValue() *map[string]Node {
 	if u.variant != "MapStringKeyNodeValue" {
 		return nil
 	}

@@ -5,6 +5,14 @@ import (
 	"github.com/boundaryml/baml/engine/language_client_go/baml_go/serde"
 )
 
+type ASTNodeSource string
+
+const (
+	ASTNodeSource_Unknown ASTNodeSource = "unknown"
+	ASTNodeSource_Baml    ASTNodeSource = "baml_file"
+	ASTNodeSource_TypeBuilder ASTNodeSource = "type_builder"
+)
+
 type MediaType string
 
 const (
@@ -21,6 +29,8 @@ type media interface {
 	MimeType() (*string, error)
 	AsUrl() (*string, error)
 	AsBase64() (*string, error)
+	IsUrl() (bool, error)
+	IsBase64() (bool, error)
 }
 
 type Image interface {
@@ -171,3 +181,105 @@ type TickReason string
 const (
 	TickReason_Unknown TickReason = "Unknown"
 )
+
+// Types for BAML Type Construction
+
+type TypeBuilder interface {
+	raw_objects.RawPointer
+	// Basic types
+	String() (Type, error)
+	Int() (Type, error)
+	Float() (Type, error)
+	Bool() (Type, error)
+	Null() (Type, error)
+	// Literal types  
+	LiteralString(value string) (Type, error)
+	LiteralInt(value int64) (Type, error)
+	LiteralBool(value bool) (Type, error)
+	// Composite types
+	Map(key Type, value Type) (Type, error)
+	List(inner Type) (Type, error)
+	Optional(inner Type) (Type, error)
+	Union(types []Type) (Type, error)
+	// BAML schema operations
+	AddBaml(baml string) error
+	// Enum operations
+	AddEnum(name string) (EnumBuilder, error)
+	Enum(name string) (EnumBuilder, error)
+	ListEnums() ([]EnumBuilder, error)
+	// Class operations
+	AddClass(name string) (ClassBuilder, error)
+	Class(name string) (ClassBuilder, error)
+	ListClasses() ([]ClassBuilder, error)
+
+	// Display the type builder
+	Print() string
+}
+
+type Type interface {
+	raw_objects.RawPointer
+	serde.InternalBamlSerializer
+	// Type extensions
+	List() (Type, error)
+	Optional() (Type, error)
+	Print() string
+}
+
+type llmRenderable interface {
+	// Set the description for the object
+	SetDescription(description string) error
+	// Set the alias for the object
+	SetAlias(alias string) error
+	// Get the description for the object
+	Description() (*string, error)
+	// Get the alias for the object
+	Alias() (*string, error)
+	// Determine where this enum was defined
+	From() (ASTNodeSource, error)
+	// Get the name for the property
+	Name() (string, error)
+}
+
+type EnumBuilder interface {
+	raw_objects.RawPointer
+	llmRenderable
+	// Add a new value to the enum
+	AddValue(value string) (EnumValueBuilder, error)
+	// Get the type definition for this enum
+	Type() (Type, error)
+	// List all values in the enum
+	ListValues() ([]EnumValueBuilder, error)
+	// Get a specific value from the enum
+	Value(name string) (EnumValueBuilder, error)
+}
+
+type EnumValueBuilder interface {
+	raw_objects.RawPointer
+	llmRenderable
+	// Mark the enum value to be skipped
+	SetSkip(skip bool) error
+	// Get the skip value
+	Skip() (bool, error)
+}
+
+type ClassBuilder interface {
+	raw_objects.RawPointer
+	llmRenderable
+	// Get the type definition for this class
+	Type() (Type, error)
+	// List all properties in the class
+	ListProperties() ([]ClassPropertyBuilder, error)
+	// Add a new property to the class
+	AddProperty(name string, fieldType Type) (ClassPropertyBuilder, error)
+	// Get a specific property from the class
+	Property(name string) (ClassPropertyBuilder, error)
+}
+
+type ClassPropertyBuilder interface {
+	raw_objects.RawPointer
+	llmRenderable
+	// Set the type for the property
+	SetType(fieldType Type) error
+	// Get the type for the property
+	Type() (Type, error)
+}

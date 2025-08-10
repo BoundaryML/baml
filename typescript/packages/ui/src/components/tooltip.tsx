@@ -6,7 +6,7 @@ import type * as React from 'react';
 import { cn } from '@baml/ui/lib/utils';
 
 function TooltipProvider({
-  delayDuration = 300,
+  delayDuration = 0,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Provider>) {
   return (
@@ -46,13 +46,13 @@ function TooltipContent({
         data-slot="tooltip-content"
         sideOffset={sideOffset}
         className={cn(
-          'fade-in-0 zoom-in-95 data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 w-fit animate-in text-balance rounded-md bg-secondary px-3 py-1.5 text-secondary-foreground text-xs data-[state=closed]:animate-out',
+          'fade-in-0 zoom-in-95 data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 w-fit animate-in text-balance rounded-md bg-sidebar px-3 py-1.5 text-foreground text-xs data-[state=closed]:animate-out',
           className,
         )}
         {...props}
       >
         {children}
-        <TooltipPrimitive.Arrow className="z-50 size-2.5 translate-y-[calc(-50%_-_2px)] rotate-45 rounded-[2px] bg-secondary fill-secondary" />
+        <TooltipPrimitive.Arrow className="z-50 size-2.5 translate-y-[calc(-50%_-_2px)] rotate-45 rounded-[2px] bg-sidebar fill-sidebar" />
       </TooltipPrimitive.Content>
     </TooltipPrimitive.Portal>
   );

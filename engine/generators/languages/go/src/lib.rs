@@ -7,7 +7,13 @@ use functions::{
 use generated_types::{render_go_stream_types, render_go_types};
 use internal_baml_core::ir::TypeValue;
 
-use crate::generated_types::{render_go_stream_types_utils, render_go_types_utils};
+use crate::{
+    functions::{render_functions_parse, render_functions_parse_stream},
+    generated_types::{
+        render_go_stream_types_utils, render_go_types_utils, render_type_builder_classes,
+        render_type_builder_common, render_type_builder_enums,
+    },
+};
 
 mod functions;
 mod generated_types;
@@ -66,6 +72,16 @@ impl LanguageFeatures for GoLanguageFeatures {
         collector.add_file(
             "functions_stream.go",
             render_functions_stream(&functions, &pkg, go_mod_name)?,
+        )?;
+
+        collector.add_file(
+            "functions_parse.go",
+            render_functions_parse(&functions, &pkg, go_mod_name)?,
+        )?;
+
+        collector.add_file(
+            "functions_parse_stream.go",
+            render_functions_parse_stream(&functions, &pkg, go_mod_name)?,
         )?;
 
         let go_classes = ir
@@ -175,6 +191,20 @@ impl LanguageFeatures for GoLanguageFeatures {
         let _ = collector.add_file(
             "types/type_aliases.go",
             render_go_types(&go_type_aliases, &pkg)?,
+        );
+
+        pkg.set("baml_client.types_builder");
+        let _ = collector.add_file(
+            "type_builder/type_builder.go",
+            render_type_builder_common(&enums, &go_classes, &pkg)?,
+        );
+        let _ = collector.add_file(
+            "type_builder/enums.go",
+            render_type_builder_enums(&enums, &pkg)?,
+        );
+        let _ = collector.add_file(
+            "type_builder/classes.go",
+            render_type_builder_classes(&go_classes, &pkg)?,
         );
 
         let go_classes = ir

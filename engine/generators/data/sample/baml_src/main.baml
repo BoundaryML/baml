@@ -1,6 +1,6 @@
 class Example {
     type "example_1" @stream.not_null
-    a int
+    a int @check(a_is_positive, {{this > 0}})
     b string
 
     // This doesn't work :(

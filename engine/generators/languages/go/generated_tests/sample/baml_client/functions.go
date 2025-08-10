@@ -42,6 +42,10 @@ func Bar(ctx context.Context, x int64, opts ...CallOptionFunc) (types.Union2Exam
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -98,6 +102,10 @@ func Foo(ctx context.Context, x int64, opts ...CallOptionFunc) (types.Union2Exam
 
 	if callOpts.collectors != nil {
 		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
 	}
 
 	encoded, err := args.Encode()

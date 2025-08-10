@@ -8,7 +8,6 @@ import type {
   WasmTestResponse,
 } from '@gloo-ai/baml-schema-wasm-web';
 import { atomFamily } from 'jotai/utils';
-import { vscode } from '../vscode';
 
 export const runtimeStateAtom: Atom<{
   functions: WasmFunction[];
@@ -61,7 +60,7 @@ export const functionObjectAtom = atomFamily((functionName: string) =>
 );
 
 export const testcaseObjectAtom = atomFamily(
-  (params: { functionName: string; testcaseName: string }) =>
+  (params: { functionName: string; testcaseName?: string | null }) =>
     atom((get) => {
       const { functions } = get(runtimeStateAtom);
       const fn = functions.find((f) => f.name === params.functionName);
@@ -248,4 +247,3 @@ export interface FlashRange {
 }
 
 export const flashRangesAtom = atom<FlashRange[]>([]);
-

@@ -1,16 +1,16 @@
 import { Suspense } from 'react';
 import 'allotment/dist/style.css';
-import { EventListener } from '@baml/playground-common/event-listener';
+// import { Snippets } from './shared/Snippets'
+// import { AppStateProvider } from './shared/AppStateContext' // Import the AppStateProvider
+import { useFeedbackWidget } from '@baml/playground-common';
 // import FunctionPanel from './shared/FunctionPanel'
 // import { ViewSelector } from './shared/Selectors'
 // import SettingsDialog, { ShowSettingsButton, showSettingsAtom } from './shared/SettingsDialog'
 // import IntroToChecksDialog from './shared/IntroToChecksDialog'
 import { CustomErrorBoundary } from '@baml/playground-common/custom-error-boundary';
+import { EventListener } from '@baml/playground-common/event-listener';
 // import 'jotai-devtools/styles.css'
 import { PromptPreview } from '@baml/playground-common/prompt-preview';
-// import { Snippets } from './shared/Snippets'
-// import { AppStateProvider } from './shared/AppStateContext' // Import the AppStateProvider
-import { useFeedbackWidget } from '@baml/playground-common';
 import { ThemeProvider } from 'next-themes';
 
 function App() {
@@ -19,18 +19,20 @@ function App() {
     <CustomErrorBoundary message="Error loading playground">
       {/* <DevTools /> */}
       <Suspense fallback={<div>Loading...</div>}>
-
-        <div className="relative min-h-screen bg-background text-foreground">
+        <div className="h-screen bg-background text-foreground">
           <ThemeProvider
             attribute="class"
             defaultTheme="dark"
             enableSystem
             disableTransitionOnChange={true}
           >
-            <PromptPreview />
-            <div className="absolute bottom-0 right-4 z-50">
-              <EventListener />
+            {/* Main content area */}
+            <div className="h-full">
+              <PromptPreview />
             </div>
+
+            {/* Background event handler (no UI) */}
+            <EventListener />
           </ThemeProvider>
         </div>
 
