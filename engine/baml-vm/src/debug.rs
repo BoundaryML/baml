@@ -114,6 +114,9 @@ pub fn display_instruction(
 
         Instruction::Pop(_)
         | Instruction::PopReplace(_)
+        | Instruction::BinOp(_)
+        | Instruction::CmpOp(_)
+        | Instruction::LogicOp(_)
         | Instruction::AllocArray(_)
         | Instruction::DispatchFuture(_)
         | Instruction::Await
@@ -164,6 +167,11 @@ fn instruction_color(instruction: &Instruction) -> Color {
         // Store instructions.
         Instruction::StoreVar(_) | Instruction::StoreGlobal(_) | Instruction::StoreField(_) => {
             Color::Green
+        }
+
+        // Binary operation instructions.
+        Instruction::BinOp(_) | Instruction::CmpOp(_) | Instruction::LogicOp(_) => {
+            Color::BrightBlue
         }
 
         // Branch instructions.
