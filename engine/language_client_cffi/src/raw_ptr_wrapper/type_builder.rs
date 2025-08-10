@@ -75,7 +75,7 @@ impl TypeBuilderWrapper {
     #[export_baml_fn]
     fn add_baml(&self, runtime: &baml_runtime::BamlRuntime, baml: &str) -> Result<(), String> {
         self.inner
-            .add_baml(baml, runtime.internal())
+            .add_baml(baml, runtime)
             .map_err(|e| e.to_string())
     }
 
