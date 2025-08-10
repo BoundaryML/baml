@@ -14,7 +14,7 @@ use regex::Regex;
 use sugar_path::SugarPath;
 use version_check::{check_version, GeneratorType, VersionCheckMode};
 
-mod dir_writer;
+// mod dir_writer;
 // mod go;
 // pub mod openapi;
 // mod python;
