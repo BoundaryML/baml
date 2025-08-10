@@ -294,9 +294,6 @@ pub struct ListFunctionCallsRequest {
     /// Maximum number of function calls to return. Defaults to 100 if not specified.
     #[ts(optional)]
     pub limit: Option<u32>,
-    /// Number of function calls to skip. Used for pagination. Defaults to 0 if not specified.
-    #[ts(optional)]
-    pub offset: Option<u32>,
     /// Keyset cursor for pagination: fetch the next page after this id.
     /// Stripe-style naming. Mutually exclusive with `endingBefore`.
     #[ts(optional)]
@@ -343,7 +340,6 @@ impl Default for ListFunctionCallsRequest {
                 direction: SortDirection::Descending,
             }),
             limit: Some(100),
-            offset: Some(0),
             starting_after: None,
             ending_before: None,
             function_call_id: None,

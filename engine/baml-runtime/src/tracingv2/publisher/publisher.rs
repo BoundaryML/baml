@@ -715,14 +715,12 @@ impl BlobUploader {
     pub async fn run(&mut self) {
         let mut upload_interval = interval(Duration::from_secs(2));
 
-        log::info!("Starting blob uploader loop");
-
         loop {
             tokio::select! {
                 Some(message) = self.rx.recv() => {
                     // log::info!("Blob uploader received message: ", message);
                     if self.lookup.api_key().is_none() {
-                        log::info!("Skipping blob upload because BOUNDARY_API_KEY is not set");
+                        log::debug!("Skipping blob upload because BOUNDARY_API_KEY is not set");
                         continue;
                     }
 
@@ -731,7 +729,6 @@ impl BlobUploader {
                             // No-op in new architecture - blobs are queued immediately when stored
                         },
                         BlobUploaderMessage::QueueBlob(blob) => {
-                            log::info!("Queuing blob: {}", blob.metadata.blob_hash);
                             self.queued_blobs.push(blob);
 
                             // If we've reached the batch size, upload immediately

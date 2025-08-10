@@ -98,8 +98,8 @@ pub struct UiFunctionCall {
     pub tags: serde_json::Map<String, serde_json::Value>,
 
     #[serde(rename = "start_epoch_ms")]
-    #[ts(type = "number | null")]
-    pub start_time: Option<EpochMsTimestamp>,
+    #[ts(type = "number")]
+    pub start_time: EpochMsTimestamp,
     #[serde(rename = "end_epoch_ms")]
     #[ts(type = "number | null")]
     pub end_time: Option<EpochMsTimestamp>,
