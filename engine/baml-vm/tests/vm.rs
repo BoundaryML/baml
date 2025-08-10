@@ -136,6 +136,23 @@ fn assert_vm_executes_bytecode_with_inspection(
 }
 
 #[test]
+fn return_function_call() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: "
+            fn one() -> int {
+                1
+            }
+
+            fn main() -> int {
+                one()
+            }
+        ",
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(1)),
+    })
+}
+
+#[test]
 fn function_call_without_parameters() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: "

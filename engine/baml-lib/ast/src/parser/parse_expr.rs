@@ -223,7 +223,7 @@ pub fn parse_expr_block(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Optio
     // TODO: Likely there's no need to separate statements and final expression
     // since a statement can now be an expression. We just need to allow any
     // random expression as a statement as mentioned in the grammar file.
-    let return_expr = if let [Stmt::Expression(Expression::If(..))] = stmts.as_slice() {
+    let return_expr = if let Some(Stmt::Expression(Expression::If(..))) = stmts.last() {
         let Stmt::Expression(e) = stmts.remove(0) else {
             unreachable!();
         };

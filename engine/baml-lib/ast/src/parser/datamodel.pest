@@ -249,7 +249,7 @@ expr_block = { BLOCK_OPEN ~ NEWLINE? ~ (stmt | comment_block | empty_lines)* ~ e
 // With operator overloading (implicit function call) + side effects.
 //
 // Just allow any expr and fix the parser.
-stmt = { (((let_expr | fn_app | generic_fn_app) ~ SEMICOLON?) | for_loop | if_expression) ~ trailing_comment? ~ NEWLINE? }
+stmt = { (((let_expr | fn_app | generic_fn_app) ~ SEMICOLON) | for_loop | if_expression) ~ trailing_comment? ~ NEWLINE? }
 
 // Let-binding statement.
 let_expr = { "let" ~ identifier ~ "=" ~ expression }

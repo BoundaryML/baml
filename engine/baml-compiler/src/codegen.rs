@@ -16,7 +16,7 @@ pub fn compile(ast: &ParserDatabase) -> anyhow::Result<BamlVmProgram> {
     // Stage 1: AST -> HIR
     let hir = hir::Hir::from_ast(&ast.ast);
 
-    eprintln!("HIR:\n{:#?}", hir);
+    // eprintln!("HIR:\n{:#?}", hir);
 
     // Stage 2: HIR -> Bytecode
     compile_hir_to_bytecode(&hir)
@@ -701,6 +701,32 @@ mod tests {
         }
 
         Ok(())
+    }
+
+    #[test]
+    fn return_function_call() -> anyhow::Result<()> {
+        assert_compiles(Program {
+            source: "
+                fn one() -> int {
+                    1
+                }
+
+                fn main() -> int {
+                    one()
+                }
+            ",
+            expected: vec![
+                ("one", vec![Instruction::LoadConst(0), Instruction::Return]),
+                (
+                    "main",
+                    vec![
+                        Instruction::LoadGlobal(0),
+                        Instruction::Call(0),
+                        Instruction::Return,
+                    ],
+                ),
+            ],
+        })
     }
 
     #[test]
