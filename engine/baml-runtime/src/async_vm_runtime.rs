@@ -156,17 +156,16 @@ impl BamlAsyncVmRuntime {
             .start_call(&function_name, ctx, params, true, false, collectors.clone())
             .curr_call_id();
 
-        let output_type = self
+        let expr_fn = self
             .llm_runtime
             .internal()
             .ir()
             .expr_fns
             .iter()
             .find(|f| f.elem.name == function_name)
-            .unwrap_or_else(|| panic!("expr function not found: {function_name}"))
-            .elem
-            .output
-            .clone();
+            .unwrap_or_else(|| panic!("expr function not found: {function_name}"));
+
+        let output_type = expr_fn.elem.output.clone();
 
         // Fun begins here. Drive the VM boy :)
 
@@ -182,15 +181,21 @@ impl BamlAsyncVmRuntime {
         // compiler produced objects betweeen VMs. We know they are read only.
         let mut vm = Vm::new(self.program.clone());
 
-        vm.set_entry_point(
-            *function_index,
-            params
-                .values()
-                .map(|v| try_vm_value_from_baml_value(&vm, &v))
-                .collect::<Result<Vec<_>, _>>()
-                .unwrap_or_else(|e| panic!("failed to convert baml args to vm args: {e}"))
-                .as_slice(),
-        );
+
+        // TODO: We can't assume arg ordering here is correct, figure out why.
+        let args = Vec::from_iter(expr_fn.elem.inputs().iter().map(|(name, _)| {
+            let Some(param) = params.get(name) else {
+                panic!("missing parameter: {name}");
+            };
+
+            let vm_value = try_vm_value_from_baml_value(&vm, param).unwrap_or_else(|e| {
+                panic!("failed to convert baml arg to vm value: {e}")
+            });
+
+            vm_value
+        }));
+
+        vm.set_entry_point(*function_index, &args);
 
         let (futures_tx, mut futures_rx) = tokio::sync::mpsc::unbounded_channel::<(
             usize,

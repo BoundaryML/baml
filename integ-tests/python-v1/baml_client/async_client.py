@@ -1599,6 +1599,27 @@ class BamlAsyncClient:
             "b": b,
         })
         return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def ReturnElseIfExpr(self, a: bool,b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = await self.__options.merge_options(baml_options).call_function_async(function_name="ReturnElseIfExpr", args={
+            "a": a,"b": b,
+        })
+        return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def AssignElseIfExpr(self, a: bool,b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = await self.__options.merge_options(baml_options).call_function_async(function_name="AssignElseIfExpr", args={
+            "a": a,"b": b,
+        })
+        return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def NormalElseIfStmt(self, a: bool,b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = await self.__options.merge_options(baml_options).call_function_async(function_name="NormalElseIfStmt", args={
+            "a": a,"b": b,
+        })
+        return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
     async def ReturnNumberCallingLlm(self, n: int,
         baml_options: BamlCallOptions = {},
     ) -> int:
@@ -4245,6 +4266,42 @@ class BamlStreamClient:
           lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
+    def ReturnElseIfExpr(self, a: bool,b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.Optional[int], int]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="ReturnElseIfExpr", args={
+            "a": a,"b": b,
+        })
+        return baml_py.BamlStream[typing.Optional[int], int](
+          result,
+          lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def AssignElseIfExpr(self, a: bool,b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.Optional[int], int]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="AssignElseIfExpr", args={
+            "a": a,"b": b,
+        })
+        return baml_py.BamlStream[typing.Optional[int], int](
+          result,
+          lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def NormalElseIfStmt(self, a: bool,b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.Optional[int], int]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="NormalElseIfStmt", args={
+            "a": a,"b": b,
+        })
+        return baml_py.BamlStream[typing.Optional[int], int](
+          result,
+          lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
     def ReturnNumberCallingLlm(self, n: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[typing.Optional[int], int]:
@@ -5815,6 +5872,27 @@ class BamlHttpRequestClient:
             "b": b,
         }, mode="request")
         return result
+    async def ReturnElseIfExpr(self, a: bool,b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ReturnElseIfExpr", args={
+            "a": a,"b": b,
+        }, mode="request")
+        return result
+    async def AssignElseIfExpr(self, a: bool,b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="AssignElseIfExpr", args={
+            "a": a,"b": b,
+        }, mode="request")
+        return result
+    async def NormalElseIfStmt(self, a: bool,b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="NormalElseIfStmt", args={
+            "a": a,"b": b,
+        }, mode="request")
+        return result
     async def ReturnNumberCallingLlm(self, n: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -7368,6 +7446,27 @@ class BamlHttpStreamRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="BoolToIntWithIfElse", args={
             "b": b,
+        }, mode="stream")
+        return result
+    async def ReturnElseIfExpr(self, a: bool,b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ReturnElseIfExpr", args={
+            "a": a,"b": b,
+        }, mode="stream")
+        return result
+    async def AssignElseIfExpr(self, a: bool,b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="AssignElseIfExpr", args={
+            "a": a,"b": b,
+        }, mode="stream")
+        return result
+    async def NormalElseIfStmt(self, a: bool,b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="NormalElseIfStmt", args={
+            "a": a,"b": b,
         }, mode="stream")
         return result
     async def ReturnNumberCallingLlm(self, n: int,

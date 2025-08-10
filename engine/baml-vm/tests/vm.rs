@@ -233,6 +233,30 @@ fn exec_else_branch() -> anyhow::Result<()> {
     })
 }
 
+#[test]
+fn exec_else_if_branch() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: "
+            fn run_if(a: bool, b: bool) -> int {
+                if a {
+                    1
+                } else if b {
+                    2
+                } else {
+                    3
+                }
+            }
+
+            fn main() -> int {
+                let a = run_if(false, true);
+                a
+            }
+        ",
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(2)),
+    })
+}
+
 // TODO: Notice how we use the inspection function to make sure the array
 // contents are what we expect. When we figure out a pattern on these types
 // of tests we can abstract it away and not have inspect the entire VM, but

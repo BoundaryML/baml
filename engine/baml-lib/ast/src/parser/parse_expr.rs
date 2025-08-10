@@ -219,19 +219,19 @@ pub fn parse_expr_block(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Optio
         }
     }
 
+    let mut return_expr = expr.map(Box::new);
+
     // Special case for returning if expressions.
     // TODO: Likely there's no need to separate statements and final expression
     // since a statement can now be an expression. We just need to allow any
     // random expression as a statement as mentioned in the grammar file.
-    let return_expr = if let Some(Stmt::Expression(Expression::If(..))) = stmts.last() {
-        let Stmt::Expression(e) = stmts.remove(0) else {
+    if return_expr.is_none() && matches!(stmts.last(), Some(Stmt::Expression(Expression::If(..)))) {
+        let Some(Stmt::Expression(e)) = stmts.pop() else {
             unreachable!();
         };
 
-        Some(Box::new(e))
-    } else {
-        expr.map(Box::new)
-    };
+        return_expr = Some(Box::new(e));
+    }
 
     Some(ExpressionBlock {
         stmts,

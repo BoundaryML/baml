@@ -34,6 +34,25 @@ def test_bool_to_int_with_if_else():
     assert sync_b.BoolToIntWithIfElse(False) == 0
 
 
+def test_return_else_if_expr():
+    disassemble(sync_b.ReturnElseIfExpr)
+    assert sync_b.ReturnElseIfExpr(True, False) == 1
+    assert sync_b.ReturnElseIfExpr(False, True) == 2
+    assert sync_b.ReturnElseIfExpr(False, False) == 3
+
+
+def test_assign_else_if_expr():
+    disassemble(sync_b.AssignElseIfExpr)
+    assert sync_b.AssignElseIfExpr(True, False) == 1
+    assert sync_b.AssignElseIfExpr(False, True) == 2
+    assert sync_b.AssignElseIfExpr(False, False) == 3
+
+
+def test_normal_else_if_stmt():
+    disassemble(sync_b.NormalElseIfStmt)
+    assert sync_b.NormalElseIfStmt(True, False) == 0
+
+
 @pytest.mark.asyncio
 async def test_llm_call_in_expr_fn():
     assert await b.ReturnNumberCallingLlm(42) == 42

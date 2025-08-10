@@ -624,7 +624,7 @@ impl Vm {
             frame.instruction_ptr += 1;
 
             // Runtime debugging information.
-            // #[cfg(debug_assertions)]
+            #[cfg(debug_assertions)]
             // {
             //     let stack = self
             //         .stack
@@ -645,7 +645,6 @@ impl Vm {
 
             //     eprintln!("{instruction} {metadata}");
             // }
-
             match function.bytecode.instructions[instruction_ptr as usize] {
                 Instruction::LoadConst(index) => {
                     let value = &function.bytecode.constants[index];
