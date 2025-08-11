@@ -429,7 +429,12 @@ impl<'g> HirCompiler<'g> {
                 todo!("jinja expression compilation")
             }
 
-            hir::Expression::Call { function, type_args, args, .. } => {
+            hir::Expression::Call {
+                function,
+                type_args,
+                args,
+                ..
+            } => {
                 let name = match function.as_ref() {
                     hir::Expression::Identifier(name, _) => name,
                     _ => panic!("expressions that evaluate to functions are not supported yet"),
@@ -716,7 +721,7 @@ mod tests {
     fn return_function_call() -> anyhow::Result<()> {
         assert_compiles(Program {
             source: "
-                fn one() -> int {
+                fn one() -> int
                     1
                 }
 
