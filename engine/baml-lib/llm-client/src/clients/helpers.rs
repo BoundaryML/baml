@@ -171,7 +171,7 @@ impl<Meta: Clone> PropertyHandler<Meta> {
                         } else {
                             self.push_error(
                                 format!(
-                                    "remap_role values must be one of: {allowed_roles_str}. Got: {from}. To support different remap roles, add allowed_roles [\"user\", \"assistant\", \"system\", ...]",
+                                    "remap_roles values must be one of: {allowed_roles_str}. Got: {from}. To support different remap roles, add allowed_roles [\"user\", \"assistant\", \"system\", ...]",
                                     allowed_roles_str = allowed_roles
                                         .iter()
                                         .map(|v| format!("{v:?}"))
