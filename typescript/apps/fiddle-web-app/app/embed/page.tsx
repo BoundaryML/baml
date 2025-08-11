@@ -19,14 +19,7 @@ export default async function EmbedComponent({
 }) {
   const params = await searchParams
   const id = typeof params.id === 'string' ? params.id : undefined
-  const parseBool = (v?: string) =>
-    typeof v === 'string' ? /^(1|true|yes|on)$/i.test(v) : undefined
 
-  const showFileTree = parseBool(params.showFileTree) ?? parseBool(params.fileTree) ?? false
-  const showPlayground = parseBool(params.showPlayground ?? params.playground)
-  const showFile = parseBool(params.showFile)
-  const defaultFile =
-    typeof params.defaultFile === 'string' ? params.defaultFile : undefined
 
   if (!id) {
     return <div className='flex items-center justify-center w-screen h-screen'>No project id provided</div>
