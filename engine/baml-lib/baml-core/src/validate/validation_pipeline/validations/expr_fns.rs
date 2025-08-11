@@ -1,12 +1,14 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
-use internal_baml_ast::ast::{WithName, WithSpan, Stmt, Expression, ClassConstructorField};
+use internal_baml_ast::ast::{
+    ClassConstructor, ClassConstructorField, Expression, ExpressionBlock, LetStmt, Stmt, WithName,
+    WithSpan,
+};
+use internal_baml_ast::ast::{ClassConstructorField, Expression, Stmt, WithName, WithSpan};
 use internal_baml_diagnostics::{DatamodelError, DatamodelWarning};
 use itertools::Itertools;
 
-use crate::{
-    ir, validate::validation_pipeline::context::Context,
-};
+use crate::{ir, validate::validation_pipeline::context::Context};
 
 /// Builtin functions.
 ///
@@ -17,12 +19,11 @@ fn baml_prelude() -> HashSet<String> {
 
     let builtin_classes = [ir::builtin::classes::REQUEST];
 
-    HashSet::from_iter(
-        builtin_functions
-            .iter()
-            .chain(builtin_classes.iter())
-            .map(ToString::to_string),
-    )
+    builtin_functions
+        .into_iter()
+        .chain(builtin_classes)
+        .map(ToString::to_string)
+        .collect()
 }
 
 // An expr_fn is valid if:
@@ -64,46 +65,67 @@ pub(super) fn validate_expr_fns(ctx: &mut Context<'_>) {
         taken_names.insert(expr_fn.name().to_owned());
     }
 
+    taken_names.insert("true".to_string());
+    taken_names.insert("false".to_string());
+
     // Expression validation is now handled by HIR-based typechecking in the validation pipeline
     // Only keep the experimental warnings for toplevel assignments
     for expr_fn in ctx.db.walk_expr_fns() {
-        let mut scope: HashSet<String> = expr_fn
+        // NOTE: (Jesus) perf of this is hideous. string clones + hashset clones (inside
+        // validate_*).
+
+        // start by declaring all top-level as non-mutable
+        let top_level = taken_names.iter().cloned().map(|arg| (arg, false));
+
+        // then declare arguments, so that they shadow the globals if required.
+        let arg_local = expr_fn
             .expr_fn()
             .args
             .args
             .iter()
-            .map(|(arg_name, _arg)| arg_name.to_string())
-            .collect();
+            .map(|(name, arg)| (name.to_string(), arg.is_mutable));
 
-        scope.insert("true".to_string());
-        scope.insert("false".to_string());
+        let mut scope: Scope = top_level.chain(arg_local).collect();
 
-        scope.extend(taken_names.iter().cloned());
-        expr_fn.expr_fn().body.stmts.iter().for_each(|s| {
-            validate_stmt(ctx, s, &scope);
-            if matches!(s, Stmt::ForLoop(_) | Stmt::Let(_)) {
-                scope.insert(s.identifier().name().to_string());
-            }
-        });
-        if let Some(expr) = &expr_fn.expr_fn().body.expr {
-            validate_expression(ctx, expr, &scope);
-        }
+        validate_expr_block(ctx, &expr_fn.expr_fn().body, scope);
     }
 
-    for toplevel_assignment in ctx.db.walk_toplevel_assignments() {
-        ctx.push_warning(DatamodelWarning::new(
-            "Variable assignment is experimental, and will break in the future.".to_string(),
-            toplevel_assignment.expr().span().clone(),
-        ));
+    {
+        let scope: Scope = taken_names
+            .iter()
+            .cloned()
+            .map(|name| (name, false))
+            .collect();
+        for toplevel_assignment in ctx.db.walk_toplevel_assignments() {
+            ctx.push_warning(DatamodelWarning::new(
+                "Variable assignment is experimental, and will break in the future.".to_string(),
+                toplevel_assignment.expr().span().clone(),
+            ));
 
-        // Create a scope for toplevel assignments that includes all taken names
-        let scope = taken_names.clone();
-        validate_expression(ctx, toplevel_assignment.expr(), &scope);
+            validate_expression(ctx, toplevel_assignment.expr(), &scope);
+        }
     }
 }
 
-fn validate_stmt(ctx: &mut Context<'_>, stmt: &Stmt, scope: &HashSet<String>) {
+fn validate_stmt(ctx: &mut Context<'_>, stmt: &Stmt, scope: &Scope) {
     match stmt {
+        Stmt::Assign(stmt) => {
+            validate_expression(ctx, &stmt.expr, scope);
+
+            let var_name = stmt.identifier.name();
+            match scope.get(var_name) {
+                Some(true) => {}
+                Some(false) => ctx.diagnostics.push_error(DatamodelError::new_anyhow_error(
+                    anyhow::format_err!(
+                    "'{var_name}' is not assignable. Perhaps you meant to declare it with `let mut`?"),
+                    stmt.span.clone(),
+                )),
+                None => ctx.diagnostics.push_error(DatamodelError::new_anyhow_error(
+                    anyhow::format_err!("cannot resolve '{var_name}' to a variable"),
+                    stmt.identifier.span().clone(),
+                )),
+            }
+        }
         Stmt::Let(stmt) => {
             validate_expression(ctx, &stmt.expr, scope);
         }
@@ -113,18 +135,9 @@ fn validate_stmt(ctx: &mut Context<'_>, stmt: &Stmt, scope: &HashSet<String>) {
 
             // Create a new scope that includes the loop variable
             let mut loop_scope = scope.clone();
-            loop_scope.insert(stmt.identifier.name().to_string());
+            loop_scope.insert(stmt.identifier.name().to_string(), false);
 
-            // Validate statements in the loop body
-            for stmt in &stmt.body.stmts {
-                validate_stmt(ctx, stmt, &loop_scope);
-                loop_scope.insert(stmt.identifier().name().to_string());
-            }
-
-            // Validate the loop body expression
-            if let Some(expr) = &stmt.body.expr {
-                validate_expression(ctx, expr, &loop_scope);
-            }
+            validate_expr_block(ctx, &stmt.body, loop_scope);
         }
         Stmt::Expression(expr) => {
             validate_expression(ctx, expr, scope);
@@ -132,10 +145,43 @@ fn validate_stmt(ctx: &mut Context<'_>, stmt: &Stmt, scope: &HashSet<String>) {
     }
 }
 
-fn validate_expression(ctx: &mut Context<'_>, expr: &Expression, scope: &HashSet<String>) {
+fn validate_expr_block(
+    ctx: &mut Context<'_>,
+    body: &ExpressionBlock,
+    mut scope_for_block: HashMap<String, bool>,
+) {
+    // Validate statements in the loop body
+    for stmt in &body.stmts {
+        validate_stmt(ctx, stmt, &scope_for_block);
+
+        insert_var_if_declared(&mut scope_for_block, stmt);
+    }
+
+    // Validate the loop body expression
+    validate_expression(ctx, &body.expr, &scope_for_block);
+}
+
+fn insert_var_if_declared(scope: &mut HashMap<String, bool>, stmt: &Stmt) {
+    if let Stmt::Let(LetStmt {
+        identifier,
+        is_mutable,
+        ..
+    }) = &stmt
+    {
+        scope.insert(identifier.name().to_string(), *is_mutable);
+    }
+}
+
+// NOTE: (Jesus) ideally this should be a (newtyped) Vec<HashMap>, (or two sets for
+// immutable/mutable vars).
+// Also a good want would be a reference to where the binding has been defined so that we can
+// helpfully point to the defn.
+type Scope = HashMap<String, bool>;
+
+fn validate_expression(ctx: &mut Context<'_>, expr: &Expression, scope: &Scope) {
     match &expr {
         Expression::Identifier(identifier) => {
-            if !scope.contains(&identifier.to_string()) {
+            if !scope.contains_key(identifier.name()) {
                 ctx.push_error(DatamodelError::new_anyhow_error(
                     anyhow::anyhow!("Unknown variable {}", &identifier.to_string()),
                     identifier.span().clone(),
@@ -145,7 +191,7 @@ fn validate_expression(ctx: &mut Context<'_>, expr: &Expression, scope: &HashSet
         Expression::Lambda(_args, _body, _span) => {}
         Expression::App(app) => {
             // Validate the function name.
-            if !scope.contains(app.name.name()) {
+            if !scope.contains_key(app.name.name()) {
                 ctx.push_error(DatamodelError::new_anyhow_error(
                     anyhow::anyhow!("Unknown function {}", &app.name.to_string()),
                     app.span().clone(),
@@ -217,17 +263,10 @@ fn validate_expression(ctx: &mut Context<'_>, expr: &Expression, scope: &HashSet
                 }
             }
         }
-        Expression::ExprBlock(block, _span) => {
-            let mut scope = scope.clone();
-            for stmt in block.stmts.iter() {
-                validate_stmt(ctx, stmt, &scope);
-                if matches!(stmt, Stmt::Let(_) | Stmt::ForLoop(_)) {
-                    scope.insert(stmt.identifier().name().to_string());
-                }
-            }
-            if let Some(expr) = &block.expr {
-                validate_expression(ctx, expr, &scope);
-            }
+        Expression::ExprBlock(block, span) => {
+            let scope = scope.clone();
+
+            validate_expr_block(ctx, &block, scope);
         }
         Expression::If(cond, then, else_, _span) => {
             validate_expression(ctx, cond, scope);
