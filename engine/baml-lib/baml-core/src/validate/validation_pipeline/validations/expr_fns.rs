@@ -1,10 +1,9 @@
 use std::collections::{HashMap, HashSet};
 
+use internal_baml_ast::ast::WithSpan;
 use internal_baml_ast::ast::{
-    ClassConstructor, ClassConstructorField, Expression, ExpressionBlock, LetStmt, Stmt, WithName,
-    WithSpan,
+    ClassConstructorField, Expression, ExpressionBlock, LetStmt, Stmt, WithName,
 };
-use internal_baml_ast::ast::{ClassConstructorField, Expression, Stmt, WithName, WithSpan};
 use internal_baml_diagnostics::{DatamodelError, DatamodelWarning};
 use itertools::Itertools;
 
@@ -158,7 +157,9 @@ fn validate_expr_block(
     }
 
     // Validate the loop body expression
-    validate_expression(ctx, &body.expr, &scope_for_block);
+    if let Some(expr) = body.expr.as_ref() {
+        validate_expression(ctx, expr, &scope_for_block);
+    }
 }
 
 fn insert_var_if_declared(scope: &mut HashMap<String, bool>, stmt: &Stmt) {
