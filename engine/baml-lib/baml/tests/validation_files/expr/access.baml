@@ -1,43 +1,74 @@
 class Foo {
     name string
-    // aliases string[]
-    // pet Pet
-    // color_preferences map<string, string>
-}
-class Pet {
-    name string
     age int
 }
 
-// let foo = Foo {
-//     name: "John",
-//     pet: Pet {
-//         name: "Buddy",
-//         age: 3,
-//     },
-//     aliases: ["John", "Johnny"],
-//     color_preferences: {
-//         blue "awesome"
-//         red "ok"
-//         green "sweet"
-//     }
-// };
 let foo = Foo {
-    name: "John"
+    name: "John",
+    age: 2,
 };
 let name = foo.name;
+let misspelling = foo.names;
+let nonsense = foo.name.field;
+
+let array_access_1 = [1, 2, 3][0];
+let array_access = [1,2, 3]["hi"];
+let array_access = [1,2, 3][foo.age];
 
 // warning: Variable assignment is experimental, and will break in the future.
-//   -->  expr/access.baml:25
+//   -->  expr/access.baml:6
 //    | 
-// 24 | // };
-// 25 | let foo = Foo {
-// 26 |     name: "John"
-// 27 | };
+//  5 | 
+//  6 | let foo = Foo {
+//  7 |     name: "John",
+//  8 |     age: 2,
+//  9 | };
 //    | 
 // warning: Variable assignment is experimental, and will break in the future.
-//   -->  expr/access.baml:28
+//   -->  expr/access.baml:10
 //    | 
-// 27 | };
-// 28 | let name = foo.name;
+//  9 | };
+// 10 | let name = foo.name;
+//    | 
+// warning: Variable assignment is experimental, and will break in the future.
+//   -->  expr/access.baml:11
+//    | 
+// 10 | let name = foo.name;
+// 11 | let misspelling = foo.names;
+//    | 
+// warning: Variable assignment is experimental, and will break in the future.
+//   -->  expr/access.baml:12
+//    | 
+// 11 | let misspelling = foo.names;
+// 12 | let nonsense = foo.name.field;
+//    | 
+// warning: Variable assignment is experimental, and will break in the future.
+//   -->  expr/access.baml:14
+//    | 
+// 13 | 
+// 14 | let array_access_1 = [1, 2, 3][0];
+//    | 
+// warning: Variable assignment is experimental, and will break in the future.
+//   -->  expr/access.baml:15
+//    | 
+// 14 | let array_access_1 = [1, 2, 3][0];
+// 15 | let array_access = [1,2, 3]["hi"];
+//    | 
+// warning: Variable assignment is experimental, and will break in the future.
+//   -->  expr/access.baml:16
+//    | 
+// 15 | let array_access = [1,2, 3]["hi"];
+// 16 | let array_access = [1,2, 3][foo.age];
+//    | 
+// error: Error validating: Class Foo has no field names
+//   -->  expr/access.baml:11
+//    | 
+// 10 | let name = foo.name;
+// 11 | let misspelling = foo.names;
+//    | 
+// error: Error validating: Can only access fields on class instances
+//   -->  expr/access.baml:12
+//    | 
+// 11 | let misspelling = foo.names;
+// 12 | let nonsense = foo.name.field;
 //    | 

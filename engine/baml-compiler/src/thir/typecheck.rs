@@ -787,11 +787,30 @@ fn typecheck_expression(
         hir::Expression::FieldAccess { base, field, span } => {
             let typed_base = typecheck_expression(base, context, diagnostics);
 
-            // TODO: Look up field type from class definition
+            // Look up field type from class definition
             let field_type = match typed_base.meta().1.as_ref() {
                 Some(hir::TypeM::ClassName(class_name, _)) => {
-                    // Would need access to class definitions here
-                    None
+                    // Look up the class definition
+                    if let Some(class_def) = context.classes.get(class_name) {
+                        // Find the field in the class
+                        if let Some(class_field) = class_def.fields.iter().find(|f| &f.name == field) {
+                            Some(class_field.r#type.clone())
+                        } else {
+                            // Field doesn't exist on the class
+                            diagnostics.push_error(DatamodelError::new_validation_error(
+                                &format!("Class {} has no field {}", class_name, field),
+                                span.clone(),
+                            ));
+                            None
+                        }
+                    } else {
+                        // Class definition not found (shouldn't happen in normal circumstances)
+                        diagnostics.push_error(DatamodelError::new_validation_error(
+                            &format!("Class {} not found", class_name),
+                            span.clone(),
+                        ));
+                        None
+                    }
                 }
                 _ => {
                     diagnostics.push_error(DatamodelError::new_validation_error(
