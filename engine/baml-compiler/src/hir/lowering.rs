@@ -352,30 +352,43 @@ impl Block {
                 ast::Stmt::Expression(expr) => {
                     let mut temp_counter = 0;
                     let mut lifted_statements = vec![];
-                    let lifted_expr = Expression::from_ast(expr, &mut lifted_statements, &mut temp_counter);
-                    statements.push(Statement::Expression {
-                        expr: lifted_expr,
-                        span: expr.span().clone(),
-                    });
+
+                    let hir_expr =
+                        Expression::from_ast(expr, &mut lifted_statements, &mut temp_counter);
+
+                    statements.extend(lifted_statements);
+
+                    // Expressions that contain blocks themselves will deal with
+                    // return expressions recursively. But expressions that have
+                    // no blocks (like function calls or 2 + 2) must drop the
+                    // returned value, so we insert semicolon expressions.
+                    if matches!(
+                        expr,
+                        ast::Expression::If(..) | ast::Expression::ExprBlock(..)
+                    ) {
+                        statements.push(Statement::Expression {
+                            expr: hir_expr,
+                            span: expr.span().clone(),
+                        });
+                    } else {
+                        statements.push(Statement::SemicolonExpression {
+                            expr: hir_expr,
+                            span: expr.span().clone(),
+                        });
+                    }
                 }
             }
         }
 
-        // Handle if expressions specially in return position
-        // Normal expression - but check for if expressions in nested contexts
-        let mut temp_counter = 0;
-        let mut lifted_statements = vec![];
-
-        // Add any lifted statements first
-        // TODO: Is this clone Ok? Or does lifted_statements need to be shared/modified?
-        statements.extend(lifted_statements.clone());
-
         if let Some(block_final_expr) = block.expr.as_ref() {
-            let lifted_expr = Expression::from_ast(
-                &block_final_expr,
-                &mut lifted_statements,
-                &mut temp_counter,
-            );
+            let mut temp_counter = 0;
+            let mut lifted_statements = vec![];
+            let lifted_expr =
+                Expression::from_ast(block_final_expr, &mut lifted_statements, &mut temp_counter);
+
+            // Add any lifted statements first
+            statements.extend(lifted_statements);
+
             // Then add the final statement
             statements.push(if is_function_body {
                 Statement::Return {
@@ -389,7 +402,6 @@ impl Block {
                 }
             });
         }
-
 
         Block { statements }
     }

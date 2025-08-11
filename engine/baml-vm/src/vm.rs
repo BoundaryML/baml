@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::bytecode::{Bytecode, Instruction};
+use crate::bytecode::{BinOp, Bytecode, CmpOp, Instruction};
 
 /// Max call stack size.
 const MAX_FRAMES: usize = 256;
@@ -252,6 +252,12 @@ pub enum InternalError {
 
     /// Attempt to access the top of the stack but it's not the expected type.
     TypeError { expected: Type, got: Type },
+
+    /// Attempt to apply a binary operation to two values of different types.
+    CannotApplyBinOp { left: Type, right: Type, op: BinOp },
+
+    /// Attempt to apply a comparison operation to two values of different types.
+    CannotApplyCmpOp { left: Type, right: Type, op: CmpOp },
 }
 
 /// Errors that can happen at runtime.
@@ -766,6 +772,86 @@ impl Vm {
                     // Empty stack, can't execute instruction.
                     None => return Err(InternalError::UnexpectedEmptyStack.into()),
                 },
+
+                Instruction::BinOp(op) => {
+                    let Some(right) = self.stack.pop() else {
+                        return Err(InternalError::UnexpectedEmptyStack.into());
+                    };
+
+                    let Some(left) = self.stack.pop() else {
+                        return Err(InternalError::UnexpectedEmptyStack.into());
+                    };
+
+                    let result = match (left, right) {
+                        (Value::Int(left), Value::Int(right)) => Value::Int(match op {
+                            BinOp::Add => left + right,
+                            BinOp::Sub => left - right,
+                            BinOp::Mul => left * right,
+                            BinOp::Div => left / right,
+                        }),
+
+                        (Value::Float(left), Value::Float(right)) => Value::Float(match op {
+                            BinOp::Add => left + right,
+                            BinOp::Sub => left - right,
+                            BinOp::Mul => left * right,
+                            BinOp::Div => left / right,
+                        }),
+
+                        _ => {
+                            return Err(VmError::from(InternalError::CannotApplyBinOp {
+                                left: Type::of(&left),
+                                right: Type::of(&right),
+                                op,
+                            }));
+                        }
+                    };
+
+                    self.stack.push(result);
+                }
+
+                Instruction::CmpOp(op) => {
+                    let Some(right) = self.stack.pop() else {
+                        return Err(InternalError::UnexpectedEmptyStack.into());
+                    };
+
+                    let Some(left) = self.stack.pop() else {
+                        return Err(InternalError::UnexpectedEmptyStack.into());
+                    };
+
+                    let result = match (left, right) {
+                        (Value::Int(left), Value::Int(right)) => Value::Bool(match op {
+                            CmpOp::Eq => left == right,
+                            CmpOp::NotEq => left != right,
+                            CmpOp::Lt => left < right,
+                            CmpOp::LtEq => left <= right,
+                            CmpOp::Gt => left > right,
+                            CmpOp::GtEq => left >= right,
+                        }),
+
+                        (Value::Float(left), Value::Float(right)) => Value::Bool(match op {
+                            CmpOp::Eq => left == right,
+                            CmpOp::NotEq => left != right,
+                            CmpOp::Lt => left < right,
+                            CmpOp::LtEq => left <= right,
+                            CmpOp::Gt => left > right,
+                            CmpOp::GtEq => left >= right,
+                        }),
+
+                        _ => Value::Bool(match op {
+                            CmpOp::Eq => left == right,
+                            CmpOp::NotEq => left != right,
+                            _ => {
+                                return Err(VmError::from(InternalError::CannotApplyCmpOp {
+                                    left: Type::of(&left),
+                                    right: Type::of(&right),
+                                    op,
+                                }))
+                            }
+                        }),
+                    };
+
+                    self.stack.push(result);
+                }
 
                 Instruction::AllocArray(size) => {
                     // Pop all the elements from the stack and create an array.

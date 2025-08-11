@@ -114,6 +114,16 @@ pub enum Instruction {
     /// backwards).
     JumpIfFalse(isize),
 
+    /// Performs an arithmetic binary operation.
+    ///
+    /// Format: `BIN_OP op` where `op` is the binary operation to perform.
+    BinOp(BinOp),
+
+    /// Performs a comparison binary operation.
+    ///
+    /// Format: `CMP_OP op` where `op` is the comparison operation to perform.
+    CmpOp(CmpOp),
+
     /// Builds an array and allocates it on the heap.
     ///
     /// Format: `ALLOC_ARRAY n` where `n` is the number of elements in the
@@ -164,6 +174,48 @@ pub enum Instruction {
     Return,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum BinOp {
+    Add,
+    Sub,
+    Mul,
+    Div,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum CmpOp {
+    Eq,
+    NotEq,
+    Lt,
+    LtEq,
+    Gt,
+    GtEq,
+}
+
+impl std::fmt::Display for BinOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BinOp::Add => f.write_str("+"),
+            BinOp::Sub => f.write_str("-"),
+            BinOp::Mul => f.write_str("*"),
+            BinOp::Div => f.write_str("/"),
+        }
+    }
+}
+
+impl std::fmt::Display for CmpOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CmpOp::Eq => f.write_str("=="),
+            CmpOp::NotEq => f.write_str("!="),
+            CmpOp::Lt => f.write_str("<"),
+            CmpOp::LtEq => f.write_str("<="),
+            CmpOp::Gt => f.write_str(">"),
+            CmpOp::GtEq => f.write_str(">="),
+        }
+    }
+}
+
 impl std::fmt::Display for Instruction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -178,6 +230,8 @@ impl std::fmt::Display for Instruction {
             Instruction::PopReplace(n) => write!(f, "POP_REPLACE {n}"),
             Instruction::Jump(o) => write!(f, "JUMP {o:+}"),
             Instruction::JumpIfFalse(o) => write!(f, "JUMP_IF_FALSE {o:+}"),
+            Instruction::BinOp(op) => write!(f, "BIN_OP {op}"),
+            Instruction::CmpOp(op) => write!(f, "CMP_OP {op}"),
             Instruction::AllocArray(n) => write!(f, "ALLOC_ARRAY {n}"),
             Instruction::AllocInstance(i) => write!(f, "ALLOC_INSTANCE {i}"),
             Instruction::DispatchFuture(i) => write!(f, "DISPATCH_FUTURE {i}"),

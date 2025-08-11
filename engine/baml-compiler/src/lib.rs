@@ -1,21 +1,23 @@
 pub mod builtin;
+pub mod codegen;
 pub mod hir;
 pub mod thir;
-pub mod codegen;
 
 pub use codegen::compile;
 
-use anyhow::Context;
-
-#[cfg(test)]
-mod test {
+pub mod test {
     use internal_baml_diagnostics::Diagnostics;
-    use internal_baml_parser_database::ParserDatabase;
-    use internal_baml_parser_database::{parse, parse_and_diagnostics};
+    use internal_baml_parser_database::{parse_and_diagnostics, ParserDatabase};
 
     /// Shim helper function for testing.
     pub fn ast(source: &'static str) -> anyhow::Result<ParserDatabase> {
-        let parser_db = parse(source).expect("Failed to parse source");
+        let (parser_db, diagnostics) = parse_and_diagnostics(source)?;
+
+        if diagnostics.has_errors() {
+            let errors = diagnostics.to_pretty_string();
+            anyhow::bail!("{errors}");
+        }
+
         Ok(parser_db)
     }
 
