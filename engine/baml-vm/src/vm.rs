@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::bytecode::{BinOp, Bytecode, CmpOp, Instruction, LogicOp};
+use crate::bytecode::{BinOp, Bytecode, CmpOp, Instruction};
 
 /// Max call stack size.
 const MAX_FRAMES: usize = 256;
@@ -258,13 +258,6 @@ pub enum InternalError {
 
     /// Attempt to apply a comparison operation to two values of different types.
     CannotApplyCmpOp { left: Type, right: Type, op: CmpOp },
-
-    /// Attempt to apply a logical operation to two values of different types.
-    CannotApplyLogicOp {
-        left: Type,
-        right: Type,
-        op: LogicOp,
-    },
 }
 
 /// Errors that can happen at runtime.

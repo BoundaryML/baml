@@ -116,7 +116,6 @@ pub fn display_instruction(
         | Instruction::PopReplace(_)
         | Instruction::BinOp(_)
         | Instruction::CmpOp(_)
-        | Instruction::LogicOp(_)
         | Instruction::AllocArray(_)
         | Instruction::DispatchFuture(_)
         | Instruction::Await
@@ -170,9 +169,7 @@ fn instruction_color(instruction: &Instruction) -> Color {
         }
 
         // Binary operation instructions.
-        Instruction::BinOp(_) | Instruction::CmpOp(_) | Instruction::LogicOp(_) => {
-            Color::BrightBlue
-        }
+        Instruction::BinOp(_) | Instruction::CmpOp(_) => Color::BrightBlue,
 
         // Branch instructions.
         Instruction::Jump(_) | Instruction::JumpIfFalse(_) => Color::Yellow,
