@@ -94,7 +94,7 @@ pub struct UiFunctionCall {
     #[ts(optional)]
     pub function_id: Option<UiFunctionIdString>,
 
-    #[ts(type = "Record<string, any>")]
+    #[ts(type = "Record<string, string>")]
     pub tags: serde_json::Map<String, serde_json::Value>,
 
     #[serde(rename = "start_epoch_ms")]
