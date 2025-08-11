@@ -355,6 +355,8 @@ impl LLMPrimitiveProvider {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use anyhow::Result;
     use indexmap::IndexMap;
 
@@ -386,6 +388,7 @@ mod tests {
                     default_role: "user".to_string(),
                     allowed_roles: vec![],
                     options: IndexMap::new(),
+                    remap_role: HashMap::new(),
                 },
                 request_options: baml_types::BamlMap::new(),
             }
