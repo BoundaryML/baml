@@ -28,3 +28,11 @@ function AnalyzeSentiment(text: string) -> Sentiment {
         Respond with exactly one of: POSITIVE, NEGATIVE, NEUTRAL
     "#
 }
+
+// Function: GeneratePoem
+//
+// Function: ClassifyText
+//
+// Function: AnalyzeSentiment
+//
+// Class: std::Request with 3 fields
