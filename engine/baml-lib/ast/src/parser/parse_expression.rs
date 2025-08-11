@@ -104,8 +104,11 @@ fn parse_primary_expression(
         Rule::map_expression => Some(parse_map(token, diagnostics)),
         Rule::array_expression => Some(parse_array(token, diagnostics)),
         Rule::jinja_expression => Some(parse_jinja_expression(token, diagnostics)),
-
-        Rule::identifier => Some(Expression::Identifier(parse_identifier(token, diagnostics))),
+        Rule::identifier => match token.as_str() {
+            "true" => Some(Expression::BoolValue(true, span)),
+            "false" => Some(Expression::BoolValue(false, span)),
+            _ => Some(Expression::Identifier(parse_identifier(token, diagnostics))),
+        },
         Rule::class_constructor => Some(parse_class_constructor(token, diagnostics)),
         Rule::fn_app => parse_fn_app(token, diagnostics),
         Rule::generic_fn_app => parse_generic_fn_app(token, diagnostics),

@@ -273,11 +273,11 @@ fn array_constructor() -> anyhow::Result<()> {
                 }
             ",
             function: "main",
-            expected: VmExecState::Complete(Value::Object(1)),
+            expected: VmExecState::Complete(Value::Object(2)),
         },
         |vm| {
-            let Object::Array(array) = &vm.objects[1] else {
-                panic!("expected Array, got {:?}", vm.objects[1]);
+            let Object::Array(array) = &vm.objects[2] else {
+                panic!("expected Array, got {:?}", vm.objects[2]);
             };
 
             assert_eq!(array, &[Value::Int(1), Value::Int(2), Value::Int(3)]);
@@ -304,11 +304,11 @@ fn class_constructor() -> anyhow::Result<()> {
                 }
             ",
             function: "main",
-            expected: VmExecState::Complete(Value::Object(2)),
+            expected: VmExecState::Complete(Value::Object(3)),
         },
         |vm| {
-            let Object::Instance(instance) = &vm.objects[2] else {
-                panic!("expected Instance, got {:?}", vm.objects[2]);
+            let Object::Instance(instance) = &vm.objects[3] else {
+                panic!("expected Instance, got {:?}", vm.objects[3]);
             };
 
             assert_eq!(instance.fields, &[Value::Int(1), Value::Int(2)]);
@@ -340,11 +340,11 @@ fn class_constructor_with_spread_operator() -> anyhow::Result<()> {
                 }
             ",
             function: "main",
-            expected: VmExecState::Complete(Value::Object(3)),
+            expected: VmExecState::Complete(Value::Object(4)),
         },
         |vm| {
-            let Object::Instance(instance) = &vm.objects[3] else {
-                panic!("expected Instance, got {:?}", vm.objects[3]);
+            let Object::Instance(instance) = &vm.objects[4] else {
+                panic!("expected Instance, got {:?}", vm.objects[4]);
             };
 
             assert_eq!(

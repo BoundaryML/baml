@@ -14,7 +14,7 @@ use crate::hir;
 /// 2. HIR -> Bytecode
 pub fn compile(ast: &ParserDatabase) -> anyhow::Result<BamlVmProgram> {
     // Stage 1: AST -> HIR
-    eprintln!("AST:\n{:#?}", ast.ast);
+    // eprintln!("AST:\n{:#?}", ast.ast);
     let hir = hir::Hir::from_ast(&ast.ast);
 
     // eprintln!("HIR:\n{:#?}", hir);
