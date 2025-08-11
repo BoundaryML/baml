@@ -150,8 +150,13 @@ impl TypeM<TypeMeta> {
                 TypeValue::Null => TypeM::String(meta),  // TODO: Add Null type to TypeM
                 TypeValue::Media(_) => TypeM::String(meta), // TODO: Add Media type to TypeM
             },
-            ast::FieldType::List(_, inner, _, _, _) => {
-                TypeM::Array(Box::new(Self::from_ast(inner)), meta)
+            ast::FieldType::List(_, inner, dims, _, _) => {
+                // Respect multi-dimensional arrays (e.g., int[][] has dims=2)
+                let mut lowered_inner = Self::from_ast(inner);
+                for _ in 0..*dims {
+                    lowered_inner = TypeM::Array(Box::new(lowered_inner), meta.clone());
+                }
+                lowered_inner
             }
             ast::FieldType::Map(_, box_pair, _, _) => TypeM::Map(
                 Box::new(Self::from_ast(&box_pair.0)),
@@ -352,7 +357,8 @@ impl Block {
                 ast::Stmt::Expression(expr) => {
                     let mut temp_counter = 0;
                     let mut lifted_statements = vec![];
-                    let lifted_expr = Expression::from_ast(expr, &mut lifted_statements, &mut temp_counter);
+                    let lifted_expr =
+                        Expression::from_ast(expr, &mut lifted_statements, &mut temp_counter);
                     statements.push(Statement::Expression {
                         expr: lifted_expr,
                         span: expr.span().clone(),
@@ -371,11 +377,8 @@ impl Block {
         statements.extend(lifted_statements.clone());
 
         if let Some(block_final_expr) = block.expr.as_ref() {
-            let lifted_expr = Expression::from_ast(
-                &block_final_expr,
-                &mut lifted_statements,
-                &mut temp_counter,
-            );
+            let lifted_expr =
+                Expression::from_ast(&block_final_expr, &mut lifted_statements, &mut temp_counter);
             // Then add the final statement
             statements.push(if is_function_body {
                 Statement::Return {
@@ -389,7 +392,6 @@ impl Block {
                 }
             });
         }
-
 
         Block { statements }
     }

@@ -252,6 +252,9 @@ pub enum InternalError {
 
     /// Attempt to access the top of the stack but it's not the expected type.
     TypeError { expected: Type, got: Type },
+
+    /// Array index out of bounds.
+    ArrayIndexOutOfBounds { index: usize, length: usize },
 }
 
 /// Errors that can happen at runtime.
@@ -780,6 +783,64 @@ impl Vm {
                     // objects.push() above might've reallocated the vector so
                     // borrow checker complains. Restore the reference.
                     function = self.objects[frame.function].as_function()?;
+                }
+
+                Instruction::LoadArrayElement => {
+                    // Stack should contain [array, index]
+                    // Pop the index first, then the array
+                    let index_value = self
+                        .stack
+                        .pop()
+                        .ok_or(InternalError::UnexpectedEmptyStack)?;
+                    let array_value = self
+                        .stack
+                        .pop()
+                        .ok_or(InternalError::UnexpectedEmptyStack)?;
+
+                    // Get the array object
+                    let Value::Object(array_index) = array_value else {
+                        return Err(VmError::from(InternalError::TypeError {
+                            expected: Type::Object,
+                            got: Type::of(&array_value),
+                        }));
+                    };
+
+                    let Object::Array(array) = &self.objects[array_index] else {
+                        return Err(VmError::from(InternalError::TypeError {
+                            expected: Type::Object,
+                            got: Type::Object,
+                        }));
+                    };
+
+                    // Get the index
+                    let index = match index_value {
+                        Value::Int(i) => {
+                            if i < 0 {
+                                return Err(VmError::from(InternalError::TypeError {
+                                    expected: Type::Int,
+                                    got: Type::Int,
+                                }));
+                            }
+                            i as usize
+                        }
+                        _ => {
+                            return Err(VmError::from(InternalError::TypeError {
+                                expected: Type::Int,
+                                got: Type::of(&index_value),
+                            }));
+                        }
+                    };
+
+                    // Check bounds
+                    if index >= array.len() {
+                        return Err(VmError::from(InternalError::ArrayIndexOutOfBounds {
+                            index,
+                            length: array.len(),
+                        }));
+                    }
+
+                    // Push the element onto the stack
+                    self.stack.push(array[index].clone());
                 }
 
                 Instruction::AllocInstance(index) => {
