@@ -5,6 +5,7 @@ import { useAtomValue } from 'jotai';
 import { ApiKeysDialog } from '../../../../components/api-keys-dialog/dialog';
 import { StatusBar } from '../../../../components/status-bar';
 import { wasmAtom } from '../../atoms';
+import { vscode } from '../../vscode';
 import { functionTestSnippetAtom, selectionAtom } from '../atoms';
 import { PreviewToolbar } from '../preview-toolbar';
 import { TestingSidebar } from '../side-bar';
@@ -73,7 +74,7 @@ export const PromptPreview = () => {
 
   return (
     <>
-      <SidebarProvider defaultOpen={true}>
+      <SidebarProvider defaultOpen={vscode.isVscode()}>
         <SidebarInset>
           {wasm ? (
             <div className="h-full flex flex-col overflow-hidden relative">

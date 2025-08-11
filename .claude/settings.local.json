@@ -1,4 +1,5 @@
 {
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "permissions": {
     "allow": [
       "Bash(grep:*)",
@@ -39,7 +40,10 @@
       "Bash(npm run lint)",
       "Bash(npm run format:*)",
       "Bash(npm run:*)",
-      "Bash(npx biome check:*)"
+      "Bash(npx biome check:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx tsc:*)",
+      "WebFetch(domain:www.npmjs.com)"
     ],
     "deny": []
   }

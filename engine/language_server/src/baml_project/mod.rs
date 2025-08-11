@@ -1231,10 +1231,12 @@ impl Project {
                     // (File system operations would be performed here.)
                 }
                 let elapsed = start.elapsed();
+                let version = env!("CARGO_PKG_VERSION");
                 if generated_file_count > 0 {
                     on_success(format!(
-                        "BAML client generated! (took {}ms)",
-                        elapsed.as_millis()
+                        "BAML client generated! (took {}ms). CLI version: {}",
+                        elapsed.as_millis(),
+                        version
                     ));
                 }
             }
