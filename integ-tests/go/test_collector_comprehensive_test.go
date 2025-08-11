@@ -698,7 +698,7 @@ func TestCollectorBeforeStreaming(t *testing.T) {
 	outputTokens, err := usage.OutputTokens()
 	require.NoError(t, err)
 	assert.Equal(t, int64(0), outputTokens)
-	fmt.Println("inputTokens", inputTokens)
+	t.Log("inputTokens", inputTokens)
 	fmt.Println("outputTokens", outputTokens)
 	
 	var finalResult string
