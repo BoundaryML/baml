@@ -1288,12 +1288,6 @@ class LlmResponseParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="VideoInputVertex", llm_response=llm_response, mode="request")
         return typing.cast(str, result)
 
-    def EchoWorkflow(
-        self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> str:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="EchoWorkflow", llm_response=llm_response, mode="request")
-        return typing.cast(str, result)
-
     def ReturnOne(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> int:
@@ -1365,6 +1359,12 @@ class LlmResponseParser:
     ) -> int:
         result = self.__options.merge_options(baml_options).parse_response(function_name="BoolToIntWithIfElseCallingLlm", llm_response=llm_response, mode="request")
         return typing.cast(int, result)
+
+    def EchoWorkflow(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="EchoWorkflow", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
 
     
 
@@ -2640,12 +2640,6 @@ class LlmStreamParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="VideoInputVertex", llm_response=llm_response, mode="stream")
         return typing.cast(str, result)
 
-    def EchoWorkflow(
-        self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="EchoWorkflow", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
-
     def ReturnOne(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Optional[int]:
@@ -2717,5 +2711,11 @@ class LlmStreamParser:
     ) -> typing.Optional[int]:
         result = self.__options.merge_options(baml_options).parse_response(function_name="BoolToIntWithIfElseCallingLlm", llm_response=llm_response, mode="stream")
         return typing.cast(typing.Optional[int], result)
+
+    def EchoWorkflow(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional[str]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="EchoWorkflow", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[str], result)
 
     

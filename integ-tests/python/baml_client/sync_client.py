@@ -1562,13 +1562,6 @@ class BamlSyncClient:
             "vid": vid,
         })
         return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
-    def EchoWorkflow(self, 
-        baml_options: BamlCallOptions = {},
-    ) -> str:
-        result = self.__options.merge_options(baml_options).call_function_sync(function_name="EchoWorkflow", args={
-            
-        })
-        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def ReturnOne(self, 
         baml_options: BamlCallOptions = {},
     ) -> int:
@@ -1653,6 +1646,13 @@ class BamlSyncClient:
             "b": b,
         })
         return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
+    def EchoWorkflow(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).call_function_sync(function_name="EchoWorkflow", args={
+            
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     
 
 
@@ -4194,18 +4194,6 @@ class BamlStreamClient:
           lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
-    def EchoWorkflow(self, 
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[typing.Optional[str], str]:
-        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="EchoWorkflow", args={
-            
-        })
-        return baml_py.BamlSyncStream[typing.Optional[str], str](
-          result,
-          lambda x: typing.cast(typing.Optional[str], x.cast_to(types, types, stream_types, True, __runtime__)),
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
-          ctx,
-        )
     def ReturnOne(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[typing.Optional[int], int]:
@@ -4348,6 +4336,18 @@ class BamlStreamClient:
           result,
           lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def EchoWorkflow(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[typing.Optional[str], str]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="EchoWorkflow", args={
+            
+        })
+        return baml_py.BamlSyncStream[typing.Optional[str], str](
+          result,
+          lambda x: typing.cast(typing.Optional[str], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     
@@ -5835,13 +5835,6 @@ class BamlHttpRequestClient:
             "vid": vid,
         }, mode="request")
         return result
-    def EchoWorkflow(self, 
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.baml_py.HTTPRequest:
-        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="EchoWorkflow", args={
-            
-        }, mode="request")
-        return result
     def ReturnOne(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -5924,6 +5917,13 @@ class BamlHttpRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="BoolToIntWithIfElseCallingLlm", args={
             "b": b,
+        }, mode="request")
+        return result
+    def EchoWorkflow(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="EchoWorkflow", args={
+            
         }, mode="request")
         return result
     
@@ -7411,13 +7411,6 @@ class BamlHttpStreamRequestClient:
             "vid": vid,
         }, mode="stream")
         return result
-    def EchoWorkflow(self, 
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.baml_py.HTTPRequest:
-        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="EchoWorkflow", args={
-            
-        }, mode="stream")
-        return result
     def ReturnOne(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -7500,6 +7493,13 @@ class BamlHttpStreamRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="BoolToIntWithIfElseCallingLlm", args={
             "b": b,
+        }, mode="stream")
+        return result
+    def EchoWorkflow(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="EchoWorkflow", args={
+            
         }, mode="stream")
         return result
     
