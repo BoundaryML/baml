@@ -4,7 +4,6 @@ mod configurations;
 mod cycle;
 mod enums;
 mod expr_fns;
-pub mod expr_typecheck;
 mod functions;
 mod reserved_names;
 mod template_strings;
@@ -13,6 +12,7 @@ mod types;
 
 use std::collections::HashSet;
 
+use anyhow::Result;
 use baml_types::GeneratorOutputType;
 
 use super::context::Context;
@@ -40,9 +40,21 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
 
     expr_fns::validate_expr_fns(ctx);
 
-    let _ = expr_typecheck::typecheck_exprs(ctx);
+    // Use HIR-based typechecking from baml-compiler
+    let _ = hir_typecheck_exprs(ctx);
 
     if !ctx.diagnostics.has_errors() {
         cycle::validate(ctx);
     }
+}
+
+/// HIR-based typechecking using functions from baml-compiler
+fn hir_typecheck_exprs(ctx: &mut Context<'_>) -> Result<()> {
+    // Create HIR from AST using baml-compiler
+    let hir = baml_compiler::hir::Hir::from_ast(ctx.db.ast());
+
+    // Run HIR-based typechecking using baml-compiler
+    let _thir = baml_compiler::thir::typecheck::typecheck(&hir, ctx.diagnostics);
+
+    Ok(())
 }

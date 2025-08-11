@@ -14,9 +14,10 @@ use crate::hir;
 /// 2. HIR -> Bytecode
 pub fn compile(ast: &ParserDatabase) -> anyhow::Result<BamlVmProgram> {
     // Stage 1: AST -> HIR
+    // eprintln!("AST:\n{:#?}", ast.ast);
     let hir = hir::Hir::from_ast(&ast.ast);
 
-    eprintln!("HIR:\n{:#?}", hir);
+    // eprintln!("HIR:\n{:#?}", hir);
 
     // Stage 2: HIR -> Bytecode
     compile_hir_to_bytecode(&hir)
@@ -311,11 +312,6 @@ impl<'g> HirCompiler<'g> {
 
             hir::Statement::Expression { expr, .. } => {
                 self.compile_expression(expr);
-            }
-
-            hir::Statement::SemicolonExpression { expr, .. } => {
-                self.compile_expression(expr);
-
                 // This could be a function call or any other random expression
                 // like:
                 //
@@ -379,6 +375,14 @@ impl<'g> HirCompiler<'g> {
                 self.emit(Instruction::LoadConst(index));
             }
 
+            hir::Expression::ArrayAccess { base, index, .. } => {
+                unimplemented!("Array access compilation")
+            }
+
+            hir::Expression::FieldAccess { base, field, .. } => {
+                unimplemented!("Array access compilation")
+            }
+
             hir::Expression::NumericValue(num, _) => {
                 let value = num
                     .parse::<i64>()
@@ -425,7 +429,12 @@ impl<'g> HirCompiler<'g> {
                 todo!("jinja expression compilation")
             }
 
-            hir::Expression::Call(name, args, _) => {
+            hir::Expression::Call { function, type_args, args, .. } => {
+                let name = match function.as_ref() {
+                    hir::Expression::Identifier(name, _) => name,
+                    _ => panic!("expressions that evaluate to functions are not supported yet"),
+                };
+
                 // Push the function onto the stack
                 if let Some(&index) = self.globals.get(name) {
                     self.emit(Instruction::LoadGlobal(index));
@@ -701,6 +710,32 @@ mod tests {
         }
 
         Ok(())
+    }
+
+    #[test]
+    fn return_function_call() -> anyhow::Result<()> {
+        assert_compiles(Program {
+            source: "
+                fn one() -> int {
+                    1
+                }
+
+                fn main() -> int {
+                    one()
+                }
+            ",
+            expected: vec![
+                ("one", vec![Instruction::LoadConst(0), Instruction::Return]),
+                (
+                    "main",
+                    vec![
+                        Instruction::LoadGlobal(0),
+                        Instruction::Call(0),
+                        Instruction::Return,
+                    ],
+                ),
+            ],
+        })
     }
 
     #[test]

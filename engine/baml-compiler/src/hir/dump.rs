@@ -3,8 +3,8 @@
 use pretty::RcDoc;
 
 use crate::hir::{
-    Block, Class, ClassConstructorField, Enum, EnumVariant, ExprFunction, Expression, Field, Hir,
-    LlmFunction, Parameter, Statement, TypeM, TypeMeta,
+    Arrow, Block, Class, ClassConstructorField, Enum, EnumVariant, ExprFunction, Expression, Field,
+    Hir, LlmFunction, Parameter, Statement, TypeArg, TypeM, TypeMeta,
 };
 
 impl Hir {
@@ -52,13 +52,15 @@ impl TypeM<TypeMeta> {
         let meta = self.get_meta();
         let base = match self {
             TypeM::Int(_) => RcDoc::text("int"),
+            TypeM::Float(_) => RcDoc::text("float"),
             TypeM::String(_) => RcDoc::text("string"),
             TypeM::Bool(_) => RcDoc::text("bool"),
             TypeM::Array(inner, _) => RcDoc::text("array").append(inner.to_doc()),
-            TypeM::Map(key, value, _) => RcDoc::text("map")
+            TypeM::Map(key, value, _) => RcDoc::text("map<")
                 .append(key.to_doc())
-                .append(RcDoc::text(":"))
-                .append(value.to_doc()),
+                .append(RcDoc::text(", "))
+                .append(value.to_doc())
+                .append(RcDoc::text(">")),
             TypeM::ClassName(name, _) => RcDoc::text(name.clone()),
             TypeM::EnumName(name, _) => RcDoc::text(name.clone()),
             TypeM::Union(types, _) => {
@@ -71,6 +73,13 @@ impl TypeM<TypeMeta> {
                     .append(RcDoc::text(")"))
             }
             TypeM::Null(_) => RcDoc::text("null"),
+            TypeM::Arrow(Arrow { inputs, output }, _) => RcDoc::text("(")
+                .append(RcDoc::intersperse(
+                    inputs.iter().map(|i| i.to_doc()),
+                    RcDoc::text(", "),
+                ))
+                .append(RcDoc::text(") -> "))
+                .append(output.to_doc()),
         };
 
         let mut doc = base;
@@ -126,7 +135,6 @@ impl Statement {
                 .append(expr.to_doc())
                 .append(RcDoc::text(";")),
             Statement::Expression { expr, .. } => expr.to_doc(),
-            Statement::SemicolonExpression { expr, .. } => expr.to_doc().append(RcDoc::text(";")),
             Statement::While {
                 condition, block, ..
             } => RcDoc::text("while")
@@ -258,6 +266,19 @@ impl Block {
 impl Expression {
     pub fn to_doc(&self) -> RcDoc<'static, ()> {
         match self {
+            Expression::ArrayAccess { base, index, .. } => RcDoc::text("base[index]")
+                .append(RcDoc::space())
+                .append(base.to_doc())
+                .append(RcDoc::space())
+                .append(RcDoc::text("["))
+                .append(index.to_doc())
+                .append(RcDoc::text("]")),
+            Expression::FieldAccess { base, field, .. } => RcDoc::text("base.field")
+                .append(RcDoc::space())
+                .append(base.to_doc())
+                .append(RcDoc::space())
+                .append(RcDoc::text("."))
+                .append(RcDoc::text(field.clone())),
             Expression::BoolValue(val, _) => RcDoc::text(val.to_string()),
             Expression::NumericValue(val, _) => RcDoc::text(val.clone()),
             Expression::Identifier(name, _) => RcDoc::text(name.clone()),
@@ -319,17 +340,34 @@ impl Expression {
                 doc
             }
             Expression::JinjaExpressionValue(val, _) => RcDoc::text(val.clone()),
-            Expression::Call(name, args, _) => RcDoc::text(name.clone())
-                .append(RcDoc::text("("))
-                .append(if args.is_empty() {
-                    RcDoc::nil()
+            Expression::Call {
+                function,
+                type_args,
+                args,
+                ..
+            } => {
+                let mut doc = function.to_doc();
+                let mut doc = if !type_args.is_empty() {
+                    doc.append(RcDoc::text("<"))
+                        .append(RcDoc::intersperse(
+                            type_args.iter().map(|arg| arg.to_doc()),
+                            RcDoc::text(","),
+                        ))
+                        .append(RcDoc::text(">"))
                 } else {
-                    RcDoc::intersperse(
-                        args.iter().map(|arg| arg.to_doc()).collect::<Vec<_>>(),
-                        RcDoc::text(",").append(RcDoc::space()),
-                    )
-                })
-                .append(RcDoc::text(")")),
+                    doc
+                };
+                doc.append(RcDoc::text("("))
+                    .append(if args.is_empty() {
+                        RcDoc::nil()
+                    } else {
+                        RcDoc::intersperse(
+                            args.iter().map(|arg| arg.to_doc()).collect::<Vec<_>>(),
+                            RcDoc::text(",").append(RcDoc::space()),
+                        )
+                    })
+                    .append(RcDoc::text(")"))
+            }
             Expression::ClassConstructor(cc, _) => RcDoc::text(cc.class_name.clone())
                 .append(RcDoc::space())
                 .append(RcDoc::text("{"))
@@ -349,6 +387,15 @@ impl Expression {
                 .append(block.to_doc().nest(2))
                 .append(RcDoc::hardline())
                 .append(RcDoc::text("}")),
+        }
+    }
+}
+
+impl TypeArg {
+    pub fn to_doc(&self) -> RcDoc<'static, ()> {
+        match self {
+            TypeArg::Type(ty) => ty.to_doc(),
+            TypeArg::TypeName(name) => RcDoc::text(name.clone()),
         }
     }
 }

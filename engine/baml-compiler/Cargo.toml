@@ -8,9 +8,10 @@ license-file.workspace = true
 
 [dependencies]
 baml-types = { path = "../baml-lib/baml-types" }
-internal-baml-core = { path = "../baml-lib/baml-core" }
+baml-vm = { path = "../baml-vm" }
+internal-baml-ast = { path = "../baml-lib/ast" }
 internal-baml-diagnostics = { path = "../baml-lib/diagnostics" }
 internal-baml-parser-database = { path = "../baml-lib/parser-database" }
-baml-vm = { path = "../baml-vm" }
 anyhow = { workspace = true }
+itertools = { workspace = true }
 pretty = { workspace = true }

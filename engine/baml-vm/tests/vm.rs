@@ -136,6 +136,23 @@ fn assert_vm_executes_bytecode_with_inspection(
 }
 
 #[test]
+fn return_function_call() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: "
+            fn one() -> int {
+                1
+            }
+
+            fn main() -> int {
+                one()
+            }
+        ",
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(1)),
+    })
+}
+
+#[test]
 fn function_call_without_parameters() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: "
@@ -208,6 +225,30 @@ fn exec_else_branch() -> anyhow::Result<()> {
 
             fn main() -> int {
                 let a = run_if(false);
+                a
+            }
+        ",
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(2)),
+    })
+}
+
+#[test]
+fn exec_else_if_branch() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: "
+            fn run_if(a: bool, b: bool) -> int {
+                if a {
+                    1
+                } else if b {
+                    2
+                } else {
+                    3
+                }
+            }
+
+            fn main() -> int {
+                let a = run_if(false, true);
                 a
             }
         ",

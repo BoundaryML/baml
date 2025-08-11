@@ -21,18 +21,22 @@ mod lowering;
 ///   - For loops become while loops.
 ///   - Class constructor spreads become regular class constructors with exhaustive fields.
 ///   - Implicit returns become explicit.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Hir {
     pub expr_functions: Vec<ExprFunction>,
     pub llm_functions: Vec<LlmFunction>,
     pub classes: Vec<Class>,
     pub enums: Vec<Enum>,
+    pub global_assignments: baml_types::BamlMap<String, Expression>,
 }
 
-#[derive(Debug)]
+pub type Type = TypeM<TypeMeta>;
+
+#[derive(Clone, Debug)]
 pub enum TypeM<M> {
     Int(M),
     String(M),
+    Float(M),
     Bool(M),
     Null(M),
     Array(Box<TypeM<M>>, M),
@@ -40,16 +44,103 @@ pub enum TypeM<M> {
     ClassName(String, M),
     EnumName(String, M),
     Union(Vec<TypeM<M>>, M),
+    Arrow(Arrow<M>, M),
 }
 
-#[derive(Debug)]
-struct TypeMeta {
-    span: Span,
-    constraints: Vec<Constraint>,
-    streaming_behavior: StreamingBehavior,
+impl<T: Default> TypeM<T> {
+    pub fn int() -> Self {
+        Self::Int(T::default())
+    }
 }
 
-#[derive(Debug)]
+impl Type {
+    #[track_caller]
+    pub fn assert_eq_up_to_span(&self, other: &Type) {
+        match (self, other) {
+            (TypeM::Int(a), TypeM::Int(b)) => assert!(a.eq_up_to_span(b)),
+            (TypeM::Int(_), _) => panic!("Int type mismatch"),
+            (TypeM::Float(a), TypeM::Float(b)) => assert!(a.eq_up_to_span(b)),
+            (TypeM::Float(_), _) => panic!("Float type mismatch"),
+            (TypeM::String(a), TypeM::String(b)) => assert!(a.eq_up_to_span(b)),
+            (TypeM::String(_), _) => panic!("String type mismatch"),
+            (TypeM::Bool(a), TypeM::Bool(b)) => assert!(a.eq_up_to_span(b)),
+            (TypeM::Bool(_), _) => panic!("Bool type mismatch"),
+            (TypeM::Null(a), TypeM::Null(b)) => assert!(a.eq_up_to_span(b)),
+            (TypeM::Null(_), _) => panic!("Null type mismatch"),
+            (TypeM::Array(a, a_meta), TypeM::Array(b, b_meta)) => {
+                a.assert_eq_up_to_span(b);
+                assert!(a_meta.eq_up_to_span(b_meta));
+            }
+            (TypeM::Array(_, _), _) => panic!("Array type mismatch"),
+            (TypeM::Map(a, b, a_meta), TypeM::Map(c, d, b_meta)) => {
+                a.assert_eq_up_to_span(c);
+                b.assert_eq_up_to_span(d);
+                assert!(a_meta.eq_up_to_span(b_meta));
+            }
+            (TypeM::Map(_, _, _), _) => panic!("Map type mismatch"),
+            (TypeM::ClassName(a, a_meta), TypeM::ClassName(b, b_meta)) => {
+                assert!(a == b);
+                assert!(a_meta.eq_up_to_span(b_meta));
+            }
+            (TypeM::ClassName(_, _), _) => panic!("Class name type mismatch"),
+            (TypeM::EnumName(a, a_meta), TypeM::EnumName(b, b_meta)) => {
+                assert!(a == b);
+                assert!(a_meta.eq_up_to_span(b_meta));
+            }
+            (TypeM::EnumName(_, _), _) => panic!("Enum name type mismatch"),
+            (TypeM::Union(a, a_meta), TypeM::Union(b, b_meta)) => {
+                assert!(a.len() == b.len());
+                a.iter()
+                    .zip(b.iter())
+                    .for_each(|(a, b)| a.assert_eq_up_to_span(b));
+                assert!(a_meta.eq_up_to_span(b_meta));
+            }
+            (TypeM::Union(_, _), _) => panic!("Union type mismatch"),
+            (TypeM::Arrow(a, a_meta), TypeM::Arrow(b, b_meta)) => {
+                assert!(a.inputs.len() == b.inputs.len());
+                a.inputs
+                    .iter()
+                    .zip(b.inputs.iter())
+                    .for_each(|(a, b)| a.assert_eq_up_to_span(b));
+                a.output.assert_eq_up_to_span(&b.output);
+                assert!(a_meta.eq_up_to_span(b_meta));
+            }
+            (TypeM::Arrow(_, _), _) => panic!("Arrow type mismatch"),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Arrow<M> {
+    pub inputs: Vec<TypeM<M>>,
+    pub output: Box<TypeM<M>>,
+}
+
+#[derive(Clone, Debug)]
+pub struct TypeMeta {
+    pub span: Span,
+    pub constraints: Vec<Constraint>,
+    pub streaming_behavior: StreamingBehavior,
+}
+
+impl TypeMeta {
+    #[track_caller]
+    pub fn eq_up_to_span(&self, other: &TypeMeta) -> bool {
+        self.constraints == other.constraints && self.streaming_behavior == other.streaming_behavior
+    }
+}
+
+impl Default for TypeMeta {
+    fn default() -> Self {
+        Self {
+            span: Span::fake(),
+            constraints: vec![],
+            streaming_behavior: StreamingBehavior::default(),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct ExprFunction {
     pub name: String,
     pub parameters: Vec<Parameter>,
@@ -58,7 +149,7 @@ pub struct ExprFunction {
     pub span: Span,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct LlmFunction {
     pub name: String,
     pub parameters: Vec<Parameter>,
@@ -68,47 +159,47 @@ pub struct LlmFunction {
     pub span: Span,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Class {
     pub name: String,
     pub fields: Vec<Field>,
     pub span: Span,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Field {
     pub name: String,
     pub r#type: TypeM<TypeMeta>,
     pub span: Span,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Enum {
     pub name: String,
     pub variants: Vec<EnumVariant>,
     pub span: Span,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct EnumVariant {
     pub name: String,
     pub span: Span,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Parameter {
     pub name: String,
-    // pub r#type: Type,
+    pub r#type: TypeM<TypeMeta>,
     pub span: Span,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Block {
     pub statements: Vec<Statement>,
 }
 
 /// A single unit of execution within a block.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum Statement {
     /// Assign an immutable variable.
     Let {
@@ -119,15 +210,9 @@ pub enum Statement {
     /// Declare a (mutable) reference.
     /// There is no span because it is never present in the source AST.
     /// This is a desugaring from `if` expressions.
-    Declare {
-        name: String,
-        span: Span,
-    },
+    Declare { name: String, span: Span },
     /// Assign a mutable variable.
-    Assign {
-        name: String,
-        value: Expression,
-    },
+    Assign { name: String, value: Expression },
     /// Declare and assign a mutable reference in one statement.
     DeclareAndAssign {
         name: String,
@@ -135,20 +220,9 @@ pub enum Statement {
         span: Span,
     },
     /// Return from a function.
-    Return {
-        expr: Expression,
-        span: Span,
-    },
+    Return { expr: Expression, span: Span },
     /// Evaluate an expression as the final value of a block (without returning from function).
-    Expression {
-        expr: Expression,
-        span: Span,
-    },
-    // Expression ending in semicolon.
-    SemicolonExpression {
-        expr: Expression,
-        span: Span,
-    },
+    Expression { expr: Expression, span: Span },
     While {
         condition: Box<Expression>,
         block: Block,
@@ -163,8 +237,18 @@ pub enum Statement {
 }
 
 /// Expressions
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum Expression {
+    ArrayAccess {
+        base: Box<Expression>,
+        index: Box<Expression>,
+        span: Span,
+    },
+    FieldAccess {
+        base: Box<Expression>,
+        field: String,
+        span: Span,
+    },
     BoolValue(bool, Span),
     NumericValue(String, Span),
     Identifier(String, Span),
@@ -179,7 +263,12 @@ pub enum Expression {
     Array(Vec<Expression>, Span),
     Map(Vec<(Expression, Expression)>, Span),
     JinjaExpressionValue(String, Span),
-    Call(String, Vec<Expression>, Span),
+    Call {
+        function: Box<Expression>,
+        type_args: Vec<TypeArg>,
+        args: Vec<Expression>,
+        span: Span,
+    },
     // Lambda(ArgumentsList, Box<ExpressionBlock>, Span), // TODO.
     // MethodCall(Box<Expression>, String, Vec<Expression>), // TODO.
     ClassConstructor(ClassConstructor, Span),
@@ -187,10 +276,22 @@ pub enum Expression {
     ExpressionBlock(Box<Block>, Span),
 }
 
+/// A type argument to a generic function call.
+///
+/// std.fetch_value<int>(...) == TypeArg::Type(int),
+/// std.fetch_value<T>(...) == TypeArg::TypeName("T")
+#[derive(Clone, Debug)]
+pub enum TypeArg {
+    Type(TypeM<TypeMeta>),
+    TypeName(String),
+}
+
 // TODO: struct Expr {kind: ExprKind, span: Span}
 impl Expression {
     pub fn span(&self) -> Span {
         match self {
+            Expression::ArrayAccess { span, .. } => span.clone(),
+            Expression::FieldAccess { span, .. } => span.clone(),
             Expression::BoolValue(_, span) => span.clone(),
             Expression::NumericValue(_, span) => span.clone(),
             Expression::Identifier(_, span) => span.clone(),
@@ -200,20 +301,20 @@ impl Expression {
             Expression::Array(_, span) => span.clone(),
             Expression::Map(_, span) => span.clone(),
             Expression::JinjaExpressionValue(_, span) => span.clone(),
-            Expression::Call(_, _, span) => span.clone(),
+            Expression::Call { span, .. } => span.clone(),
             Expression::ClassConstructor(_, span) => span.clone(),
             Expression::ExpressionBlock(_, span) => span.clone(),
         }
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ClassConstructor {
     pub class_name: String,
     pub fields: Vec<ClassConstructorField>,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum ClassConstructorField {
     Named { name: String, value: Expression },
     Spread { value: Expression },

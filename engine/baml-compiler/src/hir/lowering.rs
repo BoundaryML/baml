@@ -3,12 +3,12 @@
 //! This files contains the convertions between Baml AST nodes to HIR nodes.
 
 use baml_types::{type_meta::base::StreamingBehavior, Constraint, ConstraintLevel, TypeValue};
-use internal_baml_core::ast::{self, App, Attribute, WithName, WithSpan};
+use internal_baml_ast::ast::{self, App, Attribute, WithName, WithSpan};
 use internal_baml_diagnostics::Span;
 
 use crate::hir::{
     Block, Class, ClassConstructor, ClassConstructorField, Enum, EnumVariant, ExprFunction,
-    Expression, Field, Hir, LlmFunction, Parameter, Statement, TypeM, TypeMeta,
+    Expression, Field, Hir, LlmFunction, Parameter, Statement, TypeArg, TypeM, TypeMeta,
 };
 
 impl Hir {
@@ -19,7 +19,12 @@ impl Hir {
             llm_functions: vec![],
             classes: vec![],
             enums: vec![],
+            global_assignments: baml_types::BamlMap::new(),
         };
+
+        // Add builtin classes and enums first
+        hir.classes.extend(crate::builtin::builtin_classes());
+        hir.enums.extend(crate::builtin::builtin_enums());
 
         for top in &ast.tops {
             match top {
@@ -31,7 +36,18 @@ impl Hir {
                 }
                 ast::Top::Class(class) => hir.classes.push(Class::from_ast(class)),
                 ast::Top::Enum(enum_def) => hir.enums.push(Enum::from_ast(enum_def)),
-
+                ast::Top::TopLevelAssignment(assignment) => {
+                    // Add toplevel assignments to global_assignments for HIR typechecking
+                    let mut statements = vec![];
+                    let mut temp_counter = 0;
+                    let value = Expression::from_ast(
+                        &assignment.stmt.expr,
+                        &mut statements,
+                        &mut temp_counter,
+                    );
+                    hir.global_assignments
+                        .insert(assignment.stmt.identifier.to_string(), value);
+                }
                 _ => {}
             }
         }
@@ -152,6 +168,7 @@ impl TypeM<TypeMeta> {
         match self {
             TypeM::Int(meta) => meta,
             TypeM::String(meta) => meta,
+            TypeM::Float(meta) => meta,
             TypeM::Bool(meta) => meta,
             TypeM::Null(meta) => meta,
             TypeM::Array(_, meta) => meta,
@@ -159,6 +176,7 @@ impl TypeM<TypeMeta> {
             TypeM::ClassName(_, meta) => meta,
             TypeM::EnumName(_, meta) => meta,
             TypeM::Union(_, meta) => meta,
+            TypeM::Arrow(_, meta) => meta,
         }
     }
 
@@ -175,6 +193,7 @@ impl TypeM<TypeMeta> {
         match self {
             TypeM::Union(_, _) => true,
             TypeM::Int(_) => false,
+            TypeM::Float(_) => false,
             TypeM::String(_) => false,
             TypeM::Bool(_) => false,
             TypeM::Array(_, _) => false,
@@ -182,6 +201,7 @@ impl TypeM<TypeMeta> {
             TypeM::ClassName(_, _) => false,
             TypeM::EnumName(_, _) => false,
             TypeM::Null(_) => false,
+            TypeM::Arrow(_, _) => true,
         }
     }
 }
@@ -196,9 +216,9 @@ impl LlmFunction {
                     input
                         .args
                         .iter()
-                        .map(|(name, _)| Parameter {
+                        .map(|(name, param)| Parameter {
                             name: name.to_string(),
-                            // r#type: param.r#type.to_string(),
+                            r#type: TypeM::from_ast(&param.field_type),
                             span: name.span().clone(),
                         })
                         .collect::<Vec<_>>()
@@ -250,9 +270,9 @@ impl ExprFunction {
                 .args
                 .args
                 .iter()
-                .map(|(name, _)| Parameter {
+                .map(|(name, param)| Parameter {
                     name: name.to_string(),
-                    // r#type: param.r#type.to_string(),
+                    r#type: TypeM::from_ast(&param.field_type),
                     span: name.span().clone(),
                 })
                 .collect::<Vec<_>>(),
@@ -332,57 +352,44 @@ impl Block {
                 ast::Stmt::Expression(expr) => {
                     let mut temp_counter = 0;
                     let mut lifted_statements = vec![];
-
-                    let hir_expr =
-                        Expression::from_ast(expr, &mut lifted_statements, &mut temp_counter);
-
-                    statements.extend(lifted_statements);
-
-                    // Expressions that contain blocks themselves will deal with
-                    // return expressions recursively. But expressions that have
-                    // no blocks (like function calls or 2 + 2) must drop the
-                    // returned value, so we insert semicolon expressions.
-                    if matches!(
-                        expr,
-                        ast::Expression::If(..) | ast::Expression::ExprBlock(..)
-                    ) {
-                        statements.push(Statement::Expression {
-                            expr: hir_expr,
-                            span: expr.span().clone(),
-                        });
-                    } else {
-                        statements.push(Statement::SemicolonExpression {
-                            expr: hir_expr,
-                            span: expr.span().clone(),
-                        });
-                    }
+                    let lifted_expr = Expression::from_ast(expr, &mut lifted_statements, &mut temp_counter);
+                    statements.push(Statement::Expression {
+                        expr: lifted_expr,
+                        span: expr.span().clone(),
+                    });
                 }
             }
         }
 
         // Handle if expressions specially in return position
         // Normal expression - but check for if expressions in nested contexts
-        if let Some(expr) = &block.expr {
-            let mut temp_counter = 0;
-            let mut lifted_statements = vec![];
-            let lifted_expr = Expression::from_ast(expr, &mut lifted_statements, &mut temp_counter);
+        let mut temp_counter = 0;
+        let mut lifted_statements = vec![];
 
-            // Add any lifted statements first
-            statements.extend(lifted_statements);
+        // Add any lifted statements first
+        // TODO: Is this clone Ok? Or does lifted_statements need to be shared/modified?
+        statements.extend(lifted_statements.clone());
 
+        if let Some(block_final_expr) = block.expr.as_ref() {
+            let lifted_expr = Expression::from_ast(
+                &block_final_expr,
+                &mut lifted_statements,
+                &mut temp_counter,
+            );
             // Then add the final statement
             statements.push(if is_function_body {
                 Statement::Return {
                     expr: lifted_expr,
-                    span: expr.span().clone(),
+                    span: block_final_expr.span().clone(),
                 }
             } else {
                 Statement::Expression {
                     expr: lifted_expr,
-                    span: expr.span().clone(),
+                    span: block_final_expr.span().clone(),
                 }
             });
         }
+
 
         Block { statements }
     }
@@ -400,6 +407,16 @@ impl Expression {
         temp_counter: &mut usize,
     ) -> Self {
         match expr {
+            ast::Expression::ArrayAccess(base, index, span) => Expression::ArrayAccess {
+                base: Box::new(Self::from_ast(base, statements, temp_counter)),
+                index: Box::new(Self::from_ast(index, statements, temp_counter)),
+                span: span.clone(),
+            },
+            ast::Expression::FieldAccess(base, field, span) => Expression::FieldAccess {
+                base: Box::new(Self::from_ast(base, statements, temp_counter)),
+                field: field.to_string(),
+                span: span.clone(),
+            },
             ast::Expression::BoolValue(value, span) => Expression::BoolValue(*value, span.clone()),
             ast::Expression::NumericValue(value, span) => {
                 Expression::NumericValue(value.to_string(), span.clone())
@@ -422,14 +439,35 @@ impl Expression {
                 span.clone(),
             ),
             ast::Expression::App(App {
-                name, args, span, ..
-            }) => Expression::Call(
-                name.to_string(),
-                args.iter()
-                    .map(|arg| Self::from_ast(arg, statements, temp_counter))
-                    .collect(),
-                span.clone(),
-            ),
+                name,
+                type_args,
+                args,
+                span,
+                ..
+            }) => {
+                // Note: AST function calls are always just names next to argument lists.
+                // Later, we will be able to call any expression that is a function.
+                // e.g. foo.name_callback(name),
+                // but we don't support this in the AST yet.
+                let hir_name = Expression::Identifier(name.to_string(), name.span().clone());
+                // Note: User calls of generic functions always use concrete types - this
+                // is enforced in the AST. At some point in the future, we may allow the
+                // user to instantiate generic functions with type variables. But we don't
+                // support this yet.
+                let hir_type_args = type_args
+                    .iter()
+                    .map(|arg| TypeArg::Type(TypeM::from_ast(arg)))
+                    .collect();
+                Expression::Call {
+                    function: Box::new(hir_name),
+                    type_args: hir_type_args,
+                    args: args
+                        .iter()
+                        .map(|arg| Self::from_ast(arg, statements, temp_counter))
+                        .collect(),
+                    span: span.clone(),
+                }
+            }
             ast::Expression::Map(pairs, span) => Expression::Map(
                 pairs
                     .iter()
@@ -554,7 +592,7 @@ mod tests {
     use super::*;
 
     /// Test helper to generate HIR from BAML source
-    fn hir_from_source(source: &str) -> String {
+    fn hir_from_source(source: &'static str) -> String {
         let parser_db = crate::test::ast(source).unwrap_or_else(|e| panic!("{}", e));
         let hir = Hir::from_ast(&parser_db.ast);
         hir.pretty_print()

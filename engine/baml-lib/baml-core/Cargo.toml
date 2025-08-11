@@ -18,6 +18,7 @@ type_complexity = "allow"
 
 [dependencies]
 anyhow.workspace = true
+baml-compiler = { path = "../../baml-compiler" }
 baml-derive.workspace = true
 baml-types = { path = "../baml-types" }
 bstd.workspace = true

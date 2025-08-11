@@ -4445,6 +4445,10 @@ func LlmReturnNumber(ctx context.Context, n int64, opts ...CallOptionFunc) (int6
 		args.Collectors = callOpts.collectors
 	}
 
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)

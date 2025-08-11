@@ -173,6 +173,23 @@ fn subst<'a>(
                 meta: meta.clone(),
             })
         }
+        Expr::ArrayAccess { base, index, meta } => {
+            let new_base = subst(base, var_name, val, _env)?;
+            let new_index = subst(index, var_name, val, _env)?;
+            Ok(Expr::ArrayAccess {
+                base: Arc::new(new_base),
+                index: Arc::new(new_index),
+                meta: meta.clone(),
+            })
+        }
+        Expr::FieldAccess { base, field, meta } => {
+            let new_base = subst(base, var_name, val, _env)?;
+            Ok(Expr::FieldAccess {
+                base: Arc::new(new_base),
+                field: field.clone(),
+                meta: meta.clone(),
+            })
+        }
     };
     let res = res?;
     Ok(res)
@@ -701,6 +718,58 @@ pub async fn eval_to_value_or_llm_call<'a>(
             l @ Expr::ForLoop { .. } => {
                 let res = Box::pin(beta_reduce(env, &l, false)).await?;
                 current_expr = res;
+            }
+            Expr::ArrayAccess { base, index, meta } => {
+                let base_val = eval_to_value(env, base.as_ref()).await?;
+                let index_val = eval_to_value(env, index.as_ref()).await?;
+                
+                match (base_val, index_val) {
+                    (Some(BamlValueWithMeta::List(items, _)), Some(BamlValueWithMeta::Int(idx, _))) => {
+                        if idx < 0 || idx as usize >= items.len() {
+                            return Err(anyhow!("Array index out of bounds: {}", idx));
+                        }
+                        let val = items[idx as usize].clone();
+                        return Ok(ExprEvalResult::Value {
+                            value: val,
+                            field_type: meta.1.clone().unwrap_or(TypeIR::Primitive(TypeValue::Null, TypeMeta::default())),
+                        });
+                    }
+                    (Some(BamlValueWithMeta::Map(map, _)), Some(index_val)) => {
+                        let key = match index_val {
+                            BamlValueWithMeta::String(s, _) => s,
+                            _ => return Err(anyhow!("Map index must be a string")),
+                        };
+                        
+                        match map.get(&key) {
+                            Some(val) => {
+                                return Ok(ExprEvalResult::Value {
+                                    value: val.clone(),
+                                    field_type: meta.1.clone().unwrap_or(TypeIR::Primitive(TypeValue::Null, TypeMeta::default())),
+                                });
+                            }
+                            None => return Err(anyhow!("Map key not found: {}", key)),
+                        }
+                    }
+                    _ => return Err(anyhow!("Invalid array/map access")),
+                }
+            }
+            Expr::FieldAccess { base, field, meta } => {
+                let base_val = eval_to_value(env, base.as_ref()).await?;
+                
+                match base_val {
+                    Some(BamlValueWithMeta::Class(_, fields, _)) => {
+                        match fields.get(&field) {
+                            Some(val) => {
+                                return Ok(ExprEvalResult::Value {
+                                    value: val.clone(),
+                                    field_type: meta.1.clone().unwrap_or(TypeIR::Primitive(TypeValue::Null, TypeMeta::default())),
+                                });
+                            }
+                            None => return Err(anyhow!("Field not found: {}", field)),
+                        }
+                    }
+                    _ => return Err(anyhow!("Field access requires a class type")),
+                }
             }
         }
     }

@@ -130,6 +130,22 @@ fn parse_base_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Fiel
 
     if let Some(current) = pair.into_inner().next() {
         return match current.as_rule() {
+            Rule::path_identifier => {
+                diagnostics.push_error(DatamodelError::new_validation_error(
+                    "Path identifiers are not supported in base types",
+                    diagnostics.span(current.as_span()),
+                ));
+                // Return a Symbol type to allow type validation to continue
+                // This will trigger the "type not found" error in the validation pipeline
+                Some(FieldType::Symbol(
+                    FieldArity::Required,
+                    Identifier::Local(
+                        current.as_str().to_string(),
+                        diagnostics.span(current.as_span()),
+                    ),
+                    None,
+                ))
+            }
             Rule::identifier => {
                 let identifier = parse_identifier(current.clone(), diagnostics);
                 let field_type = match current.as_str() {
