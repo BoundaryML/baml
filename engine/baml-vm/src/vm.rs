@@ -630,7 +630,7 @@ impl Vm {
             frame.instruction_ptr += 1;
 
             // Runtime debugging information.
-            #[cfg(debug_assertions)]
+            // #[cfg(debug_assertions)]
             // {
             //     let stack = self
             //         .stack
