@@ -33,9 +33,9 @@ fn assert_vm_executes_with_inspection(
         resolved_function_names,
     } = baml_compiler::compile(&ast)?;
 
-    eprintln!("objects: {objects:#?}");
-    eprintln!("globals: {globals:#?}");
-    eprintln!("resolved_function_names: {resolved_function_names:#?}");
+    // eprintln!("objects: {objects:#?}");
+    // eprintln!("globals: {globals:#?}");
+    // eprintln!("resolved_function_names: {resolved_function_names:#?}");
 
     // Find the target function index by name
     let (target_function_index, _) = resolved_function_names[input.function];

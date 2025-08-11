@@ -1,8 +1,12 @@
-use crate::hir::{self, Hir, Type};
-use crate::thir::{self as thir, ExprMetadata, THir};
+use std::sync::Arc;
+
 use baml_types::{BamlMap, BamlValueWithMeta};
 use internal_baml_diagnostics::{DatamodelError, Diagnostics};
-use std::sync::Arc;
+
+use crate::{
+    hir::{self, Hir, Type},
+    thir::{self as thir, ExprMetadata, THir},
+};
 
 pub fn typecheck(hir: &Hir, diagnostics: &mut Diagnostics) -> THir<ExprMetadata> {
     let llm_functions = hir.llm_functions.clone();
@@ -245,7 +249,9 @@ fn typecheck_statement(
             } else {
                 // Add with unknown type (represented as Int for now as a placeholder)
                 // This prevents "Unknown variable" errors for variables with invalid initializers
-                context.inner.insert(name.clone(), hir::TypeM::Int(hir::TypeMeta::default()));
+                context
+                    .inner
+                    .insert(name.clone(), hir::TypeM::Int(hir::TypeMeta::default()));
             }
 
             Some(thir::Statement::Let {
@@ -254,7 +260,8 @@ fn typecheck_statement(
                 span: span.clone(),
             })
         }
-        hir::Statement::Expression { expr, span } => {
+        hir::Statement::Expression { expr, span }
+        | hir::Statement::SemicolonExpression { expr, span } => {
             let typed_expr = typecheck_expression(expr, context, diagnostics);
             Some(thir::Statement::Expression {
                 expr: typed_expr,
@@ -289,7 +296,9 @@ fn typecheck_statement(
             } else {
                 // Add with unknown type (represented as Int for now as a placeholder)
                 // This prevents "Unknown variable" errors for variables with invalid initializers
-                context.inner.insert(name.clone(), hir::TypeM::Int(hir::TypeMeta::default()));
+                context
+                    .inner
+                    .insert(name.clone(), hir::TypeM::Int(hir::TypeMeta::default()));
             }
 
             Some(thir::Statement::DeclareAndAssign {
@@ -517,8 +526,7 @@ fn typecheck_expression(
             // Typecheck arguments
             let typed_args: Vec<_> = if is_known_function {
                 // Only validate arguments for known functions
-                args
-                    .iter()
+                args.iter()
                     .zip(
                         param_types
                             .iter()
@@ -793,7 +801,9 @@ fn typecheck_expression(
                     // Look up the class definition
                     if let Some(class_def) = context.classes.get(class_name) {
                         // Find the field in the class
-                        if let Some(class_field) = class_def.fields.iter().find(|f| &f.name == field) {
+                        if let Some(class_field) =
+                            class_def.fields.iter().find(|f| &f.name == field)
+                        {
                             Some(class_field.r#type.clone())
                         } else {
                             // Field doesn't exist on the class
@@ -864,9 +874,10 @@ fn types_compatible(actual: &Type, expected: &Type) -> bool {
 mod tests {
     use std::path::PathBuf;
 
+    use internal_baml_diagnostics::Diagnostics;
+
     use super::*;
     use crate::hir::Hir;
-    use internal_baml_diagnostics::Diagnostics;
 
     /// Test helper to generate HIR from BAML source without validation
     fn hir_from_source(source: &'static str) -> (Hir, Diagnostics) {
@@ -920,7 +931,7 @@ mod tests {
         function add(a: int, b: int) -> int {
           a
         }
-        
+
         function test_call() -> int {
           let result = add(1, 2);
           result

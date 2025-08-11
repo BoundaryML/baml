@@ -14,7 +14,7 @@ use crate::hir;
 /// 2. HIR -> Bytecode
 pub fn compile(ast: &ParserDatabase) -> anyhow::Result<BamlVmProgram> {
     // Stage 1: AST -> HIR
-    // eprintln!("AST:\n{:#?}", ast.ast);
+    eprintln!("AST:\n{:#?}", ast.ast);
     let hir = hir::Hir::from_ast(&ast.ast);
 
     // eprintln!("HIR:\n{:#?}", hir);
@@ -311,6 +311,10 @@ impl<'g> HirCompiler<'g> {
             }
 
             hir::Statement::Expression { expr, .. } => {
+                self.compile_expression(expr);
+            }
+
+            hir::Statement::SemicolonExpression { expr, .. } => {
                 self.compile_expression(expr);
                 // This could be a function call or any other random expression
                 // like:
@@ -1154,7 +1158,7 @@ mod tests {
             expected: vec![(
                 "main",
                 vec![
-                    Instruction::AllocInstance(1),
+                    Instruction::AllocInstance(2),
                     Instruction::LoadConst(0),
                     Instruction::StoreField(0),
                     Instruction::LoadConst(1),
