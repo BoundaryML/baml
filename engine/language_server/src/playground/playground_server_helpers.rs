@@ -35,6 +35,7 @@ use crate::{
 //     include_dir!("$CARGO_MANIFEST_DIR/../../typescript/vscode-ext/packages/web-panel/dist");
 
 /// Helper to send all projects/files to a websocket client
+#[tracing::instrument(skip_all)]
 pub async fn send_all_projects_to_client(
     ws_tx: &mut (impl SinkExt<Message> + Unpin),
     session: &Arc<Session>,
@@ -42,7 +43,16 @@ pub async fn send_all_projects_to_client(
     tracing::info!("lorem ipsum send_all_projects_to_client");
     {
         let try_lock = session.baml_src_projects.try_lock();
-        tracing::info!("lorem ipsum try_lock: {:?}", try_lock.is_ok());
+        tracing::info!("lorem ipsum try_lock ok?: {:?}", try_lock.is_ok());
+        match try_lock {
+            Ok(lock) => {
+                tracing::info!("try_lock succeeded");
+            }
+            Err(e) => {
+                tracing::error!("lorem ipsum try_lock failed2: {:?}", e);
+                // return;
+            }
+        }
     }
     let projects = {
         let projects = session.baml_src_projects.lock().unwrap();
@@ -50,9 +60,20 @@ pub async fn send_all_projects_to_client(
         projects
             .iter()
             .map(|(root_path, project)| {
-                tracing::info!("lorem ipsum pre-project-lock: {:?}", root_path);
+                tracing::info!("lorem ipsum pre-project-try-lock: {:?}", root_path);
+                {
+                    let try_lock = project.try_lock();
+                    match try_lock {
+                        Ok(lock) => {
+                            tracing::info!("pre-project-lock try_lock succeeded");
+                        }
+                        Err(e) => {
+                            tracing::error!("pre-project-lock try_lock failed: {:?}", e);
+                        }
+                    }
+                }
                 let project = project.lock().unwrap();
-                tracing::info!("lorem ipsum post-project-lock: {:?}", root_path);
+                tracing::info!("lorem ipsum post-project-try;lock: {:?}", root_path);
                 let files = project.baml_project.files.clone();
                 let root_path = root_path.to_string_lossy().to_string();
                 let files_map: HashMap<String, String> = files
@@ -63,7 +84,7 @@ pub async fn send_all_projects_to_client(
             })
             .collect::<Vec<_>>()
     };
-    tracing::info!("lorem ipsum projects: {:?}", projects.len());
+    tracing::info!("lorem ipsum projects unlocked: {:?}", projects.len());
     for (root_path, files_map) in projects {
         let add_project_msg = FrontendMessage::add_project {
             root_path,
@@ -76,6 +97,7 @@ pub async fn send_all_projects_to_client(
     }
 }
 
+#[tracing::instrument(skip_all)]
 pub async fn start_client_connection(
     ws: warp::ws::WebSocket,
     state: Arc<RwLock<PlaygroundState>>,
@@ -89,9 +111,16 @@ pub async fn start_client_connection(
     };
 
     // Send initial project state using the helper
+    tracing::info!("send_all_projects_to_client BEGIN");
     send_all_projects_to_client(&mut ws_tx, &session).await;
+    tracing::info!("send_all_projects_to_client END");
 
     // --- SEND BUFFERED EVENTS (if any) ---
+    // when the playground is loading, it sends a bunch of add_project events
+    // the IDE sends a lot of add_project events, so we buffer them here
+    // the language-server will receive these events before the playground is ready
+    // so when the playground is open, it needs to connect to the language-server
+    // and have the language-server replay them all
     {
         let mut st = state.write().await;
         let buffered_events = st.drain_event_buffer();
@@ -145,12 +174,16 @@ pub fn create_server_routes(
     session: Arc<Session>,
     dist_dir: Option<std::path::PathBuf>,
 ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
+    tracing::info!("create_server_routes: Starting route creation");
+    tracing::info!("create_server_routes: dist_dir = {:?}", dist_dir);
+
     // WebSocket handler with error handling
     let ws_state = state.clone();
     let ws_session = session.clone();
     let ws_route = warp::path("ws")
         .and(warp::ws())
         .map(move |ws: warp::ws::Ws| {
+            tracing::info!("create_server_routes: WebSocket route matched");
             let state = ws_state.clone();
             let session = ws_session.clone();
             ws.on_upgrade(move |socket| async move {
@@ -158,12 +191,13 @@ pub fn create_server_routes(
             })
         });
 
-    tracing::info!("Setting up RPC websocket...");
+    tracing::info!("create_server_routes: Setting up RPC websocket...");
     // RPC WebSocket handler
     let rpc_session = session.clone();
     let rpc_route = warp::path("rpc")
         .and(warp::ws())
         .map(move |ws: warp::ws::Ws| {
+            tracing::info!("create_server_routes: RPC WebSocket route matched");
             let session = rpc_session.clone();
             ws.on_upgrade(move |socket| async move {
                 handle_rpc_websocket(socket, session).await;
@@ -171,19 +205,27 @@ pub fn create_server_routes(
         });
 
     // Static file serving - either real files or error page
+    tracing::info!("Setting up static file serving");
     let spa = warp::path::full()
         .and(warp::get())
         .and_then(move |full: warp::path::FullPath| {
+            tracing::info!("Incoming request for path: {:?}", full);
             let dist_dir = dist_dir.clone();
             async move {
+                tracing::info!("Processing request inside async block for path: {:?}", full);
                 match dist_dir {
                     Some(dir) => {
+                        tracing::info!("Using dist directory: {:?}", dir);
                         // Normal file serving
                         let path = full.as_str().trim_start_matches('/');
                         let file = if path.is_empty() { "index.html" } else { path };
                         let file_path = dir.join(file);
+                        tracing::info!("Resolved file path: {:?}", file_path);
+                        
+                        tracing::info!("About to read file: {:?}", file_path);
                         match tokio::fs::read(&file_path).await {
                             Ok(body) => {
+                                tracing::info!("Successfully read file: {:?}, size: {} bytes", file_path, body.len());
                                 let mut mime = from_path(file).first_or_octet_stream();
 
                                 // Ensure .mjs files are served with correct MIME type for ES modules
@@ -191,6 +233,7 @@ pub fn create_server_routes(
                                     mime = "application/javascript".parse().unwrap_or(mime);
                                 }
 
+                                tracing::info!("Building response with mime type: {:?}", mime);
                                 Ok::<_, warp::Rejection>(
                                     Response::builder()
                                         .header("content-type", mime.as_ref())
@@ -198,13 +241,15 @@ pub fn create_server_routes(
                                         .unwrap(),
                                 )
                             }
-                            Err(_) => {
+                            Err(e) => {
+                                tracing::info!("File not found or read error: {:?}, serving error page", e);
                                 // File not found, serve error page
                                 Ok::<_, warp::Rejection>(serve_error_page())
                             }
                         }
                     }
                     None => {
+                        tracing::info!("No dist directory available, serving error page");
                         // No dist directory available, serve error page
                         Ok::<_, warp::Rejection>(serve_error_page())
                     }
@@ -212,10 +257,14 @@ pub fn create_server_routes(
             }
         });
 
-    ws_route
+    tracing::info!("Combining routes: ws, rpc, and spa");
+    let combined_routes = ws_route
         .or(rpc_route)
         .or(spa)
-        .with(warp::log("playground-server"))
+        .with(warp::log("playground-server"));
+    
+    tracing::info!("Route creation completed successfully");
+    combined_routes
 }
 
 /// Creates a nice HTML error page when playground assets are not available

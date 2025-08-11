@@ -21,6 +21,7 @@ members = [
   "sandbox",
   "llm-response-parser",
   "boundary-udf",
+  "tokio-console-demo",
 ]
 default-members = [
   "baml-lsp-types",

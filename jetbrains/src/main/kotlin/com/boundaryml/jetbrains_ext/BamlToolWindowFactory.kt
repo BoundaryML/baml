@@ -64,18 +64,41 @@ class BamlToolWindowFactory : ToolWindowFactory {
         // Create reload button
         val reloadButton = JButton("Reload").apply {
             addActionListener {
+                val currentTime = java.time.LocalDateTime.now()
                 val savedPort = project.getService(BamlGetPortService::class.java).port
+                System.out.println("reload button clicked at ${currentTime}, port is ${savedPort}")
                 if (savedPort != null) {
                     browser.loadURL("http://localhost:$savedPort/")
                 } else {
                     browser.loadHTML("<p>Port not ready</p>")
                 }
+                System.out.println("finished loading")
             }
         }
 
-        // Create control panel with reload button
+        // Create lorem ipsum button
+        val loremButton = JButton("Lorem Ipsum").apply {
+            addActionListener {
+                val currentTime = java.time.LocalDateTime.now()
+                System.out.println("lorem button clicked at ${currentTime}")
+                browser.loadHTML("""
+                    <!DOCTYPE html>
+                    <html>
+                    <head><title>Lorem Ipsum</title></head>
+                    <body style="font-family: Arial, sans-serif; padding: 20px; color: white;">
+                        <h1>Lorem Ipsum</h1>
+                        <p><strong>Generated at:</strong> $currentTime</p>
+                        <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
+                    </body>
+                    </html>
+                """.trimIndent())
+            }
+        }
+
+        // Create control panel with buttons
         val controlPanel = JPanel(FlowLayout(FlowLayout.RIGHT)).apply {
             add(reloadButton)
+            add(loremButton)
         }
 
         // Create main panel with controls and browser
