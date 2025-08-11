@@ -12,8 +12,9 @@ let misspelling = foo.names;
 let nonsense = foo.name.field;
 
 let array_access_1 = [1, 2, 3][0];
-let array_access = [1,2, 3]["hi"];
-let array_access = [1,2, 3][foo.age];
+let array_access_2 = [1,2, 3]["hi"];
+let array_access_3 = [1,2, 3][foo.age];
+let array_access_4 = [1,2, 3][foo.name];
 
 // warning: Variable assignment is experimental, and will break in the future.
 //   -->  expr/access.baml:6
@@ -52,13 +53,19 @@ let array_access = [1,2, 3][foo.age];
 //   -->  expr/access.baml:15
 //    | 
 // 14 | let array_access_1 = [1, 2, 3][0];
-// 15 | let array_access = [1,2, 3]["hi"];
+// 15 | let array_access_2 = [1,2, 3]["hi"];
 //    | 
 // warning: Variable assignment is experimental, and will break in the future.
 //   -->  expr/access.baml:16
 //    | 
-// 15 | let array_access = [1,2, 3]["hi"];
-// 16 | let array_access = [1,2, 3][foo.age];
+// 15 | let array_access_2 = [1,2, 3]["hi"];
+// 16 | let array_access_3 = [1,2, 3][foo.age];
+//    | 
+// warning: Variable assignment is experimental, and will break in the future.
+//   -->  expr/access.baml:17
+//    | 
+// 16 | let array_access_3 = [1,2, 3][foo.age];
+// 17 | let array_access_4 = [1,2, 3][foo.name];
 //    | 
 // error: Error validating: Class Foo has no field names
 //   -->  expr/access.baml:11
@@ -71,4 +78,16 @@ let array_access = [1,2, 3][foo.age];
 //    | 
 // 11 | let misspelling = foo.names;
 // 12 | let nonsense = foo.name.field;
+//    | 
+// error: Error validating: Array index must be integer
+//   -->  expr/access.baml:15
+//    | 
+// 14 | let array_access_1 = [1, 2, 3][0];
+// 15 | let array_access_2 = [1,2, 3]["hi"];
+//    | 
+// error: Error validating: Array index must be integer
+//   -->  expr/access.baml:17
+//    | 
+// 16 | let array_access_3 = [1,2, 3][foo.age];
+// 17 | let array_access_4 = [1,2, 3][foo.name];
 //    | 
