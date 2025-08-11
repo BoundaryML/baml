@@ -6,14 +6,13 @@ import com.redhat.devtools.lsp4ij.server.OSProcessStreamConnectionProvider
 import java.nio.file.Files
 import java.nio.file.Path
 
-class BamlLanguageServer(private val project: Project) : OSProcessStreamConnectionProvider() {
+class BamlLanguageServer2(private val project: Project) : OSProcessStreamConnectionProvider() {
 
     init {
-        // Kill any orphaned baml-cli processes before starting
-        val pkillProcess = Runtime.getRuntime().exec("pkill -f target/debug/baml-cli")
-        pkillProcess.waitFor()
-        System.out.println("pkill'd the old baml-cli processes")
+        setupCommandLine()
+    }
 
+    private fun setupCommandLine() {
         // UNCOMMENT FOR DEBUGGING LOCALLY
 //        val commandLine = GeneralCommandLine(
 //            Path.of(System.getProperty("user.home"),
@@ -33,7 +32,16 @@ class BamlLanguageServer(private val project: Project) : OSProcessStreamConnecti
 //        val cli = cacheDir.resolve("baml-cli-$version-$arch-$platform").resolve(exe)
 //
 //        super.setCommandLine(GeneralCommandLine(cli.toString(), "lsp"))
+    }
 
+    fun restart() {
+        try {
+            stop()
+        } catch (e: Exception) {
+            // Ignore errors during stop
+        }
+        setupCommandLine()
+        start()
     }
 
 }

@@ -64,6 +64,8 @@ class BamlToolWindowFactory : ToolWindowFactory {
         val content = ContentFactory.getInstance().createContent(panel, null, false)
         toolWindow.contentManager.addContent(content)
 
+        System.out.println("sam asking BamlToolWindowFactory about startup");
+
         val savedPort = project.getService(BamlGetPortService::class.java).port
         if (savedPort != null) {
             // LS was up before the tool-window opened

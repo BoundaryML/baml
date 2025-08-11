@@ -39,12 +39,20 @@ pub async fn send_all_projects_to_client(
     ws_tx: &mut (impl SinkExt<Message> + Unpin),
     session: &Arc<Session>,
 ) {
+    tracing::info!("lorem ipsum send_all_projects_to_client");
+    {
+        let try_lock = session.baml_src_projects.try_lock();
+        tracing::info!("lorem ipsum try_lock: {:?}", try_lock.is_ok());
+    }
     let projects = {
         let projects = session.baml_src_projects.lock().unwrap();
+        tracing::info!("lorem ipsum projects while locked: {:?}", projects.len());
         projects
             .iter()
             .map(|(root_path, project)| {
+                tracing::info!("lorem ipsum pre-project-lock: {:?}", root_path);
                 let project = project.lock().unwrap();
+                tracing::info!("lorem ipsum post-project-lock: {:?}", root_path);
                 let files = project.baml_project.files.clone();
                 let root_path = root_path.to_string_lossy().to_string();
                 let files_map: HashMap<String, String> = files
@@ -55,12 +63,14 @@ pub async fn send_all_projects_to_client(
             })
             .collect::<Vec<_>>()
     };
+    tracing::info!("lorem ipsum projects: {:?}", projects.len());
     for (root_path, files_map) in projects {
         let add_project_msg = FrontendMessage::add_project {
             root_path,
             files: files_map,
         };
         if let Ok(msg_str) = serde_json::to_string(&add_project_msg) {
+            tracing::info!("lorem ipsum sending add_project_msg: {}", msg_str);
             let _ = ws_tx.send(Message::text(msg_str)).await;
         }
     }
@@ -71,6 +81,7 @@ pub async fn start_client_connection(
     state: Arc<RwLock<PlaygroundState>>,
     session: Arc<Session>,
 ) {
+    tracing::info!("lorem ipsum Starting client connection from language-server to wasm");
     let (mut ws_tx, mut ws_rx) = ws.split();
     let mut rx = {
         let state = state.read().await;

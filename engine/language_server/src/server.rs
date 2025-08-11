@@ -296,7 +296,7 @@ impl Server {
             .and_then(|workspace| workspace.did_change_watched_files)
             .and_then(|watched_files| watched_files.dynamic_registration)
             .unwrap_or_default();
-        tracing::info!("*** dynamic_registration: {}", dynamic_registration);
+        tracing::info!("*** asdfa sdynamic_registration: {}", dynamic_registration);
         if dynamic_registration {
             // Register all dynamic capabilities here
 
