@@ -380,7 +380,16 @@ impl<'g> HirCompiler<'g> {
             }
 
             hir::Expression::ArrayAccess { base, index, .. } => {
-                unimplemented!("Array access compilation")
+                // Compile the base expression (the array)
+                self.compile_expression(base);
+
+                // Compile the index expression
+                self.compile_expression(index);
+
+                // Emit the LoadArrayElement instruction
+                // Stack will be [array, index] and LoadArrayElement will consume both
+                // and push the result element
+                self.emit(Instruction::LoadArrayElement);
             }
 
             hir::Expression::FieldAccess { base, field, .. } => {
@@ -1316,5 +1325,72 @@ mod tests {
         );
 
         Ok(())
+    }
+
+    #[test]
+    fn array_access() -> anyhow::Result<()> {
+        assert_compiles(Program {
+            source: "
+                fn main() -> int {
+                    let arr = [1, 2, 3];
+                    arr[1]
+                }
+            ",
+            expected: vec![(
+                "main",
+                vec![
+                    // Create array [1, 2, 3]
+                    Instruction::LoadConst(0), // 1
+                    Instruction::LoadConst(1), // 2
+                    Instruction::LoadConst(2), // 3
+                    Instruction::AllocArray(3),
+                    // Store array in variable 'arr'
+                    Instruction::StoreVar(0),
+                    // Load array variable
+                    Instruction::LoadVar(0),
+                    // Load index 1
+                    Instruction::LoadConst(1),
+                    // Access array element
+                    Instruction::LoadArrayElement,
+                    Instruction::Return,
+                ],
+            )],
+        })
+    }
+
+    #[test]
+    fn array_access_with_variable_index() -> anyhow::Result<()> {
+        assert_compiles(Program {
+            source: "
+                fn main() -> int {
+                    let arr = [10, 20, 30];
+                    let idx = 2;
+                    arr[idx]
+                }
+            ",
+            expected: vec![(
+                "main",
+                vec![
+                    // Create array [10, 20, 30]
+                    Instruction::LoadConst(0), // 10
+                    Instruction::LoadConst(1), // 20
+                    Instruction::LoadConst(2), // 30
+                    Instruction::AllocArray(3),
+                    // Store array in variable 'arr'
+                    Instruction::StoreVar(0),
+                    // Load index 2
+                    Instruction::LoadConst(2),
+                    // Store index in variable 'idx'
+                    Instruction::StoreVar(1),
+                    // Load array variable
+                    Instruction::LoadVar(0),
+                    // Load index variable
+                    Instruction::LoadVar(1),
+                    // Access array element
+                    Instruction::LoadArrayElement,
+                    Instruction::Return,
+                ],
+            )],
+        })
     }
 }

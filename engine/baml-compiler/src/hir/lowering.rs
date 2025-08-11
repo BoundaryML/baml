@@ -150,8 +150,13 @@ impl TypeM<TypeMeta> {
                 TypeValue::Null => TypeM::String(meta),  // TODO: Add Null type to TypeM
                 TypeValue::Media(_) => TypeM::String(meta), // TODO: Add Media type to TypeM
             },
-            ast::FieldType::List(_, inner, _, _, _) => {
-                TypeM::Array(Box::new(Self::from_ast(inner)), meta)
+            ast::FieldType::List(_, inner, dims, _, _) => {
+                // Respect multi-dimensional arrays (e.g., int[][] has dims=2)
+                let mut lowered_inner = Self::from_ast(inner);
+                for _ in 0..*dims {
+                    lowered_inner = TypeM::Array(Box::new(lowered_inner), meta.clone());
+                }
+                lowered_inner
             }
             ast::FieldType::Map(_, box_pair, _, _) => TypeM::Map(
                 Box::new(Self::from_ast(&box_pair.0)),
