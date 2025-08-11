@@ -721,7 +721,7 @@ mod tests {
     fn return_function_call() -> anyhow::Result<()> {
         assert_compiles(Program {
             source: "
-                fn one() -> int
+                fn one() -> int {
                     1
                 }
 
