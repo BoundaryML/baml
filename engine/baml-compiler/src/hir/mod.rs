@@ -207,6 +207,7 @@ pub enum Statement {
         value: Expression,
         span: Span,
     },
+
     /// Declare a (mutable) reference.
     /// There is no span because it is never present in the source AST.
     /// This is a desugaring from `if` expressions.

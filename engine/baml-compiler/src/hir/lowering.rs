@@ -303,7 +303,27 @@ impl Block {
         // Process statements, checking for if expressions in let bindings
         for stmt in &block.stmts {
             match stmt {
+                ast::Stmt::Assign(ast::AssignStmt {
+                    identifier,
+                    expr,
+                    span,
+                }) => {
+                    let mut temp_counter = 0;
+                    let mut lifted_statements = vec![];
+
+                    // NOTE: would it be enough to just give `statements`?
+                    let lifted_expr =
+                        Expression::from_ast(expr, &mut lifted_statements, &mut temp_counter);
+
+                    statements.extend(lifted_statements);
+
+                    statements.push(Statement::Assign {
+                        name: identifier.to_string(),
+                        value: lifted_expr,
+                    })
+                }
                 ast::Stmt::Let(ast::LetStmt {
+                    is_mutable,
                     identifier,
                     expr,
                     span,
@@ -319,12 +339,22 @@ impl Block {
                     // Add any lifted statements first
                     statements.extend(lifted_statements);
 
+                    let stmt = if *is_mutable {
+                        Statement::DeclareAndAssign {
+                            name: identifier.to_string(),
+                            value: lifted_expr,
+                            span: span.clone(),
+                        }
+                    } else {
+                        Statement::Let {
+                            name: identifier.to_string(),
+                            value: lifted_expr,
+                            span: span.clone(),
+                        }
+                    };
+
                     // Then add the actual let statement
-                    statements.push(Statement::Let {
-                        name: identifier.to_string(),
-                        value: lifted_expr,
-                        span: span.clone(),
-                    });
+                    statements.push(stmt);
                 }
                 ast::Stmt::ForLoop(ast::ForLoopStmt {
                     identifier,
