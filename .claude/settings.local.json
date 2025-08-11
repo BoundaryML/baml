@@ -43,7 +43,11 @@
       "Bash(npx biome check:*)",
       "Bash(npx tsc:*)",
       "Bash(npx tsc:*)",
-      "WebFetch(domain:www.npmjs.com)"
+      "WebFetch(domain:www.npmjs.com)",
+      "WebFetch(domain:plugins.jetbrains.com)",
+      "WebFetch(domain:github.com)",
+      "Bash(./gradlew:*)",
+      "Bash(java:*)"
     ],
     "deny": []
   }
