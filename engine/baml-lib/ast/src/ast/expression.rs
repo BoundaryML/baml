@@ -126,6 +126,10 @@ pub enum Expression {
         Option<Box<Expression>>,
         Span,
     ),
+    /// Array/Map access, e.g. `arr[0]` or `map["key"]`
+    ArrayAccess(Box<Expression>, Box<Expression>, Span),
+    /// Field access, e.g. `obj.field`
+    FieldAccess(Box<Expression>, Identifier, Span),
 }
 
 impl fmt::Display for Expression {
@@ -194,6 +198,8 @@ impl fmt::Display for Expression {
                 Some(else_) => write!(f, "if {cond} {{ {then} }} else {{ {else_} }}"),
                 None => write!(f, "if {cond} {{ {then} }}"),
             },
+            Expression::ArrayAccess(base, index, _span) => write!(f, "{base}[{index}]"),
+            Expression::FieldAccess(base, field, _span) => write!(f, "{base}.{}", field.name()),
         }
     }
 }
@@ -309,6 +315,8 @@ impl Expression {
             Self::App(app) => app.span(),
             Self::ExprBlock(_, span) => span,
             Self::If(_, _, _, span) => span,
+            Self::ArrayAccess(_, _, span) => span,
+            Self::FieldAccess(_, _, span) => span,
         }
     }
 
@@ -338,6 +346,8 @@ impl Expression {
             Expression::App(_) => "function_application",
             Expression::ExprBlock(_, _) => "expression_block",
             Expression::If(_, _, _, _) => "if_expression",
+            Expression::ArrayAccess(_, _, _) => "array_access",
+            Expression::FieldAccess(_, _, _) => "field_access",
         }
     }
 
@@ -430,6 +440,16 @@ impl Expression {
                 }
             }
             (If(_, _, _, _), _) => panic!("Types do not match: {self:?} and {other:?}"),
+            (ArrayAccess(base1, index1, _), ArrayAccess(base2, index2, _)) => {
+                base1.assert_eq_up_to_span(base2);
+                index1.assert_eq_up_to_span(index2);
+            }
+            (ArrayAccess(_, _, _), _) => panic!("Types do not match: {self:?} and {other:?}"),
+            (FieldAccess(base1, field1, _), FieldAccess(base2, field2, _)) => {
+                base1.assert_eq_up_to_span(base2);
+                field1.assert_eq_up_to_span(field2);
+            }
+            (FieldAccess(_, _, _), _) => panic!("Types do not match: {self:?} and {other:?}"),
         }
     }
 
@@ -521,6 +541,8 @@ impl Expression {
             Expression::App(_) => None,          // Is this right?
             Expression::ExprBlock(_, _) => None, // Is this right?
             Expression::If(_, _, _, _) => None,
+            Expression::ArrayAccess(_, _, _) => None,
+            Expression::FieldAccess(_, _, _) => None,
         }
     }
 }

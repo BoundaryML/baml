@@ -312,11 +312,6 @@ impl<'g> HirCompiler<'g> {
 
             hir::Statement::Expression { expr, .. } => {
                 self.compile_expression(expr);
-            }
-
-            hir::Statement::SemicolonExpression { expr, .. } => {
-                self.compile_expression(expr);
-
                 // This could be a function call or any other random expression
                 // like:
                 //
@@ -380,6 +375,14 @@ impl<'g> HirCompiler<'g> {
                 self.emit(Instruction::LoadConst(index));
             }
 
+            hir::Expression::ArrayAccess { base, index, .. } => {
+                unimplemented!("Array access compilation")
+            }
+
+            hir::Expression::FieldAccess { base, field, .. } => {
+                unimplemented!("Array access compilation")
+            }
+
             hir::Expression::NumericValue(num, _) => {
                 let value = num
                     .parse::<i64>()
@@ -426,7 +429,12 @@ impl<'g> HirCompiler<'g> {
                 todo!("jinja expression compilation")
             }
 
-            hir::Expression::Call(name, args, _) => {
+            hir::Expression::Call { function, type_args, args, .. } => {
+                let name = match function.as_ref() {
+                    hir::Expression::Identifier(name, _) => name,
+                    _ => panic!("expressions that evaluate to functions are not supported yet"),
+                };
+
                 // Push the function onto the stack
                 if let Some(&index) = self.globals.get(name) {
                     self.emit(Instruction::LoadGlobal(index));

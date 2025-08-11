@@ -29,7 +29,7 @@ value_expression_block    = { value_expression_keyword ~ identifier ~ named_argu
 value_expression_contents = {
     (type_builder_block | value_expression | comment_block | block_attribute | empty_lines | BLOCK_LEVEL_CATCH_ALL)*
 }
-value_expression          = { identifier ~ expression? ~ (NEWLINE? ~ field_attribute)* ~ trailing_comment? }
+value_expression          = { identifier ~ config_expression? ~ (NEWLINE? ~ field_attribute)* ~ trailing_comment? }
 
 // ######################################
 // Type builder
@@ -56,8 +56,8 @@ named_argument_list = { openParan ~ SPACER_TEXT ~ named_argument? ~ ("," ~ SPACE
 // ######################################
 // Attributes
 // ######################################
-block_attribute = { "@@" ~ identifier ~ arguments_list? }
-field_attribute = { "@" ~ identifier ~ arguments_list? }
+block_attribute = { "@@" ~ (path_identifier | identifier) ~ arguments_list? }
+field_attribute = { "@" ~ (path_identifier | identifier) ~ arguments_list? }
 
 // Pest is greedy, order is very important here.
 field_type          = { (union | non_union) ~ optional_token? }
@@ -65,7 +65,7 @@ optional_token      = { "?" }
 union               = { base_type_with_attr ~ (field_operator ~ base_type_with_attr)+ }
 literal_type        = { numeric_literal | quoted_string_literal }
 base_type_with_attr = { base_type ~ (NEWLINE? ~ field_attribute)* }
-base_type           = { array_notation | map | identifier | group | tuple | parenthesized_type | literal_type }
+base_type           = { array_notation | map | path_identifier | identifier | group | tuple | parenthesized_type | literal_type }
 
 array_suffix   = { "[]" }
 array_notation = { base_type_without_array ~ array_suffix+ ~ optional_token? }
@@ -77,14 +77,14 @@ closeParan = { ")" }
 group      = { openParan ~ field_type ~ (field_attribute)* ~ closeParan }
 tuple      = { openParan ~ field_type_with_attr ~ ("," ~ field_type_with_attr)+ ~ closeParan }
 
-base_type_without_array = { map | identifier | group | tuple }
+base_type_without_array = { map | path_identifier | identifier | group | tuple }
 
-non_union = { array_notation | map | identifier | group | tuple | literal_type }
+non_union = { array_notation | map | path_identifier | identifier | group | tuple | literal_type }
 
 parenthesized_type = { openParan ~ field_type_with_attr ~ closeParan }
 
 path_identifier       =  { single_word ~ ("." ~ single_word)+ }
-identifier            =  { path_identifier | namespaced_identifier | single_word }
+identifier            =  { namespaced_identifier | single_word }
 single_word           = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_" | "-")* }
 namespaced_identifier = ${ single_word ~ ("::" ~ single_word)+ }
 
@@ -111,7 +111,16 @@ jinja_block_open  = _{ "{{" }
 jinja_block_close = _{ "}}" }
 jinja_body        =  { (!(jinja_block_open | jinja_block_close) ~ ANY)* }
 jinja_expression  =  { jinja_block_open ~ jinja_body ~ jinja_block_close }
-expression        =  {
+expression        =  { postfix_expression }
+
+postfix_expression = { primary_expression ~ postfix_operator* }
+
+postfix_operator = { array_accessor | field_accessor }
+
+array_accessor = { "[" ~ expression ~ "]" }
+field_accessor = { "." ~ identifier }
+
+primary_expression = {
     generic_fn_app |
     fn_app |
     if_expression |
@@ -122,11 +131,33 @@ expression        =  {
     array_expression |
     numeric_literal |
     class_constructor |
-    string_literal |
-    identifier
+    identifier |
+    string_literal
 }
 ARRAY_CATCH_ALL   =  { !"]" ~ CATCH_ALL }
 ENTRY_CATCH_ALL   =  { field_attribute | BLOCK_LEVEL_CATCH_ALL }
+
+// ######################################
+// Config expressions for value_expression blocks
+// ######################################
+// Like expression, but prioritizes string literals over identifiers
+// to allow unquoted strings like "python/pydantic" to parse correctly
+config_expression = { config_primary_expression }
+
+config_primary_expression = {
+    jinja_expression |
+    config_map_expression |
+    array_expression |
+    numeric_literal |
+    string_literal |
+    identifier
+}
+
+config_map_key   = { identifier | quoted_string_literal }
+config_map_entry = { (comment_block | empty_lines)* ~ config_map_key ~ (config_expression | ENTRY_CATCH_ALL)? ~ trailing_comment? }
+
+config_map_expression    =  { "{" ~ empty_lines? ~ (config_map_entry ~ (splitter ~ config_map_entry)*)? ~ (comment_block | empty_lines)* ~ "}" }
+
 // ######################################
 // Literals / Values
 // ######################################

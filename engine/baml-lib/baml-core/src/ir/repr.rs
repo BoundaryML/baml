@@ -30,10 +30,7 @@ use internal_llm_client::{ClientProvider, ClientSpec, UnresolvedClientProperty};
 use serde::Serialize;
 
 use super::builtin::{builtin_classes, builtin_generic_fn, builtin_ir, is_builtin_identifier};
-use crate::{
-    validate::validation_pipeline::validations::expr_typecheck::infer_types_in_context,
-    Configuration,
-};
+use crate::Configuration;
 
 /// This class represents the intermediate representation of the BAML AST.
 /// It is a representation of the BAML AST that is easier to work with than the
@@ -503,6 +500,23 @@ impl WithRepr<Expr<ExprMetadata>> for ast::Expression {
                     (span.clone(), None),
                 ))
             }
+            ast::Expression::ArrayAccess(base, index, span) => {
+                let base_ir = base.repr(db)?;
+                let index_ir = index.repr(db)?;
+                Ok(Expr::ArrayAccess {
+                    base: Arc::new(base_ir),
+                    index: Arc::new(index_ir),
+                    meta: (span.clone(), None), // Type will be inferred later
+                })
+            }
+            ast::Expression::FieldAccess(base, field, span) => {
+                let base_ir = base.repr(db)?;
+                Ok(Expr::FieldAccess {
+                    base: Arc::new(base_ir),
+                    field: field.name().to_string(),
+                    meta: (span.clone(), None), // Type will be inferred later
+                })
+            }
         }
     }
 }
@@ -811,13 +825,6 @@ impl IntermediateRepr {
         repr.clients.sort_by(|a, b| a.elem.name.cmp(&b.elem.name));
         repr.retry_policies
             .sort_by(|a, b| a.elem.name.0.cmp(&b.elem.name.0));
-
-        let mut typing_context = initial_typing_context(&repr);
-        for expr_fn in repr.expr_fns.iter_mut() {
-            let expr = expr_fn.elem.expr.clone();
-            let inferred_expr = infer_types_in_context(&mut typing_context, Arc::new(expr));
-            expr_fn.elem.expr = Arc::unwrap_or_clone(inferred_expr);
-        }
 
         // Strip out builtin classes.
         repr.classes
@@ -2258,6 +2265,35 @@ pub fn annotate_variable(
                 meta: meta.clone(),
             }
         }
+        Expr::ArrayAccess { base, index, meta } => {
+            let new_base = annotate_variable(
+                target.clone(),
+                r#type.clone(),
+                Arc::unwrap_or_clone(base.clone()),
+            );
+            let new_index = annotate_variable(
+                target.clone(),
+                r#type.clone(),
+                Arc::unwrap_or_clone(index.clone()),
+            );
+            Expr::ArrayAccess {
+                base: Arc::new(new_base),
+                index: Arc::new(new_index),
+                meta: meta.clone(),
+            }
+        }
+        Expr::FieldAccess { base, field, meta } => {
+            let new_base = annotate_variable(
+                target.clone(),
+                r#type.clone(),
+                Arc::unwrap_or_clone(base.clone()),
+            );
+            Expr::FieldAccess {
+                base: Arc::new(new_base),
+                field: field.clone(),
+                meta: meta.clone(),
+            }
+        }
     }
 }
 
@@ -2763,6 +2799,13 @@ fn specialize_generics(expr: &Expr<ExprMetadata>, ctx: &mut HashMap<Name, Expr<E
         Expr::ForLoop { iterable, body, .. } => {
             specialize_generics(iterable, ctx);
             specialize_generics(body, ctx);
+        }
+        Expr::ArrayAccess { base, index, .. } => {
+            specialize_generics(base, ctx);
+            specialize_generics(index, ctx);
+        }
+        Expr::FieldAccess { base, .. } => {
+            specialize_generics(base, ctx);
         }
     }
 }
