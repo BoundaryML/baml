@@ -8,6 +8,8 @@ import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.ui.content.ContentFactory
 import com.intellij.ui.jcef.JBCefBrowser
 import java.awt.BorderLayout
+import java.awt.FlowLayout
+import javax.swing.JButton
 import javax.swing.JPanel
 
 private const val PLACEHOLDER_HTML = """
@@ -59,9 +61,31 @@ class BamlToolWindowFactory : ToolWindowFactory {
             loadHTML(PLACEHOLDER_HTML.trimIndent())
         }
 
-        // show browser in a tool window
-        val panel = JPanel(BorderLayout()).apply { add(browser.component, BorderLayout.CENTER) }
-        val content = ContentFactory.getInstance().createContent(panel, null, false)
+        // Create reload button
+        val reloadButton = JButton("Reload").apply {
+            addActionListener {
+                val savedPort = project.getService(BamlGetPortService::class.java).port
+                if (savedPort != null) {
+                    browser.loadURL("http://localhost:$savedPort/")
+                } else {
+                    browser.loadHTML("<p>Port not ready</p>")
+                }
+            }
+        }
+
+        // Create control panel with reload button
+        val controlPanel = JPanel(FlowLayout(FlowLayout.RIGHT)).apply {
+            add(reloadButton)
+        }
+
+        // Create main panel with controls and browser
+        val mainPanel = JPanel(BorderLayout()).apply {
+            add(controlPanel, BorderLayout.NORTH)
+            add(browser.component, BorderLayout.CENTER)
+        }
+
+        // Create content with the main panel
+        val content = ContentFactory.getInstance().createContent(mainPanel, null, false)
         toolWindow.contentManager.addContent(content)
 
         System.out.println("sam asking BamlToolWindowFactory about startup");
