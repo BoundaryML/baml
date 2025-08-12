@@ -66,7 +66,7 @@ pub fn typecheck(hir: &Hir, diagnostics: &mut Diagnostics) -> THir<ExprMetadata>
     // Add global assignments to typing context
     for (name, global_expr) in &hir.global_assignments {
         // First typecheck the global assignment to infer its type
-        let typed_global_expr = typecheck_expression(global_expr, &mut typing_context, diagnostics);
+        let typed_global_expr = typecheck_expression(global_expr, &typing_context, diagnostics);
 
         // Add the inferred type to the context
         if let Some(inferred_type) = typed_global_expr.meta().1.clone() {
@@ -456,16 +456,14 @@ fn typecheck_statement(
             let mut loop_context = context.clone();
 
             // Infer item type from iterator type
-            if let Some(iterator_type) = typed_iterator.meta().1.as_ref() {
-                if let hir::TypeM::Array(inner_type, _) = iterator_type {
-                    loop_context.vars.insert(
-                        identifier.clone(),
-                        VarInfo {
-                            ty: *inner_type.clone(),
-                            if_mutable: None,
-                        },
-                    );
-                }
+            if let Some(hir::TypeM::Array(inner_type, _)) = typed_iterator.meta().1.as_ref() {
+                loop_context.vars.insert(
+                    identifier.clone(),
+                    VarInfo {
+                        ty: *inner_type.clone(),
+                        if_mutable: None,
+                    },
+                );
             }
 
             let typed_block = typecheck_block(block, &mut loop_context, diagnostics);

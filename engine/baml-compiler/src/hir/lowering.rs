@@ -38,13 +38,7 @@ impl Hir {
                 ast::Top::Enum(enum_def) => hir.enums.push(Enum::from_ast(enum_def)),
                 ast::Top::TopLevelAssignment(assignment) => {
                     // Add toplevel assignments to global_assignments for HIR typechecking
-                    let mut statements = vec![];
-                    let mut temp_counter = 0;
-                    let value = Expression::from_ast(
-                        &assignment.stmt.expr,
-                        &mut statements,
-                        &mut temp_counter,
-                    );
+                    let value = Expression::from_ast(&assignment.stmt.expr);
                     hir.global_assignments
                         .insert(assignment.stmt.identifier.to_string(), value);
                 }
@@ -308,8 +302,7 @@ impl Block {
                     // NOTE: Since we're not desugaring assignments, there will be no
                     // lifted statements.
                     let mut temp_counter = 0;
-                    let lifted_expr =
-                        Expression::from_ast(expr, &mut statements, &mut temp_counter);
+                    let lifted_expr = Expression::from_ast(expr);
 
                     statements.push(Statement::Assign {
                         name: identifier.to_string(),
@@ -322,16 +315,7 @@ impl Block {
                     expr,
                     span,
                 }) => {
-                    // Regular let statement - but check for if expressions in nested contexts
-                    // NOTE: Since we're not desugaring assignments, there will be no
-                    // lifted statements.
-                    let mut temp_counter = 0;
-                    let mut lifted_statements = vec![];
-                    let lifted_expr =
-                        Expression::from_ast(expr, &mut lifted_statements, &mut temp_counter);
-
-                    // Add any lifted statements first
-                    statements.extend(lifted_statements);
+                    let lifted_expr = Expression::from_ast(expr);
 
                     let stmt = if *is_mutable {
                         Statement::DeclareAndAssign {
@@ -357,13 +341,7 @@ impl Block {
                     span,
                 }) => {
                     // Lower for loop to HIR
-                    let mut temp_counter = 0;
-                    let mut lifted_statements = vec![];
-                    let lifted_iterator =
-                        Expression::from_ast(iterator, &mut lifted_statements, &mut temp_counter);
-
-                    // Add any lifted statements first
-                    statements.extend(lifted_statements);
+                    let lifted_iterator = Expression::from_ast(iterator);
 
                     // Add the for loop statement
                     statements.push(Statement::ForLoop {
@@ -374,13 +352,7 @@ impl Block {
                     });
                 }
                 ast::Stmt::Expression(expr) => {
-                    let mut temp_counter = 0;
-                    let mut lifted_statements = vec![];
-
-                    let hir_expr =
-                        Expression::from_ast(expr, &mut lifted_statements, &mut temp_counter);
-
-                    statements.extend(lifted_statements);
+                    let hir_expr = Expression::from_ast(expr);
 
                     // Expressions that contain blocks themselves will deal with
                     // return expressions recursively. But expressions that have
@@ -405,13 +377,7 @@ impl Block {
         }
 
         if let Some(block_final_expr) = block.expr.as_ref() {
-            let mut temp_counter = 0;
-            let mut lifted_statements = vec![];
-            let lifted_expr =
-                Expression::from_ast(block_final_expr, &mut lifted_statements, &mut temp_counter);
-
-            // Add any lifted statements first
-            statements.extend(lifted_statements);
+            let lifted_expr = Expression::from_ast(block_final_expr);
 
             // Then add the final statement
             statements.push(if is_function_body {
@@ -437,19 +403,15 @@ impl Expression {
     /// If `with_lifting` is true, if expressions will be lifted to temporary variables
     /// and the statements will be added to the provided vector.
     /// If `with_lifting` is false, if expressions will fall back to placeholders.
-    pub fn from_ast(
-        expr: &ast::Expression,
-        statements: &mut Vec<Statement>,
-        temp_counter: &mut usize,
-    ) -> Self {
+    pub fn from_ast(expr: &ast::Expression) -> Self {
         match expr {
             ast::Expression::ArrayAccess(base, index, span) => Expression::ArrayAccess {
-                base: Box::new(Self::from_ast(base, statements, temp_counter)),
-                index: Box::new(Self::from_ast(index, statements, temp_counter)),
+                base: Box::new(Self::from_ast(base)),
+                index: Box::new(Self::from_ast(index)),
                 span: span.clone(),
             },
             ast::Expression::FieldAccess(base, field, span) => Expression::FieldAccess {
-                base: Box::new(Self::from_ast(base, statements, temp_counter)),
+                base: Box::new(Self::from_ast(base)),
                 field: field.to_string(),
                 span: span.clone(),
             },
@@ -467,13 +429,9 @@ impl Expression {
                 raw_string.inner_value.to_string(),
                 raw_string.span().clone(),
             ),
-            ast::Expression::Array(values, span) => Expression::Array(
-                values
-                    .iter()
-                    .map(|value| Self::from_ast(value, statements, temp_counter))
-                    .collect(),
-                span.clone(),
-            ),
+            ast::Expression::Array(values, span) => {
+                Expression::Array(values.iter().map(Self::from_ast).collect(), span.clone())
+            }
             ast::Expression::App(App {
                 name,
                 type_args,
@@ -497,31 +455,23 @@ impl Expression {
                 Expression::Call {
                     function: Box::new(hir_name),
                     type_args: hir_type_args,
-                    args: args
-                        .iter()
-                        .map(|arg| Self::from_ast(arg, statements, temp_counter))
-                        .collect(),
+                    args: args.iter().map(Self::from_ast).collect(),
                     span: span.clone(),
                 }
             }
             ast::Expression::Map(pairs, span) => Expression::Map(
                 pairs
                     .iter()
-                    .map(|(key, value)| {
-                        (
-                            Self::from_ast(key, statements, temp_counter),
-                            Self::from_ast(value, statements, temp_counter),
-                        )
-                    })
+                    .map(|(key, value)| (Self::from_ast(key), Self::from_ast(value)))
                     .collect(),
                 span.clone(),
             ),
             ast::Expression::If(condition, if_branch, else_branch, span) => Expression::If {
-                condition: Box::new(Self::from_ast(condition, statements, temp_counter)),
-                if_branch: Box::new(Self::from_ast(if_branch, statements, temp_counter)),
+                condition: Box::new(Self::from_ast(condition)),
+                if_branch: Box::new(Self::from_ast(if_branch)),
                 else_branch: else_branch
                     .as_ref()
-                    .map(|block| Box::new(Self::from_ast(block, statements, temp_counter))),
+                    .map(|block| Box::new(Self::from_ast(block))),
                 span: span.clone(),
             },
             ast::Expression::ExprBlock(block, span) => {
@@ -554,12 +504,12 @@ impl Expression {
                                 ast::ClassConstructorField::Named(name, expr) => {
                                     ClassConstructorField::Named {
                                         name: name.to_string(),
-                                        value: Self::from_ast(expr, statements, temp_counter),
+                                        value: Self::from_ast(expr),
                                     }
                                 }
                                 ast::ClassConstructorField::Spread(expr) => {
                                     ClassConstructorField::Spread {
-                                        value: Self::from_ast(expr, statements, temp_counter),
+                                        value: Self::from_ast(expr),
                                     }
                                 }
                             })
@@ -577,7 +527,7 @@ impl Expression {
                 right,
                 span,
             } => Expression::BinaryOperation {
-                left: Box::new(Self::from_ast(left, statements, temp_counter)),
+                left: Box::new(Self::from_ast(left)),
                 operator: match operator {
                     ast::BinaryOperator::Eq => hir::BinaryOperator::Eq,
                     ast::BinaryOperator::Neq => hir::BinaryOperator::Neq,
@@ -592,7 +542,7 @@ impl Expression {
                     ast::BinaryOperator::And => hir::BinaryOperator::And,
                     ast::BinaryOperator::Or => hir::BinaryOperator::Or,
                 },
-                right: Box::new(Self::from_ast(right, statements, temp_counter)),
+                right: Box::new(Self::from_ast(right)),
                 span: span.clone(),
             },
             ast::Expression::UnaryOperation {
@@ -604,13 +554,12 @@ impl Expression {
                     ast::UnaryOperator::Not => hir::UnaryOperator::Not,
                     ast::UnaryOperator::Neg => hir::UnaryOperator::Neg,
                 },
-                expr: Box::new(Self::from_ast(expr, statements, temp_counter)),
+                expr: Box::new(Self::from_ast(expr)),
                 span: span.clone(),
             },
-            ast::Expression::Paren(expr, span) => Expression::Paren(
-                Box::new(Self::from_ast(expr, statements, temp_counter)),
-                span.clone(),
-            ),
+            ast::Expression::Paren(expr, span) => {
+                Expression::Paren(Box::new(Self::from_ast(expr)), span.clone())
+            }
         }
     }
 }
