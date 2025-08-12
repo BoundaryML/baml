@@ -1,12 +1,10 @@
 use std::collections::HashSet;
 
-use internal_baml_ast::ast::{WithName, WithSpan, Stmt, Expression, ClassConstructorField};
+use internal_baml_ast::ast::{ClassConstructorField, Expression, Stmt, WithName, WithSpan};
 use internal_baml_diagnostics::{DatamodelError, DatamodelWarning};
 use itertools::Itertools;
 
-use crate::{
-    ir, validate::validation_pipeline::context::Context,
-};
+use crate::{ir, validate::validation_pipeline::context::Context};
 
 /// Builtin functions.
 ///
@@ -104,6 +102,10 @@ pub(super) fn validate_expr_fns(ctx: &mut Context<'_>) {
 
 fn validate_stmt(ctx: &mut Context<'_>, stmt: &Stmt, scope: &HashSet<String>) {
     match stmt {
+        Stmt::Assign(stmt) => {
+            // re: validation is handled by HIR-based typechecking.
+            validate_expression(ctx, &stmt.expr, scope);
+        }
         Stmt::Let(stmt) => {
             validate_expression(ctx, &stmt.expr, scope);
         }
