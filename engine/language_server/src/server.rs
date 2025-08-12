@@ -28,9 +28,7 @@ use self::{
     schedule::event_loop_thread,
 };
 use crate::{
-    baml_project::file_utils::{find_baml_src, find_top_level_parent},
-    session::{AllSettings, ClientSettings, Session},
-    PositionEncoding,
+    baml_project::file_utils::{find_baml_src, find_top_level_parent}, playground2, session::{AllSettings, ClientSettings, Session}, PositionEncoding
 };
 
 pub mod api;
@@ -189,6 +187,11 @@ impl Server {
         };
         #[cfg(feature = "playground-server")]
         server.start_playground_server();
+
+        server.session.playground_runtime.as_ref().expect("playground_runtime should be set").spawn(async move {
+            let _ = playground2::Playground2Server::new(4000).run().await;
+        });
+
         Ok(server)
     }
 
