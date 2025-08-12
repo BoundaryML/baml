@@ -130,6 +130,69 @@ pub enum Expression {
     ArrayAccess(Box<Expression>, Box<Expression>, Span),
     /// Field access, e.g. `obj.field`
     FieldAccess(Box<Expression>, Identifier, Span),
+    /// Any form of binary operation.
+    BinaryOperation {
+        left: Box<Expression>,
+        operator: BinaryOperator,
+        right: Box<Expression>,
+        span: Span,
+    },
+    /// Any form of unary operation.
+    UnaryOperation {
+        operator: UnaryOperator,
+        expr: Box<Expression>,
+        span: Span,
+    },
+}
+
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum BinaryOperator {
+    Eq,
+    Neq,
+    Lt,
+    LtEq,
+    Gt,
+    GtEq,
+    Add,
+    Sub,
+    Mul,
+    Div,
+    And,
+    Or,
+}
+
+impl fmt::Display for BinaryOperator {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            BinaryOperator::Eq => write!(f, "=="),
+            BinaryOperator::Neq => write!(f, "!="),
+            BinaryOperator::Lt => write!(f, "<"),
+            BinaryOperator::LtEq => write!(f, "<="),
+            BinaryOperator::Gt => write!(f, ">"),
+            BinaryOperator::GtEq => write!(f, ">="),
+            BinaryOperator::Add => write!(f, "+"),
+            BinaryOperator::Sub => write!(f, "-"),
+            BinaryOperator::Mul => write!(f, "*"),
+            BinaryOperator::Div => write!(f, "/"),
+            BinaryOperator::And => write!(f, "&&"),
+            BinaryOperator::Or => write!(f, "||"),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum UnaryOperator {
+    Not,
+    Minus,
+}
+
+impl fmt::Display for UnaryOperator {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            UnaryOperator::Not => write!(f, "!"),
+            UnaryOperator::Minus => write!(f, "-"),
+        }
+    }
 }
 
 impl fmt::Display for Expression {
@@ -200,6 +263,17 @@ impl fmt::Display for Expression {
             },
             Expression::ArrayAccess(base, index, _span) => write!(f, "{base}[{index}]"),
             Expression::FieldAccess(base, field, _span) => write!(f, "{base}.{}", field.name()),
+            Expression::BinaryOperation {
+                left,
+                operator,
+                right,
+                ..
+            } => {
+                write!(f, "({left} {operator} {right})")
+            }
+            Expression::UnaryOperation { operator, expr, .. } => {
+                write!(f, "{operator}{expr}")
+            }
         }
     }
 }
@@ -317,6 +391,8 @@ impl Expression {
             Self::If(_, _, _, span) => span,
             Self::ArrayAccess(_, _, span) => span,
             Self::FieldAccess(_, _, span) => span,
+            Self::BinaryOperation { span, .. } => span,
+            Self::UnaryOperation { span, .. } => span,
         }
     }
 
@@ -348,6 +424,8 @@ impl Expression {
             Expression::If(_, _, _, _) => "if_expression",
             Expression::ArrayAccess(_, _, _) => "array_access",
             Expression::FieldAccess(_, _, _) => "field_access",
+            Expression::BinaryOperation { .. } => "binary_operation",
+            Expression::UnaryOperation { .. } => "unary_operation",
         }
     }
 
@@ -429,7 +507,7 @@ impl Expression {
             }
             (App(_), _) => panic!("Types do not match: {self:?} and {other:?}"),
             (ExprBlock(block1, _), ExprBlock(block2, _)) => {
-                block1.assert_eq_up_to_span(&block2);
+                block1.assert_eq_up_to_span(block2);
             }
             (ExprBlock(_, _), _) => panic!("Types do not match: {self:?} and {other:?}"),
             (If(cond1, then1, else1, _), If(cond2, then2, else2, _)) => {
@@ -450,6 +528,37 @@ impl Expression {
                 field1.assert_eq_up_to_span(field2);
             }
             (FieldAccess(_, _, _), _) => panic!("Types do not match: {self:?} and {other:?}"),
+            (
+                BinaryOperation {
+                    left,
+                    right,
+                    operator,
+                    ..
+                },
+                BinaryOperation {
+                    left: left2,
+                    right: right2,
+                    operator: operator2,
+                    ..
+                },
+            ) => {
+                left.assert_eq_up_to_span(left2);
+                right.assert_eq_up_to_span(right2);
+                assert_eq!(operator, operator2);
+            }
+            (BinaryOperation { .. }, _) => panic!("Types do not match: {self:?} and {other:?}"),
+            (
+                UnaryOperation { expr, operator, .. },
+                UnaryOperation {
+                    expr: expr2,
+                    operator: operator2,
+                    ..
+                },
+            ) => {
+                expr.assert_eq_up_to_span(expr2);
+                assert_eq!(operator, operator2);
+            }
+            (UnaryOperation { .. }, _) => panic!("Types do not match: {self:?} and {other:?}"),
         }
     }
 
@@ -543,6 +652,8 @@ impl Expression {
             Expression::If(_, _, _, _) => None,
             Expression::ArrayAccess(_, _, _) => None,
             Expression::FieldAccess(_, _, _) => None,
+            Expression::BinaryOperation { .. } => None,
+            Expression::UnaryOperation { .. } => None,
         }
     }
 }

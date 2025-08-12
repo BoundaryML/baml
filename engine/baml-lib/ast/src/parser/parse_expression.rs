@@ -16,70 +16,95 @@ pub(crate) fn parse_expression(
     token: Pair<'_>,
     diagnostics: &mut internal_baml_diagnostics::Diagnostics,
 ) -> Option<Expression> {
-    let first_child = token.into_inner().next()?;
-    match first_child.as_rule() {
-        Rule::postfix_expression => parse_postfix_expression(first_child, diagnostics),
-        Rule::config_primary_expression => {
-            // Unwrap the config_primary_expression and parse its child
-            let inner_child = first_child.into_inner().next()?;
-            parse_config_primary_expression(inner_child, diagnostics)
-        }
-        _ => unreachable_rule!(first_child, Rule::expression),
-    }
-}
+    use pest::pratt_parser::{Assoc, Op, PrattParser};
 
-fn parse_postfix_expression(
-    token: Pair<'_>,
-    diagnostics: &mut internal_baml_diagnostics::Diagnostics,
-) -> Option<Expression> {
-    let mut inner = token.into_inner();
-    let primary = inner.next()?;
+    // TODO: Initialize this shit once and pass it in (consider parallel parsing).
+    let pratt = PrattParser::new()
+        .op(Op::infix(Rule::OR, Assoc::Left))
+        .op(Op::infix(Rule::AND, Assoc::Left))
+        .op(Op::infix(Rule::EQ, Assoc::Left)
+            | Op::infix(Rule::NEQ, Assoc::Left)
+            | Op::infix(Rule::LT, Assoc::Left)
+            | Op::infix(Rule::LTEQ, Assoc::Left)
+            | Op::infix(Rule::GT, Assoc::Left)
+            | Op::infix(Rule::GTEQ, Assoc::Left))
+        .op(Op::infix(Rule::ADD, Assoc::Left) | Op::infix(Rule::SUB, Assoc::Left))
+        .op(Op::infix(Rule::MUL, Assoc::Left) | Op::infix(Rule::DIV, Assoc::Left))
+        .op(Op::prefix(Rule::NOT))
+        .op(Op::prefix(Rule::SUB))
+        .op(Op::postfix(Rule::array_accessor))
+        .op(Op::postfix(Rule::field_accessor));
 
-    // Check if the primary token is actually a primary_expression rule
-    let mut expr = match primary.as_rule() {
-        Rule::primary_expression => {
-            // If it's a primary_expression rule, we need to unwrap it first
-            let primary_inner = primary.into_inner().next()?;
-            parse_primary_expression(primary_inner, diagnostics)?
-        }
-        _ => parse_primary_expression(primary, diagnostics)?,
-    };
+    let span = diagnostics.span(token.as_span());
 
-    for postfix_op in inner {
-        match postfix_op.as_rule() {
-            Rule::postfix_operator => {
-                if let Some(op) = postfix_op.into_inner().next() {
-                    match op.as_rule() {
-                        Rule::array_accessor => {
-                            let span = diagnostics.span(op.as_span());
-                            let mut accessor_inner = op.into_inner();
-                            if let Some(index_expr) = accessor_inner.next() {
-                                if let Some(index) = parse_expression(index_expr, diagnostics) {
-                                    expr = Expression::ArrayAccess(
-                                        Box::new(expr),
-                                        Box::new(index),
-                                        span,
-                                    );
-                                }
-                            }
-                        }
-                        Rule::field_accessor => {
-                            let span = diagnostics.span(op.as_span());
-                            let mut accessor_inner = op.into_inner();
-                            if let Some(field_ident) = accessor_inner.next() {
-                                let field = parse_identifier(field_ident, diagnostics);
-                                expr = Expression::FieldAccess(Box::new(expr), field, span);
-                            }
-                        }
-                        _ => unreachable_rule!(op, Rule::postfix_operator),
-                    }
-                }
+    let diagnostics_ptr: *mut internal_baml_diagnostics::Diagnostics = diagnostics;
+
+    let mut parser = pratt
+        .map_primary(|primary| {
+            // Ah yes, Rust superiority.
+            #[allow(unsafe_code)]
+            let diagnostics = unsafe { &mut *diagnostics_ptr };
+
+            match primary.as_rule() {
+                Rule::expression => parse_expression(primary, diagnostics),
+                _ => parse_primary_expression(primary.into_inner().next()?, diagnostics),
             }
-            _ => unreachable_rule!(postfix_op, Rule::postfix_expression),
-        }
-    }
+        })
+        .map_prefix(|operator, right| {
+            let operator = match operator.as_rule() {
+                Rule::SUB => UnaryOperator::Minus,
+                Rule::NOT => UnaryOperator::Not,
+                _ => unreachable_rule!(operator, Rule::prefix_operator),
+            };
+            right.map(|right| Expression::UnaryOperation {
+                operator,
+                expr: Box::new(right),
+                span: span.clone(),
+            })
+        })
+        .map_postfix(|left, operator| {
+            let left = left?;
 
-    Some(expr)
+            Some(match operator.as_rule() {
+                Rule::array_accessor => {
+                    let index = parse_expression(operator.into_inner().next()?, diagnostics)?;
+
+                    Expression::ArrayAccess(Box::new(left), Box::new(index), span.clone())
+                }
+                Rule::field_accessor => {
+                    let field = parse_identifier(operator.into_inner().next()?, diagnostics);
+
+                    Expression::FieldAccess(Box::new(left), field, span.clone())
+                }
+                _ => unreachable_rule!(operator, Rule::postfix_operator),
+            })
+        })
+        .map_infix(|left, operator, right| {
+            let operator = match operator.as_rule() {
+                Rule::EQ => BinaryOperator::Eq,
+                Rule::NEQ => BinaryOperator::Neq,
+                Rule::LT => BinaryOperator::Lt,
+                Rule::LTEQ => BinaryOperator::LtEq,
+                Rule::GT => BinaryOperator::Gt,
+                Rule::GTEQ => BinaryOperator::GtEq,
+                Rule::ADD => BinaryOperator::Add,
+                Rule::SUB => BinaryOperator::Sub,
+                Rule::MUL => BinaryOperator::Mul,
+                Rule::DIV => BinaryOperator::Div,
+                Rule::OR => BinaryOperator::Or,
+                Rule::AND => BinaryOperator::And,
+                _ => unreachable_rule!(operator, Rule::infix_operator),
+            };
+
+            Some(Expression::BinaryOperation {
+                left: Box::new(left?),
+                operator,
+                right: Box::new(right?),
+                span: span.clone(),
+            })
+        });
+
+    parser.parse(token.into_inner())
 }
 
 fn parse_primary_expression(
@@ -277,11 +302,15 @@ fn parse_map_key(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expression {
     unreachable!("Encountered impossible map key during parsing")
 }
 
-fn parse_config_primary_expression(
+pub fn parse_config_primary_expression(
     token: Pair<'_>,
     diagnostics: &mut internal_baml_diagnostics::Diagnostics,
 ) -> Option<Expression> {
+    assert_correct_parser!(token, Rule::config_primary_expression);
     let span = diagnostics.span(token.as_span());
+
+    let token = token.into_inner().next()?;
+
     match token.as_rule() {
         Rule::numeric_literal => Some(Expression::NumericValue(token.as_str().into(), span)),
         Rule::string_literal => Some(parse_string_literal(token, diagnostics)),

@@ -578,6 +578,15 @@ impl<'g> HirCompiler<'g> {
             hir::Expression::ExpressionBlock(block, _) => {
                 self.compile_block(block);
             }
+
+            hir::Expression::BinaryOperation {
+                left,
+                operator,
+                right,
+                ..
+            } => todo!(),
+
+            hir::Expression::UnaryOperation { operator, expr, .. } => todo!(),
         }
     }
 

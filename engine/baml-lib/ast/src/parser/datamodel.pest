@@ -111,11 +111,17 @@ jinja_block_open  = _{ "{{" }
 jinja_block_close = _{ "}}" }
 jinja_body        =  { (!(jinja_block_open | jinja_block_close) ~ ANY)* }
 jinja_expression  =  { jinja_block_open ~ jinja_body ~ jinja_block_close }
-expression        =  { postfix_expression }
 
-postfix_expression = { primary_expression ~ postfix_operator* }
+expression =  {
+    prefix_operator*
+    ~ primary_expression
+    ~ postfix_operator*
+    ~ (infix_operator ~ prefix_operator* ~ primary_expression ~postfix_operator*)*
+}
 
 postfix_operator = { array_accessor | field_accessor }
+infix_operator = { EQ | NEQ | LT | LTEQ | GT | GTEQ | ADD | SUB | MUL | DIV | AND | OR }
+prefix_operator = { NOT | SUB }
 
 array_accessor = { "[" ~ expression ~ "]" }
 field_accessor = { "." ~ identifier }
@@ -132,8 +138,10 @@ primary_expression = {
     numeric_literal |
     class_constructor |
     identifier |
-    string_literal
+    string_literal |
+    "(" ~ expression ~ ")"
 }
+
 ARRAY_CATCH_ALL   =  { !"]" ~ CATCH_ALL }
 ENTRY_CATCH_ALL   =  { field_attribute | BLOCK_LEVEL_CATCH_ALL }
 
@@ -247,6 +255,31 @@ COLON = { ":" }
 COMMA = { "," }
 
 // #################################################
+// Operators
+// #################################################
+
+// Arithmetic
+ADD = { "+" }
+SUB = { "-" }
+MUL = { "*" }
+DIV = { "/" }
+
+// Comparison
+EQ = { "==" }
+NEQ = { "!=" }
+LT = { "<" }
+LTEQ = { "<=" }
+GT = { ">" }
+GTEQ = { ">=" }
+
+// Logical
+AND = { "&&" }
+OR = { "||" }
+
+// Unary
+NOT = { "!" }
+
+// #################################################
 // BAML Expressions
 // #################################################
 
@@ -286,7 +319,7 @@ stmt = { (((let_expr | assign_stmt | fn_app | generic_fn_app) ~ SEMICOLON) | for
 // Let-binding statement.
 let_expr = { "let" ~ MUT_KEYWORD? ~ identifier ~ "=" ~ expression }
 
-assign_stmt = { identifier ~ "=" ~ expression } 
+assign_stmt = { identifier ~ "=" ~ expression }
 
 fn_args = { expression? ~ ("," ~ expression)* }
 

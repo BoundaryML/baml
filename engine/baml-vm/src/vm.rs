@@ -776,6 +776,11 @@ impl Vm {
                     None => return Err(InternalError::UnexpectedEmptyStack.into()),
                 },
 
+                // TODO: @antonio VM instructions are implemented as if this was
+                // an interpreted language. But we know all types at compile
+                // time, so we need to treat the stack as `Vec<usize>` instead
+                // of having tagged values, then emit typed instructions like
+                // I64Add, F64Add, etc.
                 Instruction::BinOp(op) => {
                     let Some(right) = self.stack.pop() else {
                         return Err(InternalError::UnexpectedEmptyStack.into());
@@ -812,6 +817,7 @@ impl Vm {
                     self.stack.push(result);
                 }
 
+                // TODO: @antonio Same as above.
                 Instruction::CmpOp(op) => {
                     let Some(right) = self.stack.pop() else {
                         return Err(InternalError::UnexpectedEmptyStack.into());

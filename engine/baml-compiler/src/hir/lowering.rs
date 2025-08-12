@@ -7,7 +7,7 @@ use internal_baml_ast::ast::{self, App, Attribute, WithName, WithSpan};
 use internal_baml_diagnostics::Span;
 
 use crate::hir::{
-    Block, Class, ClassConstructor, ClassConstructorField, Enum, EnumVariant, ExprFunction,
+    self, Block, Class, ClassConstructor, ClassConstructorField, Enum, EnumVariant, ExprFunction,
     Expression, Field, Hir, LlmFunction, Parameter, Statement, TypeArg, TypeM, TypeMeta,
 };
 
@@ -571,6 +571,42 @@ impl Expression {
             ast::Expression::JinjaExpressionValue(jinja, span) => {
                 Expression::JinjaExpressionValue(jinja.to_string(), span.clone())
             }
+            ast::Expression::BinaryOperation {
+                left,
+                operator,
+                right,
+                span,
+            } => Expression::BinaryOperation {
+                left: Box::new(Self::from_ast(left, statements, temp_counter)),
+                operator: match operator {
+                    ast::BinaryOperator::Eq => hir::BinaryOperator::Eq,
+                    ast::BinaryOperator::Neq => hir::BinaryOperator::Neq,
+                    ast::BinaryOperator::Lt => hir::BinaryOperator::Lt,
+                    ast::BinaryOperator::LtEq => hir::BinaryOperator::LtEq,
+                    ast::BinaryOperator::Gt => hir::BinaryOperator::Gt,
+                    ast::BinaryOperator::GtEq => hir::BinaryOperator::GtEq,
+                    ast::BinaryOperator::Add => hir::BinaryOperator::Add,
+                    ast::BinaryOperator::Sub => hir::BinaryOperator::Sub,
+                    ast::BinaryOperator::Mul => hir::BinaryOperator::Mul,
+                    ast::BinaryOperator::Div => hir::BinaryOperator::Div,
+                    ast::BinaryOperator::And => hir::BinaryOperator::And,
+                    ast::BinaryOperator::Or => hir::BinaryOperator::Or,
+                },
+                right: Box::new(Self::from_ast(right, statements, temp_counter)),
+                span: span.clone(),
+            },
+            ast::Expression::UnaryOperation {
+                operator,
+                expr,
+                span,
+            } => Expression::UnaryOperation {
+                operator: match operator {
+                    ast::UnaryOperator::Not => hir::UnaryOperator::Not,
+                    ast::UnaryOperator::Minus => hir::UnaryOperator::Minus,
+                },
+                expr: Box::new(Self::from_ast(expr, statements, temp_counter)),
+                span: span.clone(),
+            },
         }
     }
 }

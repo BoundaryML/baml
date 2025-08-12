@@ -3,8 +3,9 @@
 use pretty::RcDoc;
 
 use crate::hir::{
-    Arrow, Block, Class, ClassConstructorField, Enum, EnumVariant, ExprFunction, Expression, Field,
-    Hir, LlmFunction, Parameter, Statement, TypeArg, TypeM, TypeMeta,
+    Arrow, BinaryOperator, Block, Class, ClassConstructorField, Enum, EnumVariant, ExprFunction,
+    Expression, Field, Hir, LlmFunction, Parameter, Statement, TypeArg, TypeM, TypeMeta,
+    UnaryOperator,
 };
 
 impl Hir {
@@ -388,6 +389,18 @@ impl Expression {
                 .append(block.to_doc().nest(2))
                 .append(RcDoc::hardline())
                 .append(RcDoc::text("}")),
+            Expression::BinaryOperation {
+                left,
+                operator,
+                right,
+                ..
+            } => RcDoc::text("left")
+                .append(left.to_doc())
+                .append(operator.to_doc())
+                .append(right.to_doc()),
+            Expression::UnaryOperation { operator, expr, .. } => RcDoc::text("operator")
+                .append(operator.to_doc())
+                .append(expr.to_doc()),
         }
     }
 }
@@ -474,5 +487,45 @@ impl Parameter {
     pub fn to_doc(&self) -> RcDoc<'static, ()> {
         // For now, just show the parameter name since types aren't included in HIR
         RcDoc::text(self.name.clone())
+    }
+}
+
+impl std::fmt::Display for BinaryOperator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            BinaryOperator::Eq => "==",
+            BinaryOperator::Neq => "!=",
+            BinaryOperator::Lt => "<",
+            BinaryOperator::LtEq => "<=",
+            BinaryOperator::Gt => ">",
+            BinaryOperator::GtEq => ">=",
+            BinaryOperator::Add => "+",
+            BinaryOperator::Sub => "-",
+            BinaryOperator::Mul => "*",
+            BinaryOperator::Div => "/",
+            BinaryOperator::And => "&&",
+            BinaryOperator::Or => "||",
+        })
+    }
+}
+
+impl std::fmt::Display for UnaryOperator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            UnaryOperator::Not => "!",
+            UnaryOperator::Minus => "-",
+        })
+    }
+}
+
+impl BinaryOperator {
+    pub fn to_doc(&self) -> RcDoc<'static, ()> {
+        RcDoc::text(self.to_string())
+    }
+}
+
+impl UnaryOperator {
+    pub fn to_doc(&self) -> RcDoc<'static, ()> {
+        RcDoc::text(self.to_string())
     }
 }

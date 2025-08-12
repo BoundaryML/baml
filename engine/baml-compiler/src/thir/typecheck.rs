@@ -973,6 +973,27 @@ fn typecheck_expression(
             ));
             thir::Expr::Atom(BamlValueWithMeta::Null((span.clone(), None)))
         }
+        // TODO: Typecheck operations.
+        hir::Expression::BinaryOperation {
+            left,
+            operator,
+            right,
+            span,
+        } => thir::Expr::BinaryOperation {
+            left: Arc::new(typecheck_expression(left, context, diagnostics)),
+            operator: operator.clone(),
+            right: Arc::new(typecheck_expression(right, context, diagnostics)),
+            meta: (span.clone(), None),
+        },
+        hir::Expression::UnaryOperation {
+            operator,
+            expr,
+            span,
+        } => thir::Expr::UnaryOperation {
+            operator: operator.clone(),
+            expr: Arc::new(typecheck_expression(expr, context, diagnostics)),
+            meta: (span.clone(), None),
+        },
     }
 }
 

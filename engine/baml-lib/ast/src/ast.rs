@@ -28,7 +28,8 @@ pub use attribute::{Attribute, AttributeContainer, AttributeId};
 pub use config::ConfigBlockProperty;
 pub use expr::{ExprFn, TopLevelAssignment};
 pub use expression::{
-    ClassConstructor, ClassConstructorField, Expression, ExpressionBlock, RawString,
+    BinaryOperator, ClassConstructor, ClassConstructorField, Expression, ExpressionBlock,
+    RawString, UnaryOperator,
 };
 pub use field::{Field, FieldArity, FieldType};
 pub use identifier::{Identifier, RefIdentifier};

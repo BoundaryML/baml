@@ -517,6 +517,49 @@ impl WithRepr<Expr<ExprMetadata>> for ast::Expression {
                     meta: (span.clone(), None), // Type will be inferred later
                 })
             }
+            ast::Expression::BinaryOperation {
+                left,
+                operator,
+                right,
+                span,
+            } => {
+                let left_ir = left.repr(db)?;
+                let right_ir = right.repr(db)?;
+                Ok(Expr::BinaryOperation {
+                    left: Arc::new(left_ir),
+                    operator: match operator {
+                        ast::BinaryOperator::Eq => expr::BinaryOperator::Eq,
+                        ast::BinaryOperator::Neq => expr::BinaryOperator::Neq,
+                        ast::BinaryOperator::Lt => expr::BinaryOperator::Lt,
+                        ast::BinaryOperator::LtEq => expr::BinaryOperator::LtEq,
+                        ast::BinaryOperator::Gt => expr::BinaryOperator::Gt,
+                        ast::BinaryOperator::GtEq => expr::BinaryOperator::GtEq,
+                        ast::BinaryOperator::Add => expr::BinaryOperator::Add,
+                        ast::BinaryOperator::Sub => expr::BinaryOperator::Sub,
+                        ast::BinaryOperator::Mul => expr::BinaryOperator::Mul,
+                        ast::BinaryOperator::Div => expr::BinaryOperator::Div,
+                        ast::BinaryOperator::And => expr::BinaryOperator::And,
+                        ast::BinaryOperator::Or => expr::BinaryOperator::Or,
+                    },
+                    right: Arc::new(right_ir),
+                    meta: (span.clone(), None),
+                })
+            }
+            ast::Expression::UnaryOperation {
+                expr,
+                operator,
+                span,
+            } => {
+                let expr_ir = expr.repr(db)?;
+                Ok(Expr::UnaryOperation {
+                    expr: Arc::new(expr_ir),
+                    operator: match operator {
+                        ast::UnaryOperator::Not => expr::UnaryOperator::Not,
+                        ast::UnaryOperator::Minus => expr::UnaryOperator::Minus,
+                    },
+                    meta: (span.clone(), None),
+                })
+            }
         }
     }
 }
@@ -2294,6 +2337,45 @@ pub fn annotate_variable(
                 meta: meta.clone(),
             }
         }
+        Expr::BinaryOperation {
+            left,
+            right,
+            operator,
+            meta,
+        } => {
+            let new_left = annotate_variable(
+                target.clone(),
+                r#type.clone(),
+                Arc::unwrap_or_clone(left.clone()),
+            );
+            let new_right = annotate_variable(
+                target.clone(),
+                r#type.clone(),
+                Arc::unwrap_or_clone(right.clone()),
+            );
+            Expr::BinaryOperation {
+                left: Arc::new(new_left),
+                operator: operator.clone(),
+                right: Arc::new(new_right),
+                meta: meta.clone(),
+            }
+        }
+        Expr::UnaryOperation {
+            expr,
+            operator,
+            meta,
+        } => {
+            let new_expr = annotate_variable(
+                target.clone(),
+                r#type.clone(),
+                Arc::unwrap_or_clone(expr.clone()),
+            );
+            Expr::UnaryOperation {
+                expr: Arc::new(new_expr),
+                operator: operator.clone(),
+                meta: meta.clone(),
+            }
+        }
     }
 }
 
@@ -2806,6 +2888,18 @@ fn specialize_generics(expr: &Expr<ExprMetadata>, ctx: &mut HashMap<Name, Expr<E
         }
         Expr::FieldAccess { base, .. } => {
             specialize_generics(base, ctx);
+        }
+        Expr::BinaryOperation {
+            left,
+            operator,
+            right,
+            ..
+        } => {
+            specialize_generics(left, ctx);
+            specialize_generics(right, ctx);
+        }
+        Expr::UnaryOperation { expr, .. } => {
+            specialize_generics(expr, ctx);
         }
     }
 }

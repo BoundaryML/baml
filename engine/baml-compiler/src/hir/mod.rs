@@ -406,6 +406,39 @@ pub enum Expression {
     ClassConstructor(ClassConstructor, Span),
     /// Expression block - has its own scope with statements and evaluates to a value
     ExpressionBlock(Box<Block>, Span),
+    BinaryOperation {
+        left: Box<Expression>,
+        operator: BinaryOperator,
+        right: Box<Expression>,
+        span: Span,
+    },
+    UnaryOperation {
+        operator: UnaryOperator,
+        expr: Box<Expression>,
+        span: Span,
+    },
+}
+
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum BinaryOperator {
+    Eq,
+    Neq,
+    Lt,
+    LtEq,
+    Gt,
+    GtEq,
+    Add,
+    Sub,
+    Mul,
+    Div,
+    And,
+    Or,
+}
+
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum UnaryOperator {
+    Not,
+    Minus,
 }
 
 /// A type argument to a generic function call.
@@ -436,6 +469,8 @@ impl Expression {
             Expression::Call { span, .. } => span.clone(),
             Expression::ClassConstructor(_, span) => span.clone(),
             Expression::ExpressionBlock(_, span) => span.clone(),
+            Expression::BinaryOperation { span, .. } => span.clone(),
+            Expression::UnaryOperation { span, .. } => span.clone(),
         }
     }
 }

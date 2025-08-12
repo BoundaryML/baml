@@ -1,6 +1,6 @@
 /// Type-checked HIR.
 ///
-use crate::hir::{Class, Enum, LlmFunction, Type};
+use crate::hir::{BinaryOperator, Class, Enum, LlmFunction, Type, UnaryOperator};
 
 pub mod typecheck;
 
@@ -9,10 +9,9 @@ use std::{
     sync::Arc,
 };
 
+use baml_types::{BamlMap, BamlValueWithMeta};
 use internal_baml_diagnostics::Span;
 use itertools::join;
-
-use baml_types::{BamlMap, BamlValueWithMeta};
 
 /// A full BAML program.
 /// This differs from HIR in a few ways:
@@ -86,6 +85,17 @@ pub enum Expr<T> {
     FieldAccess {
         base: Arc<Expr<T>>,
         field: String,
+        meta: T,
+    },
+    BinaryOperation {
+        left: Arc<Expr<T>>,
+        operator: BinaryOperator,
+        right: Arc<Expr<T>>,
+        meta: T,
+    },
+    UnaryOperation {
+        operator: UnaryOperator,
+        expr: Arc<Expr<T>>,
         meta: T,
     },
 }
@@ -217,6 +227,8 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
             Expr::ForLoop { meta, .. } => meta,
             Expr::ArrayAccess { meta, .. } => meta,
             Expr::FieldAccess { meta, .. } => meta,
+            Expr::BinaryOperation { meta, .. } => meta,
+            Expr::UnaryOperation { meta, .. } => meta,
         }
     }
 
@@ -236,6 +248,8 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
             Expr::ForLoop { meta, .. } => meta,
             Expr::ArrayAccess { meta, .. } => meta,
             Expr::FieldAccess { meta, .. } => meta,
+            Expr::BinaryOperation { meta, .. } => meta,
+            Expr::UnaryOperation { meta, .. } => meta,
         }
     }
 
@@ -255,6 +269,8 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
             Expr::ForLoop { meta, .. } => meta,
             Expr::ArrayAccess { meta, .. } => meta,
             Expr::FieldAccess { meta, .. } => meta,
+            Expr::BinaryOperation { meta, .. } => meta,
+            Expr::UnaryOperation { meta, .. } => meta,
         }
     }
 }
@@ -339,6 +355,15 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
             }
             Expr::FieldAccess { base, field, .. } => {
                 format!("{}.{}", base.dump_str(), field)
+            }
+            Expr::BinaryOperation {
+                left,
+                operator,
+                right,
+                ..
+            } => format!("({} {} {})", left.dump_str(), operator, right.dump_str()),
+            Expr::UnaryOperation { operator, expr, .. } => {
+                format!("({} {})", operator, expr.dump_str())
             }
         }
     }
@@ -479,6 +504,34 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
                 },
             ) => base1.temporary_same_state(base2) && field1 == field2,
             (Expr::FieldAccess { .. }, _) => false,
+            (
+                Expr::BinaryOperation {
+                    left,
+                    operator,
+                    right,
+                    ..
+                },
+                Expr::BinaryOperation {
+                    left: left2,
+                    operator: operator2,
+                    right: right2,
+                    ..
+                },
+            ) => {
+                left.temporary_same_state(left2)
+                    && operator == operator2
+                    && right.temporary_same_state(right2)
+            }
+            (Expr::BinaryOperation { .. }, _) => false,
+            (
+                Expr::UnaryOperation { operator, expr, .. },
+                Expr::UnaryOperation {
+                    operator: operator2,
+                    expr: expr2,
+                    ..
+                },
+            ) => operator == operator2 && expr.temporary_same_state(expr2),
+            (Expr::UnaryOperation { .. }, _) => false,
         }
     }
 }
@@ -539,6 +592,12 @@ impl<T: Clone> Expr<T> {
                 free_vars
             }
             Expr::FieldAccess { base, .. } => base.free_vars(),
+            Expr::BinaryOperation { left, right, .. } => {
+                let mut free_vars = left.free_vars();
+                free_vars.extend(right.free_vars());
+                free_vars
+            }
+            Expr::UnaryOperation { expr, .. } => expr.free_vars(),
         }
     }
 }
@@ -702,6 +761,26 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
                 field: field.clone(),
                 meta: meta.clone(),
             },
+            Expr::BinaryOperation {
+                left,
+                operator,
+                right,
+                meta,
+            } => Expr::BinaryOperation {
+                left: Arc::new(left.open(target, new_name)),
+                operator: operator.clone(),
+                right: Arc::new(right.open(target, new_name)),
+                meta: meta.clone(),
+            },
+            Expr::UnaryOperation {
+                expr,
+                operator,
+                meta,
+            } => Expr::UnaryOperation {
+                operator: operator.clone(),
+                expr: Arc::new(expr.open(target, new_name)),
+                meta: meta.clone(),
+            },
         }
     }
 
@@ -798,6 +877,26 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
                 field: field.clone(),
                 meta: meta.clone(),
             },
+            Expr::BinaryOperation {
+                left,
+                operator,
+                right,
+                meta,
+            } => Expr::BinaryOperation {
+                left: Arc::new(left.close(new_index, target)),
+                operator: operator.clone(),
+                right: Arc::new(right.close(new_index, target)),
+                meta: meta.clone(),
+            },
+            Expr::UnaryOperation {
+                expr,
+                operator,
+                meta,
+            } => Expr::UnaryOperation {
+                operator: operator.clone(),
+                expr: Arc::new(expr.close(new_index, target)),
+                meta: meta.clone(),
+            },
         }
     }
 }
@@ -887,6 +986,13 @@ impl<T: Clone> Iterator for ExprIterator<T> {
                 self.stack.push_back(Arc::unwrap_or_clone(base));
             }
             Expr::Builtin(_, _) => {}
+            Expr::BinaryOperation { left, right, .. } => {
+                self.stack.push_back(Arc::unwrap_or_clone(left));
+                self.stack.push_back(Arc::unwrap_or_clone(right));
+            }
+            Expr::UnaryOperation { expr, .. } => {
+                self.stack.push_back(Arc::unwrap_or_clone(expr));
+            }
         }
 
         Some(expr.clone())
