@@ -160,6 +160,44 @@ impl<Meta: Clone> PropertyHandler<Meta> {
         result.map(|(key_span, value, meta)| (key_span.clone(), value, meta.clone()))
     }
 
+    fn ensure_remap_role(&mut self, allowed_roles: &[StringOr]) -> Option<Vec<(String, StringOr)>> {
+        self.ensure_map("remap_roles", false).map(|(_, value, _)| {
+            value
+                .into_iter()
+                .filter_map(|(from, (key_span, remap_to))| match remap_to.as_str() {
+                    Some(remap_string) => {
+                        if allowed_roles.iter().any(|v| v.maybe_eq(&StringOr::Value(from.clone()))) {
+                            Some((from, remap_string.clone()))
+                        } else {
+                            self.push_error(
+                                format!(
+                                    "remap_roles values must be one of: {allowed_roles_str}. Got: {from}. To support different remap roles, add allowed_roles [\"user\", \"assistant\", \"system\", ...]",
+                                    allowed_roles_str = allowed_roles
+                                        .iter()
+                                        .map(|v| format!("{v:?}"))
+                                        .collect::<Vec<_>>()
+                                        .join(", ")
+                                ),
+                                key_span,
+                            );
+                            None
+                        }
+                    }
+                    None => {
+                        self.push_error(
+                            format!(
+                                "remap_role must be a map of strings to strings. Got: {}",
+                                remap_to.r#type()
+                            ),
+                            remap_to.meta().clone(),
+                        );
+                        None
+                    }
+                })
+                .collect::<Vec<_>>()
+        })
+    }
+
     fn ensure_allowed_roles(&mut self) -> Option<Vec<StringOr>> {
         self.ensure_array("allowed_roles", false)
             .map(|(_, value, value_span)| {
@@ -188,12 +226,17 @@ impl<Meta: Clone> PropertyHandler<Meta> {
 
     pub(crate) fn ensure_roles_selection(&mut self) -> UnresolvedRolesSelection {
         let allowed_roles = self.ensure_allowed_roles();
-        let default_role = self.ensure_default_role(allowed_roles.as_ref().unwrap_or(&vec![
+
+        let default_allowed_roles = vec![
             StringOr::Value("user".to_string()),
             StringOr::Value("assistant".to_string()),
             StringOr::Value("system".to_string()),
-        ]));
-        UnresolvedRolesSelection::new(allowed_roles, default_role)
+        ];
+        let default_role =
+            self.ensure_default_role(allowed_roles.as_ref().unwrap_or(&default_allowed_roles));
+        let remap_role =
+            self.ensure_remap_role(allowed_roles.as_ref().unwrap_or(&default_allowed_roles));
+        UnresolvedRolesSelection::new(allowed_roles, default_role, remap_role)
     }
 
     fn ensure_default_role(&mut self, allowed_roles: &[StringOr]) -> Option<StringOr> {

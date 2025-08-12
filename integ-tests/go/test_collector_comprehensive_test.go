@@ -678,3 +678,98 @@ func TestCollectorContextTimeout(t *testing.T) {
 	// Length could be 0 or 1 depending on when timeout occurred
 	assert.True(t, len(logs) <= 1, "Expected at most one log entry")
 }
+
+func TestCollectorBeforeStreaming(t *testing.T) {
+	ctx := context.Background()
+	
+	collector, err := b.NewCollector("my-collector")
+	require.NoError(t, err)
+	
+	// Make streaming call with collector
+	stream, err := b.Stream.TestOpenAIGPT4oMini(ctx, "elaborate on the following: 'The quick brown fox jumps over the lazy dog.'", b.WithCollector(collector))
+	require.NoError(t, err)
+
+	// Check logs
+	usage, err := collector.Usage()
+	require.NoError(t, err)
+	inputTokens, err := usage.InputTokens()
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), inputTokens)
+	outputTokens, err := usage.OutputTokens()
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), outputTokens)
+	t.Log("inputTokens", inputTokens)
+	fmt.Println("outputTokens", outputTokens)
+	
+	var finalResult string
+	for value := range stream {
+		if value.IsFinal && value.Final() != nil {
+			finalResult = *value.Final()
+		}
+	}
+	
+	assert.NotEmpty(t, finalResult)
+	
+	logs, err := collector.Logs()
+	require.NoError(t, err)
+	assert.Len(t, logs, 1)
+	
+	log := logs[0]
+	name, err := log.FunctionName()
+	require.NoError(t, err)
+	assert.Equal(t, "TestOpenAIGPT4oMini", name)
+	logType, err := log.LogType()
+	require.NoError(t, err)
+	assert.Equal(t, "stream", logType)
+	
+	// Verify timing and usage
+	timing, err := log.Timing()
+	require.NoError(t, err)
+	startTime, err := timing.StartTimeUTCMs()
+	require.NoError(t, err)
+	assert.Greater(t, startTime, int64(0))
+	duration, err := timing.DurationMs()
+	require.NoError(t, err)
+	assert.Greater(t, *duration, int64(0))
+	
+	usage, err = log.Usage()
+	require.NoError(t, err)
+	inputTokens, err = usage.InputTokens()
+	require.NoError(t, err)
+	assert.Greater(t, inputTokens, int64(0))
+	outputTokens, err = usage.OutputTokens()
+	require.NoError(t, err)
+	assert.Greater(t, outputTokens, int64(0))
+	
+	// Verify calls
+	calls, err := log.Calls()
+	require.NoError(t, err)
+	assert.Len(t, calls, 1)
+	
+	call := calls[0]
+	provider, err := call.Provider()
+	require.NoError(t, err)
+	assert.Equal(t, "openai", provider)
+	clientName, err := call.ClientName()
+	require.NoError(t, err)
+	assert.Equal(t, "GPT4oMini", clientName)
+	selected, err := call.Selected()
+	require.NoError(t, err)
+	assert.True(t, selected)
+	
+	// For streaming, HTTP response should be nil
+	response, err := call.HttpResponse()
+	require.NoError(t, err)
+	assert.Nil(t, response)
+	
+	// But request should exist
+	request, err := call.HttpRequest()
+	require.NoError(t, err)
+	assert.NotNil(t, request)
+	
+	body, err := request.Body()
+	require.NoError(t, err)
+	text, err := body.Text()
+	require.NoError(t, err)
+	assert.Contains(t, text, "stream")
+}
