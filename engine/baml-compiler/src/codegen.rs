@@ -20,7 +20,7 @@ pub fn compile(ast: &ParserDatabase) -> anyhow::Result<BamlVmProgram> {
     // eprintln!("AST:\n{:#?}", ast.ast);
     let hir = hir::Hir::from_ast(&ast.ast);
 
-    // eprintln!("HIR:\n{:#?}", hir);
+    // eprintln!("\nHIR:\n{:#?}", hir);
 
     // Stage 2: HIR -> Bytecode
     compile_hir_to_bytecode(&hir)

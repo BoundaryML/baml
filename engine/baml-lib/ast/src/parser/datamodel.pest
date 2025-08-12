@@ -120,7 +120,7 @@ expression =  {
 }
 
 postfix_operator = { array_accessor | field_accessor }
-infix_operator = _{ EQ | NEQ | LT | LTEQ | GT | GTEQ | ADD | SUB | MUL | DIV | AND | OR }
+infix_operator = _{ AND | OR | EQ | NEQ | LTEQ | GTEQ | LT | GT | ADD | SUB | MUL | DIV }
 prefix_operator = _{ NOT | NEG }
 
 array_accessor = { "[" ~ expression ~ "]" }

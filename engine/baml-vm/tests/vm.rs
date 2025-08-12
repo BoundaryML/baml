@@ -547,3 +547,81 @@ fn unary_not() -> anyhow::Result<()> {
         expected: VmExecState::Complete(Value::Bool(false)),
     })
 }
+
+#[test]
+fn basic_eq() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            fn main() -> bool {
+                1 == 2
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Bool(false)),
+    })
+}
+
+#[test]
+fn basic_not_eq() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            fn main() -> bool {
+                1 != 2
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Bool(true)),
+    })
+}
+
+#[test]
+fn basic_gt() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            fn main() -> bool {
+                1 > 2
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Bool(false)),
+    })
+}
+
+#[test]
+fn basic_gt_eq() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            fn main() -> bool {
+                1 >= 2
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Bool(false)),
+    })
+}
+
+#[test]
+fn basic_lt() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            fn main() -> bool {
+                1 < 2
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Bool(true)),
+    })
+}
+
+#[test]
+fn basic_lt_eq() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            fn main() -> bool {
+                1 <= 2
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Bool(true)),
+    })
+}
