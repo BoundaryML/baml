@@ -40,9 +40,10 @@ pub async fn send_all_projects_to_client(
     ws_tx: &mut (impl SinkExt<Message> + Unpin),
     session: &Arc<Session>,
 ) {
+    let baml_src_projects = session.baml_src_projects.clone();
     tracing::info!("lorem ipsum send_all_projects_to_client");
     {
-        let try_lock = session.baml_src_projects.try_lock();
+        let try_lock = baml_src_projects.try_lock();
         tracing::info!("lorem ipsum try_lock ok?: {:?}", try_lock.is_ok());
         match try_lock {
             Ok(lock) => {
@@ -55,12 +56,14 @@ pub async fn send_all_projects_to_client(
         }
     }
     let projects = {
-        let projects = session.baml_src_projects.lock().unwrap();
+        let projects = baml_src_projects.lock().unwrap();
         tracing::info!("lorem ipsum projects while locked: {:?}", projects.len());
         projects
             .iter()
             .map(|(root_path, project)| {
+                let project = project.clone();
                 tracing::info!("lorem ipsum pre-project-try-lock: {:?}", root_path);
+
                 {
                     let try_lock = project.try_lock();
                     match try_lock {
@@ -123,14 +126,15 @@ pub async fn start_client_connection(
     // and have the language-server replay them all
     {
         let mut st = state.write().await;
-        let buffered_events = st.drain_event_buffer();
+        // let buffered_events = st.drain_event_buffer();
+        let buffered_events = st.clone_event_buffer();
         for event in buffered_events.clone() {
             let _ = ws_tx.send(Message::text(event)).await;
             // Add configurable delay between buffered events
             tokio::time::sleep(tokio::time::Duration::from_millis(400)).await;
         }
         tracing::info!("Sent {} buffered events", buffered_events.len());
-        st.mark_first_client_connected();
+        // st.mark_first_client_connected();
     }
     // --- END BUFFERED EVENTS ---
 

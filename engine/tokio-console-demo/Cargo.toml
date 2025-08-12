@@ -1,0 +1,13 @@
+[package]
+name = "tokio-console-demo"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+axum = "0.7"
+tokio = { version = "1.0", features = ["full", "tracing"] }
+console-subscriber = { version = "0.4", features = ["grpc-web"] }
+tracing = "0.1"
+tower = "0.5"
+tower-http = { version = "0.6", features = ["trace"] }
+serde = { version = "1.0", features = ["derive"] }

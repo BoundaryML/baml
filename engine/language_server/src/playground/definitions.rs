@@ -76,27 +76,31 @@ impl PlaygroundState {
         self.event_buffer.drain(..).collect()
     }
 
-    /// Mark that the first client has connected.
-    pub fn mark_first_client_connected(&mut self) {
-        self.first_client_connected = true;
+    pub fn clone_event_buffer(&self) -> VecDeque<String> {
+        self.event_buffer.clone()
     }
 
-    /// Mark that a client has connected.
-    pub fn mark_client_connected(&mut self) {
-        self.active_connections += 1;
-        if self.active_connections == 1 {
-            self.first_client_connected = true;
-        }
-    }
+    // /// Mark that the first client has connected.
+    // pub fn mark_first_client_connected(&mut self) {
+    //     self.first_client_connected = true;
+    // }
 
-    /// Mark that a client has disconnected.
-    pub fn mark_client_disconnected(&mut self) {
-        if self.active_connections > 0 {
-            self.active_connections -= 1;
-            if self.active_connections == 0 {
-                self.first_client_connected = false;
-                tracing::info!("All clients disconnected, resetting connection state");
-            }
-        }
-    }
+    // /// Mark that a client has connected.
+    // pub fn mark_client_connected(&mut self) {
+    //     self.active_connections += 1;
+    //     if self.active_connections == 1 {
+    //         self.first_client_connected = true;
+    //     }
+    // }
+
+    // /// Mark that a client has disconnected.
+    // pub fn mark_client_disconnected(&mut self) {
+    //     if self.active_connections > 0 {
+    //         self.active_connections -= 1;
+    //         if self.active_connections == 0 {
+    //             self.first_client_connected = false;
+    //             tracing::info!("All clients disconnected, resetting connection state");
+    //         }
+    //     }
+    // }
 }
