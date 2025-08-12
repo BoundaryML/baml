@@ -581,7 +581,7 @@ fn vm_value_from_function_result(
         .0
         .value();
 
-    let vm_value = try_vm_value_from_baml_value(&vm, &baml_value)
+    let vm_value = try_vm_value_from_baml_value(vm, &baml_value)
         .unwrap_or_else(|e| panic!("failed to convert result to vm value: {e}"));
 
     vm_value

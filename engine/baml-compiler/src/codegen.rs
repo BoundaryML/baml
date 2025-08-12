@@ -330,9 +330,9 @@ impl<'g> HirCompiler<'g> {
             }
 
             hir::Statement::ForLoop {
-                identifier,
-                iterator,
-                block,
+                
+                
+                
                 ..
             } => {
                 todo!()
@@ -395,7 +395,7 @@ impl<'g> HirCompiler<'g> {
                 self.emit(Instruction::LoadArrayElement);
             }
 
-            hir::Expression::FieldAccess { base, field, .. } => {
+            hir::Expression::FieldAccess {   .. } => {
                 unimplemented!("Array access compilation")
             }
 
@@ -447,7 +447,7 @@ impl<'g> HirCompiler<'g> {
 
             hir::Expression::Call {
                 function,
-                type_args,
+                
                 args,
                 ..
             } => {

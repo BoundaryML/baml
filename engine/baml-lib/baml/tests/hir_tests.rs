@@ -39,11 +39,11 @@ fn run_hir_test(test_name: &str, content: &str) {
     let result = get_hir_output(content);
     let (without_expected, expected) = parse_expected_from_comments(content);
 
-    let actual = result.unwrap_or_else(|e| format!("error: {}", e));
+    let actual = result.unwrap_or_else(|e| format!("error: {e}"));
 
     if std::env::var("UPDATE_EXPECT").is_ok() {
         update_expected(
-            &format!("hir_files/{}", test_name),
+            &format!("hir_files/{test_name}"),
             &without_expected,
             &actual,
         );
@@ -135,7 +135,7 @@ fn update_expected(test_name: &str, content: &str, actual: &str) {
                 if line.is_empty() {
                     "//".to_string()
                 } else {
-                    format!("// {}", line)
+                    format!("// {line}")
                 }
             })
             .collect();
@@ -147,7 +147,7 @@ fn update_expected(test_name: &str, content: &str, actual: &str) {
         panic!("Failed to update test file {}: {}", test_path.display(), e);
     });
 
-    println!("Updated expected output for test: {}", test_name);
+    println!("Updated expected output for test: {test_name}");
 }
 
 fn compare_output(expected: &str, actual: &str, test_name: &str) {

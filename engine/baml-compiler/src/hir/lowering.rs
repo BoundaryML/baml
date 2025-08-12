@@ -215,7 +215,7 @@ impl LlmFunction {
     pub fn from_ast(function: &ast::ValueExprBlock) -> Self {
         LlmFunction {
             name: function.name().to_string(),
-            parameters: function.input().map(lower_fn_args).unwrap_or(vec![]),
+            parameters: function.input().map(lower_fn_args).unwrap_or_default(),
 
             return_type: TypeM::from_ast_optional(
                 function.output().map(|output| &output.field_type),
@@ -628,7 +628,7 @@ impl Class {
                     r#type: field
                         .expr
                         .as_ref()
-                        .map(|field_type| TypeM::from_ast(field_type))
+                        .map(TypeM::from_ast)
                         .unwrap_or_else(|| {
                             TypeM::String(TypeMeta {
                                 span: field.span().clone(),
@@ -733,7 +733,7 @@ b: int
         assert_eq!(result, expected);
         // Print for visual inspection
         println!("HIR for class constructor with complex expressions:");
-        println!("{}", result);
+        println!("{result}");
     }
 
     #[test]
@@ -767,6 +767,6 @@ b: int
 
         // Print for visual inspection
         println!("HIR for for loop lowering:");
-        println!("{}", result);
+        println!("{result}");
     }
 }

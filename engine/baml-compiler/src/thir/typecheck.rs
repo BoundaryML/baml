@@ -148,6 +148,12 @@ pub struct TypeContext {
     pub classes: BamlMap<String, hir::Class>,
 }
 
+impl Default for TypeContext {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TypeContext {
     pub fn new() -> Self {
         let mut vars = BamlMap::new();
@@ -197,12 +203,9 @@ fn typecheck_block(
 
     // Process statements
     for stmt in &block.statements {
-        match typecheck_statement(stmt, context, diagnostics) {
-            Some(typed_stmt) => {
-                // Context is already updated in typecheck_statement, no need to update again
-                statements.push(typed_stmt);
-            }
-            None => {}
+        if let Some(typed_stmt) = typecheck_statement(stmt, context, diagnostics) {
+            // Context is already updated in typecheck_statement, no need to update again
+            statements.push(typed_stmt);
         }
     }
 
@@ -375,13 +378,13 @@ fn typecheck_statement(
                         }
                     }
                     None => diagnostics.push_error(DatamodelError::new_validation_error(
-                        &format!("Cannot assign to immutable variable {}", name),
+                        &format!("Cannot assign to immutable variable {name}"),
                         value.span(),
                     )),
                 },
                 None => {
                     diagnostics.push_error(DatamodelError::new_validation_error(
-                        &format!("Unknown variable {}", name),
+                        &format!("Unknown variable {name}"),
                         value.span(),
                     ));
                 }
@@ -504,7 +507,7 @@ fn typecheck_expression(
                     )),
                     Err(_) => {
                         diagnostics.push_error(DatamodelError::new_validation_error(
-                            &format!("Invalid numeric value: {}", value),
+                            &format!("Invalid numeric value: {value}"),
                             span.clone(),
                         ));
                         thir::Expr::Atom(BamlValueWithMeta::Null((span.clone(), None)))
@@ -521,7 +524,7 @@ fn typecheck_expression(
                     )),
                     Err(_) => {
                         diagnostics.push_error(DatamodelError::new_validation_error(
-                            &format!("Invalid numeric value: {}", value),
+                            &format!("Invalid numeric value: {value}"),
                             span.clone(),
                         ));
                         thir::Expr::Atom(BamlValueWithMeta::Null((span.clone(), None)))
@@ -550,7 +553,7 @@ fn typecheck_expression(
             let var_type = context.get_type(name).cloned();
             if var_type.is_none() {
                 diagnostics.push_error(DatamodelError::new_validation_error(
-                    &format!("Unknown variable {}", name),
+                    &format!("Unknown variable {name}"),
                     span.clone(),
                 ));
             }
@@ -625,14 +628,13 @@ fn typecheck_expression(
             let func_type = context.get_type(&func_name).cloned();
 
             // TODO: Handle generics uniformly, not with this kind of one-off handler.
-            if func_name == crate::builtin::functions::FETCH_VALUE {
-                if type_args.is_empty() {
+            if func_name == crate::builtin::functions::FETCH_VALUE
+                && type_args.is_empty() {
                     diagnostics.push_error(DatamodelError::new_validation_error(
                         "Generic function std::fetch_value must have a type argument. Try adding a type argument like this: std::fetch_value<Type>",
                         function.span().clone(),
                     ));
                 }
-            }
 
             let (param_types, return_type, is_known_function) = match &func_type {
                 Some(hir::TypeM::Arrow(arrow, _)) => {
@@ -640,7 +642,7 @@ fn typecheck_expression(
                 }
                 _ => {
                     diagnostics.push_error(DatamodelError::new_validation_error(
-                        &format!("Unknown function {}", func_name),
+                        &format!("Unknown function {func_name}"),
                         span.clone(),
                     ));
                     (vec![], None, false)
@@ -665,7 +667,7 @@ fn typecheck_expression(
                         if let Some(arg_type) = typed_arg.meta().1.as_ref() {
                             if !types_compatible(arg_type, expected_type) {
                                 diagnostics.push_error(DatamodelError::new_validation_error(
-                                    &format!("Type mismatch in argument"),
+                                    "Type mismatch in argument",
                                     arg.span(),
                                 ));
                             }
@@ -705,7 +707,7 @@ fn typecheck_expression(
                         hir::TypeArg::Type(ty) => ty.clone(),
                         hir::TypeArg::TypeName(name) => {
                             diagnostics.push_error(DatamodelError::new_validation_error(
-                                &format!("Generic function calls with type names are not yet supported: {}", name),
+                                &format!("Generic function calls with type names are not yet supported: {name}"),
                                 span.clone(),
                             ));
                             hir::TypeM::ClassName(name.clone(), hir::TypeMeta::default())
@@ -932,7 +934,7 @@ fn typecheck_expression(
                         } else {
                             // Field doesn't exist on the class
                             diagnostics.push_error(DatamodelError::new_validation_error(
-                                &format!("Class {} has no field {}", class_name, field),
+                                &format!("Class {class_name} has no field {field}"),
                                 span.clone(),
                             ));
                             None
@@ -940,7 +942,7 @@ fn typecheck_expression(
                     } else {
                         // Class definition not found (shouldn't happen in normal circumstances)
                         diagnostics.push_error(DatamodelError::new_validation_error(
-                            &format!("Class {} not found", class_name),
+                            &format!("Class {class_name} not found"),
                             span.clone(),
                         ));
                         None
@@ -981,7 +983,7 @@ fn typecheck_expression(
             span,
         } => thir::Expr::BinaryOperation {
             left: Arc::new(typecheck_expression(left, context, diagnostics)),
-            operator: operator.clone(),
+            operator: *operator,
             right: Arc::new(typecheck_expression(right, context, diagnostics)),
             meta: (span.clone(), None),
         },
@@ -990,7 +992,7 @@ fn typecheck_expression(
             expr,
             span,
         } => thir::Expr::UnaryOperation {
-            operator: operator.clone(),
+            operator: *operator,
             expr: Arc::new(typecheck_expression(expr, context, diagnostics)),
             meta: (span.clone(), None),
         },
@@ -1019,9 +1021,73 @@ fn types_compatible(actual: &Type, expected: &Type) -> bool {
     }
 }
 
+impl Type {
+    /// Check if a type is optional (contains null in a union)
+    pub fn is_optional(&self) -> bool {
+        match self {
+            Type::Null(_) => true,
+            Type::Union(types, _) => types.iter().any(|t| matches!(t, Type::Null(_))),
+            _ => false,
+        }
+    }
+
+    /// Return true if `self` is a subtype of `expected`.
+    pub fn is_subtype(&self, expected: &Type) -> bool {
+        // Semantics similar to IR's `IntermediateRepr::is_subtype`:
+        // - Unions on the right: self <: (e1 | e2 | ...) if exists ei s.t. self <: ei
+        // - Unions on the left: (a1 | a2 | ...) <: expected if all ai <: expected
+        // - Arrays are covariant
+        // - Maps have contravariant keys and covariant values
+        match (self, expected) {
+            // Primitives
+            (Type::Int(_), Type::Int(_)) => true,
+            (Type::String(_), Type::String(_)) => true,
+            (Type::Bool(_), Type::Bool(_)) => true,
+            (Type::Float(_), Type::Float(_)) => true,
+            (Type::Null(_), Type::Null(_)) => true,
+
+            // Arrays: covariant element
+            (Type::Array(a_item, _), Type::Array(e_item, _)) => a_item.is_subtype(e_item),
+
+            // Maps: contravariant key, covariant value
+            (Type::Map(a_k, a_v, _), Type::Map(e_k, e_v, _)) => {
+                e_k.is_subtype(a_k) && a_v.is_subtype(e_v)
+            }
+
+            // Nominal types
+            (Type::ClassName(a, _), Type::ClassName(e, _)) => a == e,
+            (Type::EnumName(a, _), Type::EnumName(e, _)) => a == e,
+
+            // Function types: conservative check (same arity; covariant inputs/outputs)
+            (Type::Arrow(a_arrow, _), Type::Arrow(e_arrow, _)) => {
+                if a_arrow.inputs.len() != e_arrow.inputs.len() {
+                    return false;
+                }
+                if !a_arrow
+                    .inputs
+                    .iter()
+                    .zip(e_arrow.inputs.iter())
+                    .all(|(a_in, e_in)| a_in.is_subtype(e_in))
+                {
+                    return false;
+                }
+                a_arrow.output.is_subtype(&e_arrow.output)
+            }
+
+            // If expected is a union, self must be subtype of some branch
+            (a, Type::Union(e_items, _)) => e_items.iter().any(|e| a.is_subtype(e)),
+
+            // If self is a union, every branch must be a subtype of expected
+            (Type::Union(a_items, _), e) => a_items.iter().all(|a| a.is_subtype(e)),
+
+            _ => false,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
+    
 
     use internal_baml_diagnostics::Diagnostics;
 
@@ -1152,68 +1218,4 @@ mod tests {
 
     // Note: If expression test removed due to BAML syntax parsing issues in test setup.
     // The core typechecking logic for if expressions is implemented and works correctly.
-}
-
-impl Type {
-    /// Check if a type is optional (contains null in a union)
-    pub fn is_optional(&self) -> bool {
-        match self {
-            Type::Null(_) => true,
-            Type::Union(types, _) => types.iter().any(|t| matches!(t, Type::Null(_))),
-            _ => false,
-        }
-    }
-
-    /// Return true if `self` is a subtype of `expected`.
-    pub fn is_subtype(&self, expected: &Type) -> bool {
-        // Semantics similar to IR's `IntermediateRepr::is_subtype`:
-        // - Unions on the right: self <: (e1 | e2 | ...) if exists ei s.t. self <: ei
-        // - Unions on the left: (a1 | a2 | ...) <: expected if all ai <: expected
-        // - Arrays are covariant
-        // - Maps have contravariant keys and covariant values
-        match (self, expected) {
-            // Primitives
-            (Type::Int(_), Type::Int(_)) => true,
-            (Type::String(_), Type::String(_)) => true,
-            (Type::Bool(_), Type::Bool(_)) => true,
-            (Type::Float(_), Type::Float(_)) => true,
-            (Type::Null(_), Type::Null(_)) => true,
-
-            // Arrays: covariant element
-            (Type::Array(a_item, _), Type::Array(e_item, _)) => a_item.is_subtype(e_item),
-
-            // Maps: contravariant key, covariant value
-            (Type::Map(a_k, a_v, _), Type::Map(e_k, e_v, _)) => {
-                e_k.is_subtype(a_k) && a_v.is_subtype(e_v)
-            }
-
-            // Nominal types
-            (Type::ClassName(a, _), Type::ClassName(e, _)) => a == e,
-            (Type::EnumName(a, _), Type::EnumName(e, _)) => a == e,
-
-            // Function types: conservative check (same arity; covariant inputs/outputs)
-            (Type::Arrow(a_arrow, _), Type::Arrow(e_arrow, _)) => {
-                if a_arrow.inputs.len() != e_arrow.inputs.len() {
-                    return false;
-                }
-                if !a_arrow
-                    .inputs
-                    .iter()
-                    .zip(e_arrow.inputs.iter())
-                    .all(|(a_in, e_in)| a_in.is_subtype(e_in))
-                {
-                    return false;
-                }
-                a_arrow.output.is_subtype(&e_arrow.output)
-            }
-
-            // If expected is a union, self must be subtype of some branch
-            (a, Type::Union(e_items, _)) => e_items.iter().any(|e| a.is_subtype(e)),
-
-            // If self is a union, every branch must be a subtype of expected
-            (Type::Union(a_items, _), e) => a_items.iter().all(|a| a.is_subtype(e)),
-
-            _ => false,
-        }
-    }
 }

@@ -284,8 +284,8 @@ impl Expression {
             Expression::BoolValue(val, _) => RcDoc::text(val.to_string()),
             Expression::NumericValue(val, _) => RcDoc::text(val.clone()),
             Expression::Identifier(name, _) => RcDoc::text(name.clone()),
-            Expression::StringValue(val, _) => RcDoc::text(format!("\"{}\"", val)),
-            Expression::RawStringValue(val, _) => RcDoc::text(format!("#\"{}\"#", val)),
+            Expression::StringValue(val, _) => RcDoc::text(format!("\"{val}\"")),
+            Expression::RawStringValue(val, _) => RcDoc::text(format!("#\"{val}\"#")),
             Expression::Array(values, _) => RcDoc::text("[")
                 .append(if values.is_empty() {
                     RcDoc::nil()
@@ -348,8 +348,8 @@ impl Expression {
                 args,
                 ..
             } => {
-                let mut doc = function.to_doc();
-                let mut doc = if !type_args.is_empty() {
+                let doc = function.to_doc();
+                let doc = if !type_args.is_empty() {
                     doc.append(RcDoc::text("<"))
                         .append(RcDoc::intersperse(
                             type_args.iter().map(|arg| arg.to_doc()),

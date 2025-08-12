@@ -255,7 +255,7 @@ impl fmt::Display for Expression {
                     write!(f, "{stmt};")?;
                 }
                 if let Some(expr) = &block.expr {
-                    write!(f, "{}", expr)?;
+                    write!(f, "{expr}")?;
                 }
                 write!(f, "}}")
             }
@@ -736,7 +736,7 @@ impl fmt::Display for ExpressionBlock {
             write!(f, "{stmt}")?;
         }
         if let Some(expr) = &self.expr {
-            write!(f, "{}", expr)?;
+            write!(f, "{expr}")?;
         }
         write!(f, "}}")
     }

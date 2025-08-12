@@ -115,7 +115,7 @@ impl<T> Block<T> {
         T: Clone + std::fmt::Debug,
     {
         let statements = join(self.statements.iter().map(|stmt| stmt.dump_str()), "\n");
-        format!("{{ {} }}", statements)
+        format!("{{ {statements} }}")
     }
 
     pub fn free_vars(&self) -> HashSet<Name>
@@ -288,7 +288,7 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
                 Expr::Block(Box::new(Arc::unwrap_or_clone(body.clone())), meta.clone()).dump_str()
             ),
             Expr::Call { func, args, .. } => {
-                let mut args_str = itertools::join(args.iter().map(|arg| arg.dump_str()), ", ");
+                let args_str = itertools::join(args.iter().map(|arg| arg.dump_str()), ", ");
                 let func_str = match func.as_ref() {
                     Expr::BoundVar(ind, _) => ind.dump_str(),
                     Expr::FreeVar(name, _) => name.clone(),
@@ -768,7 +768,7 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
                 meta,
             } => Expr::BinaryOperation {
                 left: Arc::new(left.open(target, new_name)),
-                operator: operator.clone(),
+                operator: *operator,
                 right: Arc::new(right.open(target, new_name)),
                 meta: meta.clone(),
             },
@@ -777,7 +777,7 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
                 operator,
                 meta,
             } => Expr::UnaryOperation {
-                operator: operator.clone(),
+                operator: *operator,
                 expr: Arc::new(expr.open(target, new_name)),
                 meta: meta.clone(),
             },
@@ -884,7 +884,7 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
                 meta,
             } => Expr::BinaryOperation {
                 left: Arc::new(left.close(new_index, target)),
-                operator: operator.clone(),
+                operator: *operator,
                 right: Arc::new(right.close(new_index, target)),
                 meta: meta.clone(),
             },
@@ -893,7 +893,7 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
                 operator,
                 meta,
             } => Expr::UnaryOperation {
-                operator: operator.clone(),
+                operator: *operator,
                 expr: Arc::new(expr.close(new_index, target)),
                 meta: meta.clone(),
             },
@@ -1056,7 +1056,7 @@ impl<T: Clone> Statement<T> {
             } => {
                 format!("Let {} = {}", name, value.dump_str())
             }
-            Statement::Declare { name, span: _ } => format!("var {}", name),
+            Statement::Declare { name, span: _ } => format!("var {name}"),
             Statement::Assign { name, value } => format!("{} <- {}", name, value.dump_str()),
             Statement::DeclareAndAssign {
                 name,
@@ -1069,7 +1069,7 @@ impl<T: Clone> Statement<T> {
                 format!("return {}", expr.dump_str())
             }
             Statement::Expression { expr, span: _ } => {
-                format!("{}", expr.dump_str())
+                expr.dump_str().to_string()
             }
             Statement::While {
                 condition,

@@ -959,7 +959,7 @@ impl Vm {
                     }
 
                     // Push the element onto the stack
-                    self.stack.push(array[index].clone());
+                    self.stack.push(array[index]);
                 }
 
                 Instruction::AllocInstance(index) => {
