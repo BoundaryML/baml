@@ -4,5 +4,7 @@ function GetName(person: string) -> string {
 
 // String: "Antonio"
 // Function: GetName
-//    0   LOAD_CONST 0   (Antonio)
-//    1   RETURN
+// 1   0   LOAD_CONST 0   (Antonio)
+//     1   RETURN         
+//
+// Class: std::Request with 3 fields

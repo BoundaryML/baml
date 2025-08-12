@@ -380,7 +380,16 @@ impl<'g> HirCompiler<'g> {
             }
 
             hir::Expression::ArrayAccess { base, index, .. } => {
-                unimplemented!("Array access compilation")
+                // Compile the base expression (the array)
+                self.compile_expression(base);
+
+                // Compile the index expression
+                self.compile_expression(index);
+
+                // Emit the LoadArrayElement instruction
+                // Stack will be [array, index] and LoadArrayElement will consume both
+                // and push the result element
+                self.emit(Instruction::LoadArrayElement);
             }
 
             hir::Expression::FieldAccess { base, field, .. } => {

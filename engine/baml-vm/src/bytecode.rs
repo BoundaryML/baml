@@ -131,6 +131,12 @@ pub enum Instruction {
     /// executed.
     AllocArray(usize),
 
+    /// Loads an element from an array at a given index.
+    ///
+    /// Format: `LOAD_ARRAY_ELEMENT` where the stack contains [array, index] and
+    /// the result is the element at that index.
+    LoadArrayElement,
+
     /// Builds an instance of a class and allocates it on the heap.
     ///
     /// Format: `ALLOC_INSTANCE i` where `i` is the index of the class in the
@@ -233,6 +239,7 @@ impl std::fmt::Display for Instruction {
             Instruction::BinOp(op) => write!(f, "BIN_OP {op}"),
             Instruction::CmpOp(op) => write!(f, "CMP_OP {op}"),
             Instruction::AllocArray(n) => write!(f, "ALLOC_ARRAY {n}"),
+            Instruction::LoadArrayElement => f.write_str("LOAD_ARRAY_ELEMENT"),
             Instruction::AllocInstance(i) => write!(f, "ALLOC_INSTANCE {i}"),
             Instruction::DispatchFuture(i) => write!(f, "DISPATCH_FUTURE {i}"),
             Instruction::Await => f.write_str("AWAIT"),

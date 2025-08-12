@@ -1,0 +1,11 @@
+---
+description: Guide for using fine-grained JJ commits during development.
+globs:
+alwaysApply: true
+---
+
+Whenever doing work:
+ - See if you are on a bookmark or a commit with a name or description appropriate to that task
+ - Use fine-grained tasks - if you're creating tests for TDD, put that in a separate commit
+ - Put the feature development in another commit.
+ - When summarizing your work, tell me the names of the commits so I can quickly look at them.
