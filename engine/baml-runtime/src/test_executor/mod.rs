@@ -140,19 +140,40 @@ fn file_reader_pinned(
 
 impl TestExecutor for BamlRuntime {
     fn cli_list_tests(&self, args: &TestFilter) -> Result<()> {
-        let func_test_pairs = self
-            .inner
-            .ir
-            .walk_tests()
-            .filter_map(|node_pair| {
+        let func_test_pairs = {
+            let ir = &self.inner.ir;
+            // Regular LLM function tests
+            let from_fn_tests = ir.walk_tests().filter_map(|node_pair| {
                 let (function_name, test_name) = node_pair.name();
                 if args.includes(function_name, test_name) {
-                    Some((function_name, test_name))
+                    Some((function_name.to_string(), test_name.to_string()))
                 } else {
                     None
                 }
-            })
-            .collect::<BTreeSet<_>>();
+            });
+
+            // Expr function tests (pretending as functions)
+            let expr_fns = internal_baml_core::ir::ExprFnAsFunctionWalker::new(ir);
+            let expr_fn_tests_owned: Vec<(String, String)> = expr_fns
+                .walk_functions()
+                .flat_map(|f| {
+                    f.walk_tests()
+                        .filter_map(|node_pair| {
+                            let (function_name, test_name) = node_pair.name();
+                            if args.includes(function_name, test_name) {
+                                Some((function_name.to_string(), test_name.to_string()))
+                            } else {
+                                None
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .collect();
+
+            from_fn_tests
+                .chain(expr_fn_tests_owned)
+                .collect::<BTreeSet<_>>()
+        };
 
         println!("Found {} tests", func_test_pairs.len());
 
@@ -182,11 +203,10 @@ impl TestExecutor for BamlRuntime {
         env_vars: &HashMap<String, String>,
     ) -> TestRunStatus {
         let renderer = AggregateRenderer::new(output_format, junit_path);
-        let selected_tests = self
-            .inner
-            .ir
-            .walk_tests()
-            .filter_map(|node_pair| {
+        let selected_tests = {
+            let ir = &self.inner.ir;
+            // Regular LLM function tests
+            let from_fn_tests = ir.walk_tests().filter_map(|node_pair| {
                 let (function_name, test_name) = node_pair.name();
                 if args.includes(function_name, test_name) {
                     node_pair.span().map(|s| {
@@ -198,8 +218,39 @@ impl TestExecutor for BamlRuntime {
                 } else {
                     None
                 }
-            })
-            .collect::<BTreeMap<_, _>>();
+            });
+
+            // Expr function tests (pretending as functions)
+            let expr_fns = internal_baml_core::ir::ExprFnAsFunctionWalker::new(ir);
+            let expr_fn_tests_owned: Vec<((String, String), String)> = expr_fns
+                .walk_functions()
+                .flat_map(|f| {
+                    f.walk_tests()
+                        .filter_map(|node_pair| {
+                            let (function_name, test_name) = node_pair.name();
+                            if args.includes(function_name, test_name) {
+                                node_pair.span().map(|s| {
+                                    (
+                                        (function_name.to_string(), test_name.to_string()),
+                                        format!(
+                                            "{}:{}",
+                                            s.file.path(),
+                                            s.line_and_column().0 .0 + 1
+                                        ),
+                                    )
+                                })
+                            } else {
+                                None
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .collect();
+
+            from_fn_tests
+                .chain(expr_fn_tests_owned.into_iter())
+                .collect::<BTreeMap<_, _>>()
+        };
 
         if selected_tests.is_empty() {
             println!("No tests selected");

@@ -26,6 +26,7 @@
 
         toolchain = with fenix.packages.${system}; combine [
           complete.cargo
+          complete.clippy
           complete.rustc
           complete.rust-std
           complete.rustfmt
