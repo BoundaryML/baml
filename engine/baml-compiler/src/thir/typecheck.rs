@@ -37,7 +37,7 @@ pub fn typecheck(hir: &Hir, diagnostics: &mut Diagnostics) -> THir<ExprMetadata>
             },
             hir::TypeMeta::default(),
         );
-        typing_context.inner.insert(func.name.clone(), arrow_type);
+        typing_context.symbols.insert(func.name.clone(), arrow_type);
     }
 
     // Add LLM functions to typing context
@@ -49,7 +49,7 @@ pub fn typecheck(hir: &Hir, diagnostics: &mut Diagnostics) -> THir<ExprMetadata>
             },
             hir::TypeMeta::default(),
         );
-        typing_context.inner.insert(func.name.clone(), arrow_type);
+        typing_context.symbols.insert(func.name.clone(), arrow_type);
     }
 
     // Add builtin functions to typing context
@@ -58,7 +58,7 @@ pub fn typecheck(hir: &Hir, diagnostics: &mut Diagnostics) -> THir<ExprMetadata>
     // For now, we'll add a placeholder - this should be handled more generically in the future
     let generic_return_type = Type::String(hir::TypeMeta::default()); // Placeholder for generic T
     let fetch_value_type = crate::builtin::std_fetch_value_signature(generic_return_type);
-    typing_context.inner.insert(
+    typing_context.symbols.insert(
         crate::builtin::functions::FETCH_VALUE.to_string(),
         fetch_value_type,
     );
@@ -70,7 +70,13 @@ pub fn typecheck(hir: &Hir, diagnostics: &mut Diagnostics) -> THir<ExprMetadata>
 
         // Add the inferred type to the context
         if let Some(inferred_type) = typed_global_expr.meta().1.clone() {
-            typing_context.inner.insert(name.clone(), inferred_type);
+            typing_context.vars.insert(
+                name.clone(),
+                VarInfo {
+                    ty: inferred_type,
+                    is_mutable: false,
+                },
+            );
         }
     }
 
@@ -81,9 +87,13 @@ pub fn typecheck(hir: &Hir, diagnostics: &mut Diagnostics) -> THir<ExprMetadata>
 
         // Add parameters to context
         for param in &func.parameters {
-            func_context
-                .inner
-                .insert(param.name.clone(), param.r#type.clone());
+            func_context.vars.insert(
+                param.name.clone(),
+                VarInfo {
+                    ty: param.r#type.clone(),
+                    is_mutable: param.is_mutable,
+                },
+            );
         }
 
         // Convert HIR block to THIR block with type inference
@@ -116,33 +126,56 @@ pub fn typecheck(hir: &Hir, diagnostics: &mut Diagnostics) -> THir<ExprMetadata>
 }
 
 #[derive(Clone, Debug)]
+pub struct VarInfo {
+    pub ty: Type,
+    pub is_mutable: bool,
+}
+
+#[derive(Clone, Debug)]
 pub struct TypeContext {
-    pub inner: BamlMap<String, Type>,
+    // Function names and other non-variable symbols
+    pub symbols: BamlMap<String, Type>,
+    // Variables in scope with mutability info
+    pub vars: BamlMap<String, VarInfo>,
     pub classes: BamlMap<String, hir::Class>,
 }
 
 impl TypeContext {
     pub fn new() -> Self {
-        let mut consts = BamlMap::new();
-        consts.insert("true".to_string(), Type::Bool(hir::TypeMeta::default()));
-        consts.insert("false".to_string(), Type::Bool(hir::TypeMeta::default()));
+        let mut vars = BamlMap::new();
+        vars.insert(
+            "true".to_string(),
+            VarInfo {
+                ty: Type::Bool(hir::TypeMeta::default()),
+                is_mutable: false,
+            },
+        );
+        vars.insert(
+            "false".to_string(),
+            VarInfo {
+                ty: Type::Bool(hir::TypeMeta::default()),
+                is_mutable: false,
+            },
+        );
         Self {
-            inner: consts,
+            symbols: BamlMap::new(),
+            vars,
             classes: BamlMap::new(),
         }
     }
     pub fn get_type(&self, name: &str) -> Option<&Type> {
-        self.inner.get(name)
+        self.vars
+            .get(name)
+            .map(|v| &v.ty)
+            .or_else(|| self.symbols.get(name))
+    }
+
+    pub fn is_mutable(&self, name: &str) -> Option<bool> {
+        self.vars.get(name).map(|v| v.is_mutable)
     }
 
     pub fn infer_type(&mut self, expr: &hir::Expression) -> Option<Type> {
         todo!()
-    }
-
-    pub fn local_assignment(self, name: &str, r#type: Type) -> Self {
-        let mut env_copy = self.clone();
-        env_copy.inner.insert(name.to_string(), r#type);
-        env_copy
     }
 }
 
@@ -245,13 +278,23 @@ fn typecheck_statement(
             // Always add to context, even if type is unknown
             // This ensures the variable is defined even if its initializer has errors
             if let Some(inferred_type) = typed_value.meta().1.clone() {
-                context.inner.insert(name.clone(), inferred_type);
+                context.vars.insert(
+                    name.clone(),
+                    VarInfo {
+                        ty: inferred_type,
+                        is_mutable: false,
+                    },
+                );
             } else {
                 // Add with unknown type (represented as Int for now as a placeholder)
                 // This prevents "Unknown variable" errors for variables with invalid initializers
-                context
-                    .inner
-                    .insert(name.clone(), hir::TypeM::Int(hir::TypeMeta::default()));
+                context.vars.insert(
+                    name.clone(),
+                    VarInfo {
+                        ty: hir::TypeM::Int(hir::TypeMeta::default()),
+                        is_mutable: false,
+                    },
+                );
             }
 
             Some(thir::Statement::Let {
@@ -275,12 +318,40 @@ fn typecheck_statement(
                 span: span.clone(),
             })
         }
-        hir::Statement::Declare { name, span } => Some(thir::Statement::Declare {
-            name: name.clone(),
-            span: span.clone(),
-        }),
+        hir::Statement::Declare { name, span } => {
+            // Record a mutable variable with unknown type (placeholder Int)
+            context.vars.insert(
+                name.clone(),
+                VarInfo {
+                    ty: hir::TypeM::Int(hir::TypeMeta::default()),
+                    is_mutable: true,
+                },
+            );
+            Some(thir::Statement::Declare {
+                name: name.clone(),
+                span: span.clone(),
+            })
+        }
         hir::Statement::Assign { name, value } => {
+            // Mutability check: only mutable variables can be assigned
+            match context.is_mutable(name) {
+                Some(true) => {}
+                Some(false) => diagnostics.push_error(DatamodelError::new_validation_error(
+                    &format!("Cannot assign to immutable variable {}", name),
+                    value.span(),
+                )),
+                None => diagnostics.push_error(DatamodelError::new_validation_error(
+                    &format!("Unknown variable {}", name),
+                    value.span(),
+                )),
+            }
             let typed_value = typecheck_expression(value, context, diagnostics);
+            // Update the variable's type in the context if known
+            if let Some(var_info) = context.vars.get_mut(name) {
+                if let Some(inferred_type) = typed_value.meta().1.clone() {
+                    var_info.ty = inferred_type;
+                }
+            }
             Some(thir::Statement::Assign {
                 name: name.clone(),
                 value: typed_value,
@@ -292,13 +363,23 @@ fn typecheck_statement(
             // Always add to context, even if type is unknown
             // This ensures the variable is defined even if its initializer has errors
             if let Some(inferred_type) = typed_value.meta().1.clone() {
-                context.inner.insert(name.clone(), inferred_type);
+                context.vars.insert(
+                    name.clone(),
+                    VarInfo {
+                        ty: inferred_type,
+                        is_mutable: true,
+                    },
+                );
             } else {
                 // Add with unknown type (represented as Int for now as a placeholder)
                 // This prevents "Unknown variable" errors for variables with invalid initializers
-                context
-                    .inner
-                    .insert(name.clone(), hir::TypeM::Int(hir::TypeMeta::default()));
+                context.vars.insert(
+                    name.clone(),
+                    VarInfo {
+                        ty: hir::TypeM::Int(hir::TypeMeta::default()),
+                        is_mutable: true,
+                    },
+                );
             }
 
             Some(thir::Statement::DeclareAndAssign {
@@ -335,9 +416,13 @@ fn typecheck_statement(
             // Infer item type from iterator type
             if let Some(iterator_type) = typed_iterator.meta().1.as_ref() {
                 if let hir::TypeM::Array(inner_type, _) = iterator_type {
-                    loop_context
-                        .inner
-                        .insert(identifier.clone(), *inner_type.clone());
+                    loop_context.vars.insert(
+                        identifier.clone(),
+                        VarInfo {
+                            ty: *inner_type.clone(),
+                            is_mutable: false,
+                        },
+                    );
                 }
             }
 
@@ -356,7 +441,7 @@ fn typecheck_statement(
 /// Typecheck an expression and infer its type
 fn typecheck_expression(
     expr: &hir::Expression,
-    context: &mut TypeContext,
+    context: &TypeContext,
     diagnostics: &mut Diagnostics,
 ) -> thir::Expr<ExprMetadata> {
     match expr {

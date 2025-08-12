@@ -210,20 +210,7 @@ impl LlmFunction {
     pub fn from_ast(function: &ast::ValueExprBlock) -> Self {
         LlmFunction {
             name: function.name().to_string(),
-            parameters: function
-                .input()
-                .map(|input| {
-                    input
-                        .args
-                        .iter()
-                        .map(|(name, param)| Parameter {
-                            name: name.to_string(),
-                            r#type: TypeM::from_ast(&param.field_type),
-                            span: name.span().clone(),
-                        })
-                        .collect::<Vec<_>>()
-                })
-                .unwrap_or(vec![]),
+            parameters: function.input().map(lower_fn_args).unwrap_or(vec![]),
 
             return_type: TypeM::from_ast_optional(
                 function.output().map(|output| &output.field_type),
@@ -261,21 +248,25 @@ impl LlmFunction {
     }
 }
 
+fn lower_fn_args(input: &ast::BlockArgs) -> Vec<Parameter> {
+    input
+        .args
+        .iter()
+        .map(|(name, param)| Parameter {
+            name: name.to_string(),
+            is_mutable: param.is_mutable,
+            r#type: TypeM::from_ast(&param.field_type),
+            span: name.span().clone(),
+        })
+        .collect::<Vec<_>>()
+}
+
 impl ExprFunction {
     /// Lower an expression function into HIR.
     pub fn from_ast(function: &ast::ExprFn) -> Self {
         ExprFunction {
             name: function.name.to_string(),
-            parameters: function
-                .args
-                .args
-                .iter()
-                .map(|(name, param)| Parameter {
-                    name: name.to_string(),
-                    r#type: TypeM::from_ast(&param.field_type),
-                    span: name.span().clone(),
-                })
-                .collect::<Vec<_>>(),
+            parameters: lower_fn_args(&function.args),
             return_type: TypeM::from_ast_optional(function.return_type.as_ref()),
             body: Block::from_function_body(&function.body),
             span: function.span.clone(),
@@ -303,8 +294,26 @@ impl Block {
         // Process statements, checking for if expressions in let bindings
         for stmt in &block.stmts {
             match stmt {
+                ast::Stmt::Assign(ast::AssignStmt {
+                    identifier,
+                    expr,
+                    span,
+                }) => {
+                    // Assignment statement (like let, without let) - check for if expressions in nested contexts
+                    // NOTE: Since we're not desugaring assignments, there will be no
+                    // lifted statements.
+                    let mut temp_counter = 0;
+                    let lifted_expr =
+                        Expression::from_ast(expr, &mut statements, &mut temp_counter);
+
+                    statements.push(Statement::Assign {
+                        name: identifier.to_string(),
+                        value: lifted_expr,
+                    });
+                }
                 ast::Stmt::Let(ast::LetStmt {
                     identifier,
+                    is_mutable,
                     expr,
                     span,
                 }) => {
@@ -319,12 +328,22 @@ impl Block {
                     // Add any lifted statements first
                     statements.extend(lifted_statements);
 
+                    let stmt = if *is_mutable {
+                        Statement::DeclareAndAssign {
+                            name: identifier.to_string(),
+                            value: lifted_expr,
+                            span: span.clone(),
+                        }
+                    } else {
+                        Statement::Let {
+                            name: identifier.to_string(),
+                            value: lifted_expr,
+                            span: span.clone(),
+                        }
+                    };
+
                     // Then add the actual let statement
-                    statements.push(Statement::Let {
-                        name: identifier.to_string(),
-                        value: lifted_expr,
-                        span: span.clone(),
-                    });
+                    statements.push(stmt);
                 }
                 ast::Stmt::ForLoop(ast::ForLoopStmt {
                     identifier,

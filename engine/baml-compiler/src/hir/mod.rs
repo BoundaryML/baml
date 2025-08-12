@@ -189,6 +189,7 @@ pub struct EnumVariant {
 #[derive(Clone, Debug)]
 pub struct Parameter {
     pub name: String,
+    pub is_mutable: bool,
     pub r#type: TypeM<TypeMeta>,
     pub span: Span,
 }
