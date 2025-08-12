@@ -20,7 +20,7 @@ pub(crate) fn parse_expression(
 
     assert_correct_parser!(token, Rule::expression);
 
-    // TODO: Initialize this shit once and pass it in (consider parallel parsing).
+    // TODO: Initialize this shit once and pass it in (consider parallel parsing with .par_iter(), use some sync once cell or something).
     let pratt = PrattParser::new()
         .op(Op::infix(Rule::OR, Assoc::Left))
         .op(Op::infix(Rule::AND, Assoc::Left))
@@ -304,6 +304,14 @@ fn parse_map_key(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expression {
     unreachable!("Encountered impossible map key during parsing")
 }
 
+pub fn parse_config_expression(
+    token: Pair<'_>,
+    diagnostics: &mut internal_baml_diagnostics::Diagnostics,
+) -> Option<Expression> {
+    assert_correct_parser!(token, Rule::config_expression);
+    parse_config_primary_expression(token.into_inner().next()?, diagnostics)
+}
+
 pub fn parse_config_primary_expression(
     token: Pair<'_>,
     diagnostics: &mut internal_baml_diagnostics::Diagnostics,
@@ -356,7 +364,7 @@ fn parse_config_map_entry(
     for current in token.into_inner() {
         match current.as_rule() {
             Rule::config_map_key => key = Some(parse_config_map_key(current, diagnostics)),
-            Rule::config_expression => value = parse_expression(current, diagnostics),
+            Rule::config_expression => value = parse_config_expression(current, diagnostics),
             Rule::ENTRY_CATCH_ALL => {
                 diagnostics.push_error(
                     internal_baml_diagnostics::DatamodelError::new_validation_error(

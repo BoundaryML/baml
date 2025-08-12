@@ -189,14 +189,7 @@ fn function_call_with_parameters() -> anyhow::Result<()> {
     })
 }
 
-// TODO: Parser is kinda broken and won't parse this:
-//
-// fn run_if() -> int {
-//     let b = true;
-//     if b { 1 } else { 2 }
-// }
-//
-// Figure out how to make these tests independent of function calls.
+// TODO: Figure out how to make these tests independent of function calls.
 #[test]
 fn exec_if_branch() -> anyhow::Result<()> {
     assert_vm_executes(Program {

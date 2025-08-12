@@ -9,7 +9,7 @@ use super::{
     parse_types::{parse_field_type, reassociate_union_attributes},
     Rule,
 };
-use crate::{ast::*, parser::parse_expression::parse_config_primary_expression};
+use crate::{ast::*, parser::parse_expression::parse_config_expression};
 
 pub(crate) fn parse_value_expr(
     model_name: &Option<Identifier>,
@@ -40,7 +40,7 @@ pub(crate) fn parse_value_expr(
             }
             Rule::expression => field_type = Some(parse_expression(current, diagnostics)),
             Rule::config_expression => {
-                field_type = Some(parse_config_primary_expression(current, diagnostics))
+                field_type = Some(parse_config_expression(current, diagnostics))
             }
 
             _ => parsing_catch_all(current, "field"),
