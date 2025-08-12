@@ -625,17 +625,13 @@ impl Class {
                 .iter()
                 .map(|field| Field {
                     name: field.name().to_string(),
-                    r#type: field
-                        .expr
-                        .as_ref()
-                        .map(TypeM::from_ast)
-                        .unwrap_or_else(|| {
-                            TypeM::String(TypeMeta {
-                                span: field.span().clone(),
-                                constraints: Vec::new(),
-                                streaming_behavior: StreamingBehavior::default(),
-                            })
-                        }),
+                    r#type: field.expr.as_ref().map(TypeM::from_ast).unwrap_or_else(|| {
+                        TypeM::String(TypeMeta {
+                            span: field.span().clone(),
+                            constraints: Vec::new(),
+                            streaming_behavior: StreamingBehavior::default(),
+                        })
+                    }),
                     span: field.span().clone(),
                 })
                 .collect(),

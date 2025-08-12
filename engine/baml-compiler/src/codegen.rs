@@ -329,12 +329,7 @@ impl<'g> HirCompiler<'g> {
                 self.emit(Instruction::Pop(1));
             }
 
-            hir::Statement::ForLoop {
-                
-                
-                
-                ..
-            } => {
+            hir::Statement::ForLoop { .. } => {
                 todo!()
             }
 
@@ -395,7 +390,7 @@ impl<'g> HirCompiler<'g> {
                 self.emit(Instruction::LoadArrayElement);
             }
 
-            hir::Expression::FieldAccess {   .. } => {
+            hir::Expression::FieldAccess { .. } => {
                 unimplemented!("Array access compilation")
             }
 
@@ -445,12 +440,7 @@ impl<'g> HirCompiler<'g> {
                 todo!("jinja expression compilation")
             }
 
-            hir::Expression::Call {
-                function,
-                
-                args,
-                ..
-            } => {
+            hir::Expression::Call { function, args, .. } => {
                 let name = match function.as_ref() {
                     hir::Expression::Identifier(name, _) => name,
                     _ => panic!("expressions that evaluate to functions are not supported yet"),

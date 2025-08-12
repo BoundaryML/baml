@@ -1068,9 +1068,7 @@ impl<T: Clone> Statement<T> {
             Statement::FunctionReturn { expr, span: _ } => {
                 format!("return {}", expr.dump_str())
             }
-            Statement::Expression { expr, span: _ } => {
-                expr.dump_str().to_string()
-            }
+            Statement::Expression { expr, span: _ } => expr.dump_str().to_string(),
             Statement::While {
                 condition,
                 block,
