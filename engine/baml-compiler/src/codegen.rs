@@ -1492,4 +1492,26 @@ mod tests {
             )],
         })
     }
+
+    #[test]
+    fn basic_add() -> anyhow::Result<()> {
+        assert_compiles(Program {
+            source: r#"
+                fn main() -> int {
+                    let a = 1 + 2;
+                    a
+                }
+            "#,
+            expected: vec![(
+                "main",
+                vec![
+                    Instruction::LoadConst(0),
+                    Instruction::LoadConst(1),
+                    Instruction::BinOp(BinOp::Add),
+                    Instruction::LoadVar(1),
+                    Instruction::Return,
+                ],
+            )],
+        })
+    }
 }
