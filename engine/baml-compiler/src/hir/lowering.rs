@@ -607,6 +607,10 @@ impl Expression {
                 expr: Box::new(Self::from_ast(expr, statements, temp_counter)),
                 span: span.clone(),
             },
+            ast::Expression::Paren(expr, span) => Expression::Paren(
+                Box::new(Self::from_ast(expr, statements, temp_counter)),
+                span.clone(),
+            ),
         }
     }
 }

@@ -145,6 +145,11 @@ fn parse_primary_expression(
         }
         Rule::if_expression => parse_if_expression(token, diagnostics),
 
+        // Nested expr in parens.
+        Rule::expression => {
+            parse_expression(token, diagnostics).map(|expr| Expression::Paren(Box::new(expr), span))
+        }
+
         Rule::BLOCK_LEVEL_CATCH_ALL => {
             diagnostics.push_error(
                 internal_baml_diagnostics::DatamodelError::new_validation_error(

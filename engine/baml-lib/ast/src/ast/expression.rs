@@ -143,6 +143,8 @@ pub enum Expression {
         expr: Box<Expression>,
         span: Span,
     },
+    // No-op, just so we can keep track of parenthesis (Pratt Parser discard them).
+    Paren(Box<Expression>, Span),
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -274,6 +276,7 @@ impl fmt::Display for Expression {
             Expression::UnaryOperation { operator, expr, .. } => {
                 write!(f, "{operator}{expr}")
             }
+            Expression::Paren(expr, _span) => write!(f, "({expr})"),
         }
     }
 }
@@ -393,6 +396,7 @@ impl Expression {
             Self::FieldAccess(_, _, span) => span,
             Self::BinaryOperation { span, .. } => span,
             Self::UnaryOperation { span, .. } => span,
+            Self::Paren(_, span) => span,
         }
     }
 
@@ -426,6 +430,7 @@ impl Expression {
             Expression::FieldAccess(_, _, _) => "field_access",
             Expression::BinaryOperation { .. } => "binary_operation",
             Expression::UnaryOperation { .. } => "unary_operation",
+            Expression::Paren(_, _) => "parenthesized_expression",
         }
     }
 
@@ -559,6 +564,10 @@ impl Expression {
                 assert_eq!(operator, operator2);
             }
             (UnaryOperation { .. }, _) => panic!("Types do not match: {self:?} and {other:?}"),
+            (Paren(expr1, _), Paren(expr2, _)) => {
+                expr1.assert_eq_up_to_span(expr2);
+            }
+            (Paren(_, _), _) => panic!("Types do not match: {self:?} and {other:?}"),
         }
     }
 
@@ -654,6 +663,7 @@ impl Expression {
             Expression::FieldAccess(_, _, _) => None,
             Expression::BinaryOperation { .. } => None,
             Expression::UnaryOperation { .. } => None,
+            Expression::Paren(_, _) => None,
         }
     }
 }

@@ -560,6 +560,8 @@ impl WithRepr<Expr<ExprMetadata>> for ast::Expression {
                     meta: (span.clone(), None),
                 })
             }
+            // Don't care.
+            ast::Expression::Paren(expr, span) => expr.repr(db),
         }
     }
 }

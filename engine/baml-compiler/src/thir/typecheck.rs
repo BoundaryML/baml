@@ -994,6 +994,10 @@ fn typecheck_expression(
             expr: Arc::new(typecheck_expression(expr, context, diagnostics)),
             meta: (span.clone(), None),
         },
+        // Don't care about parens here, order is defined by Pratt Parser.
+        // TODO: Still if we need to print errors we need the entire span of the
+        // expr? Also print the expr?
+        hir::Expression::Paren(expr, span) => typecheck_expression(expr, context, diagnostics),
     }
 }
 

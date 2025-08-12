@@ -417,6 +417,7 @@ pub enum Expression {
         expr: Box<Expression>,
         span: Span,
     },
+    Paren(Box<Expression>, Span),
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -471,6 +472,7 @@ impl Expression {
             Expression::ExpressionBlock(_, span) => span.clone(),
             Expression::BinaryOperation { span, .. } => span.clone(),
             Expression::UnaryOperation { span, .. } => span.clone(),
+            Expression::Paren(_, span) => span.clone(),
         }
     }
 }

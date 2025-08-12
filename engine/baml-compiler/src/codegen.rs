@@ -645,6 +645,10 @@ impl<'g> HirCompiler<'g> {
                     hir::UnaryOperator::Neg => Instruction::UnaryOp(UnaryOp::Neg),
                 });
             }
+
+            hir::Expression::Paren(expr, _) => {
+                self.compile_expression(expr);
+            }
         }
     }
 

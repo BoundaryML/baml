@@ -394,13 +394,18 @@ impl Expression {
                 operator,
                 right,
                 ..
-            } => RcDoc::text("left")
-                .append(left.to_doc())
+            } => left
+                .to_doc()
+                .append(RcDoc::space())
                 .append(operator.to_doc())
+                .append(RcDoc::space())
                 .append(right.to_doc()),
-            Expression::UnaryOperation { operator, expr, .. } => RcDoc::text("operator")
-                .append(operator.to_doc())
-                .append(expr.to_doc()),
+            Expression::UnaryOperation { operator, expr, .. } => {
+                operator.to_doc().append(expr.to_doc())
+            }
+            Expression::Paren(expr, _) => RcDoc::text("(")
+                .append(expr.to_doc())
+                .append(RcDoc::text(")")),
         }
     }
 }
