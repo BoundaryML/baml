@@ -86,7 +86,7 @@ impl Stmt {
         match self {
             Stmt::Let(stmt) => &stmt.span,
             Stmt::ForLoop(stmt) => &stmt.span,
-            Stmt::Expression(expr) => &expr.span(),
+            Stmt::Expression(expr) => expr.span(),
             Stmt::Assign(stmt) => &stmt.span,
         }
     }
