@@ -183,14 +183,14 @@ impl fmt::Display for BinaryOperator {
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum UnaryOperator {
     Not,
-    Minus,
+    Neg,
 }
 
 impl fmt::Display for UnaryOperator {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             UnaryOperator::Not => write!(f, "!"),
-            UnaryOperator::Minus => write!(f, "-"),
+            UnaryOperator::Neg => write!(f, "-"),
         }
     }
 }

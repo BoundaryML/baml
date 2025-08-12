@@ -124,6 +124,11 @@ pub enum Instruction {
     /// Format: `CMP_OP op` where `op` is the comparison operation to perform.
     CmpOp(CmpOp),
 
+    /// Performs a unary operation.
+    ///
+    /// Format: `UNARY_OP op` where `op` is the unary operation to perform.
+    UnaryOp(UnaryOp),
+
     /// Builds an array and allocates it on the heap.
     ///
     /// Format: `ALLOC_ARRAY n` where `n` is the number of elements in the
@@ -198,6 +203,12 @@ pub enum CmpOp {
     GtEq,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum UnaryOp {
+    Not,
+    Neg,
+}
+
 impl std::fmt::Display for BinOp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -222,6 +233,15 @@ impl std::fmt::Display for CmpOp {
     }
 }
 
+impl std::fmt::Display for UnaryOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            UnaryOp::Not => f.write_str("!"),
+            UnaryOp::Neg => f.write_str("-"),
+        }
+    }
+}
+
 impl std::fmt::Display for Instruction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -238,6 +258,7 @@ impl std::fmt::Display for Instruction {
             Instruction::JumpIfFalse(o) => write!(f, "JUMP_IF_FALSE {o:+}"),
             Instruction::BinOp(op) => write!(f, "BIN_OP {op}"),
             Instruction::CmpOp(op) => write!(f, "CMP_OP {op}"),
+            Instruction::UnaryOp(op) => write!(f, "UNARY_OP {op}"),
             Instruction::AllocArray(n) => write!(f, "ALLOC_ARRAY {n}"),
             Instruction::LoadArrayElement => f.write_str("LOAD_ARRAY_ELEMENT"),
             Instruction::AllocInstance(i) => write!(f, "ALLOC_INSTANCE {i}"),

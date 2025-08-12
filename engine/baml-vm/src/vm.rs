@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 
-use crate::bytecode::{BinOp, Bytecode, CmpOp, Instruction};
+use crate::{
+    bytecode::{BinOp, Bytecode, CmpOp, Instruction},
+    UnaryOp,
+};
 
 /// Max call stack size.
 const MAX_FRAMES: usize = 256;
@@ -258,6 +261,9 @@ pub enum InternalError {
 
     /// Attempt to apply a comparison operation to two values of different types.
     CannotApplyCmpOp { left: Type, right: Type, op: CmpOp },
+
+    /// Attempt to apply a unary operation to a value of the wrong type.
+    CannotApplyUnaryOp { op: UnaryOp, value: Type },
 
     /// Array index out of bounds.
     ArrayIndexOutOfBounds { index: usize, length: usize },
@@ -857,6 +863,27 @@ impl Vm {
                                 }))
                             }
                         }),
+                    };
+
+                    self.stack.push(result);
+                }
+
+                // TODO: @antonio Same as above.
+                Instruction::UnaryOp(op) => {
+                    let Some(value) = self.stack.pop() else {
+                        return Err(InternalError::UnexpectedEmptyStack.into());
+                    };
+
+                    let result = match (op, value) {
+                        (UnaryOp::Not, Value::Bool(value)) => Value::Bool(!value),
+                        (UnaryOp::Neg, Value::Int(value)) => Value::Int(-value),
+                        (UnaryOp::Neg, Value::Float(value)) => Value::Float(-value),
+                        _ => {
+                            return Err(VmError::from(InternalError::CannotApplyUnaryOp {
+                                op,
+                                value: Type::of(&value),
+                            }));
+                        }
                     };
 
                     self.stack.push(result);

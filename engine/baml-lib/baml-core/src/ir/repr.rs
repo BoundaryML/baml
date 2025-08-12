@@ -555,7 +555,7 @@ impl WithRepr<Expr<ExprMetadata>> for ast::Expression {
                     expr: Arc::new(expr_ir),
                     operator: match operator {
                         ast::UnaryOperator::Not => expr::UnaryOperator::Not,
-                        ast::UnaryOperator::Minus => expr::UnaryOperator::Minus,
+                        ast::UnaryOperator::Neg => expr::UnaryOperator::Neg,
                     },
                     meta: (span.clone(), None),
                 })

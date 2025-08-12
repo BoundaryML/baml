@@ -602,7 +602,7 @@ impl Expression {
             } => Expression::UnaryOperation {
                 operator: match operator {
                     ast::UnaryOperator::Not => hir::UnaryOperator::Not,
-                    ast::UnaryOperator::Minus => hir::UnaryOperator::Minus,
+                    ast::UnaryOperator::Neg => hir::UnaryOperator::Neg,
                 },
                 expr: Box::new(Self::from_ast(expr, statements, temp_counter)),
                 span: span.clone(),

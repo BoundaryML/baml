@@ -88,7 +88,7 @@ pub enum BinaryOperator {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UnaryOperator {
     Not,
-    Minus,
+    Neg,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

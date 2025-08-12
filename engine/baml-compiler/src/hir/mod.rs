@@ -438,7 +438,7 @@ pub enum BinaryOperator {
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum UnaryOperator {
     Not,
-    Minus,
+    Neg,
 }
 
 /// A type argument to a generic function call.

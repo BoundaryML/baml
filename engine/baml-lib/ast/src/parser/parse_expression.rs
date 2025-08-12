@@ -18,6 +18,8 @@ pub(crate) fn parse_expression(
 ) -> Option<Expression> {
     use pest::pratt_parser::{Assoc, Op, PrattParser};
 
+    assert_correct_parser!(token, Rule::expression);
+
     // TODO: Initialize this shit once and pass it in (consider parallel parsing).
     let pratt = PrattParser::new()
         .op(Op::infix(Rule::OR, Assoc::Left))
@@ -31,7 +33,7 @@ pub(crate) fn parse_expression(
         .op(Op::infix(Rule::ADD, Assoc::Left) | Op::infix(Rule::SUB, Assoc::Left))
         .op(Op::infix(Rule::MUL, Assoc::Left) | Op::infix(Rule::DIV, Assoc::Left))
         .op(Op::prefix(Rule::NOT))
-        .op(Op::prefix(Rule::SUB))
+        .op(Op::prefix(Rule::NEG))
         .op(Op::postfix(Rule::array_accessor))
         .op(Op::postfix(Rule::field_accessor));
 
@@ -52,7 +54,7 @@ pub(crate) fn parse_expression(
         })
         .map_prefix(|operator, right| {
             let operator = match operator.as_rule() {
-                Rule::SUB => UnaryOperator::Minus,
+                Rule::NEG => UnaryOperator::Neg,
                 Rule::NOT => UnaryOperator::Not,
                 _ => unreachable_rule!(operator, Rule::prefix_operator),
             };

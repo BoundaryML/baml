@@ -469,3 +469,81 @@ fn exec_mutable_in_arg() -> anyhow::Result<()> {
         expected: VmExecState::Complete(Value::Int(3)),
     })
 }
+
+#[test]
+fn basic_add() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            fn main() -> int {
+                1 + 2
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(3)),
+    })
+}
+
+#[test]
+fn basic_sub() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            fn main() -> int {
+                1 - 2
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(-1)),
+    })
+}
+
+#[test]
+fn basic_mul() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            fn main() -> int {
+                1 * 2
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(2)),
+    })
+}
+
+#[test]
+fn basic_div() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            fn main() -> int {
+                10 / 2
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(5)),
+    })
+}
+
+#[test]
+fn unary_neg() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            fn main() -> int {
+                -1
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(-1)),
+    })
+}
+
+#[test]
+fn unary_not() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            fn main() -> bool {
+                !true
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Bool(false)),
+    })
+}

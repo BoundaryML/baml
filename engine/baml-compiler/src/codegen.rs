@@ -2,7 +2,10 @@
 
 use std::collections::{HashMap, HashSet};
 
-use baml_vm::{BamlVmProgram, Bytecode, Class, Function, FunctionKind, Instruction, Object, Value};
+use baml_vm::{
+    BamlVmProgram, BinOp, Bytecode, Class, CmpOp, Function, FunctionKind, Instruction, Object,
+    UnaryOp, Value,
+};
 use internal_baml_parser_database::ParserDatabase;
 
 use crate::hir;
@@ -584,9 +587,64 @@ impl<'g> HirCompiler<'g> {
                 operator,
                 right,
                 ..
-            } => todo!(),
+            } => {
+                self.compile_expression(left);
 
-            hir::Expression::UnaryOperation { operator, expr, .. } => todo!(),
+                // Logical operators must short-circuit. They are implemented
+                // in terms of jump instructions, there is no special VM
+                // instruction for logical AND / OR.
+                match operator {
+                    hir::BinaryOperator::And => {
+                        let skip_right = self.emit(Instruction::JumpIfFalse(0));
+                        self.emit(Instruction::Pop(1));
+                        self.compile_expression(right);
+                        self.patch_jump(skip_right);
+                    }
+
+                    hir::BinaryOperator::Or => {
+                        let eval_right = self.emit(Instruction::JumpIfFalse(0));
+                        let skip_right = self.emit(Instruction::Jump(0));
+
+                        self.patch_jump(eval_right);
+
+                        self.emit(Instruction::Pop(1));
+                        self.compile_expression(right);
+
+                        self.patch_jump(skip_right);
+                    }
+
+                    other => {
+                        self.compile_expression(right);
+
+                        self.emit(match other {
+                            hir::BinaryOperator::Add => Instruction::BinOp(BinOp::Add),
+                            hir::BinaryOperator::Sub => Instruction::BinOp(BinOp::Sub),
+                            hir::BinaryOperator::Mul => Instruction::BinOp(BinOp::Mul),
+                            hir::BinaryOperator::Div => Instruction::BinOp(BinOp::Div),
+
+                            hir::BinaryOperator::Eq => Instruction::CmpOp(CmpOp::Eq),
+                            hir::BinaryOperator::Neq => Instruction::CmpOp(CmpOp::NotEq),
+                            hir::BinaryOperator::Lt => Instruction::CmpOp(CmpOp::Lt),
+                            hir::BinaryOperator::LtEq => Instruction::CmpOp(CmpOp::LtEq),
+                            hir::BinaryOperator::Gt => Instruction::CmpOp(CmpOp::Gt),
+                            hir::BinaryOperator::GtEq => Instruction::CmpOp(CmpOp::GtEq),
+
+                            hir::BinaryOperator::And | hir::BinaryOperator::Or => unreachable!(
+                                "compiler bug: logical binary operators must be handled before arithmetic and comparison operators"
+                            ),
+                        });
+                    }
+                }
+            }
+
+            hir::Expression::UnaryOperation { operator, expr, .. } => {
+                self.compile_expression(expr);
+
+                self.emit(match operator {
+                    hir::UnaryOperator::Not => Instruction::UnaryOp(UnaryOp::Not),
+                    hir::UnaryOperator::Neg => Instruction::UnaryOp(UnaryOp::Neg),
+                });
+            }
         }
     }
 
@@ -1341,14 +1399,14 @@ mod tests {
         assert_compiles(Program {
             source: r#"
                 fn DeclareMutableInFunction(x: int) -> int {
-                
+
                     let mut y = 3;
-                
+
                     y = 5;
-                
+
                     y
                 }
-                
+
                 fn MutableInArg(mut x: int) -> int {
                     x = 3;
                     x
