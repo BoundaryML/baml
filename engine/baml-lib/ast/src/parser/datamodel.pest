@@ -119,7 +119,7 @@ expression =  {
     ~ (infix_operator ~ prefix_operator* ~ primary_expression ~ postfix_operator*)*
 }
 
-postfix_operator = { array_accessor | field_accessor }
+postfix_operator = _{ array_accessor | field_accessor }
 infix_operator = _{ AND | OR | EQ | NEQ | LTEQ | GTEQ | LT | GT | ADD | SUB | MUL | DIV }
 prefix_operator = _{ NOT | NEG }
 
