@@ -265,6 +265,7 @@ impl AwsClient {
                 default_role: properties.default_role(),
                 allowed_roles: properties.allowed_roles(),
                 options: properties.client_options(),
+                remap_role: properties.remap_role(),
             },
             features: ModelFeatures {
                 chat: true,
@@ -292,6 +293,7 @@ impl AwsClient {
                 default_role: properties.default_role(),
                 allowed_roles: properties.allowed_roles(),
                 options: properties.client_options(),
+                remap_role: properties.remap_role(),
             },
             features: ModelFeatures {
                 chat: true,

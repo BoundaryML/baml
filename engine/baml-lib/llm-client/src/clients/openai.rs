@@ -110,6 +110,10 @@ impl ResolvedOpenAI {
             self.allowed_roles().remove(0)
         })
     }
+
+    pub fn remap_role(&self) -> std::collections::HashMap<String, String> {
+        self.role_selection.remap().unwrap_or_default()
+    }
 }
 
 impl<Meta: Clone> UnresolvedOpenAI<Meta> {

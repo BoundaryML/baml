@@ -16,7 +16,12 @@ export async function loadProject(
     if (exampleProject) {
       data = exampleProject;
     } else {
+      // Try to load a shared URL project first
       data = await loadUrl(id);
+      // If not found, try loading from docs-based examples (public/_docs/{id}/baml_src)
+      if (!data) {
+        data = await loadDocsProject(id);
+      }
     }
   } else {
     const exampleProject = projectGroups.allProjects[0];
@@ -117,6 +122,35 @@ const getProjectFiles = async (projectPath: string): Promise<EditorFile[]> => {
     error: f.error ?? null,
   }));
 };
+
+// Attempts to load a project from the docs examples at public/_docs/{projectId}/baml_src
+async function loadDocsProject(projectId: string): Promise<BAMLProject | undefined> {
+  const docsProjectRoot = path.join(process.cwd(), 'public', '_docs', projectId, 'baml_src');
+  try {
+    const stat = await fs.stat(docsProjectRoot);
+    if (!stat.isDirectory()) {
+      return undefined;
+    }
+  } catch {
+    // Not found
+    return undefined;
+  }
+
+  const files = await getAllFiles(docsProjectRoot);
+  if (files.length === 0) {
+    return undefined;
+  }
+  return {
+    id: projectId,
+    name: projectId,
+    description: '',
+    files: files.map((f) => ({
+      path: f.path.replace(docsProjectRoot, ''),
+      content: f.content ?? '',
+      error: f.error ?? null,
+    })),
+  };
+}
 
 export type BamlProjectsGroupings = {
   allProjects: BAMLProject[];

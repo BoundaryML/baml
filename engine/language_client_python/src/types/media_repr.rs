@@ -67,9 +67,9 @@ impl TryInto<UserFacingBamlMedia> for &BamlMedia {
 
 /// This function is used for Pydantic compatibility in three ways:
 ///
-///   - allows constructing Pydantic models containing a BamlImagePy instance
-///   - allows FastAPI requests to deserialize BamlImagePy instances in JSON format
-///   - allows serializing BamlImagePy instances in JSON format
+///   - allows constructing Pydantic models containing a BAML media instance
+///   - allows FastAPI requests to deserialize BAML media instances in JSON format
+///   - allows serializing BAML media instances in JSON format
 ///
 /// Ideally this belongs in baml_py.internal_monkeypatch, so that we can get
 /// ruff-based type checking, but this depends on the pydantic libraries, so we
@@ -89,60 +89,58 @@ pub fn __get_pydantic_core_schema__(
             r#"
 from pydantic_core import core_schema, SchemaValidator
 
-def deserialize(data):
-    from baml_py.baml_py import BamlImagePy
-    if isinstance(data, BamlImagePy):
+def _union_schema():
+    return core_schema.union_schema([
+        core_schema.model_fields_schema({
+            'url': core_schema.model_field(core_schema.str_schema()),
+            'media_type': core_schema.model_field(
+                core_schema.with_default_schema(
+                    core_schema.union_schema([
+                        core_schema.str_schema(),
+                        core_schema.none_schema(),
+                    ]),
+                    default=None,
+                ),
+            ),
+        }),
+        core_schema.model_fields_schema({
+            'base64': core_schema.model_field(core_schema.str_schema()),
+            'media_type': core_schema.model_field(
+                core_schema.with_default_schema(
+                    core_schema.union_schema([
+                        core_schema.str_schema(),
+                        core_schema.none_schema(),
+                    ]),
+                    default=None,
+                ),
+            ),
+        }),
+    ])
+
+def deserialize(data, cls):
+    if isinstance(data, cls):
         return data
     else:
-        SchemaValidator(
-            core_schema.union_schema([
-                core_schema.model_fields_schema({
-                    'url': core_schema.model_field(core_schema.str_schema()),
-                    'media_type': core_schema.model_field(
-                        core_schema.with_default_schema(
-                            core_schema.union_schema([
-                                core_schema.str_schema(),
-                                core_schema.none_schema(),
-                            ]),
-                            default=None,
-                        ),
-                    ),
-                }),
-                core_schema.model_fields_schema({
-                    'base64': core_schema.model_field(core_schema.str_schema()),
-                    'media_type': core_schema.model_field(
-                        core_schema.with_default_schema(
-                            core_schema.union_schema([
-                                core_schema.str_schema(),
-                                core_schema.none_schema(),
-                            ]),
-                            default=None,
-                        ),
-                    ),
-                }),
-            ])
-        ).validate_python(data)
-        return BamlImagePy.baml_deserialize(data)
+        SchemaValidator(_union_schema()).validate_python(data)
+        return cls.baml_deserialize(data)
 
-def get_schema():
+def get_schema(cls):
     return core_schema.no_info_after_validator_function(
-        deserialize,
+        lambda v: deserialize(v, cls),
         core_schema.any_schema(),
         serialization=core_schema.plain_serializer_function_ser_schema(
             lambda v: v.baml_serialize(),
         )
     )
-
-ret = get_schema()
     "#
         );
-        PyModule::from_code(
+        let module = PyModule::from_code(
             py,
             code,
             c_str!(file!()),
             CString::new(crate::MODULE_NAME).unwrap().as_c_str(),
-        )?
-        .getattr("ret")?
-        .into_py_any(py)
+        )?;
+        let get_schema = module.getattr("get_schema")?;
+        get_schema.call1((_cls,))?.into_py_any(py)
     })
 }

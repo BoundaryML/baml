@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use anyhow::Result;
 use baml_derive::BamlHash;
@@ -84,6 +84,19 @@ impl ResolvedGoogleAI {
                     .first()
                     .cloned()
                     .unwrap_or_else(|| "user".to_string())
+            }
+        })
+    }
+
+    pub fn remap_role(&self) -> HashMap<String, String> {
+        self.role_selection.remap().unwrap_or_else(|| {
+            let allowed_roles = self.allowed_roles();
+            if allowed_roles.contains(&"assistant".to_string())
+                && !allowed_roles.contains(&"model".to_string())
+            {
+                HashMap::from([("assistant".to_string(), "model".to_string())])
+            } else {
+                HashMap::new()
             }
         })
     }

@@ -27,6 +27,9 @@ pub struct RenderContext_Client {
     pub provider: String,
     pub default_role: String,
     pub allowed_roles: Vec<String>,
+    // how to remap allowed roles to the ones the client expects
+    // this is done last, if not present, we use use role as is
+    pub remap_role: HashMap<String, String>,
 
     // properties of the client
     pub options: IndexMap<String, serde_json::Value>,
@@ -55,6 +58,7 @@ fn render_minijinja(
     template_string_macros: &[TemplateStringMacro],
     default_role: String,
     allowed_roles: Vec<String>,
+    remap_role: HashMap<String, String>,
 ) -> Result<RenderedPrompt, minijinja::Error> {
     let mut env = get_env();
 
@@ -258,6 +262,11 @@ fn render_minijinja(
         }
     }
 
+    chat_messages.iter_mut().for_each(|m| {
+        if let Some(remap) = remap_role.get(&m.role) {
+            m.role = remap.clone();
+        }
+    });
     Ok(RenderedPrompt::Chat(chat_messages))
 }
 
@@ -420,6 +429,7 @@ pub fn render_prompt(
     let minijinja_args: minijinja::Value = args.clone().to_minijinja_value(ir, &eval_ctx);
     let default_role = ctx.client.default_role.clone();
     let allowed_roles = ctx.client.allowed_roles.clone();
+    let remap_role = ctx.client.remap_role.clone();
     let rendered = render_minijinja(
         template,
         &minijinja_args,
@@ -427,6 +437,7 @@ pub fn render_prompt(
         template_string_macros,
         default_role,
         allowed_roles,
+        remap_role,
     );
 
     match rendered {
@@ -517,6 +528,7 @@ mod render_tests {
                     provider: "openai".to_string(),
                     default_role: "system".to_string(),
                     allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
                     options: IndexMap::new(),
                 },
                 output_format: OutputFormatContent::new_string(),
@@ -579,6 +591,7 @@ mod render_tests {
                     provider: "openai".to_string(),
                     default_role: "system".to_string(),
                     allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
                     options: IndexMap::new(),
                 },
                 output_format: OutputFormatContent::new_string(),
@@ -639,6 +652,7 @@ mod render_tests {
                     provider: "openai".to_string(),
                     default_role: "system".to_string(),
                     allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
                     options: IndexMap::new(),
                 },
                 output_format: OutputFormatContent::new_string(),
@@ -708,6 +722,7 @@ mod render_tests {
                     provider: "openai".to_string(),
                     default_role: "system".to_string(),
                     allowed_roles: vec!["system".to_string(), "john doe".to_string()],
+                    remap_role: HashMap::new(),
                     options: IndexMap::new(),
                 },
                 output_format: OutputFormatContent::new_string(),
@@ -787,6 +802,7 @@ mod render_tests {
                     provider: "openai".to_string(),
                     default_role: "system".to_string(),
                     allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
                     options: IndexMap::new(),
                 },
                 output_format: OutputFormatContent::new_string(),
@@ -839,6 +855,7 @@ mod render_tests {
                     provider: "openai".to_string(),
                     default_role: "system".to_string(),
                     allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
                     options: IndexMap::new(),
                 },
                 output_format: OutputFormatContent::new_string(),
@@ -880,6 +897,7 @@ mod render_tests {
                     provider: "openai".to_string(),
                     default_role: "system".to_string(),
                     allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
                     options: IndexMap::new(),
                 },
                 output_format: OutputFormatContent::new_string(),
@@ -921,6 +939,7 @@ mod render_tests {
                     provider: "openai".to_string(),
                     default_role: "system".to_string(),
                     allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
                     options: IndexMap::new(),
                 },
                 output_format: OutputFormatContent::new_string(),
@@ -962,6 +981,7 @@ mod render_tests {
                     provider: "openai".to_string(),
                     default_role: "system".to_string(),
                     allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
                     options: IndexMap::new(),
                 },
                 output_format: OutputFormatContent::new_string(),
@@ -1025,6 +1045,7 @@ mod render_tests {
                     provider: "openai".to_string(),
                     default_role: "system".to_string(),
                     allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
                     options: IndexMap::new(),
                 },
                 output_format: OutputFormatContent::new_string(),
@@ -1086,6 +1107,7 @@ mod render_tests {
                     provider: "openai".to_string(),
                     default_role: "system".to_string(),
                     allowed_roles: vec!["system".to_string(), "john doe".to_string()],
+                    remap_role: HashMap::new(),
                     options: IndexMap::new(),
                 },
                 output_format: OutputFormatContent::new_string(),
@@ -1171,6 +1193,7 @@ mod render_tests {
                     provider: "openai".to_string(),
                     default_role: "system".to_string(),
                     allowed_roles: vec!["system".to_string(), "user".to_string()],
+                    remap_role: HashMap::new(),
                     options: IndexMap::new(),
                 },
                 output_format: OutputFormatContent::new_string(),
@@ -1250,6 +1273,7 @@ mod render_tests {
                     provider: "openai".to_string(),
                     default_role: "system".to_string(),
                     allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
                     options: IndexMap::new(),
                 },
                 output_format: OutputFormatContent::new_string(),
@@ -1306,6 +1330,7 @@ mod render_tests {
                     provider: "openai".to_string(),
                     default_role: "system".to_string(),
                     allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
                     options: IndexMap::new(),
                 },
                 output_format: OutputFormatContent::new_string(),
@@ -1358,6 +1383,7 @@ mod render_tests {
                     provider: "openai".to_string(),
                     default_role: "system".to_string(),
                     allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
                     options: IndexMap::new(),
                 },
                 output_format: OutputFormatContent::new_string(),
@@ -1406,6 +1432,7 @@ mod render_tests {
                     provider: "openai".to_string(),
                     default_role: "system".to_string(),
                     allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
                     options: IndexMap::new(),
                 },
                 output_format: OutputFormatContent::new_string(),
@@ -1427,6 +1454,7 @@ mod render_tests {
                     provider: "openai".to_string(),
                     default_role: "system".to_string(),
                     allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
                     options: IndexMap::new(),
                 },
                 output_format: OutputFormatContent::new_string(),
@@ -1471,6 +1499,7 @@ mod render_tests {
                     provider: "openai".to_string(),
                     default_role: "system".to_string(),
                     allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
                     options: IndexMap::new(),
                 },
                 output_format: OutputFormatContent::new_string(),
@@ -1492,6 +1521,7 @@ mod render_tests {
                     provider: "openai".to_string(),
                     default_role: "system".to_string(),
                     allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
                     options: IndexMap::new(),
                 },
                 output_format: OutputFormatContent::new_string(),
@@ -1536,6 +1566,7 @@ mod render_tests {
                     provider: "openai".to_string(),
                     default_role: "system".to_string(),
                     allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
                     options: IndexMap::new(),
                 },
                 output_format: OutputFormatContent::new_string(),
@@ -1611,6 +1642,7 @@ mod render_tests {
                     provider: "openai".to_string(),
                     default_role: "system".to_string(),
                     allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
                     options: IndexMap::new(),
                 },
                 output_format: OutputFormatContent::new_string(),
@@ -1706,6 +1738,7 @@ mod render_tests {
                     provider: "openai".to_string(),
                     default_role: "system".to_string(),
                     allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
                     options: IndexMap::new(),
                 },
                 output_format: OutputFormatContent::new_string(),
@@ -1813,6 +1846,7 @@ mod render_tests {
                     provider: "openai".to_string(),
                     default_role: "system".to_string(),
                     allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
                     options: IndexMap::new(),
                 },
                 output_format: OutputFormatContent::new_string(),
@@ -1891,6 +1925,7 @@ mod render_tests {
                     provider: "openai".to_string(),
                     default_role: "system".to_string(),
                     allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
                     options: IndexMap::new(),
                 },
                 output_format: OutputFormatContent::new_string(),
@@ -1952,6 +1987,7 @@ mod render_tests {
                     provider: "openai".to_string(),
                     default_role: "system".to_string(),
                     allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
                     options: IndexMap::new(),
                 },
                 output_format: OutputFormatContent::new_string(),
@@ -2058,6 +2094,7 @@ mod render_tests {
                     provider: "openai".to_string(),
                     default_role: "system".to_string(),
                     allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
                     options: IndexMap::new(),
                 },
                 output_format: OutputFormatContent::new_string(),
@@ -2140,6 +2177,7 @@ mod render_tests {
                     provider: "openai".to_string(),
                     default_role: "system".to_string(),
                     allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
                     options: IndexMap::new(),
                 },
                 output_format: OutputFormatContent::new_string(),
@@ -2148,6 +2186,7 @@ mod render_tests {
             &[],
             "user".to_string(),
             vec!["user".to_string(), "system".to_string()],
+            HashMap::new(),
         )
         .expect("Rendering should succeed");
         match result {
@@ -2190,6 +2229,7 @@ mod render_tests {
                 provider: "openai".to_string(),
                 default_role: "system".to_string(),
                 allowed_roles: vec!["system".to_string()],
+                remap_role: HashMap::new(),
                 options: IndexMap::new(),
             },
             output_format: OutputFormatContent::new_string(),
@@ -2224,6 +2264,7 @@ mod render_tests {
                     provider: "openai".to_string(),
                     default_role: "system".to_string(),
                     allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
                     options: IndexMap::new(),
                 },
                 output_format: OutputFormatContent::new_string(),
@@ -2232,6 +2273,7 @@ mod render_tests {
             &[],
             "user".to_string(),
             vec!["user".to_string(), "system".to_string()],
+            HashMap::new(),
         )
         .expect("Rendering should succeed");
         match result {
@@ -2255,6 +2297,7 @@ mod render_tests {
                     provider: "openai".to_string(),
                     default_role: "system".to_string(),
                     allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
                     options: IndexMap::new(),
                 },
                 output_format: OutputFormatContent::new_string(),
@@ -2263,6 +2306,7 @@ mod render_tests {
             &[],
             "user".to_string(),
             vec!["user".to_string(), "system".to_string()],
+            HashMap::new(),
         )
         .expect("Rendering should succeed");
         match result {
@@ -2303,6 +2347,7 @@ mod render_tests {
                 provider: "openai".to_string(),
                 default_role: "system".to_string(),
                 allowed_roles: vec!["system".to_string()],
+                remap_role: HashMap::new(),
                 options: IndexMap::new(),
             },
             output_format: OutputFormatContent::new_string(),
@@ -2391,6 +2436,7 @@ mod render_tests {
                 provider: "openai".to_string(),
                 default_role: "system".to_string(),
                 allowed_roles: vec!["system".to_string()],
+                remap_role: HashMap::new(),
                 options: IndexMap::new(),
             },
             output_format: OutputFormatContent::new_string(),
@@ -2439,6 +2485,7 @@ mod render_tests {
                 provider: "openai".to_string(),
                 default_role: "system".to_string(),
                 allowed_roles: vec!["system".to_string()],
+                remap_role: HashMap::new(),
                 options: IndexMap::new(),
             },
             output_format: OutputFormatContent::new_string(),
@@ -2515,6 +2562,7 @@ mod render_tests {
                 provider: "openai".to_string(),
                 default_role: "system".to_string(),
                 allowed_roles: vec!["system".to_string()],
+                remap_role: HashMap::new(),
                 options: IndexMap::new(),
             },
             output_format: OutputFormatContent::new_string(),
@@ -2544,5 +2592,286 @@ mod render_tests {
             }
             _ => panic!("Expected Completion"),
         }
+    }
+
+    #[test]
+    fn test_remap_role_basic() -> anyhow::Result<()> {
+        setup_logging();
+
+        let args = BamlValue::Map(BamlMap::from([(
+            "subject".to_string(),
+            BamlValue::String("test".to_string()),
+        )]));
+
+        let ir = make_test_ir("class C {}")?;
+
+        let mut remap_role = HashMap::new();
+        remap_role.insert("user".to_string(), "human".to_string());
+        remap_role.insert("assistant".to_string(), "ai".to_string());
+
+        let rendered = render_prompt(
+            r#"
+                {{ _.chat("user") }}
+                Hello there!
+                
+                {{ _.chat("assistant") }}
+                Hi back!
+                
+                {{ _.chat("system") }}
+                System message here.
+            "#,
+            &args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "claude".to_string(),
+                    provider: "anthropic".to_string(),
+                    default_role: "system".to_string(),
+                    allowed_roles: vec![
+                        "user".to_string(),
+                        "assistant".to_string(),
+                        "system".to_string(),
+                    ],
+                    remap_role,
+                    options: IndexMap::new(),
+                },
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::new(),
+            },
+            &[],
+            &ir,
+            &HashMap::new(),
+        )?;
+
+        match rendered {
+            RenderedPrompt::Chat(messages) => {
+                assert_eq!(messages.len(), 3);
+                assert_eq!(messages[0].role, "human"); // user -> human
+                assert_eq!(messages[1].role, "ai"); // assistant -> ai
+                assert_eq!(messages[2].role, "system"); // system unchanged (not in remap)
+            }
+            _ => panic!("Expected Chat prompt"),
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_remap_role_with_default_role() -> anyhow::Result<()> {
+        setup_logging();
+
+        let args = BamlValue::Map(BamlMap::from([(
+            "subject".to_string(),
+            BamlValue::String("test".to_string()),
+        )]));
+
+        let ir = make_test_ir("class C {}")?;
+
+        let mut remap_role = HashMap::new();
+        remap_role.insert("system".to_string(), "instructions".to_string());
+
+        let rendered = render_prompt(
+            r#"
+                {{ _.chat("unknown_role") }}
+                This role is not in allowed_roles, so it should use default_role
+            "#,
+            &args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "claude".to_string(),
+                    provider: "anthropic".to_string(),
+                    default_role: "system".to_string(),
+                    allowed_roles: vec!["user".to_string(), "system".to_string()], // unknown_role not in allowed_roles
+                    remap_role,
+                    options: IndexMap::new(),
+                },
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::new(),
+            },
+            &[],
+            &ir,
+            &HashMap::new(),
+        )?;
+
+        match rendered {
+            RenderedPrompt::Chat(messages) => {
+                assert_eq!(messages.len(), 1);
+                // Should fall back to default_role (system) and then be remapped to "instructions"
+                assert_eq!(messages[0].role, "instructions");
+            }
+            _ => panic!("Expected Chat prompt"),
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_remap_role_with_complex_template() -> anyhow::Result<()> {
+        setup_logging();
+
+        let args = BamlValue::Map(BamlMap::from([
+            (
+                "user_name".to_string(),
+                BamlValue::String("Alice".to_string()),
+            ),
+            (
+                "topic".to_string(),
+                BamlValue::String("weather".to_string()),
+            ),
+        ]));
+
+        let ir = make_test_ir("class C {}")?;
+
+        let mut remap_role = HashMap::new();
+        remap_role.insert("user".to_string(), "customer".to_string());
+        remap_role.insert("assistant".to_string(), "support_agent".to_string());
+        remap_role.insert("system".to_string(), "context".to_string());
+
+        let rendered = render_prompt(
+            r#"
+                {{ _.chat("system") }}
+                You are a helpful assistant discussing {{ topic }}.
+                
+                {{ _.chat("user") }}
+                Hi, I'm {{ user_name }}. Can you tell me about {{ topic }}?
+                
+                {{ _.chat("assistant") }}
+                Hello {{ user_name }}! I'd be happy to discuss {{ topic }} with you.
+            "#,
+            &args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "claude".to_string(),
+                    provider: "anthropic".to_string(),
+                    default_role: "system".to_string(),
+                    allowed_roles: vec![
+                        "system".to_string(),
+                        "user".to_string(),
+                        "assistant".to_string(),
+                    ],
+                    remap_role,
+                    options: IndexMap::new(),
+                },
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::new(),
+            },
+            &[],
+            &ir,
+            &HashMap::new(),
+        )?;
+
+        match rendered {
+            RenderedPrompt::Chat(messages) => {
+                assert_eq!(messages.len(), 3);
+                assert_eq!(messages[0].role, "context"); // system -> context
+                assert_eq!(messages[1].role, "customer"); // user -> customer
+                assert_eq!(messages[2].role, "support_agent"); // assistant -> support_agent
+
+                // Check that content is properly rendered too
+                assert!(messages[0].parts[0].to_string().contains("weather"));
+                assert!(messages[1].parts[0].to_string().contains("Alice"));
+                assert!(messages[2].parts[0].to_string().contains("Alice"));
+            }
+            _ => panic!("Expected Chat prompt"),
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_remap_role_with_duplicate_role() -> anyhow::Result<()> {
+        setup_logging();
+
+        let args = BamlValue::Map(BamlMap::from([(
+            "subject".to_string(),
+            BamlValue::String("test".to_string()),
+        )]));
+
+        let ir = make_test_ir("class C {}")?;
+
+        let mut remap_role = HashMap::new();
+        remap_role.insert("user".to_string(), "participant".to_string());
+
+        let rendered = render_prompt(
+            r#"
+                {{ _.chat("user") }}
+                First message
+                
+                {{ _.chat("user", __baml_allow_dupe_role__=true) }}
+                Second message from same role
+            "#,
+            &args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "claude".to_string(),
+                    provider: "anthropic".to_string(),
+                    default_role: "system".to_string(),
+                    allowed_roles: vec!["user".to_string()],
+                    remap_role,
+                    options: IndexMap::new(),
+                },
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::new(),
+            },
+            &[],
+            &ir,
+            &HashMap::new(),
+        )?;
+
+        match rendered {
+            RenderedPrompt::Chat(messages) => {
+                assert_eq!(messages.len(), 2);
+                assert_eq!(messages[0].role, "participant"); // user -> participant
+                assert_eq!(messages[1].role, "participant"); // user -> participant
+                assert!(!messages[0].allow_duplicate_role);
+                assert!(messages[1].allow_duplicate_role);
+            }
+            _ => panic!("Expected Chat prompt"),
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_remap_role_completion_prompt_unchanged() -> anyhow::Result<()> {
+        setup_logging();
+
+        let args = BamlValue::Map(BamlMap::from([(
+            "subject".to_string(),
+            BamlValue::String("test".to_string()),
+        )]));
+
+        let ir = make_test_ir("class C {}")?;
+
+        let mut remap_role = HashMap::new();
+        remap_role.insert("user".to_string(), "human".to_string());
+
+        let rendered = render_prompt(
+            "This is a completion prompt about {{ subject }}",
+            &args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "claude".to_string(),
+                    provider: "anthropic".to_string(),
+                    default_role: "system".to_string(),
+                    allowed_roles: vec!["user".to_string()],
+                    remap_role,
+                    options: IndexMap::new(),
+                },
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::new(),
+            },
+            &[],
+            &ir,
+            &HashMap::new(),
+        )?;
+
+        match rendered {
+            RenderedPrompt::Completion(content) => {
+                assert_eq!(content, "This is a completion prompt about test");
+            }
+            _ => panic!("Expected Completion prompt"),
+        }
+
+        Ok(())
     }
 }
