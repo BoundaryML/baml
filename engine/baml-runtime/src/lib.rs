@@ -319,6 +319,9 @@ impl BamlRuntime {
         let tags: HashMap<String, BamlValue> = [(
             "baml.language".to_string(),
             BamlValue::String("wasm".to_string()),
+        ), (
+            "baml.version".to_string(),
+            BamlValue::String(env!("CARGO_PKG_VERSION").to_string()),
         )]
         .into_iter()
         .collect();
