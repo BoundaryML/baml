@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use baml_types::{BamlMap, BamlValueWithMeta};
-use internal_baml_diagnostics::{DatamodelError, Diagnostics};
+use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Diagnostics, Span};
 
 use crate::{
     hir::{self, Hir, Type},
@@ -74,7 +74,7 @@ pub fn typecheck(hir: &Hir, diagnostics: &mut Diagnostics) -> THir<ExprMetadata>
                 name.clone(),
                 VarInfo {
                     ty: inferred_type,
-                    is_mutable: false,
+                    if_mutable: None,
                 },
             );
         }
@@ -91,7 +91,9 @@ pub fn typecheck(hir: &Hir, diagnostics: &mut Diagnostics) -> THir<ExprMetadata>
                 param.name.clone(),
                 VarInfo {
                     ty: param.r#type.clone(),
-                    is_mutable: param.is_mutable,
+                    if_mutable: param.is_mutable.then(|| MutableVarInfo {
+                        ty_infer_span: Some(param.span.clone()),
+                    }),
                 },
             );
         }
@@ -126,9 +128,15 @@ pub fn typecheck(hir: &Hir, diagnostics: &mut Diagnostics) -> THir<ExprMetadata>
 }
 
 #[derive(Clone, Debug)]
+pub struct MutableVarInfo {
+    /// If `ty` is not a placeholder, the span of the statement that made the inference.
+    pub ty_infer_span: Option<Span>,
+}
+
+#[derive(Clone, Debug)]
 pub struct VarInfo {
     pub ty: Type,
-    pub is_mutable: bool,
+    pub if_mutable: Option<MutableVarInfo>,
 }
 
 #[derive(Clone, Debug)]
@@ -143,18 +151,21 @@ pub struct TypeContext {
 impl TypeContext {
     pub fn new() -> Self {
         let mut vars = BamlMap::new();
+
+        // TODO: convert true/false into symbols (no infer span), ensure that they are reachable
+
         vars.insert(
             "true".to_string(),
             VarInfo {
                 ty: Type::Bool(hir::TypeMeta::default()),
-                is_mutable: false,
+                if_mutable: None,
             },
         );
         vars.insert(
             "false".to_string(),
             VarInfo {
                 ty: Type::Bool(hir::TypeMeta::default()),
-                is_mutable: false,
+                if_mutable: None,
             },
         );
         Self {
@@ -168,10 +179,6 @@ impl TypeContext {
             .get(name)
             .map(|v| &v.ty)
             .or_else(|| self.symbols.get(name))
-    }
-
-    pub fn is_mutable(&self, name: &str) -> Option<bool> {
-        self.vars.get(name).map(|v| v.is_mutable)
     }
 
     pub fn infer_type(&mut self, expr: &hir::Expression) -> Option<Type> {
@@ -282,7 +289,7 @@ fn typecheck_statement(
                     name.clone(),
                     VarInfo {
                         ty: inferred_type,
-                        is_mutable: false,
+                        if_mutable: None,
                     },
                 );
             } else {
@@ -292,7 +299,7 @@ fn typecheck_statement(
                     name.clone(),
                     VarInfo {
                         ty: hir::TypeM::Int(hir::TypeMeta::default()),
-                        is_mutable: false,
+                        if_mutable: None,
                     },
                 );
             }
@@ -324,7 +331,9 @@ fn typecheck_statement(
                 name.clone(),
                 VarInfo {
                     ty: hir::TypeM::Int(hir::TypeMeta::default()),
-                    is_mutable: true,
+                    if_mutable: Some(MutableVarInfo {
+                        ty_infer_span: None,
+                    }),
                 },
             );
             Some(thir::Statement::Declare {
@@ -333,25 +342,51 @@ fn typecheck_statement(
             })
         }
         hir::Statement::Assign { name, value } => {
-            // Mutability check: only mutable variables can be assigned
-            match context.is_mutable(name) {
-                Some(true) => {}
-                Some(false) => diagnostics.push_error(DatamodelError::new_validation_error(
-                    &format!("Cannot assign to immutable variable {}", name),
-                    value.span(),
-                )),
-                None => diagnostics.push_error(DatamodelError::new_validation_error(
-                    &format!("Unknown variable {}", name),
-                    value.span(),
-                )),
-            }
             let typed_value = typecheck_expression(value, context, diagnostics);
-            // Update the variable's type in the context if known
-            if let Some(var_info) = context.vars.get_mut(name) {
-                if let Some(inferred_type) = typed_value.meta().1.clone() {
-                    var_info.ty = inferred_type;
+
+            // validate/update type.
+            match context.vars.get_mut(name) {
+                Some(info) => match info.if_mutable.as_mut() {
+                    Some(mut_info) => {
+                        if let Some(inferred_type) = typed_value.meta().1.as_ref() {
+                            if let Some(infer_span) = mut_info.ty_infer_span.as_ref() {
+                                // known type - typecheck against it.
+                                if !info.ty.can_be_assigned(inferred_type) {
+                                    diagnostics.push_error(DatamodelError::new_validation_error(
+                                        &format!(
+                                            "Cannot assign {} to {}",
+                                            inferred_type.name_for_user(),
+                                            info.ty.name_for_user()
+                                        ),
+                                        value.span(),
+                                    ));
+
+                                    diagnostics.push_warning(DatamodelWarning::new(
+                                        format!("type for '{name}' was inferred here"),
+                                        infer_span.clone(),
+                                    ));
+                                }
+                            } else {
+                                // type is not known yet - use this assignment as the type.
+                                info.ty = inferred_type.clone();
+
+                                mut_info.ty_infer_span = Some(value.span())
+                            }
+                        }
+                    }
+                    None => diagnostics.push_error(DatamodelError::new_validation_error(
+                        &format!("Cannot assign to immutable variable {}", name),
+                        value.span(),
+                    )),
+                },
+                None => {
+                    diagnostics.push_error(DatamodelError::new_validation_error(
+                        &format!("Unknown variable {}", name),
+                        value.span(),
+                    ));
                 }
             }
+
             Some(thir::Statement::Assign {
                 name: name.clone(),
                 value: typed_value,
@@ -367,7 +402,9 @@ fn typecheck_statement(
                     name.clone(),
                     VarInfo {
                         ty: inferred_type,
-                        is_mutable: true,
+                        if_mutable: Some(MutableVarInfo {
+                            ty_infer_span: Some(typed_value.span().clone()),
+                        }),
                     },
                 );
             } else {
@@ -377,7 +414,9 @@ fn typecheck_statement(
                     name.clone(),
                     VarInfo {
                         ty: hir::TypeM::Int(hir::TypeMeta::default()),
-                        is_mutable: true,
+                        if_mutable: Some(MutableVarInfo {
+                            ty_infer_span: None,
+                        }),
                     },
                 );
             }
@@ -420,7 +459,7 @@ fn typecheck_statement(
                         identifier.clone(),
                         VarInfo {
                             ty: *inner_type.clone(),
-                            is_mutable: false,
+                            if_mutable: None,
                         },
                     );
                 }

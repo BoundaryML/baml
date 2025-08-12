@@ -53,7 +53,111 @@ impl<T: Default> TypeM<T> {
     }
 }
 
+impl<T> TypeM<T> {
+    pub fn name_for_user(&self) -> &'static str {
+        match self {
+            TypeM::Int(_) => "int",
+            TypeM::String(_) => "string",
+            TypeM::Float(_) => "float",
+            TypeM::Bool(_) => "bool",
+            TypeM::Null(_) => "null type",
+            TypeM::Array(type_m, _) => "array",
+            TypeM::Map(type_m, type_m1, _) => "map",
+            TypeM::ClassName(_, _) => "class",
+            TypeM::EnumName(_, _) => "enum",
+            TypeM::Union(type_ms, _) => "union",
+            TypeM::Arrow(arrow, _) => "function",
+        }
+    }
+}
+
 impl Type {
+    /// Returns true if two types are exactly equal except for their spans.
+    pub fn eq_up_to_span(&self, other: &Type) -> bool {
+        match (self, other) {
+            (TypeM::Int(a), TypeM::Int(b)) => a.eq_up_to_span(b),
+            (TypeM::Float(a), TypeM::Float(b)) => a.eq_up_to_span(b),
+            (TypeM::String(a), TypeM::String(b)) => a.eq_up_to_span(b),
+            (TypeM::Bool(a), TypeM::Bool(b)) => a.eq_up_to_span(b),
+            (TypeM::Null(a), TypeM::Null(b)) => a.eq_up_to_span(b),
+
+            (TypeM::Array(a, a_meta), TypeM::Array(b, b_meta)) => {
+                a.eq_up_to_span(b) && a_meta.eq_up_to_span(b_meta)
+            }
+
+            (TypeM::Map(a_key, a_val, a_meta), TypeM::Map(b_key, b_val, b_meta)) => {
+                a_key.eq_up_to_span(b_key)
+                    && a_val.eq_up_to_span(b_val)
+                    && a_meta.eq_up_to_span(b_meta)
+            }
+
+            (TypeM::ClassName(a, a_meta), TypeM::ClassName(b, b_meta)) => {
+                a == b && a_meta.eq_up_to_span(b_meta)
+            }
+
+            (TypeM::EnumName(a, a_meta), TypeM::EnumName(b, b_meta)) => {
+                a == b && a_meta.eq_up_to_span(b_meta)
+            }
+
+            (TypeM::Union(a_members, a_meta), TypeM::Union(b_members, b_meta)) => {
+                a_members.len() == b_members.len()
+                    && a_members
+                        .iter()
+                        .zip(b_members.iter())
+                        .all(|(a, b)| a.eq_up_to_span(b))
+                    && a_meta.eq_up_to_span(b_meta)
+            }
+
+            (TypeM::Arrow(a_fn, a_meta), TypeM::Arrow(b_fn, b_meta)) => {
+                a_fn.inputs.len() == b_fn.inputs.len()
+                    && a_fn
+                        .inputs
+                        .iter()
+                        .zip(b_fn.inputs.iter())
+                        .all(|(a, b)| a.eq_up_to_span(b))
+                    && a_fn.output.eq_up_to_span(&b_fn.output)
+                    && a_meta.eq_up_to_span(b_meta)
+            }
+
+            _ => false,
+        }
+    }
+
+    #[track_caller]
+    pub fn can_be_assigned(&self, other: &Type) -> bool {
+        // TODO: add diagnostics
+        match (self, other) {
+            (TypeM::Null(_), TypeM::Null(_))
+            | (TypeM::Bool(_), TypeM::Bool(_))
+            | (TypeM::Float(_), TypeM::Float(_))
+            | (TypeM::String(_), TypeM::String(_))
+            | (TypeM::Int(_), TypeM::Int(_)) => true,
+
+            (TypeM::Array(a, _), TypeM::Array(b, _)) => a.can_be_assigned(b),
+
+            (TypeM::Map(key_a, val_a, _), TypeM::Map(key_b, val_b, _)) => {
+                key_a.can_be_assigned(key_b) && val_a.can_be_assigned(val_b)
+            }
+
+            (TypeM::EnumName(a, _), TypeM::EnumName(b, _))
+            | (TypeM::ClassName(a, _), TypeM::ClassName(b, _)) => a == b,
+
+            (TypeM::Union(a, _), TypeM::Union(b, _)) => {
+                // there can't be any type in b that is not assignable to a.
+                b.iter()
+                    .all(|b_ty| a.iter().any(|a_ty| a_ty.can_be_assigned(b_ty)))
+            }
+            (TypeM::Union(inner, _), non_union) => {
+                inner.iter().any(|i| i.can_be_assigned(non_union))
+            }
+
+            // for functions we only want the same inputs & same outputs, otherwise an
+            // auto-cast mechanism would need to be in place.
+            (a @ TypeM::Arrow(_, _), b @ TypeM::Arrow(_, _)) => a.eq_up_to_span(b),
+
+            (_, _) => false,
+        }
+    }
     #[track_caller]
     pub fn assert_eq_up_to_span(&self, other: &Type) {
         match (self, other) {
@@ -127,6 +231,17 @@ impl TypeMeta {
     #[track_caller]
     pub fn eq_up_to_span(&self, other: &TypeMeta) -> bool {
         self.constraints == other.constraints && self.streaming_behavior == other.streaming_behavior
+    }
+
+    #[track_caller]
+    pub fn diagnose_eq_up_to_span(&self, other: &TypeMeta) -> anyhow::Result<()> {
+        if self.constraints != other.constraints {
+            return Err(anyhow::anyhow!("constraints do not match"));
+        }
+        if self.streaming_behavior != other.streaming_behavior {
+            return Err(anyhow::anyhow!("streaming behaviors do not match"));
+        }
+        Ok(())
     }
 }
 
