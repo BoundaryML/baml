@@ -867,6 +867,7 @@ impl IntermediateRepr {
         repr.classes.sort_by(|a, b| a.elem.name.cmp(&b.elem.name));
         repr.functions
             .sort_by(|a, b| a.elem.name().cmp(b.elem.name()));
+        repr.expr_fns.sort_by(|a, b| a.elem.name.cmp(&b.elem.name));
         repr.clients.sort_by(|a, b| a.elem.name.cmp(&b.elem.name));
         repr.retry_policies
             .sort_by(|a, b| a.elem.name.0.cmp(&b.elem.name.0));

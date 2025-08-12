@@ -1288,22 +1288,22 @@ class LlmResponseParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="VideoInputVertex", llm_response=llm_response, mode="request")
         return typing.cast(str, result)
 
-    def EchoWorkflow(
-        self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> str:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="EchoWorkflow", llm_response=llm_response, mode="request")
-        return typing.cast(str, result)
-
-    def ReturnOne(
+    def AssignElseIfExpr(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> int:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="ReturnOne", llm_response=llm_response, mode="request")
+        result = self.__options.merge_options(baml_options).parse_response(function_name="AssignElseIfExpr", llm_response=llm_response, mode="request")
         return typing.cast(int, result)
 
-    def ReturnNumber(
+    def BoolToIntWithIfElse(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> int:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="ReturnNumber", llm_response=llm_response, mode="request")
+        result = self.__options.merge_options(baml_options).parse_response(function_name="BoolToIntWithIfElse", llm_response=llm_response, mode="request")
+        return typing.cast(int, result)
+
+    def BoolToIntWithIfElseCallingLlm(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="BoolToIntWithIfElseCallingLlm", llm_response=llm_response, mode="request")
         return typing.cast(int, result)
 
     def CallReturnOne(
@@ -1318,16 +1318,16 @@ class LlmResponseParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="ChainedCalls", llm_response=llm_response, mode="request")
         return typing.cast(int, result)
 
-    def StoreFnCallInLocalVar(
+    def EchoWorkflow(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> int:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="StoreFnCallInLocalVar", llm_response=llm_response, mode="request")
-        return typing.cast(int, result)
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="EchoWorkflow", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
 
-    def BoolToIntWithIfElse(
+    def NormalElseIfStmt(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> int:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="BoolToIntWithIfElse", llm_response=llm_response, mode="request")
+        result = self.__options.merge_options(baml_options).parse_response(function_name="NormalElseIfStmt", llm_response=llm_response, mode="request")
         return typing.cast(int, result)
 
     def ReturnElseIfExpr(
@@ -1336,16 +1336,10 @@ class LlmResponseParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="ReturnElseIfExpr", llm_response=llm_response, mode="request")
         return typing.cast(int, result)
 
-    def AssignElseIfExpr(
+    def ReturnNumber(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> int:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="AssignElseIfExpr", llm_response=llm_response, mode="request")
-        return typing.cast(int, result)
-
-    def NormalElseIfStmt(
-        self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> int:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="NormalElseIfStmt", llm_response=llm_response, mode="request")
+        result = self.__options.merge_options(baml_options).parse_response(function_name="ReturnNumber", llm_response=llm_response, mode="request")
         return typing.cast(int, result)
 
     def ReturnNumberCallingLlm(
@@ -1354,16 +1348,22 @@ class LlmResponseParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="ReturnNumberCallingLlm", llm_response=llm_response, mode="request")
         return typing.cast(int, result)
 
+    def ReturnOne(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="ReturnOne", llm_response=llm_response, mode="request")
+        return typing.cast(int, result)
+
+    def StoreFnCallInLocalVar(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="StoreFnCallInLocalVar", llm_response=llm_response, mode="request")
+        return typing.cast(int, result)
+
     def StoreLlmCallInLocalVar(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> int:
         result = self.__options.merge_options(baml_options).parse_response(function_name="StoreLlmCallInLocalVar", llm_response=llm_response, mode="request")
-        return typing.cast(int, result)
-
-    def BoolToIntWithIfElseCallingLlm(
-        self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> int:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="BoolToIntWithIfElseCallingLlm", llm_response=llm_response, mode="request")
         return typing.cast(int, result)
 
     
@@ -2640,22 +2640,22 @@ class LlmStreamParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="VideoInputVertex", llm_response=llm_response, mode="stream")
         return typing.cast(str, result)
 
-    def EchoWorkflow(
-        self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="EchoWorkflow", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
-
-    def ReturnOne(
+    def AssignElseIfExpr(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Optional[int]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="ReturnOne", llm_response=llm_response, mode="stream")
+        result = self.__options.merge_options(baml_options).parse_response(function_name="AssignElseIfExpr", llm_response=llm_response, mode="stream")
         return typing.cast(typing.Optional[int], result)
 
-    def ReturnNumber(
+    def BoolToIntWithIfElse(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Optional[int]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="ReturnNumber", llm_response=llm_response, mode="stream")
+        result = self.__options.merge_options(baml_options).parse_response(function_name="BoolToIntWithIfElse", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[int], result)
+
+    def BoolToIntWithIfElseCallingLlm(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional[int]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="BoolToIntWithIfElseCallingLlm", llm_response=llm_response, mode="stream")
         return typing.cast(typing.Optional[int], result)
 
     def CallReturnOne(
@@ -2670,16 +2670,16 @@ class LlmStreamParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="ChainedCalls", llm_response=llm_response, mode="stream")
         return typing.cast(typing.Optional[int], result)
 
-    def StoreFnCallInLocalVar(
+    def EchoWorkflow(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[int]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="StoreFnCallInLocalVar", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[int], result)
+    ) -> typing.Optional[str]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="EchoWorkflow", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[str], result)
 
-    def BoolToIntWithIfElse(
+    def NormalElseIfStmt(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Optional[int]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="BoolToIntWithIfElse", llm_response=llm_response, mode="stream")
+        result = self.__options.merge_options(baml_options).parse_response(function_name="NormalElseIfStmt", llm_response=llm_response, mode="stream")
         return typing.cast(typing.Optional[int], result)
 
     def ReturnElseIfExpr(
@@ -2688,16 +2688,10 @@ class LlmStreamParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="ReturnElseIfExpr", llm_response=llm_response, mode="stream")
         return typing.cast(typing.Optional[int], result)
 
-    def AssignElseIfExpr(
+    def ReturnNumber(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Optional[int]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="AssignElseIfExpr", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[int], result)
-
-    def NormalElseIfStmt(
-        self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[int]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="NormalElseIfStmt", llm_response=llm_response, mode="stream")
+        result = self.__options.merge_options(baml_options).parse_response(function_name="ReturnNumber", llm_response=llm_response, mode="stream")
         return typing.cast(typing.Optional[int], result)
 
     def ReturnNumberCallingLlm(
@@ -2706,16 +2700,22 @@ class LlmStreamParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="ReturnNumberCallingLlm", llm_response=llm_response, mode="stream")
         return typing.cast(typing.Optional[int], result)
 
+    def ReturnOne(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional[int]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="ReturnOne", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[int], result)
+
+    def StoreFnCallInLocalVar(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional[int]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="StoreFnCallInLocalVar", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[int], result)
+
     def StoreLlmCallInLocalVar(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Optional[int]:
         result = self.__options.merge_options(baml_options).parse_response(function_name="StoreLlmCallInLocalVar", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[int], result)
-
-    def BoolToIntWithIfElseCallingLlm(
-        self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[int]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="BoolToIntWithIfElseCallingLlm", llm_response=llm_response, mode="stream")
         return typing.cast(typing.Optional[int], result)
 
     
