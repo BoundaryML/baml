@@ -595,6 +595,10 @@ impl Expr<ExprMetadata> {
         }
     }
 
+    pub fn span(&self) -> &Span {
+        &self.meta().0
+    }
+
     pub fn fresh_names(&self, arity: usize) -> Vec<Name> {
         let free_vars = self.free_vars();
         let mut i = 0;

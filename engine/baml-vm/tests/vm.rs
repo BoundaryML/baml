@@ -435,3 +435,37 @@ fn block_expr() -> anyhow::Result<()> {
         expected: VmExecState::Complete(Value::Int(1)),
     })
 }
+
+#[test]
+fn exec_declare_mutable_in_function() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            fn main() -> int {
+                let mut y = 3;
+                y = 5;
+                y
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(5)),
+    })
+}
+
+#[test]
+fn exec_mutable_in_arg() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            fn MutableInArg(mut x: int) -> int {
+                x = 3;
+                x
+            }
+
+            fn main() -> int {
+                let r = MutableInArg(42);
+                r
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(3)),
+    })
+}

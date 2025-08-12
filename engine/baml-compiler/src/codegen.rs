@@ -1326,4 +1326,46 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn mutable_variables() -> anyhow::Result<()> {
+        assert_compiles(Program {
+            source: r#"
+                fn DeclareMutableInFunction(x: int) -> int {
+                
+                    let mut y = 3;
+                
+                    y = 5;
+                
+                    y
+                }
+                
+                fn MutableInArg(mut x: int) -> int {
+                    x = 3;
+                    x
+                }
+            "#,
+            expected: vec![
+                (
+                    "DeclareMutableInFunction",
+                    vec![
+                        Instruction::LoadConst(0),
+                        Instruction::LoadConst(1),
+                        Instruction::StoreVar(2),
+                        Instruction::LoadVar(2),
+                        Instruction::Return,
+                    ],
+                ),
+                (
+                    "MutableInArg",
+                    vec![
+                        Instruction::LoadConst(0),
+                        Instruction::StoreVar(1),
+                        Instruction::LoadVar(1),
+                        Instruction::Return,
+                    ],
+                ),
+            ],
+        })
+    }
 }
