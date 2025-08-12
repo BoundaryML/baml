@@ -181,16 +181,14 @@ impl BamlAsyncVmRuntime {
         // compiler produced objects betweeen VMs. We know they are read only.
         let mut vm = Vm::new(self.program.clone());
 
-
         // TODO: We can't assume arg ordering here is correct, figure out why.
         let args = Vec::from_iter(expr_fn.elem.inputs().iter().map(|(name, _)| {
             let Some(param) = params.get(name) else {
                 panic!("missing parameter: {name}");
             };
 
-            let vm_value = try_vm_value_from_baml_value(&vm, param).unwrap_or_else(|e| {
-                panic!("failed to convert baml arg to vm value: {e}")
-            });
+            let vm_value = try_vm_value_from_baml_value(&vm, param)
+                .unwrap_or_else(|e| panic!("failed to convert baml arg to vm value: {e}"));
 
             vm_value
         }));

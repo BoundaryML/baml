@@ -8,8 +8,8 @@ use super::{
 use crate::{
     assert_correct_parser,
     ast::{
-        self, expr::ExprFn, App, ArgumentsList, Expression, ExpressionBlock, ForLoopStmt, LetStmt, AssignStmt,
-        Stmt, TopLevelAssignment, *,
+        self, expr::ExprFn, App, ArgumentsList, AssignStmt, Expression, ExpressionBlock,
+        ForLoopStmt, LetStmt, Stmt, TopLevelAssignment, *,
     },
     parser::{
         parse_arguments::parse_arguments_list, parse_expression::parse_expression,

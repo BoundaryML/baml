@@ -190,7 +190,12 @@ fn subst<'a>(
                 meta: meta.clone(),
             })
         }
-        Expr::BinaryOperation { left, operator, right, meta } => {
+        Expr::BinaryOperation {
+            left,
+            operator,
+            right,
+            meta,
+        } => {
             let new_left = subst(left, var_name, val, _env)?;
             let new_right = subst(right, var_name, val, _env)?;
             Ok(Expr::BinaryOperation {
@@ -200,7 +205,11 @@ fn subst<'a>(
                 meta: meta.clone(),
             })
         }
-        Expr::UnaryOperation { expr, operator, meta } => {
+        Expr::UnaryOperation {
+            expr,
+            operator,
+            meta,
+        } => {
             let new_expr = subst(expr, var_name, val, _env)?;
             Ok(Expr::UnaryOperation {
                 expr: Arc::new(new_expr),
@@ -742,14 +751,20 @@ pub async fn eval_to_value_or_llm_call<'a>(
                 let index_val = eval_to_value(env, index.as_ref()).await?;
 
                 match (base_val, index_val) {
-                    (Some(BamlValueWithMeta::List(items, _)), Some(BamlValueWithMeta::Int(idx, _))) => {
+                    (
+                        Some(BamlValueWithMeta::List(items, _)),
+                        Some(BamlValueWithMeta::Int(idx, _)),
+                    ) => {
                         if idx < 0 || idx as usize >= items.len() {
                             return Err(anyhow!("Array index out of bounds: {}", idx));
                         }
                         let val = items[idx as usize].clone();
                         return Ok(ExprEvalResult::Value {
                             value: val,
-                            field_type: meta.1.clone().unwrap_or(TypeIR::Primitive(TypeValue::Null, TypeMeta::default())),
+                            field_type: meta
+                                .1
+                                .clone()
+                                .unwrap_or(TypeIR::Primitive(TypeValue::Null, TypeMeta::default())),
                         });
                     }
                     (Some(BamlValueWithMeta::Map(map, _)), Some(index_val)) => {
@@ -762,7 +777,10 @@ pub async fn eval_to_value_or_llm_call<'a>(
                             Some(val) => {
                                 return Ok(ExprEvalResult::Value {
                                     value: val.clone(),
-                                    field_type: meta.1.clone().unwrap_or(TypeIR::Primitive(TypeValue::Null, TypeMeta::default())),
+                                    field_type: meta.1.clone().unwrap_or(TypeIR::Primitive(
+                                        TypeValue::Null,
+                                        TypeMeta::default(),
+                                    )),
                                 });
                             }
                             None => return Err(anyhow!("Map key not found: {}", key)),
@@ -775,28 +793,38 @@ pub async fn eval_to_value_or_llm_call<'a>(
                 let base_val = eval_to_value(env, base.as_ref()).await?;
 
                 match base_val {
-                    Some(BamlValueWithMeta::Class(_, fields, _)) => {
-                        match fields.get(&field) {
-                            Some(val) => {
-                                return Ok(ExprEvalResult::Value {
-                                    value: val.clone(),
-                                    field_type: meta.1.clone().unwrap_or(TypeIR::Primitive(TypeValue::Null, TypeMeta::default())),
-                                });
-                            }
-                            None => return Err(anyhow!("Field not found: {}", field)),
+                    Some(BamlValueWithMeta::Class(_, fields, _)) => match fields.get(&field) {
+                        Some(val) => {
+                            return Ok(ExprEvalResult::Value {
+                                value: val.clone(),
+                                field_type: meta.1.clone().unwrap_or(TypeIR::Primitive(
+                                    TypeValue::Null,
+                                    TypeMeta::default(),
+                                )),
+                            });
                         }
-                    }
+                        None => return Err(anyhow!("Field not found: {}", field)),
+                    },
                     _ => return Err(anyhow!("Field access requires a class type")),
                 }
             }
-            Expr::BinaryOperation { left, operator, right, meta } => {
+            Expr::BinaryOperation {
+                left,
+                operator,
+                right,
+                meta,
+            } => {
                 let left = eval_to_value(env, left.as_ref()).await?;
                 let right = eval_to_value(env, right.as_ref()).await?;
 
                 todo!("impl eval to value for binary operation");
             }
 
-            Expr::UnaryOperation { expr, operator, meta } => {
+            Expr::UnaryOperation {
+                expr,
+                operator,
+                meta,
+            } => {
                 let expr = eval_to_value(env, expr.as_ref()).await?;
 
                 todo!("impl eval to value for unary operation");

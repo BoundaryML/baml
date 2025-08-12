@@ -1,5 +1,6 @@
-use crate::hir::{Class, Enum, EnumVariant, Field, Type, TypeM, TypeMeta};
 use internal_baml_diagnostics::Span;
+
+use crate::hir::{Class, Enum, EnumVariant, Field, Type, TypeM, TypeMeta};
 
 pub mod functions {
     pub const FETCH_VALUE: &str = "std::fetch_value";
