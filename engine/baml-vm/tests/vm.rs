@@ -625,3 +625,29 @@ fn basic_lt_eq() -> anyhow::Result<()> {
         expected: VmExecState::Complete(Value::Bool(true)),
     })
 }
+
+#[test]
+fn basic_and() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            fn main() -> bool {
+                true && false
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Bool(false)),
+    })
+}
+
+#[test]
+fn basic_or() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            fn main() -> bool {
+                true || false
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Bool(true)),
+    })
+}

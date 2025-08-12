@@ -1435,4 +1435,57 @@ mod tests {
             ],
         })
     }
+
+    #[test]
+    fn basic_and() -> anyhow::Result<()> {
+        assert_compiles(Program {
+            source: r#"
+                fn ret_bool() -> bool {
+                    true
+                }
+
+                fn main() -> bool {
+                    true && ret_bool()
+                }
+            "#,
+            expected: vec![(
+                "main",
+                vec![
+                    Instruction::LoadConst(0),
+                    Instruction::JumpIfFalse(4),
+                    Instruction::Pop(1),
+                    Instruction::LoadGlobal(0),
+                    Instruction::Call(0),
+                    Instruction::Return,
+                ],
+            )],
+        })
+    }
+
+    #[test]
+    fn basic_or() -> anyhow::Result<()> {
+        assert_compiles(Program {
+            source: r#"
+                fn ret_bool() -> bool {
+                    true
+                }
+
+                fn main() -> bool {
+                    true || ret_bool()
+                }
+            "#,
+            expected: vec![(
+                "main",
+                vec![
+                    Instruction::LoadConst(0),
+                    Instruction::JumpIfFalse(2),
+                    Instruction::Jump(4),
+                    Instruction::Pop(1),
+                    Instruction::LoadGlobal(0),
+                    Instruction::Call(0),
+                    Instruction::Return,
+                ],
+            )],
+        })
+    }
 }
