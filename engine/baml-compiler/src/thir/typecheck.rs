@@ -370,7 +370,7 @@ fn typecheck_statement(
                                 // type is not known yet - use this assignment as the type.
                                 info.ty = inferred_type.clone();
 
-                                mut_info.ty_infer_span = Some(value.span())
+                                mut_info.ty_infer_span = Some(value.span().clone())
                             }
                         }
                     }
