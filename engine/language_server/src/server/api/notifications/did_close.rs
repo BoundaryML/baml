@@ -44,7 +44,7 @@ impl SyncNotificationHandler for DidCloseTextDocumentHandler {
             None => {}
             Some(project) => {
                 let document_key = DocumentKey::from_url(
-                    &PathBuf::from(project.lock().unwrap().root_path()),
+                    &PathBuf::from(project.lock().root_path()),
                     &url,
                 )
                 .internal_error()?;
@@ -55,7 +55,6 @@ impl SyncNotificationHandler for DidCloseTextDocumentHandler {
                 // TODO: ideally the baml project just has a view of unsaved files directly from the Session itself, and not maintain its own state / copy of the unsaved files
                 project
                     .lock()
-                    .unwrap()
                     .baml_project
                     .remove_unsaved_file(&document_key);
             }

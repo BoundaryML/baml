@@ -44,19 +44,19 @@ pub async fn send_all_projects_to_client(
     tracing::info!("lorem ipsum send_all_projects_to_client");
     {
         let try_lock = baml_src_projects.try_lock();
-        tracing::info!("lorem ipsum try_lock ok?: {:?}", try_lock.is_ok());
+        tracing::info!("lorem ipsum try_lock ok?: {:?}", try_lock.is_some());
         match try_lock {
-            Ok(lock) => {
+            Some(lock) => {
                 tracing::info!("try_lock succeeded");
             }
-            Err(e) => {
-                tracing::error!("lorem ipsum try_lock failed2: {:?}", e);
+            None => {
+                tracing::error!("lorem ipsum try_lock failed2");
                 return;
             }
         }
     }
     let projects = {
-        let projects = baml_src_projects.lock().unwrap();
+        let projects = baml_src_projects.lock();
         tracing::info!("lorem ipsum projects while locked: {:?}", projects.len());
         projects
             .iter()
@@ -67,15 +67,15 @@ pub async fn send_all_projects_to_client(
                 {
                     let try_lock = project.try_lock();
                     match try_lock {
-                        Ok(lock) => {
+                        Some(lock) => {
                             tracing::info!("pre-project-lock try_lock succeeded");
                         }
-                        Err(e) => {
-                            tracing::error!("pre-project-lock try_lock failed: {:?}", e);
+                        None => {
+                            tracing::error!("pre-project-lock try_lock failed");
                         }
                     }
                 }
-                let project = project.lock().unwrap();
+                let project = project.lock();
                 tracing::info!("lorem ipsum post-project-try;lock: {:?}", root_path);
                 let files = project.baml_project.files.clone();
                 let root_path = root_path.to_string_lossy().to_string();

@@ -70,7 +70,8 @@ impl SyncNotificationHandler for DidOpenTextDocumentHandler {
 
         tracing::info!("before get_or_create_project");
         if let Some(project) = session.get_or_create_project(&file_path) {
-            if let Ok(version) = project.lock().unwrap().get_common_generator_version() {
+            let locked = project.lock();
+            if let Ok(version) = locked.get_common_generator_version() {
                 notifier
                     .0
                     .send(lsp_server::Message::Notification(
@@ -78,12 +79,7 @@ impl SyncNotificationHandler for DidOpenTextDocumentHandler {
                             "baml_src_generator_version".to_string(),
                             BamlSrcVersionPayload {
                                 version,
-                                root_path: project
-                                    .lock()
-                                    .unwrap()
-                                    .root_path()
-                                    .to_string_lossy()
-                                    .to_string(),
+                                root_path: locked.root_path().to_string_lossy().to_string(),
                             },
                         ),
                     ))

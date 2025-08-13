@@ -50,16 +50,15 @@ impl SyncRequestHandler for GotoDefinition {
             .expect("Ensured that a project db exists");
         project
             .lock()
-            .unwrap()
             .update_runtime(Some(notifier))
             .internal_error()?;
 
         let document_key = DocumentKey::from_url(
-            &project.lock().unwrap().baml_project.root_dir_name,
+            &project.lock().baml_project.root_dir_name,
             &params.text_document_position_params.text_document.uri,
         )
         .internal_error()?;
-        let guard = project.lock().unwrap();
+        let guard = project.lock();
         let doc = guard
             .baml_project
             .files

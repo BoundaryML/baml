@@ -44,12 +44,11 @@ impl SyncRequestHandler for CodeActionHandler {
             .get_or_create_project(&path)
             .expect("Ensured that a project db exists");
         let document_key =
-            DocumentKey::from_url(project.lock().unwrap().root_path(), &uri).internal_error()?;
+            DocumentKey::from_url(project.lock().root_path(), &uri).internal_error()?;
 
         // Get the first function from the current file if available
         let function_name = project
             .lock()
-            .unwrap()
             .list_functions()
             .unwrap_or_default()
             .into_iter()

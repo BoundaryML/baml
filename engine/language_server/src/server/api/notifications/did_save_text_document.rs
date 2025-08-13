@@ -48,7 +48,7 @@ impl super::SyncNotificationHandler for DidSaveTextDocument {
             .get_or_create_project(&path)
             .expect("Ensured that a project db exists");
 
-        let version = project.lock().unwrap().get_common_generator_version();
+        let version = project.lock().get_common_generator_version();
         if let Ok(version) = version {
             let _ = notifier.0.send(lsp_server::Message::Notification(
                 lsp_server::Notification::new(
@@ -57,7 +57,6 @@ impl super::SyncNotificationHandler for DidSaveTextDocument {
                         version,
                         root_path: project
                             .lock()
-                            .unwrap()
                             .root_path()
                             .to_string_lossy()
                             .to_string(),
@@ -66,7 +65,7 @@ impl super::SyncNotificationHandler for DidSaveTextDocument {
             ));
         }
 
-        project.lock().unwrap().run_generators_without_debounce(
+        project.lock().run_generators_without_debounce(
             |message| {
                 tracing::info!("About to notify client that generator has run.");
                 notifier.notify_baml_info(&message).unwrap_or(())
@@ -105,7 +104,7 @@ impl super::BackgroundDocumentNotificationHandler for DidSaveTextDocument {
         // Note: In the background version, we need to get the project from the snapshot
         // instead of modifying the session directly
         if let Some(project) = snapshot.project() {
-            project.lock().unwrap().run_generators_without_debounce(
+            project.lock().run_generators_without_debounce(
                 |message| {
                     tracing::info!("About to notify client that generator has run.");
                     notifier.notify_baml_info(&message).unwrap_or(())

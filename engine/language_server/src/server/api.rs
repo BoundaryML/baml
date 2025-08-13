@@ -1,7 +1,9 @@
 use std::{
-    sync::{Arc, Mutex},
+    sync::Arc,
     time::{Duration, Instant},
 };
+
+use parking_lot::Mutex;
 
 use diagnostics::{file_diagnostics, project_diagnostics};
 use log::info;
@@ -80,12 +82,11 @@ pub(super) fn request<'a>(req: lsp_server::Request) -> Task<'a> {
             return Task::local(move |session, _notifier, requester, responder| {
                 let result: anyhow::Result<(serde_json::Value,)> = {
                     let mut all_functions = Vec::new();
-                    let projects = session.baml_src_projects.lock().unwrap();
+                    let projects = session.baml_src_projects.lock();
 
                     for (_, project) in projects.iter() {
                         let functions = project
                             .lock()
-                            .unwrap()
                             .baml_project
                             .list_functions()
                             .iter()
@@ -137,7 +138,7 @@ pub(super) fn request<'a>(req: lsp_server::Request) -> Task<'a> {
                     let project = session
                         .get_or_create_project(url.to_file_path().unwrap())
                         .expect("Already checked for project's existence");
-                    project.lock().unwrap().update_runtime(Some(notifier))?;
+                    project.lock().update_runtime(Some(notifier))?;
 
                     // TODO: I think we need to send ALL diagnostics for the project. Not sure how this report is different vs sending a signle diagnostic param message
                     let diagnostics = file_diagnostics(project.clone(), &url);
@@ -278,7 +279,7 @@ fn background_request_task<'a, R: traits::BackgroundDocumentRequestHandler>(
         };
         // info!(
         //     "session.projects.len(): {:?}",
-        //     session.baml_src_projects.lock().unwrap().len()
+        //     session.baml_src_projects.lock().len()
         // );
         let _db = session.get_or_create_project(&path).clone();
         if _db.is_none() {

@@ -4,9 +4,11 @@ use std::{
     collections::HashMap,
     ops::{Deref, DerefMut},
     path::{Path, PathBuf},
-    sync::{Arc, Mutex},
+    sync::Arc,
     time::Instant,
 };
+
+use parking_lot::Mutex;
 
 use anyhow::{anyhow, Context};
 use index::DocumentController;
@@ -190,7 +192,7 @@ impl Session {
         let baml_src = find_top_level_parent(path.as_ref())?;
 
         // Lock once and perform all operations within this scope
-        let mut projects = self.baml_src_projects.lock().unwrap();
+        let mut projects = self.baml_src_projects.lock();
 
         // If project exists, return it
         if let Some(project) = projects.get(&baml_src) {
@@ -212,7 +214,7 @@ impl Session {
     }
 
     pub fn print_baml_projects(&self) {
-        let projects = self.baml_src_projects.lock().unwrap();
+        let projects = self.baml_src_projects.lock();
 
         let info_string = projects
             .iter()
@@ -220,7 +222,7 @@ impl Session {
                 format!(
                     "{}: {:?}",
                     key.display(),
-                    project.lock().unwrap().root_path()
+                    project.lock().root_path()
                 )
             })
             .collect::<Vec<_>>()
@@ -237,7 +239,7 @@ impl Session {
         // tracing::info!("skipping session reload");
         // return Ok(());
         tracing::info!("Reloading session");
-        let mut baml_src_projects = self.baml_src_projects.lock().unwrap();
+        let mut baml_src_projects = self.baml_src_projects.lock();
 
         // Drop moved "baml_src" directories, otherwise the project_updates
         // code below will fail trying to read directories that no longer exist.
@@ -255,13 +257,11 @@ impl Session {
             .map(|(_project_root, project)| {
                 let files_map = project
                     .lock()
-                    .unwrap()
                     .baml_project
                     .load_files()
                     .map_err(|e| anyhow::anyhow!("Failed to load project files: {}", e))?;
                 project
                     .lock()
-                    .unwrap()
                     .update_runtime(notifier.clone())
                     .map_err(|e| {
                         tracing::error!("Failed to update runtime after reloading files: {e}");
@@ -290,11 +290,10 @@ impl Session {
         files.iter().for_each(|(file_url, file_contents)| {
             let text_document = TextDocument::new(file_contents.clone(), 0);
             let document_is_unsaved = any(
-                self.baml_src_projects.lock().unwrap().iter(),
+                self.baml_src_projects.lock().iter(),
                 |(_, project)| {
                     project
                         .lock()
-                        .unwrap()
                         .baml_project
                         .unsaved_files
                         .contains_key(file_url)
@@ -311,8 +310,8 @@ impl Session {
 
     pub fn clear_unsaved_files(&mut self) {
         tracing::info!("Clearing unsaved files");
-        for (_folder, project) in self.baml_src_projects.lock().unwrap().iter_mut() {
-            project.lock().unwrap().baml_project.unsaved_files.clear();
+        for (_folder, project) in self.baml_src_projects.lock().iter_mut() {
+            project.lock().baml_project.unsaved_files.clear();
         }
     }
 
@@ -322,12 +321,12 @@ impl Session {
         let project = self.get_or_create_project(&file_path)?;
 
         let document_key =
-            DocumentKey::from_url(&project.lock().unwrap().baml_project.root_dir_name, &url)
+            DocumentKey::from_url(&project.lock().baml_project.root_dir_name, &url)
                 .ok()?;
 
         Some(DocumentSnapshot {
             resolved_client_capabilities: self.resolved_client_capabilities.clone(),
-            document_ref: self.index.lock().unwrap().make_document_ref(document_key)?,
+            document_ref: self.index.lock().make_document_ref(document_key)?,
             position_encoding: self.position_encoding,
             session: Arc::new((*self).clone()),
         })
@@ -336,7 +335,7 @@ impl Session {
     /// Registers a text document at the provided `url`.
     /// If a document is already open here, it will be overwritten.
     pub(crate) fn open_text_document(&self, document_key: DocumentKey, document: TextDocument) {
-        let mut index = self.index.lock().unwrap();
+        let mut index = self.index.lock();
         index.open_text_document(document_key, document);
     }
 
@@ -353,11 +352,10 @@ impl Session {
                 )
             }
         };
-        for (_folder, project) in self.baml_src_projects.lock().unwrap().iter_mut() {
+        for (_folder, project) in self.baml_src_projects.lock().iter_mut() {
             let text_document = TextDocument::new(new_contents.clone(), 0);
             project
                 .lock()
-                .unwrap()
                 .baml_project
                 .unsaved_files
                 .insert(document_key.clone(), text_document);
@@ -379,7 +377,7 @@ impl Session {
         let doc_key = key;
         let start_time = Instant::now();
         let doc_contents = {
-            let mut index = self.index.lock().unwrap();
+            let mut index = self.index.lock();
             index.update_text_document(key, content_changes, new_version, position_encoding)?;
 
             let doc_controller = index
@@ -396,20 +394,17 @@ impl Session {
         let start_time = Instant::now();
         self.baml_src_projects
             .lock()
-            .unwrap()
             .iter_mut()
             .try_for_each(|(_folder, project)| {
                 let text_document = TextDocument::new(doc_contents.clone(), 0);
                 if project
                     .lock()
-                    .unwrap()
                     .baml_project
                     .files
                     .contains_key(doc_key)
                 {
                     project
                         .lock()
-                        .unwrap()
                         .baml_project
                         .unsaved_files
                         .insert(doc_key.clone(), text_document);
@@ -417,7 +412,6 @@ impl Session {
 
                     project
                         .lock()
-                        .unwrap()
                         .update_runtime(notifier.clone())
                         .map_err(|e| anyhow::anyhow!("Could not update runtime: {e}"))?;
                     let _elapsed = start_time.elapsed();
@@ -430,7 +424,7 @@ impl Session {
     /// De-registers a document, specified by its key.
     /// Calling this multiple times for the same document is a logic error.
     pub(crate) fn close_document(&self, key: &DocumentKey) -> anyhow::Result<()> {
-        let mut index = self.index.lock().unwrap();
+        let mut index = self.index.lock();
         index.close_document(key)?;
         Ok(())
     }
@@ -474,8 +468,10 @@ impl DocumentSnapshot {
 mod tests {
     use std::{
         path::PathBuf,
-        sync::{Arc, Mutex},
+        sync::Arc,
     };
+
+    use parking_lot::Mutex;
 
     use lsp_types::ClientCapabilities;
 
@@ -544,7 +540,7 @@ mod tests {
         // Verify it's the same project
         {
             let unwrapped_project = found_project.unwrap();
-            let project_guard = unwrapped_project.lock().unwrap();
+            let project_guard = unwrapped_project.lock();
             let found_root = project_guard.root_path();
             assert_eq!(
                 found_root, key2,

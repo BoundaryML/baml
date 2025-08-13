@@ -1,7 +1,9 @@
 use std::{
     borrow::Cow,
-    sync::{Arc, Mutex},
+    sync::Arc,
 };
+
+use parking_lot::Mutex;
 
 use lsp_types::{
     request::DocumentDiagnosticRequest, DocumentDiagnosticParams, DocumentDiagnosticReport,

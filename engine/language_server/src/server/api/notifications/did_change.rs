@@ -54,7 +54,7 @@ impl SyncNotificationHandler for DidChangeTextDocumentHandler {
 
         let project = project.unwrap();
         let document_key =
-            DocumentKey::from_url(project.lock().unwrap().root_path(), &url).internal_error()?;
+            DocumentKey::from_url(project.lock().root_path(), &url).internal_error()?;
 
         session
             .update_text_document(
@@ -68,7 +68,7 @@ impl SyncNotificationHandler for DidChangeTextDocumentHandler {
         // Broadcast update to playground clients
         #[cfg(feature = "playground-server")]
         if let Some(state) = &session.playground_state {
-            let project = project.lock().unwrap();
+            let project = project.lock();
             let files_map: std::collections::HashMap<String, String> = project
                 .baml_project
                 .files

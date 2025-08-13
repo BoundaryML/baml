@@ -249,6 +249,25 @@ impl Server {
             .ok();
         }));
 
+        
+        std::thread::spawn(|| {
+            tracing::info!("Starting deadlock checker watchdog");
+            loop {
+                tracing::info!("sleeping 10s to check for deadlocks");
+                std::thread::sleep(Duration::from_secs(10));
+                let cycles = parking_lot::deadlock::check_deadlock();
+                if cycles.is_empty() { continue; }
+                tracing::error!("deadlocks detected:");
+                for (i, threads) in cycles.iter().enumerate() {
+                    tracing::error!("Cycle {i}:");
+                    for t in threads {
+                        tracing::error!("  Thread {:?}", t.thread_id());
+                        tracing::error!("  Backtrace:\n{:?}", t.backtrace());
+                    }
+                }
+            }
+        });
+
         event_loop_thread(move || {
             Self::event_loop(
                 &self.connection,

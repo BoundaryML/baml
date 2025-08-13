@@ -45,7 +45,7 @@ impl SyncRequestHandler for CodeLens {
             .get_or_create_project(&path)
             .expect("Ensured that a project db exists");
         let fake_env = HashMap::new();
-        let baml_diagnostics = match project.lock().unwrap().baml_project.runtime(fake_env) {
+        let baml_diagnostics = match project.lock().baml_project.runtime(fake_env) {
             Ok(runtime) => runtime.internal().diagnostics().clone(),
             Err(err) => err,
         };
@@ -61,7 +61,7 @@ impl SyncRequestHandler for CodeLens {
             )
         };
 
-        let project_lock = project.lock().unwrap();
+        let project_lock = project.lock();
 
         let doc_matches = |span: &BamlSpan, project_lock: &Project| {
             let absolute_file = DocumentKey::from_url(project_lock.root_path(), &url);

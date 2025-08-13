@@ -25,6 +25,7 @@ internal-baml-diagnostics = { path = "../baml-lib/diagnostics" }
 internal-baml-codegen = { workspace = true }
 crossbeam = { version = "0.8.4", features = ["crossbeam-channel"] }
 ignore = { version = "0.4.22" }
+parking_lot = { version = "0.12", features = ["deadlock_detection"] }
 indexmap = { workspace = true }
 jod-thread = { version = "0.1.2" }
 lsp-server = "0.7.6"

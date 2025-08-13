@@ -15,6 +15,20 @@ use std::time::Duration;
 use tokio::net::TcpListener;
 use tower_http::services::ServeDir;
 use crate::playground2::ping_handler::ping_handler;
+use crate::playground2::websocket_rpc_handler::ws_rpc_handler;
+use crate::playground2::websocket_ws_handler::ws_handler;
+
+pub struct AppState {
+    pub broadcast_rx: broadcast::Receiver<lsp_server::Message>,
+}
+
+impl Clone for AppState {
+    fn clone(&self) -> Self {
+        Self {
+            broadcast_rx: self.broadcast_rx.resubscribe(),
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct Playground2Server {
@@ -27,10 +41,18 @@ impl Playground2Server {
         // Determine the static files directory
         let dist_dir = playground_static_assets().await?;
 
+        // Create the app state
+        let state = AppState {
+            broadcast_rx: self.broadcast_rx.resubscribe(),
+        };
+
         let app = Router::new()
             .route("/health", get(health_check))
             .route("/ping", get(ping_handler))
-            .fallback_service(ServeDir::new(dist_dir));
+            .route("/ws", get(ws_handler))
+            .route("/rpc", get(ws_rpc_handler))
+            .fallback_service(ServeDir::new(dist_dir))
+            .with_state(state);
 
         let addr = SocketAddr::from(([127, 0, 0, 1], self.port));
         

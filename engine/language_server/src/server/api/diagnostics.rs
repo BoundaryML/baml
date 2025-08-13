@@ -1,8 +1,10 @@
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
-    sync::{Arc, Mutex},
+    sync::Arc,
 };
+
+use parking_lot::Mutex;
 
 use baml_runtime::InternalRuntimeInterface;
 use internal_baml_diagnostics::{SourceFile, Span};
@@ -114,7 +116,7 @@ pub fn publish_session_lsp_diagnostics(
 pub fn project_diagnostics(
     project: Arc<Mutex<Project>>,
 ) -> HashMap<Url, Vec<lsp_types::Diagnostic>> {
-    let mut guard = project.lock().unwrap();
+    let mut guard = project.lock();
     let root_path = PathBuf::from(guard.root_path());
     let fake_env = HashMap::new();
     let baml_diagnostics = match guard.baml_project.runtime(fake_env) {
@@ -294,7 +296,7 @@ pub fn file_diagnostics(
     project: Arc<Mutex<Project>>,
     file_url: &Url,
 ) -> Vec<lsp_types::Diagnostic> {
-    let mut guard = project.lock().unwrap();
+    let mut guard = project.lock();
     let root_path = PathBuf::from(guard.root_path());
     let fake_env = HashMap::new();
     let baml_diagnostics = match guard.baml_project.runtime(fake_env) {
