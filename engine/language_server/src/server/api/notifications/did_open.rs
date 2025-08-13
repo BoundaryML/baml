@@ -72,10 +72,7 @@ impl SyncNotificationHandler for DidOpenTextDocumentHandler {
                             "baml_src_generator_version".to_string(),
                             BamlSrcVersionPayload {
                                 version,
-                                root_path: project
-                                    .root_path()
-                                    .to_string_lossy()
-                                    .to_string(),
+                                root_path: project.root_path().to_string_lossy().to_string(),
                             },
                         ),
                     ))
