@@ -25,3 +25,4 @@ function AddOne(x: int) -> int {
 // [1;94m   | [0m
 // [1;94m 1 | [0mfunction [1;91mAddOne[0m(x: int) -> int {
 // [1;94m   | [0m
+//
