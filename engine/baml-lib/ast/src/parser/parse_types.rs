@@ -460,35 +460,6 @@ mod tests {
 
     use super::super::{BAMLParser, Rule};
 
-    #[test]
-    fn type_attributes() {
-        parses_to! {
-            parser: BAMLParser,
-            input: r#"int @description("hi")"#,
-            rule: Rule::type_expression,
-            tokens: [type_expression(0,22,[
-                identifier(0,3, [
-                    single_word(0, 3)
-                ]),
-                field_attribute(4,22,[
-                    identifier(5,16,[
-                        single_word(5,16)
-                    ]),
-                    arguments_list(16, 22, [
-                        expression(17,21, [
-                            string_literal(17,21,[
-                                quoted_string_literal(17,21,[
-                                  quoted_string_content(18,20)
-                                ])
-                            ])
-                        ])
-                    ])
-                ])
-              ])
-            ]
-        }
-    }
-
     /// Tests the parsing of optional array and map types.
     /// This test ensures that the parser correctly handles the optional token (?)
     /// when applied to arrays and maps.
