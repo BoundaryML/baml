@@ -189,6 +189,8 @@ struct HirCompiler<'g> {
     /// Scope stack.
     scopes: Vec<Scope>,
 
+    current_loop: Option<LoopInfo>,
+
     /// Locals in scope.
     locals_in_scope: Vec<HashMap<String, usize>>,
 
@@ -200,6 +202,15 @@ struct HirCompiler<'g> {
 
     /// Objects pool.
     objects: &'g mut Vec<Object>,
+}
+
+#[derive(Debug)]
+struct LoopInfo {
+    /// Instruction index indicating start of the loop. Used for lowering `continue`.
+    pub start_insn: isize,
+    /// List of jump instruction locations to be patched when loop construction is done.
+    /// They will point to the loop exit. Used for admitting arbitrary `break`s.
+    pub break_patch_list: Vec<usize>,
 }
 
 impl<'g> HirCompiler<'g> {
@@ -215,6 +226,7 @@ impl<'g> HirCompiler<'g> {
             llm_functions,
             objects,
             locals: HashMap::new(),
+            current_loop: None,
             bytecode: Bytecode::new(),
             scopes: Vec::new(),
             current_source_line: 0,
@@ -289,7 +301,6 @@ impl<'g> HirCompiler<'g> {
                 self.compile_expression(value);
                 self.track_local(name);
             }
-
             hir::Statement::Declare { name, .. } => {
                 // For mutable references, we need to allocate space on the stack
                 // We'll push a null/undefined value as placeholder
@@ -328,21 +339,17 @@ impl<'g> HirCompiler<'g> {
 
                 self.emit(Instruction::StoreVar(self.locals[name]));
             }
-
             hir::Statement::DeclareAndAssign { name, value, .. } => {
                 self.compile_expression(value);
                 self.track_local(name);
             }
-
             hir::Statement::Return { expr, .. } => {
                 self.compile_expression(expr);
                 self.emit(Instruction::Return);
             }
-
             hir::Statement::Expression { expr, .. } => {
                 self.compile_expression(expr);
             }
-
             hir::Statement::SemicolonExpression { expr, .. } => {
                 self.compile_expression(expr);
                 // This could be a function call or any other random expression
@@ -354,16 +361,19 @@ impl<'g> HirCompiler<'g> {
                 // binding) then implicitly drop the value.
                 self.emit(Instruction::Pop(1));
             }
-
             hir::Statement::ForLoop { .. } => {
                 todo!()
             }
-
             hir::Statement::While {
                 condition, block, ..
             } => {
                 // Remember where the loop starts
                 let loop_start = self.bytecode.instructions.len() as isize;
+
+                let old_loop_status = self.current_loop.replace(LoopInfo {
+                    start_insn: loop_start,
+                    break_patch_list: Vec::new(),
+                });
 
                 // Compile condition
                 self.compile_expression(condition);
@@ -382,11 +392,39 @@ impl<'g> HirCompiler<'g> {
                 let offset = -(loop_end - loop_start);
                 self.emit(Instruction::Jump(offset));
 
-                // Patch exit jump
-                self.patch_jump(exit_jump);
+                let loop_info = std::mem::replace(&mut self.current_loop, old_loop_status)
+                    .expect("should have been pushed before when grabbing old_status");
 
+                // patch exit jump so that it pops condition
+                self.patch_jump(exit_jump);
                 // Pop condition
                 self.emit(Instruction::Pop(1));
+
+                // Patch breaks. Since they are executed *inside* the loop body, the condition is
+                // alredy popped.
+                for jump_loc in loop_info.break_patch_list {
+                    self.patch_jump(jump_loc);
+                }
+            }
+            hir::Statement::Break(span) => {
+                // NOTE: right now this will generate redundant code when using
+                // `if condition { break }`, since `if` will generate its own jump location and we
+                // will end up with a conditional jump and a regular jump together.
+                let exit_jump = self.emit(Instruction::Jump(0));
+
+                let cur_loop = self.current_loop.as_mut().expect("`break` must have a loop wrapping it, and this should have been checked by validation");
+
+                cur_loop.break_patch_list.push(exit_jump);
+            }
+            hir::Statement::Continue(span) => {
+                let cur_loop = self.current_loop.as_ref().expect("`continue` must have a loop wrapping it, and this should have been checked by validation");
+
+                // jump back to the start.
+                let loop_start = cur_loop.start_insn;
+                let continue_loc = self.bytecode.instructions.len() as isize;
+                let offset = -(continue_loc - loop_start);
+
+                self.emit(Instruction::Jump(offset));
             }
         }
     }
@@ -1560,6 +1598,271 @@ mod tests {
                     Instruction::LoadConst(1),
                     Instruction::BinOp(BinOp::Add),
                     Instruction::StoreVar(1),
+                    Instruction::LoadVar(1),
+                    Instruction::Return,
+                ],
+            )],
+        })
+    }
+
+    #[test]
+    fn while_loop_gcd() -> anyhow::Result<()> {
+        assert_compiles(Program {
+            source: r#"
+                fn GCD(mut a: int, mut b: int) -> int {
+                    while (a != b) {
+                        if a > b {
+                            a = a - b;
+                        } else {
+                            b = b - a;
+                        }
+                    }
+
+                    a
+                }
+            "#,
+            expected: vec![(
+                "GCD",
+                vec![
+                    // while (a != b)
+                    Instruction::LoadVar(1),
+                    Instruction::LoadVar(2),
+                    Instruction::CmpOp(CmpOp::NotEq),
+                    Instruction::JumpIfFalse(18),
+                    Instruction::Pop(1),
+                    // if a > b { a = a - b; } else { b = b - a; }
+                    Instruction::LoadVar(1),
+                    Instruction::LoadVar(2),
+                    Instruction::CmpOp(CmpOp::Gt),
+                    Instruction::JumpIfFalse(7),
+                    Instruction::Pop(1),
+                    Instruction::LoadVar(1),
+                    Instruction::LoadVar(2),
+                    Instruction::BinOp(BinOp::Sub),
+                    Instruction::StoreVar(1),
+                    Instruction::Jump(6),
+                    Instruction::Pop(1),
+                    Instruction::LoadVar(2),
+                    Instruction::LoadVar(1),
+                    Instruction::BinOp(BinOp::Sub),
+                    Instruction::StoreVar(2),
+                    // jump back to loop start
+                    Instruction::Jump(-20),
+                    // exit loop: pop condition and return a
+                    Instruction::Pop(1),
+                    Instruction::LoadVar(1),
+                    Instruction::Return,
+                ],
+            )],
+        })
+    }
+
+    #[test]
+    fn break_factorial() -> anyhow::Result<()> {
+        assert_compiles(Program {
+            source: r#"
+                fn Factorial(mut limit: int) -> int {
+                    let mut result = 1;
+
+                    while true {
+                        if limit == 0 {
+                            break;
+                        }
+                        result = result * limit;
+                        limit = limit - 1;
+                    }
+
+                    result
+                }
+            "#,
+            expected: vec![(
+                "Factorial",
+                vec![
+                    // let mut result = 1;
+                    Instruction::LoadConst(0),
+                    // while true { ... }
+                    Instruction::LoadConst(1),
+                    Instruction::JumpIfFalse(19),
+                    Instruction::Pop(1),
+                    // if limit == 0 { break; }
+                    Instruction::LoadVar(1),
+                    Instruction::LoadConst(2),
+                    Instruction::CmpOp(CmpOp::Eq),
+                    Instruction::JumpIfFalse(4),
+                    Instruction::Pop(1),
+                    Instruction::Jump(13),
+                    Instruction::Jump(2),
+                    Instruction::Pop(1),
+                    // result = result * limit;
+                    Instruction::LoadVar(2),
+                    Instruction::LoadVar(1),
+                    Instruction::BinOp(BinOp::Mul),
+                    Instruction::StoreVar(2),
+                    // limit = limit - 1;
+                    Instruction::LoadVar(1),
+                    Instruction::LoadConst(3),
+                    Instruction::BinOp(BinOp::Sub),
+                    Instruction::StoreVar(1),
+                    // loop back and exit
+                    Instruction::Jump(-19),
+                    Instruction::Pop(1),
+                    // return result
+                    Instruction::LoadVar(2),
+                    Instruction::Return,
+                ],
+            )],
+        })
+    }
+
+    #[test]
+    fn continue_factorial() -> anyhow::Result<()> {
+        assert_compiles(Program {
+            source: r#"
+                fn Factorial(mut limit: int) -> int {
+                    let mut result = 1;
+
+                    // used to make the loop break without relying on `break` implementation.
+                    let mut should_continue = true;
+                    while should_continue {
+                        result = result * limit;
+                        limit = limit - 1;
+
+                        if limit != 0 {
+                            continue;
+                        } else {
+                            should_continue = false;
+                        }
+                    }
+
+                    result
+                }
+            "#,
+            expected: vec![(
+                "Factorial",
+                vec![
+                    // let mut result = 1;
+                    Instruction::LoadConst(0),
+                    // let mut should_continue = true;
+                    Instruction::LoadConst(1),
+                    // while should_continue { ... }
+                    Instruction::LoadVar(3),
+                    Instruction::JumpIfFalse(21),
+                    Instruction::Pop(1),
+                    // result = result * limit;
+                    Instruction::LoadVar(2),
+                    Instruction::LoadVar(1),
+                    Instruction::BinOp(BinOp::Mul),
+                    Instruction::StoreVar(2),
+                    // limit = limit - 1;
+                    Instruction::LoadVar(1),
+                    Instruction::LoadConst(2),
+                    Instruction::BinOp(BinOp::Sub),
+                    Instruction::StoreVar(1),
+                    // if limit != 0 { continue; } else { should_continue = false; }
+                    Instruction::LoadVar(1),
+                    Instruction::LoadConst(3),
+                    Instruction::CmpOp(CmpOp::NotEq),
+                    Instruction::JumpIfFalse(4),
+                    Instruction::Pop(1),
+                    Instruction::Jump(-16),
+                    Instruction::Jump(4),
+                    Instruction::Pop(1),
+                    Instruction::LoadConst(4),
+                    Instruction::StoreVar(3),
+                    Instruction::Jump(-21),
+                    Instruction::Pop(1),
+                    // return result
+                    Instruction::LoadVar(2),
+                    Instruction::Return,
+                ],
+            )],
+        })
+    }
+
+    #[test]
+    fn continue_nested() -> anyhow::Result<()> {
+        assert_compiles(Program {
+            source: r#"
+                fn Nested() -> int {
+                    while true {
+                        while false {
+                            continue;
+                        }
+                        if false {
+                            continue;
+                        }
+                    }
+                    5
+                }
+            "#,
+            expected: vec![(
+                "Nested",
+                vec![
+                    Instruction::LoadConst(0),
+                    Instruction::JumpIfFalse(15),
+                    Instruction::Pop(1),
+                    Instruction::LoadConst(1),
+                    Instruction::JumpIfFalse(4),
+                    Instruction::Pop(1),
+                    Instruction::Jump(-3),
+                    Instruction::Jump(-4),
+                    Instruction::Pop(1),
+                    Instruction::LoadConst(2),
+                    Instruction::JumpIfFalse(4),
+                    Instruction::Pop(1),
+                    Instruction::Jump(-12),
+                    Instruction::Jump(2),
+                    Instruction::Pop(1),
+                    Instruction::Jump(-15),
+                    Instruction::Pop(1),
+                    Instruction::LoadConst(3),
+                    Instruction::Return,
+                ],
+            )],
+        })
+    }
+
+    #[test]
+    fn break_nested() -> anyhow::Result<()> {
+        assert_compiles(Program {
+            source: r#"
+                fn Nested() -> int {
+                    let mut a = 5;
+                    while true {
+                        while true {
+                            a = a + 1;
+                            break;
+                        }
+                        a = a + 1;
+                        break;
+                    }
+                    a
+                }
+            "#,
+            expected: vec![(
+                "Nested",
+                vec![
+                    Instruction::LoadConst(0),
+                    Instruction::LoadConst(1),
+                    Instruction::JumpIfFalse(18),
+                    Instruction::Pop(1),
+                    Instruction::LoadConst(2),
+                    Instruction::JumpIfFalse(8),
+                    Instruction::Pop(1),
+                    Instruction::LoadVar(1),
+                    Instruction::LoadConst(3),
+                    Instruction::BinOp(BinOp::Add),
+                    Instruction::StoreVar(1),
+                    Instruction::Jump(3),
+                    Instruction::Jump(-8),
+                    Instruction::Pop(1),
+                    Instruction::LoadVar(1),
+                    Instruction::LoadConst(4),
+                    Instruction::BinOp(BinOp::Add),
+                    Instruction::StoreVar(1),
+                    Instruction::Jump(3),
+                    Instruction::Jump(-18),
+                    Instruction::Pop(1),
                     Instruction::LoadVar(1),
                     Instruction::Return,
                 ],

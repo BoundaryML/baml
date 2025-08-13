@@ -177,6 +177,8 @@ impl Statement {
                 .append(block.to_doc().nest(2))
                 .append(RcDoc::hardline())
                 .append(RcDoc::text("}")),
+            Statement::Break(_) => RcDoc::text("break").append(RcDoc::text(";")),
+            Statement::Continue(_) => RcDoc::text("continue").append(RcDoc::text(";")),
         }
     }
 }

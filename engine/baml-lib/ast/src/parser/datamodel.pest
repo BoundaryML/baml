@@ -250,6 +250,8 @@ CLIENT_KEYWORD       = { "client<llm>" | "client" }
 GENERATOR_KEYWORD    = { "generator" }
 RETRY_POLICY_KEYWORD = { "retry_policy" }
 MUT_KEYWORD          = { "mut" }
+BREAK_KEYWORD        = { "break" }
+CONTINUE_KEYWORD     = { "continue" }
 SEMICOLON = { ";" }
 COLON = { ":" }
 COMMA = { "," }
@@ -323,7 +325,7 @@ expr_block = { BLOCK_OPEN ~ NEWLINE? ~ (stmt | comment_block | empty_lines)* ~ e
 // With operator overloading (implicit function call) + side effects.
 //
 // Just allow any expr and fix the parser.
-stmt = { (((let_expr | assign_op_stmt | assign_stmt | fn_app | generic_fn_app) ~ SEMICOLON) | for_loop | if_expression) ~ trailing_comment? ~ NEWLINE? }
+stmt = { (((let_expr | assign_op_stmt | assign_stmt | fn_app | generic_fn_app | BREAK_KEYWORD | CONTINUE_KEYWORD) ~ SEMICOLON) | for_loop | if_expression | while_loop) ~ trailing_comment? ~ NEWLINE? }
 
 // Let-binding statement.
 let_expr = { "let" ~ MUT_KEYWORD? ~ identifier ~ "=" ~ expression }
@@ -351,6 +353,10 @@ fn_app = { identifier ~ "(" ~ fn_args ~ ")" }
 
 // If expression.
 if_expression = { "if" ~ expression ~ expr_block ~ ( "else" ~ (expr_block | if_expression) )? }
+
+while_loop = { "while" ~  expression ~  expr_block  }
+
+
 
 // For loop, e.g.
 // for (r in resumes) {

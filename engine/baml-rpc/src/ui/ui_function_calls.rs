@@ -294,14 +294,9 @@ pub struct ListFunctionCallsRequest {
     /// Maximum number of function calls to return. Defaults to 100 if not specified.
     #[ts(optional)]
     pub limit: Option<u32>,
-    /// Keyset cursor for pagination: fetch the next page after this id.
-    /// Stripe-style naming. Mutually exclusive with `endingBefore`.
+    /// Number of function calls to skip. Used for pagination. Defaults to 0 if not specified.
     #[ts(optional)]
-    pub starting_after: Option<String>,
-    /// Keyset cursor for pagination: fetch the previous page ending before this id.
-    /// Stripe-style naming. Mutually exclusive with `startingAfter`.
-    #[ts(optional)]
-    pub ending_before: Option<String>,
+    pub offset: Option<u32>,
     #[ts(optional)]
     pub function_call_id: Option<FilterExpression<String>>,
     #[ts(optional)]
@@ -340,8 +335,7 @@ impl Default for ListFunctionCallsRequest {
                 direction: SortDirection::Descending,
             }),
             limit: Some(100),
-            starting_after: None,
-            ending_before: None,
+            offset: Some(0),
             function_call_id: None,
             function_id: None,
             function_name: None,
@@ -364,15 +358,6 @@ pub struct ListFunctionCallsResponse {
     pub function_calls: Vec<ui_types::UiFunctionCall>,
     pub function_definitions: Vec<ui_types::UiFunctionDefinition>,
     pub type_definitions: Vec<ui_types::UiTypeDefinition>,
-    /// Whether or not there are more elements available after this set.
-    /// If false, this set comprises the end of the list. (Stripe-style)
-    pub has_more: bool,
-    /// Cursor of the next page (older items when ordering desc). Present only if there are more results.
-    #[ts(optional)]
-    pub next_cursor: Option<String>,
-    /// Cursor of the previous page (newer items when ordering desc). Optional convenience.
-    #[ts(optional)]
-    pub prev_cursor: Option<String>,
 }
 
 pub struct ListFunctionCalls;

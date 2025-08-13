@@ -74,8 +74,7 @@ pub struct AnthropicErrorResponse {
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 pub struct AnthropicErrorInner {
     pub r#type: String,
-    pub message: Option<String>,
-    pub details: Option<serde_json::Value>,
+    pub message: String,
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq, Serialize)]
@@ -88,9 +87,7 @@ pub enum MessageChunk {
     ContentBlockStop(ContentBlockStopChunk),
     MessageDelta(MessageDeltaChunk),
     MessageStop,
-    Error {
-        error: AnthropicErrorInner,
-    },
+    Error(AnthropicErrorInner),
     #[serde(other)]
     Other,
 }
@@ -262,7 +259,7 @@ mod tests {
         let response: AnthropicErrorResponse = serde_json::from_str(json).unwrap();
         assert_eq!(response.r#type, "error");
         assert_eq!(response.error.r#type, "invalid_request_error");
-        assert_eq!(response.error.message, Some("Invalid API key".to_string()));
+        assert_eq!(response.error.message, "Invalid API key");
     }
 
     #[test]

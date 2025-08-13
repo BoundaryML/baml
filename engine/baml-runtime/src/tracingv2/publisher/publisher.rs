@@ -10,10 +10,6 @@ use std::{
 use anyhow::{Context, Result};
 use baml_rpc::{
     ast::tops::{FunctionDefinition, SourceCode, AST},
-    runtime_api::{
-        BlobBatchUploadS3File, BlobMetadataItem, BlobUploadItem, CreateBlobBatchUploadUrl,
-        CreateBlobBatchUploadUrlRequest, CreateBlobBatchUploadUrlResponse,
-    },
     ApiEndpoint, BamlSrcUploadS3File, CheckBamlSrcUpload, CheckBamlSrcUploadRequest,
     CreateTraceEventUploadUrl, CreateTraceEventUploadUrlRequest, CreateTraceEventUploadUrlResponse,
     NamedType, S3UploadMetadata, TraceEventBatch, TypeDefinition, TypeDefinitionSource,
@@ -34,9 +30,7 @@ use tracing::field;
 #[cfg(target_family = "wasm")]
 use wasmtimer::tokio::*;
 
-use super::rpc_converters::{
-    to_rpc_event, BlobRefCache, BlobStorage, IRRpcState, IntoRpcEvent, TypeLookup,
-};
+use super::rpc_converters::{to_rpc_event, IntoRpcEvent, TypeLookup};
 use crate::{
     runtime::{AstSignatureWrapper, InternalBamlRuntime},
     tracingv2::storage::interface::TraceEventWithMeta,
@@ -49,20 +43,11 @@ enum PublisherMessage {
     Shutdown(tokio::sync::oneshot::Sender<()>),
 }
 
-#[derive(Debug)]
-pub enum BlobUploaderMessage {
-    Upload,
-    QueueBlob(super::rpc_converters::blob_storage::BlobWithContent),
-    Flush(tokio::sync::oneshot::Sender<()>),
-    Shutdown(tokio::sync::oneshot::Sender<()>),
-}
-
 /// Global publisher channel.
 /// When the module is first used, we create an unbounded channel and then spawn the publisher task.
 static PUBLISHING_CHANNEL: OnceCell<mpsc::UnboundedSender<PublisherMessage>> = OnceCell::new();
 #[cfg(not(target_arch = "wasm32"))]
 static PUBLISHING_TASK: OnceCell<Arc<tokio::task::JoinHandle<()>>> = OnceCell::new();
-static BLOB_UPLOADER_TASK: OnceCell<Arc<tokio::task::JoinHandle<()>>> = OnceCell::new();
 
 fn get_publish_channel(
     allow_missing: bool,
@@ -96,8 +81,6 @@ struct RuntimeAST {
     ast: Arc<AstSignatureWrapper>,
     #[serde(skip)]
     pub client: reqwest::Client,
-    #[serde(skip)]
-    blob_cache: BlobRefCache,
 }
 
 impl RuntimeAST {
@@ -196,12 +179,6 @@ impl TypeLookup for RuntimeAST {
     }
 }
 
-impl BlobStorage for RuntimeAST {
-    fn blob_cache(&self) -> &BlobRefCache {
-        &self.blob_cache
-    }
-}
-
 pub fn start_publisher(
     lookup: Arc<AstSignatureWrapper>,
     #[cfg(not(target_arch = "wasm32"))] rt: Arc<tokio::runtime::Runtime>,
@@ -216,43 +193,26 @@ pub fn start_publisher(
     }
     log::debug!("Starting publisher");
 
-    // Create the blob upload channel first
-    let (blob_tx, blob_rx) = mpsc::unbounded_channel::<BlobUploaderMessage>();
-
     let lookup = Arc::new(RuntimeAST {
         ast: lookup,
         client: reqwest::Client::new(),
-        blob_cache: BlobRefCache::with_upload_channel(blob_tx.clone()),
     });
 
     // Use get_or_init to ensure thread-safe initialization
     let channel = PUBLISHING_CHANNEL.get_or_init(|| {
         let (tx, rx) = mpsc::unbounded_channel::<PublisherMessage>();
-
-        let mut publisher = TracePublisher::new(rx, lookup.clone(), blob_tx.clone());
-        let mut blob_uploader = BlobUploader::new(blob_rx, lookup.clone());
+        let mut publisher = TracePublisher::new(rx, lookup.clone());
 
         #[cfg(not(target_arch = "wasm32"))]
         {
-            // Spawn the main publisher task
             let handle = rt.spawn(async move { publisher.run().await });
             PUBLISHING_TASK.get_or_init(|| Arc::new(handle));
-
-            // Spawn the blob uploader task
-            let blob_handle = rt.spawn(async move { blob_uploader.run().await });
-            BLOB_UPLOADER_TASK.get_or_init(|| Arc::new(blob_handle));
         }
 
         #[cfg(target_arch = "wasm32")]
-        {
-            wasm_bindgen_futures::spawn_local(async move {
-                publisher.run().await;
-            });
-
-            wasm_bindgen_futures::spawn_local(async move {
-                blob_uploader.run().await;
-            });
-        }
+        wasm_bindgen_futures::spawn_local(async move {
+            publisher.run().await;
+        });
 
         tx
     });
@@ -267,9 +227,6 @@ pub async fn shutdown_publisher() -> anyhow::Result<()> {
     log::debug!("Shutting down publisher");
     // 1. send Shutdown
     let Some(channel) = get_publish_channel(true) else {
-        return Ok(());
-    };
-    let Some(blob_channel) = BLOB_UPLOADER_TASK.get() else {
         return Ok(());
     };
     let (ack_tx, ack_rx) = tokio::sync::oneshot::channel();
@@ -289,33 +246,20 @@ struct TracePublisher {
     batch_size: usize,
     rx: mpsc::UnboundedReceiver<PublisherMessage>,
     lookup: Arc<RuntimeAST>,
-    blob_tx: mpsc::UnboundedSender<BlobUploaderMessage>,
-}
-
-struct BlobUploader {
-    rx: mpsc::UnboundedReceiver<BlobUploaderMessage>,
-    lookup: Arc<RuntimeAST>,
-    queued_blobs: Vec<super::rpc_converters::blob_storage::BlobWithContent>,
-    batch_size: usize,
 }
 
 impl TracePublisher {
-    pub fn new(
-        rx: mpsc::UnboundedReceiver<PublisherMessage>,
-        lookup: Arc<RuntimeAST>,
-        blob_tx: mpsc::UnboundedSender<BlobUploaderMessage>,
-    ) -> Self {
+    pub fn new(rx: mpsc::UnboundedReceiver<PublisherMessage>, lookup: Arc<RuntimeAST>) -> Self {
         let batch_size = lookup
             .ast
             .env_var("BAML_TRACE_BATCH_SIZE")
             .and_then(|s| s.parse::<usize>().ok())
-            .unwrap_or(500);
+            .unwrap_or(200);
 
         Self {
             rx,
             batch_size,
             lookup,
-            blob_tx,
         }
     }
 
@@ -355,8 +299,6 @@ impl TracePublisher {
                             buffer.push(event);
                             if buffer.len() >= self.batch_size {
                                 self.process_batch(std::mem::take(&mut buffer)).await;
-                                // Trigger blob upload after batch processing
-                                let _ = self.blob_tx.send(BlobUploaderMessage::Upload);
                             }
 
                         },
@@ -365,10 +307,6 @@ impl TracePublisher {
                             if !buffer.is_empty() {
                                 self.process_batch(std::mem::take(&mut buffer)).await;
                             }
-                            // Flush blob uploader and wait for completion
-                            let (blob_ack_tx, blob_ack_rx) = tokio::sync::oneshot::channel();
-                            let _ = self.blob_tx.send(BlobUploaderMessage::Flush(blob_ack_tx));
-                            let _ = blob_ack_rx.await;
                             // Signal flush completion.
                             let _ = flush_ack.send(());
                         },
@@ -376,10 +314,6 @@ impl TracePublisher {
                             if !buffer.is_empty() {
                                 self.process_batch(std::mem::take(&mut buffer)).await;
                             }
-                            // Shutdown blob uploader and wait for completion
-                            let (blob_ack_tx, blob_ack_rx) = tokio::sync::oneshot::channel();
-                            let _ = self.blob_tx.send(BlobUploaderMessage::Shutdown(blob_ack_tx));
-                            let _ = blob_ack_rx.await;
                             let _ = shutdown_ack.send(());
                             break;
                         }
@@ -393,8 +327,6 @@ impl TracePublisher {
                     }
                     if !buffer.is_empty() {
                         self.process_batch(std::mem::take(&mut buffer)).await;
-                        // Trigger blob upload after batch processing
-                        let _ = self.blob_tx.send(BlobUploaderMessage::Upload);
                     }
                 }
             }
@@ -598,20 +530,101 @@ impl TracePublisher {
     }
 
     async fn process_batch(&self, batch: Vec<Arc<TraceEventWithMeta>>) {
-        let batch_result = self.process_batch_impl(batch).await;
+        let batch_result = self.process_batch_with_splitting(batch).await;
         if let Err(e) = batch_result {
-            baml_log::debug!("Failed to upload trace events: {:?}", e);
+            baml_log::debug!("Failed to upload trace events after retries: {:?}", e);
         }
     }
 
-    // Remove the process_blob_uploads method as it's now handled by BlobUploader
+    /// Process a batch with automatic splitting on failure.
+    /// If a batch fails to upload, we'll recursively split it in half and retry.
+    /// This helps with payload size limits, rate limiting, and transient network issues.
+    /// We only allow 2 splits maximum before giving up.
+    async fn process_batch_with_splitting(
+        &self,
+        batch: Vec<Arc<TraceEventWithMeta>>,
+    ) -> Result<()> {
+        // Allow maximum of 2 splits before giving up
+        let max_splits = 1;
+
+        self.process_batch_recursive(batch, max_splits).await
+    }
+
+    /// Recursively process batches, splitting on failure until we reach maximum splits.
+    async fn process_batch_recursive(
+        &self,
+        batch: Vec<Arc<TraceEventWithMeta>>,
+        splits_remaining: usize,
+    ) -> Result<()> {
+        // Try to upload the batch
+        match self.process_batch_impl(batch.clone()).await {
+            Ok(()) => {
+                tracing::debug!("Successfully uploaded batch of {} events", batch.len());
+                Ok(())
+            }
+            Err(e) => {
+                // If no more splits remaining, give up
+                if splits_remaining == 0 {
+                    log::info!(
+                        "Failed to upload batch of {} events after maximum splits: {}",
+                        batch.len(),
+                        e
+                    );
+                    return Err(e);
+                }
+
+                // Split the batch in half and retry each half
+                let mid = batch.len() / 2;
+                let (first_half, second_half) = batch.split_at(mid);
+
+                tracing::debug!(
+                    "Batch upload failed (size: {}), splitting into {} and {} events (splits remaining: {}): {}",
+                    batch.len(),
+                    first_half.len(),
+                    second_half.len(),
+                    splits_remaining - 1,
+                    e
+                );
+
+                // Process both halves recursively with Box::pin
+                let first_result = Box::pin(
+                    self.process_batch_recursive(first_half.to_vec(), splits_remaining - 1),
+                )
+                .await;
+                let second_result = Box::pin(
+                    self.process_batch_recursive(second_half.to_vec(), splits_remaining - 1),
+                )
+                .await;
+
+                // If either half failed, propagate the error
+                match (first_result, second_result) {
+                    (Ok(()), Ok(())) => {
+                        tracing::debug!("Successfully uploaded split batches");
+                        Ok(())
+                    }
+                    (Err(e1), Ok(())) => {
+                        log::info!("First half failed: {e1}");
+                        Err(e1)
+                    }
+                    (Ok(()), Err(e2)) => {
+                        log::info!("Second half failed: {e2}");
+                        Err(e2)
+                    }
+                    (Err(e1), Err(e2)) => {
+                        log::debug!("Both halves failed - first: {e1}, second: {e2}");
+                        Err(e1) // Return the first error
+                    }
+                }
+            }
+        }
+    }
 
     /// Process a batch of events.
     ///
-    /// This method:
-    ///   1. Converts events to RPC format with blob extraction.
-    ///   2. Serializes the events into JSON.
-    ///   3. Uploads the JSON to S3 via presigned URL.
+    /// In this example we:
+    ///   1. Serialize the events into JSON.
+    ///   2. Append the JSON to a file (using async file I/O on macOS).
+    ///   3. Post the JSON to an HTTP API with up to 3 retries.
     async fn process_batch_impl(&self, batch: Vec<Arc<TraceEventWithMeta>>) -> Result<()> {
         // log::info!("Processing {:#?}", batch);
         // Assemble the upload request structure.
@@ -687,194 +700,12 @@ impl TracePublisher {
             .await
             .context("Failed to upload trace events to S3")?;
 
-        log::debug!("Successfully uploaded batch of {} events", batch.len());
         Ok(())
     }
 }
 
 trait AsReqwestHeaders {
     fn as_reqwest_headers(&self) -> Result<HeaderMap>;
-}
-
-impl BlobUploader {
-    pub fn new(rx: mpsc::UnboundedReceiver<BlobUploaderMessage>, lookup: Arc<RuntimeAST>) -> Self {
-        let batch_size = lookup
-            .ast
-            .env_var("BAML_BLOB_BATCH_SIZE")
-            .and_then(|s| s.parse::<usize>().ok())
-            .unwrap_or(10); // Default to 10 blobs per batch
-
-        Self {
-            rx,
-            lookup,
-            queued_blobs: Vec::new(),
-            batch_size,
-        }
-    }
-
-    pub async fn run(&mut self) {
-        let mut upload_interval = interval(Duration::from_secs(2));
-
-        loop {
-            tokio::select! {
-                Some(message) = self.rx.recv() => {
-                    // log::info!("Blob uploader received message: ", message);
-                    if self.lookup.api_key().is_none() {
-                        log::debug!("Skipping blob upload because BOUNDARY_API_KEY is not set");
-                        continue;
-                    }
-
-                    match message {
-                        BlobUploaderMessage::Upload => {
-                            // No-op in new architecture - blobs are queued immediately when stored
-                        },
-                        BlobUploaderMessage::QueueBlob(blob) => {
-                            self.queued_blobs.push(blob);
-
-                            // If we've reached the batch size, upload immediately
-                            if self.queued_blobs.len() >= self.batch_size {
-                                self.process_queued_blobs().await;
-                            }
-                        },
-                        BlobUploaderMessage::Flush(flush_ack) => {
-                            self.process_queued_blobs().await;
-                            let _ = flush_ack.send(());
-                        },
-                        BlobUploaderMessage::Shutdown(shutdown_ack) => {
-                            self.process_queued_blobs().await;
-                            let _ = shutdown_ack.send(());
-                            break;
-                        }
-                    }
-                }
-                _ = upload_interval.tick() => {
-                    // log::info!("Blob uploader received tick");
-                    if self.lookup.api_key().is_none() {
-                        log::info!("Skipping blob upload because BOUNDARY_API_KEY is not set");
-                        continue;
-                    }
-                    // Process any queued blobs on the timer
-                    if !self.queued_blobs.is_empty() {
-                        self.process_queued_blobs().await;
-                    }
-                }
-            }
-        }
-    }
-
-    async fn process_queued_blobs(&mut self) {
-        if self.queued_blobs.is_empty() {
-            return;
-        }
-
-        log::info!("Processing {} queued blobs", self.queued_blobs.len());
-        let blobs_to_upload = std::mem::take(&mut self.queued_blobs);
-        let result = self.upload_blob_batch(blobs_to_upload).await;
-        if let Err(e) = result {
-            log::error!("Failed to upload queued blob batch: {}", e);
-        }
-    }
-
-    async fn upload_blob_batch(
-        &self,
-        blobs: Vec<super::rpc_converters::blob_storage::BlobWithContent>,
-    ) -> Result<()> {
-        if blobs.is_empty() {
-            return Ok(());
-        }
-
-        log::debug!("Uploading {} blobs", blobs.len());
-
-        // Prepare metadata for the API request
-        let blob_metadata: Vec<BlobMetadataItem> = blobs
-            .iter()
-            .map(|blob| BlobMetadataItem {
-                blob_hash: blob.metadata.blob_hash.clone(),
-                function_call_id: blob.metadata.function_call_id.clone(),
-                media_type: blob.metadata.media_type.clone(),
-                size_bytes: blob.metadata.size_bytes,
-            })
-            .collect();
-
-        // Get upload URL and check which blobs already exist
-        let upload_response = match self
-            .lookup
-            .api_request::<CreateBlobBatchUploadUrl>(CreateBlobBatchUploadUrlRequest {
-                blob_metadata,
-                baml_runtime: Some(env!("CARGO_PKG_VERSION").to_string()),
-            })
-            .await
-        {
-            Ok(response) => response,
-            Err(e) => {
-                log::error!("Failed to get blob upload URL: {}", e);
-                return Err(e.into());
-            }
-        };
-        log::debug!("upload_response={:?}", upload_response);
-
-        // Filter out blobs that already exist
-        let blobs_to_upload: Vec<_> = blobs
-            .into_iter()
-            .filter(|blob| {
-                !upload_response
-                    .exclude_blobs
-                    .contains(&blob.metadata.blob_hash)
-            })
-            .collect();
-
-        if blobs_to_upload.is_empty() {
-            log::debug!("All blobs already exist, skipping upload");
-            return Ok(());
-        }
-
-        // Prepare the upload payload
-        let upload_items: Vec<BlobUploadItem> = blobs_to_upload
-            .iter()
-            .map(|blob| BlobUploadItem {
-                function_call_id: blob.metadata.function_call_id.clone(),
-                blob_hash: blob.metadata.blob_hash.clone(),
-                payload: blob.content.clone(),
-                media_type: blob.metadata.media_type.clone(),
-            })
-            .collect();
-
-        let batch_file = BlobBatchUploadS3File {
-            blobs: upload_items,
-        };
-
-        // Upload to S3
-        let upload_result = self
-            .lookup
-            .client
-            .put(&upload_response.s3_presigned_url)
-            .json(&batch_file)
-            .headers(
-                upload_response
-                    .upload_metadata
-                    .as_reqwest_headers()
-                    .context("Failed to convert upload metadata to headers")?,
-            )
-            .send()
-            .await;
-
-        let blob_hashes: Vec<String> = blobs_to_upload
-            .iter()
-            .map(|b| b.metadata.blob_hash.clone())
-            .collect();
-
-        match upload_result {
-            Ok(_) => {
-                log::debug!("Successfully uploaded {} blobs", blobs_to_upload.len());
-            }
-            Err(e) => {
-                log::error!("Failed to upload blob batch to S3: {}", e);
-                return Err(e.into());
-            }
-        }
-
-        Ok(())
-    }
 }
 
 impl AsReqwestHeaders for S3UploadMetadata {

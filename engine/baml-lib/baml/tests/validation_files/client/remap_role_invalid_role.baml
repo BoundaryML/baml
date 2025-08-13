@@ -10,7 +10,7 @@ client<llm> MyClient {
   }
 }
 
-// error: remap_role values must be one of: Value("user"), Value("assistant"). Got: system. To support different remap roles, add allowed_roles ["user", "assistant", "system", ...]
+// error: remap_roles values must be one of: Value("user"), Value("assistant"). Got: system. To support different remap roles, add allowed_roles ["user", "assistant", "system", ...]
 //   -->  client/remap_role_invalid_role.baml:8
 //    | 
 //  7 |       user "human"

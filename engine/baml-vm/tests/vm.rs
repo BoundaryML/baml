@@ -842,3 +842,149 @@ fn basic_assign_bit_xor() -> anyhow::Result<()> {
         expected: VmExecState::Complete(Value::Int(9)),
     })
 }
+
+#[test]
+fn while_loop() -> anyhow::Result<()> {
+    // NOTE: there's no way to make a safeguard since there's no "return", and we shouldn't rely on
+    // "break" to keep the test as isolated as possible.
+    // Maybe we should "time-out" the VM? (we know how many jumps it should take...)
+    const SOURCE: &str = r#"
+        fn GCD(mut a: int, mut b: int) -> int {
+
+            while a != b {
+
+               if a > b {
+                   a = a - b;
+               } else {
+                   b = b - a;
+               }
+
+            }
+
+            a
+        }
+
+        fn main() -> int {
+            GCD(21, 15)
+        }
+    "#;
+
+    assert_vm_executes(Program {
+        source: SOURCE,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(3)),
+    })
+}
+
+#[test]
+fn break_factorial() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            fn Factorial(mut limit: int) -> int {
+                let mut result = 1;
+
+                while true {
+                    if limit == 0 {
+                        break;
+                    }
+                    result = result * limit;
+                    limit = limit - 1;
+                }
+
+                result
+            }
+
+            fn main() -> int {
+                Factorial(5)
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(120)),
+    })
+}
+
+#[test]
+fn break_nested_loops() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            fn Nested() -> int {
+                let mut a = 5;
+                while true {
+                    while true {
+                        a = a + 1;
+                        break;
+                    }
+                    a = a + 1;
+                    break;
+                }
+                a
+            }
+
+            fn main() -> int {
+                Nested()
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(7)),
+    })
+}
+
+#[test]
+fn continue_factorial() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            fn Factorial(mut limit: int) -> int {
+                let mut result = 1;
+
+                // used to make the loop break without relying on `break` implementation.
+                let mut should_continue = true;
+                while should_continue {
+                    result = result * limit;
+                    limit = limit - 1;
+
+                    if limit != 0 {
+                        continue;
+                    } else {
+                        should_continue = false;
+                    }
+                }
+
+                result
+            }
+
+            fn main() -> int {
+                Factorial(5)
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(120)),
+    })
+}
+
+#[test]
+fn continue_nested() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            fn ContinueNested() -> int {
+                let mut execute = true;
+                while execute {
+                    while false {
+                        continue;
+                    }
+                    if false {
+                        continue;
+                    }
+                    execute = false;
+                }
+                5
+            }
+
+            fn main() -> int {
+                ContinueNested()
+            }
+        "#,
+        function: "main",
+        // This would never complete if run; test is #[ignore] to avoid execution.
+        expected: VmExecState::Complete(Value::Int(5)),
+    })
+}

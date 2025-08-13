@@ -121,7 +121,6 @@ log-once = "0.4.1"
 once_cell.workspace = true
 time.workspace = true
 tempfile = "3.19.0"
-sha2 = "0.10.9"
 
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]

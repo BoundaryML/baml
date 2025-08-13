@@ -1017,9 +1017,15 @@ pub enum Statement<T> {
     /// Declare a (mutable) reference.
     /// There is no span because it is never present in the source AST.
     /// This is a desugaring from `if` expressions.
-    Declare { name: String, span: Span },
+    Declare {
+        name: String,
+        span: Span,
+    },
     /// Assign a mutable variable.
-    Assign { name: String, value: Expr<T> },
+    Assign {
+        name: String,
+        value: Expr<T>,
+    },
     /// Declare and assign a mutable reference in one statement.
     DeclareAndAssign {
         name: String,
@@ -1027,9 +1033,15 @@ pub enum Statement<T> {
         span: Span,
     },
     /// Return from a function.
-    FunctionReturn { expr: Expr<T>, span: Span },
+    FunctionReturn {
+        expr: Expr<T>,
+        span: Span,
+    },
     /// Evaluate an expression as the final value of a block (without returning from function).
-    Expression { expr: Expr<T>, span: Span },
+    Expression {
+        expr: Expr<T>,
+        span: Span,
+    },
     While {
         condition: Box<Expr<T>>,
         block: Block<T>,
@@ -1041,6 +1053,8 @@ pub enum Statement<T> {
         block: Block<T>,
         span: Span,
     },
+    Break(Span),
+    Continue(Span),
 }
 
 impl<T: Clone> Statement<T> {
@@ -1089,6 +1103,8 @@ impl<T: Clone> Statement<T> {
                     block.dump_str()
                 )
             }
+            Statement::Break(_) => "break".to_string(),
+            Statement::Continue(_) => "continue".to_string(),
         }
     }
 
@@ -1130,6 +1146,7 @@ impl<T: Clone> Statement<T> {
                 free_vars.extend(block.free_vars());
                 free_vars
             }
+            Statement::Break(_) | Statement::Continue(_) => HashSet::new(),
         }
     }
 
@@ -1184,6 +1201,8 @@ impl<T: Clone> Statement<T> {
                 block: block.open(target, new_name),
                 span: span.clone(),
             },
+            Statement::Break(span) => Statement::Break(span.clone()),
+            Statement::Continue(span) => Statement::Continue(span.clone()),
         }
     }
 
@@ -1238,6 +1257,8 @@ impl<T: Clone> Statement<T> {
                 block: block.close(new_index, target),
                 span: span.clone(),
             },
+            Statement::Break(span) => Statement::Break(span.clone()),
+            Statement::Continue(span) => Statement::Continue(span.clone()),
         }
     }
 
@@ -1323,6 +1344,8 @@ impl<T: Clone> Statement<T> {
                 },
             ) => iterator.temporary_same_state(iterator2) && block.temporary_same_state(block2),
             (Statement::ForLoop { .. }, _) => false,
+            (Statement::Break(_), other) => matches!(other, Statement::Break(_)),
+            (Statement::Continue(_), other) => matches!(other, Statement::Continue(_)),
         }
     }
 }
