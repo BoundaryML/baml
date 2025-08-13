@@ -112,6 +112,23 @@ pub fn parse_top_level_assignment(
     }
 }
 
+fn parse_while_loop(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Stmt> {
+    assert_correct_parser!(pair, Rule::while_loop);
+
+    let span = diagnostics.span(pair.as_span());
+    let mut while_loop = pair.into_inner();
+
+    let condition = parse_expression(while_loop.next()?, diagnostics)?;
+
+    let body = parse_expr_block(while_loop.next()?, diagnostics)?;
+
+    Some(Stmt::WhileLoop(WhileStmt {
+        condition,
+        body,
+        span,
+    }))
+}
+
 pub fn parse_for_loop(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Stmt> {
     assert_correct_parser!(token, Rule::for_loop);
     let span = diagnostics.span(token.as_span());
@@ -209,6 +226,7 @@ pub fn parse_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
                 })
             })
         }
+        Rule::while_loop => parse_while_loop(stmt_token, diagnostics),
         Rule::for_loop => parse_for_loop(stmt_token, diagnostics),
         Rule::if_expression => parse_if_expression(stmt_token, diagnostics).map(Stmt::Expression),
         Rule::fn_app => parse_fn_app(stmt_token, diagnostics).map(Stmt::Expression),
