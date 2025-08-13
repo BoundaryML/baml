@@ -461,14 +461,19 @@ pub fn parse_if_expression(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Op
     let else_branch_expr = tokens.next()?;
     let else_branch_span = diagnostics.span(else_branch_expr.as_span());
 
-    let else_branch = match else_branch_expr.as_rule() {
-        Rule::expr_block => parse_expr_block(else_branch_expr, diagnostics)
-            .map(|e| Box::new(Expression::ExprBlock(e, else_branch_span))),
+    let else_branch = tokens.next().and_then(|else_branch_expr| {
+        let else_branch_span = diagnostics.span(else_branch_expr.as_span());
 
-        Rule::if_expression => parse_if_expression(else_branch_expr, diagnostics).map(Box::new),
+        let else_branch = match else_branch_expr.as_rule() {
+            Rule::expr_block => parse_expr_block(else_branch_expr, diagnostics)
+                .map(|e| Box::new(Expression::ExprBlock(e, else_branch_span))),
 
-        _ => unreachable_rule!(else_branch_expr, Rule::if_expression),
-    };
+            Rule::if_expression => parse_if_expression(else_branch_expr, diagnostics).map(Box::new),
+
+            _ => unreachable_rule!(else_branch_expr, Rule::if_expression),
+        };
+        else_branch
+    });
 
     Some(Expression::If(
         Box::new(condition),
