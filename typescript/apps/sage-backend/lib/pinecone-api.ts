@@ -15,15 +15,25 @@ const PINECONE_INDEX_NAME =
     : 'ask-baml-dev';
 console.log('Using pinecone index:', PINECONE_INDEX_NAME);
 
-const openaiClient = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY ?? '',
-});
+let openaiClient: OpenAI | null = null;
+function getOpenAI(): OpenAI {
+  if (!openaiClient) {
+    openaiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY ?? '' });
+  }
+  return openaiClient;
+}
 
-const pineconeClient = new Pinecone({
-  apiKey: process.env.PINECONE_API_KEY ?? '',
-});
+let pineconeClient: Pinecone | null = null;
+function getPinecone(): Pinecone {
+  if (!pineconeClient) {
+    pineconeClient = new Pinecone({ apiKey: process.env.PINECONE_API_KEY ?? '' });
+  }
+  return pineconeClient;
+}
 
-const pineconeIndex = pineconeClient.Index(PINECONE_INDEX_NAME);
+function getPineconeIndex() {
+  return getPinecone().Index(PINECONE_INDEX_NAME);
+}
 
 const CorpusDocumentSchema = z.object({
   title: z.string(),
@@ -185,7 +195,7 @@ async function generateEmbeddingsForDocs(docs: CorpusDocument[]): Promise<Embedd
         }
       }
 
-      const embeddingResponse = await openaiClient.embeddings.create({
+      const embeddingResponse = await getOpenAI().embeddings.create({
         model: 'text-embedding-3-large',
         input: chunk,
       });
@@ -223,7 +233,7 @@ async function upsertToPinecone(embeddingsWithMetadata: EmbeddingWithMetadata[])
   // Execute all batches in parallel
   await Promise.all(
     batches.map(async (batch, index) => {
-      await pineconeIndex.upsert(batch);
+      await getPineconeIndex().upsert(batch);
       console.log(`Upserted batch ${index + 1}/${batches.length} with ${batch.length} records`);
     }),
   );
@@ -297,13 +307,13 @@ export async function populatePinecone(docsYmlPath: string): Promise<void> {
   ]);
   console.log(`Computed embeddings for ${embeddingsWithMetadata.length} chunks`);
 
-  const beforeStats = await pineconeIndex.describeIndexStats();
+  const beforeStats = await getPineconeIndex().describeIndexStats();
   console.log('Before stats', beforeStats);
-  const deleted = await pineconeIndex.deleteAll();
+  const deleted = await getPineconeIndex().deleteAll();
   console.log('Deleted old embeddings from Pinecone', deleted);
   await upsertToPinecone(embeddingsWithMetadata);
   console.log('Upserted new embeddings to Pinecone');
-  const afterStats = await pineconeIndex.describeIndexStats();
+  const afterStats = await getPineconeIndex().describeIndexStats();
   console.log('After stats', afterStats);
   console.log(`✅ Successfully populated Pinecone with ${embeddingsWithMetadata.length} chunks`);
 }
@@ -312,8 +322,8 @@ export async function populatePinecone(docsYmlPath: string): Promise<void> {
  * Search Pinecone for relevant documents using vector similarity
  */
 export async function searchPinecone(query: string) {
-  const results = await pineconeIndex.query({
-    vector: await openaiClient.embeddings
+  const results = await getPineconeIndex().query({
+    vector: await getOpenAI().embeddings
       .create({
         model: EMBEDDING_MODEL,
         input: query,

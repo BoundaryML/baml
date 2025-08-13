@@ -4,8 +4,6 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { submitQuery } from '@/app/actions/query';
 
-const notionLogger = new NotionLogger();
-
 export async function POST(httpRequest: NextRequest) {
   try {
     const body = await httpRequest.json();
@@ -27,6 +25,7 @@ export async function POST(httpRequest: NextRequest) {
 
     const result = await submitQuery(request);
 
+    const notionLogger = new NotionLogger();
     notionLogger
       .appendEntry({
         session_id: request.session_id,

@@ -4,9 +4,6 @@ import { SendFeedbackRequestSchema } from '@baml/sage-interface';
 import type { NextRequest } from 'next/server';
 import { after, NextResponse } from 'next/server';
 
-const slack = new SlackFeedbackLogger();
-const notionLogger = new NotionLogger();
-
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -28,11 +25,17 @@ export async function POST(request: NextRequest) {
 
     // Deliberately do not await these, so that the request can return immediately.
     after(async () => {
-      console.info('Feedback will be logged to Notion and Slack');
-      const { pageId: notionPageId } = await notionLogger.updateFeedback(feedbackData);
-      const notionLink = notionPageId ? notionLogger.toUrl({ pageId: notionPageId }) : undefined;
-      await slack.sendFeedback({ ...feedbackData, notionLink });
-      console.info('Feedback logged to Notion and Slack');
+      try {
+        const slack = new SlackFeedbackLogger();
+        const notionLogger = new NotionLogger();
+        console.info('Feedback will be logged to Notion and Slack');
+        const { pageId: notionPageId } = await notionLogger.updateFeedback(feedbackData);
+        const notionLink = notionPageId ? notionLogger.toUrl({ pageId: notionPageId }) : undefined;
+        await slack.sendFeedback({ ...feedbackData, notionLink });
+        console.info('Feedback logged to Notion and Slack');
+      } catch (error) {
+        console.error('Failed to send feedback to Notion/Slack:', error);
+      }
     });
 
     return NextResponse.json({
