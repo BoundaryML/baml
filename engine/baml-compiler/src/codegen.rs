@@ -1541,4 +1541,29 @@ mod tests {
             )],
         })
     }
+
+    #[test]
+    fn basic_assign_add() -> anyhow::Result<()> {
+        assert_compiles(Program {
+            source: r#"
+                fn main() -> int {
+                    let mut x = 1;
+                    x += 2;
+                    x
+                }
+            "#,
+            expected: vec![(
+                "main",
+                vec![
+                    Instruction::LoadConst(0),
+                    Instruction::LoadVar(1),
+                    Instruction::LoadConst(1),
+                    Instruction::BinOp(BinOp::Add),
+                    Instruction::StoreVar(1),
+                    Instruction::LoadVar(1),
+                    Instruction::Return,
+                ],
+            )],
+        })
+    }
 }
