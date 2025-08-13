@@ -60,6 +60,8 @@ fn compile_hir_to_bytecode(hir: &hir::Hir) -> anyhow::Result<BamlVmProgram> {
     let mut objects = Vec::with_capacity(resolved_globals.len());
     let mut globals = Vec::with_capacity(resolved_globals.len());
 
+    let mut loop_vars_counter = ForLoopVarCounters::new();
+
     // Compile HIR functions to bytecode
     for func in &hir.expr_functions {
         let bytecode_function = compile_hir_function(
@@ -67,6 +69,7 @@ fn compile_hir_to_bytecode(hir: &hir::Hir) -> anyhow::Result<BamlVmProgram> {
             &resolved_globals,
             &resolved_classes,
             &llm_functions,
+            &mut loop_vars_counter,
             &mut objects,
         )?;
 
@@ -115,15 +118,55 @@ fn compile_hir_to_bytecode(hir: &hir::Hir) -> anyhow::Result<BamlVmProgram> {
     })
 }
 
+/// Produces a variable of the form `__baml <name_infix> <counter>`.
+/// These variables cannot be accessed by the user because they have spaces
+#[derive(Default)]
+struct VariableCounter {
+    pub name_infix: &'static str,
+    counter: usize,
+}
+
+impl VariableCounter {
+    pub fn new(name_infix: &'static str) -> Self {
+        Self {
+            name_infix,
+            counter: 0,
+        }
+    }
+
+    pub fn next(&mut self) -> String {
+        self.counter += 1;
+        let index = self.counter - 1;
+        format!("__baml {}{index}", self.name_infix)
+    }
+}
+
+struct ForLoopVarCounters {
+    pub loop_index: VariableCounter,
+    pub array: VariableCounter,
+    pub array_len: VariableCounter,
+}
+
+impl ForLoopVarCounters {
+    pub fn new() -> Self {
+        Self {
+            loop_index: VariableCounter::new("for loop index"),
+            array: VariableCounter::new("for loop iterated array"),
+            array_len: VariableCounter::new("for loop array length"),
+        }
+    }
+}
+
 /// Compile an HIR function to bytecode.
 fn compile_hir_function(
     func: &hir::ExprFunction,
     globals: &HashMap<String, usize>,
     classes: &HashMap<String, HashMap<String, usize>>,
     llm_functions: &HashSet<String>,
+    loop_var_counter: &mut ForLoopVarCounters,
     objects: &mut Vec<Object>,
 ) -> anyhow::Result<Function> {
-    let mut compiler = HirCompiler::new(globals, classes, llm_functions, objects);
+    let mut compiler = HirCompiler::new(globals, classes, llm_functions, loop_var_counter, objects);
     compiler.compile_function(func)
 }
 
@@ -186,6 +229,8 @@ struct HirCompiler<'g> {
     /// Maps the name of the variable to its final index in the eval stack.
     locals: HashMap<String, usize>,
 
+    var_counters: &'g mut ForLoopVarCounters,
+
     /// Scope stack.
     scopes: Vec<Scope>,
 
@@ -218,6 +263,7 @@ impl<'g> HirCompiler<'g> {
         globals: &'g HashMap<String, usize>,
         classes: &'g HashMap<String, HashMap<String, usize>>,
         llm_functions: &'g HashSet<String>,
+        var_counters: &'g mut ForLoopVarCounters,
         objects: &'g mut Vec<Object>,
     ) -> Self {
         Self {
@@ -226,6 +272,7 @@ impl<'g> HirCompiler<'g> {
             llm_functions,
             objects,
             locals: HashMap::new(),
+            var_counters,
             current_loop: None,
             bytecode: Bytecode::new(),
             scopes: Vec::new(),
@@ -302,11 +349,7 @@ impl<'g> HirCompiler<'g> {
                 self.track_local(name);
             }
             hir::Statement::Declare { name, .. } => {
-                // For mutable references, we need to allocate space on the stack
-                // We'll push a null/undefined value as placeholder
-                let constant_index = self.add_constant(Value::Null);
-                self.emit(Instruction::LoadConst(constant_index));
-                self.track_local(name);
+                self.declare_mut(name);
             }
 
             hir::Statement::Assign { name, value, .. } => {
@@ -361,8 +404,90 @@ impl<'g> HirCompiler<'g> {
                 // binding) then implicitly drop the value.
                 self.emit(Instruction::Pop(1));
             }
-            hir::Statement::ForLoop { .. } => {
-                todo!()
+            hir::Statement::ForLoop {
+                identifier,
+                iterator,
+                block,
+                span,
+            } => {
+                // store array, array length & index in stack.
+                // compile as:
+                // let <array> = (iterator);
+                // let <array len> = array.len()
+                // var <loop i> = 0;
+                // while (<loop i> < <array len>) {
+                //      let <iterator> = <array>[<loop i>];
+                //      <loop i>++;
+                //      (loop body)
+                // }
+
+                // {
+
+                self.compile_expression(iterator);
+                self.enter_scope();
+
+                // stack: [<array>]
+
+                // save array length & loop index as locals. Use spaces for variable names since
+                // those can't be achieved by the user.
+
+                let array_name = self.var_counters.array.next();
+                let array_len_name = self.var_counters.array_len.next();
+                let loop_i_name = self.var_counters.loop_index.next();
+
+                // track first array, then array len
+                let array_location = self.track_local(&array_name);
+                let array_len_location = self.track_local(&array_len_name);
+                let loop_i_location = self.track_local(&loop_i_name);
+
+                self.emit(Instruction::ArrayLength);
+
+                // stack: [<array> <array len>]
+
+                // var <loop i> = 0;
+                {
+                    // maintain zero at a place because otherwise we're going to add it every time
+                    // a `for` loop is compiled.
+                    let zero = self.find_or_add_int(0);
+
+                    self.emit(Instruction::LoadConst(zero));
+                }
+                // stack: [<array> <array len> <loop i>]
+
+                self.compile_while_loop(
+                    |ctx| {
+                        ctx.emit(Instruction::LoadVar(loop_i_location));
+                        ctx.emit(Instruction::LoadVar(array_len_location));
+                        ctx.emit(Instruction::CmpOp(CmpOp::Lt));
+                    },
+                    |ctx| {
+                        ctx.enter_scope();
+
+                        // NOTE: would be nice to have newtype'd indices for these.
+                        let iterator_location = ctx.track_local(identifier.as_str());
+
+                        // let <iterator name> = array[i];
+
+                        ctx.emit(Instruction::LoadVar(array_location));
+                        ctx.emit(Instruction::LoadVar(loop_i_location));
+                        ctx.emit(Instruction::LoadArrayElement);
+
+                        // <loop_i>++;
+                        ctx.emit(Instruction::LoadVar(loop_i_location));
+                        let one = ctx.find_or_add_int(1);
+                        ctx.emit(Instruction::LoadConst(one));
+                        ctx.emit(Instruction::BinOp(BinOp::Add));
+                        ctx.emit(Instruction::StoreVar(loop_i_location));
+
+                        // stack: [<array> <array len> <array iterator> <loop iterator>]
+
+                        ctx.compile_block(block);
+
+                        ctx.exit_scope(false);
+                    },
+                );
+
+                self.exit_scope(false);
             }
             hir::Statement::While {
                 condition, block, ..
@@ -370,41 +495,10 @@ impl<'g> HirCompiler<'g> {
                 // Remember where the loop starts
                 let loop_start = self.bytecode.instructions.len() as isize;
 
-                let old_loop_status = self.current_loop.replace(LoopInfo {
-                    start_insn: loop_start,
-                    break_patch_list: Vec::new(),
-                });
-
-                // Compile condition
-                self.compile_expression(condition);
-
-                // Jump out of loop if false
-                let exit_jump = self.emit(Instruction::JumpIfFalse(0));
-
-                // Pop condition
-                self.emit(Instruction::Pop(1));
-
-                // Compile loop body
-                self.compile_block(block);
-
-                // Jump back to start
-                let loop_end = self.bytecode.instructions.len() as isize;
-                let offset = -(loop_end - loop_start);
-                self.emit(Instruction::Jump(offset));
-
-                let loop_info = std::mem::replace(&mut self.current_loop, old_loop_status)
-                    .expect("should have been pushed before when grabbing old_status");
-
-                // patch exit jump so that it pops condition
-                self.patch_jump(exit_jump);
-                // Pop condition
-                self.emit(Instruction::Pop(1));
-
-                // Patch breaks. Since they are executed *inside* the loop body, the condition is
-                // alredy popped.
-                for jump_loc in loop_info.break_patch_list {
-                    self.patch_jump(jump_loc);
-                }
+                self.compile_while_loop(
+                    |ctx| ctx.compile_expression(condition),
+                    |ctx| ctx.compile_block(block),
+                );
             }
             hir::Statement::Break(span) => {
                 // NOTE: right now this will generate redundant code when using
@@ -427,6 +521,70 @@ impl<'g> HirCompiler<'g> {
                 self.emit(Instruction::Jump(offset));
             }
         }
+    }
+
+    fn declare_mut(&mut self, name: &str) -> usize {
+        // For mutable references, we need to allocate space on the stack
+        // We'll push a null/undefined value as placeholder
+        let constant_index = self.add_constant(Value::Null);
+        self.emit(Instruction::LoadConst(constant_index));
+        self.track_local(name)
+    }
+
+    fn find_or_add_int(&mut self, wanted_int: i64) -> usize {
+        let known_location = self
+            .bytecode
+            .constants
+            .iter()
+            .enumerate()
+            .find_map(|(i, elem)| {
+                let Value::Int(val) = elem else {
+                    return None;
+                };
+
+                (val == &wanted_int).then_some(i)
+            });
+
+        known_location.unwrap_or_else(|| self.add_constant(Value::Int(wanted_int)))
+    }
+
+    fn next_insn_index(&self) -> isize {
+        self.bytecode.instructions.len() as isize
+    }
+
+    /// Compiles a while loop with custom condition & block logic.
+    ///
+    /// Lambdas take `&mut Self` because both cannot borrow `self` at the same time.
+    fn compile_while_loop(
+        &mut self,
+        compile_condition: impl FnOnce(&mut Self),
+        compile_block: impl FnOnce(&mut Self),
+    ) {
+        let loop_start = self.next_insn_index();
+        self.inside_loop(|ctx| {
+            compile_condition(ctx);
+
+            // Jump out of loop if false
+            let exit_jump = ctx.emit(Instruction::JumpIfFalse(0));
+
+            // Pop condition
+            ctx.emit(Instruction::Pop(1));
+
+            // Compile loop body
+            compile_block(ctx);
+
+            // Jump back to start
+            let loop_end = ctx.bytecode.instructions.len() as isize;
+            let offset = -(loop_end - loop_start);
+            ctx.emit(Instruction::Jump(offset));
+
+            // patch exit jump so that it pops condition
+            ctx.patch_jump(exit_jump);
+            // Pop condition
+            ctx.emit(Instruction::Pop(1));
+
+            // the `break` statements don't have to pop anything.
+        });
     }
 
     /// Generate bytecode for an expression.
@@ -769,7 +927,7 @@ impl<'g> HirCompiler<'g> {
     /// Keeps track of a new local and returns its index in the eval stack.
     fn track_local(&mut self, name: &str) -> usize {
         let index = self.locals.len() + 1;
-        self.locals.insert(name.to_string(), index);
+        debug_assert!(self.locals.insert(name.to_string(), index).is_none());
 
         self.scopes
             .last_mut()
@@ -814,6 +972,32 @@ impl<'g> HirCompiler<'g> {
                 self.locals.remove(&local);
             }
         }
+    }
+
+    /// Wraps `inner` in a context with loop information. Any `break`s that are submitted by
+    /// `inner` to this loop are patched to the next instruction after `inner` returns.
+    /// The parameter to `inner` is the same as `self` and can be ignored, it's used to
+    /// obtain the borrow inside `inner`'s body.
+    ///
+    /// See [`Self::compile_while_loop`] for a usage example.
+    fn inside_loop<T>(&mut self, inner: impl FnOnce(&mut Self) -> T) -> T {
+        let start_insn = self.next_insn_index();
+
+        let old_loop_status = self.current_loop.replace(LoopInfo {
+            start_insn,
+            break_patch_list: Vec::new(),
+        });
+
+        let result = inner(self);
+
+        let loop_info = std::mem::replace(&mut self.current_loop, old_loop_status)
+            .expect("should have been pushed before when grabbing old_status");
+
+        for jump_loc in loop_info.break_patch_list {
+            self.patch_jump(jump_loc);
+        }
+
+        result
     }
 }
 
