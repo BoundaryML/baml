@@ -100,6 +100,15 @@ pub fn parse_top_level_assignment(
 
             None
         }
+
+        Stmt::WhileLoop(stmt) => {
+            diagnostics.push_error(DatamodelError::new_static(
+                "while loops are not allowed at top level, only let statements are allowed",
+                stmt.span.clone(),
+            ));
+
+            None
+        }
     }
 }
 
