@@ -30,8 +30,14 @@ pub(crate) fn parse_expression(
             | Op::infix(Rule::LTEQ, Assoc::Left)
             | Op::infix(Rule::GT, Assoc::Left)
             | Op::infix(Rule::GTEQ, Assoc::Left))
+        .op(Op::infix(Rule::BIT_OR, Assoc::Left))
+        .op(Op::infix(Rule::BIT_XOR, Assoc::Left))
+        .op(Op::infix(Rule::BIT_AND, Assoc::Left))
+        .op(Op::infix(Rule::BIT_SHL, Assoc::Left) | Op::infix(Rule::BIT_SHR, Assoc::Left))
         .op(Op::infix(Rule::ADD, Assoc::Left) | Op::infix(Rule::SUB, Assoc::Left))
-        .op(Op::infix(Rule::MUL, Assoc::Left) | Op::infix(Rule::DIV, Assoc::Left))
+        .op(Op::infix(Rule::MUL, Assoc::Left)
+            | Op::infix(Rule::DIV, Assoc::Left)
+            | Op::infix(Rule::MOD, Assoc::Left))
         .op(Op::prefix(Rule::NOT))
         .op(Op::prefix(Rule::NEG))
         .op(Op::postfix(Rule::array_accessor))
@@ -93,6 +99,12 @@ pub(crate) fn parse_expression(
                 Rule::SUB => BinaryOperator::Sub,
                 Rule::MUL => BinaryOperator::Mul,
                 Rule::DIV => BinaryOperator::Div,
+                Rule::MOD => BinaryOperator::Mod,
+                Rule::BIT_AND => BinaryOperator::BitAnd,
+                Rule::BIT_OR => BinaryOperator::BitOr,
+                Rule::BIT_XOR => BinaryOperator::BitXor,
+                Rule::BIT_SHL => BinaryOperator::Shl,
+                Rule::BIT_SHR => BinaryOperator::Shr,
                 Rule::OR => BinaryOperator::Or,
                 Rule::AND => BinaryOperator::And,
                 _ => unreachable_rule!(operator, Rule::infix_operator),

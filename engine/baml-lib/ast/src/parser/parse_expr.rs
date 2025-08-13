@@ -8,8 +8,8 @@ use super::{
 use crate::{
     assert_correct_parser,
     ast::{
-        self, expr::ExprFn, App, ArgumentsList, AssignStmt, Expression, ExpressionBlock,
-        ForLoopStmt, LetStmt, Stmt, TopLevelAssignment, *,
+        self, expr::ExprFn, App, ArgumentsList, AssignOp, AssignOpStmt, AssignStmt, Expression,
+        ExpressionBlock, ForLoopStmt, LetStmt, Stmt, TopLevelAssignment, *,
     },
     parser::{
         parse_arguments::parse_arguments_list, parse_expression::parse_expression,
@@ -74,6 +74,14 @@ pub fn parse_top_level_assignment(
 
             None
         }
+        Stmt::AssignOp(stmt) => {
+            diagnostics.push_error(DatamodelError::new_static(
+                "assign operations are not allowed at top level, only let statements are allowed",
+                stmt.span.clone(),
+            ));
+
+            None
+        }
 
         Stmt::ForLoop(stmt) => {
             diagnostics.push_error(DatamodelError::new_static(
@@ -128,6 +136,41 @@ pub fn parse_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
             maybe_body.map(|body| {
                 Stmt::Assign(AssignStmt {
                     identifier,
+                    expr: body,
+                    span: span.clone(),
+                })
+            })
+        }
+        Rule::assign_op_stmt => {
+            let mut assignment_tokens = stmt_token.into_inner();
+
+            let identifier = parse_identifier(assignment_tokens.next()?, diagnostics);
+
+            let op_token = assignment_tokens.next()?;
+
+            let assign_op = match op_token.as_rule() {
+                Rule::ADD_ASSIGN => AssignOp::AddAssign,
+                Rule::SUB_ASSIGN => AssignOp::SubAssign,
+                Rule::MUL_ASSIGN => AssignOp::MulAssign,
+                Rule::DIV_ASSIGN => AssignOp::DivAssign,
+                Rule::MOD_ASSIGN => AssignOp::ModAssign,
+                Rule::BIT_AND_ASSIGN => AssignOp::BitAndAssign,
+                Rule::BIT_OR_ASSIGN => AssignOp::BitOrAssign,
+                Rule::BIT_XOR_ASSIGN => AssignOp::BitXorAssign,
+                Rule::BIT_SHL_ASSIGN => AssignOp::ShlAssign,
+                Rule::BIT_SHR_ASSIGN => AssignOp::ShrAssign,
+                other => unreachable_rule!(op_token, other),
+            };
+
+            let rhs = assignment_tokens.next()?;
+            let rhs_span = diagnostics.span(rhs.as_span());
+
+            let maybe_body = parse_assignment_expr(diagnostics, rhs, rhs_span);
+
+            maybe_body.map(|body| {
+                Stmt::AssignOp(AssignOpStmt {
+                    identifier,
+                    assign_op,
                     expr: body,
                     span: span.clone(),
                 })

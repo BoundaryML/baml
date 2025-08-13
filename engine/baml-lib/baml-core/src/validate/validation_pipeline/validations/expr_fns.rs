@@ -106,6 +106,10 @@ fn validate_stmt(ctx: &mut Context<'_>, stmt: &Stmt, scope: &HashSet<String>) {
             // re: validation is handled by HIR-based typechecking.
             validate_expression(ctx, &stmt.expr, scope);
         }
+        Stmt::AssignOp(stmt) => {
+            // re: validation is handled by HIR-based typechecking.
+            validate_expression(ctx, &stmt.expr, scope);
+        }
         Stmt::Let(stmt) => {
             validate_expression(ctx, &stmt.expr, scope);
         }

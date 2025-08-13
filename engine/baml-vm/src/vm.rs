@@ -802,6 +802,13 @@ impl Vm {
                             BinOp::Sub => left - right,
                             BinOp::Mul => left * right,
                             BinOp::Div => left / right,
+                            BinOp::Mod => left % right,
+
+                            BinOp::BitAnd => left & right,
+                            BinOp::BitOr => left | right,
+                            BinOp::BitXor => left ^ right,
+                            BinOp::Shl => left << right,
+                            BinOp::Shr => left >> right,
                         }),
 
                         (Value::Float(left), Value::Float(right)) => Value::Float(match op {
@@ -809,6 +816,20 @@ impl Vm {
                             BinOp::Sub => left - right,
                             BinOp::Mul => left * right,
                             BinOp::Div => left / right,
+                            BinOp::Mod => left % right,
+
+                            // Bitwise ops not applicable to floats.
+                            BinOp::BitAnd
+                            | BinOp::BitOr
+                            | BinOp::BitXor
+                            | BinOp::Shl
+                            | BinOp::Shr => {
+                                return Err(VmError::from(InternalError::CannotApplyBinOp {
+                                    left: Type::Float,
+                                    right: Type::Float,
+                                    op,
+                                }));
+                            }
                         }),
 
                         _ => {
