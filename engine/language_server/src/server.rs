@@ -28,7 +28,7 @@ use self::{
     schedule::event_loop_thread,
 };
 use crate::{
-    baml_project::file_utils::{find_baml_src, find_top_level_parent}, playground2, session::{AllSettings, ClientSettings, Session}, PositionEncoding
+    baml_project::file_utils::{find_baml_src, find_top_level_parent}, playground2::{self, server::LangServerToWasmMessage}, session::{AllSettings, ClientSettings, Session}, PositionEncoding
 };
 
 pub mod api;
@@ -54,7 +54,7 @@ pub(crate) struct Server {
     pub worker_threads: NonZeroUsize,
     pub session: Session,
     pub tokio_runtime: tokio::runtime::Runtime,
-    pub broadcast_tx: broadcast::Sender<lsp_server::Message>,
+    pub broadcast_tx: broadcast::Sender<LangServerToWasmMessage>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -160,12 +160,15 @@ impl Server {
 
         let rt = tokio::runtime::Runtime::new()?;
 
+        let (playground_tx, playground_rx) = broadcast::channel(1000);
+
         let mut session = Session::new(
             &client_capabilities,
             position_encoding,
             global_settings,
             &workspaces,
             rt.handle().clone(),
+            playground_tx,
         )?;
 
         let client = client::Client::new(connection.make_sender());
@@ -200,6 +203,16 @@ impl Server {
                 broadcast_rx,
             }.run().await;
         });
+        {
+            let mut playground_rx = playground_rx.resubscribe();
+            let broadcast_tx = server.broadcast_tx.clone();
+            server.tokio_runtime.spawn(async move {
+                while let Ok(msg) = playground_rx.recv().await {
+                    broadcast_tx.send(LangServerToWasmMessage::PlaygroundMessage(msg)).unwrap();
+                }
+                tracing::info!("Playground rx channel closed");
+            });
+        }
 
         Ok(server)
     }
@@ -290,7 +303,7 @@ impl Server {
         _client_capabilities: &ClientCapabilities,
         mut session: Session,
         worker_threads: NonZeroUsize,
-        broadcast_tx: broadcast::Sender<lsp_server::Message>,
+        broadcast_tx: broadcast::Sender<LangServerToWasmMessage>,
     ) -> anyhow::Result<()> {
         // Ensure we have a notifier for reload operations
         let client = client::Client::new(connection.make_sender());
@@ -306,7 +319,7 @@ impl Server {
             if connection.handle_shutdown(&msg)? {
                 break;
             }
-            broadcast_tx.send(msg.clone())?;
+            broadcast_tx.send(LangServerToWasmMessage::LspMessage(msg.clone()))?;
             let tasks = match msg {
                 Message::Request(req) => vec![api::request(req)],
                 Message::Notification(notification) => api::notification(notification),

@@ -1,4 +1,5 @@
 use anyhow::Context;
+use serde::Serialize;
 use tokio::sync::broadcast;
 use std::io::Cursor;
 use flate2::read::GzDecoder;
@@ -14,12 +15,20 @@ use std::path::PathBuf;
 use std::time::Duration;
 use tokio::net::TcpListener;
 use tower_http::services::ServeDir;
+use crate::playground::FrontendMessage;
 use crate::playground2::ping_handler::ping_handler;
 use crate::playground2::websocket_rpc_handler::ws_rpc_handler;
 use crate::playground2::websocket_ws_handler::ws_handler;
 
+#[derive(Serialize, Debug, Clone)]
+#[serde(untagged)]
+pub enum LangServerToWasmMessage {
+    LspMessage(lsp_server::Message),
+    PlaygroundMessage(FrontendMessage),
+}
+
 pub struct AppState {
-    pub broadcast_rx: broadcast::Receiver<lsp_server::Message>,
+    pub broadcast_rx: broadcast::Receiver<LangServerToWasmMessage>,
 }
 
 impl Clone for AppState {
@@ -33,7 +42,7 @@ impl Clone for AppState {
 #[derive(Debug)]
 pub struct Playground2Server {
     pub port: u16,
-    pub broadcast_rx: broadcast::Receiver<lsp_server::Message>,
+    pub broadcast_rx: broadcast::Receiver<LangServerToWasmMessage>,
 }
 
 impl Playground2Server {

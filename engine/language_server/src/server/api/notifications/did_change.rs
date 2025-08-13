@@ -7,6 +7,7 @@ use lsp_types::{
 #[cfg(feature = "playground-server")]
 use crate::playground::broadcast_project_update;
 use crate::{
+    playground::FrontendMessage,
     server::{
         api::{
             diagnostics::publish_diagnostics,
@@ -66,8 +67,9 @@ impl SyncNotificationHandler for DidChangeTextDocumentHandler {
             .internal_error()?;
 
         // Broadcast update to playground clients
-        #[cfg(feature = "playground-server")]
-        if let Some(state) = &session.playground_state {
+        // #[cfg(feature = "playground-server")]
+        // if let Some(state) = &session.playground_state {
+        {
             let project = project.lock();
             let files_map: std::collections::HashMap<String, String> = project
                 .baml_project
@@ -85,14 +87,22 @@ impl SyncNotificationHandler for DidChangeTextDocumentHandler {
                     (key, contents)
                 })
                 .collect();
-            let root_path = project.root_path().to_string_lossy().to_string();
-            let state = state.clone();
-            if let Some(runtime) = &session.playground_runtime {
-                runtime.spawn(async move {
-                    let _ = broadcast_project_update(&state, &root_path, files_map).await;
-                });
-            }
+            session
+                .playground_tx
+                .send(FrontendMessage::add_project {
+                    root_path: project.root_path().to_string_lossy().to_string(),
+                    files: files_map,
+                })
+                .unwrap();
         }
+        // let root_path = project.root_path().to_string_lossy().to_string();
+        // let state = state.clone();
+        // if let Some(runtime) = &session.playground_runtime {
+        //     runtime.spawn(async move {
+        //         let _ = broadcast_project_update(&state, &root_path, files_map).await;
+        //     });
+        // }
+        // }
 
         tracing::info!("publishing diagnostics");
 

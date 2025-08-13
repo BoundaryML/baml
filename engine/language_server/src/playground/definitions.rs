@@ -6,7 +6,7 @@ use tokio::sync::broadcast;
 // Note: the name add_project should match exactly to the
 // EventListener.tsx command definitions due to how serde serializes these into json
 #[allow(non_camel_case_types)]
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(tag = "command", content = "content")]
 pub enum FrontendMessage {
     add_project {

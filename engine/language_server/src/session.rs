@@ -8,12 +8,11 @@ use std::{
     time::Instant,
 };
 
-use parking_lot::Mutex;
-
 use anyhow::{anyhow, Context};
 use index::DocumentController;
 use itertools::any;
 use lsp_types::{ClientCapabilities, TextDocumentContentChangeEvent, Url};
+use parking_lot::Mutex;
 use serde_json::Value;
 
 pub(crate) use self::{capabilities::ResolvedClientCapabilities, settings::AllSettings};
@@ -24,6 +23,7 @@ pub use self::{
 use crate::{
     baml_project::{file_utils::find_top_level_parent, BamlProject, Project},
     edit::{DocumentKey, DocumentVersion},
+    playground::FrontendMessage,
     server::client::Notifier,
 };
 // use crate::system::{url_to_any_system_path, AnySystemPath, LSPSystem};
@@ -53,6 +53,8 @@ pub struct Session {
     pub resolved_client_capabilities: Arc<ResolvedClientCapabilities>,
 
     pub baml_settings: BamlSettings,
+
+    pub playground_tx: broadcast::Sender<FrontendMessage>,
 
     /// The actual port that the playground server is running on (after availability check)
     #[cfg(feature = "playground-server")]
@@ -86,6 +88,7 @@ impl Clone for Session {
             position_encoding: self.position_encoding,
             resolved_client_capabilities: self.resolved_client_capabilities.clone(),
             baml_settings: self.baml_settings.clone(),
+            playground_tx: self.playground_tx.clone(),
             #[cfg(feature = "playground-server")]
             playground_port: self.playground_port,
             #[cfg(feature = "playground-server")]
@@ -103,6 +106,7 @@ impl Session {
         global_settings: ClientSettings,
         workspace_folders: &[(Url, ClientSettings)],
         runtime_handle: tokio::runtime::Handle,
+        playground_tx: broadcast::Sender<FrontendMessage>,
     ) -> anyhow::Result<Self> {
         let mut projects = HashMap::new();
         let index = index::Index::new(global_settings.clone());
@@ -140,6 +144,7 @@ impl Session {
                 client_capabilities,
             )),
             baml_settings: BamlSettings::default(),
+            playground_tx,
             #[cfg(feature = "playground-server")]
             playground_port: None,
             #[cfg(feature = "playground-server")]
@@ -218,13 +223,7 @@ impl Session {
 
         let info_string = projects
             .iter()
-            .map(|(key, project)| {
-                format!(
-                    "{}: {:?}",
-                    key.display(),
-                    project.lock().root_path()
-                )
-            })
+            .map(|(key, project)| format!("{}: {:?}", key.display(), project.lock().root_path()))
             .collect::<Vec<_>>()
             .join("\n");
 
@@ -289,16 +288,13 @@ impl Session {
         // Index all the files, except for the ones with unsaved changes.
         files.iter().for_each(|(file_url, file_contents)| {
             let text_document = TextDocument::new(file_contents.clone(), 0);
-            let document_is_unsaved = any(
-                self.baml_src_projects.lock().iter(),
-                |(_, project)| {
-                    project
-                        .lock()
-                        .baml_project
-                        .unsaved_files
-                        .contains_key(file_url)
-                },
-            );
+            let document_is_unsaved = any(self.baml_src_projects.lock().iter(), |(_, project)| {
+                project
+                    .lock()
+                    .baml_project
+                    .unsaved_files
+                    .contains_key(file_url)
+            });
             if !document_is_unsaved {
                 self.open_text_document(file_url.clone(), text_document);
             }
@@ -321,8 +317,7 @@ impl Session {
         let project = self.get_or_create_project(&file_path)?;
 
         let document_key =
-            DocumentKey::from_url(&project.lock().baml_project.root_dir_name, &url)
-                .ok()?;
+            DocumentKey::from_url(&project.lock().baml_project.root_dir_name, &url).ok()?;
 
         Some(DocumentSnapshot {
             resolved_client_capabilities: self.resolved_client_capabilities.clone(),
@@ -335,8 +330,7 @@ impl Session {
     /// Registers a text document at the provided `url`.
     /// If a document is already open here, it will be overwritten.
     pub(crate) fn open_text_document(&self, document_key: DocumentKey, document: TextDocument) {
-        let mut index = self.index.lock();
-        index.open_text_document(document_key, document);
+        let mut index = self.index.lock().open_text_document(document_key, document);
     }
 
     pub(crate) fn set_unsaved_file(
@@ -397,12 +391,7 @@ impl Session {
             .iter_mut()
             .try_for_each(|(_folder, project)| {
                 let text_document = TextDocument::new(doc_contents.clone(), 0);
-                if project
-                    .lock()
-                    .baml_project
-                    .files
-                    .contains_key(doc_key)
-                {
+                if project.lock().baml_project.files.contains_key(doc_key) {
                     project
                         .lock()
                         .baml_project
@@ -468,10 +457,8 @@ impl DocumentSnapshot {
 mod tests {
     use std::{
         path::PathBuf,
-        sync::Arc,
+        sync::{Arc, Mutex},
     };
-
-    use parking_lot::Mutex;
 
     use lsp_types::ClientCapabilities;
 
