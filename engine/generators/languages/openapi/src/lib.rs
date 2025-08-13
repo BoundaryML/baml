@@ -1,6 +1,8 @@
 use std::hash::Hash;
 
-use dir_writer::{FileCollector, GeneratorArgs, IntermediateRepr, LanguageFeatures};
+use dir_writer::{
+    FileCollector, GeneratorArgs, IntermediateRepr, LanguageFeatures, RemoveDirBehavior,
+};
 use indexmap::IndexMap;
 use serde::Serialize;
 
@@ -18,6 +20,10 @@ impl LanguageFeatures for OpenApiLanguageFeatures {
     fn name() -> &'static str {
         "openapi"
     }
+
+    /// OpenAPI codegen creates a lot of files that BAML can't know about in
+    /// advance, so we allow removing them.
+    const REMOVE_DIR_BEHAVIOR: RemoveDirBehavior = RemoveDirBehavior::Unsafe;
 
     const CONTENT_PREFIX: &'static str = r#"
 ###############################################################################

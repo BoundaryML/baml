@@ -141,7 +141,7 @@ impl TypeBuilder {
         rt: &crate::runtime::BamlRuntime,
     ) -> Result<(), pyo3::PyErr> {
         self.inner
-            .add_baml(baml, &rt.inner)
+            .add_baml(baml, rt.inner.internal())
             .map_err(BamlError::from_anyhow)
     }
 }

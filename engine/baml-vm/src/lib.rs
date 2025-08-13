@@ -1,0 +1,20 @@
+//! Baml virtual machine.
+//!
+//! This crate implements a stack based virtual machine similar to the CPython
+//! VM or Lox VM from [Crafting Interpreters](https://craftinginterpreters.com/).
+//!
+//! Main entry point is [`Vm::exec`] which runs the VM cycle:
+//! 1. Decode Instruction.
+//! 2. Execute Instruction.
+//! 3. Increment instruction pointer and repeat loop.
+//!
+//! The instructions that the VM runs are defined in [`Instruction`] enum.
+
+mod bytecode;
+pub mod debug;
+mod vm;
+
+pub use bytecode::{BinOp, Bytecode, CmpOp, Instruction, UnaryOp};
+pub use vm::{
+    BamlVmProgram, Class, Frame, Function, FunctionKind, Instance, Object, Value, Vm, VmExecState,
+};

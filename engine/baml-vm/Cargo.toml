@@ -1,0 +1,22 @@
+[package]
+edition = "2021"
+name = "baml-vm"
+version.workspace = true
+authors.workspace = true
+description = "BAML Virtual Machine"
+license-file.workspace = true
+
+[dependencies]
+colored = "2.1.0"
+tokio = { workspace = true }
+baml-types = { path = "../baml-lib/baml-types" }
+
+[lints.clippy]
+new_without_default = "allow"
+
+[dev-dependencies]
+anyhow = { workspace = true }
+baml-compiler = { path = "../baml-compiler" }
+internal-baml-core = { path = "../baml-lib/baml-core" }
+internal-baml-diagnostics = { path = "../baml-lib/diagnostics" }
+internal-baml-parser-database = { path = "../baml-lib/parser-database" }

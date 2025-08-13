@@ -44,6 +44,75 @@ pub enum Expr<T> {
         body: Arc<Expr<T>>,
         meta: T,
     },
+    /// Array or map access: `base[index]`
+    ArrayAccess {
+        base: Arc<Expr<T>>,
+        index: Arc<Expr<T>>,
+        meta: T,
+    },
+    /// Field access: `base.field`
+    FieldAccess {
+        base: Arc<Expr<T>>,
+        field: String,
+        meta: T,
+    },
+    BinaryOperation {
+        left: Arc<Expr<T>>,
+        operator: BinaryOperator,
+        right: Arc<Expr<T>>,
+        meta: T,
+    },
+    UnaryOperation {
+        operator: UnaryOperator,
+        expr: Arc<Expr<T>>,
+        meta: T,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BinaryOperator {
+    /// The `==` operator (equal).
+    Eq,
+    /// The `!=` operator (not equal).
+    Neq,
+    /// The `<` operator (less than).
+    Lt,
+    /// The `<=` operator (less than or equal).
+    LtEq,
+    /// The `>` operator (greater than).
+    Gt,
+    /// The `>=` operator (greater than or equal).
+    GtEq,
+    /// The `+` operator (addition).
+    Add,
+    /// The `-` operator (subtraction).
+    Sub,
+    /// The `*` operator (multiplication).
+    Mul,
+    /// The `/` operator (division).
+    Div,
+    /// The `%` operator (modulus).
+    Mod,
+    /// The `&` operator (bitwise and).
+    BitAnd,
+    /// The `|` operator (bitwise or).
+    BitOr,
+    /// The `^` operator (bitwise xor).
+    BitXor,
+    /// The `<<` operator (shift left).
+    Shl,
+    /// The `>>` operator (shift right).
+    Shr,
+    /// The `&&` operator (logical and).
+    And,
+    /// The `||` operator (logical or).
+    Or,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum UnaryOperator {
+    Not,
+    Neg,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -99,6 +168,10 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
             Expr::Builtin(_, meta) => meta,
             Expr::If(_, _, _, meta) => meta,
             Expr::ForLoop { meta, .. } => meta,
+            Expr::ArrayAccess { meta, .. } => meta,
+            Expr::FieldAccess { meta, .. } => meta,
+            Expr::BinaryOperation { meta, .. } => meta,
+            Expr::UnaryOperation { meta, .. } => meta,
         }
     }
 
@@ -118,6 +191,10 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
             Expr::Builtin(_, meta) => meta,
             Expr::If(_, _, _, meta) => meta,
             Expr::ForLoop { meta, .. } => meta,
+            Expr::ArrayAccess { meta, .. } => meta,
+            Expr::FieldAccess { meta, .. } => meta,
+            Expr::BinaryOperation { meta, .. } => meta,
+            Expr::UnaryOperation { meta, .. } => meta,
         }
     }
 
@@ -137,6 +214,10 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
             Expr::Builtin(_, meta) => meta,
             Expr::If(_, _, _, meta) => meta,
             Expr::ForLoop { meta, .. } => meta,
+            Expr::ArrayAccess { meta, .. } => meta,
+            Expr::FieldAccess { meta, .. } => meta,
+            Expr::BinaryOperation { meta, .. } => meta,
+            Expr::UnaryOperation { meta, .. } => meta,
         }
     }
 }
@@ -227,6 +308,23 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
                     iterable.dump_str(),
                     body.dump_str()
                 )
+            }
+            Expr::ArrayAccess { base, index, .. } => {
+                format!("{}[{}]", base.dump_str(), index.dump_str())
+            }
+            Expr::FieldAccess { base, field, .. } => {
+                format!("{}.{}", base.dump_str(), field)
+            }
+            Expr::BinaryOperation {
+                left,
+                operator,
+                right,
+                ..
+            } => {
+                format!("({:?} {} {})", operator, left.dump_str(), right.dump_str())
+            }
+            Expr::UnaryOperation { operator, expr, .. } => {
+                format!("({:?} {})", operator, expr.dump_str())
             }
         }
     }
@@ -350,6 +448,35 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
                 },
             ) => i1 == i2 && iter1.temporary_same_state(iter2) && body1.temporary_same_state(body2),
             (Expr::ForLoop { .. }, _) => false,
+            (
+                Expr::ArrayAccess {
+                    base: base1,
+                    index: index1,
+                    ..
+                },
+                Expr::ArrayAccess {
+                    base: base2,
+                    index: index2,
+                    ..
+                },
+            ) => base1.temporary_same_state(base2) && index1.temporary_same_state(index2),
+            (Expr::ArrayAccess { .. }, _) => false,
+            (
+                Expr::FieldAccess {
+                    base: base1,
+                    field: field1,
+                    ..
+                },
+                Expr::FieldAccess {
+                    base: base2,
+                    field: field2,
+                    ..
+                },
+            ) => base1.temporary_same_state(base2) && field1 == field2,
+            (Expr::FieldAccess { .. }, _) => false,
+
+            (Expr::BinaryOperation { .. }, _) => false,
+            (Expr::UnaryOperation { .. }, _) => false,
         }
     }
 }
@@ -459,6 +586,18 @@ impl Expr<ExprMetadata> {
                 free_vars.insert(item.clone());
                 free_vars
             }
+            Expr::ArrayAccess { base, index, .. } => {
+                let mut free_vars = base.free_vars();
+                free_vars.extend(index.free_vars());
+                free_vars
+            }
+            Expr::FieldAccess { base, .. } => base.free_vars(),
+            Expr::BinaryOperation { left, right, .. } => {
+                let mut free_vars = left.free_vars();
+                free_vars.extend(right.free_vars());
+                free_vars
+            }
+            Expr::UnaryOperation { expr, .. } => expr.free_vars(),
         }
     }
 
@@ -565,6 +704,36 @@ impl<T: Clone> Expr<T> {
                 body: Arc::new(body.open(target, new_name)),
                 meta: meta.clone(),
             },
+            Expr::ArrayAccess { base, index, meta } => Expr::ArrayAccess {
+                base: Arc::new(base.open(target, new_name)),
+                index: Arc::new(index.open(target, new_name)),
+                meta: meta.clone(),
+            },
+            Expr::FieldAccess { base, field, meta } => Expr::FieldAccess {
+                base: Arc::new(base.open(target, new_name)),
+                field: field.clone(),
+                meta: meta.clone(),
+            },
+            Expr::BinaryOperation {
+                left,
+                operator,
+                right,
+                meta,
+            } => Expr::BinaryOperation {
+                left: Arc::new(left.open(target, new_name)),
+                operator: operator.clone(),
+                right: Arc::new(right.open(target, new_name)),
+                meta: meta.clone(),
+            },
+            Expr::UnaryOperation {
+                expr,
+                operator,
+                meta,
+            } => Expr::UnaryOperation {
+                operator: operator.clone(),
+                expr: Arc::new(expr.open(target, new_name)),
+                meta: meta.clone(),
+            },
         }
     }
 
@@ -653,6 +822,36 @@ impl<T: Clone> Expr<T> {
                 body: Arc::new(body.close(new_index, target)),
                 meta: meta.clone(),
             },
+            Expr::ArrayAccess { base, index, meta } => Expr::ArrayAccess {
+                base: Arc::new(base.close(new_index, target)),
+                index: Arc::new(index.close(new_index, target)),
+                meta: meta.clone(),
+            },
+            Expr::FieldAccess { base, field, meta } => Expr::FieldAccess {
+                base: Arc::new(base.close(new_index, target)),
+                field: field.clone(),
+                meta: meta.clone(),
+            },
+            Expr::BinaryOperation {
+                left,
+                operator,
+                right,
+                meta,
+            } => Expr::BinaryOperation {
+                left: Arc::new(left.close(new_index, target)),
+                operator: operator.clone(),
+                right: Arc::new(right.close(new_index, target)),
+                meta: meta.clone(),
+            },
+            Expr::UnaryOperation {
+                expr,
+                operator,
+                meta,
+            } => Expr::UnaryOperation {
+                operator: operator.clone(),
+                expr: Arc::new(expr.close(new_index, target)),
+                meta: meta.clone(),
+            },
         }
     }
 }
@@ -737,7 +936,21 @@ impl<'a, T: 'a> Iterator for ExprIterator<'a, T> {
                 self.stack.push_back(iterable);
                 self.stack.push_back(body);
             }
+            Expr::ArrayAccess { base, index, .. } => {
+                self.stack.push_back(base);
+                self.stack.push_back(index);
+            }
+            Expr::FieldAccess { base, .. } => {
+                self.stack.push_back(base);
+            }
             Expr::Builtin(_, _) => {}
+            Expr::BinaryOperation { left, right, .. } => {
+                self.stack.push_back(left);
+                self.stack.push_back(right);
+            }
+            Expr::UnaryOperation { expr, .. } => {
+                self.stack.push_back(expr);
+            }
         }
 
         Some(expr)

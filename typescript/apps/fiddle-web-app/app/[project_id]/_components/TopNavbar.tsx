@@ -190,6 +190,8 @@ export const TopNavbar = ({
         open={embedDialogOpen}
         onOpenChange={setEmbedDialogOpen}
         shareId={project.id}
+        project={project}
+        projectName={projectName}
       />
 
       {unsavedChanges ? (

@@ -361,6 +361,7 @@ macro_rules! make_openai_client {
                 default_role: $properties.default_role(),
                 allowed_roles: $properties.allowed_roles(),
                 options: $properties.properties.clone(),
+                remap_role: $properties.remap_role(),
             },
             features: ModelFeatures {
                 chat: true,
@@ -387,6 +388,7 @@ macro_rules! make_openai_client {
                 default_role: $properties.default_role(),
                 allowed_roles: $properties.allowed_roles(),
                 options: $properties.properties.clone(),
+                remap_role: $properties.remap_role(),
             },
             features: ModelFeatures {
                 chat: true,
@@ -680,6 +682,7 @@ mod tests {
                 provider: "openai-responses".to_string(),
                 default_role: "user".to_string(),
                 allowed_roles: vec!["user".to_string(), "assistant".to_string()],
+                remap_role: HashMap::new(),
                 options: IndexMap::new(),
             },
             features: ModelFeatures {
@@ -731,6 +734,7 @@ mod tests {
                 provider: "openai".to_string(),
                 default_role: "user".to_string(),
                 allowed_roles: vec!["user".to_string(), "assistant".to_string()],
+                remap_role: HashMap::new(),
                 options: IndexMap::new(),
             },
             features: ModelFeatures {

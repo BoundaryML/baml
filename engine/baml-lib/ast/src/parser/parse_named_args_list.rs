@@ -40,14 +40,18 @@ pub(crate) fn parse_named_argument_list(
 
         let mut name = None;
         let mut r#type = None;
+        let mut is_mutable = false;
         for arg in named_arg.into_inner() {
             match arg.as_rule() {
                 Rule::identifier => {
                     name = Some(parse_identifier(arg, diagnostics));
                 }
+                Rule::MUT_KEYWORD => {
+                    is_mutable = true;
+                }
                 Rule::COLON => {}
                 Rule::field_type | Rule::field_type_chain => {
-                    match parse_function_arg(arg, diagnostics) {
+                    match parse_function_arg(arg, is_mutable, diagnostics) {
                         Ok(t) => r#type = Some(t),
                         Err(e) => diagnostics.push_error(e),
                     }
@@ -80,6 +84,7 @@ pub(crate) fn parse_named_argument_list(
 
 pub fn parse_function_arg(
     pair: Pair<'_>,
+    is_mutable: bool,
     diagnostics: &mut Diagnostics,
 ) -> Result<BlockArg, DatamodelError> {
     assert!(
@@ -91,6 +96,7 @@ pub fn parse_function_arg(
 
     match parse_field_type_chain(pair, diagnostics) {
         Some(ftype) => Ok(BlockArg {
+            is_mutable,
             span,
             field_type: ftype,
         }),

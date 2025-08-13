@@ -1,12 +1,14 @@
 [workspace]
 resolver = "2"
 members = [
+  "baml-compiler",
   "baml-lib/*",
   "baml-lsp-types",
   "baml-rpc",
   "baml-ids",
   "baml-runtime",
   "baml-schema-wasm",
+  "baml-vm",
   "bstd",
   "cli",
   "language_client_codegen",
@@ -23,6 +25,7 @@ members = [
   "boundary-udf",
 ]
 default-members = [
+  "baml-compiler",
   "baml-lsp-types",
   "baml-lib/*",
   "baml-rpc",
@@ -33,6 +36,7 @@ default-members = [
   # and it's OK to not build this by default because we have to build ts separately (this may
   # also have something to do with resolver=2 and how duplicate dep builds are handled)
   # "baml-schema-wasm",
+  "baml-vm",
   "bstd",
   "cli",
   "language_client_cffi",
@@ -75,6 +79,7 @@ internal-baml-codegen = { path = "language_client_codegen" }
 internal-baml-core = { path = "baml-lib/baml-core" }
 internal-baml-jinja = { path = "baml-lib/jinja-runtime" }
 internal-llm-client = { path = "baml-lib/llm-client" }
+itertools = "0.14.0"
 jsonish = { path = "baml-lib/jsonish" }
 log = "0.4.20"
 # TODO: disable imports, etc
@@ -98,6 +103,7 @@ minijinja = { version = "2.10.2", default-features = false, features = [
   #
 ] }
 once_cell = "1"
+pretty = "0.12.4"
 pretty_assertions = "1.4.1"
 rand = "0.8.5"
 regex = "1.10.4"

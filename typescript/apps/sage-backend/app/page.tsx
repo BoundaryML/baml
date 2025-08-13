@@ -1,8 +1,8 @@
 'use client';
+import type { QueryRequest, QueryResponse } from '@baml/sage-interface';
 import { useEffect, useState } from 'react';
-import { type QueryResponse, submitQuery } from './actions/query';
-import { PLACEHOLDER_QUERIES } from './eval_data';
-import type { QueryRequest } from './types';
+import { submitQuery } from './actions/query';
+import { PLACEHOLDER_QUERIES } from './eval-data';
 async function hashQueryRequest(request: QueryRequest): Promise<string> {
   const sortedRequest = JSON.stringify(request, Object.keys(request).sort());
   const encoder = new TextEncoder();
@@ -80,9 +80,7 @@ export default function Home() {
   }: { queryIndex: number; allowCache: boolean }) => {
     setQueryResults((prev) =>
       prev.map((item, i) =>
-        i === queryIndex
-          ? { ...item, isLoading: true, error: null, response: null }
-          : item,
+        i === queryIndex ? { ...item, isLoading: true, error: null, response: null } : item,
       ),
     );
 
@@ -103,9 +101,7 @@ export default function Home() {
       }
 
       setQueryResults((prev) =>
-        prev.map((item, i) =>
-          i === queryIndex ? { ...item, response, isLoading: false } : item,
-        ),
+        prev.map((item, i) => (i === queryIndex ? { ...item, response, isLoading: false } : item)),
       );
     } catch (err) {
       setQueryResults((prev) =>
@@ -125,18 +121,14 @@ export default function Home() {
   // Function to retry all queries
   const retryAllQueries = async () => {
     await Promise.all(
-      PLACEHOLDER_QUERIES.map((_, index) =>
-        runQuery({ queryIndex: index, allowCache: false }),
-      ),
+      PLACEHOLDER_QUERIES.map((_, index) => runQuery({ queryIndex: index, allowCache: false })),
     );
   };
 
   // Run all queries on mount
   useEffect(() => {
     Promise.all(
-      PLACEHOLDER_QUERIES.map((_, index) =>
-        runQuery({ queryIndex: index, allowCache: true }),
-      ),
+      PLACEHOLDER_QUERIES.map((_, index) => runQuery({ queryIndex: index, allowCache: true })),
     );
   }, []);
 
@@ -182,16 +174,12 @@ export default function Home() {
               <tr
                 key={index}
                 className={`border-b border-gray-200 dark:border-gray-700 hover:bg-blue-50 dark:hover:bg-blue-900/20 ${
-                  index % 2 === 0
-                    ? 'bg-white dark:bg-gray-800'
-                    : 'bg-gray-100 dark:bg-gray-700'
+                  index % 2 === 0 ? 'bg-white dark:bg-gray-800' : 'bg-gray-100 dark:bg-gray-700'
                 }`}
               >
                 <td className="px-4 py-4 align-middle">
                   <button
-                    onClick={() =>
-                      runQuery({ queryIndex: index, allowCache: false })
-                    }
+                    onClick={() => runQuery({ queryIndex: index, allowCache: false })}
                     disabled={item.isLoading}
                     className="text-xs px-3 py-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded transition-colors"
                   >
@@ -200,41 +188,37 @@ export default function Home() {
                 </td>
                 <td className="px-6 py-4 align-middle">
                   <p className="text-sm text-gray-700 dark:text-gray-300">
-                    {item.queryData.input.query}
+                    {item.queryData.input.message.text}
                   </p>
                 </td>
                 <td className="px-6 py-4">
                   {item.isLoading && (
                     <div className="flex items-center space-x-2">
                       <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-                      <span className="text-sm text-gray-600 dark:text-gray-400">
-                        Loading...
-                      </span>
+                      <span className="text-sm text-gray-600 dark:text-gray-400">Loading...</span>
                     </div>
                   )}
 
                   {item.error && (
                     <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded">
-                      <p className="text-sm text-red-800 dark:text-red-200">
-                        {item.error}
-                      </p>
+                      <p className="text-sm text-red-800 dark:text-red-200">{item.error}</p>
                     </div>
                   )}
 
-                  {item.response && item.response.answer && (
+                  {item.response && item.response.message.text && (
                     <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded">
                       <p className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap">
-                        {item.response.answer}
+                        {item.response.message.text}
                       </p>
                     </div>
                   )}
                 </td>
                 <td className="px-6 py-4 max-w-96">
-                  {item.response?.ranked_docs &&
-                    item.response.ranked_docs.length > 0 && (
+                  {item.response?.message.ranked_docs &&
+                    item.response.message.ranked_docs.length > 0 && (
                       <div className="max-w-96">
                         <div>
-                          {item.response.ranked_docs.map((doc) => (
+                          {item.response.message.ranked_docs.map((doc: any) => (
                             <div
                               key={doc.url}
                               className="p-2 bg-gray-50 dark:bg-gray-700/50 rounded text-xs mb-1"
@@ -272,20 +256,20 @@ export default function Home() {
                     )}
                 </td>
                 <td className="px-6 py-4">
-                  {item.response?.suggested_messages &&
-                    item.response.suggested_messages.length > 0 && (
+                  {item.response?.message.suggested_messages &&
+                    item.response.message.suggested_messages.length > 0 && (
                       <div>
                         <div>
-                          {item.response.suggested_messages.map((message, msgIndex) => (
-                            <div
-                              key={msgIndex}
-                              className="p-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded text-xs mb-1"
-                            >
-                              <p className="text-blue-800 dark:text-blue-200">
-                                {message}
-                              </p>
-                            </div>
-                          ))}
+                          {item.response.message.suggested_messages.map(
+                            (message: any, msgIndex: any) => (
+                              <div
+                                key={msgIndex}
+                                className="p-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded text-xs mb-1"
+                              >
+                                <p className="text-blue-800 dark:text-blue-200">{message}</p>
+                              </div>
+                            ),
+                          )}
                         </div>
                       </div>
                     )}

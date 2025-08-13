@@ -1,5 +1,6 @@
 pub mod dev;
 mod dotenv;
+pub mod dump_intermediate;
 pub mod generate;
 pub mod init;
 pub mod init_ui;
