@@ -331,7 +331,7 @@ let_expr = { "let" ~ MUT_KEYWORD? ~ identifier ~ "=" ~ expression }
 assign_stmt = { identifier ~ "=" ~ expression }
 assign_op_stmt = { identifier ~ assign_op ~ expression }
 
-assign_op = _{ ADD_ASSIGN | SUB_ASSIGN | MUL_ASSIGN | DIV_ASSIGN | MOD_ASSIGN | BIT_AND_ASSIGN | BIT_OR_ASSIGN | BIT_XOR_ASSIGN | BIT_SHL_ASSIGN | BIT_SHR_ASSIGN }
+assign_op = _{ BIT_SHL_ASSIGN | BIT_SHR_ASSIGN | ADD_ASSIGN | SUB_ASSIGN | MUL_ASSIGN | DIV_ASSIGN | MOD_ASSIGN | BIT_AND_ASSIGN | BIT_OR_ASSIGN | BIT_XOR_ASSIGN }
 
 ADD_ASSIGN = { "+=" }
 SUB_ASSIGN = { "-=" }
