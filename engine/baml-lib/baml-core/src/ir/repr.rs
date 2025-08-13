@@ -517,6 +517,10 @@ impl WithRepr<Expr<ExprMetadata>> for ast::Expression {
                     meta: (span.clone(), None), // Type will be inferred later
                 })
             }
+            // TODO: impl this (needs to compile, can't panic).
+            ast::Expression::MethodCall { span, .. } => {
+                Ok(Expr::Atom(BamlValueWithMeta::Null((span.clone(), None))))
+            }
             ast::Expression::BinaryOperation {
                 left,
                 operator,

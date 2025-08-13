@@ -434,6 +434,17 @@ impl Expression {
                 field: field.to_string(),
                 span: span.clone(),
             },
+            ast::Expression::MethodCall {
+                receiver,
+                method,
+                args,
+                span,
+            } => Expression::MethodCall {
+                receiver: Box::new(Self::from_ast(receiver)),
+                method: method.to_string(),
+                args: args.iter().map(Self::from_ast).collect(),
+                span: span.clone(),
+            },
             ast::Expression::BoolValue(value, span) => Expression::BoolValue(*value, span.clone()),
             ast::Expression::NumericValue(value, span) => {
                 Expression::NumericValue(value.to_string(), span.clone())

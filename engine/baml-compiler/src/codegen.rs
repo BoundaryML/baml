@@ -417,7 +417,7 @@ impl<'g> HirCompiler<'g> {
             }
 
             hir::Expression::FieldAccess { .. } => {
-                unimplemented!("Array access compilation")
+                unimplemented!("field access compilation")
             }
 
             hir::Expression::NumericValue(num, _) => {
@@ -491,6 +491,10 @@ impl<'g> HirCompiler<'g> {
                 } else {
                     self.emit(Instruction::Call(args.len()));
                 }
+            }
+
+            hir::Expression::MethodCall { .. } => {
+                todo!("method call compilation")
             }
 
             hir::Expression::ClassConstructor(constructor, _) => {

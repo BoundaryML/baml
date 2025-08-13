@@ -67,6 +67,12 @@ pub enum Expr<T> {
         args: Vec<Expr<T>>,
         meta: T,
     },
+    MethodCall {
+        receiver: Arc<Expr<T>>,
+        method: Arc<Expr<T>>,
+        args: Vec<Expr<T>>,
+        meta: T,
+    },
     If(Arc<Expr<T>>, Arc<Expr<T>>, Option<Arc<Expr<T>>>, T),
     Builtin(Builtin, T),
     ForLoop {
@@ -229,6 +235,7 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
             Expr::FieldAccess { meta, .. } => meta,
             Expr::BinaryOperation { meta, .. } => meta,
             Expr::UnaryOperation { meta, .. } => meta,
+            Expr::MethodCall { meta, .. } => meta,
         }
     }
 
@@ -250,6 +257,7 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
             Expr::FieldAccess { meta, .. } => meta,
             Expr::BinaryOperation { meta, .. } => meta,
             Expr::UnaryOperation { meta, .. } => meta,
+            Expr::MethodCall { meta, .. } => meta,
         }
     }
 
@@ -271,6 +279,7 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
             Expr::FieldAccess { meta, .. } => meta,
             Expr::BinaryOperation { meta, .. } => meta,
             Expr::UnaryOperation { meta, .. } => meta,
+            Expr::MethodCall { meta, .. } => meta,
         }
     }
 }
@@ -365,6 +374,24 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
             Expr::UnaryOperation { operator, expr, .. } => {
                 format!("({} {})", operator, expr.dump_str())
             }
+            Expr::MethodCall {
+                receiver,
+                method,
+                args,
+                ..
+            } => format!(
+                "{}.{}({})",
+                receiver.dump_str(),
+                match method.as_ref() {
+                    Expr::BoundVar(ind, _) => ind.dump_str(),
+                    Expr::FreeVar(name, _) => name.clone(),
+                    _ => format!("({})", method.dump_str()),
+                },
+                args.iter()
+                    .map(|a| a.dump_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
         }
     }
 
@@ -407,6 +434,29 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
                         .all(|(a1, a2)| a1.temporary_same_state(a2))
             }
             (Expr::Call { .. }, _) => false,
+
+            (
+                Expr::MethodCall {
+                    receiver: r1,
+                    method: m1,
+                    args: a1,
+                    ..
+                },
+                Expr::MethodCall {
+                    receiver: r2,
+                    method: m2,
+                    args: a2,
+                    ..
+                },
+            ) => {
+                r1.temporary_same_state(r2)
+                    && m1.temporary_same_state(m2)
+                    && a1
+                        .iter()
+                        .zip(a2.iter())
+                        .all(|(a1, a2)| a1.temporary_same_state(a2))
+            }
+            (Expr::MethodCall { .. }, _) => false,
 
             (
                 Expr::ClassConstructor {
@@ -564,6 +614,11 @@ impl<T: Clone> Expr<T> {
             }
             Expr::Call { func, args, .. } => {
                 let mut free_vars = func.free_vars();
+                free_vars.extend(args.iter().flat_map(|arg| arg.free_vars()));
+                free_vars
+            }
+            Expr::MethodCall { receiver, args, .. } => {
+                let mut free_vars = receiver.free_vars();
                 free_vars.extend(args.iter().flat_map(|arg| arg.free_vars()));
                 free_vars
             }
@@ -733,6 +788,17 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
                 type_args: type_args.clone(),
                 meta: meta.clone(),
             },
+            Expr::MethodCall {
+                receiver,
+                method,
+                args,
+                meta,
+            } => Expr::MethodCall {
+                receiver: Arc::new(receiver.open(target, new_name)),
+                method: Arc::new(method.open(target, new_name)),
+                args: args.iter().map(|arg| arg.open(target, new_name)).collect(),
+                meta: meta.clone(),
+            },
             Expr::Builtin(builtin, m) => Expr::Builtin(builtin.clone(), m.clone()),
             Expr::If(cond, then, else_, m) => Expr::If(
                 Arc::new(cond.open(target, new_name)),
@@ -847,6 +913,20 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
                     .map(|arg| arg.close(new_index, target))
                     .collect(),
                 type_args: type_args.clone(),
+                meta: meta.clone(),
+            },
+            Expr::MethodCall {
+                receiver,
+                method,
+                args,
+                meta,
+            } => Expr::MethodCall {
+                receiver: Arc::new(receiver.close(new_index, target)),
+                method: Arc::new(method.close(new_index, target)),
+                args: args
+                    .iter()
+                    .map(|arg| arg.close(new_index, target))
+                    .collect(),
                 meta: meta.clone(),
             },
             Expr::Builtin(builtin, m) => Expr::Builtin(builtin.clone(), m.clone()),
@@ -966,6 +1046,16 @@ impl<T: Clone> Iterator for ExprIterator<T> {
             Expr::Call { func, args, .. } => {
                 self.stack.push_back(Arc::unwrap_or_clone(func));
                 args.into_iter().for_each(|arg| self.stack.push_back(arg))
+            }
+            Expr::MethodCall {
+                receiver,
+                method,
+                args,
+                ..
+            } => {
+                self.stack.push_back(Arc::unwrap_or_clone(receiver));
+                self.stack.push_back(Arc::unwrap_or_clone(method));
+                args.into_iter().for_each(|arg| self.stack.push_back(arg));
             }
             Expr::If(cond, then, else_, _) => {
                 self.stack.push_back(Arc::unwrap_or_clone(cond));

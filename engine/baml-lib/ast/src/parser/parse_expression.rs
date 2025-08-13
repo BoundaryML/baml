@@ -41,6 +41,7 @@ pub(crate) fn parse_expression(
         .op(Op::prefix(Rule::NOT))
         .op(Op::prefix(Rule::NEG))
         .op(Op::postfix(Rule::array_accessor))
+        .op(Op::postfix(Rule::method_call))
         .op(Op::postfix(Rule::field_accessor));
 
     let span = diagnostics.span(token.as_span());
@@ -64,6 +65,7 @@ pub(crate) fn parse_expression(
                 Rule::NOT => UnaryOperator::Not,
                 _ => unreachable_rule!(operator, Rule::prefix_operator),
             };
+
             right.map(|right| Expression::UnaryOperation {
                 operator,
                 expr: Box::new(right),
@@ -79,10 +81,24 @@ pub(crate) fn parse_expression(
 
                     Expression::ArrayAccess(Box::new(left), Box::new(index), span.clone())
                 }
+
                 Rule::field_accessor => {
                     let field = parse_identifier(operator.into_inner().next()?, diagnostics);
 
                     Expression::FieldAccess(Box::new(left), field, span.clone())
+                }
+
+                Rule::method_call => {
+                    match parse_fn_app(operator.into_inner().next()?, diagnostics)? {
+                        Expression::App(fn_call) => Expression::MethodCall {
+                            receiver: Box::new(left),
+                            method: fn_call.name,
+                            args: fn_call.args,
+                            span: span.clone(),
+                        },
+
+                        _ => unreachable!("expected function call when parsing method call"),
+                    }
                 }
                 _ => unreachable_rule!(operator, Rule::postfix_operator),
             })

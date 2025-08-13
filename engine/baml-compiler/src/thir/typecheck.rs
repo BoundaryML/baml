@@ -717,6 +717,23 @@ fn typecheck_expression(
                 meta: (span.clone(), return_type),
             }
         }
+        hir::Expression::MethodCall {
+            receiver,
+            method,
+            args,
+            span,
+        } => {
+            // TODO: Typecheck method call.
+            thir::Expr::MethodCall {
+                receiver: Arc::new(typecheck_expression(receiver, context, diagnostics)),
+                method: Arc::new(thir::Expr::FreeVar(method.clone(), (span.clone(), None))),
+                args: args
+                    .iter()
+                    .map(|arg| typecheck_expression(arg, context, diagnostics))
+                    .collect(),
+                meta: (span.clone(), None),
+            }
+        }
         hir::Expression::ClassConstructor(constructor, span) => {
             let mut typed_fields = BamlMap::new();
             let mut spread = None;

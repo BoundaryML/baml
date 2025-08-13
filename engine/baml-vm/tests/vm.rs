@@ -842,3 +842,17 @@ fn basic_assign_bit_xor() -> anyhow::Result<()> {
         expected: VmExecState::Complete(Value::Int(9)),
     })
 }
+
+#[test]
+fn builtin_method_call() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            fn main() -> int {
+                let arr = [1, 2, 3];
+                arr.len()
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(3)),
+    })
+}
