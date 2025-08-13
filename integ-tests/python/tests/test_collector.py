@@ -224,6 +224,89 @@ async def test_collector_async_stream_success():
 
 
 @pytest.mark.asyncio
+async def test_collector_async_stream_success_gemini():
+    collector = Collector(name="my-collector")
+    function_logs = collector.logs
+    assert len(function_logs) == 0
+
+    stream = b.stream.TestGemini("hi there", baml_options={"collector": collector})
+
+    async for chunk in stream:
+        print(f"### chunk: {chunk}")
+
+    res = await stream.get_final_response()
+    print(f"### res: {res}")
+    function_logs = collector.logs
+
+    function_logs = collector.logs
+    assert len(function_logs) == 1
+
+    log = collector.last
+    assert log is not None
+    assert log.function_name == "TestGemini"
+    assert log.log_type == "stream"
+
+    function_logs = collector.logs
+    assert len(function_logs) == 1
+
+    log = collector.last
+    assert log is not None
+    assert log.function_name == "TestGemini"
+    assert log.log_type == "stream"
+
+    # Verify timing fields
+    assert log.timing.start_time_utc_ms > 0
+    assert log.timing.duration_ms is not None and log.timing.duration_ms > 0
+
+    # Verify usage fields
+    assert log.usage.input_tokens is not None and log.usage.input_tokens > 0
+    assert log.usage.output_tokens is not None and log.usage.output_tokens > 0
+
+    # Verify calls
+    calls = log.calls
+    assert len(calls) == 1
+
+    call = calls[0]
+
+    assert call.provider == "google-ai"
+    assert call.client_name == "Gemini"
+    assert call.selected
+
+    # Verify request/response
+    request = call.http_request
+    assert request is not None
+    print(f"### request.body: {request.body} \n {type(request.body)}", file=sys.stderr)
+    body = request.body.json()
+
+    print(f"{call.usage}")
+
+    assert isinstance(body, dict)
+    assert "contents" in body
+
+    # Verify http response
+    response = call.http_response
+    assert response is None
+
+    # Verify call timing
+    call_timing = call.timing
+    assert call_timing.start_time_utc_ms > 0
+    assert call_timing.duration_ms is not None and call_timing.duration_ms > 0
+
+    # Verify call usage
+    call_usage = call.usage
+    assert call_usage.input_tokens is not None and call_usage.input_tokens > 0
+    assert call_usage.output_tokens is not None and call_usage.output_tokens > 0
+
+    # Verify raw response exists
+    assert log.raw_llm_response is not None
+
+    gc.collect()
+    print("----- gc.collect() -----", file=sys.stderr)
+    # still not collected cause it's in use
+    assert function_call_count() > 0
+
+
+@pytest.mark.asyncio
 async def test_collector_async_multiple_calls_usage():
     collector = Collector(name="my-collector")
 
@@ -890,7 +973,9 @@ async def test_collector_openai_stream_chunk_verification():
     assert call.client_name == "GPT4oMini"
     sse_chunks = call.sse_responses()
     assert sse_chunks is not None
-    assert len(sse_chunks) >= len(chunks_received), f"Expected {len(chunks_received)} chunks, got {sse_chunks}"
+    assert len(sse_chunks) >= len(
+        chunks_received
+    ), f"Expected {len(chunks_received)} chunks, got {sse_chunks}"
     for chunk in sse_chunks:
         print(f"Chunk: {chunk.json()}")
 
@@ -907,37 +992,37 @@ async def test_collector_openai_stream_chunk_verification():
 async def test_collector_openai_multiple_concurrent_streams():
     """Test streaming collector with multiple concurrent OpenAI streams"""
     collector = Collector(name="openai-concurrent-streams")
-    
+
     async def stream_and_collect(prompt: str) -> tuple[list[str], str]:
         """Helper to run a stream and collect chunks"""
         chunks = []
         stream = b.stream.TestOpenAIGPT4oMini(
             prompt, baml_options={"collector": collector}
         )
-        
+
         async for chunk in stream:
             chunks.append(chunk)
-        
+
         final = await stream.get_final_response()
         return chunks, final
-    
+
     # Run multiple streams concurrently
     results = await asyncio.gather(
         stream_and_collect("Say hello"),
         stream_and_collect("Say goodbye"),
-        stream_and_collect("Count to 3")
+        stream_and_collect("Count to 3"),
     )
-    
+
     # Verify we got results from all streams
     assert len(results) == 3
     for chunks, final in results:
         assert len(chunks) > 0
         assert len(final) > 0
-    
+
     # Verify collector captured all streams
     logs = collector.logs
     assert len(logs) == 3
-    
+
     # Verify each log is properly formed
     for i, log in enumerate(logs):
         assert log.function_name == "TestOpenAIGPT4oMini"
@@ -945,14 +1030,14 @@ async def test_collector_openai_multiple_concurrent_streams():
         assert log.timing.duration_ms is not None and log.timing.duration_ms > 0
         assert log.usage.input_tokens is not None and log.usage.input_tokens > 0
         assert log.usage.output_tokens is not None and log.usage.output_tokens > 0
-        
+
         # Verify streaming request
         call = log.calls[0]
         assert call.provider == "openai"
         assert call.http_request
         request_body = call.http_request.body.json()
         assert request_body.get("stream") is True
-    
+
     # Verify total usage is sum of all streams
     total_input = sum(log.usage.input_tokens or 0 for log in logs)
     total_output = sum(log.usage.output_tokens or 0 for log in logs)
@@ -964,7 +1049,7 @@ async def test_collector_openai_multiple_concurrent_streams():
 async def test_collector_openai_stream_usage_accumulation():
     """Test that streaming collector properly accumulates usage across multiple calls"""
     collector = Collector(name="openai-stream-usage")
-    
+
     # First streaming call
     stream1 = b.stream.TestOpenAIGPT4oMini(
         "First stream", baml_options={"collector": collector}
@@ -972,14 +1057,14 @@ async def test_collector_openai_stream_usage_accumulation():
     async for _ in stream1:
         pass
     await stream1.get_final_response()
-    
+
     # Capture usage after first stream
     first_usage = collector.usage
     first_input = first_usage.input_tokens
     first_output = first_usage.output_tokens
     assert first_input is not None and first_input > 0
     assert first_output is not None and first_output > 0
-    
+
     # Second streaming call
     stream2 = b.stream.TestOpenAIGPT4oMini(
         "Second stream with more content", baml_options={"collector": collector}
@@ -987,7 +1072,7 @@ async def test_collector_openai_stream_usage_accumulation():
     async for _ in stream2:
         pass
     await stream2.get_final_response()
-    
+
     # Verify usage accumulated
     assert collector.usage.input_tokens is not None
     assert collector.usage.output_tokens is not None
@@ -995,25 +1080,27 @@ async def test_collector_openai_stream_usage_accumulation():
     assert collector.usage.output_tokens > first_output
     assert collector.usage.input_tokens > 0
     assert collector.usage.output_tokens > 0
-    
+
     # Non-streaming call
-    await b.TestOpenAIGPT4oMini("Non-streaming call", baml_options={"collector": collector})
-    
+    await b.TestOpenAIGPT4oMini(
+        "Non-streaming call", baml_options={"collector": collector}
+    )
+
     # Verify we have 3 logs total
     logs = collector.logs
     assert len(logs) == 3
-    
+
     # Verify total usage matches sum of individual calls
     total_input = sum(log.usage.input_tokens or 0 for log in logs)
     total_output = sum(log.usage.output_tokens or 0 for log in logs)
     assert collector.usage.input_tokens == total_input
     assert collector.usage.output_tokens == total_output
-    
+
     # Verify first two are streaming, last is not
     for i in range(2):
         request_body = logs[i].calls[0].http_request.body.json()
         assert request_body.get("stream") is True
-    
+
     # Last call should not be streaming
     last_request_body = logs[2].calls[0].http_request.body.json()
     assert last_request_body.get("stream") is not True
