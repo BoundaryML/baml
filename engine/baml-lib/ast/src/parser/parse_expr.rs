@@ -458,9 +458,6 @@ pub fn parse_if_expression(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Op
     let then_branch_span = diagnostics.span(then_branch_expr_block.as_span());
     let then_branch = parse_expr_block(then_branch_expr_block, diagnostics)?;
 
-    let else_branch_expr = tokens.next()?;
-    let else_branch_span = diagnostics.span(else_branch_expr.as_span());
-
     let else_branch = tokens.next().and_then(|else_branch_expr| {
         let else_branch_span = diagnostics.span(else_branch_expr.as_span());
 

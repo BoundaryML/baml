@@ -1,3 +1,25 @@
+fn Factorial(mut limit: int) -> int {
+
+	let mut result = 1;
+
+
+    // used to make the loop break without relying on `break` implementation.
+    let mut should_continue = true;
+	while should_continue {
+		result = result * limit;
+		limit = limit - 1;
+
+        if limit != 0 {
+            continue;
+        } else {
+            should_continue = false;
+        }
+
+	}
+
+	result
+}
+
 fn ContinueOutsideLoop() -> int {
 
     continue;
@@ -17,17 +39,23 @@ fn ContinueNested() -> int {
 //   -->  loops/continue.baml:1
 //    | 
 //    | 
-//  1 | fn ContinueOutsideLoop() -> int {
+//  1 | fn Factorial(mut limit: int) -> int {
 //    | 
 // warning: Workflow functions are experimental, and will break in the future.
-//   -->  loops/continue.baml:8
+//   -->  loops/continue.baml:23
 //    | 
-//  7 | 
-//  8 | fn ContinueNested() -> int {
+// 22 | 
+// 23 | fn ContinueOutsideLoop() -> int {
+//    | 
+// warning: Workflow functions are experimental, and will break in the future.
+//   -->  loops/continue.baml:30
+//    | 
+// 29 | 
+// 30 | fn ContinueNested() -> int {
 //    | 
 // error: Error validating: 'continue' cannot be used outside of a loop
-//   -->  loops/continue.baml:3
+//   -->  loops/continue.baml:25
 //    | 
-//  2 | 
-//  3 |     continue;
+// 24 | 
+// 25 |     continue;
 //    | 

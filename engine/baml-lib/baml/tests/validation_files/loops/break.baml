@@ -47,10 +47,10 @@ fn Nested() -> int {
 // 17 | fn OutsideLoop() -> int {
 //    | 
 // warning: Workflow functions are experimental, and will break in the future.
-//   -->  loops/break.baml:25
+//   -->  loops/break.baml:24
 //    | 
-// 24 | // TODO: this one should be in bytecode/execution.
-// 25 | fn Nested() -> int {
+// 23 | 
+// 24 | fn Nested() -> int {
 //    | 
 // error: Error validating: 'break' cannot be used outside of a loop
 //   -->  loops/break.baml:19
