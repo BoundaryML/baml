@@ -1,3 +1,28 @@
+/// Typechecking for the BAML language.
+///
+/// The big-step typechecking algorithm goes from `HIR` to `THIR`, inferring
+/// types for expressions and statements wherever possible, and collecting
+/// errors when the types are incompatible.
+///
+/// Type "compatibility" follows the covariance and contravariance rules
+/// typical in statically-typed languages with subtyping.
+///
+/// A value with a type S may be used in a context that expects a value
+/// with type T if S <: T (S is a subtype of T).
+///
+/// Aspirationally, we implement bidirectional typing, a method that is
+/// mostly syntax-directed (doesn't involve search and backtracking),
+/// copes well with subtyping, and produces good error messages.
+/// https://arxiv.org/abs/1908.05839
+///
+/// However, the current implementation is simple and ad-hoc, likely wrong
+/// in several places. Bidirectional typing is the target.
+///
+/// Variables in THIR are tracked via the locally-nameless technique, which
+/// is a good compromise between simple named variables (which are trivial
+/// to implement but easy to get wrong) and de Bruijn indices (which are safer
+/// but more confusing to implement). See the docs for `thir::Expr::BoundVar`
+/// and `thir::Expr::FreeVar`. for more details.
 use std::sync::Arc;
 
 use baml_types::{BamlMap, BamlValueWithMeta};
@@ -8,6 +33,7 @@ use crate::{
     thir::{self as thir, ExprMetadata, THir},
 };
 
+/// Convert HIR to THIR while collecting type errors.
 pub fn typecheck(hir: &Hir, diagnostics: &mut Diagnostics) -> THir<ExprMetadata> {
     let llm_functions = hir.llm_functions.clone();
     let classes: BamlMap<String, hir::Class> = hir
