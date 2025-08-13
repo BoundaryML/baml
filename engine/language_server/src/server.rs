@@ -196,6 +196,7 @@ impl Server {
     }
 
     pub fn run(self) -> anyhow::Result<()> {
+        tracing::info!("BAML language server started inside hot reload lorem ipsum");
         // The new PanicInfoHook name requires MSRV >= 1.82
         #[allow(deprecated)]
         type PanicHook = Box<dyn Fn(&PanicInfo<'_>) + 'static + Sync + Send>;

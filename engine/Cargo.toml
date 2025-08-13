@@ -9,6 +9,7 @@ members = [
   "baml-schema-wasm",
   "bstd",
   "cli",
+  "hot-reload",
   "language_client_codegen",
   "language_client_python",
   "language_client_ruby/ext/ruby_ffi",
@@ -119,6 +120,8 @@ strum_macros = "0.26.2"
 thiserror = "2.0.12"
 time = { version = "0.3.36", features = ["formatting"] }
 tracing-core = { version = "0.1.31" }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 pin-project-lite = "0.2.14"
 url = "2.5.2"
 uuid = { version = "1.8.0", features = ["v4", "v7", "serde"] }

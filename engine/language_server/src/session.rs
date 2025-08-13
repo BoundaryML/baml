@@ -234,6 +234,8 @@ impl Session {
     }
 
     pub fn reload(&mut self, notifier: Option<Notifier>) -> anyhow::Result<()> {
+        // tracing::info!("skipping session reload");
+        // return Ok(());
         tracing::info!("Reloading session");
         let mut baml_src_projects = self.baml_src_projects.lock().unwrap();
 

@@ -67,8 +67,8 @@ echo "Building in REPO${_path} (cwd: $(pwd))"
 case "$_path" in
 
 
-  /engine/cli | /engine/cli/* )
-    command="RUSTFLAGS='--cfg tokio_unstable' cargo build"
+  /engine | /engine/* )
+    command="RUSTFLAGS='--cfg tokio_unstable' cargo build --package baml-cli --package baml-hot-reload"
 
     if [ "$_watch_mode" -eq 1 ]; then
       npx nodemon \

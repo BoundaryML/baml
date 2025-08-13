@@ -5,7 +5,7 @@ retry_policy Bar {
   }
 }
 
-retry_policy Foo {
+retry_policy Foo {asdfasdf
   max_retries 3
   strategy {
     type constant_delay

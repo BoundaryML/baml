@@ -1,0 +1,15 @@
+[package]
+name = "baml-hot-reload"
+version.workspace = true
+edition = "2021"
+
+[[bin]]
+name = "baml-hot-reload"
+path = "src/main.rs"
+
+[dependencies]
+notify-debouncer-full = "0.3"
+tokio.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true

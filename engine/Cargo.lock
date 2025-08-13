@@ -1015,6 +1015,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml-hot-reload"
+version = "0.204.0"
+dependencies = [
+ "anyhow",
+ "notify-debouncer-full",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "baml-ids"
 version = "0.0.1"
 dependencies = [

@@ -18,8 +18,12 @@ class BamlLanguageServer(private val project: Project) : OSProcessStreamConnecti
 //        val commandLine = GeneralCommandLine(
 //            Path.of(System.getProperty("user.home"),
 //                "/Documents/boundary/baml-main/baml/engine/target/debug", "baml-cli").toString(), "lsp")
+//        val commandLine = GeneralCommandLine(
+//            "/Users/sam/baml4/engine/target/debug/baml-cli", "lsp"
+//        )
+//            .withEnvironment("RUST_BACKTRACE", "full")
         val commandLine = GeneralCommandLine(
-            "/Users/sam/baml4/engine/target/debug/baml-cli", "lsp"
+            "/Users/sam/baml4/engine/target/debug/baml-hot-reload", "lsp"
         )
             .withEnvironment("RUST_BACKTRACE", "full")
         super.setCommandLine(commandLine)
