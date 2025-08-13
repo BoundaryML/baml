@@ -34,7 +34,7 @@ fn Foo() -> int {
 }
 
 // error: Error validating: This line is invalid. It does not start with any known Baml schema keyword.
-//   -->  while_loops.baml:14
+//   -->  loops/while_loops.baml:14
 //    | 
 // 13 | 
 // 14 | fn Foo() -> int {
