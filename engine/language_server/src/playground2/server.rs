@@ -41,12 +41,11 @@ impl Clone for AppState {
 
 #[derive(Debug)]
 pub struct Playground2Server {
-    pub port: u16,
     pub broadcast_rx: broadcast::Receiver<LangServerToWasmMessage>,
 }
 
 impl Playground2Server {
-    pub async fn run(self) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn run(self, listener: TcpListener) -> Result<(), Box<dyn std::error::Error + Send>> {
         // Determine the static files directory
         let dist_dir = playground_static_assets().await?;
 
@@ -63,15 +62,8 @@ impl Playground2Server {
             .fallback_service(ServeDir::new(dist_dir))
             .with_state(state);
 
-        let addr = SocketAddr::from(([127, 0, 0, 1], self.port));
-        
-        tracing::info!("Starting Playground2 server on {}", addr);
-        
-        let listener = TcpListener::bind(addr).await?;
-        
-        axum::serve(listener, app).await?;
-        
-        Ok(())
+        tracing::info!("Starting Playground2 server on {}", listener.local_addr().unwrap());
+        axum::serve(listener, app).await.map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)
     }
 }
 

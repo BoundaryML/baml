@@ -62,12 +62,6 @@ struct PortNotificationParams {
     port: u16,
 }
 
-impl PortNotificationParams {
-    fn new(port: u16) -> Self {
-        PortNotificationParams { port }
-    }
-}
-
 impl Server {
     pub fn new(worker_threads: NonZeroUsize) -> anyhow::Result<Self> {
         let connection = ConnectionInitializer::stdio();
@@ -197,12 +191,31 @@ impl Server {
         // #[cfg(feature = "playground-server")]
         // server.start_playground_server();
 
-        server.tokio_runtime.spawn(async move {
-            let _ = playground2::Playground2Server{
-                port: 4000,
-                broadcast_rx,
-            }.run().await;
-        });
+        {
+            let lsp_sender = server.connection.make_sender();
+            server.tokio_runtime.spawn(async move {
+                let port_picker = match playground2::port_picker::pick().await {
+                    Ok(port_picker) => port_picker,
+                    Err(e) => {
+                        tracing::error!("Failed to pick ports: {}", e);
+                        return;
+                    }
+                };
+                let http_services = futures::future::join(
+                    playground2::Playground2Server{
+                        broadcast_rx,
+                    }.run(port_picker.playground_listener),
+                    playground2::ProxyServer{}.run(port_picker.proxy_listener)
+                );
+                lsp_sender.send(Message::Notification(lsp_server::Notification::new(
+                    "baml/port".to_string(),
+                    serde_json::to_value(PortNotificationParams {
+                        port: port_picker.playground_port,
+                    }).unwrap(),
+                ))).unwrap();
+                let _ = http_services.await;
+            });
+        }
         {
             let mut playground_rx = playground_rx.resubscribe();
             let broadcast_tx = server.broadcast_tx.clone();

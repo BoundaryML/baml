@@ -91,7 +91,8 @@ console-subscriber = { version = "0.4.1", features = ["grpc-web"] }
 axum = { version = "0.8.4", features = ["ws"] }
 futures.workspace = true
 tokio-stream = "0.1.17"
-tower-http = { version = "0.6.6", features = ["fs"] }
+tower-http = { version = "0.6.6", features = ["fs", "cors"] }
+tower = "0.5"
 
 [dev-dependencies]
 insta = { version = "1.42.1" }

@@ -4232,6 +4232,7 @@ dependencies = [
  "thiserror 2.0.12",
  "tokio",
  "tokio-stream",
+ "tower 0.5.2",
  "tower-http 0.6.6",
  "tracing",
  "tracing-log",
