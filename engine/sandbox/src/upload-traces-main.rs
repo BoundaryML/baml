@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 // use baml_types::rpc::TraceEventUploadRequest;
 
 #[tokio::main]

@@ -130,7 +130,7 @@ impl Stmt {
         match self {
             Stmt::Let(stmt) => &stmt.identifier,
             Stmt::ForLoop(stmt) => &stmt.identifier,
-            Stmt::Expression(expr) => panic!("expressions don't have identifiers"),
+            Stmt::Expression(_expr) => panic!("expressions don't have identifiers"),
             Stmt::Assign(stmt) => &stmt.identifier,
             Stmt::AssignOp(stmt) => &stmt.identifier,
         }

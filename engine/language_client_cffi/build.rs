@@ -11,6 +11,7 @@ mod protoc_lang_out {
 
     #![deny(missing_docs)]
     #![deny(rustdoc::broken_intra_doc_links)]
+    #![allow(dead_code)]
 
     use std::{
         ffi::{OsStr, OsString},

@@ -840,11 +840,13 @@ impl BamlRuntime {
                                 })
                             })
                             .transpose();
-                        let result = FunctionResult::new(
+                        let fr = FunctionResult::new(
                             OrchestrationScope { scope: vec![] },
                             Self::dummy_llm_placeholder_for_expr_fn(),
                             res,
                         );
+
+                        let result: Result<FunctionResult> = Ok(fr);
 
                         let trace_event = TraceEvent::new_function_end(
                             call_id_stack.clone(),
