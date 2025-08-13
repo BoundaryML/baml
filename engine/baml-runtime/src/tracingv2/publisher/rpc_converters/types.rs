@@ -6,7 +6,7 @@ use baml_types::{
     StreamingMode, TypeValue,
 };
 
-use super::{IntoRpcEvent, IRRpcState};
+use super::{IRRpcState, IntoRpcEvent};
 
 impl<'a, T: HasType<type_meta::NonStreaming>> IntoRpcEvent<'a, runtime_api::BamlValue<'a>>
     for BamlValueWithMeta<T>

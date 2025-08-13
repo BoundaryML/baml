@@ -1,12 +1,16 @@
-use crate::tracingv2::publisher::publisher::BlobUploaderMessage;
+use std::{
+    borrow::Cow,
+    collections::{HashMap, HashSet},
+    sync::{Arc, Mutex},
+};
+
 use baml_rpc::runtime_api::baml_value::{BamlValue, MediaValue, ValueContent};
 use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::borrow::Cow;
-use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
+
+use crate::tracingv2::publisher::publisher::BlobUploaderMessage;
 
 /// Represents a blob that needs to be uploaded
 #[derive(Debug, Clone, Serialize, Deserialize)]
