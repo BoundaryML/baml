@@ -323,12 +323,26 @@ expr_block = { BLOCK_OPEN ~ NEWLINE? ~ (stmt | comment_block | empty_lines)* ~ e
 // With operator overloading (implicit function call) + side effects.
 //
 // Just allow any expr and fix the parser.
-stmt = { (((let_expr | assign_stmt | fn_app | generic_fn_app) ~ SEMICOLON) | for_loop | if_expression) ~ trailing_comment? ~ NEWLINE? }
+stmt = { (((let_expr | assign_op_stmt | assign_stmt | fn_app | generic_fn_app) ~ SEMICOLON) | for_loop | if_expression) ~ trailing_comment? ~ NEWLINE? }
 
 // Let-binding statement.
 let_expr = { "let" ~ MUT_KEYWORD? ~ identifier ~ "=" ~ expression }
 
 assign_stmt = { identifier ~ "=" ~ expression }
+assign_op_stmt = { identifier ~ assign_op ~ expression }
+
+assign_op = _{ ADD_ASSIGN | SUB_ASSIGN | MUL_ASSIGN | DIV_ASSIGN | MOD_ASSIGN | BIT_AND_ASSIGN | BIT_OR_ASSIGN | BIT_XOR_ASSIGN | BIT_SHL_ASSIGN | BIT_SHR_ASSIGN }
+
+ADD_ASSIGN = { "+=" }
+SUB_ASSIGN = { "-=" }
+MUL_ASSIGN = { "*=" }
+DIV_ASSIGN = { "/=" }
+MOD_ASSIGN = { "%=" }
+BIT_AND_ASSIGN = { "&=" }
+BIT_OR_ASSIGN = { "|=" }
+BIT_XOR_ASSIGN = { "^=" }
+BIT_SHL_ASSIGN = { "<<=" }
+BIT_SHR_ASSIGN = { ">>=" }
 
 fn_args = { expression? ~ ("," ~ expression)* }
 

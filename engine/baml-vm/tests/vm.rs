@@ -722,3 +722,123 @@ fn basic_or() -> anyhow::Result<()> {
         expected: VmExecState::Complete(Value::Bool(true)),
     })
 }
+
+#[test]
+fn basic_assign_add() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            fn main() -> int {
+                let mut x = 1;
+                x += 2;
+                x
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(3)),
+    })
+}
+
+#[test]
+fn basic_assign_sub() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            fn main() -> int {
+                let mut x = 1;
+                x -= 2;
+                x
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(-1)),
+    })
+}
+
+#[test]
+fn basic_assign_mul() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            fn main() -> int {
+                let mut x = 1;
+                x *= 2;
+                x
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(2)),
+    })
+}
+
+#[test]
+fn basic_assign_div() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            fn main() -> int {
+                let mut x = 10;
+                x /= 2;
+                x
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(5)),
+    })
+}
+
+#[test]
+fn basic_assign_mod() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            fn main() -> int {
+                let mut x = 10;
+                x %= 3;
+                x
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(1)),
+    })
+}
+
+#[test]
+fn basic_assign_bit_and() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            fn main() -> int {
+                let mut x = 10;
+                x &= 3;
+                x
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(2)),
+    })
+}
+
+#[test]
+fn basic_assign_bit_or() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            fn main() -> int {
+                let mut x = 10;
+                x |= 3;
+                x
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(11)),
+    })
+}
+
+#[test]
+fn basic_assign_bit_xor() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            fn main() -> int {
+                let mut x = 10;
+                x ^= 3;
+                x
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(9)),
+    })
+}

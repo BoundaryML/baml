@@ -18,6 +18,38 @@ pub struct AssignStmt {
 }
 
 #[derive(Debug, Clone)]
+pub struct AssignOpStmt {
+    pub identifier: Identifier,
+    pub assign_op: AssignOp,
+    pub expr: Expression,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum AssignOp {
+    /// The `+=` operator (addition)
+    AddAssign,
+    /// The `-=` operator (subtraction)
+    SubAssign,
+    /// The `*=` operator (multiplication)
+    MulAssign,
+    /// The `/=` operator (division)
+    DivAssign,
+    /// The `%=` operator (modulus)
+    ModAssign,
+    /// The `^=` operator (bitwise xor)
+    BitXorAssign,
+    /// The `&=` operator (bitwise and)
+    BitAndAssign,
+    /// The `|=` operator (bitwise or)
+    BitOrAssign,
+    /// The `<<=` operator (shift left)
+    ShlAssign,
+    /// The `>>=` operator (shift right)
+    ShrAssign,
+}
+
+#[derive(Debug, Clone)]
 pub struct ForLoopStmt {
     pub identifier: Identifier,
     pub iterator: Expression,
@@ -33,6 +65,24 @@ pub enum Stmt {
     /// Expression with trailing semicolon.
     Expression(Expression),
     Assign(AssignStmt),
+    AssignOp(AssignOpStmt),
+}
+
+impl fmt::Display for AssignOp {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            AssignOp::AddAssign => "+=",
+            AssignOp::SubAssign => "-=",
+            AssignOp::MulAssign => "*=",
+            AssignOp::DivAssign => "/=",
+            AssignOp::ModAssign => "%=",
+            AssignOp::BitAndAssign => "&=",
+            AssignOp::BitOrAssign => "|=",
+            AssignOp::BitXorAssign => "^=",
+            AssignOp::ShlAssign => "<<=",
+            AssignOp::ShrAssign => ">>=",
+        })
+    }
 }
 
 impl fmt::Display for Stmt {
@@ -42,6 +92,9 @@ impl fmt::Display for Stmt {
             Stmt::ForLoop(stmt) => write!(f, "for {} in {}", stmt.identifier, stmt.iterator)?,
             Stmt::Expression(expr) => write!(f, "{expr}")?,
             Stmt::Assign(stmt) => write!(f, "{} = {}", stmt.identifier, stmt.expr)?,
+            Stmt::AssignOp(stmt) => {
+                write!(f, "{} {} {}", stmt.identifier, stmt.assign_op, stmt.expr)?
+            }
         }
         Ok(())
     }
@@ -79,6 +132,7 @@ impl Stmt {
             Stmt::ForLoop(stmt) => &stmt.identifier,
             Stmt::Expression(expr) => panic!("expressions don't have identifiers"),
             Stmt::Assign(stmt) => &stmt.identifier,
+            Stmt::AssignOp(stmt) => &stmt.identifier,
         }
     }
 
@@ -88,6 +142,7 @@ impl Stmt {
             Stmt::ForLoop(stmt) => &stmt.span,
             Stmt::Expression(expr) => expr.span(),
             Stmt::Assign(stmt) => &stmt.span,
+            Stmt::AssignOp(stmt) => &stmt.span,
         }
     }
 

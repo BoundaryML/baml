@@ -3,9 +3,9 @@
 use pretty::RcDoc;
 
 use crate::hir::{
-    Arrow, BinaryOperator, Block, Class, ClassConstructorField, Enum, EnumVariant, ExprFunction,
-    Expression, Field, Hir, LlmFunction, Parameter, Statement, TypeArg, TypeM, TypeMeta,
-    UnaryOperator,
+    Arrow, AssignOp, BinaryOperator, Block, Class, ClassConstructorField, Enum, EnumVariant,
+    ExprFunction, Expression, Field, Hir, LlmFunction, Parameter, Statement, TypeArg, TypeM,
+    TypeMeta, UnaryOperator,
 };
 
 impl Hir {
@@ -117,9 +117,20 @@ impl Statement {
                 .append(RcDoc::space())
                 .append(RcDoc::text(name.clone()))
                 .append(RcDoc::text(";")),
-            Statement::Assign { name, value } => RcDoc::text(name.clone())
+            Statement::Assign { name, value, .. } => RcDoc::text(name.clone())
                 .append(RcDoc::space())
                 .append(RcDoc::text("="))
+                .append(RcDoc::space())
+                .append(value.to_doc())
+                .append(RcDoc::text(";")),
+            Statement::AssignOp {
+                name,
+                value,
+                assign_op,
+                ..
+            } => RcDoc::text(name.clone())
+                .append(RcDoc::space())
+                .append(assign_op.to_doc())
                 .append(RcDoc::space())
                 .append(value.to_doc())
                 .append(RcDoc::text(";")),
@@ -529,6 +540,23 @@ impl std::fmt::Display for UnaryOperator {
     }
 }
 
+impl std::fmt::Display for AssignOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            AssignOp::AddAssign => "+=",
+            AssignOp::SubAssign => "-=",
+            AssignOp::MulAssign => "*=",
+            AssignOp::DivAssign => "/=",
+            AssignOp::ModAssign => "%=",
+            AssignOp::BitXorAssign => "^=",
+            AssignOp::BitAndAssign => "&=",
+            AssignOp::BitOrAssign => "|=",
+            AssignOp::ShlAssign => "<<=",
+            AssignOp::ShrAssign => ">>=",
+        })
+    }
+}
+
 impl BinaryOperator {
     pub fn to_doc(&self) -> RcDoc<'static, ()> {
         RcDoc::text(self.to_string())
@@ -536,6 +564,12 @@ impl BinaryOperator {
 }
 
 impl UnaryOperator {
+    pub fn to_doc(&self) -> RcDoc<'static, ()> {
+        RcDoc::text(self.to_string())
+    }
+}
+
+impl AssignOp {
     pub fn to_doc(&self) -> RcDoc<'static, ()> {
         RcDoc::text(self.to_string())
     }

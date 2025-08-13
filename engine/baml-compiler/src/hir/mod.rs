@@ -334,6 +334,13 @@ pub enum Statement {
     Assign {
         name: String,
         value: Expression,
+        span: Span,
+    },
+    AssignOp {
+        name: String,
+        assign_op: AssignOp,
+        value: Expression,
+        span: Span,
     },
     /// Declare and assign a mutable reference in one statement.
     DeclareAndAssign {
@@ -366,6 +373,30 @@ pub enum Statement {
         block: Block,
         span: Span,
     },
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum AssignOp {
+    /// The `+=` operator (addition)
+    AddAssign,
+    /// The `-=` operator (subtraction)
+    SubAssign,
+    /// The `*=` operator (multiplication)
+    MulAssign,
+    /// The `/=` operator (division)
+    DivAssign,
+    /// The `%=` operator (modulus)
+    ModAssign,
+    /// The `^=` operator (bitwise xor)
+    BitXorAssign,
+    /// The `&=` operator (bitwise and)
+    BitAndAssign,
+    /// The `|=` operator (bitwise or)
+    BitOrAssign,
+    /// The `<<=` operator (shift left)
+    ShlAssign,
+    /// The `>>=` operator (shift right)
+    ShrAssign,
 }
 
 /// Expressions

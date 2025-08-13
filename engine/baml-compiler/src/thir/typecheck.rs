@@ -344,7 +344,9 @@ fn typecheck_statement(
                 span: span.clone(),
             })
         }
-        hir::Statement::Assign { name, value } => {
+        // TODO: assign op needs more type checking?
+        hir::Statement::Assign { name, value, .. }
+        | hir::Statement::AssignOp { name, value, .. } => {
             let typed_value = typecheck_expression(value, context, diagnostics);
 
             // validate/update type.
