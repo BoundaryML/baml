@@ -370,13 +370,10 @@ impl<'g> HirCompiler<'g> {
                 // Remember where the loop starts
                 let loop_start = self.bytecode.instructions.len() as isize;
 
-                let old_loop_status = std::mem::replace(
-                    &mut self.current_loop,
-                    Some(LoopInfo {
-                        start_insn: loop_start,
-                        break_patch_list: Vec::new(),
-                    }),
-                );
+                let old_loop_status = self.current_loop.replace(LoopInfo {
+                    start_insn: loop_start,
+                    break_patch_list: Vec::new(),
+                });
 
                 // Compile condition
                 self.compile_expression(condition);

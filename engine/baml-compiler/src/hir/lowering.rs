@@ -304,7 +304,7 @@ impl Block {
 
                     let hir_condition = Expression::from_ast(condition);
 
-                    let hir_body = Block::from_expression_block(&body);
+                    let hir_body = Block::from_expression_block(body);
 
                     statements.push(Statement::While {
                         condition: Box::new(hir_condition),
