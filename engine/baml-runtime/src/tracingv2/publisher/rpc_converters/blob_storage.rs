@@ -39,6 +39,12 @@ pub struct BlobRefCache {
     blob_upload_tx: Option<mpsc::UnboundedSender<BlobUploaderMessage>>,
 }
 
+impl Default for BlobRefCache {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BlobRefCache {
     pub fn new() -> Self {
         Self {
@@ -110,7 +116,7 @@ impl BlobRefCache {
                         blob_hash: blob_hash.clone(),
                         function_call_id: function_call_id.to_string(),
                         media_type: media_type.clone(),
-                        size_bytes: base64_content.as_bytes().len(),
+                        size_bytes: base64_content.len(),
                     },
                     content: base64_content.as_bytes().to_vec(),
                 };
