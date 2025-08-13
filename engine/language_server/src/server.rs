@@ -21,7 +21,7 @@ use lsp_types::{
 };
 use schedule::Task;
 use serde::{Deserialize, Serialize};
-use tokio::sync::RwLock;
+use tokio::sync::{broadcast, RwLock};
 
 use self::{
     connection::{Connection, ConnectionInitializer},
@@ -38,13 +38,13 @@ mod schedule;
 
 pub(crate) use connection::ClientSender;
 
-#[cfg(not(feature = "playground-server"))]
+// #[cfg(not(feature = "playground-server"))]
 use crate::message::try_show_message;
-#[cfg(feature = "playground-server")]
-use crate::{
-    message::try_show_message,
-    playground::{PlaygroundServer, PlaygroundState},
-};
+// #[cfg(feature = "playground-server")]
+// use crate::{
+//     message::try_show_message,
+//     playground::{PlaygroundServer, PlaygroundState},
+// };
 
 pub type Result<T> = std::result::Result<T, api::Error>;
 
@@ -53,6 +53,8 @@ pub(crate) struct Server {
     pub client_capabilities: ClientCapabilities,
     pub worker_threads: NonZeroUsize,
     pub session: Session,
+    pub tokio_runtime: tokio::runtime::Runtime,
+    pub broadcast_tx: broadcast::Sender<lsp_server::Message>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -170,26 +172,33 @@ impl Server {
         let notifier = client.notifier();
 
         // Playground state is initialized here, but server startup is now external
-        #[cfg(feature = "playground-server")]
-        {
-            let playground_state = Arc::new(RwLock::new(PlaygroundState::new()));
-            session.playground_state = Some(playground_state.clone());
-            // Store the runtime in the session
-            session.playground_runtime = Some(rt);
-        }
+        // #[cfg(feature = "playground-server")]
+        // {
+        //     let playground_state = Arc::new(RwLock::new(PlaygroundState::new()));
+        //     session.playground_state = Some(playground_state.clone());
+        //     // Store the runtime in the session
+        //     session.playground_runtime = Some(rt);
+        // }
         session.reload(Some(notifier))?;
+
+        let (broadcast_tx, broadcast_rx) = broadcast::channel(1000);
 
         let mut server = Self {
             connection,
             worker_threads,
             session,
             client_capabilities,
+            tokio_runtime: tokio::runtime::Runtime::new()?,
+            broadcast_tx,
         };
-        #[cfg(feature = "playground-server")]
-        server.start_playground_server();
+        // #[cfg(feature = "playground-server")]
+        // server.start_playground_server();
 
-        server.session.playground_runtime.as_ref().expect("playground_runtime should be set").spawn(async move {
-            let _ = playground2::Playground2Server::new(4000).run().await;
+        server.tokio_runtime.spawn(async move {
+            let _ = playground2::Playground2Server{
+                port: 4000,
+                broadcast_rx,
+            }.run().await;
         });
 
         Ok(server)
@@ -246,6 +255,7 @@ impl Server {
                 &self.client_capabilities,
                 self.session,
                 self.worker_threads,
+                self.broadcast_tx,
             )?;
             self.connection.close()?;
             Ok(())
@@ -261,6 +271,7 @@ impl Server {
         _client_capabilities: &ClientCapabilities,
         mut session: Session,
         worker_threads: NonZeroUsize,
+        broadcast_tx: broadcast::Sender<lsp_server::Message>,
     ) -> anyhow::Result<()> {
         // Ensure we have a notifier for reload operations
         let client = client::Client::new(connection.make_sender());
@@ -272,9 +283,11 @@ impl Server {
         Self::try_register_capabilities(_client_capabilities, &mut scheduler);
 
         for msg in connection.incoming() {
+            tracing::info!("Received message: {:?}", msg);
             if connection.handle_shutdown(&msg)? {
                 break;
             }
+            broadcast_tx.send(msg.clone())?;
             let tasks = match msg {
                 Message::Request(req) => vec![api::request(req)],
                 Message::Notification(notification) => api::notification(notification),
@@ -300,7 +313,7 @@ impl Server {
             .and_then(|workspace| workspace.did_change_watched_files)
             .and_then(|watched_files| watched_files.dynamic_registration)
             .unwrap_or_default();
-        tracing::info!("*** asdfa sdynamic_registration: {}", dynamic_registration);
+        tracing::info!("dynamic_registration ATTEMPT START HELLO AGAIN: {}", dynamic_registration);
         if dynamic_registration {
             // Register all dynamic capabilities here
 
@@ -346,6 +359,7 @@ impl Server {
         } else {
             tracing::warn!("LSP client does not support dynamic capability registration - automatic configuration reloading will not be available.");
         }
+        tracing::info!("dynamic_registration ATTEMPT END: {}", dynamic_registration);
     }
 
     pub fn find_best_position_encoding(
@@ -413,83 +427,83 @@ impl Server {
         }
     }
 
-    #[cfg(feature = "playground-server")]
-    fn start_playground_server(&mut self) {
-        // Extract needed values to avoid borrowing conflicts
-        let playground_state = self.session.playground_state.clone();
-        let playground_runtime = self.session.playground_runtime.as_ref().is_some();
+    // #[cfg(feature = "playground-server")]
+    // fn start_playground_server(&mut self) {
+    //     // Extract needed values to avoid borrowing conflicts
+    //     let playground_state = self.session.playground_state.clone();
+    //     let playground_runtime = self.session.playground_runtime.as_ref().is_some();
 
-        if let Some(playground_state) = playground_state {
-            if playground_runtime {
-                let mut playground_port =
-                    self.session.baml_settings.playground_port.unwrap_or(3030);
-                const MAX_PORT_ATTEMPTS: u16 = 100;
-                let starting_port = playground_port;
-                let mut attempts = 0;
+    //     if let Some(playground_state) = playground_state {
+    //         if playground_runtime {
+    //             let mut playground_port =
+    //                 self.session.baml_settings.playground_port.unwrap_or(3030);
+    //             const MAX_PORT_ATTEMPTS: u16 = 100;
+    //             let starting_port = playground_port;
+    //             let mut attempts = 0;
 
-                // Determine the actual available port synchronously with a limit
-                loop {
-                    if attempts >= MAX_PORT_ATTEMPTS {
-                        tracing::error!(
-                            "Failed to find an available port after {} attempts starting from port {}. Playground server will not start.",
-                            MAX_PORT_ATTEMPTS,
-                            starting_port
-                        );
-                        return;
-                    }
+    //             // Determine the actual available port synchronously with a limit
+    //             loop {
+    //                 if attempts >= MAX_PORT_ATTEMPTS {
+    //                     tracing::error!(
+    //                         "Failed to find an available port after {} attempts starting from port {}. Playground server will not start.",
+    //                         MAX_PORT_ATTEMPTS,
+    //                         starting_port
+    //                     );
+    //                     return;
+    //                 }
 
-                    // Check if port is available before attempting to bind
-                    let port_available =
-                        { std::net::TcpListener::bind(("127.0.0.1", playground_port)).is_ok() };
+    //                 // Check if port is available before attempting to bind
+    //                 let port_available =
+    //                     { std::net::TcpListener::bind(("127.0.0.1", playground_port)).is_ok() };
 
-                    if port_available {
-                        break;
-                    } else {
-                        // Port is already in use, try next port
-                        attempts += 1;
-                        playground_port += 1;
-                        tracing::info!(
-                            "Port {} is in use, trying port {} (attempt {}/{})",
-                            playground_port - 1,
-                            playground_port,
-                            attempts,
-                            MAX_PORT_ATTEMPTS
-                        );
-                    }
-                }
+    //                 if port_available {
+    //                     break;
+    //                 } else {
+    //                     // Port is already in use, try next port
+    //                     attempts += 1;
+    //                     playground_port += 1;
+    //                     tracing::info!(
+    //                         "Port {} is in use, trying port {} (attempt {}/{})",
+    //                         playground_port - 1,
+    //                         playground_port,
+    //                         attempts,
+    //                         MAX_PORT_ATTEMPTS
+    //                     );
+    //                 }
+    //             }
 
-                // Port is available, store it in the session
-                self.session.set_session_playground_port(playground_port);
-                tracing::info!(
-                    "Successfully found available port {} after {} attempts",
-                    playground_port,
-                    attempts
-                );
+    //             // Port is available, store it in the session
+    //             self.session.set_session_playground_port(playground_port);
+    //             tracing::info!(
+    //                 "Successfully found available port {} after {} attempts",
+    //                 playground_port,
+    //                 attempts
+    //             );
 
-                // Now get the runtime and start the server
-                let rt = self.session.playground_runtime.as_ref().unwrap();
-                let session_arc = Arc::new(self.session.clone());
-                let playground_server =
-                    PlaygroundServer::new(playground_state.clone(), session_arc);
-                let sender = self.connection.make_sender();
-                let final_port = playground_port;
+    //             // Now get the runtime and start the server
+    //             let rt = self.session.playground_runtime.as_ref().unwrap();
+    //             let session_arc = Arc::new(self.session.clone());
+    //             let playground_server =
+    //                 PlaygroundServer::new(playground_state.clone(), session_arc);
+    //             let sender = self.connection.make_sender();
+    //             let final_port = playground_port;
 
-                rt.spawn(async move {
-                    // Send LSP notification about the port
-                    let params = PortNotificationParams::new(final_port);
-                    let notification = lsp_server::Notification::new(
-                        "baml/port".to_string(),
-                        serde_json::to_value(params).unwrap(),
-                    );
-                    if let Err(e) = sender.send(Message::Notification(notification)) {
-                        tracing::error!("Failed to send port notification: {}", e);
-                    }
+    //             rt.spawn(async move {
+    //                 // Send LSP notification about the port
+    //                 let params = PortNotificationParams::new(final_port);
+    //                 let notification = lsp_server::Notification::new(
+    //                     "baml/port".to_string(),
+    //                     serde_json::to_value(params).unwrap(),
+    //                 );
+    //                 if let Err(e) = sender.send(Message::Notification(notification)) {
+    //                     tracing::error!("Failed to send port notification: {}", e);
+    //                 }
 
-                    if let Err(e) = playground_server.run(final_port).await {
-                        tracing::error!("Playground server error: {}", e);
-                    }
-                });
-            }
-        }
-    }
+    //                 if let Err(e) = playground_server.run(final_port).await {
+    //                     tracing::error!("Playground server error: {}", e);
+    //                 }
+    //             });
+    //         }
+    //     }
+    // }
 }

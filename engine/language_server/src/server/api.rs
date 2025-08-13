@@ -75,90 +75,90 @@ pub(super) fn request<'a>(req: lsp_server::Request) -> Task<'a> {
             local_request_task::<request::DocumentDiagnosticRequestHandler>(req)
             // note background request task here sometimes results in inconsistent baml project state...
         }
-        // "getBAMLFunctions" => {
-        //     // tracing::info!("getBAMLFunctions");
-        //     return Task::local(move |session, _notifier, requester, responder| {
-        //         let result: anyhow::Result<(serde_json::Value,)> = {
-        //             let mut all_functions = Vec::new();
-        //             let projects = session.baml_src_projects.lock().unwrap();
+        "getBAMLFunctions" => {
+            // tracing::info!("getBAMLFunctions");
+            return Task::local(move |session, _notifier, requester, responder| {
+                let result: anyhow::Result<(serde_json::Value,)> = {
+                    let mut all_functions = Vec::new();
+                    let projects = session.baml_src_projects.lock().unwrap();
 
-        //             for (_, project) in projects.iter() {
-        //                 let functions = project
-        //                     .lock()
-        //                     .unwrap()
-        //                     .baml_project
-        //                     .list_functions()
-        //                     .iter()
-        //                     .map(|f| BamlFunctionResult {
-        //                         name: f.name.clone(),
-        //                         span: BamlFunctionSpan {
-        //                             file_path: f.span.file_path.clone(),
-        //                             start: f.span.start,
-        //                             end: f.span.end,
-        //                         },
-        //                     })
-        //                     .collect::<Vec<BamlFunctionResult>>();
+                    for (_, project) in projects.iter() {
+                        let functions = project
+                            .lock()
+                            .unwrap()
+                            .baml_project
+                            .list_functions()
+                            .iter()
+                            .map(|f| BamlFunctionResult {
+                                name: f.name.clone(),
+                                span: BamlFunctionSpan {
+                                    file_path: f.span.file_path.clone(),
+                                    start: f.span.start,
+                                    end: f.span.end,
+                                },
+                            })
+                            .collect::<Vec<BamlFunctionResult>>();
 
-        //                 all_functions.extend(functions);
-        //             }
+                        all_functions.extend(functions);
+                    }
 
-        //             let result = serde_json::to_value(all_functions);
-        //             if let Ok(result) = result {
-        //                 Ok((result,))
-        //             } else {
-        //                 Err(anyhow::anyhow!(
-        //                     "Failed to serialize functions: {:?}",
-        //                     result
-        //                 ))
-        //             }
-        //         };
-        //         if let Ok((result,)) = result {
-        //             responder.respond(id, Ok(result)).unwrap();
-        //         } else {
-        //             // no action
-        //             // responder.respond(id, Err(result.unwrap_err())).unwrap();
-        //         }
-        //     });
-        // }
-        // "requestDiagnostics" => {
-        //     // tracing::info!("---- requestDiagnostics");
-        //     return Task::local(move |session, notifier, _requester, responder| {
-        //         let result: anyhow::Result<()> = (|| {
-        //             // tracing::info!("requestDiagnostics: {:?}", req.params);
+                    let result = serde_json::to_value(all_functions);
+                    if let Ok(result) = result {
+                        Ok((result,))
+                    } else {
+                        Err(anyhow::anyhow!(
+                            "Failed to serialize functions: {:?}",
+                            result
+                        ))
+                    }
+                };
+                if let Ok((result,)) = result {
+                    responder.respond(id, Ok(result)).unwrap();
+                } else {
+                    // no action
+                    // responder.respond(id, Err(result.unwrap_err())).unwrap();
+                }
+            });
+        }
+        "requestDiagnostics" => {
+            // tracing::info!("---- requestDiagnostics");
+            return Task::local(move |session, notifier, _requester, responder| {
+                let result: anyhow::Result<()> = (|| {
+                    // tracing::info!("requestDiagnostics: {:?}", req.params);
 
-        //             let params = serde_json::from_value::<DiagnosticRequestParams>(req.params)
-        //                 .map_err(|e| anyhow::anyhow!("Failed to parse JSON: {e}"))?;
-        //             let url = Url::parse(&params.project_id)
-        //                 .map_err(|e| anyhow::anyhow!("Failed to parse URL: {e}"))?;
-        //             if !url.to_string().contains("baml_src") {
-        //                 return Ok(());
-        //             }
+                    let params = serde_json::from_value::<DiagnosticRequestParams>(req.params)
+                        .map_err(|e| anyhow::anyhow!("Failed to parse JSON: {e}"))?;
+                    let url = Url::parse(&params.project_id)
+                        .map_err(|e| anyhow::anyhow!("Failed to parse URL: {e}"))?;
+                    if !url.to_string().contains("baml_src") {
+                        return Ok(());
+                    }
 
-        //             let project = session
-        //                 .get_or_create_project(url.to_file_path().unwrap())
-        //                 .expect("Already checked for project's existence");
-        //             project.lock().unwrap().update_runtime(Some(notifier))?;
+                    let project = session
+                        .get_or_create_project(url.to_file_path().unwrap())
+                        .expect("Already checked for project's existence");
+                    project.lock().unwrap().update_runtime(Some(notifier))?;
 
-        //             // TODO: I think we need to send ALL diagnostics for the project. Not sure how this report is different vs sending a signle diagnostic param message
-        //             let diagnostics = file_diagnostics(project.clone(), &url);
-        //             // tracing::info!("---- diagnostics Returned: ");
-        //             let report = Ok(DocumentDiagnosticReportResult::Report(
-        //                 DocumentDiagnosticReport::Full(RelatedFullDocumentDiagnosticReport {
-        //                     related_documents: None,
-        //                     full_document_diagnostic_report: FullDocumentDiagnosticReport {
-        //                         result_id: None,
-        //                         items: diagnostics,
-        //                     },
-        //                 }),
-        //             ));
-        //             responder.respond(id, report)?;
-        //             Ok(())
-        //         })();
-        //         result.unwrap_or_else(|e| {
-        //             tracing::error!("Failed to send response: {e}");
-        //         })
-        //     });
-        // }
+                    // TODO: I think we need to send ALL diagnostics for the project. Not sure how this report is different vs sending a signle diagnostic param message
+                    let diagnostics = file_diagnostics(project.clone(), &url);
+                    // tracing::info!("---- diagnostics Returned: ");
+                    let report = Ok(DocumentDiagnosticReportResult::Report(
+                        DocumentDiagnosticReport::Full(RelatedFullDocumentDiagnosticReport {
+                            related_documents: None,
+                            full_document_diagnostic_report: FullDocumentDiagnosticReport {
+                                result_id: None,
+                                items: diagnostics,
+                            },
+                        }),
+                    ));
+                    responder.respond(id, report)?;
+                    Ok(())
+                })();
+                result.unwrap_or_else(|e| {
+                    tracing::error!("Failed to send response: {e}");
+                })
+            });
+        }
         request::ExecuteCommand::METHOD => local_request_task::<request::ExecuteCommand>(req),
         // request::Format::METHOD => {
         //     background_request_task::<request::Format>(req, BackgroundSchedule::Fmt)

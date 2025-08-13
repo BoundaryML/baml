@@ -15,14 +15,15 @@ class BamlGetPortService(private val project: Project) {
     }
 
     @Volatile
-    var port: Int? = null
+    var port: Int? = 4000
         private set
 
     fun setPort(newPort: Int) {
-        port = newPort
-        project.messageBus
-            .syncPublisher(TOPIC)
-            .onPort(newPort)
+//        port = newPort
+//        port = 4000
+//        project.messageBus
+//            .syncPublisher(TOPIC)
+//            .onPort(newPort)
     }
 
     fun interface Listener { fun onPort(port: Int) }

@@ -1,4 +1,5 @@
 use anyhow::Context;
+use tokio::sync::broadcast;
 use std::io::Cursor;
 use flate2::read::GzDecoder;
 use tar::Archive;
@@ -15,16 +16,13 @@ use tokio::net::TcpListener;
 use tower_http::services::ServeDir;
 use crate::playground2::ping_handler::ping_handler;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Playground2Server {
-    port: u16,
+    pub port: u16,
+    pub broadcast_rx: broadcast::Receiver<lsp_server::Message>,
 }
 
 impl Playground2Server {
-    pub fn new(port: u16) -> Self {
-        Self { port }
-    }
-
     pub async fn run(self) -> Result<(), Box<dyn std::error::Error>> {
         // Determine the static files directory
         let dist_dir = playground_static_assets().await?;

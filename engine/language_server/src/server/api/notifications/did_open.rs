@@ -24,6 +24,11 @@ impl NotificationHandler for DidOpenTextDocumentHandler {
 }
 
 impl SyncNotificationHandler for DidOpenTextDocumentHandler {
+    // #[tracing::instrument(
+    //     name = "DidOpenTextDocumentHandler",
+    //     skip(session, notifier, requester),
+    //     ret
+    // )]
     fn run(
         session: &mut Session,
         notifier: Notifier,
@@ -39,6 +44,7 @@ impl SyncNotificationHandler for DidOpenTextDocumentHandler {
 
         // TODO: do this when server initializes instead of every time a file is opened
         // note this just schedules the task. It will run after the current task is done.
+        tracing::info!("before workspace configuration request");
         requester
             .request::<types::request::WorkspaceConfiguration>(
                 ConfigurationParams {
@@ -62,6 +68,7 @@ impl SyncNotificationHandler for DidOpenTextDocumentHandler {
             .to_file_path()
             .internal_error_msg(&format!("Could not convert URL '{url}' to file path"))?;
 
+        tracing::info!("before get_or_create_project");
         if let Some(project) = session.get_or_create_project(&file_path) {
             if let Ok(version) = project.lock().unwrap().get_common_generator_version() {
                 notifier
@@ -86,6 +93,7 @@ impl SyncNotificationHandler for DidOpenTextDocumentHandler {
             tracing::error!("Failed to get or create project for path: {:?}", file_path);
             show_err_msg!("Failed to get or create project for path: {:?}", file_path);
         }
+        tracing::info!("after get_or_create_project");
 
         // session.open_text_document(
         //     DocumentKey::from_path(&file_path, &file_path).internal_error()?,
