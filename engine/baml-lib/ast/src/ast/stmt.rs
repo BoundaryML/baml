@@ -98,7 +98,7 @@ impl fmt::Display for Stmt {
         match self {
             Stmt::Let(stmt) => write!(f, "let {} = {}", stmt.identifier, stmt.expr),
             Stmt::ForLoop(stmt) => write!(f, "for {} in {}", stmt.identifier, stmt.iterator),
-            Stmt::Expression(expr) => write!(f, "{expr}")?,
+            Stmt::Expression(expr) => fmt::Display::fmt(expr, f),
             Stmt::Assign(stmt) => write!(f, "{} = {}", stmt.identifier, stmt.expr),
             Stmt::AssignOp(stmt) => {
                 write!(f, "{} {} {}", stmt.identifier, stmt.assign_op, stmt.expr)

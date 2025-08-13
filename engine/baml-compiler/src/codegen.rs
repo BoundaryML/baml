@@ -1566,4 +1566,56 @@ mod tests {
             )],
         })
     }
+
+    #[test]
+    fn while_loop_gcd() -> anyhow::Result<()> {
+        assert_compiles(Program {
+            source: r#"
+                fn GCD(mut a: int, mut b: int) -> int {
+                    while (a != b) {
+                        if a > b {
+                            a = a - b;
+                        } else {
+                            b = b - a;
+                        }
+                    }
+
+                    a
+                }
+            "#,
+            expected: vec![(
+                "GCD",
+                vec![
+                    // while (a != b)
+                    Instruction::LoadVar(1),
+                    Instruction::LoadVar(2),
+                    Instruction::CmpOp(CmpOp::NotEq),
+                    Instruction::JumpIfFalse(18),
+                    Instruction::Pop(1),
+                    // if a > b { a = a - b; } else { b = b - a; }
+                    Instruction::LoadVar(1),
+                    Instruction::LoadVar(2),
+                    Instruction::CmpOp(CmpOp::Gt),
+                    Instruction::JumpIfFalse(7),
+                    Instruction::Pop(1),
+                    Instruction::LoadVar(1),
+                    Instruction::LoadVar(2),
+                    Instruction::BinOp(BinOp::Sub),
+                    Instruction::StoreVar(1),
+                    Instruction::Jump(6),
+                    Instruction::Pop(1),
+                    Instruction::LoadVar(2),
+                    Instruction::LoadVar(1),
+                    Instruction::BinOp(BinOp::Sub),
+                    Instruction::StoreVar(2),
+                    // jump back to loop start
+                    Instruction::Jump(-20),
+                    // exit loop: pop condition and return a
+                    Instruction::Pop(1),
+                    Instruction::LoadVar(1),
+                    Instruction::Return,
+                ],
+            )],
+        })
+    }
 }

@@ -842,3 +842,35 @@ fn basic_assign_bit_xor() -> anyhow::Result<()> {
         expected: VmExecState::Complete(Value::Int(9)),
     })
 }
+
+#[test]
+fn while_loop() -> anyhow::Result<()> {
+    // NOTE: there's no way to make a safeguard since there's no "return" or working "break".
+    // Maybe we should "time-out" the VM? (we know how many jumps it should take...)
+    const SOURCE: &str = r#"
+        fn GCD(mut a: int, mut b: int) -> int {
+
+            while a != b {
+
+               if a > b {
+                   a = a - b;
+               } else {
+                   b = b - a;
+               }
+
+            }
+
+            a
+        }
+
+        fn main() -> int {
+            GCD(21, 15)
+        }
+    "#;
+
+    assert_vm_executes(Program {
+        source: SOURCE,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(3)),
+    })
+}
