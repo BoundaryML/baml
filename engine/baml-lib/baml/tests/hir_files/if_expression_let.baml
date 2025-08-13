@@ -38,3 +38,4 @@ function simpleIf() -> string {
 // [1;94m   | [0m
 // [1;94m 1 | [0mfunction [1;91msimpleIf[0m() -> string {
 // [1;94m   | [0m
+//

@@ -48,3 +48,4 @@ function Foo() -> int {
 // [1;94m   | [0m
 // [1;94m 1 | [0mfunction [1;91mFoo[0m() -> int {
 // [1;94m   | [0m
+//
