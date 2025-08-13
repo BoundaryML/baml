@@ -205,14 +205,17 @@ fn extract_blobs_from_trace_data<'a>(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use baml_rpc::ast::type_reference::TypeReference;
-    use baml_rpc::runtime_api::baml_value::{
-        BamlValue, Media, MediaValue, TypeIndex, ValueContent, ValueMetadata,
+    use std::{borrow::Cow, collections::HashMap};
+
+    use baml_rpc::{
+        ast::type_reference::TypeReference,
+        runtime_api::baml_value::{
+            BamlValue, Media, MediaValue, TypeIndex, ValueContent, ValueMetadata,
+        },
     };
     use indexmap::IndexMap;
-    use std::borrow::Cow;
-    use std::collections::HashMap;
+
+    use super::*;
 
     #[test]
     fn test_extract_blobs_from_media_value() {
@@ -549,8 +552,9 @@ mod tests {
 
     #[test]
     fn test_extract_blobs_integration_with_trace_data_processing() {
-        use baml_rpc::runtime_api::{HTTPBody, IntermediateData, TraceData};
         use std::borrow::Cow;
+
+        use baml_rpc::runtime_api::{HTTPBody, IntermediateData, TraceData};
 
         let cache = blob_storage::BlobRefCache::new();
         let function_call_id = "integration-test-call";
@@ -601,11 +605,12 @@ mod tests {
 
     #[test]
     fn test_extract_blobs_from_llm_request_media() {
-        use baml_rpc::runtime_api::baml_value::{Media, MediaValue};
+        use std::borrow::Cow;
+
         use baml_rpc::runtime_api::{
+            baml_value::{Media, MediaValue},
             IntermediateData, LLMChatMessage, LLMChatMessagePart, TraceData,
         };
-        use std::borrow::Cow;
 
         let cache = blob_storage::BlobRefCache::new();
         let function_call_id = "llm-media-test-call";
@@ -698,10 +703,11 @@ mod tests {
 
     #[test]
     fn test_extract_blobs_from_llm_request_text_with_base64() {
+        use std::borrow::Cow;
+
         use baml_rpc::runtime_api::{
             IntermediateData, LLMChatMessage, LLMChatMessagePart, TraceData,
         };
-        use std::borrow::Cow;
 
         let cache = blob_storage::BlobRefCache::new();
         let function_call_id = "llm-text-test-call";

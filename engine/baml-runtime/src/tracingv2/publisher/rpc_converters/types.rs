@@ -6,7 +6,7 @@ use baml_types::{
     StreamingMode, TypeValue,
 };
 
-use super::{IntoRpcEvent, IRRpcState};
+use super::{IRRpcState, IntoRpcEvent};
 
 impl<'a, T: HasType<type_meta::NonStreaming>> IntoRpcEvent<'a, runtime_api::BamlValue<'a>>
     for BamlValueWithMeta<T>
@@ -86,7 +86,7 @@ impl<'a, T: HasType<type_meta::NonStreaming>> IntoRpcEvent<'a, runtime_api::Baml
 fn matches_value_with_rpc_type<T: HasType<type_meta::NonStreaming>>(
     value: &BamlValueWithMeta<T>,
     rpc_type_ref: &baml_rpc::TypeReferenceWithMetadata<baml_rpc::TypeMetadata>,
-    lookup: &(impl IRRpcState + ?Sized),
+    _lookup: &(impl IRRpcState + ?Sized),
 ) -> bool {
     use baml_rpc::TypeReferenceWithMetadata;
     match (value, rpc_type_ref) {
@@ -114,14 +114,14 @@ fn matches_value_with_rpc_type<T: HasType<type_meta::NonStreaming>>(
             TypeReferenceWithMetadata::List(inner_type, _),
         ) => list_values
             .iter()
-            .all(|value| matches_value_with_rpc_type(value, inner_type, lookup)),
+            .all(|value| matches_value_with_rpc_type(value, inner_type, _lookup)),
         (
             BamlValueWithMeta::Map(map_values, _),
             TypeReferenceWithMetadata::Map { key, value, .. },
         ) => map_values.iter().all(|(map_key, map_value)| {
             // TODO: Validate key type
             // matches_value_with_rpc_type(map_key, key, lookup)
-            matches_value_with_rpc_type(map_value, value, lookup)
+            matches_value_with_rpc_type(map_value, value, _lookup)
         }),
         (BamlValueWithMeta::Media(media, _), TypeReferenceWithMetadata::Media(media_type, _)) => {
             matches!(

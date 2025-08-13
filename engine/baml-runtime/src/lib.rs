@@ -300,10 +300,16 @@ impl BamlRuntime {
         baml_src_reader: BamlSrcReader,
     ) -> RuntimeContextManager {
         let ctx = RuntimeContextManager::new(baml_src_reader);
-        let tags: HashMap<String, BamlValue> = [("baml.language", language), ("baml.runtime", BamlValue::String(env!("CARGO_PKG_VERSION").to_string()))]
-            .into_iter()
-            .map(|(k, v)| (k.to_string(), v))
-            .collect();
+        let tags: HashMap<String, BamlValue> = [
+            ("baml.language", language),
+            (
+                "baml.runtime",
+                BamlValue::String(env!("CARGO_PKG_VERSION").to_string()),
+            ),
+        ]
+        .into_iter()
+        .map(|(k, v)| (k.to_string(), v))
+        .collect();
         ctx.upsert_tags(tags);
         ctx
     }
@@ -317,13 +323,16 @@ impl BamlRuntime {
         baml_src_reader: BamlSrcReader,
     ) -> RuntimeContextManager {
         let ctx = RuntimeContextManager::new(baml_src_reader);
-        let tags: HashMap<String, BamlValue> = [(
-            "baml.language".to_string(),
-            BamlValue::String("wasm".to_string()),
-        ), (
-            "baml.runtime".to_string(),
-            BamlValue::String(env!("CARGO_PKG_VERSION").to_string()),
-        )]
+        let tags: HashMap<String, BamlValue> = [
+            (
+                "baml.language".to_string(),
+                BamlValue::String("wasm".to_string()),
+            ),
+            (
+                "baml.runtime".to_string(),
+                BamlValue::String(env!("CARGO_PKG_VERSION").to_string()),
+            ),
+        ]
         .into_iter()
         .collect();
         ctx.upsert_tags(tags);
@@ -837,7 +846,7 @@ impl BamlRuntime {
                                 })
                             })
                             .transpose();
-                       
+
                         let result: Result<FunctionResult> = Ok(FunctionResult::new(
                             OrchestrationScope { scope: vec![] },
                             Self::dummy_llm_placeholder_for_expr_fn(),

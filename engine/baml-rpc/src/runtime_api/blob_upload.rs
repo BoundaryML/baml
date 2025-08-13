@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+
 use crate::{rpc::ApiEndpoint, s3::S3UploadMetadata};
 
 /// Request to get upload URLs for blob batch
@@ -31,7 +32,7 @@ pub struct CreateBlobBatchUploadUrl;
 impl ApiEndpoint for CreateBlobBatchUploadUrl {
     type Request<'a> = CreateBlobBatchUploadUrlRequest;
     type Response<'a> = CreateBlobBatchUploadUrlResponse;
-    
+
     const PATH: &'static str = "/v1/blobs/batch-upload-url";
 }
 

@@ -1,12 +1,16 @@
-use crate::tracingv2::publisher::publisher::BlobUploaderMessage;
+use std::{
+    borrow::Cow,
+    collections::{HashMap, HashSet},
+    sync::{Arc, Mutex},
+};
+
 use baml_rpc::runtime_api::baml_value::{BamlValue, MediaValue, ValueContent};
 use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::borrow::Cow;
-use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
+
+use crate::tracingv2::publisher::publisher::BlobUploaderMessage;
 
 /// Represents a blob that needs to be uploaded
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -33,6 +37,12 @@ pub struct BlobRefCache {
     active_calls: Arc<Mutex<HashSet<String>>>,
     // Channel to queue blobs for immediate upload
     blob_upload_tx: Option<mpsc::UnboundedSender<BlobUploaderMessage>>,
+}
+
+impl Default for BlobRefCache {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl BlobRefCache {
@@ -106,7 +116,7 @@ impl BlobRefCache {
                         blob_hash: blob_hash.clone(),
                         function_call_id: function_call_id.to_string(),
                         media_type: media_type.clone(),
-                        size_bytes: base64_content.as_bytes().len(),
+                        size_bytes: base64_content.len(),
                     },
                     content: base64_content.as_bytes().to_vec(),
                 };
