@@ -36,3 +36,4 @@ function CallTest() -> int {
 // [1;94m 4 | [0m
 // [1;94m 5 | [0mfunction [1;91mCallTest[0m() -> int {
 // [1;94m   | [0m
+//
