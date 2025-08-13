@@ -17,12 +17,6 @@
 ///
 /// However, the current implementation is simple and ad-hoc, likely wrong
 /// in several places. Bidirectional typing is the target.
-///
-/// Variables in THIR are tracked via the locally-nameless technique, which
-/// is a good compromise between simple named variables (which are trivial
-/// to implement but easy to get wrong) and de Bruijn indices (which are safer
-/// but more confusing to implement). See the docs for `thir::Expr::BoundVar`
-/// and `thir::Expr::FreeVar`. for more details.
 use std::sync::Arc;
 
 use baml_types::{BamlMap, BamlValueWithMeta};

@@ -58,8 +58,6 @@ pub enum Expr<T> {
     },
     // A free variable, not bound by a lambda.
     FreeVar(Name, T),
-    // The DeBruijn index of a bound variable.
-    BoundVar(VarIndex, T),
     Function(usize, Arc<Block<T>>, T), // number of parameters, body, metadata
     Call {
         func: Arc<Expr<T>>,
@@ -135,38 +133,6 @@ impl<T> Block<T> {
         free_vars
     }
 
-    pub fn open(&self, target: &VarIndex, new_name: &str) -> Block<T>
-    where
-        T: Clone + std::fmt::Debug,
-    {
-        Block {
-            env: self.env.clone(),
-            statements: self
-                .statements
-                .iter()
-                .map(|stmt| stmt.open(target, new_name))
-                .collect(),
-            return_value: self.return_value.open(target, new_name),
-            span: self.span.clone(),
-        }
-    }
-
-    pub fn close(&self, new_index: &VarIndex, target: &str) -> Block<T>
-    where
-        T: Clone + std::fmt::Debug,
-    {
-        Block {
-            env: self.env.clone(),
-            statements: self
-                .statements
-                .iter()
-                .map(|stmt| stmt.close(new_index, target))
-                .collect(),
-            return_value: self.return_value.close(new_index, target),
-            span: self.span.clone(),
-        }
-    }
-
     pub fn temporary_same_state(&self, other: &Block<T>) -> bool
     where
         T: Clone + std::fmt::Debug,
@@ -222,11 +188,10 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
             Expr::Atom(baml_value) => baml_value.meta(),
             Expr::Block(_, meta) => meta,
             Expr::List(_, meta) => meta,
-            Expr::Map(_, meta) => meta,
-            Expr::ClassConstructor { meta, .. } => meta,
-            Expr::BoundVar(_, meta) => meta,
             Expr::FreeVar(_, meta) => meta,
             Expr::Function(_, _, meta) => meta,
+            Expr::Map(_, meta) => meta,
+            Expr::ClassConstructor { meta, .. } => meta,
             Expr::Call { meta, .. } => meta,
             Expr::Builtin(_, meta) => meta,
             Expr::If(_, _, _, meta) => meta,
@@ -246,7 +211,6 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
             Expr::List(_, meta) => meta,
             Expr::Map(_, meta) => meta,
             Expr::ClassConstructor { meta, .. } => meta,
-            Expr::BoundVar(_, meta) => meta,
             Expr::FreeVar(_, meta) => meta,
             Expr::Function(_, _, meta) => meta,
             Expr::Call { meta, .. } => meta,
@@ -268,7 +232,6 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
             Expr::List(_, meta) => meta,
             Expr::Map(_, meta) => meta,
             Expr::ClassConstructor { meta, .. } => meta,
-            Expr::BoundVar(_, meta) => meta,
             Expr::FreeVar(_, meta) => meta,
             Expr::Function(_, _, meta) => meta,
             Expr::Call { meta, .. } => meta,
@@ -290,7 +253,6 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
         match self {
             Expr::Atom(atom) => atom.clone().value().to_string(),
             Expr::Block(block, _) => block.dump_str(),
-            Expr::BoundVar(ind, _) => ind.dump_str(),
             Expr::FreeVar(name, _) => name.clone(),
             Expr::Function(_, body, meta) => format!(
                 "\\. -> {}",
@@ -299,7 +261,6 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
             Expr::Call { func, args, .. } => {
                 let args_str = itertools::join(args.iter().map(|arg| arg.dump_str()), ", ");
                 let func_str = match func.as_ref() {
-                    Expr::BoundVar(ind, _) => ind.dump_str(),
                     Expr::FreeVar(name, _) => name.clone(),
                     _ => format!("({})", func.dump_str()),
                 };
@@ -383,7 +344,6 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
                 "{}.{}({})",
                 receiver.dump_str(),
                 match method.as_ref() {
-                    Expr::BoundVar(ind, _) => ind.dump_str(),
                     Expr::FreeVar(name, _) => name.clone(),
                     _ => format!("({})", method.dump_str()),
                 },
@@ -408,9 +368,6 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
 
             (Expr::Builtin(b1, _), Expr::Builtin(b2, _)) => b1 == b2,
             (Expr::Builtin(_, _), _) => false,
-
-            (Expr::BoundVar(n1, _), Expr::BoundVar(n2, _)) => n1 == n2,
-            (Expr::BoundVar(_, _), _) => false,
 
             (Expr::FreeVar(n1, _), Expr::FreeVar(n2, _)) => n1 == n2,
             (Expr::FreeVar(_, _), _) => false,
@@ -608,7 +565,6 @@ impl<T: Clone> Expr<T> {
             }
             Expr::Builtin(_, _) => HashSet::new(),
             Expr::FreeVar(name, _) => HashSet::from([name.clone()]),
-            Expr::BoundVar(_, _) => HashSet::new(),
             Expr::Function(_, body, meta) => {
                 Expr::Block(Box::new(Arc::unwrap_or_clone(body.clone())), meta.clone()).free_vars()
             }
@@ -732,255 +688,6 @@ impl Expr<ExprMetadata> {
     }
 }
 
-impl<T: Clone + std::fmt::Debug> Expr<T> {
-    /// Opens a term by replacing the bound variable with index k by a free variable.
-    /// This operation is used when going under a binder.
-    pub fn open(&self, target: &VarIndex, new_name: &str) -> Expr<T> {
-        match self {
-            Expr::Atom(v) => Expr::Atom(v.clone()),
-            Expr::Block(block, m) => Expr::Block(Box::new(block.open(target, new_name)), m.clone()),
-            Expr::List(items, m) => Expr::List(
-                items.iter().map(|e| e.open(target, new_name)).collect(),
-                m.clone(),
-            ),
-            Expr::Map(entries, m) => Expr::Map(
-                entries
-                    .iter()
-                    .map(|(key, val)| (key.clone(), val.open(target, new_name)))
-                    .collect(),
-                m.clone(),
-            ),
-            Expr::ClassConstructor {
-                name: class_name,
-                fields,
-                spread,
-                meta: m,
-            } => Expr::ClassConstructor {
-                name: class_name.clone(),
-                fields: fields
-                    .iter()
-                    .map(|(key, val)| (key.clone(), val.open(target, new_name)))
-                    .collect(),
-                spread: spread.as_ref().map(|s| Box::new(s.open(target, new_name))),
-                meta: m.clone(),
-            },
-            Expr::FreeVar(n, m) => Expr::FreeVar(n.clone(), m.clone()),
-            Expr::BoundVar(i, m) => {
-                if i == target {
-                    Expr::FreeVar(new_name.to_string(), m.clone())
-                } else {
-                    Expr::BoundVar(i.clone(), m.clone())
-                }
-            }
-            Expr::Function(arity, body, m) => Expr::Function(
-                *arity,
-                Arc::new(body.open(&target.deeper(), new_name)),
-                m.clone(),
-            ),
-            Expr::Call {
-                func,
-                args,
-                meta,
-                type_args,
-            } => Expr::Call {
-                func: Arc::new(func.open(target, new_name)),
-                args: args.iter().map(|arg| arg.open(target, new_name)).collect(),
-                type_args: type_args.clone(),
-                meta: meta.clone(),
-            },
-            Expr::MethodCall {
-                receiver,
-                method,
-                args,
-                meta,
-            } => Expr::MethodCall {
-                receiver: Arc::new(receiver.open(target, new_name)),
-                method: Arc::new(method.open(target, new_name)),
-                args: args.iter().map(|arg| arg.open(target, new_name)).collect(),
-                meta: meta.clone(),
-            },
-            Expr::Builtin(builtin, m) => Expr::Builtin(builtin.clone(), m.clone()),
-            Expr::If(cond, then, else_, m) => Expr::If(
-                Arc::new(cond.open(target, new_name)),
-                Arc::new(then.open(target, new_name)),
-                else_.as_ref().map(|e| Arc::new(e.open(target, new_name))),
-                m.clone(),
-            ),
-            Expr::ForLoop {
-                item,
-                iterable,
-                body,
-                meta,
-            } => Expr::ForLoop {
-                item: item.clone(),
-                iterable: Arc::new(iterable.open(target, new_name)),
-                body: Arc::new(body.open(target, new_name)),
-                meta: meta.clone(),
-            },
-            Expr::ArrayAccess { base, index, meta } => Expr::ArrayAccess {
-                base: Arc::new(base.open(target, new_name)),
-                index: Arc::new(index.open(target, new_name)),
-                meta: meta.clone(),
-            },
-            Expr::FieldAccess { base, field, meta } => Expr::FieldAccess {
-                base: Arc::new(base.open(target, new_name)),
-                field: field.clone(),
-                meta: meta.clone(),
-            },
-            Expr::BinaryOperation {
-                left,
-                operator,
-                right,
-                meta,
-            } => Expr::BinaryOperation {
-                left: Arc::new(left.open(target, new_name)),
-                operator: *operator,
-                right: Arc::new(right.open(target, new_name)),
-                meta: meta.clone(),
-            },
-            Expr::UnaryOperation {
-                expr,
-                operator,
-                meta,
-            } => Expr::UnaryOperation {
-                operator: *operator,
-                expr: Arc::new(expr.open(target, new_name)),
-                meta: meta.clone(),
-            },
-        }
-    }
-
-    /// Closes a term by replacing the free variable with name by a bound variable with index k.
-    /// This is the inverse operation of open.
-    pub fn close(&self, new_index: &VarIndex, target: &str) -> Expr<T>
-    where
-        T: Clone + std::fmt::Debug,
-    {
-        match self {
-            Expr::Atom(v) => Expr::Atom(v.clone()),
-            Expr::Block(block, m) => {
-                Expr::Block(Box::new(block.close(new_index, target)), m.clone())
-            }
-            Expr::List(items, m) => Expr::List(
-                items.iter().map(|e| e.close(new_index, target)).collect(),
-                m.clone(),
-            ),
-            Expr::Map(entries, m) => Expr::Map(
-                entries
-                    .iter()
-                    .map(|(key, val)| (key.clone(), val.close(new_index, target)))
-                    .collect(),
-                m.clone(),
-            ),
-            Expr::ClassConstructor {
-                name: class_name,
-                fields,
-                spread,
-                meta: m,
-            } => Expr::ClassConstructor {
-                name: class_name.clone(),
-                fields: fields
-                    .iter()
-                    .map(|(key, val)| (key.clone(), val.close(new_index, target)))
-                    .collect(),
-                spread: spread
-                    .as_ref()
-                    .map(|s| Box::new(s.close(new_index, target))),
-                meta: m.clone(),
-            },
-            Expr::FreeVar(n, m) => {
-                if n == target {
-                    Expr::BoundVar(new_index.clone(), m.clone())
-                } else {
-                    Expr::FreeVar(n.clone(), m.clone())
-                }
-            }
-            Expr::BoundVar(i, m) => Expr::BoundVar(i.clone(), m.clone()),
-            Expr::Function(arity, body, m) => Expr::Function(
-                *arity,
-                Arc::new(body.close(&new_index.deeper(), target)),
-                m.clone(),
-            ),
-            Expr::Call {
-                func,
-                args,
-                meta,
-                type_args,
-            } => Expr::Call {
-                func: Arc::new(func.close(new_index, target)),
-                args: args
-                    .iter()
-                    .map(|arg| arg.close(new_index, target))
-                    .collect(),
-                type_args: type_args.clone(),
-                meta: meta.clone(),
-            },
-            Expr::MethodCall {
-                receiver,
-                method,
-                args,
-                meta,
-            } => Expr::MethodCall {
-                receiver: Arc::new(receiver.close(new_index, target)),
-                method: Arc::new(method.close(new_index, target)),
-                args: args
-                    .iter()
-                    .map(|arg| arg.close(new_index, target))
-                    .collect(),
-                meta: meta.clone(),
-            },
-            Expr::Builtin(builtin, m) => Expr::Builtin(builtin.clone(), m.clone()),
-            Expr::If(cond, then, else_, m) => Expr::If(
-                Arc::new(cond.close(new_index, target)),
-                Arc::new(then.close(new_index, target)),
-                else_.as_ref().map(|e| Arc::new(e.close(new_index, target))),
-                m.clone(),
-            ),
-            Expr::ForLoop {
-                item,
-                iterable,
-                body,
-                meta,
-            } => Expr::ForLoop {
-                item: item.clone(),
-                iterable: Arc::new(iterable.close(new_index, target)),
-                body: Arc::new(body.close(new_index, target)),
-                meta: meta.clone(),
-            },
-            Expr::ArrayAccess { base, index, meta } => Expr::ArrayAccess {
-                base: Arc::new(base.close(new_index, target)),
-                index: Arc::new(index.close(new_index, target)),
-                meta: meta.clone(),
-            },
-            Expr::FieldAccess { base, field, meta } => Expr::FieldAccess {
-                base: Arc::new(base.close(new_index, target)),
-                field: field.clone(),
-                meta: meta.clone(),
-            },
-            Expr::BinaryOperation {
-                left,
-                operator,
-                right,
-                meta,
-            } => Expr::BinaryOperation {
-                left: Arc::new(left.close(new_index, target)),
-                operator: *operator,
-                right: Arc::new(right.close(new_index, target)),
-                meta: meta.clone(),
-            },
-            Expr::UnaryOperation {
-                expr,
-                operator,
-                meta,
-            } => Expr::UnaryOperation {
-                operator: *operator,
-                expr: Arc::new(expr.close(new_index, target)),
-                meta: meta.clone(),
-            },
-        }
-    }
-}
-
 /// An iterator over the sub-expressions of an expression.
 impl<T: Clone> IntoIterator for Expr<T> {
     type Item = Expr<T>;
@@ -1036,7 +743,6 @@ impl<T: Clone> Iterator for ExprIterator<T> {
                 }
             }
             Expr::FreeVar(_, _) => {}
-            Expr::BoundVar(_, _) => {}
             Expr::Function(_, body, meta) => {
                 self.stack.push_back(Expr::Block(
                     Box::new(Arc::unwrap_or_clone(body)),
@@ -1237,118 +943,6 @@ impl<T: Clone> Statement<T> {
                 free_vars
             }
             Statement::Break(_) | Statement::Continue(_) => HashSet::new(),
-        }
-    }
-
-    pub fn open(&self, target: &VarIndex, new_name: &str) -> Statement<T>
-    where
-        T: Clone + std::fmt::Debug,
-    {
-        match self {
-            Statement::Let { name, value, span } => Statement::Let {
-                name: name.clone(),
-                value: value.open(target, new_name),
-                span: span.clone(),
-            },
-            Statement::Declare { name, span } => Statement::Declare {
-                name: name.clone(),
-                span: span.clone(),
-            },
-            Statement::Assign { name, value } => Statement::Assign {
-                name: name.clone(),
-                value: value.open(target, new_name),
-            },
-            Statement::DeclareAndAssign { name, value, span } => Statement::DeclareAndAssign {
-                name: name.clone(),
-                value: value.open(target, new_name),
-                span: span.clone(),
-            },
-            Statement::FunctionReturn { expr, span } => Statement::FunctionReturn {
-                expr: expr.open(target, new_name),
-                span: span.clone(),
-            },
-            Statement::Expression { expr, span } => Statement::Expression {
-                expr: expr.open(target, new_name),
-                span: span.clone(),
-            },
-            Statement::While {
-                condition,
-                block,
-                span,
-            } => Statement::While {
-                condition: Box::new(condition.open(target, new_name)),
-                block: block.open(target, new_name),
-                span: span.clone(),
-            },
-            Statement::ForLoop {
-                identifier,
-                iterator,
-                block,
-                span,
-            } => Statement::ForLoop {
-                identifier: identifier.clone(),
-                iterator: Box::new(iterator.open(target, new_name)),
-                block: block.open(target, new_name),
-                span: span.clone(),
-            },
-            Statement::Break(span) => Statement::Break(span.clone()),
-            Statement::Continue(span) => Statement::Continue(span.clone()),
-        }
-    }
-
-    pub fn close(&self, new_index: &VarIndex, target: &str) -> Statement<T>
-    where
-        T: Clone + std::fmt::Debug,
-    {
-        match self {
-            Statement::Let { name, value, span } => Statement::Let {
-                name: name.clone(),
-                value: value.close(new_index, target),
-                span: span.clone(),
-            },
-            Statement::Declare { name, span } => Statement::Declare {
-                name: name.clone(),
-                span: span.clone(),
-            },
-            Statement::Assign { name, value } => Statement::Assign {
-                name: name.clone(),
-                value: value.close(new_index, target),
-            },
-            Statement::DeclareAndAssign { name, value, span } => Statement::DeclareAndAssign {
-                name: name.clone(),
-                value: value.close(new_index, target),
-                span: span.clone(),
-            },
-            Statement::FunctionReturn { expr, span } => Statement::FunctionReturn {
-                expr: expr.close(new_index, target),
-                span: span.clone(),
-            },
-            Statement::Expression { expr, span } => Statement::Expression {
-                expr: expr.close(new_index, target),
-                span: span.clone(),
-            },
-            Statement::While {
-                condition,
-                block,
-                span,
-            } => Statement::While {
-                condition: Box::new(condition.close(new_index, target)),
-                block: block.close(new_index, target),
-                span: span.clone(),
-            },
-            Statement::ForLoop {
-                identifier,
-                iterator,
-                block,
-                span,
-            } => Statement::ForLoop {
-                identifier: identifier.clone(),
-                iterator: Box::new(iterator.close(new_index, target)),
-                block: block.close(new_index, target),
-                span: span.clone(),
-            },
-            Statement::Break(span) => Statement::Break(span.clone()),
-            Statement::Continue(span) => Statement::Continue(span.clone()),
         }
     }
 
