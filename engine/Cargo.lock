@@ -1324,6 +1324,7 @@ dependencies = [
  "baml-compiler",
  "baml-types",
  "colored 2.2.0",
+ "criterion",
  "internal-baml-core",
  "internal-baml-diagnostics",
  "internal-baml-parser-database",
