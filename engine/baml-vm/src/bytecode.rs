@@ -191,6 +191,12 @@ pub enum BinOp {
     Sub,
     Mul,
     Div,
+    Mod,
+    BitAnd,
+    BitOr,
+    BitXor,
+    Shl,
+    Shr,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -211,34 +217,40 @@ pub enum UnaryOp {
 
 impl std::fmt::Display for BinOp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            BinOp::Add => f.write_str("+"),
-            BinOp::Sub => f.write_str("-"),
-            BinOp::Mul => f.write_str("*"),
-            BinOp::Div => f.write_str("/"),
-        }
+        f.write_str(match self {
+            BinOp::Add => "+",
+            BinOp::Sub => "-",
+            BinOp::Mul => "*",
+            BinOp::Div => "/",
+            BinOp::Mod => "%",
+            BinOp::BitAnd => "&",
+            BinOp::BitOr => "|",
+            BinOp::BitXor => "^",
+            BinOp::Shl => "<<",
+            BinOp::Shr => ">>",
+        })
     }
 }
 
 impl std::fmt::Display for CmpOp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            CmpOp::Eq => f.write_str("=="),
-            CmpOp::NotEq => f.write_str("!="),
-            CmpOp::Lt => f.write_str("<"),
-            CmpOp::LtEq => f.write_str("<="),
-            CmpOp::Gt => f.write_str(">"),
-            CmpOp::GtEq => f.write_str(">="),
-        }
+        f.write_str(match self {
+            CmpOp::Eq => "==",
+            CmpOp::NotEq => "!=",
+            CmpOp::Lt => "<",
+            CmpOp::LtEq => "<=",
+            CmpOp::Gt => ">",
+            CmpOp::GtEq => ">=",
+        })
     }
 }
 
 impl std::fmt::Display for UnaryOp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            UnaryOp::Not => f.write_str("!"),
-            UnaryOp::Neg => f.write_str("-"),
-        }
+        f.write_str(match self {
+            UnaryOp::Not => "!",
+            UnaryOp::Neg => "-",
+        })
     }
 }
 

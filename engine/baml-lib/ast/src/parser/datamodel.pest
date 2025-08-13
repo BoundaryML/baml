@@ -120,7 +120,7 @@ expression =  {
 }
 
 postfix_operator = _{ array_accessor | field_accessor }
-infix_operator = _{ AND | OR | EQ | NEQ | LTEQ | GTEQ | LT | GT | ADD | SUB | MUL | DIV }
+infix_operator = _{ AND | OR | EQ | NEQ | LTEQ | GTEQ | BIT_SHL | BIT_SHR | BIT_AND | BIT_OR | BIT_XOR | LT | GT | ADD | SUB | MUL | DIV | MOD }
 prefix_operator = _{ NOT | NEG }
 
 array_accessor = { "[" ~ expression ~ "]" }
@@ -263,6 +263,14 @@ ADD = { "+" }
 SUB = { "-" }
 MUL = { "*" }
 DIV = { "/" }
+MOD = { "%" }
+
+// Bitwise
+BIT_AND = { "&" }
+BIT_OR = { "|" }
+BIT_XOR = { "^" }
+BIT_SHL = { "<<" }
+BIT_SHR = { ">>" }
 
 // Comparison
 EQ = { "==" }

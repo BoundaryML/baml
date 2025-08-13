@@ -510,6 +510,12 @@ impl std::fmt::Display for BinaryOperator {
             BinaryOperator::Div => "/",
             BinaryOperator::And => "&&",
             BinaryOperator::Or => "||",
+            BinaryOperator::Mod => "%",
+            BinaryOperator::BitAnd => "&",
+            BinaryOperator::BitOr => "|",
+            BinaryOperator::BitXor => "^",
+            BinaryOperator::Shl => "<<",
+            BinaryOperator::Shr => ">>",
         })
     }
 }

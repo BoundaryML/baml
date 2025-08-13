@@ -143,23 +143,47 @@ pub enum Expression {
         expr: Box<Expression>,
         span: Span,
     },
-    // No-op, just so we can keep track of parenthesis (Pratt Parser discard them).
+    // No-op, just so we can keep track of parenthesis (Pratt Parser discards them).
     Paren(Box<Expression>, Span),
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum BinaryOperator {
+    /// The `==` operator (equal).
     Eq,
+    /// The `!=` operator (not equal).
     Neq,
+    /// The `<` operator (less than).
     Lt,
+    /// The `<=` operator (less than or equal).
     LtEq,
+    /// The `>` operator (greater than).
     Gt,
+    /// The `>=` operator (greater than or equal).
     GtEq,
+    /// The `+` operator (addition).
     Add,
+    /// The `-` operator (subtraction).
     Sub,
+    /// The `*` operator (multiplication).
     Mul,
+    /// The `/` operator (division).
     Div,
+    /// The `%` operator (modulus).
+    Mod,
+    /// The `&` operator (bitwise and).
+    BitAnd,
+    /// The `|` operator (bitwise or).
+    BitOr,
+    /// The `^` operator (bitwise xor).
+    BitXor,
+    /// The `<<` operator (shift left).
+    Shl,
+    /// The `>>` operator (shift right).
+    Shr,
+    /// The `&&` operator (logical and).
     And,
+    /// The `||` operator (logical or).
     Or,
 }
 
@@ -176,6 +200,12 @@ impl fmt::Display for BinaryOperator {
             BinaryOperator::Sub => write!(f, "-"),
             BinaryOperator::Mul => write!(f, "*"),
             BinaryOperator::Div => write!(f, "/"),
+            BinaryOperator::Mod => write!(f, "%"),
+            BinaryOperator::BitAnd => write!(f, "&"),
+            BinaryOperator::BitOr => write!(f, "|"),
+            BinaryOperator::BitXor => write!(f, "^"),
+            BinaryOperator::Shl => write!(f, "<<"),
+            BinaryOperator::Shr => write!(f, ">>"),
             BinaryOperator::And => write!(f, "&&"),
             BinaryOperator::Or => write!(f, "||"),
         }

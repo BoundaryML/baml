@@ -528,6 +528,8 @@ impl Expression {
                 span,
             } => Expression::BinaryOperation {
                 left: Box::new(Self::from_ast(left)),
+                // TODO: Looks kind of redundant, maybe we can make a module
+                // for reusable structs in both AST and HIR.
                 operator: match operator {
                     ast::BinaryOperator::Eq => hir::BinaryOperator::Eq,
                     ast::BinaryOperator::Neq => hir::BinaryOperator::Neq,
@@ -541,6 +543,12 @@ impl Expression {
                     ast::BinaryOperator::Div => hir::BinaryOperator::Div,
                     ast::BinaryOperator::And => hir::BinaryOperator::And,
                     ast::BinaryOperator::Or => hir::BinaryOperator::Or,
+                    ast::BinaryOperator::Mod => hir::BinaryOperator::Mod,
+                    ast::BinaryOperator::BitAnd => hir::BinaryOperator::BitAnd,
+                    ast::BinaryOperator::BitOr => hir::BinaryOperator::BitOr,
+                    ast::BinaryOperator::BitXor => hir::BinaryOperator::BitXor,
+                    ast::BinaryOperator::Shl => hir::BinaryOperator::Shl,
+                    ast::BinaryOperator::Shr => hir::BinaryOperator::Shr,
                 },
                 right: Box::new(Self::from_ast(right)),
                 span: span.clone(),

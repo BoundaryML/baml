@@ -422,17 +422,41 @@ pub enum Expression {
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum BinaryOperator {
+    /// The `==` operator (equal).
     Eq,
+    /// The `!=` operator (not equal).
     Neq,
+    /// The `<` operator (less than).
     Lt,
+    /// The `<=` operator (less than or equal).
     LtEq,
+    /// The `>` operator (greater than).
     Gt,
+    /// The `>=` operator (greater than or equal).
     GtEq,
+    /// The `+` operator (addition).
     Add,
+    /// The `-` operator (subtraction).
     Sub,
+    /// The `*` operator (multiplication).
     Mul,
+    /// The `/` operator (division).
     Div,
+    /// The `%` operator (modulus).
+    Mod,
+    /// The `&` operator (bitwise and).
+    BitAnd,
+    /// The `|` operator (bitwise or).
+    BitOr,
+    /// The `^` operator (bitwise xor).
+    BitXor,
+    /// The `<<` operator (shift left).
+    Shl,
+    /// The `>>` operator (shift right).
+    Shr,
+    /// The `&&` operator (logical and).
     And,
+    /// The `||` operator (logical or).
     Or,
 }
 

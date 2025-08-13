@@ -516,6 +516,84 @@ fn basic_div() -> anyhow::Result<()> {
 }
 
 #[test]
+fn basic_mod() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            fn main() -> int {
+                10 % 3
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(1)),
+    })
+}
+
+#[test]
+fn basic_bit_and() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            fn main() -> int {
+                10 & 3
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(2)),
+    })
+}
+
+#[test]
+fn basic_bit_or() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            fn main() -> int {
+                10 | 3
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(11)),
+    })
+}
+
+#[test]
+fn basic_bit_xor() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            fn main() -> int {
+                10 ^ 3
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(9)),
+    })
+}
+
+#[test]
+fn basic_bit_shift_left() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            fn main() -> int {
+                10 << 3
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(80)),
+    })
+}
+
+#[test]
+fn basic_bit_shift_right() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            fn main() -> int {
+                10 >> 3
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(1)),
+    })
+}
+
+#[test]
 fn unary_neg() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"

@@ -607,11 +607,21 @@ impl<'g> HirCompiler<'g> {
                         self.compile_expression(right);
 
                         self.emit(match other {
+                            // Arithmetic operators.
                             hir::BinaryOperator::Add => Instruction::BinOp(BinOp::Add),
                             hir::BinaryOperator::Sub => Instruction::BinOp(BinOp::Sub),
                             hir::BinaryOperator::Mul => Instruction::BinOp(BinOp::Mul),
                             hir::BinaryOperator::Div => Instruction::BinOp(BinOp::Div),
+                            hir::BinaryOperator::Mod => Instruction::BinOp(BinOp::Mod),
 
+                            // Bitwise operators.
+                            hir::BinaryOperator::BitAnd => Instruction::BinOp(BinOp::BitAnd),
+                            hir::BinaryOperator::BitOr => Instruction::BinOp(BinOp::BitOr),
+                            hir::BinaryOperator::BitXor => Instruction::BinOp(BinOp::BitXor),
+                            hir::BinaryOperator::Shl => Instruction::BinOp(BinOp::Shl),
+                            hir::BinaryOperator::Shr => Instruction::BinOp(BinOp::Shr),
+
+                            // Comparison operators.
                             hir::BinaryOperator::Eq => Instruction::CmpOp(CmpOp::Eq),
                             hir::BinaryOperator::Neq => Instruction::CmpOp(CmpOp::NotEq),
                             hir::BinaryOperator::Lt => Instruction::CmpOp(CmpOp::Lt),
@@ -619,6 +629,7 @@ impl<'g> HirCompiler<'g> {
                             hir::BinaryOperator::Gt => Instruction::CmpOp(CmpOp::Gt),
                             hir::BinaryOperator::GtEq => Instruction::CmpOp(CmpOp::GtEq),
 
+                            // Logical operators.
                             hir::BinaryOperator::And | hir::BinaryOperator::Or => unreachable!(
                                 "compiler bug: logical binary operators must be handled before arithmetic and comparison operators"
                             ),
