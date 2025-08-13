@@ -15,7 +15,7 @@ client<llm> MyClient {
 //  4 |     model "gpt-4o"
 //  5 |     allowed_roles []
 //    | 
-// error: remap_role values must be one of: . Got: user. To support different remap roles, add allowed_roles ["user", "assistant", "system", ...]
+// error: remap_roles values must be one of: . Got: user. To support different remap roles, add allowed_roles ["user", "assistant", "system", ...]
 //   -->  client/remap_role_empty_allowed_roles.baml:7
 //    | 
 //  6 |     remap_roles {

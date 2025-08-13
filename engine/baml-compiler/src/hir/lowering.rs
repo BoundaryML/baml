@@ -293,20 +293,58 @@ impl Block {
         // Process statements, checking for if expressions in let bindings
         for stmt in &block.stmts {
             match stmt {
+                ast::Stmt::Break(span) => statements.push(Statement::Break(span.clone())),
+                ast::Stmt::Continue(span) => statements.push(Statement::Continue(span.clone())),
+                ast::Stmt::WhileLoop(ast::WhileStmt {
+                    condition,
+                    body,
+                    span,
+                }) => {
+                    // lowering to HIR is trivial, since HIR maps 1:1 with this.
+
+                    let hir_condition = Expression::from_ast(condition);
+
+                    let hir_body = Block::from_expression_block(body);
+
+                    statements.push(Statement::While {
+                        condition: Box::new(hir_condition),
+                        block: hir_body,
+                        span: span.clone(),
+                    })
+                }
                 ast::Stmt::Assign(ast::AssignStmt {
                     identifier,
                     expr,
                     span,
                 }) => {
-                    // Assignment statement (like let, without let) - check for if expressions in nested contexts
-                    // NOTE: Since we're not desugaring assignments, there will be no
-                    // lifted statements.
-                    let mut temp_counter = 0;
-                    let lifted_expr = Expression::from_ast(expr);
-
                     statements.push(Statement::Assign {
                         name: identifier.to_string(),
-                        value: lifted_expr,
+                        value: Expression::from_ast(expr),
+                        span: span.clone(),
+                    });
+                }
+                ast::Stmt::AssignOp(ast::AssignOpStmt {
+                    identifier,
+                    assign_op,
+                    expr,
+                    span,
+                }) => {
+                    statements.push(Statement::AssignOp {
+                        name: identifier.to_string(),
+                        assign_op: match assign_op {
+                            ast::AssignOp::AddAssign => hir::AssignOp::AddAssign,
+                            ast::AssignOp::SubAssign => hir::AssignOp::SubAssign,
+                            ast::AssignOp::MulAssign => hir::AssignOp::MulAssign,
+                            ast::AssignOp::DivAssign => hir::AssignOp::DivAssign,
+                            ast::AssignOp::ModAssign => hir::AssignOp::ModAssign,
+                            ast::AssignOp::BitXorAssign => hir::AssignOp::BitXorAssign,
+                            ast::AssignOp::BitAndAssign => hir::AssignOp::BitAndAssign,
+                            ast::AssignOp::BitOrAssign => hir::AssignOp::BitOrAssign,
+                            ast::AssignOp::ShlAssign => hir::AssignOp::ShlAssign,
+                            ast::AssignOp::ShrAssign => hir::AssignOp::ShrAssign,
+                        },
+                        value: Expression::from_ast(expr),
+                        span: span.clone(),
                     });
                 }
                 ast::Stmt::Let(ast::LetStmt {
