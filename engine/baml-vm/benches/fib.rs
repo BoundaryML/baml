@@ -34,7 +34,7 @@ fn bootstrap_vm(input: Program) -> Vm {
 }
 
 pub fn bench_recursive_fib(c: &mut Criterion) {
-    c.bench_function("recursive fib 30", |b| {
+    c.bench_function("recursive fib 25", |b| {
         b.iter_batched(
             || {
                 bootstrap_vm(Program {
@@ -48,7 +48,7 @@ pub fn bench_recursive_fib(c: &mut Criterion) {
                         }
                     "#,
                     function: "fib",
-                    args: vec![Value::Int(30)],
+                    args: vec![Value::Int(25)],
                 })
             },
             |mut vm| {
@@ -60,7 +60,7 @@ pub fn bench_recursive_fib(c: &mut Criterion) {
 }
 
 pub fn bench_iterative_fib(c: &mut Criterion) {
-    c.bench_function("iterative fib 30", |b| {
+    c.bench_function("iterative fib 3000", |b| {
         b.iter_batched(
             || {
                 bootstrap_vm(Program {
@@ -84,7 +84,7 @@ pub fn bench_iterative_fib(c: &mut Criterion) {
                         }
                     "#,
                     function: "fib",
-                    args: vec![Value::Int(30)],
+                    args: vec![Value::Int(3000)],
                 })
             },
             |mut vm| {
