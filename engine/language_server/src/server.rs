@@ -264,15 +264,15 @@ impl Server {
 
         
         std::thread::spawn(|| {
-            tracing::info!("Starting deadlock checker watchdog");
+            tracing::info!("Starting deadlock watchdog");
             loop {
-                tracing::info!("sleeping 10s to check for deadlocks");
                 std::thread::sleep(Duration::from_secs(10));
+                // NB: this shows deadlocks detected since the _last_ check, not all current deadlocks.
                 let cycles = parking_lot::deadlock::check_deadlock();
                 if cycles.is_empty() { continue; }
-                tracing::error!("deadlocks detected:");
+                tracing::error!("Detected {} deadlocks since the last check:", cycles.len());
                 for (i, threads) in cycles.iter().enumerate() {
-                    tracing::error!("Cycle {i}:");
+                    tracing::error!("Deadlock {} of {}:", i + 1, cycles.len());
                     for t in threads {
                         tracing::error!("  Thread {:?}", t.thread_id());
                         tracing::error!("  Backtrace:\n{:?}", t.backtrace());
@@ -319,7 +319,7 @@ impl Server {
             if connection.handle_shutdown(&msg)? {
                 break;
             }
-            broadcast_tx.send(LangServerToWasmMessage::LspMessage(msg.clone()))?;
+            // broadcast_tx.send(LangServerToWasmMessage::LspMessage(msg.clone()))?;
             let tasks = match msg {
                 Message::Request(req) => vec![api::request(req)],
                 Message::Notification(notification) => api::notification(notification),

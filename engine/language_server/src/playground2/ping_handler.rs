@@ -23,12 +23,12 @@ pub async fn ping_handler(extract::Query(query): extract::Query<PingQuery>) -> R
             // Create an endless stream of "pong" messages
             let stream = stream::iter(0..)
                 .map(move |i| {
-                    Ok::<_, Infallible>(Event::default().data(format!("{}: seq {}", response, i)))
+                    Ok::<_, Infallible>(Event::default().data(format!("{response}: seq {i}")))
                 })
                 .throttle(Duration::from_millis(500));
 
             Sse::new(stream).into_response()
         }
-        _ => format!("{}\n", response).into_response(),
+        _ => format!("{response}\n").into_response(),
     }
 }
