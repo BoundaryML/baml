@@ -453,6 +453,7 @@ fn typecheck_statement(
             span,
         } => {
             let typed_condition = typecheck_expression(condition, context, diagnostics);
+
             let typed_block =
                 context.inside_loop(|context| typecheck_block(block, context, diagnostics));
 
