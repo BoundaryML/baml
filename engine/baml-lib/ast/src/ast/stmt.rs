@@ -5,6 +5,14 @@ use super::{Expression, ExpressionBlock, Identifier, Span};
 #[derive(Debug, Clone)]
 pub struct LetStmt {
     pub identifier: Identifier,
+    pub is_mutable: bool,
+    pub expr: Expression,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct AssignStmt {
+    pub identifier: Identifier,
     pub expr: Expression,
     pub span: Span,
 }
@@ -22,6 +30,9 @@ pub struct ForLoopStmt {
 pub enum Stmt {
     Let(LetStmt),
     ForLoop(ForLoopStmt),
+    /// Expression with trailing semicolon.
+    Expression(Expression),
+    Assign(AssignStmt),
 }
 
 impl fmt::Display for Stmt {
@@ -29,6 +40,8 @@ impl fmt::Display for Stmt {
         match self {
             Stmt::Let(stmt) => write!(f, "let {} = {}", stmt.identifier, stmt.expr)?,
             Stmt::ForLoop(stmt) => write!(f, "for {} in {}", stmt.identifier, stmt.iterator)?,
+            Stmt::Expression(expr) => write!(f, "{expr}")?,
+            Stmt::Assign(stmt) => write!(f, "{} = {}", stmt.identifier, stmt.expr)?,
         }
         Ok(())
     }
@@ -46,10 +59,15 @@ impl Stmt {
                 stmt1.iterator.assert_eq_up_to_span(&stmt2.iterator);
                 stmt1.body.assert_eq_up_to_span(&stmt2.body);
             }
-            (Stmt::Let(_), Stmt::ForLoop(_)) => {
-                panic!("Types do not match: {self:?} and {other:?}")
+            (Stmt::Expression(expr1), Stmt::Expression(expr2)) => {
+                expr1.assert_eq_up_to_span(expr2);
             }
-            (Stmt::ForLoop(_), Stmt::Let(_)) => {
+
+            (Stmt::Assign(stmt1), Stmt::Assign(stmt2)) => {
+                stmt1.identifier.assert_eq_up_to_span(&stmt2.identifier);
+                stmt1.expr.assert_eq_up_to_span(&stmt2.expr);
+            }
+            (_, _) => {
                 panic!("Types do not match: {self:?} and {other:?}")
             }
         }
@@ -59,6 +77,8 @@ impl Stmt {
         match self {
             Stmt::Let(stmt) => &stmt.identifier,
             Stmt::ForLoop(stmt) => &stmt.identifier,
+            Stmt::Expression(expr) => panic!("expressions don't have identifiers"),
+            Stmt::Assign(stmt) => &stmt.identifier,
         }
     }
 
@@ -66,13 +86,16 @@ impl Stmt {
         match self {
             Stmt::Let(stmt) => &stmt.span,
             Stmt::ForLoop(stmt) => &stmt.span,
+            Stmt::Expression(expr) => expr.span(),
+            Stmt::Assign(stmt) => &stmt.span,
         }
     }
 
+    // TODO: Get rid of this, just match over the type and grab the body.
     pub fn body(&self) -> &Expression {
         match self {
             Stmt::Let(stmt) => &stmt.expr,
-            Stmt::ForLoop(stmt) => &stmt.body.expr,
+            _ => panic!("body() called on non-let statement"),
         }
     }
 }

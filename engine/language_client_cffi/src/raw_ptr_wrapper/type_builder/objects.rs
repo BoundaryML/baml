@@ -127,7 +127,7 @@ impl TypeBuilder {
     }
 
     pub fn add_baml(&self, baml: &str, rt: &BamlRuntime) -> anyhow::Result<()> {
-        self.type_builder.add_baml(baml, rt)
+        self.type_builder.add_baml(baml, &rt.inner)
     }
 
     pub fn list_enums(&self, rt: &BamlRuntime) -> Vec<EnumBuilder> {

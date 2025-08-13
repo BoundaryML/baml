@@ -160,7 +160,7 @@ class {{ call_manager_name }}:
             args,
             # this is always None, we set this later!
             # on_event
-            None,   
+            None,
             # ctx
             ctx,
             # tb
@@ -242,3 +242,26 @@ class {{ call_manager_name }}:
             # env_vars
             resolved_options.env_vars,
         )
+
+
+def disassemble(function: typing.Callable) -> None:
+    import inspect
+    from . import b
+
+    if not callable(function):
+        print(f"disassemble: object {function} is not a Baml function")
+        return
+
+    is_client_method = False
+
+    for (method_name, _) in inspect.getmembers(b, predicate=inspect.ismethod):
+        if method_name == function.__name__:
+            is_client_method = True
+            break
+
+    if not is_client_method:
+        print(f"disassemble: function {function.__name__} is not a Baml function")
+        return
+
+    print(f"----- function {function.__name__} -----")
+    __runtime__.disassemble(function.__name__)

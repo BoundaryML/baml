@@ -33,6 +33,9 @@ impl Span {
         self.file == other.file && (self.contains(other.start) || self.contains(other.end))
     }
 
+    // TODO: Parser should keep track of this information and set it when the
+    // span is created. Otherwise we'll have to read the entire file again and
+    // again every time we call this function on a span.
     pub fn line_and_column(&self) -> ((usize, usize), (usize, usize)) {
         let contents = self.file.as_str();
         let mut line = 0;
@@ -63,6 +66,10 @@ impl Span {
             (Some(start), None) => (start, (line, column)),
             _ => ((0, 0), (0, 0)),
         }
+    }
+
+    pub fn line_number(&self) -> usize {
+        self.line_and_column().0 .0
     }
 
     /// Create a fake span. Useful when generating test data that requires

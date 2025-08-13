@@ -8,8 +8,8 @@ use super::{
 use crate::{
     assert_correct_parser,
     ast::{
-        self, expr::ExprFn, App, ArgumentsList, Expression, ExpressionBlock, ForLoopStmt, LetStmt,
-        Stmt, TopLevelAssignment, *,
+        self, expr::ExprFn, App, ArgumentsList, AssignStmt, Expression, ExpressionBlock,
+        ForLoopStmt, LetStmt, Stmt, TopLevelAssignment, *,
     },
     parser::{
         parse_arguments::parse_arguments_list, parse_expression::parse_expression,
@@ -63,11 +63,31 @@ pub fn parse_top_level_assignment(
 
     match parse_statement(tokens.next()?, diagnostics)? {
         Stmt::Let(stmt) => Some(TopLevelAssignment { stmt }),
+        Stmt::Assign(stmt) => {
+            // NOTE: (Jesus) top-level is generally regarded as order-independent,
+            // and assignments need an order of execution.
+
+            diagnostics.push_error(DatamodelError::new_static(
+                "assignments are not allowed at top level, only let statements are allowed",
+                stmt.span.clone(),
+            ));
+
+            None
+        }
 
         Stmt::ForLoop(stmt) => {
             diagnostics.push_error(DatamodelError::new_static(
                 "for loops are not allowed at top level, only let statements are allowed",
                 stmt.span.clone(),
+            ));
+
+            None
+        }
+
+        Stmt::Expression(expr) => {
+            diagnostics.push_error(DatamodelError::new_static(
+                "expressions are not allowed at top level, only let statements are allowed",
+                expr.span().clone(),
             ));
 
             None
@@ -97,36 +117,50 @@ pub fn parse_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
 
     let stmt_token = tokens.next()?;
     let stmt = match stmt_token.as_rule() {
-        Rule::let_expr => {
-            let mut let_binding_tokens = stmt_token.into_inner();
-            let identifier = parse_identifier(let_binding_tokens.next()?, diagnostics);
+        Rule::assign_stmt => {
+            let mut assignment_tokens = stmt_token.into_inner();
 
-            let rhs = let_binding_tokens.next()?;
+            let identifier = parse_identifier(assignment_tokens.next()?, diagnostics);
+
+            let rhs = assignment_tokens.next()?;
             let rhs_span = diagnostics.span(rhs.as_span());
-            let maybe_body = match rhs.as_rule() {
-                Rule::expr_block => {
-                    let block_span = diagnostics.span(rhs.as_span());
-                    let maybe_expr_block = parse_expr_block(rhs, diagnostics);
-                    maybe_expr_block.map(|expr_block| Expression::ExprBlock(expr_block, block_span))
-                }
-                Rule::expression => parse_expression(rhs, diagnostics),
-                _ => {
-                    diagnostics.push_error(DatamodelError::new_static(
-                        "Parser only allows expr_block and expr here",
-                        rhs_span,
-                    ));
-                    None
-                }
-            };
+            let maybe_body = parse_assignment_expr(diagnostics, rhs, rhs_span);
             maybe_body.map(|body| {
-                Stmt::Let(LetStmt {
+                Stmt::Assign(AssignStmt {
                     identifier,
                     expr: body,
                     span: span.clone(),
                 })
             })
         }
+        Rule::let_expr => {
+            let mut let_binding_tokens = stmt_token.into_inner();
+
+            let is_mutable = if let Rule::MUT_KEYWORD = let_binding_tokens.peek()?.as_rule() {
+                let_binding_tokens.next()?;
+                true
+            } else {
+                false
+            };
+
+            let identifier = parse_identifier(let_binding_tokens.next()?, diagnostics);
+
+            let rhs = let_binding_tokens.next()?;
+            let rhs_span = diagnostics.span(rhs.as_span());
+            let maybe_body = parse_assignment_expr(diagnostics, rhs, rhs_span);
+            maybe_body.map(|body| {
+                Stmt::Let(LetStmt {
+                    identifier,
+                    is_mutable,
+                    expr: body,
+                    span: span.clone(),
+                })
+            })
+        }
         Rule::for_loop => parse_for_loop(stmt_token, diagnostics),
+        Rule::if_expression => parse_if_expression(stmt_token, diagnostics).map(Stmt::Expression),
+        Rule::fn_app => parse_fn_app(stmt_token, diagnostics).map(Stmt::Expression),
+        Rule::generic_fn_app => parse_generic_fn_app(stmt_token, diagnostics).map(Stmt::Expression),
         _ => {
             diagnostics.push_error(DatamodelError::new_static(
                 "Expected let expression or for loop",
@@ -152,6 +186,28 @@ pub fn parse_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
     stmt
 }
 
+fn parse_assignment_expr(
+    diagnostics: &mut Diagnostics,
+    rhs: Pair<'_>,
+    rhs_span: Span,
+) -> Option<Expression> {
+    match rhs.as_rule() {
+        Rule::expr_block => {
+            let block_span = diagnostics.span(rhs.as_span());
+            let maybe_expr_block = parse_expr_block(rhs, diagnostics);
+            maybe_expr_block.map(|expr_block| Expression::ExprBlock(expr_block, block_span))
+        }
+        Rule::expression => parse_expression(rhs, diagnostics),
+        _ => {
+            diagnostics.push_error(DatamodelError::new_static(
+                "Parser only allows expr_block and expr here",
+                rhs_span,
+            ));
+            None
+        }
+    }
+}
+
 pub fn parse_expr_block(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<ExpressionBlock> {
     assert_correct_parser!(token, Rule::expr_block);
     let span = diagnostics.span(token.as_span());
@@ -175,12 +231,16 @@ pub fn parse_expr_block(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Optio
                 }
             }
             Rule::BLOCK_CLOSE => {
-                if expr.is_none() {
-                    diagnostics.push_error(DatamodelError::new_static(
-                        "Function must end in an expression.",
-                        span.clone(),
-                    ));
-                }
+                // Commentend out because we can't have blocks without return
+                // expressions otherwise. Plus we need functions with no return
+                // types as well.
+
+                // if expr.is_none() {
+                //     diagnostics.push_error(DatamodelError::new_static(
+                //         "Function must end in an expression.",
+                //         span.clone(),
+                //     ));
+                // }
                 break;
             }
             Rule::NEWLINE => {
@@ -202,9 +262,24 @@ pub fn parse_expr_block(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Optio
             }
         }
     }
-    expr.map(|e| ExpressionBlock {
+
+    let mut return_expr = expr.map(Box::new);
+
+    // Special case for returning if expressions.
+    // TODO: Likely there's no need to separate statements and final expression
+    // since a statement can now be an expression. We just need to allow any
+    // random expression as a statement as mentioned in the grammar file.
+    if return_expr.is_none() && matches!(stmts.last(), Some(Stmt::Expression(Expression::If(..)))) {
+        let Some(Stmt::Expression(e)) = stmts.pop() else {
+            unreachable!();
+        };
+
+        return_expr = Some(Box::new(e));
+    }
+
+    Some(ExpressionBlock {
         stmts,
-        expr: Box::new(e),
+        expr: return_expr,
     })
 }
 
@@ -289,12 +364,28 @@ pub fn parse_if_expression(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Op
     let span = diagnostics.span(token.as_span());
     let mut tokens = token.into_inner();
     let condition = parse_expression(tokens.next()?, diagnostics)?;
-    let then_branch = parse_expression(tokens.next()?, diagnostics)?;
-    let else_branch = parse_expression(tokens.next()?, diagnostics);
+
+    // TODO: Some weird parsing going on here, figure out rules and spans.
+    let then_branch_expr_block = tokens.next()?;
+    let then_branch_span = diagnostics.span(then_branch_expr_block.as_span());
+    let then_branch = parse_expr_block(then_branch_expr_block, diagnostics)?;
+
+    let else_branch_expr = tokens.next()?;
+    let else_branch_span = diagnostics.span(else_branch_expr.as_span());
+
+    let else_branch = match else_branch_expr.as_rule() {
+        Rule::expr_block => parse_expr_block(else_branch_expr, diagnostics)
+            .map(|e| Box::new(Expression::ExprBlock(e, else_branch_span))),
+
+        Rule::if_expression => parse_if_expression(else_branch_expr, diagnostics).map(Box::new),
+
+        _ => unreachable_rule!(else_branch_expr, Rule::if_expression),
+    };
+
     Some(Expression::If(
         Box::new(condition),
-        Box::new(then_branch),
-        else_branch.map(Box::new),
+        Box::new(Expression::ExprBlock(then_branch, then_branch_span)),
+        else_branch,
         span,
     ))
 }

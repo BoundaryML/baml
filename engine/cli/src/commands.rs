@@ -44,6 +44,12 @@ pub(crate) enum Commands {
     #[command(about = "Run BAML tests")]
     Test(baml_runtime::cli::testing::TestArgs),
 
+    #[command(about = "Print HIR from BAML files")]
+    DumpHIR(baml_runtime::cli::dump_intermediate::DumpIntermediateArgs),
+
+    #[command(about = "Print Bytecode from BAML files")]
+    DumpBytecode(baml_runtime::cli::dump_intermediate::DumpIntermediateArgs),
+
     #[command(about = "Starts a language server", name = "lsp")]
     LanguageServer(crate::lsp::LanguageServerArgs),
 }
@@ -143,6 +149,26 @@ impl RuntimeCli {
                     }
                     baml_runtime::cli::testing::TestRunResult::NoTestsRun => {
                         Ok(crate::ExitCode::NoTestsRun)
+                    }
+                }
+            }
+            Commands::DumpHIR(args) => {
+                args.from = BamlRuntime::parse_baml_src_path(&args.from)?;
+                match args.run(baml_runtime::cli::dump_intermediate::DumpType::HIR) {
+                    Ok(()) => Ok(crate::ExitCode::Success),
+                    Err(e) => {
+                        eprintln!("Error: {e}");
+                        Ok(crate::ExitCode::Other)
+                    }
+                }
+            }
+            Commands::DumpBytecode(args) => {
+                args.from = BamlRuntime::parse_baml_src_path(&args.from)?;
+                match args.run(baml_runtime::cli::dump_intermediate::DumpType::Bytecode) {
+                    Ok(()) => Ok(crate::ExitCode::Success),
+                    Err(e) => {
+                        eprintln!("Error: {e}");
+                        Ok(crate::ExitCode::Other)
                     }
                 }
             }

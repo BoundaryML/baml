@@ -29,7 +29,7 @@ value_expression_block    = { value_expression_keyword ~ identifier ~ named_argu
 value_expression_contents = {
     (type_builder_block | value_expression | comment_block | block_attribute | empty_lines | BLOCK_LEVEL_CATCH_ALL)*
 }
-value_expression          = { identifier ~ expression? ~ (NEWLINE? ~ field_attribute)* ~ trailing_comment? }
+value_expression          = { identifier ~ config_expression? ~ (NEWLINE? ~ field_attribute)* ~ trailing_comment? }
 
 // ######################################
 // Type builder
@@ -49,15 +49,15 @@ ARROW = { SPACER_TEXT ~ "->" ~ SPACER_TEXT }
 assignment           = { "=" }
 template_declaration = { TEMPLATE_KEYWORD ~ identifier ~ assignment? ~ named_argument_list? ~ raw_string_literal }
 
-named_argument = { identifier ~ ((COLON ~ field_type_chain) | COLON)? }
+named_argument = { MUT_KEYWORD? ~ identifier ~ ((COLON ~ field_type_chain) | COLON)? }
 // Be forgiving and allow trailing comma
 named_argument_list = { openParan ~ SPACER_TEXT ~ named_argument? ~ ("," ~ SPACER_TEXT ~ named_argument)* ~ ","? ~ SPACER_TEXT ~ closeParan }
 
 // ######################################
 // Attributes
 // ######################################
-block_attribute = { "@@" ~ identifier ~ arguments_list? }
-field_attribute = { "@" ~ identifier ~ arguments_list? }
+block_attribute = { "@@" ~ (path_identifier | identifier) ~ arguments_list? }
+field_attribute = { "@" ~ (path_identifier | identifier) ~ arguments_list? }
 
 // Pest is greedy, order is very important here.
 field_type          = { (union | non_union) ~ optional_token? }
@@ -65,7 +65,7 @@ optional_token      = { "?" }
 union               = { base_type_with_attr ~ (field_operator ~ base_type_with_attr)+ }
 literal_type        = { numeric_literal | quoted_string_literal }
 base_type_with_attr = { base_type ~ (NEWLINE? ~ field_attribute)* }
-base_type           = { array_notation | map | identifier | group | tuple | parenthesized_type | literal_type }
+base_type           = { array_notation | map | path_identifier | identifier | group | tuple | parenthesized_type | literal_type }
 
 array_suffix   = { "[]" }
 array_notation = { base_type_without_array ~ array_suffix+ ~ optional_token? }
@@ -77,14 +77,14 @@ closeParan = { ")" }
 group      = { openParan ~ field_type ~ (field_attribute)* ~ closeParan }
 tuple      = { openParan ~ field_type_with_attr ~ ("," ~ field_type_with_attr)+ ~ closeParan }
 
-base_type_without_array = { map | identifier | group | tuple }
+base_type_without_array = { map | path_identifier | identifier | group | tuple }
 
-non_union = { array_notation | map | identifier | group | tuple | literal_type }
+non_union = { array_notation | map | path_identifier | identifier | group | tuple | literal_type }
 
 parenthesized_type = { openParan ~ field_type_with_attr ~ closeParan }
 
 path_identifier       =  { single_word ~ ("." ~ single_word)+ }
-identifier            =  { path_identifier | namespaced_identifier | single_word }
+identifier            =  { namespaced_identifier | single_word }
 single_word           = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_" | "-")* }
 namespaced_identifier = ${ single_word ~ ("::" ~ single_word)+ }
 
@@ -111,7 +111,22 @@ jinja_block_open  = _{ "{{" }
 jinja_block_close = _{ "}}" }
 jinja_body        =  { (!(jinja_block_open | jinja_block_close) ~ ANY)* }
 jinja_expression  =  { jinja_block_open ~ jinja_body ~ jinja_block_close }
-expression        =  {
+
+expression =  {
+    prefix_operator*
+    ~ primary_expression
+    ~ postfix_operator*
+    ~ (infix_operator ~ prefix_operator* ~ primary_expression ~ postfix_operator*)*
+}
+
+postfix_operator = _{ array_accessor | field_accessor }
+infix_operator = _{ AND | OR | EQ | NEQ | LTEQ | GTEQ | BIT_SHL | BIT_SHR | BIT_AND | BIT_OR | BIT_XOR | LT | GT | ADD | SUB | MUL | DIV | MOD }
+prefix_operator = _{ NOT | NEG }
+
+array_accessor = { "[" ~ expression ~ "]" }
+field_accessor = { "." ~ identifier }
+
+primary_expression = {
     generic_fn_app |
     fn_app |
     if_expression |
@@ -122,11 +137,35 @@ expression        =  {
     array_expression |
     numeric_literal |
     class_constructor |
+    identifier |
+    string_literal |
+    "(" ~ expression ~ ")"
+}
+
+ARRAY_CATCH_ALL   =  { !"]" ~ CATCH_ALL }
+ENTRY_CATCH_ALL   =  { field_attribute | BLOCK_LEVEL_CATCH_ALL }
+
+// ######################################
+// Config expressions for value_expression blocks
+// ######################################
+// Like expression, but prioritizes string literals over identifiers
+// to allow unquoted strings like "python/pydantic" to parse correctly
+config_expression = { config_primary_expression }
+
+config_primary_expression = {
+    jinja_expression |
+    config_map_expression |
+    array_expression |
+    numeric_literal |
     string_literal |
     identifier
 }
-ARRAY_CATCH_ALL   =  { !"]" ~ CATCH_ALL }
-ENTRY_CATCH_ALL   =  { field_attribute | BLOCK_LEVEL_CATCH_ALL }
+
+config_map_key   = { identifier | quoted_string_literal }
+config_map_entry = { (comment_block | empty_lines)* ~ config_map_key ~ (config_expression | ENTRY_CATCH_ALL)? ~ trailing_comment? }
+
+config_map_expression    =  { "{" ~ empty_lines? ~ (config_map_entry ~ (splitter ~ config_map_entry)*)? ~ (comment_block | empty_lines)* ~ "}" }
+
 // ######################################
 // Literals / Values
 // ######################################
@@ -210,9 +249,44 @@ TYPE_BUILDER_KEYWORD = { "type_builder" }
 CLIENT_KEYWORD       = { "client<llm>" | "client" }
 GENERATOR_KEYWORD    = { "generator" }
 RETRY_POLICY_KEYWORD = { "retry_policy" }
+MUT_KEYWORD          = { "mut" }
 SEMICOLON = { ";" }
 COLON = { ":" }
 COMMA = { "," }
+
+// #################################################
+// Operators
+// #################################################
+
+// Arithmetic
+ADD = { "+" }
+SUB = { "-" }
+MUL = { "*" }
+DIV = { "/" }
+MOD = { "%" }
+
+// Bitwise
+BIT_AND = { "&" }
+BIT_OR = { "|" }
+BIT_XOR = { "^" }
+BIT_SHL = { "<<" }
+BIT_SHR = { ">>" }
+
+// Comparison
+EQ = { "==" }
+NEQ = { "!=" }
+LT = { "<" }
+LTEQ = { "<=" }
+GT = { ">" }
+GTEQ = { ">=" }
+
+// Logical
+AND = { "&&" }
+OR = { "||" }
+
+// Unary
+NOT = { "!" }
+NEG = { "-" } // NOTE: Can't reuse SUB here. Read this: https://docs.rs/pest/latest/pest/pratt_parser/struct.PrattParser.html
 
 // #################################################
 // BAML Expressions
@@ -232,14 +306,29 @@ top_level_assignment = { stmt }
 expr_fn = { ("function" | "fn") ~ identifier ~ named_argument_list ~ ARROW? ~ field_type_chain? ~ expr_block }
 
 // Body of a function (including curly brackets).
-expr_block = { BLOCK_OPEN ~ NEWLINE? ~ (stmt | comment_block | empty_lines)* ~ expression ~ NEWLINE? ~ BLOCK_CLOSE }
+expr_block = { BLOCK_OPEN ~ NEWLINE? ~ (stmt | comment_block | empty_lines)* ~ expression? ~ NEWLINE? ~ BLOCK_CLOSE }
 
 // Statement.
-// Currently the only statement is a let-binding.
-stmt = { ((let_expr ~ SEMICOLON?) | for_loop) ~ trailing_comment? ~ NEWLINE? }
+// TODO: Most language allow any arbitrary expression as a statement. For example,
+// you should be able to do this:
+//
+// let x = 1;
+// 2 + 2;  // Random expression as a statement.
+//
+// For now we only allow function calls, most other expressions don't make sense
+// at least at first glance, but imagine something like
+//
+// call_func(1) + call_func(2);
+//
+// With operator overloading (implicit function call) + side effects.
+//
+// Just allow any expr and fix the parser.
+stmt = { (((let_expr | assign_stmt | fn_app | generic_fn_app) ~ SEMICOLON) | for_loop | if_expression) ~ trailing_comment? ~ NEWLINE? }
 
 // Let-binding statement.
-let_expr = { "let" ~ identifier ~ "=" ~ expression }
+let_expr = { "let" ~ MUT_KEYWORD? ~ identifier ~ "=" ~ expression }
+
+assign_stmt = { identifier ~ "=" ~ expression }
 
 fn_args = { expression? ~ ("," ~ expression)* }
 
@@ -247,9 +336,7 @@ fn_args = { expression? ~ ("," ~ expression)* }
 fn_app = { identifier ~ "(" ~ fn_args ~ ")" }
 
 // If expression.
-if_expression = { "if" ~ expression ~ NEWLINE? ~
-   "{"~ NEWLINE? ~ expression ~ NEWLINE? ~ "}" ~
-   ( "else" ~ "{"~ NEWLINE? ~ expression ~ NEWLINE? ~ "}" )? }
+if_expression = { "if" ~ expression ~ expr_block ~ ( "else" ~ (expr_block | if_expression) )? }
 
 // For loop, e.g.
 // for (r in resumes) {

@@ -43,7 +43,7 @@ pub(crate) fn parse_value_expression_block(
                 input = Some(parse_named_argument_list(current, diagnostics))
             }
             Rule::field_type | Rule::field_type_chain => {
-                match parse_function_arg(current, diagnostics) {
+                match parse_function_arg(current, false, diagnostics) {
                     Ok(arg) => output = Some(arg),
                     Err(err) => diagnostics.push_error(err),
                 }
