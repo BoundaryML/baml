@@ -96,7 +96,7 @@ type_alias = { identifier ~ identifier ~ assignment ~ field_type_with_attr }
 // ######################################
 // Arguments
 // ######################################
-arguments_list = { "(" ~ (NEWLINE?) ~ expression? ~ ("," ~ (NEWLINE?) ~ expression)? ~ (NEWLINE?) ~ ")" }
+arguments_list = { "(" ~ (NEWLINE?) ~ config_expression? ~ ("," ~ (NEWLINE?) ~ config_expression)? ~ (NEWLINE?) ~ ")" }
 
 // ######################################
 // Expressions & Functions

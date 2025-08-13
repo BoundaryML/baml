@@ -63,7 +63,8 @@ impl SyncNotificationHandler for DidOpenTextDocumentHandler {
             .internal_error_msg(&format!("Could not convert URL '{url}' to file path"))?;
 
         if let Some(project) = session.get_or_create_project(&file_path) {
-            if let Ok(version) = project.lock().unwrap().get_common_generator_version() {
+            let project = project.lock().unwrap();
+            if let Ok(version) = project.get_common_generator_version() {
                 notifier
                     .0
                     .send(lsp_server::Message::Notification(
@@ -71,12 +72,7 @@ impl SyncNotificationHandler for DidOpenTextDocumentHandler {
                             "baml_src_generator_version".to_string(),
                             BamlSrcVersionPayload {
                                 version,
-                                root_path: project
-                                    .lock()
-                                    .unwrap()
-                                    .root_path()
-                                    .to_string_lossy()
-                                    .to_string(),
+                                root_path: project.root_path().to_string_lossy().to_string(),
                             },
                         ),
                     ))
