@@ -77,6 +77,7 @@ pub fn bench_iterative_fib(c: &mut Criterion) {
                                     let c = a + b;
                                     a = b;
                                     b = c;
+                                    i += 1;
                                 }
                                 b
                             }
