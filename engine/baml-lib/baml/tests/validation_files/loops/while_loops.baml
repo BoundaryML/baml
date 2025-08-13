@@ -17,11 +17,12 @@ fn Foo() -> int {
     let y = false;
 
     let mut a = 0;
+
     while a < 10 {
         let b = if x {
             let c = 5;
             5
-         else if y {
+         } else if y {
             6
          } else {
             7
@@ -33,10 +34,15 @@ fn Foo() -> int {
     3
 }
 
-// error: Error validating: This line is invalid. It does not start with any known Baml schema keyword.
+// warning: Workflow functions are experimental, and will break in the future.
+//   -->  loops/while_loops.baml:1
+//    | 
+//    | 
+//  1 | fn GCD(mut a: int, mut b: int) -> int {
+//    | 
+// warning: Workflow functions are experimental, and will break in the future.
 //   -->  loops/while_loops.baml:14
 //    | 
 // 13 | 
 // 14 | fn Foo() -> int {
-// 15 | 
 //    | 
