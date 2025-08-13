@@ -74,6 +74,8 @@ pub enum Stmt {
     Expression(Expression),
     Assign(AssignStmt),
     AssignOp(AssignOpStmt),
+    Break(Span),
+    Continue(Span),
 }
 
 impl fmt::Display for AssignOp {
@@ -104,6 +106,8 @@ impl fmt::Display for Stmt {
                 write!(f, "{} {} {}", stmt.identifier, stmt.assign_op, stmt.expr)
             }
             Stmt::WhileLoop(stmt) => write!(f, "while {} {}", stmt.condition, stmt.body),
+            Stmt::Break(_) => f.write_str("break"),
+            Stmt::Continue(_) => f.write_str("continue"),
         }
     }
 }
@@ -140,6 +144,8 @@ impl Stmt {
             Stmt::ForLoop(stmt) => &stmt.identifier,
             Stmt::Expression(expr) => panic!("expressions don't have identifiers"),
             Stmt::WhileLoop(expr) => panic!("while loops don't have identifiers"),
+            Stmt::Break(_) => panic!("break statements don't have identifiers"),
+            Stmt::Continue(_) => panic!("continue statements don't have identifiers"),
             Stmt::Assign(stmt) => &stmt.identifier,
             Stmt::AssignOp(stmt) => &stmt.identifier,
         }
@@ -153,6 +159,7 @@ impl Stmt {
             Stmt::Assign(stmt) => &stmt.span,
             Stmt::AssignOp(stmt) => &stmt.span,
             Stmt::WhileLoop(stmt) => &stmt.span,
+            Stmt::Break(span) | Stmt::Continue(span) => span,
         }
     }
 

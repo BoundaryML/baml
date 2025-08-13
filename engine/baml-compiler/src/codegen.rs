@@ -289,7 +289,6 @@ impl<'g> HirCompiler<'g> {
                 self.compile_expression(value);
                 self.track_local(name);
             }
-
             hir::Statement::Declare { name, .. } => {
                 // For mutable references, we need to allocate space on the stack
                 // We'll push a null/undefined value as placeholder
@@ -328,21 +327,17 @@ impl<'g> HirCompiler<'g> {
 
                 self.emit(Instruction::StoreVar(self.locals[name]));
             }
-
             hir::Statement::DeclareAndAssign { name, value, .. } => {
                 self.compile_expression(value);
                 self.track_local(name);
             }
-
             hir::Statement::Return { expr, .. } => {
                 self.compile_expression(expr);
                 self.emit(Instruction::Return);
             }
-
             hir::Statement::Expression { expr, .. } => {
                 self.compile_expression(expr);
             }
-
             hir::Statement::SemicolonExpression { expr, .. } => {
                 self.compile_expression(expr);
                 // This could be a function call or any other random expression
@@ -354,11 +349,9 @@ impl<'g> HirCompiler<'g> {
                 // binding) then implicitly drop the value.
                 self.emit(Instruction::Pop(1));
             }
-
             hir::Statement::ForLoop { .. } => {
                 todo!()
             }
-
             hir::Statement::While {
                 condition, block, ..
             } => {
@@ -387,6 +380,9 @@ impl<'g> HirCompiler<'g> {
 
                 // Pop condition
                 self.emit(Instruction::Pop(1));
+            }
+            hir::Statement::Break(span) | hir::Statement::Continue(span) => {
+                todo!("break/continue requires context on loops")
             }
         }
     }

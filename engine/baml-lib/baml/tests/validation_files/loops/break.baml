@@ -21,7 +21,6 @@ fn OutsideLoop() -> int {
     3
 }
 
-// TODO: this one should be in bytecode/execution.
 fn Nested() -> int {
     let mut a = 5;
     while true {
@@ -35,31 +34,27 @@ fn Nested() -> int {
     a // should be 2
 }
 
-// error: Expected let expression or for loop
-//   -->  loops/break.baml:8
+// warning: Workflow functions are experimental, and will break in the future.
+//   -->  loops/break.baml:1
 //    | 
-//  7 | if limit == 0 {
-//  8 | break;
-//  9 | }
 //    | 
-// error: Expected let expression or for loop
+//  1 | fn Factorial(mut limit: int) -> int {
+//    | 
+// warning: Workflow functions are experimental, and will break in the future.
+//   -->  loops/break.baml:17
+//    | 
+// 16 | 
+// 17 | fn OutsideLoop() -> int {
+//    | 
+// warning: Workflow functions are experimental, and will break in the future.
+//   -->  loops/break.baml:25
+//    | 
+// 24 | // TODO: this one should be in bytecode/execution.
+// 25 | fn Nested() -> int {
+//    | 
+// error: Error validating: 'break' cannot be used outside of a loop
 //   -->  loops/break.baml:19
 //    | 
 // 18 | 
 // 19 |     break;
-// 20 | 
-//    | 
-// error: Expected let expression or for loop
-//   -->  loops/break.baml:30
-//    | 
-// 29 |             a = a + 1;
-// 30 |             break;
-// 31 |         }
-//    | 
-// error: Expected let expression or for loop
-//   -->  loops/break.baml:33
-//    | 
-// 32 |         a = a + 1;
-// 33 |         break;
-// 34 |     }
 //    | 

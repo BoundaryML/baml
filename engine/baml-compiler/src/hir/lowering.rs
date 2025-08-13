@@ -293,6 +293,8 @@ impl Block {
         // Process statements, checking for if expressions in let bindings
         for stmt in &block.stmts {
             match stmt {
+                ast::Stmt::Break(span) => statements.push(Statement::Break(span.clone())),
+                ast::Stmt::Continue(span) => statements.push(Statement::Continue(span.clone())),
                 ast::Stmt::WhileLoop(ast::WhileStmt {
                     condition,
                     body,

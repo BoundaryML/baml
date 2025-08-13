@@ -109,6 +109,22 @@ pub fn parse_top_level_assignment(
 
             None
         }
+        Stmt::Break(span) => {
+            diagnostics.push_error(DatamodelError::new_static(
+                "break statements are not allowed at top level, only let statements are allowed",
+                span.clone(),
+            ));
+
+            None
+        }
+        Stmt::Continue(span) => {
+            diagnostics.push_error(DatamodelError::new_static(
+                "continue statements are not allowed at top level, only let statements are allowed",
+                span.clone(),
+            ));
+
+            None
+        }
     }
 }
 
@@ -226,6 +242,8 @@ pub fn parse_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
                 })
             })
         }
+        Rule::BREAK_KEYWORD => Some(Stmt::Break(diagnostics.span(stmt_token.as_span()))),
+        Rule::CONTINUE_KEYWORD => Some(Stmt::Continue(diagnostics.span(stmt_token.as_span()))),
         Rule::while_loop => parse_while_loop(stmt_token, diagnostics),
         Rule::for_loop => parse_for_loop(stmt_token, diagnostics),
         Rule::if_expression => parse_if_expression(stmt_token, diagnostics).map(Stmt::Expression),
@@ -233,7 +251,7 @@ pub fn parse_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
         Rule::generic_fn_app => parse_generic_fn_app(stmt_token, diagnostics).map(Stmt::Expression),
         _ => {
             diagnostics.push_error(DatamodelError::new_static(
-                "Expected let expression or for loop",
+                "Expected statement",
                 span.clone(),
             ));
             None

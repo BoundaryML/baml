@@ -21,7 +21,6 @@ fn ContinueOutsideLoop() -> int {
     3
 }
 
-// TODO: this one should be in bytecode
 fn ContinueNested() -> int {
     while true {
         while true {
@@ -30,24 +29,27 @@ fn ContinueNested() -> int {
     }
 }
 
-// error: Expected let expression or for loop
-//   -->  loops/continue.baml:8
+// warning: Workflow functions are experimental, and will break in the future.
+//   -->  loops/continue.baml:1
 //    | 
-//  7 | if limit == 0 {
-//  8 | break;
-//  9 | }
 //    | 
-// error: Expected let expression or for loop
+//  1 | fn Factorial(mut limit: int) -> int {
+//    | 
+// warning: Workflow functions are experimental, and will break in the future.
+//   -->  loops/continue.baml:17
+//    | 
+// 16 | 
+// 17 | fn ContinueOutsideLoop() -> int {
+//    | 
+// warning: Workflow functions are experimental, and will break in the future.
+//   -->  loops/continue.baml:25
+//    | 
+// 24 | // TODO: this one should be in bytecode
+// 25 | fn ContinueNested() -> int {
+//    | 
+// error: Error validating: 'continue' cannot be used outside of a loop
 //   -->  loops/continue.baml:19
 //    | 
 // 18 | 
 // 19 |     continue;
-// 20 | 
-//    | 
-// error: Expected let expression or for loop
-//   -->  loops/continue.baml:28
-//    | 
-// 27 |         while true {
-// 28 |             continue;
-// 29 |         }
 //    | 
