@@ -34,11 +34,11 @@ fn ContinueNested() -> int {
 //   while should_continue {
 //   result = result * limit;
 //     limit = limit - 1;
-//     if limit != 0 { {
+//     if limit != 0 {
 //     continue;
-//     } } else { {
+//     } else {
 //     should_continue = false;
-//     } }
+//     } 
 //   }
 //   return result;
 // }

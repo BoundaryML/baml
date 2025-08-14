@@ -281,17 +281,13 @@ impl Block {
 impl Expression {
     pub fn to_doc(&self) -> RcDoc<'static, ()> {
         match self {
-            Expression::ArrayAccess { base, index, .. } => RcDoc::text("base[index]")
-                .append(RcDoc::space())
-                .append(base.to_doc())
-                .append(RcDoc::space())
+            Expression::ArrayAccess { base, index, .. } => base
+                .to_doc()
                 .append(RcDoc::text("["))
                 .append(index.to_doc())
                 .append(RcDoc::text("]")),
-            Expression::FieldAccess { base, field, .. } => RcDoc::text("base.field")
-                .append(RcDoc::space())
-                .append(base.to_doc())
-                .append(RcDoc::space())
+            Expression::FieldAccess { base, field, .. } => base
+                .to_doc()
                 .append(RcDoc::text("."))
                 .append(RcDoc::text(field.clone())),
             Expression::BoolValue(val, _) => RcDoc::text(val.to_string()),
@@ -339,18 +335,14 @@ impl Expression {
                     .append(RcDoc::space())
                     .append(condition.to_doc())
                     .append(RcDoc::space())
-                    .append(RcDoc::text("{"))
-                    .append(RcDoc::space())
                     .append(if_branch.to_doc())
-                    .append(RcDoc::space())
-                    .append(RcDoc::text("}"));
+                    .append(RcDoc::space());
                 if let Some(else_expr) = else_branch {
                     doc = doc
-                        .append(RcDoc::text(" else {"))
+                        .append(RcDoc::text("else"))
                         .append(RcDoc::space())
                         .append(else_expr.to_doc())
-                        .append(RcDoc::space())
-                        .append(RcDoc::text("}"));
+                        .append(RcDoc::space());
                 }
                 doc
             }
