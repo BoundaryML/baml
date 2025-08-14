@@ -13,7 +13,7 @@ impl Vm {
     /// Array length.
     pub fn len(&mut self, args: &[Value]) -> Result<Value, VmError> {
         if args.len() != 1 {
-            return Err(VmError::new(InternalError::InvalidArgumentCount {
+            return Err(VmError::from(InternalError::InvalidArgumentCount {
                 expected: 1,
                 got: args.len(),
             }));
