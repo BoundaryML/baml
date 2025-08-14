@@ -475,17 +475,33 @@ fn typecheck_statement(
             let mut loop_context = context.clone();
 
             // Infer item type from iterator type
-            if let Some(hir::TypeM::Array(inner_type, _)) = typed_iterator.meta().1.as_ref() {
-                loop_context.vars.insert(
-                    identifier.clone(),
-                    VarInfo {
-                        ty: *inner_type.clone(),
-                        if_mutable: None,
-                    },
-                );
-            }
+            let item_type = if let Some(iterator_type) = typed_iterator.meta().1.as_ref() {
+                if let hir::TypeM::Array(inner_type, _) = iterator_type {
+                    inner_type.as_ref().clone()
+                } else {
+                    diagnostics.push_error(DatamodelError::new_validation_error(
+                        "iterable in `for` loop must be an array",
+                        typed_iterator.span().clone(),
+                    ));
+                    // use int for default - we might want a bottom type here to avoid
+                    // misleading/extraneous errors
+                    hir::TypeM::int()
+                }
+            } else {
+                // could not infer type - use int for default.
+                hir::TypeM::int()
+            };
 
-            let typed_block = typecheck_block(block, &mut loop_context, diagnostics);
+            loop_context.vars.insert(
+                identifier.clone(),
+                VarInfo {
+                    ty: item_type,
+                    if_mutable: None,
+                },
+            );
+
+            let typed_block = loop_context
+                .inside_loop(|loop_context| typecheck_block(block, loop_context, diagnostics));
 
             Some(thir::Statement::ForLoop {
                 identifier: identifier.clone(),
@@ -1219,8 +1235,6 @@ mod tests {
         }
     }
 
-    // TODO: Fix this test.
-    #[ignore]
     #[test]
     fn typecheck_array_access() {
         let source = r##"

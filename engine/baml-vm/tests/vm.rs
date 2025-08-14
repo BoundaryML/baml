@@ -984,7 +984,137 @@ fn continue_nested() -> anyhow::Result<()> {
             }
         "#,
         function: "main",
-        // This would never complete if run; test is #[ignore] to avoid execution.
         expected: VmExecState::Complete(Value::Int(5)),
+    })
+}
+
+#[test]
+fn while_with_scope() -> anyhow::Result<()> {
+    const SOURCE: &str = r#"
+        fn Fib(mut n: int) -> int {
+
+            let mut a = 0;
+            let mut b = 1;
+
+            while n > 0 {
+                n -= 1;
+                let t = a + b;
+                b = a;
+                a = t;
+            }
+
+            a
+        }
+
+        fn main() -> int {
+            Fib(5)
+        }
+    "#;
+
+    assert_vm_executes(Program {
+        source: SOURCE,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(5)),
+    })
+}
+
+#[test]
+fn for_loop_sum() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            fn Sum(xs: int[]) -> int {
+                let mut result = 0;
+
+                for x in xs {
+                    result += x;
+                }
+
+                result
+            }
+
+            fn main() -> int {
+                Sum([1, 2, 3, 4])
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(10)),
+    })
+}
+
+#[test]
+fn for_loop_with_break() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            fn ForWithBreak(xs: int[]) -> int {
+                let mut result = 0;
+
+                for x in xs {
+                    if x > 10 {
+                        break;
+                    }
+                    result += x;
+                }
+
+                result
+            }
+
+            fn main() -> int {
+                ForWithBreak([3, 4, 11, 100])
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(7)),
+    })
+}
+
+#[test]
+fn for_loop_with_continue() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            fn ForWithContinue(xs: int[]) -> int {
+                let mut result = 0;
+
+                for x in xs {
+                    if x > 10 {
+                        continue;
+                    }
+                    result += x;
+                }
+
+                result
+            }
+
+            fn main() -> int {
+                ForWithContinue([5, 20, 6])
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(11)),
+    })
+}
+
+#[test]
+fn for_loop_nested() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            fn NestedFor(arr_a: int[], arr_b: int[]) -> int {
+
+                let mut result =  0;
+
+                for a in arr_a {
+                    for b in arr_b {
+                        result += a * b;
+                    }
+                }
+
+                result
+            }
+
+            fn main() -> int {
+                NestedFor([1, 2], [3, 4])
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(21)),
     })
 }
