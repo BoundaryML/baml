@@ -4,7 +4,7 @@ use axum::{extract::{ws::Message, State, WebSocketUpgrade}, response::IntoRespon
 use futures::{SinkExt, StreamExt};
 use tokio::sync::RwLock;
 
-use crate::{playground::PlaygroundState, session::PreSendToWasmMessage, Session};
+use crate::{session::PreSendToWasmMessage, Session};
 use crate::playground2::server::AppState;
 
 use base64::{engine::general_purpose, Engine as _};

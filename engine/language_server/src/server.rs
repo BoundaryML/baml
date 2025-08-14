@@ -33,6 +33,7 @@ use crate::{
 
 pub mod api;
 pub mod client;
+mod commands;
 pub mod connection;
 mod schedule;
 

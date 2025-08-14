@@ -35,7 +35,7 @@ function ExtractResume(resume: string) -> Resume {
 
 // Test the function with a sample resume. Open the VSCode playground to run this.
 test vaibhav_resume {
-  functions [ExtractResume]
+  functions [ExtractResume, ZippityDoo]
   args {
     resume #"
       Vaibhav Gupta

@@ -4,8 +4,6 @@ use lsp_types::{
     notification::DidChangeTextDocument, DidChangeTextDocumentParams, PublishDiagnosticsParams,
 };
 
-#[cfg(feature = "playground-server")]
-use crate::playground::broadcast_project_update;
 use crate::{
     playground::FrontendMessage,
     server::{

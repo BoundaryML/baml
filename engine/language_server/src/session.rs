@@ -35,8 +35,8 @@ mod settings;
 
 use tokio::sync::{broadcast, RwLock};
 
-#[cfg(feature = "playground-server")]
-use crate::playground::PlaygroundState;
+// #[cfg(feature = "playground-server")]
+// use crate::playground::PlaygroundState;
 
 #[derive(Debug, Clone)]
 /// for lang-server internal comms, before sending out to the playground
@@ -67,9 +67,8 @@ pub struct Session {
     #[cfg(feature = "playground-server")]
     pub playground_port: Option<u16>,
 
-    #[cfg(feature = "playground-server")]
-    pub playground_state: Option<Arc<RwLock<PlaygroundState>>>,
-
+    // #[cfg(feature = "playground-server")]
+    // pub playground_state: Option<Arc<RwLock<PlaygroundState>>>,
     /// Runtime for the playground server
     #[cfg(feature = "playground-server")]
     pub playground_runtime: Option<tokio::runtime::Runtime>,
@@ -98,8 +97,8 @@ impl Clone for Session {
             playground_tx: self.playground_tx.clone(),
             #[cfg(feature = "playground-server")]
             playground_port: self.playground_port,
-            #[cfg(feature = "playground-server")]
-            playground_state: self.playground_state.clone(),
+            // #[cfg(feature = "playground-server")]
+            // playground_state: self.playground_state.clone(),
             #[cfg(feature = "playground-server")]
             playground_runtime: None, // Don't clone the runtime
         }
@@ -154,8 +153,8 @@ impl Session {
             playground_tx,
             #[cfg(feature = "playground-server")]
             playground_port: None,
-            #[cfg(feature = "playground-server")]
-            playground_state: None,
+            // #[cfg(feature = "playground-server")]
+            // playground_state: None,
             #[cfg(feature = "playground-server")]
             playground_runtime: None,
         })
