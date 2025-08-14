@@ -25,6 +25,46 @@ pub struct BamlValue<'a> {
     pub value: ValueContent<'a>,
 }
 
+impl<'a> std::fmt::Display for BamlValue<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.value {
+            ValueContent::Null => write!(f, "null"),
+            ValueContent::String(s) => write!(f, "{s}"),
+            ValueContent::Float(flt) => write!(f, "{flt}"),
+            ValueContent::Int(i) => write!(f, "{i}"),
+            ValueContent::Boolean(b) => write!(f, "{b}"),
+            ValueContent::List(l) => write!(
+                f,
+                "[{}]",
+                l.iter()
+                    .map(|v| v.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            ValueContent::Map(m) => write!(
+                f,
+                "{{{}}}",
+                m.iter()
+                    .map(|(k, v)| format!("{k}: {v}"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            ValueContent::Class { fields } => write!(
+                f,
+                "{} {{{}}}",
+                self.metadata.type_ref,
+                fields
+                    .iter()
+                    .map(|(k, v)| format!("{k}: {v}"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            ValueContent::Enum { value } => write!(f, "{} {}", value, self.metadata.type_ref),
+            ValueContent::Media(_) => write!(f, "<media placeholder>"),
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum CheckValue {
@@ -69,6 +109,45 @@ pub enum ValueContent<'a> {
     Media(Media<'a>),
 }
 
+impl<'a> std::fmt::Display for ValueContent<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ValueContent::Null => write!(f, "null"),
+            ValueContent::String(s) => write!(f, "{s}"),
+            ValueContent::Float(flt) => write!(f, "{flt}"),
+            ValueContent::Int(i) => write!(f, "{i}"),
+            ValueContent::Boolean(b) => write!(f, "{b}"),
+            ValueContent::List(l) => write!(
+                f,
+                "[{}]",
+                l.iter()
+                    .map(|v| v.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            ValueContent::Map(m) => write!(
+                f,
+                "{{{}}}",
+                m.iter()
+                    .map(|(k, v)| format!("{k}: {v}"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            ValueContent::Class { fields } => write!(
+                f,
+                "class {{{}}}",
+                fields
+                    .iter()
+                    .map(|(k, v)| format!("{k}: {v}"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            ValueContent::Enum { value } => write!(f, "enum {value}"),
+            ValueContent::Media(_) => write!(f, "<media placeholder>"),
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[ts(export)]
 #[serde(rename_all = "snake_case")]
@@ -84,4 +163,5 @@ pub enum MediaValue<'a> {
     Url(Cow<'a, str>),
     Base64(Cow<'a, str>),
     FilePath(Cow<'a, str>),
+    BlobRef(Cow<'a, str>), // Hash reference to a blob stored in S3
 }

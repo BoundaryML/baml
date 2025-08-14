@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.205.0](https://github.com/boundaryml/baml/compare/0.204.0..0.205.0) - 2025-08-14
+
+### Bug Fixes
+
+- **(jetbrains)** Fix installer logic (#2275) - ([a89ceb6](https://github.com/boundaryml/baml/commit/a89ceb6d1022b95e8842bcdb056d22816e3e4680)) - Samuel Lijin
+- handle missing `parts` field in gemini flash responses (#2272) - ([5aa9995](https://github.com/boundaryml/baml/commit/5aa9995699533d90136c508b01ac09ef9d8df4d3)) - Juan Manuel Verges
+- issue with some ids for embed prompt fiddle (#2279) - ([66f6566](https://github.com/boundaryml/baml/commit/66f65666f546c5e9b00b09c746203eb90e463850)) - Chris Watts
+- Fix cases where BAML extension would deadlock -- not loading playground (#2311) - ([d9a2a3d](https://github.com/boundaryml/baml/commit/d9a2a3d51f7b103a626d77f8503e4b78882b4a85)) - Samuel Lijin
+- [Python] Allow Baml PDF, Image, Audio types to serialize correctly (#2274) - ([d017bfe](https://github.com/boundaryml/baml/commit/d017bfea1441ac8bfb6602d94299a69c91b60f55)) - Egor Lukiyanov
+- Allow openapi generator to remove unknown files from output dir (#2281) - ([cba26f9](https://github.com/boundaryml/baml/commit/cba26f963eaac4c6506a19d483e89e81a63db5cf)) - Antonio Sarosi
+- add version number on generations (#2282) - ([5e995ef](https://github.com/boundaryml/baml/commit/5e995ef6b05c233525de4dd7a07fe0a815adcf98)) - aaronvg
+- Set token usage for gemini streaming (#2302) - ([2f6be15](https://github.com/boundaryml/baml/commit/2f6be15d05bf7ff7b3a96d46092584e4ad5184d4)) - masonk
+
+
+### Features
+- [feature] Allow users to remap common roles -> model specific roles. (#2288) - ([279051d](https://github.com/boundaryml/baml/commit/279051db754913b8087a1ad99be9fb3f64cabd35)) - hellovai
+- Make `baml-cli test` run expression functions (#2294) - ([e163ce1](https://github.com/boundaryml/baml/commit/e163ce10aa090fca7ac7a9775dc78c369f94756d)) - Greg Hale
+
+
+### BAML VM (WIP)
+- Baml VM (#2089) - ([5e4b946](https://github.com/boundaryml/baml/commit/5e4b9467723e3371140dfa6f97d691f83c2dec9d)) - Antonio Sarosi
+- Bitwise operators (`&`, `|`, `^`, `>>`, `<<`) (#2300) - ([9bd9552](https://github.com/boundaryml/baml/commit/9bd955237c629f306287fa7bd168f5a103a63378)) - Antonio Sarosi
+- Assignment operators (`&=`, `|=`, `+=`, `-=`, `*=`, `/=`, `%=`, `>>=`, `<<=`) (#2301) - ([934ad56](https://github.com/boundaryml/baml/commit/934ad56a4ab64b99e58b3d50eb871511746c4c50)) - Antonio Sarosi
+- While loops (#2297) - ([781846b](https://github.com/boundaryml/baml/commit/781846b4941318dfa64ad38039777ce633ddc0f7)) - Jesús Lapastora
+- Bump version to 0.205.0 - ([e416f81](https://github.com/boundaryml/baml/commit/e416f81315749ddf0db32ad6049c7755a4c67ddc)) - Aaron Villalpando
+
 ## [0.204.0](https://github.com/boundaryml/baml/compare/0.203.1..0.204.0) - 2025-08-06
 
 ### Features
