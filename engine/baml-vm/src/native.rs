@@ -12,10 +12,17 @@ use crate::{
 impl Vm {
     /// Array length.
     pub fn len(&mut self, args: &[Value]) -> Result<Value, VmError> {
+        if args.len() != 1 {
+            return Err(VmError::new(InternalError::InvalidArgumentCount {
+                expected: 1,
+                got: args.len(),
+            }));
+        }
+
         let Value::Object(array) = args[0] else {
             return Err(VmError::from(InternalError::TypeError {
                 expected: Type::Object,
-                got: Type::Object,
+                got: Type::of(&args[0]),
             }));
         };
 
