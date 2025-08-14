@@ -989,6 +989,36 @@ fn continue_nested() -> anyhow::Result<()> {
 }
 
 #[test]
+fn while_with_scope() -> anyhow::Result<()> {
+    const SOURCE: &str = r#"
+        fn Fib(mut n: int) -> int {
+
+            let mut a = 0;
+            let mut b = 1;
+
+            while n > 0 {
+                n -= 1;
+                let t = a + b;
+                b = a;
+                a = t;
+            }
+
+            a
+        }
+
+        fn main() -> int {
+            Fib(5)
+        }
+    "#;
+
+    assert_vm_executes(Program {
+        source: SOURCE,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(5)),
+    })
+}
+
+#[test]
 fn for_loop_sum() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -1062,6 +1092,8 @@ fn for_loop_with_continue() -> anyhow::Result<()> {
         expected: VmExecState::Complete(Value::Int(11)),
     })
 }
+
+
 
 #[test]
 fn for_loop_nested() -> anyhow::Result<()> {

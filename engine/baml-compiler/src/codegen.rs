@@ -249,13 +249,14 @@ struct HirCompiler<'g> {
     objects: &'g mut Vec<Object>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct LoopInfo {
-    /// Instruction index indicating start of the loop. Used for lowering `continue`.
-    pub start_insn: isize,
     /// List of jump instruction locations to be patched when loop construction is done.
     /// They will point to the loop exit. Used for admitting arbitrary `break`s.
     pub break_patch_list: Vec<usize>,
+    /// List of jump instruction locations to be patched when loop construction is done.
+    /// They will point to the end of the loop scope. Used for admitting arbitrary `continue`s.
+    pub continue_patch_list: Vec<usize>,
 }
 
 impl<'g> HirCompiler<'g> {
@@ -442,8 +443,6 @@ impl<'g> HirCompiler<'g> {
 
                 self.emit(Instruction::ArrayLength);
 
-                // stack: [<array> <array len>]
-
                 // var <loop i> = 0;
                 {
                     // maintain zero at a place because otherwise we're going to add it every time
@@ -452,7 +451,6 @@ impl<'g> HirCompiler<'g> {
 
                     self.emit(Instruction::LoadConst(zero));
                 }
-                // stack: [<array> <array len> <loop i>]
 
                 self.compile_while_loop(
                     |ctx| {
@@ -511,14 +509,15 @@ impl<'g> HirCompiler<'g> {
                 cur_loop.break_patch_list.push(exit_jump);
             }
             hir::Statement::Continue(span) => {
-                let cur_loop = self.current_loop.as_ref().expect("`continue` must have a loop wrapping it, and this should have been checked by validation");
+                // NOTE: right now this will generate redundant code when using
+                // `if condition { continue }`, since `if` will generate its own jump location and we
+                // will end up with a conditional jump and a regular jump together.
+                // unreachable.
+                let exit_jump = self.emit(Instruction::Jump(0));
 
-                // jump back to the start.
-                let loop_start = cur_loop.start_insn;
-                let continue_loc = self.bytecode.instructions.len() as isize;
-                let offset = -(continue_loc - loop_start);
+                let cur_loop = self.current_loop.as_mut().expect("`continue` must have a loop wrapping it, and this should have been checked by validation");
 
-                self.emit(Instruction::Jump(offset));
+                cur_loop.continue_patch_list.push(exit_jump);
             }
         }
     }
@@ -561,30 +560,81 @@ impl<'g> HirCompiler<'g> {
         compile_block: impl FnOnce(&mut Self),
     ) {
         let loop_start = self.next_insn_index();
-        self.inside_loop(|ctx| {
-            compile_condition(ctx);
+        compile_condition(self);
+        // Jump out of loop if false
+        let exit_jump = self.emit(Instruction::JumpIfFalse(0));
+        // Pop condition
+        self.emit(Instruction::Pop(1));
 
-            // Jump out of loop if false
-            let exit_jump = ctx.emit(Instruction::JumpIfFalse(0));
+        let block_start = self.next_insn_index() as usize;
 
-            // Pop condition
-            ctx.emit(Instruction::Pop(1));
+        // compile block with continue/break context.
+        let (loop_info, _) = self.with_loop_info(compile_block);
 
-            // Compile loop body
-            compile_block(ctx);
+        // find the first of many sequential pops for sequential scope exits, and add them up
+        // so that we can pop all on `break`.
+        // TODO: when scope exit uses
+        let (first_pop, total_pop_count) = {
+            let block_insns = &self.bytecode.instructions[block_start..];
 
-            // Jump back to start
-            let loop_end = ctx.bytecode.instructions.len() as isize;
-            let offset = -(loop_end - loop_start);
-            ctx.emit(Instruction::Jump(offset));
+            let last_pops =
+                block_insns
+                    .iter()
+                    .enumerate()
+                    .rev()
+                    .map_while(|(i, insn)| match insn {
+                        Instruction::Pop(count) | Instruction::PopReplace(count) => {
+                            Some((i + block_start, count))
+                        }
+                        _ => None,
+                    });
 
-            // patch exit jump so that it pops condition
-            ctx.patch_jump(exit_jump);
-            // Pop condition
-            ctx.emit(Instruction::Pop(1));
+            let (first_pop, pop_count) =
+                last_pops.fold((None, 0), |(_, acc), (i, count)| (Some(i), acc + count));
 
-            // the `break` statements don't have to pop anything.
-        });
+            (first_pop, pop_count)
+        };
+
+        // jump back to the start of the loop.
+        self.emit(Instruction::Jump(loop_start - self.next_insn_index()));
+
+        // NOTE: not using tuple because it's very easy to accidentally swap places.
+        // Use a struct with names & destructure it with a pattern if you find it better.
+        let continue_location;
+        let break_location;
+
+        if let Some(block_end_location) = first_pop {
+            // scope has a destructor. We'll patch `continue` to go to the pop instruction. We'll then add a pop that accounts for the full inside block in `break`.
+
+            continue_location = block_end_location;
+
+            // `break` should go here (after the jump) and pop the locals, but not the condition
+            // result.
+            break_location = self.emit(Instruction::Pop(total_pop_count));
+        } else {
+            // scope has no destructor, so we can wire `continue` directly to loop start
+            continue_location = loop_start as usize;
+
+            // and `break` will just go past the end.
+            break_location = self.next_insn_index() as usize;
+        };
+
+        // jump over itself & the next instruction, since `break` should not pop anything.
+        self.emit(Instruction::Jump(2));
+
+        // finally, exit jump (where the condition hasn't been popped) should go here, so that
+        // it can pop the condition.
+        self.patch_jump(exit_jump);
+        self.emit(Instruction::Pop(1));
+
+        // patch the set continue/break locations.
+        for break_jmp in loop_info.break_patch_list {
+            self.patch_jump_to(break_jmp, break_location);
+        }
+
+        for continue_jmp in loop_info.continue_patch_list {
+            self.patch_jump_to(continue_jmp, continue_location);
+        }
     }
 
     /// Generate bytecode for an expression.
@@ -910,18 +960,31 @@ impl<'g> HirCompiler<'g> {
     /// and finally we call this function passing the index of the jump
     /// instruction to adjust the offset and make it point to the end of the
     /// target block.
-    fn patch_jump(&mut self, instruction_ptr: usize) {
-        let destination = self.bytecode.instructions.len();
-
+    fn patch_jump_to(&mut self, instruction_ptr: usize, destination: usize) {
         match &mut self.bytecode.instructions[instruction_ptr] {
             Instruction::Jump(offset) | Instruction::JumpIfFalse(offset) => {
-                *offset = (destination - instruction_ptr) as isize;
+                *offset = destination as isize - instruction_ptr as isize;
             }
             _ => panic!(
                 "compiler bug: expected jump instruction at index {instruction_ptr}, but got {:?}",
                 self.bytecode.instructions[instruction_ptr]
             ),
         }
+    }
+
+    /// Patches a jump instruction to point to the next instruction.
+    ///
+    /// When we first emit a jump instruction, we do not know what offset to use
+    /// because we don't know how many instructions the block we want to jump
+    /// over will emit. In order to solve that, we emit the jump instruction
+    /// with a placeholder offset (like 0), then we compile the jump target,
+    /// and finally we call this function passing the index of the jump
+    /// instruction to adjust the offset and make it point to the end of the
+    /// target block.
+    fn patch_jump(&mut self, instruction_ptr: usize) {
+        let destination = self.bytecode.instructions.len();
+
+        self.patch_jump_to(instruction_ptr, destination)
     }
 
     /// Keeps track of a new local and returns its index in the eval stack.
@@ -980,24 +1043,15 @@ impl<'g> HirCompiler<'g> {
     /// obtain the borrow inside `inner`'s body.
     ///
     /// See [`Self::compile_while_loop`] for a usage example.
-    fn inside_loop<T>(&mut self, inner: impl FnOnce(&mut Self) -> T) -> T {
-        let start_insn = self.next_insn_index();
-
-        let old_loop_status = self.current_loop.replace(LoopInfo {
-            start_insn,
-            break_patch_list: Vec::new(),
-        });
+    fn with_loop_info<T>(&mut self, inner: impl FnOnce(&mut Self) -> T) -> (LoopInfo, T) {
+        let old_loop_status = self.current_loop.replace(LoopInfo::default());
 
         let result = inner(self);
 
         let loop_info = std::mem::replace(&mut self.current_loop, old_loop_status)
             .expect("should have been pushed before when grabbing old_status");
 
-        for jump_loc in loop_info.break_patch_list {
-            self.patch_jump(jump_loc);
-        }
-
-        result
+        (loop_info, result)
     }
 }
 
