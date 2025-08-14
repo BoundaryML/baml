@@ -359,10 +359,10 @@ while_loop = { "while" ~  expression ~  expr_block  }
 
 
 // For loop, e.g.
-// for (r in resumes) {
+// for r in resumes {
 //   ExtractResume(x)
 // }
-for_loop = { "for" ~ "(" ~ identifier ~ "in" ~ expression ~ ")" ~ expr_block }
+for_loop = { "for" ~ identifier ~ "in" ~ expression ~ expr_block }
 
 // Anonymous function.
 lambda = { named_argument_list ~ "=>" ~ expression }

@@ -56,15 +56,9 @@ pub fn display_instruction(
             "({})",
             display_value(&function.bytecode.constants[*index], objects)
         ),
-
-        // TODO: For this one we need to add some logic to check if it's
-        // a function or a global variable. In the case of variables, we
-        // have to store the names (potentially in the [`Vm`] struct) and
-        // print it.
         Instruction::LoadGlobal(index) | Instruction::StoreGlobal(index) => {
             format!("({})", display_value(&globals[*index], objects))
         }
-
         Instruction::LoadVar(index) | Instruction::StoreVar(index) => {
             format!(
                 "({})",
@@ -75,7 +69,6 @@ pub fn display_instruction(
                     .unwrap_or(&"?".to_string())
             )
         }
-
         Instruction::LoadField(index) | Instruction::StoreField(index) => 'field: {
             // When the compiler calls this, there's no runtime stack so it's
             // not possible to get instruction parameters from the stack.
@@ -102,16 +95,12 @@ pub fn display_instruction(
 
             format!("({})", class.field_names[*index])
         }
-
         Instruction::Jump(offset) | Instruction::JumpIfFalse(offset) => {
             format!("(to {})", instruction_ptr + offset)
         }
-
-        // Classes are also globals, we can get the name from there.
         Instruction::AllocInstance(index) => {
             format!("({})", display_value(&globals[*index], objects))
         }
-
         Instruction::Pop(_)
         | Instruction::PopReplace(_)
         | Instruction::BinOp(_)
@@ -122,6 +111,7 @@ pub fn display_instruction(
         | Instruction::DispatchFuture(_)
         | Instruction::Await
         | Instruction::Call(_)
+        | Instruction::ArrayLength
         | Instruction::Return => String::new(),
     };
 
@@ -159,36 +149,22 @@ const COLUMN_MARGIN: usize = 3;
 /// Get color for instruction based on its type
 fn instruction_color(instruction: &Instruction) -> Color {
     match instruction {
-        // Load instructions.
         Instruction::LoadConst(_)
         | Instruction::LoadVar(_)
         | Instruction::LoadGlobal(_)
         | Instruction::LoadField(_)
         | Instruction::LoadArrayElement => Color::Blue,
-
-        // Store instructions.
         Instruction::StoreVar(_) | Instruction::StoreGlobal(_) | Instruction::StoreField(_) => {
             Color::Green
         }
-
-        // Operation instructions.
-        Instruction::BinOp(_) | Instruction::CmpOp(_) | Instruction::UnaryOp(_) => {
-            Color::BrightBlue
-        }
-
-        // Branch instructions.
+        Instruction::BinOp(_)
+        | Instruction::CmpOp(_)
+        | Instruction::UnaryOp(_)
+        | Instruction::ArrayLength => Color::BrightBlue,
         Instruction::Jump(_) | Instruction::JumpIfFalse(_) => Color::Yellow,
-
-        // Call instructions.
         Instruction::Call(_) => Color::Magenta,
-
-        // Return instructions.
         Instruction::Return | Instruction::Pop(_) | Instruction::PopReplace(_) => Color::Red,
-
-        // Alloc instructions.
         Instruction::AllocInstance(_) | Instruction::AllocArray(_) => Color::Cyan,
-
-        // Async instructions.
         Instruction::DispatchFuture(_) | Instruction::Await => Color::BrightGreen,
     }
 }
