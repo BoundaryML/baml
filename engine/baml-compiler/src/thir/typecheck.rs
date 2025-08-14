@@ -1235,8 +1235,6 @@ mod tests {
         }
     }
 
-    // TODO: Fix this test.
-    #[ignore]
     #[test]
     fn typecheck_array_access() {
         let source = r##"

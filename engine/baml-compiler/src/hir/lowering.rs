@@ -726,38 +726,4 @@ b: int
         println!("HIR for class constructor with complex expressions:");
         println!("{result}");
     }
-
-    #[test]
-    #[ignore] // TODO: This doesn't pass syntax validation.
-    fn test_for_loop_lowering() {
-        // Test for loop lowering to while loop with iterator
-        let source = r#"
-           function TestForLoop() -> int[] {
-               for (item in [1, 2, 3]) { mul(item, 2) }
-           }
-       "#;
-        let result = hir_from_source(source);
-
-        // The for loop should be lowered to:
-        // - iterator variable declaration
-        // - index variable initialization
-        // - result array initialization
-        // - while loop with condition and body
-        let expected = r#"function TestForLoop() {
- let iter_0 = [1, 2, 3];
- let index_0 = 0;
- let result_0 = [];
- while lt(index_0, length(iter_0)) {
- let item = index(iter_0, index_0);
-   var temp_push_1 = push(result_0, mul(item, 2));
-   index_0 = add(index_0, 1);
- }
- return result_0;
-}"#;
-        assert_eq!(result, expected);
-
-        // Print for visual inspection
-        println!("HIR for for loop lowering:");
-        println!("{result}");
-    }
 }

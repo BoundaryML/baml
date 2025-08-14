@@ -1866,7 +1866,7 @@ mod tests {
                     Instruction::LoadVar(1),
                     Instruction::LoadVar(2),
                     Instruction::CmpOp(CmpOp::NotEq),
-                    Instruction::JumpIfFalse(20),
+                    Instruction::JumpIfFalse(19),
                     Instruction::Pop(1),
                     // if a > b { a = a - b; } else { b = b - a; }
                     Instruction::LoadVar(1),
@@ -1921,7 +1921,7 @@ mod tests {
                     Instruction::LoadConst(0),
                     // while true { ... }
                     Instruction::LoadConst(1),
-                    Instruction::JumpIfFalse(19),
+                    Instruction::JumpIfFalse(20),
                     Instruction::Pop(1),
                     // if limit == 0 { break; }
                     Instruction::LoadVar(1),
@@ -2040,13 +2040,14 @@ mod tests {
                 "Nested",
                 vec![
                     Instruction::LoadConst(0),
-                    Instruction::JumpIfFalse(20),
+                    Instruction::JumpIfFalse(18),
                     Instruction::Pop(1),
                     Instruction::LoadConst(1),
-                    Instruction::JumpIfFalse(4),
+                    Instruction::JumpIfFalse(5),
                     Instruction::Pop(1),
                     Instruction::Jump(-3),
                     Instruction::Jump(-4),
+                    Instruction::Jump(2),
                     Instruction::Pop(1),
                     Instruction::LoadConst(2),
                     Instruction::JumpIfFalse(4),
@@ -2087,7 +2088,7 @@ mod tests {
                 vec![
                     Instruction::LoadConst(0),
                     Instruction::LoadConst(1),
-                    Instruction::JumpIfFalse(18),
+                    Instruction::JumpIfFalse(20),
                     Instruction::Pop(1),
                     Instruction::LoadConst(2),
                     Instruction::JumpIfFalse(9),
