@@ -1143,7 +1143,7 @@ impl Vm {
                             self.stack.drain(locals_offset..);
                             self.stack.push(result);
 
-                            // Some Rust bullshit because we're passing VM as
+                            // Rust borrow check workaround because we're passing VM as
                             // mut and technically the frame pointer could be
                             // invalidated. Frame is Copy so we can maintain a
                             // local owned copy to avoid this but then we'd need

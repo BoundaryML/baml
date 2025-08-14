@@ -1930,7 +1930,8 @@ mod tests {
                     Instruction::AllocArray(3),
                     Instruction::LoadGlobal(2),
                     Instruction::LoadVar(1),
-                    Instruction::Call(0),
+                    // call with one argument (self)
+                    Instruction::Call(1),
                     Instruction::Return,
                 ],
             )],

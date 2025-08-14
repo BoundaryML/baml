@@ -12,10 +12,17 @@ use crate::{
 impl Vm {
     /// Array length.
     pub fn len(&mut self, args: &[Value]) -> Result<Value, VmError> {
+        if args.len() != 1 {
+            return Err(VmError::new(InternalError::InvalidArgumentCount {
+                expected: 1,
+                got: args.len(),
+            }));
+        }
+
         let Value::Object(array) = args[0] else {
             return Err(VmError::from(InternalError::TypeError {
                 expected: Type::Object,
-                got: Type::Object,
+                got: Type::of(&args[0]),
             }));
         };
 
@@ -33,7 +40,8 @@ impl Vm {
 pub type NativeFunction = fn(&mut Vm, &[Value]) -> Result<Value, VmError>;
 
 pub fn functions() -> HashMap<String, (NativeFunction, usize)> {
-    let fns: [(&str, (NativeFunction, usize)); _] = [("len", (Vm::len, 1))];
+    let native_fn: NativeFunction = Vm::len;
+    let fns = [("len", (native_fn, 1))];
 
     HashMap::from_iter(fns.into_iter().map(|(name, func)| (name.to_string(), func)))
 }
