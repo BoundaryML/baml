@@ -146,6 +146,8 @@ pub struct TypeContext {
     // Variables in scope with mutability info
     pub vars: BamlMap<String, VarInfo>,
     pub classes: BamlMap<String, hir::Class>,
+    // Used for knowing whether `break` and `continue` are inside a loop or not.
+    pub is_inside_loop: bool,
 }
 
 impl Default for TypeContext {
@@ -157,8 +159,6 @@ impl Default for TypeContext {
 impl TypeContext {
     pub fn new() -> Self {
         let mut vars = BamlMap::new();
-
-        // TODO: convert true/false into symbols (no infer span), ensure that they are reachable
 
         vars.insert(
             "true".to_string(),
@@ -178,6 +178,7 @@ impl TypeContext {
             symbols: BamlMap::new(),
             vars,
             classes: BamlMap::new(),
+            is_inside_loop: false,
         }
     }
     pub fn get_type(&self, name: &str) -> Option<&Type> {
@@ -189,6 +190,20 @@ impl TypeContext {
 
     pub fn infer_type(&mut self, expr: &hir::Expression) -> Option<Type> {
         todo!()
+    }
+
+    /// Makes sure that the context passed to `inner` knows it's inside a loop,
+    /// and restores the previous loop information upon return.
+    fn inside_loop<T>(&mut self, inner: impl FnOnce(&mut Self) -> T) -> T {
+        let old = self.is_inside_loop;
+
+        self.is_inside_loop = true;
+
+        let value = inner(self);
+
+        self.is_inside_loop = old;
+
+        value
     }
 }
 
@@ -438,7 +453,9 @@ fn typecheck_statement(
             span,
         } => {
             let typed_condition = typecheck_expression(condition, context, diagnostics);
-            let typed_block = typecheck_block(block, context, diagnostics);
+
+            let typed_block =
+                context.inside_loop(|context| typecheck_block(block, context, diagnostics));
 
             Some(thir::Statement::While {
                 condition: Box::new(typed_condition),
@@ -475,6 +492,28 @@ fn typecheck_statement(
                 iterator: Box::new(typed_iterator),
                 block: typed_block,
                 span: span.clone(),
+            })
+        }
+
+        hir::Statement::Break(span) | hir::Statement::Continue(span) => {
+            if !context.is_inside_loop {
+                let name = if let hir::Statement::Continue(_) = stmt {
+                    "continue"
+                } else {
+                    "break"
+                };
+
+                diagnostics.push_error(DatamodelError::new_validation_error(
+                    &format!("'{name}' cannot be used outside of a loop"),
+                    span.clone(),
+                ));
+            }
+
+            // give it even on error so that LSP & other source tools can be aware of it.
+            Some(match stmt {
+                hir::Statement::Continue(span) => thir::Statement::Continue(span.clone()),
+                hir::Statement::Break(span) => thir::Statement::Break(span.clone()),
+                _ => panic!("just matched break & continue"),
             })
         }
     }

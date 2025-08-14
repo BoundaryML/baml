@@ -102,6 +102,11 @@ pub(super) fn validate_expr_fns(ctx: &mut Context<'_>) {
 
 fn validate_stmt(ctx: &mut Context<'_>, stmt: &Stmt, scope: &HashSet<String>) {
     match stmt {
+        Stmt::WhileLoop(stmt) => {
+            validate_expression(ctx, &stmt.condition, scope);
+
+            validate_expr_block(ctx, scope.clone(), &stmt.body);
+        }
         Stmt::Assign(stmt) => {
             // re: validation is handled by HIR-based typechecking.
             validate_expression(ctx, &stmt.expr, scope);
@@ -121,20 +126,31 @@ fn validate_stmt(ctx: &mut Context<'_>, stmt: &Stmt, scope: &HashSet<String>) {
             let mut loop_scope = scope.clone();
             loop_scope.insert(stmt.identifier.name().to_string());
 
-            // Validate statements in the loop body
-            for stmt in &stmt.body.stmts {
-                validate_stmt(ctx, stmt, &loop_scope);
-                loop_scope.insert(stmt.identifier().name().to_string());
-            }
-
-            // Validate the loop body expression
-            if let Some(expr) = &stmt.body.expr {
-                validate_expression(ctx, expr, &loop_scope);
-            }
+            let body = &stmt.body;
+            validate_expr_block(ctx, loop_scope, body);
         }
         Stmt::Expression(expr) => {
             validate_expression(ctx, expr, scope);
         }
+        // these don't have any inner expressions or blocks
+        Stmt::Break(_) | Stmt::Continue(_) => {}
+    }
+}
+
+fn validate_expr_block(
+    ctx: &mut Context<'_>,
+    mut scope_for_block: HashSet<String>,
+    body: &internal_baml_ast::ast::ExpressionBlock,
+) {
+    for stmt in &body.stmts {
+        validate_stmt(ctx, stmt, &scope_for_block);
+        if matches!(stmt, Stmt::ForLoop(_) | Stmt::Let(_)) {
+            scope_for_block.insert(stmt.identifier().name().to_string());
+        }
+    }
+
+    if let Some(expr) = &body.expr {
+        validate_expression(ctx, expr, &scope_for_block);
     }
 }
 
@@ -224,16 +240,7 @@ fn validate_expression(ctx: &mut Context<'_>, expr: &Expression, scope: &HashSet
             }
         }
         Expression::ExprBlock(block, _span) => {
-            let mut scope = scope.clone();
-            for stmt in block.stmts.iter() {
-                validate_stmt(ctx, stmt, &scope);
-                if matches!(stmt, Stmt::Let(_) | Stmt::ForLoop(_)) {
-                    scope.insert(stmt.identifier().name().to_string());
-                }
-            }
-            if let Some(expr) = &block.expr {
-                validate_expression(ctx, expr, &scope);
-            }
+            validate_expr_block(ctx, scope.clone(), block);
         }
         Expression::If(cond, then, else_, _span) => {
             validate_expression(ctx, cond, scope);

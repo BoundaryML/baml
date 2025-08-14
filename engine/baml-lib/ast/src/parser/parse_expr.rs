@@ -100,7 +100,49 @@ pub fn parse_top_level_assignment(
 
             None
         }
+
+        Stmt::WhileLoop(stmt) => {
+            diagnostics.push_error(DatamodelError::new_static(
+                "while loops are not allowed at top level, only let statements are allowed",
+                stmt.span.clone(),
+            ));
+
+            None
+        }
+        Stmt::Break(span) => {
+            diagnostics.push_error(DatamodelError::new_static(
+                "break statements are not allowed at top level, only let statements are allowed",
+                span.clone(),
+            ));
+
+            None
+        }
+        Stmt::Continue(span) => {
+            diagnostics.push_error(DatamodelError::new_static(
+                "continue statements are not allowed at top level, only let statements are allowed",
+                span.clone(),
+            ));
+
+            None
+        }
     }
+}
+
+fn parse_while_loop(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Stmt> {
+    assert_correct_parser!(pair, Rule::while_loop);
+
+    let span = diagnostics.span(pair.as_span());
+    let mut while_loop = pair.into_inner();
+
+    let condition = parse_expression(while_loop.next()?, diagnostics)?;
+
+    let body = parse_expr_block(while_loop.next()?, diagnostics)?;
+
+    Some(Stmt::WhileLoop(WhileStmt {
+        condition,
+        body,
+        span,
+    }))
 }
 
 pub fn parse_for_loop(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Stmt> {
@@ -200,13 +242,16 @@ pub fn parse_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
                 })
             })
         }
+        Rule::BREAK_KEYWORD => Some(Stmt::Break(diagnostics.span(stmt_token.as_span()))),
+        Rule::CONTINUE_KEYWORD => Some(Stmt::Continue(diagnostics.span(stmt_token.as_span()))),
+        Rule::while_loop => parse_while_loop(stmt_token, diagnostics),
         Rule::for_loop => parse_for_loop(stmt_token, diagnostics),
         Rule::if_expression => parse_if_expression(stmt_token, diagnostics).map(Stmt::Expression),
         Rule::fn_app => parse_fn_app(stmt_token, diagnostics).map(Stmt::Expression),
         Rule::generic_fn_app => parse_generic_fn_app(stmt_token, diagnostics).map(Stmt::Expression),
         _ => {
             diagnostics.push_error(DatamodelError::new_static(
-                "Expected let expression or for loop",
+                "Expected statement",
                 span.clone(),
             ));
             None
@@ -413,17 +458,19 @@ pub fn parse_if_expression(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Op
     let then_branch_span = diagnostics.span(then_branch_expr_block.as_span());
     let then_branch = parse_expr_block(then_branch_expr_block, diagnostics)?;
 
-    let else_branch_expr = tokens.next()?;
-    let else_branch_span = diagnostics.span(else_branch_expr.as_span());
+    let else_branch = tokens.next().and_then(|else_branch_expr| {
+        let else_branch_span = diagnostics.span(else_branch_expr.as_span());
 
-    let else_branch = match else_branch_expr.as_rule() {
-        Rule::expr_block => parse_expr_block(else_branch_expr, diagnostics)
-            .map(|e| Box::new(Expression::ExprBlock(e, else_branch_span))),
+        let else_branch = match else_branch_expr.as_rule() {
+            Rule::expr_block => parse_expr_block(else_branch_expr, diagnostics)
+                .map(|e| Box::new(Expression::ExprBlock(e, else_branch_span))),
 
-        Rule::if_expression => parse_if_expression(else_branch_expr, diagnostics).map(Box::new),
+            Rule::if_expression => parse_if_expression(else_branch_expr, diagnostics).map(Box::new),
 
-        _ => unreachable_rule!(else_branch_expr, Rule::if_expression),
-    };
+            _ => unreachable_rule!(else_branch_expr, Rule::if_expression),
+        };
+        else_branch
+    });
 
     Some(Expression::If(
         Box::new(condition),

@@ -293,6 +293,25 @@ impl Block {
         // Process statements, checking for if expressions in let bindings
         for stmt in &block.stmts {
             match stmt {
+                ast::Stmt::Break(span) => statements.push(Statement::Break(span.clone())),
+                ast::Stmt::Continue(span) => statements.push(Statement::Continue(span.clone())),
+                ast::Stmt::WhileLoop(ast::WhileStmt {
+                    condition,
+                    body,
+                    span,
+                }) => {
+                    // lowering to HIR is trivial, since HIR maps 1:1 with this.
+
+                    let hir_condition = Expression::from_ast(condition);
+
+                    let hir_body = Block::from_expression_block(body);
+
+                    statements.push(Statement::While {
+                        condition: Box::new(hir_condition),
+                        block: hir_body,
+                        span: span.clone(),
+                    })
+                }
                 ast::Stmt::Assign(ast::AssignStmt {
                     identifier,
                     expr,
