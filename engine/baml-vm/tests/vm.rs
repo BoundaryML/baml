@@ -1093,8 +1093,6 @@ fn for_loop_with_continue() -> anyhow::Result<()> {
     })
 }
 
-
-
 #[test]
 fn for_loop_nested() -> anyhow::Result<()> {
     assert_vm_executes(Program {
