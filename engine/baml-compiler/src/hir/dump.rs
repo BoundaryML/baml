@@ -350,18 +350,14 @@ impl Expression {
                     .append(RcDoc::space())
                     .append(condition.to_doc())
                     .append(RcDoc::space())
-                    .append(RcDoc::text("{"))
-                    .append(RcDoc::space())
                     .append(if_branch.to_doc())
-                    .append(RcDoc::space())
-                    .append(RcDoc::text("}"));
+                    .append(RcDoc::space());
                 if let Some(else_expr) = else_branch {
                     doc = doc
-                        .append(RcDoc::text(" else {"))
+                        .append(RcDoc::text("else"))
                         .append(RcDoc::space())
                         .append(else_expr.to_doc())
-                        .append(RcDoc::space())
-                        .append(RcDoc::text("}"));
+                        .append(RcDoc::space());
                 }
                 doc
             }

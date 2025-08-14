@@ -8,6 +8,11 @@ function TestArray() -> int[] {
     [arr, result]
 }
 
+function ArrayAccess() -> int {
+    let arr = [1, 2, 3];
+    arr[1]
+}
+
 // function Helper(x) {
 //   return x;
 // }
@@ -16,6 +21,11 @@ function TestArray() -> int[] {
 //   let arr = [1, 2, 3];
 //   let result = Helper(42);
 //   return [arr, result];
+// }
+//
+// function ArrayAccess() {
+//   let arr = [1, 2, 3];
+//   return arr[1];
 // }
 //
 // class std::Request {

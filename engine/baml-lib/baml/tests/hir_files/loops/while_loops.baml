@@ -13,11 +13,11 @@ fn GCD(mut a: int, mut b: int) -> int {
 
 // function GCD(a, b) {
 //   while a != b {
-//   if a > b { {
+//   if a > b {
 //     a = a - b;
-//     } } else { {
+//     } else {
 //     b = b - a;
-//     } }
+//     } 
 //   }
 //   return a;
 // }
