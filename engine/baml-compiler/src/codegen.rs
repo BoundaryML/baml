@@ -57,6 +57,12 @@ fn compile_hir_to_bytecode(hir: &hir::Hir) -> anyhow::Result<BamlVmProgram> {
         resolved_classes.insert(class.name.clone(), class_fields);
     }
 
+    let native_fns = baml_vm::native::functions();
+
+    for name in native_fns.keys() {
+        resolved_globals.insert(name.clone(), resolved_globals.len());
+    }
+
     let mut objects = Vec::with_capacity(resolved_globals.len());
     let mut globals = Vec::with_capacity(resolved_globals.len());
 
@@ -97,6 +103,19 @@ fn compile_hir_to_bytecode(hir: &hir::Hir) -> anyhow::Result<BamlVmProgram> {
 
         globals.push(Value::Object(objects.len()));
         objects.push(Object::Class(bytecode_class));
+    }
+
+    for (name, (func, arity)) in native_fns {
+        let native_function = Object::Function(Function {
+            name: name.clone(),
+            arity,
+            bytecode: Bytecode::new(),
+            kind: FunctionKind::Native(func),
+            locals_in_scope: vec![], // TODO.
+        });
+
+        globals.push(Value::Object(objects.len()));
+        objects.push(native_function);
     }
 
     let resolved_function_names = objects
@@ -531,8 +550,27 @@ impl<'g> HirCompiler<'g> {
                 }
             }
 
-            hir::Expression::MethodCall { .. } => {
-                todo!("method call compilation")
+            hir::Expression::MethodCall {
+                receiver,
+                method,
+                args,
+                span,
+            } => {
+                // Push the function onto the stack
+                let Some(&index) = self.globals.get(method) else {
+                    panic!("undefined method: {method}");
+                };
+
+                self.emit(Instruction::LoadGlobal(index));
+
+                self.compile_expression(receiver);
+
+                for arg in args {
+                    self.compile_expression(arg);
+                }
+
+                // `self` counts as one argument.
+                self.emit(Instruction::Call(1 + args.len()));
             }
 
             hir::Expression::ClassConstructor(constructor, _) => {
@@ -1868,6 +1906,31 @@ mod tests {
                     Instruction::Jump(-18),
                     Instruction::Pop(1),
                     Instruction::LoadVar(1),
+                    Instruction::Return,
+                ],
+            )],
+        })
+    }
+
+    #[test]
+    fn builtin_method_call() -> anyhow::Result<()> {
+        assert_compiles(Program {
+            source: r#"
+                fn main() -> int {
+                    let arr = [1, 2, 3];
+                    arr.len()
+                }
+            "#,
+            expected: vec![(
+                "main",
+                vec![
+                    Instruction::LoadConst(0),
+                    Instruction::LoadConst(1),
+                    Instruction::LoadConst(2),
+                    Instruction::AllocArray(3),
+                    Instruction::LoadGlobal(2),
+                    Instruction::LoadVar(1),
+                    Instruction::Call(0),
                     Instruction::Return,
                 ],
             )],

@@ -22,11 +22,14 @@ pub enum FunctionKind {
     /// result and then push it on top of the eval stack.
     Llm,
 
-    /// OS interfacing function.
+    /// Builtin or OS interfacing function.
     ///
-    /// VM will handle control flow to a Rust wrapper that calls into the OS
-    /// and returns a result. Needed for features like `fetch`.
-    Native,
+    /// For OS interfacing, VM will handle control flow to a Rust wrapper that
+    /// calls into the OS and returns a result. Needed for features like
+    /// `fetch`.
+    ///
+    /// Builtin functions like `len` work the same way.
+    Native(crate::native::NativeFunction),
 }
 
 /// Represents any Baml function.
@@ -39,6 +42,8 @@ pub struct Function {
     pub arity: usize,
 
     /// Bytecode to execute.
+    ///
+    /// Only relevant if [`Self::kind`] is [`FunctionKind::Exec`].
     pub bytecode: Bytecode,
 
     /// Type of function.
@@ -1127,21 +1132,48 @@ impl Vm {
                         return Err(VmError::RuntimeError(RuntimeError::StackOverflow));
                     }
 
-                    // Otherwise push the new frame.
-                    self.frames.push(Frame {
-                        function: *index,
-                        instruction_ptr: 0,
-                        locals_offset,
-                    });
+                    match callee.kind {
+                        FunctionKind::Native(func) => {
+                            let args = self.stack[locals_offset + 1..].to_owned();
 
-                    // Point to next frame.
-                    frame = self.frames.last_mut().expect("last_mut() was pushed above");
+                            // Run Rust native function.
+                            let result = func(self, &args)?;
 
-                    // Grab function ref. We do this to avoid running this
-                    // code at the beginning of each iteration since it's
-                    // totaly unnecessary. The function only changes when the
-                    // frame changes.
-                    function = self.objects[frame.function].as_function()?;
+                            // Drop function call and place result on top.
+                            self.stack.drain(locals_offset..);
+                            self.stack.push(result);
+
+                            // Some Rust bullshit because we're passing VM as
+                            // mut and technically the frame pointer could be
+                            // invalidated. Frame is Copy so we can maintain a
+                            // local owned copy to avoid this but then we'd need
+                            // to presist changes when moving to a new frame.
+                            frame = self.frames.last_mut().expect("last_mut() was pushed above");
+                            function = self.objects[frame.function].as_function()?;
+                        }
+
+                        FunctionKind::Exec => {
+                            // Otherwise push the new frame.
+                            self.frames.push(Frame {
+                                function: *index,
+                                instruction_ptr: 0,
+                                locals_offset,
+                            });
+
+                            // Point to next frame.
+                            frame = self.frames.last_mut().expect("last_mut() was pushed above");
+
+                            // Grab function ref. We do this to avoid running this
+                            // code at the beginning of each iteration since it's
+                            // totaly unnecessary. The function only changes when the
+                            // frame changes.
+                            function = self.objects[frame.function].as_function()?;
+                        }
+
+                        FunctionKind::Llm => {
+                            return Err(VmError::from(InternalError::InvalidFunctionRef));
+                        }
+                    }
                 }
 
                 Instruction::Return => {
