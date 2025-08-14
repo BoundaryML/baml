@@ -137,7 +137,7 @@ impl VariableCounter {
     pub fn next(&mut self) -> String {
         self.counter += 1;
         let index = self.counter - 1;
-        format!("__baml {}{index}", self.name_infix)
+        format!("__baml {} {index}", self.name_infix)
     }
 }
 
