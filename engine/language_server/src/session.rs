@@ -38,6 +38,13 @@ use tokio::sync::{broadcast, RwLock};
 #[cfg(feature = "playground-server")]
 use crate::playground::PlaygroundState;
 
+#[derive(Debug, Clone)]
+/// for lang-server internal comms, before sending out to the playground
+pub enum PreSendToWasmMessage {
+    Initialized,
+    FrontendMessage(FrontendMessage),
+}
+
 /// The global state for the LSP
 #[derive(Debug)]
 pub struct Session {
@@ -54,7 +61,7 @@ pub struct Session {
 
     pub baml_settings: BamlSettings,
 
-    pub playground_tx: broadcast::Sender<FrontendMessage>,
+    pub playground_tx: broadcast::Sender<PreSendToWasmMessage>,
 
     /// The actual port that the playground server is running on (after availability check)
     #[cfg(feature = "playground-server")]
@@ -106,7 +113,7 @@ impl Session {
         global_settings: ClientSettings,
         workspace_folders: &[(Url, ClientSettings)],
         runtime_handle: tokio::runtime::Handle,
-        playground_tx: broadcast::Sender<FrontendMessage>,
+        playground_tx: broadcast::Sender<PreSendToWasmMessage>,
     ) -> anyhow::Result<Self> {
         let mut projects = HashMap::new();
         let index = index::Index::new(global_settings.clone());

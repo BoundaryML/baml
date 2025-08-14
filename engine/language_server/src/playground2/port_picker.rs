@@ -10,7 +10,7 @@ pub struct PortPicks {
 pub async fn pick() -> anyhow::Result<PortPicks> {
     const MAX_PORT_ATTEMPTS: u16 = 100;
 
-    for playground_port in 4000..4000 + MAX_PORT_ATTEMPTS {
+    for playground_port in 3700..3700 + MAX_PORT_ATTEMPTS {
         let proxy_port = playground_port + 1;
 
         if let (Ok(playground_listener), Ok(proxy_listener)) = (

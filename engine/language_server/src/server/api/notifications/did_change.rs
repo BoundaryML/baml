@@ -17,7 +17,7 @@ use crate::{
         client::{Notifier, Requester},
         Result,
     },
-    session::Session,
+    session::{PreSendToWasmMessage, Session},
     DocumentKey,
 };
 
@@ -89,10 +89,12 @@ impl SyncNotificationHandler for DidChangeTextDocumentHandler {
                 .collect();
             session
                 .playground_tx
-                .send(FrontendMessage::add_project {
-                    root_path: project.root_path().to_string_lossy().to_string(),
-                    files: files_map,
-                })
+                .send(PreSendToWasmMessage::FrontendMessage(
+                    FrontendMessage::add_project {
+                        root_path: project.root_path().to_string_lossy().to_string(),
+                        files: files_map,
+                    },
+                ))
                 .unwrap();
         }
         // let root_path = project.root_path().to_string_lossy().to_string();

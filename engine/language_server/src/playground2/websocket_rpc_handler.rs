@@ -4,7 +4,7 @@ use axum::{extract::{ws::Message, State, WebSocketUpgrade}, response::IntoRespon
 use futures::{SinkExt, StreamExt};
 use tokio::sync::RwLock;
 
-use crate::{playground::PlaygroundState, Session};
+use crate::{playground::PlaygroundState, session::PreSendToWasmMessage, Session};
 use crate::playground2::server::AppState;
 
 use base64::{engine::general_purpose, Engine as _};
@@ -32,8 +32,7 @@ pub async fn handle_rpc_websocket(
                 let rpc_id = json["rpcId"].clone();
                 let rpc_method = json["rpcMethod"].as_str().unwrap_or("");
                 let data = &json["data"];
-                // tracing::info!("Handling RPC request!");
-                // tracing::info!("RPC METHOD: {:?}", rpc_method);
+                tracing::info!("Handling RPC request: {:?}", rpc_method);
                 match rpc_method {
                     "INITIALIZED" => {
                         let response = serde_json::json!({
@@ -42,6 +41,7 @@ pub async fn handle_rpc_websocket(
                             "data": { "ok": true }
                         });
                         let _ = ws_tx.send(Message::text(response.to_string())).await;
+                        state.playground_tx.send(PreSendToWasmMessage::Initialized).unwrap();
                     }
                     // "GET_WEBVIEW_URI" => {
                     //     let path = data["path"].as_str().unwrap_or("");

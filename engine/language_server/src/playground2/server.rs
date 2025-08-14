@@ -19,6 +19,7 @@ use crate::playground::FrontendMessage;
 use crate::playground2::ping_handler::ping_handler;
 use crate::playground2::websocket_rpc_handler::ws_rpc_handler;
 use crate::playground2::websocket_ws_handler::ws_handler;
+use crate::session::PreSendToWasmMessage;
 
 #[derive(Serialize, Debug, Clone)]
 #[serde(untagged)]
@@ -29,12 +30,14 @@ pub enum LangServerToWasmMessage {
 
 pub struct AppState {
     pub broadcast_rx: broadcast::Receiver<LangServerToWasmMessage>,
+    pub playground_tx: broadcast::Sender<PreSendToWasmMessage>,
 }
 
 impl Clone for AppState {
     fn clone(&self) -> Self {
         Self {
             broadcast_rx: self.broadcast_rx.resubscribe(),
+            playground_tx: self.playground_tx.clone(),
         }
     }
 }
@@ -42,6 +45,7 @@ impl Clone for AppState {
 #[derive(Debug)]
 pub struct Playground2Server {
     pub broadcast_rx: broadcast::Receiver<LangServerToWasmMessage>,
+    pub playground_tx: broadcast::Sender<PreSendToWasmMessage>,
 }
 
 impl Playground2Server {
@@ -52,6 +56,7 @@ impl Playground2Server {
         // Create the app state
         let state = AppState {
             broadcast_rx: self.broadcast_rx.resubscribe(),
+            playground_tx: self.playground_tx.clone(),
         };
 
         let app = Router::new()

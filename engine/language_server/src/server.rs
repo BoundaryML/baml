@@ -28,7 +28,7 @@ use self::{
     schedule::event_loop_thread,
 };
 use crate::{
-    baml_project::file_utils::{find_baml_src, find_top_level_parent}, playground2::{self, server::LangServerToWasmMessage}, session::{AllSettings, ClientSettings, Session}, PositionEncoding
+    baml_project::file_utils::{find_baml_src, find_top_level_parent}, playground::FrontendMessage, playground2::{self, server::LangServerToWasmMessage}, session::{AllSettings, ClientSettings, PreSendToWasmMessage, Session}, PositionEncoding
 };
 
 pub mod api;
@@ -193,6 +193,7 @@ impl Server {
 
         {
             let lsp_sender = server.connection.make_sender();
+            let playground_tx = server.session.playground_tx.clone();
             server.tokio_runtime.spawn(async move {
                 let port_picker = match playground2::port_picker::pick().await {
                     Ok(port_picker) => port_picker,
@@ -204,6 +205,7 @@ impl Server {
                 let http_services = futures::future::join(
                     playground2::Playground2Server{
                         broadcast_rx,
+                        playground_tx,
                     }.run(port_picker.playground_listener),
                     playground2::ProxyServer{}.run(port_picker.proxy_listener)
                 );
@@ -219,9 +221,40 @@ impl Server {
         {
             let mut playground_rx = playground_rx.resubscribe();
             let broadcast_tx = server.broadcast_tx.clone();
+            let session = server.session.clone();
             server.tokio_runtime.spawn(async move {
                 while let Ok(msg) = playground_rx.recv().await {
-                    broadcast_tx.send(LangServerToWasmMessage::PlaygroundMessage(msg)).unwrap();
+                    match msg {
+                        PreSendToWasmMessage::Initialized => {
+                            let projects = session.baml_src_projects.lock();
+                            for (_, project) in projects.iter() {
+            let project = project.lock();
+            let files_map: std::collections::HashMap<String, String> = project
+                .baml_project
+                .files
+                .iter()
+                .map(|(path, doc)| {
+                    let key = path.path().to_string_lossy().to_string();
+                    // If there's an unsaved version, use it
+                    let contents = project
+                        .baml_project
+                        .unsaved_files
+                        .get(path)
+                        .map(|unsaved| unsaved.contents.clone())
+                        .unwrap_or_else(|| doc.contents.clone());
+                    (key, contents)
+                })
+                .collect();
+                            broadcast_tx.send(LangServerToWasmMessage::PlaygroundMessage(FrontendMessage::add_project {
+                                root_path: project.root_path().to_string_lossy().to_string(),
+                                files: files_map,
+                            })).unwrap();
+                            }
+                        }
+                        PreSendToWasmMessage::FrontendMessage(msg) => {
+                            broadcast_tx.send(LangServerToWasmMessage::PlaygroundMessage(msg)).unwrap();
+                        }
+                    }
                 }
                 tracing::info!("Playground rx channel closed");
             });
