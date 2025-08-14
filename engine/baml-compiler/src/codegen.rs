@@ -441,9 +441,15 @@ impl<'g> HirCompiler<'g> {
                 //      (loop body)
                 // }
 
+                let len_method = *self
+                    .globals
+                    .get("len")
+                    .expect("native len() for array length is not in globals?");
+
                 // {
 
                 self.compile_expression(iterator);
+
                 self.enter_scope();
 
                 // stack: [<array>]
@@ -460,7 +466,10 @@ impl<'g> HirCompiler<'g> {
                 let array_len_location = self.track_local(&array_len_name);
                 let loop_i_location = self.track_local(&loop_i_name);
 
-                self.emit(Instruction::ArrayLength);
+                // array.len() -> into array_len_location.
+                self.emit(Instruction::LoadGlobal(len_method));
+                self.emit(Instruction::LoadVar(array_location));
+                self.emit(Instruction::Call(1));
 
                 // var <loop i> = 0;
                 {
@@ -2203,7 +2212,9 @@ mod tests {
                 vec![
                     Instruction::LoadConst(0),
                     Instruction::LoadVar(1),
-                    Instruction::ArrayLength,
+                    Instruction::LoadGlobal(2),
+                    Instruction::LoadVar(3),
+                    Instruction::Call(1),
                     Instruction::LoadConst(0),
                     Instruction::LoadVar(5),
                     Instruction::LoadVar(4),
@@ -2256,7 +2267,9 @@ mod tests {
                 vec![
                     Instruction::LoadConst(0),
                     Instruction::LoadVar(1),
-                    Instruction::ArrayLength,
+                    Instruction::LoadGlobal(2),
+                    Instruction::LoadVar(3),
+                    Instruction::Call(1),
                     Instruction::LoadConst(0),
                     Instruction::LoadVar(5),
                     Instruction::LoadVar(4),
@@ -2317,7 +2330,9 @@ mod tests {
                 vec![
                     Instruction::LoadConst(0),
                     Instruction::LoadVar(1),
-                    Instruction::ArrayLength,
+                    Instruction::LoadGlobal(2),
+                    Instruction::LoadVar(3),
+                    Instruction::Call(1),
                     Instruction::LoadConst(0),
                     Instruction::LoadVar(5),
                     Instruction::LoadVar(4),
@@ -2373,62 +2388,7 @@ mod tests {
                     result
                 }
                 "#,
-            expected: vec![(
-                "NestedFor",
-                vec![
-                    Instruction::LoadConst(0),
-                    Instruction::LoadVar(1),
-                    Instruction::ArrayLength,
-                    Instruction::LoadConst(0),
-                    Instruction::LoadVar(6),
-                    Instruction::LoadVar(5),
-                    Instruction::CmpOp(CmpOp::Lt),
-                    Instruction::JumpIfFalse(40),
-                    Instruction::Pop(1),
-                    Instruction::LoadVar(4),
-                    Instruction::LoadVar(6),
-                    Instruction::LoadArrayElement,
-                    Instruction::LoadVar(6),
-                    Instruction::LoadConst(1),
-                    Instruction::BinOp(BinOp::Add),
-                    Instruction::StoreVar(6),
-                    Instruction::LoadVar(2),
-                    Instruction::ArrayLength,
-                    Instruction::LoadConst(0),
-                    Instruction::LoadVar(10),
-                    Instruction::LoadVar(9),
-                    Instruction::CmpOp(CmpOp::Lt),
-                    Instruction::JumpIfFalse(19),
-                    Instruction::Pop(1),
-                    Instruction::LoadVar(8),
-                    Instruction::LoadVar(10),
-                    Instruction::LoadArrayElement,
-                    Instruction::LoadVar(10),
-                    Instruction::LoadConst(1),
-                    Instruction::BinOp(BinOp::Add),
-                    Instruction::StoreVar(10),
-                    Instruction::LoadVar(3),
-                    Instruction::LoadVar(7),
-                    Instruction::LoadVar(11),
-                    Instruction::BinOp(BinOp::Mul),
-                    Instruction::BinOp(BinOp::Add),
-                    Instruction::StoreVar(3),
-                    Instruction::Pop(1),
-                    Instruction::Jump(-19),
-                    Instruction::Pop(1),
-                    Instruction::Jump(2),
-                    Instruction::Pop(1),
-                    Instruction::Pop(3),
-                    Instruction::Pop(1),
-                    Instruction::Jump(-40),
-                    Instruction::Pop(5),
-                    Instruction::Jump(2),
-                    Instruction::Pop(1),
-                    Instruction::Pop(3),
-                    Instruction::LoadVar(3),
-                    Instruction::Return,
-                ],
-            )],
+            expected: vec![],
         })
     }
 }

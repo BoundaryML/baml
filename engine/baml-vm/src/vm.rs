@@ -910,31 +910,6 @@ impl Vm {
                     function = self.objects[frame.function].as_function()?;
                 }
 
-                Instruction::ArrayLength => {
-                    let top = self
-                        .stack
-                        .last()
-                        .ok_or(InternalError::UnexpectedEmptyStack)?;
-
-                    let Value::Object(obj_index) = top else {
-                        return Err(InternalError::TypeError {
-                            expected: Type::Object,
-                            got: Type::of(top),
-                        })?;
-                    };
-
-                    let Object::Array(array) = &self.objects[*obj_index] else {
-                        return Err(InternalError::TypeError {
-                            expected: Type::Object,
-                            got: Type::of(top),
-                        })?;
-                    };
-
-                    let length = array.len() as i64;
-
-                    self.stack.push(Value::Int(length));
-                }
-
                 Instruction::LoadArrayElement => {
                     // Stack should contain [array, index]
                     // Pop the index first, then the array
