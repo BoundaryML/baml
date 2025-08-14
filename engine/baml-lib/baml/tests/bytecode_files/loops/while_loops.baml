@@ -42,3 +42,4 @@ fn GCD(mut a: int, mut b: int) -> int {
 //      23   RETURN              
 //
 // Class: std::Request with 3 fields
+// Function: len

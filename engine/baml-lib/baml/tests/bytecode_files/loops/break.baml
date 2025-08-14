@@ -90,3 +90,4 @@ fn Nested() -> int {
 //      22   RETURN              
 //
 // Class: std::Request with 3 fields
+// Function: len

@@ -33,7 +33,8 @@ impl Vm {
 pub type NativeFunction = fn(&mut Vm, &[Value]) -> Result<Value, VmError>;
 
 pub fn functions() -> HashMap<String, (NativeFunction, usize)> {
-    let fns: [(&str, (NativeFunction, usize)); _] = [("len", (Vm::len, 1))];
+    let native_fn: NativeFunction = Vm::len;
+    let fns = [("len", (native_fn, 1))];
 
     HashMap::from_iter(fns.into_iter().map(|(name, func)| (name.to_string(), func)))
 }
