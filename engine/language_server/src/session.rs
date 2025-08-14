@@ -66,24 +66,6 @@ pub struct Session {
     /// The actual port that the playground server is running on (after availability check)
     #[cfg(feature = "playground-server")]
     pub playground_port: Option<u16>,
-
-    // #[cfg(feature = "playground-server")]
-    // pub playground_state: Option<Arc<RwLock<PlaygroundState>>>,
-    /// Runtime for the playground server
-    #[cfg(feature = "playground-server")]
-    pub playground_runtime: Option<tokio::runtime::Runtime>,
-}
-
-impl Drop for Session {
-    fn drop(&mut self) {
-        #[cfg(feature = "playground-server")]
-        {
-            // Shutdown the playground runtime if it exists
-            if let Some(runtime) = self.playground_runtime.take() {
-                runtime.shutdown_timeout(std::time::Duration::from_secs(1));
-            }
-        }
-    }
 }
 
 impl Clone for Session {
@@ -97,10 +79,6 @@ impl Clone for Session {
             playground_tx: self.playground_tx.clone(),
             #[cfg(feature = "playground-server")]
             playground_port: self.playground_port,
-            // #[cfg(feature = "playground-server")]
-            // playground_state: self.playground_state.clone(),
-            #[cfg(feature = "playground-server")]
-            playground_runtime: None, // Don't clone the runtime
         }
     }
 }
@@ -153,10 +131,6 @@ impl Session {
             playground_tx,
             #[cfg(feature = "playground-server")]
             playground_port: None,
-            // #[cfg(feature = "playground-server")]
-            // playground_state: None,
-            #[cfg(feature = "playground-server")]
-            playground_runtime: None,
         })
     }
 

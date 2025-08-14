@@ -83,21 +83,19 @@ pub async fn handle_rpc_websocket(
                     //     });
                     //     let _ = ws_tx.send(Message::text(response.to_string())).await;
                     // }
-                    // "GET_PLAYGROUND_PORT" => {
-                    //     let playground_port =
-                    //         session.get_session_playground_port().unwrap_or_else(|| {
-                    //             session.baml_settings.playground_port.unwrap_or(3030)
-                    //         });
+                    "GET_PLAYGROUND_PORT" => {
+                        // TODO: this is a hack to just test that the proxy works
+                        let playground_port = 3701;
 
-                    //     tracing::info!("GET_PLAYGROUND_PORT: returning port={}", playground_port);
+                        tracing::info!("GET_PLAYGROUND_PORT: returning port={}", playground_port);
 
-                    //     let response = serde_json::json!({
-                    //         "rpcMethod": "GET_PLAYGROUND_PORT",
-                    //         "rpcId": rpc_id,
-                    //         "data": { "port": playground_port }
-                    //     });
-                    //     let _ = ws_tx.send(Message::text(response.to_string())).await;
-                    // }
+                        let response = serde_json::json!({
+                            "rpcMethod": "GET_PLAYGROUND_PORT",
+                            "rpcId": rpc_id,
+                            "data": { "port": playground_port }
+                        });
+                        let _ = ws_tx.send(Message::text(response.to_string())).await;
+                    }
                     "SET_PROXY_SETTINGS" => {
                         let response = serde_json::json!({
                             "rpcMethod": "SET_PROXY_SETTINGS",
