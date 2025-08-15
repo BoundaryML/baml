@@ -191,7 +191,6 @@ pub struct GetDashboardDataResponse {
     pub latency_p75_ms: MetricSeriesFloat,
     pub latency_p95_ms: MetricSeriesFloat,
     pub latency_avg_ms: MetricSeriesFloat,
-    pub total_cost: MetricSeriesFloat,
     pub total_llm_calls: MetricSeriesInt,
     pub total_traces: MetricSeriesInt,
 }
