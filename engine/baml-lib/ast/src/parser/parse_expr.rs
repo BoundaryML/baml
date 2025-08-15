@@ -83,10 +83,10 @@ pub fn parse_top_level_assignment(
             None
         }
 
-        Stmt::ForLoop(stmt) => {
+        s @ (Stmt::ForLoop(_) | Stmt::CForLoop(_)) => {
             diagnostics.push_error(DatamodelError::new_static(
                 "for loops are not allowed at top level, only let statements are allowed",
-                stmt.span.clone(),
+                s.span().clone(),
             ));
 
             None
@@ -174,11 +174,12 @@ fn parse_for_loop(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Stmt
     let body = parse_expr_block(tokens.next()?, diagnostics)?;
 
     match in_between_rule.as_rule() {
-        Rule::iterator_for_loop => parse_iterator_for_loop(in_between_rule, span, body, diagnostics),
+        Rule::iterator_for_loop => {
+            parse_iterator_for_loop(in_between_rule, span, body, diagnostics)
+        }
         Rule::c_for_loop => todo!("c for loop not implemented"),
         _ => panic!("unexpected in-between rule in for-loop."),
     }
-
 }
 
 pub fn parse_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Stmt> {

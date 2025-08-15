@@ -293,6 +293,7 @@ impl Block {
         // Process statements, checking for if expressions in let bindings
         for stmt in &block.stmts {
             match stmt {
+                ast::Stmt::CForLoop(_) => todo!("desguar c-like for loop"),
                 ast::Stmt::Break(span) => statements.push(Statement::Break(span.clone())),
                 ast::Stmt::Continue(span) => statements.push(Statement::Continue(span.clone())),
                 ast::Stmt::WhileLoop(ast::WhileStmt {
