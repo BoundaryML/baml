@@ -3,9 +3,12 @@ use crate::thir::THir;
 use std::cell::RefCell;
 use std::sync::Arc;
 
+use crate::hir::Hir;
 use crate::thir::{Block, Expr, ExprMetadata, Statement, VarIndex};
+
 use anyhow::{anyhow, bail, Context, Result};
 use baml_types::{BamlMap, BamlValue, BamlValueWithMeta};
+use internal_baml_parser_database::{ast, parse_and_diagnostics};
 use std::future::Future;
 
 /// A scope is a map of variable names to their values.
@@ -31,24 +34,31 @@ enum ControlFlow {
 pub async fn interpret_thir<F, Fut>(
     thir: THir<ExprMetadata>,
     expr: Expr<ExprMetadata>,
-    run_llm_function: F,
+    mut run_llm_function: F,
+    extra_bindings: BamlMap<String, BamlValueWithMeta<ExprMetadata>>,
 ) -> Result<BamlValueWithMeta<ExprMetadata>>
 where
-    F: Fn(String, Vec<BamlValue>) -> Fut + Send + Sync,
+    F: FnMut(String, Vec<BamlValue>) -> Fut + Send + Sync,
     Fut: Future<Output = Result<BamlValueWithMeta<ExprMetadata>>> + Send,
 {
     let mut scopes = vec![Scope {
-        variables: BamlMap::new(),
+        variables: BamlMap::from_iter(
+            extra_bindings
+                .into_iter()
+                .map(|(k, v)| (k, RefCell::new(v))),
+        ),
     }];
 
     // Seed scope with global assignments
     for (name, gexpr) in thir.global_assignments.iter() {
-        let v = expect_value(evaluate_expr(gexpr, &mut scopes, &thir, &run_llm_function).await?)?;
+        let v =
+            expect_value(evaluate_expr(gexpr, &mut scopes, &thir, &mut run_llm_function).await?)?;
         declare(&mut scopes, name, v);
     }
 
     // Evaluate provided expression
-    let result = expect_value(evaluate_expr(&expr, &mut scopes, &thir, &run_llm_function).await?)?;
+    let result =
+        expect_value(evaluate_expr(&expr, &mut scopes, &thir, &mut run_llm_function).await?)?;
     Ok(result)
 }
 
@@ -56,10 +66,10 @@ fn evaluate_block_with_control_flow<'a, F, Fut>(
     block: &'a Block<ExprMetadata>,
     scopes: &'a mut Vec<Scope>,
     thir: &'a THir<ExprMetadata>,
-    run_llm_function: &'a F,
+    run_llm_function: &'a mut F,
 ) -> std::pin::Pin<Box<dyn Future<Output = Result<ControlFlow>> + Send + 'a>>
 where
-    F: Fn(String, Vec<BamlValue>) -> Fut + Send + Sync,
+    F: FnMut(String, Vec<BamlValue>) -> Fut + Send + Sync,
     Fut: Future<Output = Result<BamlValueWithMeta<ExprMetadata>>> + Send,
 {
     Box::pin(async move {
@@ -192,10 +202,10 @@ async fn evaluate_block<F, Fut>(
     block: &Block<ExprMetadata>,
     scopes: &mut Vec<Scope>,
     thir: &THir<ExprMetadata>,
-    run_llm_function: &F,
+    run_llm_function: &mut F,
 ) -> Result<BamlValueWithMeta<ExprMetadata>>
 where
-    F: Fn(String, Vec<BamlValue>) -> Fut + Send + Sync,
+    F: FnMut(String, Vec<BamlValue>) -> Fut + Send + Sync,
     Fut: Future<Output = Result<BamlValueWithMeta<ExprMetadata>>> + Send,
 {
     match evaluate_block_with_control_flow(block, scopes, thir, run_llm_function).await? {
@@ -275,10 +285,10 @@ fn evaluate_expr<'a, F, Fut>(
     expr: &'a Expr<ExprMetadata>,
     scopes: &'a mut Vec<Scope>,
     thir: &'a THir<ExprMetadata>,
-    run_llm_function: &'a F,
+    run_llm_function: &'a mut F,
 ) -> std::pin::Pin<Box<dyn Future<Output = Result<EvalValue>> + Send + 'a>>
 where
-    F: Fn(String, Vec<BamlValue>) -> Fut + Send + Sync,
+    F: FnMut(String, Vec<BamlValue>) -> Fut + Send + Sync,
     Fut: Future<Output = Result<BamlValueWithMeta<ExprMetadata>>> + Send,
 {
     Box::pin(async move {
@@ -896,7 +906,7 @@ mod tests {
     async fn eval_atom_int() {
         let thir = empty_thir();
         let expr = Expr::Atom(BamlValueWithMeta::Int(1, meta()));
-        let out = super::interpret_thir(thir, expr, mock_llm_function)
+        let out = super::interpret_thir(thir, expr, mock_llm_function, BamlMap::new())
             .await
             .unwrap();
         match out {
@@ -923,7 +933,7 @@ mod tests {
             meta: meta(),
         };
 
-        let out = super::interpret_thir(thir, call, mock_llm_function)
+        let out = super::interpret_thir(thir, call, mock_llm_function, BamlMap::new())
             .await
             .unwrap();
         match out {
@@ -955,7 +965,7 @@ mod tests {
             meta: meta(),
         };
 
-        let out = super::interpret_thir(thir, call, mock_llm_function)
+        let out = super::interpret_thir(thir, call, mock_llm_function, BamlMap::new())
             .await
             .unwrap();
         match out {
@@ -1002,7 +1012,7 @@ mod tests {
         };
 
         // Since the interpreter uses our mock LLM function, this should fail with our mock error message
-        let result = super::interpret_thir(thir, call, mock_llm_function).await;
+        let result = super::interpret_thir(thir, call, mock_llm_function, BamlMap::new()).await;
         assert!(result.is_ok());
         let out = result.unwrap();
         match out {

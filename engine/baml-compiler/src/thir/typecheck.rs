@@ -27,8 +27,16 @@ use crate::{
     thir::{self as thir, ExprMetadata, THir},
 };
 
-/// Convert HIR to THIR while collecting type errors.
 pub fn typecheck(hir: &Hir, diagnostics: &mut Diagnostics) -> THir<ExprMetadata> {
+    let (thir, _) = typecheck_returning_context(hir, diagnostics);
+    thir
+}
+
+/// Convert HIR to THIR while collecting type errors.
+pub fn typecheck_returning_context(
+    hir: &Hir,
+    diagnostics: &mut Diagnostics,
+) -> (THir<ExprMetadata>, TypeContext) {
     let llm_functions = hir.llm_functions.clone();
     let classes: BamlMap<String, hir::Class> = hir
         .classes
@@ -138,13 +146,16 @@ pub fn typecheck(hir: &Hir, diagnostics: &mut Diagnostics) -> THir<ExprMetadata>
         });
     }
 
-    THir {
-        llm_functions,
-        classes,
-        enums,
-        expr_functions,
-        global_assignments: BamlMap::new(),
-    }
+    (
+        THir {
+            llm_functions,
+            classes,
+            enums,
+            expr_functions,
+            global_assignments: BamlMap::new(),
+        },
+        typing_context,
+    )
 }
 
 #[derive(Clone, Debug)]
@@ -208,8 +219,213 @@ impl TypeContext {
             .or_else(|| self.symbols.get(name))
     }
 
-    pub fn infer_type(&mut self, expr: &hir::Expression) -> Option<Type> {
-        todo!()
+    // TODO: What's this?
+    pub fn from_thir(thir: &thir::THir<ExprMetadata>) -> Self {
+        let mut context = TypeContext::new();
+
+        // Add classes to context
+        for (name, class) in &thir.classes {
+            context.classes.insert(name.clone(), class.clone());
+        }
+
+        // Add expression functions to symbol table
+        for func in &thir.expr_functions {
+            let arrow_type = hir::TypeM::Arrow(
+                hir::Arrow {
+                    inputs: func.parameters.iter().map(|p| p.r#type.clone()).collect(),
+                    output: Box::new(func.return_type.clone()),
+                },
+                hir::TypeMeta::default(),
+            );
+            context.symbols.insert(func.name.clone(), arrow_type);
+        }
+
+        // Add global assignments to variable context
+        for (name, _expr) in &thir.global_assignments {
+            // For now, we'll assume string type for global assignments
+            // TODO: Properly infer type from expression
+            context.vars.insert(
+                name.clone(),
+                VarInfo {
+                    ty: hir::TypeM::String(hir::TypeMeta::default()),
+                    if_mutable: None,
+                },
+            );
+        }
+
+        context
+    }
+
+    pub fn infer_type(&self, expr: &hir::Expression) -> Option<Type> {
+        match expr {
+            hir::Expression::BoolValue(_, _) => Some(hir::TypeM::Bool(hir::TypeMeta::default())),
+            hir::Expression::NumericValue(value, _) => {
+                // Try to parse as integer first, then float
+                if value.contains('.') {
+                    Some(hir::TypeM::Float(hir::TypeMeta::default()))
+                } else {
+                    Some(hir::TypeM::Int(hir::TypeMeta::default()))
+                }
+            }
+            hir::Expression::StringValue(_, _) | hir::Expression::RawStringValue(_, _) => {
+                Some(hir::TypeM::String(hir::TypeMeta::default()))
+            }
+            hir::Expression::Identifier(name, _) => {
+                // Look up type in context
+                self.get_type(name).cloned()
+            }
+            hir::Expression::Array(items, _) => {
+                // Infer array type from first item
+                let inner_type = items.first().and_then(|item| self.infer_type(item))?;
+                Some(hir::TypeM::Array(
+                    Box::new(inner_type),
+                    hir::TypeMeta::default(),
+                ))
+            }
+            hir::Expression::Map(entries, _) => {
+                // Infer map type from first value (assume string keys)
+                let value_type = entries
+                    .iter()
+                    .next()
+                    .and_then(|(_, value_expr)| self.infer_type(value_expr))?;
+                Some(hir::TypeM::Map(
+                    Box::new(hir::TypeM::String(hir::TypeMeta::default())),
+                    Box::new(value_type),
+                    hir::TypeMeta::default(),
+                ))
+            }
+            hir::Expression::ClassConstructor(constructor, _) => Some(hir::TypeM::ClassName(
+                constructor.class_name.clone(),
+                hir::TypeMeta::default(),
+            )),
+            hir::Expression::Call { function, .. } => {
+                // Try to get function name and look up its type
+                match function.as_ref() {
+                    hir::Expression::Identifier(name, _) => self.symbols.get(name).cloned(),
+                    _ => None, // Complex function expressions not handled yet
+                }
+            }
+            // Lambda expressions - not currently supported in HIR
+            // hir::Expression::Lambda(params, _body, _) => { ... }
+            hir::Expression::If {
+                if_branch,
+                else_branch,
+                ..
+            } => {
+                // Infer type from then branch (else branch should match)
+                let then_type = self.infer_type(if_branch);
+                if let Some(else_expr) = else_branch {
+                    let else_type = self.infer_type(else_expr);
+                    // TODO: Proper type unification
+                    then_type.or(else_type)
+                } else {
+                    then_type
+                }
+            }
+            hir::Expression::BinaryOperation {
+                left,
+                operator,
+                right,
+                ..
+            } => {
+                match operator {
+                    hir::BinaryOperator::Add
+                    | hir::BinaryOperator::Sub
+                    | hir::BinaryOperator::Mul
+                    | hir::BinaryOperator::Div
+                    | hir::BinaryOperator::Mod => {
+                        // Arithmetic operations - try to infer numeric type
+                        let left_type = self.infer_type(left);
+                        let right_type = self.infer_type(right);
+
+                        match (left_type, right_type) {
+                            (Some(hir::TypeM::Float(_)), _) | (_, Some(hir::TypeM::Float(_))) => {
+                                Some(hir::TypeM::Float(hir::TypeMeta::default()))
+                            }
+                            (Some(hir::TypeM::Int(_)), Some(hir::TypeM::Int(_))) => {
+                                Some(hir::TypeM::Int(hir::TypeMeta::default()))
+                            }
+                            _ => Some(hir::TypeM::Float(hir::TypeMeta::default())), // default to float
+                        }
+                    }
+                    hir::BinaryOperator::And
+                    | hir::BinaryOperator::Or
+                    | hir::BinaryOperator::Eq
+                    | hir::BinaryOperator::Neq
+                    | hir::BinaryOperator::Lt
+                    | hir::BinaryOperator::LtEq
+                    | hir::BinaryOperator::Gt
+                    | hir::BinaryOperator::GtEq => {
+                        // Comparison and logical operations return bool
+                        Some(hir::TypeM::Bool(hir::TypeMeta::default()))
+                    }
+                    hir::BinaryOperator::BitAnd
+                    | hir::BinaryOperator::BitOr
+                    | hir::BinaryOperator::BitXor
+                    | hir::BinaryOperator::Shl
+                    | hir::BinaryOperator::Shr => {
+                        // Bitwise operations on integers
+                        Some(hir::TypeM::Int(hir::TypeMeta::default()))
+                    }
+                }
+            }
+            hir::Expression::UnaryOperation {
+                operator,
+                expr: inner_expr,
+                ..
+            } => {
+                match operator {
+                    hir::UnaryOperator::Not => {
+                        // Logical not returns bool
+                        Some(hir::TypeM::Bool(hir::TypeMeta::default()))
+                    }
+                    hir::UnaryOperator::Neg => {
+                        // Numeric negation preserves type
+                        self.infer_type(inner_expr)
+                    }
+                }
+            }
+            hir::Expression::ArrayAccess { base, .. } => {
+                // Extract inner type from array
+                if let Some(base_type) = self.infer_type(base) {
+                    match base_type {
+                        hir::TypeM::Array(inner_type, _) => Some(*inner_type),
+                        _ => None, // Not an array
+                    }
+                } else {
+                    None
+                }
+            }
+            hir::Expression::FieldAccess { base, field, .. } => {
+                // Look up field type in class definition
+                if let Some(base_type) = self.infer_type(base) {
+                    match base_type {
+                        hir::TypeM::ClassName(class_name, _) => {
+                            // Look up field in class definition
+                            if let Some(class_def) = self.classes.get(&class_name) {
+                                class_def
+                                    .fields
+                                    .iter()
+                                    .find(|f| f.name == *field)
+                                    .map(|f| f.r#type.clone())
+                            } else {
+                                None
+                            }
+                        }
+                        _ => None, // Not a class
+                    }
+                } else {
+                    None
+                }
+            }
+            // Null expressions - not currently in HIR Expression enum
+            hir::Expression::Paren(inner_expr, _) => {
+                // Parentheses don't change type
+                self.infer_type(inner_expr)
+            }
+            // For expressions we can't infer or don't handle yet
+            _ => None,
+        }
     }
 
     /// Makes sure that the context passed to `inner` knows it's inside a loop,
@@ -556,7 +772,7 @@ fn typecheck_statement(
 }
 
 /// Typecheck an expression and infer its type
-fn typecheck_expression(
+pub fn typecheck_expression(
     expr: &hir::Expression,
     context: &TypeContext,
     diagnostics: &mut Diagnostics,

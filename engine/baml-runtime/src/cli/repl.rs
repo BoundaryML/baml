@@ -5,14 +5,26 @@ use std::{
 };
 
 use anyhow::{anyhow, Context, Result};
-use baml_types::{expr::ExprMetadata, BamlValueWithMeta};
+use baml_types::{
+    expr::ExprMetadata, ir_type::TypeGeneric, BamlValue, BamlValueWithMeta, Completion, TypeIR,
+};
 use clap::Args;
+use indexmap::IndexMap;
 use internal_baml_core::ast::Span;
+use jsonish::{ResponseBamlValue, ResponseValueMeta};
 use reedline::{DefaultPrompt, FileBackedHistory, Reedline, Signal};
 
 use crate::BamlRuntime;
-use baml_compiler::{hir::Hir, thir::typecheck::typecheck};
-use internal_baml_core::internal_baml_diagnostics::Diagnostics;
+use baml_compiler::{
+    hir::{self, from_ir_type, to_ir_type, Hir, Type, TypeM, TypeMeta},
+    thir::{
+        interpret::interpret_thir,
+        typecheck::{typecheck_expression, typecheck_returning_context, VarInfo},
+    },
+};
+use internal_baml_ast::{parse, parse_standalone_expression};
+use internal_baml_core::ast as baml_ast;
+use internal_baml_core::internal_baml_diagnostics::{Diagnostics, SourceFile};
 
 #[derive(Args, Clone, Debug)]
 pub struct ReplArgs {
@@ -26,7 +38,7 @@ pub struct ReplArgs {
 
 struct ReplState {
     runtime: Option<BamlRuntime>,
-    variables: HashMap<String, BamlValueWithMeta<ExprMetadata>>,
+    variables: IndexMap<String, BamlValueWithMeta<ExprMetadata>>,
     env_vars: HashMap<String, String>,
 }
 
@@ -34,7 +46,7 @@ impl ReplState {
     fn new() -> Self {
         Self {
             runtime: None,
-            variables: HashMap::new(),
+            variables: IndexMap::new(),
             env_vars: std::env::vars().collect(),
         }
     }
@@ -46,6 +58,28 @@ impl ReplState {
         self.runtime = Some(runtime);
         println!("✓ Loaded BAML sources from {}", path.display());
         Ok(())
+    }
+
+    fn function_parameters(&self) -> Result<HashMap<String, Vec<String>>> {
+        let runtime = self
+            .runtime
+            .as_ref()
+            .ok_or_else(|| anyhow!("No BAML sources loaded. Use :load <path> to load sources."))?;
+        let internal = runtime.internal();
+        let hir = Hir::from_ast(&internal.db.ast);
+        let mut diagnostics = Diagnostics::default();
+        diagnostics.set_source(&(PathBuf::from("repl"), "function_parameters").into());
+        let (thir, _) = typecheck_returning_context(&hir, &mut diagnostics);
+        Ok(thir
+            .llm_functions
+            .iter()
+            .map(|f| {
+                (
+                    f.name.clone(),
+                    f.parameters.iter().map(|p| p.name.clone()).collect(),
+                )
+            })
+            .collect())
     }
 
     fn dump_thir(&self) -> Result<String> {
@@ -63,7 +97,7 @@ impl ReplState {
 
             // Typecheck HIR to get THIR
             let mut diagnostics = Diagnostics::default();
-            let thir = typecheck(&hir, &mut diagnostics);
+            let (thir, _) = typecheck_returning_context(&hir, &mut diagnostics);
 
             // Format the THIR for display
             let mut output = String::new();
@@ -147,7 +181,7 @@ impl ReplState {
         println!("✓ Reset interpreter environment");
     }
 
-    fn evaluate_expression(&mut self, input: &str) -> Result<String> {
+    async fn evaluate_expression(&mut self, input: &str) -> Result<String> {
         let runtime = self
             .runtime
             .as_ref()
@@ -155,30 +189,144 @@ impl ReplState {
 
         // For now, we'll implement a simple expression evaluator
         // This is a placeholder - we'd need to integrate with the BAML parser properly
-        self.evaluate_simple_expression(input)
+        self.evaluate_simple_expression(input).await
     }
 
-    fn evaluate_simple_expression(&mut self, input: &str) -> Result<String> {
+    async fn evaluate_simple_expression(&mut self, input: &str) -> Result<String> {
         // Check if this is a variable assignment
         if let Some((var_name, expr_str)) = input.split_once('=') {
             let var_name = var_name.trim().to_string();
             let expr_str = expr_str.trim();
 
-            // For now, just handle simple literal values
-            let value = self.parse_simple_value(expr_str)?;
-            self.variables.insert(var_name.clone(), value);
-            Ok(format!("✓ {} = {}", var_name, expr_str))
+            // Parse and evaluate the BAML expression
+            let value = self.parse_and_evaluate_baml_expression(expr_str).await?;
+            self.variables.insert(var_name.clone(), value.clone());
+            Ok(format!("✓ {} = {}", var_name, self.format_value(&value)))
         } else if let Some(value) = self.variables.get(input.trim()) {
             // Return variable value
             Ok(format!("{}", self.format_value(value)))
         } else {
-            // Try to parse as a simple value
-            let value = self.parse_simple_value(input)?;
+            // Try to parse as a BAML expression
+            let value = self.parse_and_evaluate_baml_expression(input).await?;
             Ok(self.format_value(&value))
         }
     }
 
-    fn parse_simple_value(&self, input: &str) -> Result<BamlValueWithMeta<ExprMetadata>> {
+    async fn parse_and_evaluate_baml_expression(
+        &self,
+        input: &str,
+    ) -> Result<BamlValueWithMeta<ExprMetadata>> {
+        let runtime = self
+            .runtime
+            .as_ref()
+            .ok_or_else(|| anyhow!("No BAML sources loaded. Use :load <path> to load sources."))?;
+
+        // Get the internal runtime to access the existing context
+        let internal = runtime.internal();
+
+        // For now, we'll use a simplified approach that demonstrates the concept
+        // TODO: Implement proper BAML expression parsing and evaluation
+        // This would involve:
+        // 1. Creating a minimal BAML source with the expression
+        // 2. Parsing it with the BAML parser
+        // 3. Converting AST to HIR
+        // 4. Typechecking in the context of the loaded THIR
+        // 5. Evaluating the expression
+
+        // Convert AST to HIR from existing loaded sources
+        let hir = Hir::from_ast(&internal.db.ast);
+
+        // Typecheck to get THIR
+        let mut type_diagnostics = Diagnostics::default();
+        type_diagnostics.set_source(&(PathBuf::from("repl"), input).into());
+        let (thir, type_context) = typecheck_returning_context(&hir, &mut type_diagnostics);
+
+        if type_diagnostics.has_errors() {
+            eprintln!("Warning: Type errors in loaded BAML sources");
+        }
+
+        let input_expr_ast = parse_standalone_expression(input, &mut type_diagnostics)?;
+        let input_expr_hir = hir::Expression::from_ast(&input_expr_ast);
+
+        let input_expr_thir =
+            typecheck_expression(&input_expr_hir, &type_context, &mut type_diagnostics);
+
+        // let variables: IndexMap<String, BamlValueWithMeta<TypeGeneric<TypeIR>>> = self
+
+        let variables: IndexMap<String, BamlValueWithMeta<(Span, Option<TypeM<TypeMeta>>)>> = self
+            .variables
+            .iter()
+            .map(|(k, v)| {
+                (
+                    k.clone(),
+                    v.clone()
+                        .map_meta_owned(|(s, m)| (s, m.map(|t| from_ir_type(&t)))),
+                )
+            })
+            .collect();
+
+        let foo: IndexMap<String, BamlValueWithMeta<(Span, Option<TypeM<TypeMeta>>)>> =
+            IndexMap::new();
+
+        let fn_params = self.function_parameters()?.clone();
+        let runtime_clone = self.runtime.clone();
+        let handle_llm_function = |function_name: String, args: Vec<BamlValue>| {
+            let fn_params = fn_params.clone();
+            let runtime_clone = runtime_clone.clone();
+            async move {
+                match runtime_clone.as_ref() {
+                    Some(runtime) => {
+                        let param_names = fn_params
+                            .get(&function_name)
+                            .ok_or_else(|| anyhow!("LLM Function {} not found", function_name))?;
+                        let args = args
+                            .clone()
+                            .into_iter()
+                            .zip(param_names.iter())
+                            .map(|(arg, name)| (name.clone(), arg.clone()))
+                            .collect();
+                        let cxt =
+                            runtime.create_ctx_manager(BamlValue::String("none".to_string()), None);
+                        let res = runtime
+                            .call_function(
+                                function_name,
+                                &args,
+                                &cxt,
+                                None,
+                                None,
+                                None,
+                                self.env_vars.clone(),
+                            )
+                            .await;
+                        Ok(res
+                            .0?
+                            .parsed()
+                            .as_ref()
+                            .expect("TODO")
+                            .as_ref()
+                            .expect("TODO")
+                            .clone()
+                            .0
+                            .map_meta_owned(|_| (Span::fake(), None)))
+                    }
+                    None => Err(anyhow!(
+                        "No BAML sources loaded. Use :load <path> to load sources."
+                    )),
+                }
+            }
+        };
+        let eval_result = interpret_thir(
+            thir.clone(),
+            input_expr_thir,
+            handle_llm_function,
+            variables,
+        )
+        .await?;
+
+        Ok(eval_result.map_meta(|(span, ty)| (span.clone(), ty.clone().map(|t| to_ir_type(&t)))))
+    }
+
+    fn parse_simple_value_fallback(&self, input: &str) -> Result<BamlValueWithMeta<ExprMetadata>> {
         let input = input.trim();
 
         // Try to parse different types
@@ -203,7 +351,7 @@ impl ReplState {
             } else {
                 let items: Result<Vec<_>> = inner
                     .split(',')
-                    .map(|item| self.parse_simple_value(item.trim()))
+                    .map(|item| self.parse_simple_value_fallback(item.trim()))
                     .collect();
                 Ok(BamlValueWithMeta::List(items?, (Span::fake(), None)))
             }
@@ -213,6 +361,101 @@ impl ReplState {
                 input.to_string(),
                 (Span::fake(), None),
             ))
+        }
+    }
+
+    fn infer_expression_type(&self, input: &str) -> Result<String> {
+        let input = input.trim();
+
+        // If not a stored variable, proceed with parsing and type checking
+        let runtime = self
+            .runtime
+            .as_ref()
+            .ok_or_else(|| anyhow!("No BAML sources loaded. Use :load <path> to load sources."))?;
+
+        // Get the internal runtime to access the existing context
+        let internal = runtime.internal();
+
+        // Convert AST to HIR from existing loaded sources
+        let hir = Hir::from_ast(&internal.db.ast);
+
+        // Typecheck to get THIR and type context
+        let mut type_diagnostics = Diagnostics::default();
+        type_diagnostics.set_source(&(PathBuf::from("repl"), input).into());
+        let (_thir, mut type_context) = typecheck_returning_context(&hir, &mut type_diagnostics);
+
+        for (k, v) in &self.variables {
+            if let Some(ty) = v.meta().1.as_ref() {
+                type_context.vars.insert(
+                    k.clone(),
+                    VarInfo {
+                        ty: from_ir_type(&ty),
+                        if_mutable: None,
+                    },
+                );
+            }
+        }
+
+        if type_diagnostics.has_errors() {
+            eprintln!("Warning: Type errors in loaded BAML sources");
+        }
+
+        // Parse the expression
+        let input_expr_ast = parse_standalone_expression(input, &mut type_diagnostics)?;
+        let input_expr_hir = hir::Expression::from_ast(&input_expr_ast);
+
+        // Typecheck the expression to infer its type
+        let input_expr_thir =
+            typecheck_expression(&input_expr_hir, &type_context, &mut type_diagnostics);
+
+        // Check for type errors in the expression
+        if type_diagnostics.has_errors() {
+            let error_messages: Vec<String> = type_diagnostics
+                .errors()
+                .iter()
+                .map(|e| e.message().to_string())
+                .collect();
+            return Err(anyhow!("Type error: {}", error_messages.join("; ")));
+        }
+
+        // Extract the inferred type
+        if let Some(inferred_type) = input_expr_thir.meta().1.as_ref() {
+            Ok(self.format_type(inferred_type))
+        } else {
+            Ok("unknown".to_string())
+        }
+    }
+
+    fn format_type(&self, ty: &Type) -> String {
+        match ty {
+            hir::TypeM::Int(_) => "int".to_string(),
+            hir::TypeM::String(_) => "string".to_string(),
+            hir::TypeM::Float(_) => "float".to_string(),
+            hir::TypeM::Bool(_) => "bool".to_string(),
+            hir::TypeM::Null(_) => "null".to_string(),
+            hir::TypeM::Array(inner, _) => format!("{}[]", self.format_type(inner)),
+            hir::TypeM::Map(key, value, _) => {
+                format!(
+                    "map<{}, {}>",
+                    self.format_type(key),
+                    self.format_type(value)
+                )
+            }
+            hir::TypeM::ClassName(name, _) => name.clone(),
+            hir::TypeM::EnumName(name, _) => name.clone(),
+            hir::TypeM::Union(types, _) => {
+                let type_names: Vec<String> = types.iter().map(|t| self.format_type(t)).collect();
+                format!("({})", type_names.join(" | "))
+            }
+            hir::TypeM::Arrow(arrow, _) => {
+                let input_types: Vec<String> =
+                    arrow.inputs.iter().map(|t| self.format_type(t)).collect();
+                format!(
+                    "({}) -> {}",
+                    input_types.join(", "),
+                    self.format_type(&arrow.output)
+                )
+            }
         }
     }
 
@@ -255,7 +498,7 @@ impl ReplState {
 }
 
 impl ReplArgs {
-    pub fn run(&self) -> Result<()> {
+    pub async fn run(&self) -> Result<()> {
         let mut state = ReplState::new();
 
         // Try to load initial BAML sources if the directory exists
@@ -281,13 +524,14 @@ impl ReplArgs {
 
         println!("BAML REPL - Interactive BAML Expression Evaluator");
         println!("Type expressions to evaluate them, or use commands:");
-        println!("  :load <path>   - Load BAML sources from directory");
-        println!("  :reset         - Clear all variables");
-        println!("  :vars          - List all variables");
-        println!("  :thir          - Show THIR (Typed HIR) of loaded BAML sources");
-        println!("  :help          - Show this help");
-        println!("  :quit or Ctrl+C - Exit");
-        println!("  x = expr       - Assign expression result to variable x");
+        println!("  :load <path> (:l)  - Load BAML sources from directory");
+        println!("  :reset (:r)        - Clear all variables");
+        println!("  :vars (:v)         - List all variables");
+        println!("  :thir              - Show THIR (Typed HIR) of loaded BAML sources");
+        println!("  :type <expr> (:t)  - Show the inferred type of an expression");
+        println!("  :help (:h, :?)     - Show this help");
+        println!("  :quit (:q)         - Exit");
+        println!("  x = expr           - Assign expression result to variable x");
         println!();
 
         loop {
@@ -309,7 +553,7 @@ impl ReplArgs {
                         }
                     } else {
                         // Handle expression evaluation
-                        match state.evaluate_expression(input) {
+                        match state.evaluate_expression(input).await {
                             Ok(result) => println!("{}", result),
                             Err(e) => eprintln!("Error: {}", e),
                         }
@@ -335,31 +579,43 @@ impl ReplArgs {
         }
 
         match parts[0] {
-            "load" => {
+            "load" | "l" => {
                 if parts.len() != 2 {
-                    return Err(anyhow!("Usage: :load <path>"));
+                    return Err(anyhow!("Usage: :load <path> (or :l <path>)"));
                 }
                 let path = PathBuf::from(parts[1]);
                 state.load_baml_sources(path)?;
                 Ok(Some("".to_string())) // Success message already printed
             }
-            "reset" => {
+            "reset" | "r" => {
                 state.reset();
                 Ok(Some("".to_string())) // Success message already printed
             }
-            "vars" => Ok(Some(state.list_variables())),
+            "vars" | "v" => Ok(Some(state.list_variables())),
             "thir" => match state.dump_thir() {
                 Ok(output) => Ok(Some(output)),
                 Err(e) => Err(e),
             },
-            "help" => Ok(Some(
+            "type" | "t" => {
+                if parts.len() < 2 {
+                    return Err(anyhow!("Usage: :type <expression> (or :t <expression>)"));
+                }
+                let command_prefix = if parts[0] == "type" { ":type" } else { ":t" };
+                let expr_str = input[command_prefix.len()..].trim();
+                match state.infer_expression_type(expr_str) {
+                    Ok(type_info) => Ok(Some(type_info)),
+                    Err(e) => Err(e),
+                }
+            }
+            "help" | "h" | "?" => Ok(Some(
                 r#"BAML REPL Commands:
-  :load <path>   - Load BAML sources from directory
-  :reset         - Clear all variables
-  :vars          - List all variables
-  :thir          - Show THIR (Typed HIR) of loaded BAML sources
-  :help          - Show this help
-  :quit          - Exit the REPL
+  :load <path> (:l)  - Load BAML sources from directory
+  :reset (:r)        - Clear all variables
+  :vars (:v)         - List all variables
+  :thir              - Show THIR (Typed HIR) of loaded BAML sources
+  :type <expr> (:t)  - Show the inferred type of an expression
+  :help (:h, :?)     - Show this help
+  :quit (:q)         - Exit the REPL
   
 Expression syntax:
   x = expr       - Assign expression result to variable x
@@ -373,7 +629,7 @@ Supported literals:
   Arrays: [1, 2, 3]"#
                     .to_string(),
             )),
-            "quit" | "exit" => {
+            "quit" | "exit" | "q" => {
                 println!("Goodbye!");
                 Ok(None)
             }

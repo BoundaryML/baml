@@ -179,7 +179,7 @@ impl RuntimeCli {
                 Ok(()) => Ok(crate::ExitCode::Success),
                 Err(_) => Ok(crate::ExitCode::Other),
             },
-            Commands::Repl(args) => match args.run() {
+            Commands::Repl(args) => match t.block_on(async { args.run().await }) {
                 Ok(()) => Ok(crate::ExitCode::Success),
                 Err(e) => {
                     eprintln!("Error: {e}");

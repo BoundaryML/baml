@@ -30,6 +30,8 @@ arc_with_non_send_sync = "allow"
 anyhow.workspace = true
 baml-compiler = { path = "../baml-compiler" }
 baml-ids.workspace = true
+internal-baml-ast = { path = "../baml-lib/ast" }
+internal-baml-diagnostics = { path = "../baml-lib/diagnostics" }
 baml-log.workspace = true
 baml-types.workspace = true
 baml-rpc.workspace = true

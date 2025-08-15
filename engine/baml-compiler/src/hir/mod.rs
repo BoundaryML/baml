@@ -2,6 +2,7 @@
 //!
 //! This file contains the definitions for all HIR items.
 
+use baml_types::ir_type::TypeIR;
 use baml_types::{type_meta::base::StreamingBehavior, Constraint};
 use internal_baml_diagnostics::Span;
 
@@ -45,6 +46,146 @@ pub enum TypeM<M> {
     EnumName(String, M),
     Union(Vec<TypeM<M>>, M),
     Arrow(Arrow<M>, M),
+}
+
+pub fn to_ir_type(type_: &Type) -> TypeIR {
+    use baml_types::ir_type::type_meta;
+    use baml_types::ir_type::{StreamingMode, TypeGeneric, TypeValue};
+
+    let get_meta = |type_meta: &TypeMeta| type_meta::IR {
+        constraints: type_meta.constraints.clone(),
+        streaming_behavior: type_meta.streaming_behavior.clone(),
+    };
+
+    match type_ {
+        TypeM::Int(type_meta) => TypeGeneric::Primitive(TypeValue::Int, get_meta(type_meta)),
+        TypeM::String(type_meta) => TypeGeneric::Primitive(TypeValue::String, get_meta(type_meta)),
+        TypeM::Float(type_meta) => TypeGeneric::Primitive(TypeValue::Float, get_meta(type_meta)),
+        TypeM::Bool(type_meta) => TypeGeneric::Primitive(TypeValue::Bool, get_meta(type_meta)),
+        TypeM::Null(type_meta) => TypeGeneric::Primitive(TypeValue::Null, get_meta(type_meta)),
+        TypeM::Array(inner_type, type_meta) => {
+            TypeGeneric::List(Box::new(to_ir_type(inner_type)), get_meta(type_meta))
+        }
+        TypeM::Map(key_type, value_type, type_meta) => TypeGeneric::Map(
+            Box::new(to_ir_type(key_type)),
+            Box::new(to_ir_type(value_type)),
+            get_meta(type_meta),
+        ),
+        TypeM::ClassName(name, type_meta) => TypeGeneric::Class {
+            name: name.clone(),
+            mode: StreamingMode::NonStreaming, // Default to non-streaming
+            dynamic: false,                    // Default to static
+            meta: get_meta(type_meta),
+        },
+        TypeM::EnumName(name, type_meta) => TypeGeneric::Enum {
+            name: name.clone(),
+            dynamic: false, // Default to static
+            meta: get_meta(type_meta),
+        },
+        TypeM::Union(types, type_meta) => {
+            // Convert all union types
+            let ir_types: Vec<TypeIR> = types.iter().map(to_ir_type).collect();
+
+            // Use the public union_with_meta function to create the union
+            TypeGeneric::union_with_meta(ir_types, get_meta(type_meta))
+        }
+        TypeM::Arrow(arrow, type_meta) => {
+            // Convert arrow type (function type)
+            let param_types: Vec<TypeIR> = arrow.inputs.iter().map(to_ir_type).collect();
+            let return_type = to_ir_type(&arrow.output);
+
+            let arrow_ir = baml_types::ir_type::ArrowGeneric {
+                param_types,
+                return_type,
+            };
+
+            TypeGeneric::Arrow(Box::new(arrow_ir), get_meta(type_meta))
+        }
+    }
+}
+
+pub fn from_ir_type(ir_type: &TypeIR) -> Type {
+    use baml_types::ir_type::{LiteralValue, TypeGeneric, TypeValue};
+
+    let make_meta = |ir_meta: &baml_types::ir_type::type_meta::IR| TypeMeta {
+        span: Span::fake(),
+        constraints: ir_meta.constraints.clone(),
+        streaming_behavior: ir_meta.streaming_behavior.clone(),
+    };
+
+    match ir_type {
+        TypeGeneric::Primitive(TypeValue::Int, ir_meta) => TypeM::Int(make_meta(ir_meta)),
+        TypeGeneric::Primitive(TypeValue::String, ir_meta) => TypeM::String(make_meta(ir_meta)),
+        TypeGeneric::Primitive(TypeValue::Float, ir_meta) => TypeM::Float(make_meta(ir_meta)),
+        TypeGeneric::Primitive(TypeValue::Bool, ir_meta) => TypeM::Bool(make_meta(ir_meta)),
+        TypeGeneric::Primitive(TypeValue::Null, ir_meta) => TypeM::Null(make_meta(ir_meta)),
+        TypeGeneric::Primitive(TypeValue::Media(_), ir_meta) => {
+            // Media types are not directly supported in TypeM, so we fall back to a string representation
+            // This is a lossy conversion - media types in IR become strings in HIR
+            TypeM::String(make_meta(ir_meta))
+        }
+        TypeGeneric::List(inner_ir, ir_meta) => {
+            TypeM::Array(Box::new(from_ir_type(inner_ir)), make_meta(ir_meta))
+        }
+        TypeGeneric::Map(key_ir, value_ir, ir_meta) => TypeM::Map(
+            Box::new(from_ir_type(key_ir)),
+            Box::new(from_ir_type(value_ir)),
+            make_meta(ir_meta),
+        ),
+        TypeGeneric::Class { name, meta, .. } => {
+            // Note: We lose streaming mode and dynamic flag information in the conversion
+            TypeM::ClassName(name.clone(), make_meta(meta))
+        }
+        TypeGeneric::Enum { name, meta, .. } => {
+            // Note: We lose dynamic flag information in the conversion
+            TypeM::EnumName(name.clone(), make_meta(meta))
+        }
+        TypeGeneric::Union(_union_type, ir_meta) => {
+            // Convert union types by using the flattened representation
+            let flattened_types = ir_type.flatten();
+            let converted_types: Vec<Type> = flattened_types.iter().map(from_ir_type).collect();
+            TypeM::Union(converted_types, make_meta(ir_meta))
+        }
+        TypeGeneric::Arrow(arrow_ir, ir_meta) => {
+            let inputs: Vec<Type> = arrow_ir.param_types.iter().map(from_ir_type).collect();
+            let output = Box::new(from_ir_type(&arrow_ir.return_type));
+            let arrow = Arrow { inputs, output };
+            TypeM::Arrow(arrow, make_meta(ir_meta))
+        }
+        TypeGeneric::Literal(literal_value, ir_meta) => {
+            // Literal types are not directly supported in TypeM, so we convert them to their base type
+            // This is a lossy conversion - literal values become their base primitive types
+            match literal_value {
+                LiteralValue::String(_) => TypeM::String(make_meta(ir_meta)),
+                LiteralValue::Int(_) => TypeM::Int(make_meta(ir_meta)),
+                LiteralValue::Bool(_) => TypeM::Bool(make_meta(ir_meta)),
+            }
+        }
+        TypeGeneric::Tuple(tuple_types, ir_meta) => {
+            // Tuples are not directly supported in TypeM, so we convert them to arrays
+            // This is a lossy conversion - tuples become arrays of union types
+            if tuple_types.is_empty() {
+                // Empty tuple becomes array of null
+                TypeM::Array(
+                    Box::new(TypeM::Null(make_meta(ir_meta))),
+                    make_meta(ir_meta),
+                )
+            } else if tuple_types.len() == 1 {
+                // Single-element tuple becomes array of that type
+                TypeM::Array(Box::new(from_ir_type(&tuple_types[0])), make_meta(ir_meta))
+            } else {
+                // Multi-element tuple becomes array of union type
+                let converted_types: Vec<Type> = tuple_types.iter().map(from_ir_type).collect();
+                let union_type = TypeM::Union(converted_types, TypeMeta::default());
+                TypeM::Array(Box::new(union_type), make_meta(ir_meta))
+            }
+        }
+        TypeGeneric::RecursiveTypeAlias { name, meta, .. } => {
+            // Recursive type aliases are not directly supported in TypeM, so we treat them as class names
+            // This is a lossy conversion - recursive type aliases become class references
+            TypeM::ClassName(name.clone(), make_meta(meta))
+        }
+    }
 }
 
 impl<T: Default> TypeM<T> {
