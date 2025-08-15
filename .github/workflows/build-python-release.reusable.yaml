@@ -21,9 +21,9 @@ jobs:
       fail-fast: false
       matrix:
         _:
-          - target: x86_64-unknown-linux-gnu
-            runs_on: ubuntu-latest
-            manylinux: 2_17
+          # - target: x86_64-unknown-linux-gnu
+          #   runs_on: ubuntu-latest
+          #   manylinux: 2_17
 
           # - target: aarch64-unknown-linux-gnu
           #   runs_on: ubuntu-latest
@@ -50,8 +50,8 @@ jobs:
           # - target: x86_64-apple-darwin
           #   runs_on: macos-latest
 
-          # - target: aarch64-apple-darwin
-          #   runs_on: macos-latest
+          - target: aarch64-apple-darwin
+            runs_on: macos-latest
 
           # - target: x86_64-pc-windows-msvc
           #   runs_on: windows-latest
