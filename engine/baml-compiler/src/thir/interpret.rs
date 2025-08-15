@@ -331,7 +331,6 @@ where
                     EvalValue::Value(v)
                 }
             }
-            Expr::BoundVar(_, _) => bail!("unexpected bound var outside func application"),
             Expr::Function(arity, body, meta) => {
                 EvalValue::Function(*arity, body.clone(), meta.clone())
             }
@@ -388,16 +387,16 @@ where
                 let body_expr =
                     Expr::Block(Box::new(Arc::unwrap_or_clone(body.clone())), meta.clone());
                 let fresh = body_expr.fresh_names(arity);
-                let mut opened = body_expr;
-                for (i, name) in fresh.iter().enumerate() {
-                    opened = opened.open(
-                        &VarIndex {
-                            de_bruijn: 0,
-                            tuple: i as u32,
-                        },
-                        name,
-                    );
-                }
+                // let mut opened = body_expr;
+                // for (i, name) in fresh.iter().enumerate() {
+                //     opened = opened.open(
+                //         &VarIndex {
+                //             de_bruijn: 0,
+                //             tuple: i as u32,
+                //         },
+                //         name,
+                //     );
+                // }
 
                 // Create a scope binding parameters to their argument values
                 scopes.push(Scope {
@@ -407,7 +406,8 @@ where
                         .map(|(k, v)| (k, RefCell::new(v)))
                         .collect(),
                 });
-                let result = match &opened {
+                // TODO: Check this.
+                let result = match &body_expr {
                     Expr::Block(b, _) => evaluate_block(b, scopes, thir, run_llm_function).await?,
                     other => {
                         expect_value(evaluate_expr(other, scopes, thir, run_llm_function).await?)?
@@ -571,6 +571,14 @@ where
                     }
                     _ => bail!("for loop requires iterable (list) at {:?}", meta.0),
                 }
+            }
+            Expr::MethodCall {
+                receiver,
+                method,
+                args,
+                meta,
+            } => {
+                todo!("method calls are not supported in the interpreter")
             }
         })
     })
@@ -903,13 +911,7 @@ mod tests {
         let body = Block {
             env: BamlMap::new(),
             statements: vec![],
-            return_value: Expr::BoundVar(
-                VarIndex {
-                    de_bruijn: 0,
-                    tuple: 0,
-                },
-                meta(),
-            ),
+            return_value: Expr::FreeVar("x".to_string(), meta()),
             span: Span::fake(),
         };
 

@@ -1,0 +1,10 @@
+:load ~
+1
+:load ~/code/tmp
+:load ~/code/tmp/baml_src
+:vars
+:reset
+:help
+42
+:q
+:quit

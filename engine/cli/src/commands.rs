@@ -52,6 +52,9 @@ pub(crate) enum Commands {
 
     #[command(about = "Starts a language server", name = "lsp")]
     LanguageServer(crate::lsp::LanguageServerArgs),
+
+    #[command(about = "Start an interactive REPL for BAML expressions")]
+    Repl(baml_runtime::cli::repl::ReplArgs),
 }
 
 impl RuntimeCli {
@@ -175,6 +178,13 @@ impl RuntimeCli {
             Commands::LanguageServer(args) => match args.run() {
                 Ok(()) => Ok(crate::ExitCode::Success),
                 Err(_) => Ok(crate::ExitCode::Other),
+            },
+            Commands::Repl(args) => match args.run() {
+                Ok(()) => Ok(crate::ExitCode::Success),
+                Err(e) => {
+                    eprintln!("Error: {e}");
+                    Ok(crate::ExitCode::Other)
+                }
             },
         }
     }
