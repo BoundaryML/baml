@@ -371,12 +371,10 @@ impl<'g> HirCompiler<'g> {
             hir::Statement::Declare { name, .. } => {
                 self.declare_mut(name);
             }
-
             hir::Statement::Assign { name, value, .. } => {
                 self.compile_expression(value);
                 self.emit(Instruction::StoreVar(self.locals[name]));
             }
-
             hir::Statement::AssignOp {
                 name,
                 value,
@@ -547,6 +545,14 @@ impl<'g> HirCompiler<'g> {
 
                 cur_loop.continue_patch_list.push(exit_jump);
             }
+
+            // TODO: I need to report where `continue` is located, or add capability to insert
+            // things ad-hoc.
+            hir::Statement::CForLoop {
+                condition,
+                after,
+                block,
+            } => todo!("c-like for loop unmappable to while"),
         }
     }
 

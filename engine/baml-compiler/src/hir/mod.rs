@@ -363,7 +363,7 @@ pub enum Statement {
         span: Span,
     },
     While {
-        condition: Box<Expression>,
+        condition: Expression,
         block: Block,
         span: Span,
     },
@@ -372,6 +372,12 @@ pub enum Statement {
         iterator: Box<Expression>,
         block: Block,
         span: Span,
+    },
+    /// C-like for-loop that can't be directly mapped to `while` because it has either no condition or has after statement
+    CForLoop {
+        condition: Option<Expression>,
+        after: Option<Box<Statement>>,
+        block: Block,
     },
     Break(Span),
     Continue(Span),
@@ -444,7 +450,7 @@ pub enum Expression {
     // MethodCall(Box<Expression>, String, Vec<Expression>), // TODO.
     ClassConstructor(ClassConstructor, Span),
     /// Expression block - has its own scope with statements and evaluates to a value
-    ExpressionBlock(Box<Block>, Span),
+    ExpressionBlock(Block, Span),
     BinaryOperation {
         left: Box<Expression>,
         operator: BinaryOperator,

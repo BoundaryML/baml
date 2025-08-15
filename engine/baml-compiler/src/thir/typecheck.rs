@@ -379,7 +379,6 @@ fn typecheck_statement(
                 span: span.clone(),
             })
         }
-        // TODO: assign op needs more type checking?
         hir::Statement::Assign { name, value, .. }
         | hir::Statement::AssignOp { name, value, .. } => {
             let typed_value = typecheck_expression(value, context, diagnostics);
@@ -530,7 +529,6 @@ fn typecheck_statement(
                 span: span.clone(),
             })
         }
-
         hir::Statement::Break(span) | hir::Statement::Continue(span) => {
             if !context.is_inside_loop {
                 let name = if let hir::Statement::Continue(_) = stmt {
@@ -552,6 +550,11 @@ fn typecheck_statement(
                 _ => panic!("just matched break & continue"),
             })
         }
+        hir::Statement::CForLoop {
+            condition,
+            after,
+            block,
+        } => todo!("for loop with after/without condition"),
     }
 }
 
