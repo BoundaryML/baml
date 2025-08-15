@@ -101,15 +101,16 @@ impl SyncRequestHandler for ExecuteCommand {
                     .unwrap();
             }
             Ok(RegisteredCommands::RunTest(args)) => {
-                session
-                    .playground_tx
-                    .send(PreSendToWasmMessage::FrontendMessage(
-                        FrontendMessage::select_function {
-                            root_path: args.project_id,
-                            function_name: args.function_name.clone(),
-                        },
-                    ))
-                    .unwrap();
+                // session
+                //     .playground_tx
+                //     .send(PreSendToWasmMessage::FrontendMessage(
+                //         FrontendMessage::select_function {
+                //             root_path: args.project_id,
+                //             function_name: args.function_name.clone(),
+                //         },
+                //     ))
+                //     .unwrap();
+                // std::thread::sleep(std::time::Duration::from_secs(1));
                 session
                     .playground_tx
                     .send(PreSendToWasmMessage::FrontendMessage(

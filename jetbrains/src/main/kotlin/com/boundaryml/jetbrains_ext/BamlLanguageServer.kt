@@ -26,6 +26,7 @@ class BamlLanguageServer(private val project: Project) : OSProcessStreamConnecti
             "/Users/sam/baml4/engine/target/debug/baml-hot-reload", "lsp"
         )
             .withEnvironment("RUST_BACKTRACE", "full")
+            .withEnvironment("VSCODE_DEBUG_MODE", "true")
         super.setCommandLine(commandLine)
 
 //

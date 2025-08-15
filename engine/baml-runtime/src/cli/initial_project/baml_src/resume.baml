@@ -11,7 +11,7 @@ function ZippityDoo(resume: string) -> Resume {
   // you can use custom LLM params with a custom client name from clients.baml like "client CustomHaiku"
   client "openai/gpt-4o" // Set OPENAI_API_KEY to use this client.
   prompt #"
-    Extract rerererere this content:
+    Extract lorem ipsum this content:
     {{ resume }}
 
     {{ ctx.output_format }}

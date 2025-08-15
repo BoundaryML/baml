@@ -246,12 +246,15 @@ export const EventListener: React.FC = () => {
           }
         | {
             command: 'run_test';
-            content: { test_name: string };
+            content: {
+              function_name: string;
+              test_name: string;
+            };
           }
       >,
     ) => {
       const { command, content } = event.data;
-      console.debug('command', command);
+      console.debug('lorem ipsum sit amet', {command, content});
 
       switch (command) {
         case 'add_project':
@@ -304,14 +307,18 @@ export const EventListener: React.FC = () => {
           break;
 
         case 'run_test':
-          if (selectedFunc) {
-            setSelectedTestcase(content.test_name);
-            runBamlTests([
-              { functionName: selectedFunc, testName: content.test_name },
-            ]);
-          } else {
-            console.error('No function selected');
-          }
+          console.info('running test command received', {
+            content,
+            selectedFunc,
+          });
+          console.info('setting selected function', content.function_name);
+          setSelectedFunction(content.function_name);
+          console.info('setting selected testcase', content.test_name);
+          setSelectedTestcase(content.test_name);
+          console.info('running baml test', content.test_name);
+          runBamlTests([
+            { functionName: content.function_name, testName: content.test_name },
+          ]);
           // run([content.test_name])
           // setShowTests(true)
           // setClientGraph(false)

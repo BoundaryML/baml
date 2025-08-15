@@ -83,11 +83,6 @@ async fn health_check() -> &'static str {
 async fn playground_static_assets() -> anyhow::Result<PathBuf> {
     const GITHUB_REPO: &str = "BoundaryML/baml";
 
-    if std::env::var("VSCODE_DEBUG_MODE")
-        .map(|v| v == "true")
-        .unwrap_or(false)
-    {
-        // Use cargo-relative path for local dist
         let local_dist = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../typescript/apps/playground/dist");
         tracing::info!(
@@ -95,21 +90,33 @@ async fn playground_static_assets() -> anyhow::Result<PathBuf> {
             local_dist.display()
         );
         Ok(local_dist)
-    } else {
-        let version = env!("CARGO_PKG_VERSION");
-        // Test release
-        // let version = "test-zed";
+    // if std::env::var("VSCODE_DEBUG_MODE")
+    //     .map(|v| v == "true")
+    //     .unwrap_or(false)
+    // {
+    //     // Use cargo-relative path for local dist
+    //     let local_dist = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+    //         .join("../../typescript/apps/playground/dist");
+    //     tracing::info!(
+    //         "VSCODE_DEBUG_MODE is set. Using local playground dist at {}",
+    //         local_dist.display()
+    //     );
+    //     Ok(local_dist)
+    // } else {
+    //     let version = env!("CARGO_PKG_VERSION");
+    //     // Test release
+    //     // let version = "test-zed";
 
-        match get_playground_dist(GITHUB_REPO, version).await {
-            Ok(dir) => Ok(std::path::PathBuf::from(dir)),
-            Err(e) => {
-                tracing::error!(
-                    "Failed to prepare playground web UI: {e}. Serving error page instead."
-                );
-                Err(e)
-            }
-        }
-    }
+    //     match get_playground_dist(GITHUB_REPO, version).await {
+    //         Ok(dir) => Ok(std::path::PathBuf::from(dir)),
+    //         Err(e) => {
+    //             tracing::error!(
+    //                 "Failed to prepare playground web UI: {e}. Serving error page instead."
+    //             );
+    //             Err(e)
+    //         }
+    //     }
+    // }
 }
 
 
