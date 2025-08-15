@@ -148,7 +148,7 @@ jobs:
             fi
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v1
+        uses: astral-sh/setup-uv@v6
 
       - name: Test LICENSE packaging
         run: |
@@ -156,7 +156,7 @@ jobs:
 
           mkdir -p ../python-license-test
           cd ../python-license-test
-          uv init -- --bare --python 3.10
+          uv init --bare --python 3.10
           uv add pip-licenses-cli
           uv pip install ../engine/language_client_python/dist/*.whl
           uv pip-licenses | tee license-audit.log
