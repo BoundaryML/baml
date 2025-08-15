@@ -156,7 +156,7 @@ jobs:
 
           mkdir -p ../python-license-test
           cd ../python-license-test
-          uv init --bare
+          uv init
           uv add pip-licenses-cli
           uv pip install ../engine/language_client_python/dist/*.whl
           uv pip-licenses | tee license-audit.log
