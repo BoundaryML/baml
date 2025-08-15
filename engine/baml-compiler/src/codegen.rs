@@ -585,29 +585,27 @@ impl<'g> HirCompiler<'g> {
         self.bytecode.instructions.len() as isize
     }
 
-    /// Compiles a while loop with custom condition & block logic.
+    /// Finishes compilation of a loop where `continue` should perform more instructions besides running to the start of
+    /// the loop. Loop exits only with `break`/`continue` or custom bail-out instructions that can
+    /// be patched by the user.
     ///
-    /// Lambdas take `&mut Self` because both cannot borrow `self` at the same time.
-    fn compile_while_loop(
+    /// # Safety
+    /// This assumes that `compile_continue`'s output does not emit any scope exits itself, and is
+    /// leaves the stack at the same length as was prior to executing said output.
+    ///
+    /// Also assumes that the bytecode prior to what is emitted here has just finished executing
+    /// the inner loop block.
+    fn finish_loop_with_after(
         &mut self,
-        compile_condition: impl FnOnce(&mut Self),
-        compile_block: impl FnOnce(&mut Self),
+        loop_start: isize,
+        block_start: usize,
+        loop_info: LoopInfo,
+        compile_continue: impl FnOnce(&mut Self),
     ) {
-        let loop_start = self.next_insn_index();
-        compile_condition(self);
-        // Jump out of loop if false
-        let exit_jump = self.emit(Instruction::JumpIfFalse(0));
-        // Pop condition
-        self.emit(Instruction::Pop(1));
-
-        let block_start = self.next_insn_index() as usize;
-
-        // compile block with continue/break context.
-        let (loop_info, _) = self.with_loop_info(compile_block);
-
         // find the first of many sequential pops for sequential scope exits, and add them up
         // so that we can pop all on `break`.
-        // TODO: when scope exit uses
+        // TODO: refactor scope exit so that we can avoid searching for pops that may or may not be
+        // related to scope cleanup.
         let (first_pop, total_pop_count) = {
             let block_insns = &self.bytecode.instructions[block_start..];
 
@@ -629,6 +627,12 @@ impl<'g> HirCompiler<'g> {
             (first_pop, pop_count)
         };
 
+        let continue_block_start = self.next_insn_index();
+
+        compile_continue(self);
+
+        let continue_block_is_empty = self.next_insn_index() == continue_block_start;
+
         // jump back to the start of the loop.
         self.emit(Instruction::Jump(loop_start - self.next_insn_index()));
 
@@ -639,6 +643,7 @@ impl<'g> HirCompiler<'g> {
 
         if let Some(block_end_location) = first_pop {
             // scope has a destructor. We'll patch `continue` to go to the pop instruction. We'll then add a pop that accounts for the full inside block in `break`.
+            // Since `compile_continue`'s output comes right after the block output
 
             continue_location = block_end_location;
 
@@ -646,20 +651,18 @@ impl<'g> HirCompiler<'g> {
             // result.
             break_location = self.emit(Instruction::Pop(total_pop_count));
         } else {
-            // scope has no destructor, so we can wire `continue` directly to loop start
-            continue_location = loop_start as usize;
+            // scope has no destructor, so we can wire `continue` directly the continue block
+            // before the jump. If there's nothing to do @ `continue`, avoid jumping to a jump and
+            // wire it to loop start directly.
+            continue_location = if continue_block_is_empty {
+                loop_start
+            } else {
+                continue_block_start
+            } as usize;
 
             // and `break` will just go past the end.
             break_location = self.next_insn_index() as usize;
         };
-
-        // jump over itself & the next instruction, since `break` should not pop anything.
-        self.emit(Instruction::Jump(2));
-
-        // finally, exit jump (where the condition hasn't been popped) should go here, so that
-        // it can pop the condition.
-        self.patch_jump(exit_jump);
-        self.emit(Instruction::Pop(1));
 
         // patch the set continue/break locations.
         for break_jmp in loop_info.break_patch_list {
@@ -669,6 +672,37 @@ impl<'g> HirCompiler<'g> {
         for continue_jmp in loop_info.continue_patch_list {
             self.patch_jump_to(continue_jmp, continue_location);
         }
+    }
+
+    /// Compiles a while loop with custom condition & block logic.
+    ///
+    /// Lambdas take `&mut Self` because both cannot borrow `self` at the same time.
+    fn compile_while_loop(
+        &mut self,
+        compile_condition: impl FnOnce(&mut Self),
+        compile_block: impl FnOnce(&mut Self),
+    ) {
+        let loop_start = self.next_insn_index();
+
+        compile_condition(self);
+
+        // this jump needs cleaning up, so it's not the same as `break`.
+        let bail_jump = self.emit(Instruction::JumpIfFalse(0));
+        self.emit(Instruction::Pop(1));
+
+        let block_start = self.next_insn_index() as usize;
+        let (loop_info, _) = self.with_loop_info(compile_block);
+
+        // nothing to be deferred for `continue`.
+        self.finish_loop_with_after(loop_start, block_start, loop_info, |_| {});
+
+        // breaking the loop from the inside should not pop anything, so skip the next insn.
+        // NOTE: currently this will make `break` jump twice when there are no `pop`s to do (no
+        // defer).
+        self.emit(Instruction::Jump(2));
+
+        let pop_condition = self.emit(Instruction::Pop(1));
+        self.patch_jump_to(bail_jump, pop_condition);
     }
 
     /// Generate bytecode for an expression.
