@@ -570,7 +570,7 @@ fn typecheck_statement(
                 None => None,
             };
 
-            let block = typecheck_block(block, context, diagnostics);
+            let block = context.inside_loop(|context| typecheck_block(block, context, diagnostics));
 
             Some(thir::Statement::CForLoop {
                 condition,

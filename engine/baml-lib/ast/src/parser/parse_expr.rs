@@ -174,7 +174,10 @@ fn parse_c_for_loop(
 
     let mut tokens = rule.into_inner();
 
-    let init_stmt = if let Rule::c_for_init_stmt = tokens.peek()?.as_rule() {
+    let init_stmt = if tokens
+        .peek()
+        .is_some_and(|p| matches!(p.as_rule(), Rule::c_for_init_stmt))
+    {
         let inner = tokens.next().unwrap().into_inner().next()?;
 
         let span = diagnostics.span(inner.as_span());
@@ -184,14 +187,18 @@ fn parse_c_for_loop(
         None
     };
 
-    let condition = if let Rule::expression = tokens.peek()?.as_rule() {
+    let condition = if tokens
+        .peek()
+        .is_some_and(|p| matches!(p.as_rule(), Rule::expression))
+    {
         parse_expression(tokens.next().unwrap(), diagnostics)
     } else {
         None
     };
 
-    let after_stmt = if let Rule::c_for_after_stmt = tokens.peek()?.as_rule() {
-        let inner = tokens.next().unwrap().into_inner().next()?;
+    let after_stmt = if let Some(rule) = tokens.next() {
+        assert_correct_parser!(rule, Rule::c_for_after_stmt);
+        let inner = rule.into_inner().next()?;
         let span = diagnostics.span(inner.as_span());
 
         parse_statement_inner_rule(inner, span, diagnostics).map(Box::new)

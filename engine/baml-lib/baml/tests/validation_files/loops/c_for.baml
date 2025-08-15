@@ -8,6 +8,12 @@ fn SumToTen() -> int {
 	s
 }
 
+fn InfiniteFor() -> int {
+	for (;;) {}
+
+	0
+}
+
 // should error everywhere `i` is used.
 fn NoIteratorDeclared() -> int {
 	let mut s = 0;
@@ -40,6 +46,16 @@ fn LoopHeaderScopeUnavailable() -> int {
 	s
 }
 
+fn BreakContinue() -> int {
+
+	for (;;) {
+		break;
+		continue;
+	}
+	
+	0
+}
+
 // warning: Workflow functions are experimental, and will break in the future.
 //   -->  loops/c_for.baml:1
 //    | 
@@ -47,56 +63,68 @@ fn LoopHeaderScopeUnavailable() -> int {
 //  1 | fn SumToTen() -> int {
 //    | 
 // warning: Workflow functions are experimental, and will break in the future.
-//   -->  loops/c_for.baml:12
+//   -->  loops/c_for.baml:11
 //    | 
-// 11 | // should error everywhere `i` is used.
-// 12 | fn NoIteratorDeclared() -> int {
-//    | 
-// warning: Workflow functions are experimental, and will break in the future.
-//   -->  loops/c_for.baml:23
-//    | 
-// 22 | // should be fine
-// 23 | fn LoopHeaderScope() -> int {
+// 10 | 
+// 11 | fn InfiniteFor() -> int {
 //    | 
 // warning: Workflow functions are experimental, and will break in the future.
-//   -->  loops/c_for.baml:33
+//   -->  loops/c_for.baml:18
 //    | 
-// 32 | // should error in `i += x` (no `x` in scope)
-// 33 | fn LoopHeaderScopeUnavailable() -> int {
+// 17 | // should error everywhere `i` is used.
+// 18 | fn NoIteratorDeclared() -> int {
+//    | 
+// warning: Workflow functions are experimental, and will break in the future.
+//   -->  loops/c_for.baml:29
+//    | 
+// 28 | // should be fine
+// 29 | fn LoopHeaderScope() -> int {
+//    | 
+// warning: Workflow functions are experimental, and will break in the future.
+//   -->  loops/c_for.baml:39
+//    | 
+// 38 | // should error in `i += x` (no `x` in scope)
+// 39 | fn LoopHeaderScopeUnavailable() -> int {
+//    | 
+// warning: Workflow functions are experimental, and will break in the future.
+//   -->  loops/c_for.baml:49
+//    | 
+// 48 | 
+// 49 | fn BreakContinue() -> int {
 //    | 
 // error: Unknown variable i
-//   -->  loops/c_for.baml:16
+//   -->  loops/c_for.baml:22
 //    | 
-// 15 | for (; i <= 10; i += 1) {
-// 16 | s += i;
+// 21 | for (; i <= 10; i += 1) {
+// 22 | s += i;
 //    | 
 // error: Unknown variable x
-//   -->  loops/c_for.baml:36
+//   -->  loops/c_for.baml:42
 //    | 
-// 35 | 
-// 36 | for (let mut i = 0; i <= 10; i += x) {
-//    | 
-// error: Error validating: Unknown variable i
-//   -->  loops/c_for.baml:15
-//    | 
-// 14 | 
-// 15 | for (; i <= 10; i += 1) {
+// 41 | 
+// 42 | for (let mut i = 0; i <= 10; i += x) {
 //    | 
 // error: Error validating: Unknown variable i
-//   -->  loops/c_for.baml:15
+//   -->  loops/c_for.baml:21
 //    | 
-// 14 | 
-// 15 | for (; i <= 10; i += 1) {
+// 20 | 
+// 21 | for (; i <= 10; i += 1) {
 //    | 
 // error: Error validating: Unknown variable i
-//   -->  loops/c_for.baml:16
+//   -->  loops/c_for.baml:21
 //    | 
-// 15 | for (; i <= 10; i += 1) {
-// 16 | s += i;
+// 20 | 
+// 21 | for (; i <= 10; i += 1) {
+//    | 
+// error: Error validating: Unknown variable i
+//   -->  loops/c_for.baml:22
+//    | 
+// 21 | for (; i <= 10; i += 1) {
+// 22 | s += i;
 //    | 
 // error: Error validating: Unknown variable x
-//   -->  loops/c_for.baml:36
+//   -->  loops/c_for.baml:42
 //    | 
-// 35 | 
-// 36 | for (let mut i = 0; i <= 10; i += x) {
+// 41 | 
+// 42 | for (let mut i = 0; i <= 10; i += x) {
 //    | 

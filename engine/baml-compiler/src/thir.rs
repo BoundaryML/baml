@@ -923,7 +923,7 @@ impl<T: Clone> Statement<T> {
                     .unwrap_or_else(String::new);
                 let block = block.dump_str();
 
-                format!("for (;{condition};{after}) {block}")
+                format!("for (;{condition};{after}) {{ {block} }}")
             }
         }
     }

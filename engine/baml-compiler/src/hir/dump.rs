@@ -206,9 +206,12 @@ impl Statement {
                     None => cur,
                 };
 
-                cur = cur.append(RcDoc::text(")"));
+                cur = cur.append(RcDoc::text(")")).append(RcDoc::space());
 
-                cur.append(block)
+                cur.append(RcDoc::text("{"))
+                    .append(RcDoc::space())
+                    .append(block)
+                    .append(RcDoc::text("}"))
             }
         }
     }
