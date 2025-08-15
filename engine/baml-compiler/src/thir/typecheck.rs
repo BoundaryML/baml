@@ -379,8 +379,12 @@ fn typecheck_statement(
                 span: span.clone(),
             })
         }
-        hir::Statement::Assign { name, value, .. }
-        | hir::Statement::AssignOp { name, value, .. } => {
+        hir::Statement::Assign {
+            name, value, span, ..
+        }
+        | hir::Statement::AssignOp {
+            name, value, span, ..
+        } => {
             let typed_value = typecheck_expression(value, context, diagnostics);
 
             // validate/update type.
@@ -421,7 +425,7 @@ fn typecheck_statement(
                 None => {
                     diagnostics.push_error(DatamodelError::new_validation_error(
                         &format!("Unknown variable {name}"),
-                        value.span(),
+                        span.clone(),
                     ));
                 }
             }
@@ -554,7 +558,26 @@ fn typecheck_statement(
             condition,
             after,
             block,
-        } => todo!("for loop with after/without condition"),
+        } => {
+            // make sure that we typecheck with the correct context (condition before block)
+
+            let condition = condition
+                .as_ref()
+                .map(|cond| typecheck_expression(cond, context, diagnostics));
+
+            let after = match after.as_ref() {
+                Some(after) => Some(Box::new(typecheck_statement(after, context, diagnostics)?)),
+                None => None,
+            };
+
+            let block = typecheck_block(block, context, diagnostics);
+
+            Some(thir::Statement::CForLoop {
+                condition,
+                after,
+                block,
+            })
+        }
     }
 }
 

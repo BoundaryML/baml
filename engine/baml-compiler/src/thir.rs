@@ -849,6 +849,12 @@ pub enum Statement<T> {
         block: Block<T>,
         span: Span,
     },
+    /// like [`crate::hir::Statement::CForLoop`]
+    CForLoop {
+        condition: Option<Expr<T>>,
+        after: Option<Box<Statement<T>>>,
+        block: Block<T>,
+    },
     Break(Span),
     Continue(Span),
 }
@@ -901,6 +907,24 @@ impl<T: Clone> Statement<T> {
             }
             Statement::Break(_) => "break".to_string(),
             Statement::Continue(_) => "continue".to_string(),
+            Statement::CForLoop {
+                condition,
+                after,
+                block,
+            } => {
+                let condition = condition
+                    .as_ref()
+                    .map(Expr::dump_str)
+                    .unwrap_or_else(String::new);
+
+                let after = after
+                    .as_ref()
+                    .map(|s| s.dump_str())
+                    .unwrap_or_else(String::new);
+                let block = block.dump_str();
+
+                format!("for (;{condition};{after}) {block}")
+            }
         }
     }
 
@@ -943,6 +967,28 @@ impl<T: Clone> Statement<T> {
                 free_vars
             }
             Statement::Break(_) | Statement::Continue(_) => HashSet::new(),
+            Statement::CForLoop {
+                condition,
+                after,
+                block,
+            } => {
+                let condition_vars = condition
+                    .as_ref()
+                    .map(Expr::free_vars)
+                    .unwrap_or_else(HashSet::new);
+
+                let after_vars = after
+                    .as_ref()
+                    .map(|s| s.free_vars())
+                    .unwrap_or_else(HashSet::new);
+
+                let mut block_vars = block.free_vars();
+
+                block_vars.extend(condition_vars);
+                block_vars.extend(after_vars);
+
+                block_vars
+            }
         }
     }
 
@@ -1028,6 +1074,29 @@ impl<T: Clone> Statement<T> {
                 },
             ) => iterator.temporary_same_state(iterator2) && block.temporary_same_state(block2),
             (Statement::ForLoop { .. }, _) => false,
+            (
+                Statement::CForLoop {
+                    condition: cond1,
+                    after: after1,
+                    block: block1,
+                },
+                Statement::CForLoop {
+                    condition: cond2,
+                    after: after2,
+                    block: block2,
+                },
+            ) => {
+                cond1.as_ref().is_some_and(|cond1| {
+                    cond2
+                        .as_ref()
+                        .is_some_and(|cond2| cond1.temporary_same_state(cond2))
+                }) && after1.as_ref().is_some_and(|after1| {
+                    after2
+                        .as_ref()
+                        .is_some_and(|after2| after1.temporary_same_state(after2))
+                }) && block1.temporary_same_state(block2)
+            }
+            (Statement::CForLoop { .. }, _) => false,
             (Statement::Break(_), other) => matches!(other, Statement::Break(_)),
             (Statement::Continue(_), other) => matches!(other, Statement::Continue(_)),
         }
