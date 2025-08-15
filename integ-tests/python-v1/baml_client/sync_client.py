@@ -1366,7 +1366,7 @@ class BamlSyncClient:
             "query": query,
         })
         return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
-    def TestOpenAIResponsesImageInput(self, image: typing.Union[baml_py.Image, str],
+    def TestOpenAIResponsesImageInput(self, image: typing.Union[baml_py.Image, str, baml_py.Pdf, baml_py.Audio],
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestOpenAIResponsesImageInput", args={
@@ -3858,7 +3858,7 @@ class BamlStreamClient:
           lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
-    def TestOpenAIResponsesImageInput(self, image: typing.Union[baml_py.Image, str],
+    def TestOpenAIResponsesImageInput(self, image: typing.Union[baml_py.Image, str, baml_py.Pdf, baml_py.Audio],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[str, str]:
         ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestOpenAIResponsesImageInput", args={
@@ -5639,7 +5639,7 @@ class BamlHttpRequestClient:
             "query": query,
         }, mode="request")
         return result
-    def TestOpenAIResponsesImageInput(self, image: typing.Union[baml_py.Image, str],
+    def TestOpenAIResponsesImageInput(self, image: typing.Union[baml_py.Image, str, baml_py.Pdf, baml_py.Audio],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestOpenAIResponsesImageInput", args={
@@ -7215,7 +7215,7 @@ class BamlHttpStreamRequestClient:
             "query": query,
         }, mode="stream")
         return result
-    def TestOpenAIResponsesImageInput(self, image: typing.Union[baml_py.Image, str],
+    def TestOpenAIResponsesImageInput(self, image: typing.Union[baml_py.Image, str, baml_py.Pdf, baml_py.Audio],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestOpenAIResponsesImageInput", args={

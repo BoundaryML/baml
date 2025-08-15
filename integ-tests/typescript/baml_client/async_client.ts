@@ -5212,7 +5212,7 @@ export class BamlAsyncClient {
   }
   
   async TestOpenAIResponsesImageInput(
-      image: Image | string,
+      image: Image | string | Pdf | Audio,
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
@@ -12232,7 +12232,7 @@ class BamlStreamClient {
   }
   
   TestOpenAIResponsesImageInput(
-      image: Image | string,
+      image: Image | string | Pdf | Audio,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {

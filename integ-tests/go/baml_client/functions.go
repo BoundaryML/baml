@@ -11375,7 +11375,7 @@ func TestOpenAIResponsesFunctionCall(ctx context.Context, query string, opts ...
 	}
 }
 
-func TestOpenAIResponsesImageInput(ctx context.Context, image types.Union2ImageOrString, opts ...CallOptionFunc) (string, error) {
+func TestOpenAIResponsesImageInput(ctx context.Context, image types.Union4AudioOrImageOrPDFOrString, opts ...CallOptionFunc) (string, error) {
 
 	var callOpts callOption
 	for _, opt := range opts {

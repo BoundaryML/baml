@@ -3542,12 +3542,12 @@ export const TestOpenAIResponsesFunctionCall = async (
  * This action initiates a streaming response by calling the corresponding
  * BAML stream function. The returned stream yields incremental updates.
  *
- * @param { Image | string } image - Input parameter.
+ * @param { Image | string | Pdf | Audio } image - Input parameter.
  *
  * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
  */
 export const TestOpenAIResponsesImageInput = async (
-  image: Image | string,
+  image: Image | string | Pdf | Audio,
 ): Promise<ReadableStream<Uint8Array>> => {
   const stream = b.stream.TestOpenAIResponsesImageInput(
     image,

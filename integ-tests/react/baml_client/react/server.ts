@@ -3359,12 +3359,12 @@ export const TestOpenAIResponsesFunctionCall = async (
  * This server action calls the underlying BAML function "TestOpenAIResponsesImageInput"
  * with the specified parameters.
  *
- * @param { Image | string } image - Input parameter.
+ * @param { Image | string | Pdf | Audio } image - Input parameter.
  *
  * @returns {Promise<string>} A promise that resolves with the result of the action.
  */
 export const TestOpenAIResponsesImageInput = async (
-  image: Image | string,
+  image: Image | string | Pdf | Audio,
 ): Promise<string> => {
   return b.TestOpenAIResponsesImageInput(
     image,

@@ -1354,7 +1354,7 @@ class BamlAsyncClient:
             "query": query,
         })
         return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
-    async def TestOpenAIResponsesImageInput(self, image: typing.Union[baml_py.Image, str],
+    async def TestOpenAIResponsesImageInput(self, image: typing.Union[baml_py.Image, str, baml_py.Pdf, baml_py.Audio],
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestOpenAIResponsesImageInput", args={
@@ -3846,7 +3846,7 @@ class BamlStreamClient:
           lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
-    def TestOpenAIResponsesImageInput(self, image: typing.Union[baml_py.Image, str],
+    def TestOpenAIResponsesImageInput(self, image: typing.Union[baml_py.Image, str, baml_py.Pdf, baml_py.Audio],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[str, str]:
         ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="TestOpenAIResponsesImageInput", args={
@@ -5627,7 +5627,7 @@ class BamlHttpRequestClient:
             "query": query,
         }, mode="request")
         return result
-    async def TestOpenAIResponsesImageInput(self, image: typing.Union[baml_py.Image, str],
+    async def TestOpenAIResponsesImageInput(self, image: typing.Union[baml_py.Image, str, baml_py.Pdf, baml_py.Audio],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
         result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestOpenAIResponsesImageInput", args={
@@ -7203,7 +7203,7 @@ class BamlHttpStreamRequestClient:
             "query": query,
         }, mode="stream")
         return result
-    async def TestOpenAIResponsesImageInput(self, image: typing.Union[baml_py.Image, str],
+    async def TestOpenAIResponsesImageInput(self, image: typing.Union[baml_py.Image, str, baml_py.Pdf, baml_py.Audio],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
         result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestOpenAIResponsesImageInput", args={

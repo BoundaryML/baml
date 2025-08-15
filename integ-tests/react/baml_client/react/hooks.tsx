@@ -9520,7 +9520,7 @@ export function useTestOpenAIResponsesFunctionCall(
  *
  * **Input Types:**
  *
- * - image: Image | string
+ * - image: Image | string | Pdf | Audio
  *
  *
  * **Return Type:**

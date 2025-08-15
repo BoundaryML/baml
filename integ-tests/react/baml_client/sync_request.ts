@@ -4611,7 +4611,7 @@ export class HttpRequest {
   }
   
   TestOpenAIResponsesImageInput(
-      image: Image | string,
+      image: Image | string | Pdf | Audio,
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
@@ -9892,7 +9892,7 @@ export class HttpStreamRequest {
   }
   
   TestOpenAIResponsesImageInput(
-      image: Image | string,
+      image: Image | string | Pdf | Audio,
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {

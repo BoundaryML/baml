@@ -4622,7 +4622,7 @@ module BamlClient
       end
       sig {params(
           varargs: T.untyped,
-          image: T.any(Baml::Image, String),
+          image: T.any(Baml::Image, String, Baml::Pdf, Baml::Audio),
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)}
       def TestOpenAIResponsesImageInput(
@@ -9908,7 +9908,7 @@ module BamlClient
       end
       sig {params(
           varargs: T.untyped,
-          image: T.any(Baml::Image, String),
+          image: T.any(Baml::Image, String, Baml::Pdf, Baml::Audio),
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIResponsesImageInput(

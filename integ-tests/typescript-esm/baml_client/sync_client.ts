@@ -5214,7 +5214,7 @@ export class BamlSyncClient {
   }
   
   TestOpenAIResponsesImageInput(
-      image: Image | string,
+      image: Image | string | Pdf | Audio,
       __baml_options__?: BamlCallOptions
   ): string {
     try {

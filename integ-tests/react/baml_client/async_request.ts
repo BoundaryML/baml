@@ -4611,7 +4611,7 @@ export class AsyncHttpRequest {
   }
   
   async TestOpenAIResponsesImageInput(
-      image: Image | string,
+      image: Image | string | Pdf | Audio,
       __baml_options__?: BamlCallOptions
   ): Promise<HTTPRequest> {
     try {
@@ -9892,7 +9892,7 @@ export class AsyncHttpStreamRequest {
   }
   
   async TestOpenAIResponsesImageInput(
-      image: Image | string,
+      image: Image | string | Pdf | Audio,
       __baml_options__?: BamlCallOptions
   ): Promise<HTTPRequest> {
     try {

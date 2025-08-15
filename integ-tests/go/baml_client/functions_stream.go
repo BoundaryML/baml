@@ -15065,7 +15065,7 @@ func (*stream) TestOpenAIResponsesFunctionCall(ctx context.Context, query string
 }
 
 // / Streaming version of TestOpenAIResponsesImageInput
-func (*stream) TestOpenAIResponsesImageInput(ctx context.Context, image types.Union2ImageOrString, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+func (*stream) TestOpenAIResponsesImageInput(ctx context.Context, image types.Union4AudioOrImageOrPDFOrString, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {

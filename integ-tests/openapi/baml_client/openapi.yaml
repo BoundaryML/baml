@@ -5994,6 +5994,8 @@ components:
                 oneOf:
                 - $ref: '#/components/schemas/BamlImage'
                 - type: string
+                - $ref: '#/components/schemas/BamlPdf'
+                - $ref: '#/components/schemas/BamlAudio'
               __baml_options__:
                 nullable: true
                 $ref: '#/components/schemas/BamlOptions'
