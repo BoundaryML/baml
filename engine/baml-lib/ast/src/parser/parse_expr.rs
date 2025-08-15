@@ -145,19 +145,40 @@ fn parse_while_loop(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Stm
     }))
 }
 
-pub fn parse_for_loop(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Stmt> {
-    assert_correct_parser!(token, Rule::for_loop);
-    let span = diagnostics.span(token.as_span());
-    let mut tokens = token.into_inner();
+fn parse_iterator_for_loop(
+    rule: Pair<'_>,
+    span: Span,
+    body: ExpressionBlock,
+    diagnostics: &mut Diagnostics,
+) -> Option<Stmt> {
+    assert_correct_parser!(rule, Rule::iterator_for_loop);
+    let mut tokens = rule.into_inner();
     let identifier = parse_identifier(tokens.next()?, diagnostics);
     let iterator = parse_expression(tokens.next()?, diagnostics)?;
-    let body = parse_expr_block(tokens.next()?, diagnostics)?;
+
     Some(Stmt::ForLoop(ForLoopStmt {
         identifier,
         iterator,
         body,
         span,
     }))
+}
+
+fn parse_for_loop(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Stmt> {
+    assert_correct_parser!(token, Rule::for_loop);
+    let span = diagnostics.span(token.as_span());
+    let mut tokens = token.into_inner();
+
+    let in_between_rule = tokens.next()?;
+
+    let body = parse_expr_block(tokens.next()?, diagnostics)?;
+
+    match in_between_rule.as_rule() {
+        Rule::iterator_for_loop => parse_iterator_for_loop(in_between_rule, span, body, diagnostics),
+        Rule::c_for_loop => todo!("c for loop not implemented"),
+        _ => panic!("unexpected in-between rule in for-loop."),
+    }
+
 }
 
 pub fn parse_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Stmt> {
