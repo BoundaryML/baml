@@ -4,7 +4,7 @@ on:
   workflow_call: {}
   push:
     branches:
-      - baml-py-win
+      - sam/license-fix
 
 concurrency:
   # suffix is important to prevent a concurrency deadlock with the calling workflow
@@ -25,40 +25,40 @@ jobs:
             runs_on: ubuntu-latest
             manylinux: 2_17
 
-          - target: aarch64-unknown-linux-gnu
-            runs_on: ubuntu-latest
-            manylinux: 2_24
-            # I'm not sure if this actually works; I can't 'pip install ./local-path.whl'
-            # from inside a container based off quay.io/pypa/manylinux2014_aarch64
-            # see https://github.com/astral-sh/uv/issues/3439#issuecomment-2110448346
-            # manylinux: 2_28
-            # env:
-            #   # Workaround ring 0.17 build issue
-            #   # see https://github.com/briansmith/ring/issues/1728
-            #   CFLAGS_aarch64_unknown_linux_gnu: "-D__ARM_ARCH=8"
+          # - target: aarch64-unknown-linux-gnu
+          #   runs_on: ubuntu-latest
+          #   manylinux: 2_24
+          #   # I'm not sure if this actually works; I can't 'pip install ./local-path.whl'
+          #   # from inside a container based off quay.io/pypa/manylinux2014_aarch64
+          #   # see https://github.com/astral-sh/uv/issues/3439#issuecomment-2110448346
+          #   # manylinux: 2_28
+          #   # env:
+          #   #   # Workaround ring 0.17 build issue
+          #   #   # see https://github.com/briansmith/ring/issues/1728
+          #   #   CFLAGS_aarch64_unknown_linux_gnu: "-D__ARM_ARCH=8"
 
-          - target: x86_64-unknown-linux-musl
-            runs_on: ubuntu-latest
-            # see https://github.com/astral-sh/uv/blob/9bb55c4ac0582e05d1a7a5bbd99cc7b2c82f1847/.github/workflows/build-binaries.yml#L594
-            manylinux: musllinux_1_1
+          # - target: x86_64-unknown-linux-musl
+          #   runs_on: ubuntu-latest
+          #   # see https://github.com/astral-sh/uv/blob/9bb55c4ac0582e05d1a7a5bbd99cc7b2c82f1847/.github/workflows/build-binaries.yml#L594
+          #   manylinux: musllinux_1_1
 
-          - target: aarch64-unknown-linux-musl
-            runs_on: ubuntu-latest
-            # see https://github.com/astral-sh/uv/blob/9bb55c4ac0582e05d1a7a5bbd99cc7b2c82f1847/.github/workflows/build-binaries.yml#L594
-            manylinux: musllinux_1_1
+          # - target: aarch64-unknown-linux-musl
+          #   runs_on: ubuntu-latest
+          #   # see https://github.com/astral-sh/uv/blob/9bb55c4ac0582e05d1a7a5bbd99cc7b2c82f1847/.github/workflows/build-binaries.yml#L594
+          #   manylinux: musllinux_1_1
 
-          - target: x86_64-apple-darwin
-            runs_on: macos-latest
+          # - target: x86_64-apple-darwin
+          #   runs_on: macos-latest
 
-          - target: aarch64-apple-darwin
-            runs_on: macos-latest
+          # - target: aarch64-apple-darwin
+          #   runs_on: macos-latest
 
-          - target: x86_64-pc-windows-msvc
-            runs_on: windows-latest
+          # - target: x86_64-pc-windows-msvc
+          #   runs_on: windows-latest
 
-          - target: aarch64-pc-windows-msvc
-            runs_on: windows-11-arm
-            architecture: arm64
+          # - target: aarch64-pc-windows-msvc
+          #   runs_on: windows-11-arm
+          #   architecture: arm64
 
     name: ${{ matrix._.target }}
     runs-on: ${{ matrix._.runs_on }}
@@ -131,6 +131,7 @@ jobs:
           # see https://github.com/PyO3/maturin/issues/2110
           XWIN_VERSION: "16"
         with:
+          maturin-version: "1.9.2"
           target: ${{ matrix._.target }}
           command: build
           # building in engine/ ensures that we pick up .cargo/config.toml
