@@ -16,7 +16,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 pub use crate::chat_message_part::ChatMessagePart;
-use crate::{baml_value_to_jinja_value::IntoMiniJinjaValue, output_format::OutputFormat};
+use crate::{
+    baml_value_to_jinja_value::{IntoMiniJinjaValue, MinijinjaBamlEnum},
+    output_format::OutputFormat,
+};
 
 #[allow(non_camel_case_types)]
 #[derive(Clone, Debug, Serialize)]
@@ -110,6 +113,15 @@ fn render_minijinja(
             client => client,
             tags => tags,
             output_format => minijinja::value::Value::from_object(formatter),
+        },
+    );
+    env.add_global(
+        "MyEnum",
+        context! {
+            VALUE_B => minijinja::value::Value::from_object(MinijinjaBamlEnum {
+                value: "VALUE_B".to_string(),
+                alias: Some("ALIAS_B".to_string()),
+            }),
         },
     );
 
@@ -1354,6 +1366,55 @@ mod render_tests {
     }
 
     #[test]
+    fn render_enum_with_aliases() -> anyhow::Result<()> {
+        setup_logging();
+
+        let args: BamlValue = BamlValue::Map(BamlMap::from([(
+            "class_arg".to_string(),
+            // class args are not aliased yet when passed in to jinja
+            BamlValue::Class(
+                "C".to_string(),
+                BamlMap::from([("prop1".to_string(), BamlValue::String("value".to_string()))]),
+            ),
+        )]));
+
+        let ir = make_test_ir(
+            r#"
+            class C {
+                prop1 string @alias("key1")
+            }
+            "#,
+        )?;
+
+        let rendered = render_prompt(
+            " {{ class_arg }}",
+            &args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                    default_role: "system".to_string(),
+                    allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
+                    options: IndexMap::new(),
+                },
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::new(),
+            },
+            &[],
+            &ir,
+            &HashMap::new(),
+        )?;
+
+        assert_eq!(
+            rendered,
+            RenderedPrompt::Completion("{\n    \"key1\": \"value\",\n}".to_string())
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn render_class_with_aliases() -> anyhow::Result<()> {
         setup_logging();
 
@@ -2022,49 +2083,81 @@ mod render_tests {
 
     // See the note in baml_value_to_jinja_value.rs for Enum for why we don't support aliases.
     // tl;dr we don't havea  way to override the equality operator for enum comparisons to NOT use the alias.
-    // #[test]
-    // fn test_render_prompt_with_enum() -> anyhow::Result<()> {
-    //     setup_logging();
+    #[test]
+    fn test_render_prompt_with_enum() -> anyhow::Result<()> {
+        setup_logging();
 
-    //     let args = BamlValue::Map(BamlMap::from([(
-    //         "enum_arg".to_string(),
-    //         BamlValue::Enum("MyEnum".to_string(), "VALUE_B".to_string()),
-    //     )]));
+        let args = BamlValue::Map(BamlMap::from([(
+            "enum_arg".to_string(),
+            BamlValue::Enum("MyEnum".to_string(), "VALUE_B".to_string()),
+        )]));
 
-    //     let ir = make_test_ir(
-    //         r#"
-    //         enum MyEnum {
-    //             VALUE_A
-    //             VALUE_B @alias("ALIAS_B")
-    //             VALUE_C
-    //         }
-    //         "#,
-    //     )?;
+        let ir = make_test_ir(
+            r#"
+            enum MyEnum {
+                VALUE_A
+                VALUE_B @alias("ALIAS_B")
+                VALUE_C
+            }
+            "#,
+        )?;
 
-    //     let rendered = render_prompt(
-    //         "Enum value: {{ enum_arg }}",
-    //         &args,
-    //         RenderContext {
-    //             client: RenderContext_Client {
-    //                 name: "gpt4".to_string(),
-    //                 provider: "openai".to_string(),
-    //                 default_role: "system".to_string(),
-    //             },
-    //             output_format: OutputFormatContent::new_string(),
-    //             tags: HashMap::new(),
-    //         },
-    //         &vec![],
-    //         &ir,
-    //         &HashMap::new(),
-    //     )?;
+        let rendered = render_prompt(
+            r#"Enum value: {{ enum_arg }}
 
-    //     assert_eq!(
-    //         rendered,
-    //         RenderedPrompt::Completion("Enum value: ALIAS_B".to_string())
-    //     );
+{% if enum_arg == MyEnum.VALUE_B %}
+Enum value is equal to MyEnum.VALUE_B, as expected
+{% else %}
+Enum value should equal MyEnum.VALUE_B, but it does not
+{% endif %}
 
-    //     Ok(())
-    // }
+{% if enum_arg == "VALUE_B" %}
+Enum value should not equal the "VALUE_B" string, but it does
+{% else %}
+Enum value is not equal to the "VALUE_B" string, as expected
+{% endif %}
+
+{% if enum_arg == "ALIAS_B" %}
+Enum value should not equal MyEnum.ALIAS_B, but it does
+{% else %}
+Enum value does not equal MyEnum.ALIAS_B, as expected
+{% endif %}
+"#,
+            &args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                    default_role: "system".to_string(),
+                    allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
+                    options: IndexMap::new(),
+                },
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::new(),
+            },
+            &vec![],
+            &ir,
+            &HashMap::new(),
+        )?;
+
+        assert_eq!(
+            rendered,
+            RenderedPrompt::Completion(
+                r#"Enum value: ALIAS_B
+
+Enum value is equal to MyEnum.VALUE_B, as expected
+
+Enum value is not equal to the "VALUE_B" string, as expected
+
+Enum value does not equal MyEnum.ALIAS_B, as expected
+"#
+                .to_string()
+            )
+        );
+
+        Ok(())
+    }
 
     #[test]
     fn test_render_prompt_with_enum_no_alias() -> anyhow::Result<()> {

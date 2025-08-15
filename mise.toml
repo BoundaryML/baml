@@ -9,9 +9,10 @@ ruby = "3.2.2"
 node = "lts"     # For pnpm
 
 # Rust tools
-"cargo:wasm-pack" = "0.13.1"
+"cargo:bacon" = "latest"
 "cargo:cross" = "latest"
 "cargo:cargo-watch" = "latest"
+"cargo:wasm-pack" = "0.13.1"
 
 # Go tools
 # "go:google.golang.org/protobuf/cmd/protoc-gen-go" = "v1.36.6"

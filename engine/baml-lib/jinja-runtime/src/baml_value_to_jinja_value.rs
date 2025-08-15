@@ -41,22 +41,22 @@ impl IntoMiniJinjaValue for BamlValue {
             }
             BamlValue::Media(i) => i.to_minijinja_value(ir, eval_ctx),
             // For enums and classes we compute the aliases from the IR, and generate custom jinja structs that print out the alias if stringified.
-            BamlValue::Enum(_name, value) => {
-                minijinja::Value::from(value.clone())
+            BamlValue::Enum(name, value) => {
+                // minijinja::Value::from(value.clone())
                 // Until we can fix the broken test, just return the normal value. For now we wont suppport enum alias rendering.
-                // let mut alias: Option<String> = None;
-                // if let Ok(e) = ir.find_enum(name) {
-                //     if let Some(enum_value) = e
-                //         .walk_values()
-                //         .find(|ir_enum_value| ir_enum_value.item.elem.0 == *value)
-                //     {
-                //         alias = enum_value.alias(env_vars).ok().and_then(|a| a);
-                //     }
-                // }
-                // minijinja::Value::from_object(MinijinjaBamlEnum {
-                //     value: value.clone(),
-                //     alias,
-                // })
+                let mut alias: Option<String> = None;
+                if let Ok(e) = ir.find_enum(name) {
+                    if let Some(enum_value) = e
+                        .walk_values()
+                        .find(|ir_enum_value| ir_enum_value.item.elem.0 == *value)
+                    {
+                        alias = enum_value.alias(eval_ctx).ok().and_then(|a| a);
+                    }
+                }
+                minijinja::Value::from_object(MinijinjaBamlEnum {
+                    value: value.clone(),
+                    alias,
+                })
             }
             BamlValue::Class(name, m) => {
                 let map = m
@@ -144,9 +144,9 @@ impl minijinja::value::Object for MinijinjaBamlMedia {
 
 // Enums
 
-struct MinijinjaBamlEnum {
-    value: String,
-    alias: Option<String>,
+pub struct MinijinjaBamlEnum {
+    pub value: String,
+    pub alias: Option<String>,
 }
 
 impl std::fmt::Display for MinijinjaBamlEnum {
@@ -176,6 +176,15 @@ impl Object for MinijinjaBamlEnum {
 
     fn render(self: &Arc<Self>, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         std::fmt::Display::fmt(self, f)
+    }
+
+    fn custom_cmp(
+        self: &Arc<Self>,
+        _other: &minijinja::value::DynObject,
+    ) -> Option<std::cmp::Ordering> {
+        // let other = other.downcast_ref::<Self>()?;
+        // Some(self.num.cmp(&other.num))
+        Some(std::cmp::Ordering::Equal)
     }
 }
 
