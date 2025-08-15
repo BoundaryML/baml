@@ -147,7 +147,7 @@ jobs:
                 :
             fi
 
-      - name: Test wheels
+      - name: Test LICENSE packaging
         run: |
           set -euo pipefail
 
@@ -158,6 +158,7 @@ jobs:
           uv pip install ../engine/language_client_python/dist/*.whl
           uv pip-licenses | tee license-audit.log
 
+          # Due to `set -e`, this will fail if no matches are found
           grep 'baml.*Apache-2.0' license-audit.log
 
       - name: Upload wheels
