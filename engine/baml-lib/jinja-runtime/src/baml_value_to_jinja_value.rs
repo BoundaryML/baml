@@ -198,28 +198,31 @@ impl Object for MinijinjaBamlEnumValue {
     }
 
     fn enumerate(self: &Arc<Self>) -> Enumerator {
-        Enumerator::Empty
+        Enumerator::NonEnumerable
     }
 
     fn render(self: &Arc<Self>, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         std::fmt::Display::fmt(self, f)
     }
 
-    // fn custom_cmp(
-    //     self: &Arc<Self>,
-    //     _other: &minijinja::value::DynObject,
-    // ) -> Option<std::cmp::Ordering> {
-    //     // let other = other.downcast_ref::<Self>()?;
-    //     // Some(self.num.cmp(&other.num))
-    //     Some(std::cmp::Ordering::Equal)
-    // }
-}
-
-impl PartialEq for MinijinjaBamlEnumValue {
-    fn eq(&self, other: &Self) -> bool {
-        self.value == other.value
+    fn custom_cmp(
+        self: &Arc<Self>,
+        other: &minijinja::value::DynObject,
+    ) -> Option<std::cmp::Ordering> {
+        let other = other.downcast_ref::<Self>()?;
+        Some(
+            self.value
+                .cmp(&other.value)
+                .then(self.alias.cmp(&other.alias)),
+        )
     }
 }
+
+// impl PartialEq for MinijinjaBamlEnumValue {
+//     fn eq(&self, other: &Self) -> bool {
+//         self.value == other.value
+//     }
+// }
 
 // Classes
 

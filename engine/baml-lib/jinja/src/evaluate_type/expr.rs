@@ -371,8 +371,24 @@ fn tracker_visit_expr(
 
             match &parent {
                 Type::ClassRef(c) => {
-                    let (t, err) =
-                        types.check_property(&pretty_print(&expr.expr), c, expr.name, expr.span());
+                    let (t, err) = types.check_class_property(
+                        &pretty_print(&expr.expr),
+                        c,
+                        expr.name,
+                        expr.span(),
+                    );
+                    if let Some(e) = err {
+                        state.errors.push(e);
+                    }
+                    t
+                }
+                Type::EnumTypeRef(e) => {
+                    let (t, err) = types.check_enum_property(
+                        &pretty_print(&expr.expr),
+                        e,
+                        expr.name,
+                        expr.span(),
+                    );
                     if let Some(e) = err {
                         state.errors.push(e);
                     }

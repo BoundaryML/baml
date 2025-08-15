@@ -255,6 +255,13 @@ impl TypeError {
             span: Span::default(),
         }
     }
+
+    fn new_enum_not_defined(class: &str) -> Self {
+        Self {
+            message: format!("Class '{class}' is not defined"),
+            span: Span::default(),
+        }
+    }
 }
 
 struct ScopeTracker {

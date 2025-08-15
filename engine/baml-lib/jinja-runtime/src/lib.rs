@@ -2138,9 +2138,11 @@ handwritten enum values:
 
 Enum value is equal to MyEnum.VALUE_B, as expected
 
+Enum value is not equal to MyEnum.VALUE_A, as expected
+
 Enum value is not equal to the "VALUE_B" string, as expected
 
-Enum value does not equal MyEnum.ALIAS_B, as expected
+Enum value is not equal to the "ALIAS_B" string, as expected
 "#
                 .to_string()
             )

@@ -117,7 +117,7 @@ test Test1 {
 }
 // This will be available as an enum in your Python and Typescript code.
 enum Category {
-    Refund
+    Refund @alias("give my money back")
     CancelOrder
     TechnicalSupport
     AccountIssue
@@ -130,7 +130,7 @@ class Message {
 }
 
 // inputs can be more complex than just a string
-function ClassifyMessage(message: Message) -> Category {
+function ClassifyMessage(enum_arg: Category) -> Category {
   client GPT4o
 
   prompt #"
@@ -139,7 +139,8 @@ function ClassifyMessage(message: Message) -> Category {
 
     INPUT:
     ---
-    {{ message.userName }}: {{ message.message }}
+    {{ enum_arg }}
+    {{ Category.Refund }}
     ---
 
     {{ ctx.output_format }}
@@ -151,10 +152,7 @@ function ClassifyMessage(message: Message) -> Category {
 test Test1 {
   functions [ClassifyMessage]
   args {
-    message {
-      userName "Alice"
-      message "I can't access my account using my login credentials. I havent received the promised reset password email. Please help."
-    }
+    enum_arg Refund
   }
 }
 // These are LLM clients you can use in your functions. We currently support Anthropic, OpenAI / Azure, Gemini, and Ollama as providers.

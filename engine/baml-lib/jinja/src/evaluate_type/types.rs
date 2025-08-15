@@ -6,7 +6,7 @@ use std::{
 };
 
 use baml_types::LiteralValue;
-use indexmap::{IndexMap, IndexSet};
+use indexmap::IndexMap;
 use minijinja::machinery::{
     ast::{Call, Spanned},
     Span,
@@ -168,7 +168,7 @@ impl Type {
             ),
             Type::Both(l, r) => format!("{} & {}", l.name(), r.name()),
             Type::ClassRef(name) => format!("class {name}"),
-            Type::EnumTypeRef(name) => format!("enum {name}"),
+            Type::EnumTypeRef(name) => format!("enum definition {name}"),
             Type::EnumValueRef(name) => format!("enum {name}"),
             Type::FunctionRef(name) => format!("function {name}"),
             Type::Alias { name, resolved, .. } => {
@@ -248,7 +248,7 @@ pub struct PredefinedTypes {
     functions: IndexMap<String, (Type, Vec<(String, Type)>)>,
     classes: HashMap<String, IndexMap<String, Type>>,
     #[allow(dead_code)]
-    enum_values: IndexSet<String>,
+    enum_definitions: IndexMap<String, Vec<String>>,
     /// TODO: See the comment for [`Type::AliasRef`].
     ///
     /// We should use this but we can't without a significant refactor.
@@ -384,7 +384,7 @@ impl PredefinedTypes {
                     ]),
                 ),
             ]),
-            enum_values: Default::default(),
+            enum_definitions: Default::default(),
             variables: match context {
                 JinjaContext::Prompt => IndexMap::from([
                     ("ctx".into(), Type::ClassRef("baml::Context".into())),
@@ -470,6 +470,9 @@ impl PredefinedTypes {
         if self.as_class(name).is_some() {
             return Some(Type::ClassRef(name.to_string()));
         }
+        if self.as_enum(name).is_some() {
+            return Some(Type::EnumTypeRef(name.to_string()));
+        }
         None
     }
 
@@ -494,6 +497,10 @@ impl PredefinedTypes {
         self.classes.get(name)
     }
 
+    pub fn as_enum(&self, name: &str) -> Option<&Vec<String>> {
+        self.enum_definitions.get(name)
+    }
+
     pub fn as_function(&self, name: &str) -> Option<&(Type, Vec<(String, Type)>)> {
         self.functions.get(name)
     }
@@ -506,8 +513,8 @@ impl PredefinedTypes {
         self.classes.insert(name.to_string(), fields);
     }
 
-    pub fn add_enum(&mut self, name: &str) {
-        self.enum_values.insert(name.to_string());
+    pub fn add_enum(&mut self, name: &str, values: Vec<String>) {
+        self.enum_definitions.insert(name.to_string(), values);
     }
 
     pub fn add_alias(&mut self, name: &str, target: Type) {
@@ -532,7 +539,7 @@ impl PredefinedTypes {
         }
     }
 
-    pub fn check_property(
+    pub fn check_class_property(
         &self,
         variable_name: &str,
         class: &str,
@@ -555,6 +562,34 @@ impl PredefinedTypes {
             }
         }
         (Type::Unknown, Some(TypeError::new_class_not_defined(class)))
+    }
+
+    pub fn check_enum_property(
+        &self,
+        variable_name: &str,
+        enum_name: &str,
+        enum_value: &str,
+        span: Span,
+    ) -> (Type, Option<TypeError>) {
+        if let Some(values) = self.as_enum(enum_name) {
+            if values.contains(&enum_value.to_string()) {
+                return (Type::EnumValueRef(enum_value.to_string()), None);
+            } else {
+                return (
+                    Type::Unknown,
+                    Some(TypeError::new_property_not_defined(
+                        variable_name,
+                        enum_name,
+                        enum_value,
+                        span,
+                    )),
+                );
+            }
+        }
+        (
+            Type::Unknown,
+            Some(TypeError::new_enum_not_defined(enum_name)),
+        )
     }
 
     pub fn check_function_args(
