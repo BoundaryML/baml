@@ -119,12 +119,12 @@ fn tracker_visit_expr(
 
             expected
         }
-        ast::Expr::BinOp(expr) => {
-            let lhs = tracker_visit_expr(&expr.left, state, types);
-            let rhs = tracker_visit_expr(&expr.right, state, types);
+        ast::Expr::BinOp(bin_expr) => {
+            let lhs = tracker_visit_expr(&bin_expr.left, state, types);
+            let rhs = tracker_visit_expr(&bin_expr.right, state, types);
             // TODO: Check for type compatibility
 
-            match expr.op {
+            match bin_expr.op {
                 ast::BinOpKind::Add => {
                     if lhs.is_subtype_of(&Type::String) || rhs.is_subtype_of(&Type::String) {
                         Type::String
@@ -138,7 +138,49 @@ fn tracker_visit_expr(
                 ast::BinOpKind::Pow => Type::Number,
                 ast::BinOpKind::FloorDiv => Type::Number,
                 ast::BinOpKind::Rem => Type::Number,
-                ast::BinOpKind::Eq => Type::Bool,
+                ast::BinOpKind::Eq => {
+                    match (&lhs, &rhs) {
+                        (Type::EnumValueRef(e1), Type::EnumValueRef(e2)) => {
+                            if e1 == e2 {
+                                Type::Bool
+                            } else {
+                                state.errors.push(TypeError::new_invalid_binop(
+                                    expr,
+                                    &lhs,
+                                    &rhs,
+                                    expr.span(),
+                                ));
+                                Type::Unknown
+                            }
+                        }
+                        (Type::EnumValueRef(_), _) => {
+                            state.errors.push(TypeError::new_invalid_binop(
+                                expr,
+                                &lhs,
+                                &rhs,
+                                expr.span(),
+                            ));
+                            Type::Unknown
+                        }
+                        (_, Type::EnumValueRef(_)) => {
+                            state.errors.push(TypeError::new_invalid_binop(
+                                expr,
+                                &lhs,
+                                &rhs,
+                                expr.span(),
+                            ));
+                            Type::Unknown
+                        }
+                        _ => Type::Bool,
+                    }
+                    // state.errors.push(TypeError::new_invalid_binop(
+                    //     &expr,
+                    //     &lhs,
+                    //     &rhs,
+                    //     bin_expr.span(),
+                    // ));
+                    // Type::Unknown
+                }
                 ast::BinOpKind::Ne => Type::Bool,
                 ast::BinOpKind::Lt => Type::Bool,
                 ast::BinOpKind::Gt => Type::Bool,

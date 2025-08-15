@@ -126,6 +126,18 @@ fn test_ifexpr() {
 }
 
 #[test]
+fn test_enum() {
+    let mut types = PredefinedTypes::default(JinjaContext::Prompt);
+    types.add_enum("MyEnum");
+    types.add_variable("enum_arg", Type::EnumValueRef("MyEnum".into()));
+
+    assert_eq!(
+        assert_fails_to!("enum_arg == \"VALUE_A\"", &types),
+        vec!["enum MyEnum (enum_arg) does not have a value 'enum_arg'"]
+    );
+}
+
+#[test]
 fn test_eval() {
     let types = PredefinedTypes::default(JinjaContext::Prompt);
     assert_eq!(assert_evaluates_to!("1 + 1", &types), Type::Number);

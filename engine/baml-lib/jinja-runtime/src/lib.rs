@@ -17,7 +17,9 @@ use serde_json::json;
 
 pub use crate::chat_message_part::ChatMessagePart;
 use crate::{
-    baml_value_to_jinja_value::{IntoMiniJinjaValue, MinijinjaBamlEnum},
+    baml_value_to_jinja_value::{
+        IntoMiniJinjaValue, MinijinjaBamlEnumType, MinijinjaBamlEnumValue,
+    },
     output_format::OutputFormat,
 };
 
@@ -62,6 +64,7 @@ fn render_minijinja(
     default_role: String,
     allowed_roles: Vec<String>,
     remap_role: HashMap<String, String>,
+    enum_values_by_name: IndexMap<String, Vec<MinijinjaBamlEnumValue>>,
 ) -> Result<RenderedPrompt, minijinja::Error> {
     let mut env = get_env();
 
@@ -115,15 +118,18 @@ fn render_minijinja(
             output_format => minijinja::value::Value::from_object(formatter),
         },
     );
-    env.add_global(
-        "MyEnum",
-        context! {
-            VALUE_B => minijinja::value::Value::from_object(MinijinjaBamlEnum {
-                value: "VALUE_B".to_string(),
-                alias: Some("ALIAS_B".to_string()),
+    for (enum_name, enum_values) in enum_values_by_name {
+        env.add_global(
+            enum_name.clone(),
+            minijinja::value::Value::from_object(MinijinjaBamlEnumType {
+                enum_name,
+                enum_values: enum_values
+                    .into_iter()
+                    .map(|v| (v.value.clone(), v))
+                    .collect(),
             }),
-        },
-    );
+        );
+    }
 
     let role_fn = minijinja::Value::from_function(
         |role: Option<String>, kwargs: Kwargs| -> Result<String, minijinja::Error> {
@@ -442,6 +448,21 @@ pub fn render_prompt(
     let default_role = ctx.client.default_role.clone();
     let allowed_roles = ctx.client.allowed_roles.clone();
     let remap_role = ctx.client.remap_role.clone();
+    let enum_values_by_name = ir
+        .walk_enums()
+        .map(|e| {
+            let enum_name = e.name().to_string();
+            let enum_values = e
+                .walk_values()
+                .map(|v| MinijinjaBamlEnumValue {
+                    value: v.name().to_string(),
+                    alias: v.alias(&eval_ctx).unwrap_or(None),
+                })
+                .collect::<Vec<_>>();
+            (enum_name, enum_values)
+        })
+        .collect::<IndexMap<_, _>>();
+
     let rendered = render_minijinja(
         template,
         &minijinja_args,
@@ -450,6 +471,7 @@ pub fn render_prompt(
         default_role,
         allowed_roles,
         remap_role,
+        enum_values_by_name,
     );
 
     match rendered {
@@ -1366,55 +1388,6 @@ mod render_tests {
     }
 
     #[test]
-    fn render_enum_with_aliases() -> anyhow::Result<()> {
-        setup_logging();
-
-        let args: BamlValue = BamlValue::Map(BamlMap::from([(
-            "class_arg".to_string(),
-            // class args are not aliased yet when passed in to jinja
-            BamlValue::Class(
-                "C".to_string(),
-                BamlMap::from([("prop1".to_string(), BamlValue::String("value".to_string()))]),
-            ),
-        )]));
-
-        let ir = make_test_ir(
-            r#"
-            class C {
-                prop1 string @alias("key1")
-            }
-            "#,
-        )?;
-
-        let rendered = render_prompt(
-            " {{ class_arg }}",
-            &args,
-            RenderContext {
-                client: RenderContext_Client {
-                    name: "gpt4".to_string(),
-                    provider: "openai".to_string(),
-                    default_role: "system".to_string(),
-                    allowed_roles: vec!["system".to_string()],
-                    remap_role: HashMap::new(),
-                    options: IndexMap::new(),
-                },
-                output_format: OutputFormatContent::new_string(),
-                tags: HashMap::new(),
-            },
-            &[],
-            &ir,
-            &HashMap::new(),
-        )?;
-
-        assert_eq!(
-            rendered,
-            RenderedPrompt::Completion("{\n    \"key1\": \"value\",\n}".to_string())
-        );
-
-        Ok(())
-    }
-
-    #[test]
     fn render_class_with_aliases() -> anyhow::Result<()> {
         setup_logging();
 
@@ -2095,7 +2068,7 @@ mod render_tests {
         let ir = make_test_ir(
             r#"
             enum MyEnum {
-                VALUE_A
+                VALUE_A @alias("alpha")
                 VALUE_B @alias("ALIAS_B")
                 VALUE_C
             }
@@ -2103,7 +2076,13 @@ mod render_tests {
         )?;
 
         let rendered = render_prompt(
-            r#"Enum value: {{ enum_arg }}
+            r#"
+Enum value: {{ enum_arg }}
+
+handwritten enum values:
+  - first: {{ MyEnum.VALUE_A }}
+  - second: {{ MyEnum.VALUE_B }}
+  - third: {{ MyEnum.VALUE_C }}
 
 {% if enum_arg == MyEnum.VALUE_B %}
 Enum value is equal to MyEnum.VALUE_B, as expected
@@ -2111,16 +2090,22 @@ Enum value is equal to MyEnum.VALUE_B, as expected
 Enum value should equal MyEnum.VALUE_B, but it does not
 {% endif %}
 
-{% if enum_arg == "VALUE_B" %}
-Enum value should not equal the "VALUE_B" string, but it does
+{% if enum_arg != MyEnum.VALUE_A %}
+Enum value is not equal to MyEnum.VALUE_A, as expected
 {% else %}
-Enum value is not equal to the "VALUE_B" string, as expected
+Enum value should not equal MyEnum.VALUE_A, but it does
 {% endif %}
 
-{% if enum_arg == "ALIAS_B" %}
-Enum value should not equal MyEnum.ALIAS_B, but it does
+{% if enum_arg != "VALUE_B" %}
+Enum value is not equal to the "VALUE_B" string, as expected
 {% else %}
-Enum value does not equal MyEnum.ALIAS_B, as expected
+Enum value should not equal the "VALUE_B" string, but it does
+{% endif %}
+
+{% if enum_arg != "ALIAS_B" %}
+Enum value is not equal to the "ALIAS_B" string, as expected
+{% else %}
+Enum value should not equal the "ALIAS_B" string, but it does
 {% endif %}
 "#,
             &args,
@@ -2145,6 +2130,11 @@ Enum value does not equal MyEnum.ALIAS_B, as expected
             rendered,
             RenderedPrompt::Completion(
                 r#"Enum value: ALIAS_B
+
+handwritten enum values:
+  - first: alpha
+  - second: ALIAS_B
+  - third: VALUE_C
 
 Enum value is equal to MyEnum.VALUE_B, as expected
 
@@ -2280,6 +2270,7 @@ Enum value does not equal MyEnum.ALIAS_B, as expected
             "user".to_string(),
             vec!["user".to_string(), "system".to_string()],
             HashMap::new(),
+            IndexMap::new(),
         )
         .expect("Rendering should succeed");
         match result {
@@ -2367,6 +2358,7 @@ Enum value does not equal MyEnum.ALIAS_B, as expected
             "user".to_string(),
             vec!["user".to_string(), "system".to_string()],
             HashMap::new(),
+            IndexMap::new(),
         )
         .expect("Rendering should succeed");
         match result {
@@ -2400,6 +2392,7 @@ Enum value does not equal MyEnum.ALIAS_B, as expected
             "user".to_string(),
             vec!["user".to_string(), "system".to_string()],
             HashMap::new(),
+            IndexMap::new(),
         )
         .expect("Rendering should succeed");
         match result {

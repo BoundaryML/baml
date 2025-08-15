@@ -28,6 +28,12 @@ impl<'db> EnumWalker<'db> {
                 }
             })
     }
+
+    /// For some reason this has a symbol naming conflict with ClassWalker::add_to_types
+    /// so we name it differently here.
+    pub fn add_enums_to_types(self, types: &mut internal_baml_jinja_types::PredefinedTypes) {
+        types.add_enum(self.name());
+    }
 }
 
 impl<'db> EnumValueWalker<'db> {

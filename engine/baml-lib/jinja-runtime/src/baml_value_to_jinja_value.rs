@@ -53,7 +53,7 @@ impl IntoMiniJinjaValue for BamlValue {
                         alias = enum_value.alias(eval_ctx).ok().and_then(|a| a);
                     }
                 }
-                minijinja::Value::from_object(MinijinjaBamlEnum {
+                minijinja::Value::from_object(MinijinjaBamlEnumValue {
                     value: value.clone(),
                     alias,
                 })
@@ -142,26 +142,53 @@ impl minijinja::value::Object for MinijinjaBamlMedia {
     }
 }
 
+#[derive(Debug)]
+pub struct MinijinjaBamlEnumType {
+    pub enum_name: String,
+    pub enum_values: IndexMap<String, MinijinjaBamlEnumValue>,
+}
+
+impl Object for MinijinjaBamlEnumType {
+    fn repr(self: &Arc<Self>) -> ObjectRepr {
+        ObjectRepr::Map
+    }
+
+    fn get_value(self: &Arc<Self>, key: &minijinja::Value) -> Option<minijinja::Value> {
+        self.enum_values
+            .get(key.as_str()?)
+            .map(|v| minijinja::value::Value::from_object(v.clone()))
+    }
+
+    fn enumerate(self: &Arc<Self>) -> Enumerator {
+        Enumerator::NonEnumerable
+    }
+
+    fn enumerator_len(self: &Arc<Self>) -> Option<usize> {
+        None
+    }
+}
+
 // Enums
 
-pub struct MinijinjaBamlEnum {
+#[derive(Clone)]
+pub struct MinijinjaBamlEnumValue {
     pub value: String,
     pub alias: Option<String>,
 }
 
-impl std::fmt::Display for MinijinjaBamlEnum {
+impl std::fmt::Display for MinijinjaBamlEnumValue {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", self.alias.as_ref().unwrap_or(&self.value))
     }
 }
 
-impl std::fmt::Debug for MinijinjaBamlEnum {
+impl std::fmt::Debug for MinijinjaBamlEnumValue {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         std::fmt::Display::fmt(self, f)
     }
 }
 
-impl Object for MinijinjaBamlEnum {
+impl Object for MinijinjaBamlEnumValue {
     fn repr(self: &Arc<Self>) -> ObjectRepr {
         ObjectRepr::Map
     }
@@ -178,17 +205,17 @@ impl Object for MinijinjaBamlEnum {
         std::fmt::Display::fmt(self, f)
     }
 
-    fn custom_cmp(
-        self: &Arc<Self>,
-        _other: &minijinja::value::DynObject,
-    ) -> Option<std::cmp::Ordering> {
-        // let other = other.downcast_ref::<Self>()?;
-        // Some(self.num.cmp(&other.num))
-        Some(std::cmp::Ordering::Equal)
-    }
+    // fn custom_cmp(
+    //     self: &Arc<Self>,
+    //     _other: &minijinja::value::DynObject,
+    // ) -> Option<std::cmp::Ordering> {
+    //     // let other = other.downcast_ref::<Self>()?;
+    //     // Some(self.num.cmp(&other.num))
+    //     Some(std::cmp::Ordering::Equal)
+    // }
 }
 
-impl PartialEq for MinijinjaBamlEnum {
+impl PartialEq for MinijinjaBamlEnumValue {
     fn eq(&self, other: &Self) -> bool {
         self.value == other.value
     }

@@ -189,6 +189,18 @@ impl TypeError {
         Self { message: format!("{message}\n\nSee: https://docs.rs/minijinja/latest/minijinja/filters/index.html#functions for the compelete list"), span }
     }
 
+    fn new_invalid_binop(expr: &Expr, lhs: &Type, rhs: &Type, span: Span) -> Self {
+        Self {
+            message: format!(
+                "'{}' compares {} with {}, but enum values can only be compared with other enum values",
+                pretty_print::pretty_print(expr),
+                lhs.name(),
+                rhs.name()
+            ),
+            span,
+        }
+    }
+
     fn new_invalid_type(expr: &Expr, got: &Type, expected: &str, span: Span) -> Self {
         Self {
             message: format!(

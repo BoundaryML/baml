@@ -6,7 +6,7 @@ use std::{
 };
 
 use baml_types::LiteralValue;
-use indexmap::IndexMap;
+use indexmap::{IndexMap, IndexSet};
 use minijinja::machinery::{
     ast::{Call, Spanned},
     Span,
@@ -33,6 +33,8 @@ pub enum Type {
     // It is simultaneously two types, whichever fits best
     Both(Box<Type>, Box<Type>),
     ClassRef(String),
+    EnumTypeRef(String),
+    EnumValueRef(String),
     FunctionRef(String),
     /// TODO: This should be `AliasRef(String)` but functions like
     /// [`Self::is_subtype_of`] or [`Self::bitor`] don't have access to the
@@ -107,6 +109,8 @@ impl Type {
             (Type::Tuple(_), _) => false,
 
             (Type::ClassRef(_), _) => false,
+            (Type::EnumTypeRef(_), _) => false,
+            (Type::EnumValueRef(_), _) => false,
             (Type::FunctionRef(_), _) => false,
             (Type::Alias { resolved, .. }, _) => resolved.is_subtype_of(other),
             (Type::RecursiveTypeAlias(_), _) => false,
@@ -164,6 +168,8 @@ impl Type {
             ),
             Type::Both(l, r) => format!("{} & {}", l.name(), r.name()),
             Type::ClassRef(name) => format!("class {name}"),
+            Type::EnumTypeRef(name) => format!("enum {name}"),
+            Type::EnumValueRef(name) => format!("enum {name}"),
             Type::FunctionRef(name) => format!("function {name}"),
             Type::Alias { name, resolved, .. } => {
                 format!("type alias {name} (resolves to {})", resolved.name())
@@ -241,6 +247,8 @@ enum Scope {
 pub struct PredefinedTypes {
     functions: IndexMap<String, (Type, Vec<(String, Type)>)>,
     classes: HashMap<String, IndexMap<String, Type>>,
+    #[allow(dead_code)]
+    enum_values: IndexSet<String>,
     /// TODO: See the comment for [`Type::AliasRef`].
     ///
     /// We should use this but we can't without a significant refactor.
@@ -376,6 +384,7 @@ impl PredefinedTypes {
                     ]),
                 ),
             ]),
+            enum_values: Default::default(),
             variables: match context {
                 JinjaContext::Prompt => IndexMap::from([
                     ("ctx".into(), Type::ClassRef("baml::Context".into())),
@@ -495,6 +504,10 @@ impl PredefinedTypes {
 
     pub fn add_class(&mut self, name: &str, fields: IndexMap<String, Type>) {
         self.classes.insert(name.to_string(), fields);
+    }
+
+    pub fn add_enum(&mut self, name: &str) {
+        self.enum_values.insert(name.to_string());
     }
 
     pub fn add_alias(&mut self, name: &str, target: Type) {
