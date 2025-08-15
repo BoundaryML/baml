@@ -348,10 +348,10 @@ impl<'g> HirCompiler<'g> {
             self.compile_statement(statement);
         }
 
-        let scope_has_ending_expr = matches!(
-            block.statements.last(),
-            Some(hir::Statement::Expression { .. })
-        );
+        let scope_has_ending_expr = block.statements.last().is_some_and(|stmt| match stmt {
+            hir::Statement::Expression { expr, .. } => expr.produces_final_value(),
+            _ => false,
+        });
 
         self.exit_scope(scope_has_ending_expr);
     }
@@ -1103,6 +1103,77 @@ impl<'g> HirCompiler<'g> {
             .expect("should have been pushed before when grabbing old_status");
 
         (loop_info, result)
+    }
+}
+
+impl hir::Expression {
+    /// Returns true if the block ends with an expression that has a final value.
+    ///
+    /// For example, it would return true for this block:
+    ///
+    /// ```ignore
+    /// let a = {
+    ///     let b = 1;
+    ///     if b == 1 {
+    ///         1
+    ///     } else {
+    ///         2
+    ///     }
+    /// };
+    /// ```
+    ///
+    /// But false for this one:
+    ///
+    /// ```ignore
+    /// let mut a = 0;
+    /// if a == 0 {
+    ///     a = 1;
+    /// } else {
+    ///     a = 2;
+    /// }
+    /// ```
+    ///
+    /// TODO: This seems completely unecessary, the typechecker will already
+    /// check at some point that return values match the expected type. After
+    /// that we should alreay have enough information to decide whether a block
+    /// returns or not.
+    fn produces_final_value(&self) -> bool {
+        match self {
+            // First call will happen on a block. Recurse on the final expression.
+            hir::Expression::ExpressionBlock(block, _) => match block.statements.last() {
+                Some(hir::Statement::Expression { expr, .. }) => expr.produces_final_value(),
+
+                // Does not produce a value.
+                _ => false,
+            },
+
+            // If statements as last expression need to check if they return
+            // any value. We won't recurse into the else branch because both
+            // need to match, if one of them returns a value the other one must
+            // return the same type. This is typechecker bug if it's wrong, so
+            // I won't bother here.
+            hir::Expression::If { if_branch, .. } => if_branch.produces_final_value(),
+
+            // This is an expression that produces a value, so true. We're
+            // forcing non-exhaustive match here because other types of
+            // expressions that we add in the future might need to be considered.
+            hir::Expression::Array(_, _)
+            | hir::Expression::Map(_, _)
+            | hir::Expression::JinjaExpressionValue(_, _)
+            | hir::Expression::ArrayAccess { .. }
+            | hir::Expression::FieldAccess { .. }
+            | hir::Expression::MethodCall { .. }
+            | hir::Expression::BoolValue(_, _)
+            | hir::Expression::NumericValue(_, _)
+            | hir::Expression::Identifier(_, _)
+            | hir::Expression::StringValue(_, _)
+            | hir::Expression::RawStringValue(_, _)
+            | hir::Expression::Call { .. }
+            | hir::Expression::ClassConstructor(_, _)
+            | hir::Expression::BinaryOperation { .. }
+            | hir::Expression::UnaryOperation { .. }
+            | hir::Expression::Paren(_, _) => true,
+        }
     }
 }
 
@@ -1939,6 +2010,107 @@ mod tests {
                     Instruction::Jump(-20),
                     Instruction::Jump(2),
                     // exit loop: pop condition and return a
+                    Instruction::Pop(1),
+                    Instruction::LoadVar(1),
+                    Instruction::Return,
+                ],
+            )],
+        })
+    }
+
+    // This tests that we don't emit POP_REPLACE for if expressions when they
+    // do not return values.
+    #[test]
+    fn nested_block_expr_with_ending_normal_if() -> anyhow::Result<()> {
+        assert_compiles(Program {
+            source: "
+                fn main() -> int {
+                    let mut a = 1;
+
+                    {
+                        let b = 2;
+                        let c = 3;
+                        a = b + c;
+
+                        if a == 5 {
+                            a = 10;
+                        }
+                    }
+
+                    a
+                }
+            ",
+            expected: vec![(
+                "main",
+                vec![
+                    Instruction::LoadConst(0),
+                    Instruction::LoadConst(1),
+                    Instruction::LoadConst(2),
+                    Instruction::LoadVar(2),
+                    Instruction::LoadVar(3),
+                    Instruction::BinOp(BinOp::Add),
+                    Instruction::StoreVar(1),
+                    Instruction::LoadVar(1),
+                    Instruction::LoadConst(3),
+                    Instruction::CmpOp(CmpOp::Eq),
+                    Instruction::JumpIfFalse(5),
+                    Instruction::Pop(1),
+                    Instruction::LoadConst(4),
+                    Instruction::StoreVar(1),
+                    Instruction::Jump(2),
+                    Instruction::Pop(1),
+                    Instruction::Pop(2),
+                    Instruction::LoadVar(1),
+                    Instruction::Return,
+                ],
+            )],
+        })
+    }
+
+    // This tests that we don't emit POP_REPLACE for if expressions when they
+    // do not return values.
+    #[test]
+    fn while_loop_with_ending_if() -> anyhow::Result<()> {
+        assert_compiles(Program {
+            source: "
+                fn main() -> int {
+                    let mut a = 1;
+
+                    while a < 5 {
+                        a += 1;
+
+                        if a == 2 {
+                            break;
+                        }
+                    }
+
+                    a
+                }
+            ",
+            expected: vec![(
+                "main",
+                vec![
+                    Instruction::LoadConst(0),
+                    Instruction::LoadVar(1),
+                    Instruction::LoadConst(1),
+                    Instruction::CmpOp(CmpOp::Lt),
+                    Instruction::JumpIfFalse(17),
+                    Instruction::Pop(1),
+                    Instruction::LoadVar(1),
+                    Instruction::LoadConst(2),
+                    Instruction::BinOp(BinOp::Add),
+                    Instruction::StoreVar(1),
+                    Instruction::LoadVar(1),
+                    Instruction::LoadConst(3),
+                    Instruction::CmpOp(CmpOp::Eq),
+                    Instruction::JumpIfFalse(4),
+                    Instruction::Pop(1),
+                    Instruction::Jump(4),
+                    Instruction::Jump(2),
+                    Instruction::Pop(1),
+                    Instruction::Jump(-17),
+                    Instruction::Pop(1),
+                    Instruction::Jump(2),
                     Instruction::Pop(1),
                     Instruction::LoadVar(1),
                     Instruction::Return,

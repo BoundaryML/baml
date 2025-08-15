@@ -415,17 +415,17 @@ impl Block {
         }
 
         if let Some(block_final_expr) = block.expr.as_ref() {
-            let lifted_expr = Expression::from_ast(block_final_expr);
+            let final_expr = Expression::from_ast(block_final_expr);
 
             // Then add the final statement
             statements.push(if is_function_body {
                 Statement::Return {
-                    expr: lifted_expr,
+                    expr: final_expr,
                     span: block_final_expr.span().clone(),
                 }
             } else {
                 Statement::Expression {
-                    expr: lifted_expr,
+                    expr: final_expr,
                     span: block_final_expr.span().clone(),
                 }
             });
