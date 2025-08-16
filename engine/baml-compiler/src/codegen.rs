@@ -1084,7 +1084,7 @@ impl<'g> HirCompiler<'g> {
 
     /// Emits instructions to drop scopes up-to and including `pop_until` index, but does not affect information for
     /// locals.
-    /// Used in `break` & `continue` to emit appropiate popping instructions.
+    /// Used in `break` & `continue` to emit appropriate popping instructions.
     fn emit_scope_drops(&mut self, pop_until: usize) {
         let scopes = &self.scopes[pop_until..];
 
