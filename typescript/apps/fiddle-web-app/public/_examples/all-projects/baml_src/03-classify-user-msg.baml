@@ -1,6 +1,6 @@
 // This will be available as an enum in your Python and Typescript code.
 enum Category {
-    Refund @alias("give my money back")
+    Refund
     CancelOrder
     TechnicalSupport
     AccountIssue
@@ -13,7 +13,7 @@ class Message {
 }
 
 // inputs can be more complex than just a string
-function ClassifyMessage(enum_arg: Category) -> Category {
+function ClassifyMessage(message: Message) -> Category {
   client GPT4o
 
   prompt #"
@@ -22,8 +22,7 @@ function ClassifyMessage(enum_arg: Category) -> Category {
 
     INPUT:
     ---
-    {{ enum_arg }}
-    {{ Category.Refund }}
+    {{ message.userName }}: {{ message.message }}
     ---
 
     {{ ctx.output_format }}
@@ -35,6 +34,9 @@ function ClassifyMessage(enum_arg: Category) -> Category {
 test Test1 {
   functions [ClassifyMessage]
   args {
-    enum_arg Refund
+    message {
+      userName "Alice"
+      message "I can't access my account using my login credentials. I havent received the promised reset password email. Please help."
+    }
   }
 }
