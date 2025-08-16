@@ -36,23 +36,23 @@ jobs:
             #   # Workaround ring 0.17 build issue
             #   # see https://github.com/briansmith/ring/issues/1728
             #   CFLAGS_aarch64_unknown_linux_gnu: "-D__ARM_ARCH=8"
-            run_license_test: false
+            license_test: skip
 
           - target: x86_64-unknown-linux-musl
             runs_on: ubuntu-latest
             # see https://github.com/astral-sh/uv/blob/9bb55c4ac0582e05d1a7a5bbd99cc7b2c82f1847/.github/workflows/build-binaries.yml#L594
             manylinux: musllinux_1_1
-            run_license_test: false
+            license_test: skip
 
           - target: aarch64-unknown-linux-musl
             runs_on: ubuntu-latest
             # see https://github.com/astral-sh/uv/blob/9bb55c4ac0582e05d1a7a5bbd99cc7b2c82f1847/.github/workflows/build-binaries.yml#L594
             manylinux: musllinux_1_1
-            run_license_test: false
+            license_test: skip
 
           - target: x86_64-apple-darwin
             runs_on: macos-latest
-            run_license_test: false
+            license_test: skip
 
           - target: aarch64-apple-darwin
             runs_on: macos-latest
@@ -69,7 +69,7 @@ jobs:
     # See also https://github.com/mcrumiller/polars/.github/workflows/release-python.yml#L282
     steps:
       - name: Test LICENSE packaging
-        if: matrix._.run_license_test != false
+        if: matrix._.license_test != 'skip'
         run: |
           set -euo pipefail
 
