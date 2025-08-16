@@ -1560,7 +1560,7 @@ impl WasmRuntime {
 
     #[wasm_bindgen]
     pub async fn run_tests(
-        &mut self,
+        &self,
         function_test_pairs: js_sys::Array,
         on_partial_response: js_sys::Function,
         get_baml_src_cb: js_sys::Function,
