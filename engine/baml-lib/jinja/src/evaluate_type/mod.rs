@@ -195,7 +195,7 @@ impl TypeError {
             (Type::String, _) | (_, Type::String) | (Type::Literal(LiteralValue::String(_)), _) | (_, Type::Literal(LiteralValue::String(_))) => {
                 Self {
                     message: format!(
-                        "Type mismatch: '{}' compares values of different types ({} and {}). Note that starting in baml 0.206.0, strings are not implicitly converted to enum values (e.g. you should use `MyEnum.VALUE_A` instead of `\"VALUE_A\"`).",
+                        "Type mismatch: '{}' compares values of different types ({} and {}). Starting in baml 0.206.0, strings are not implicitly converted to enum values (e.g. you should use `MyEnum.VALUE_A` instead of `\"VALUE_A\"`).",
                         pretty_print::pretty_print(expr),
                         lhs.name(),
                         rhs.name()
