@@ -1,4 +1,7 @@
+#[cfg(not(target_arch = "wasm32"))]
 use libc::size_t;
+#[cfg(target_arch = "wasm32")]
+type size_t = usize;
 
 use super::*;
 use crate::{
@@ -34,7 +37,7 @@ impl Buffer {
 
 #[no_mangle]
 pub extern "C" fn call_object_constructor(
-    encoded_args: *const libc::c_char,
+    encoded_args: *const c_char,
     length: usize,
 ) -> Buffer {
     let result = call_object_constructor_impl(encoded_args, length);
@@ -64,7 +67,7 @@ pub extern "C" fn call_object_constructor(
 }
 
 fn call_object_constructor_impl(
-    encoded_args: *const libc::c_char,
+    encoded_args: *const c_char,
     length: usize,
 ) -> BamlObjectResponse {
     let BamlObjectConstructorArgs {
@@ -88,8 +91,8 @@ pub extern "C" fn free_buffer(buf: Buffer) {
 
 #[no_mangle]
 pub extern "C" fn call_object_method(
-    runtime: *const libc::c_void,
-    encoded_args: *const libc::c_char,
+    runtime: *const c_void,
+    encoded_args: *const c_char,
     length: usize,
 ) -> Buffer {
     let runtime = unsafe { &*(runtime as *const baml_runtime::BamlRuntime) };
@@ -122,7 +125,7 @@ pub extern "C" fn call_object_method(
 
 fn call_object_method_impl(
     runtime: &baml_runtime::BamlRuntime,
-    encoded_args: *const libc::c_char,
+    encoded_args: *const c_char,
     length: usize,
 ) -> BamlObjectResponse {
     let BamlMethodArguments {

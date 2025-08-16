@@ -3,28 +3,24 @@ use std::{collections::HashMap, ops::Deref, ptr::null, sync::Arc};
 use anyhow::Result;
 use baml_runtime::{BamlRuntime, FunctionResult};
 use baml_types::BamlValue;
-use once_cell::sync::Lazy;
 
 use super::*;
 use crate::ffi::{
+    async_runtime::AsyncRuntime,
     callbacks::{safe_trigger_callback, send_error_to_callback, send_result_to_callback},
     utils::handle_ffi_error,
 };
-
-/// cbindgen:ignore
-static RUNTIME: Lazy<Arc<tokio::runtime::Runtime>> =
-    Lazy::new(|| Arc::new(tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime")));
 
 /// Extern "C" function that returns immediately, scheduling the async call.
 /// Once the asynchronous function completes, the provided callback is invoked.
 #[no_mangle]
 pub extern "C" fn call_function_from_c(
-    runtime: *const libc::c_void,
+    runtime: *const c_void,
     function_name: *const c_char,
-    encoded_args: *const libc::c_char,
+    encoded_args: *const c_char,
     length: usize,
     id: u32,
-) -> *const libc::c_void {
+) -> *const c_void {
     match call_function_from_c_inner(runtime, function_name, encoded_args, length, id) {
         Ok(_) => null(),
         Err(e) => handle_ffi_error(e),
@@ -33,12 +29,12 @@ pub extern "C" fn call_function_from_c(
 
 #[no_mangle]
 pub extern "C" fn call_function_parse_from_c(
-    runtime: *const libc::c_void,
+    runtime: *const c_void,
     function_name: *const c_char,
-    encoded_args: *const libc::c_char,
+    encoded_args: *const c_char,
     length: usize,
     id: u32,
-) -> *const libc::c_void {
+) -> *const c_void {
     match call_function_parse_from_c_inner(runtime, function_name, encoded_args, length, id) {
         Ok(_) => null(),
         Err(e) => handle_ffi_error(e),
@@ -46,9 +42,9 @@ pub extern "C" fn call_function_parse_from_c(
 }
 
 fn call_function_from_c_inner(
-    runtime: *const libc::c_void,
+    runtime: *const c_void,
     function_name: *const c_char,
-    encoded_args: *const libc::c_char,
+    encoded_args: *const c_char,
     length: usize,
     id: u32,
 ) -> Result<()> {
@@ -75,9 +71,7 @@ fn call_function_from_c_inner(
     let ctx = runtime.create_ctx_manager(BamlValue::String("cffi".to_string()), None);
 
     // Spawn an async task to await the future and call the callback when done.
-    // Ensure that a Tokio runtime is running in your application.
-    let rt = RUNTIME.clone();
-    rt.spawn(async move {
+    AsyncRuntime::spawn_local(async move {
         let result = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| async {
             // TODO: There's a race condition bug here. Technically we should COPY the type builder, not just clone it.
             let type_builder = type_builder.map(|t| t.type_builder.as_ref().clone());
@@ -116,9 +110,9 @@ fn call_function_from_c_inner(
 }
 
 fn call_function_parse_from_c_inner(
-    runtime: *const libc::c_void,
+    runtime: *const c_void,
     function_name: *const c_char,
-    encoded_args: *const libc::c_char,
+    encoded_args: *const c_char,
     length: usize,
     id: u32,
 ) -> Result<()> {
@@ -165,9 +159,7 @@ fn call_function_parse_from_c_inner(
     };
 
     // Spawn an async task to await the future and call the callback when done.
-    // Ensure that a Tokio runtime is running in your application.
-    let rt = RUNTIME.clone();
-    rt.spawn(async move {
+    AsyncRuntime::spawn_local(async move {
         let result = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| async {
             // TODO: There's a race condition bug here. Technically we should COPY the type builder, not just clone it.
             let type_builder = type_builder.map(|t| t.type_builder.as_ref().clone());
@@ -211,12 +203,12 @@ fn call_function_parse_from_c_inner(
 /// Once the asynchronous function completes, the provided callback is invoked.
 #[no_mangle]
 pub extern "C" fn call_function_stream_from_c(
-    runtime: *const libc::c_void,
+    runtime: *const c_void,
     function_name: *const c_char,
-    encoded_args: *const libc::c_char,
+    encoded_args: *const c_char,
     length: usize,
     id: u32,
-) -> *const libc::c_void {
+) -> *const c_void {
     match call_function_stream_from_c_inner(runtime, function_name, encoded_args, length, id) {
         Ok(_) => null(),
         Err(e) => handle_ffi_error(e),
@@ -224,9 +216,9 @@ pub extern "C" fn call_function_stream_from_c(
 }
 
 fn call_function_stream_from_c_inner(
-    runtime: *const libc::c_void,
+    runtime: *const c_void,
     function_name: *const c_char,
-    encoded_args: *const libc::c_char,
+    encoded_args: *const c_char,
     length: usize,
     id: u32,
 ) -> Result<()> {
@@ -270,7 +262,7 @@ fn call_function_stream_from_c_inner(
 
     let ctx = runtime.create_ctx_manager(BamlValue::String("cffi".to_string()), None);
 
-    RUNTIME.spawn(async move {
+    AsyncRuntime::spawn_local(async move {
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| async move {
             stream
                 .run(

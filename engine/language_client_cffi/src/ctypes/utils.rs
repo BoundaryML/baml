@@ -11,7 +11,7 @@ pub(super) trait Decode {
 }
 
 pub trait DecodeFromBuffer {
-    fn from_c_buffer(buffer: *const libc::c_char, length: usize) -> Result<Self, anyhow::Error>
+    fn from_c_buffer(buffer: *const crate::ffi::c_char, length: usize) -> Result<Self, anyhow::Error>
     where
         Self: Sized;
 }
@@ -21,7 +21,7 @@ where
     T: Decode,
     T::From: prost::Message + Default,
 {
-    fn from_c_buffer(buffer: *const libc::c_char, length: usize) -> Result<Self, anyhow::Error>
+    fn from_c_buffer(buffer: *const crate::ffi::c_char, length: usize) -> Result<Self, anyhow::Error>
     where
         Self: Sized,
     {

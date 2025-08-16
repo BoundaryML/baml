@@ -8,9 +8,9 @@ use crate::panic::ffi_safe::{ffi_safe_cstring, ffi_safe_ptr};
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[no_mangle]
-pub extern "C" fn version() -> *const libc::c_char {
+pub extern "C" fn version() -> *const c_char {
     ffi_safe_cstring(|| match CString::new(VERSION) {
-        Ok(version) => Ok(version.into_raw() as *const libc::c_char),
+        Ok(version) => Ok(version.into_raw() as *const c_char),
         Err(_) => Err("Version string contains null bytes".to_string()),
     })
 }
@@ -18,11 +18,11 @@ pub extern "C" fn version() -> *const libc::c_char {
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn create_baml_runtime(
-    root_path: *const libc::c_char,
-    src_files_json: *const libc::c_char,
-    env_vars_json: *const libc::c_char,
-) -> *const libc::c_void {
-    ffi_safe_ptr(|| -> Result<*const libc::c_void, String> {
+    root_path: *const c_char,
+    src_files_json: *const c_char,
+    env_vars_json: *const c_char,
+) -> *const c_void {
+    ffi_safe_ptr(|| -> Result<*const c_void, String> {
         // Parse src_files JSON
         let src_files_str = unsafe {
             CStr::from_ptr(src_files_json)
@@ -52,12 +52,12 @@ pub extern "C" fn create_baml_runtime(
         let runtime = BamlRuntime::from_file_content(root_path_str, &src_files, env_vars)
             .map_err(|e| format!("Failed to create BAML runtime: {e}"))?;
 
-        Ok(Box::into_raw(Box::new(runtime)) as *const libc::c_void)
+        Ok(Box::into_raw(Box::new(runtime)) as *const c_void)
     })
 }
 
 #[no_mangle]
-pub extern "C" fn destroy_baml_runtime(runtime: *const libc::c_void) {
+pub extern "C" fn destroy_baml_runtime(runtime: *const c_void) {
     if !runtime.is_null() {
         unsafe {
             let _ = Box::from_raw(runtime as *mut BamlRuntime);
@@ -65,9 +65,10 @@ pub extern "C" fn destroy_baml_runtime(runtime: *const libc::c_void) {
     }
 }
 
+#[cfg(feature = "native")]
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
-pub extern "C" fn invoke_runtime_cli(args: *const *const libc::c_char) -> libc::c_int {
+pub extern "C" fn invoke_runtime_cli(args: *const *const c_char) -> c_int {
     // Safety: We assume `args` is a valid pointer to a null-terminated array of C strings.
     let args_vec = unsafe {
         // Ensure the pointer itself is not null.
@@ -98,4 +99,12 @@ pub extern "C" fn invoke_runtime_cli(args: *const *const libc::c_char) -> libc::
             1
         }
     }
+}
+
+#[cfg(not(feature = "native"))]
+#[no_mangle]
+pub extern "C" fn invoke_runtime_cli(_args: *const *const c_char) -> c_int {
+    // CLI not available in WASM builds
+    baml_log::error!("CLI not available in WASM builds");
+    1
 }

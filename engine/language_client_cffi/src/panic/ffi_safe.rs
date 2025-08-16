@@ -12,9 +12,9 @@ pub fn extract_panic_message(panic_info: Box<dyn std::any::Any + Send>) -> Strin
 }
 
 /// Generic panic-safe wrapper for FFI functions returning pointers
-pub fn ffi_safe_ptr<F>(f: F) -> *const libc::c_void
+pub fn ffi_safe_ptr<F>(f: F) -> *const crate::ffi::c_void
 where
-    F: FnOnce() -> Result<*const libc::c_void, String> + std::panic::UnwindSafe,
+    F: FnOnce() -> Result<*const crate::ffi::c_void, String> + std::panic::UnwindSafe,
 {
     match catch_unwind(AssertUnwindSafe(f)) {
         Ok(Ok(result)) => result,
@@ -31,9 +31,9 @@ where
 }
 
 /// Panic-safe wrapper for FFI functions returning C strings
-pub fn ffi_safe_cstring<F>(f: F) -> *const libc::c_char
+pub fn ffi_safe_cstring<F>(f: F) -> *const crate::ffi::c_char
 where
-    F: FnOnce() -> Result<*const libc::c_char, String> + std::panic::UnwindSafe,
+    F: FnOnce() -> Result<*const crate::ffi::c_char, String> + std::panic::UnwindSafe,
 {
     match catch_unwind(AssertUnwindSafe(f)) {
         Ok(Ok(result)) => result,
@@ -50,9 +50,9 @@ where
 }
 
 /// Create a fallback C string that's guaranteed to work
-fn create_fallback_cstring(fallback: &str) -> *const libc::c_char {
+fn create_fallback_cstring(fallback: &str) -> *const crate::ffi::c_char {
     match std::ffi::CString::new(fallback) {
-        Ok(c_string) => c_string.into_raw() as *const libc::c_char,
+        Ok(c_string) => c_string.into_raw() as *const crate::ffi::c_char,
         Err(_) => std::ptr::null(), // This should never happen with simple strings
     }
 }

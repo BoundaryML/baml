@@ -68,3 +68,5 @@ const void *create_baml_runtime(const char *root_path,
 void destroy_baml_runtime(const void *runtime);
 
 int invoke_runtime_cli(const char *const *args);
+
+int invoke_runtime_cli(const char *const *_args);

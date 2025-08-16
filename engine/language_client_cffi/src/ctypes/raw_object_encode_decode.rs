@@ -56,7 +56,7 @@ impl Decode for MediaWrapper {
         Self: Sized,
     {
         Ok(MediaWrapper::from_raw(
-            from.pointer as *const libc::c_void,
+            from.pointer as *const crate::ffi::c_void,
             true,
         ))
     }

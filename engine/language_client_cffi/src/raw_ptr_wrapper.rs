@@ -49,7 +49,7 @@ impl<T: std::fmt::Debug> std::fmt::Debug for RawPtrWrapper<T> {
 }
 
 impl<T> RawPtrWrapper<T> {
-    pub fn from_raw(object: *const libc::c_void, persist: bool) -> Self {
+    pub fn from_raw(object: *const crate::ffi::c_void, persist: bool) -> Self {
         Self {
             inner: unsafe { Arc::from_raw(object as *const T) },
             persist: AtomicBool::new(persist),

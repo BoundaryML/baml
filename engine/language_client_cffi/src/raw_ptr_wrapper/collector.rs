@@ -8,7 +8,10 @@ use baml_types::{
     tracing::events::{HTTPBody, HTTPRequest, HTTPResponse, SSEEvent},
     BamlValue,
 };
+#[cfg(feature = "native")]
 use tokio_util::either;
+#[cfg(not(feature = "native"))]
+use either;
 
 use super::{BamlObjectResponse, BamlObjectResponseSuccess, CallMethod};
 use crate::raw_ptr_wrapper::{

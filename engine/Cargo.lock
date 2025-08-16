@@ -1345,9 +1345,13 @@ dependencies = [
  "baml-types",
  "baml_cffi_macros",
  "cbindgen",
+ "console_error_panic_hook",
+ "console_log",
+ "either",
  "env_logger",
  "indexmap 2.10.0",
  "internal-baml-codegen",
+ "js-sys",
  "libc",
  "once_cell",
  "prost",
@@ -1358,6 +1362,9 @@ dependencies = [
  "serde_json",
  "tokio",
  "tokio-util",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
 ]
 
 [[package]]
