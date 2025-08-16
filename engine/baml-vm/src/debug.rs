@@ -111,7 +111,6 @@ pub fn display_instruction(
         | Instruction::DispatchFuture(_)
         | Instruction::Await
         | Instruction::Call(_)
-        | Instruction::ArrayLength
         | Instruction::Return => String::new(),
     };
 
@@ -157,10 +156,9 @@ fn instruction_color(instruction: &Instruction) -> Color {
         Instruction::StoreVar(_) | Instruction::StoreGlobal(_) | Instruction::StoreField(_) => {
             Color::Green
         }
-        Instruction::BinOp(_)
-        | Instruction::CmpOp(_)
-        | Instruction::UnaryOp(_)
-        | Instruction::ArrayLength => Color::BrightBlue,
+        Instruction::BinOp(_) | Instruction::CmpOp(_) | Instruction::UnaryOp(_) => {
+            Color::BrightBlue
+        }
         Instruction::Jump(_) | Instruction::JumpIfFalse(_) => Color::Yellow,
         Instruction::Call(_) => Color::Magenta,
         Instruction::Return | Instruction::Pop(_) | Instruction::PopReplace(_) => Color::Red,

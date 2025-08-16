@@ -136,12 +136,6 @@ pub enum Instruction {
     /// executed.
     AllocArray(usize),
 
-    /// Fetches the array length from the top of the stack. Does not consume it.
-    ///
-    /// Format: `ARRAY_LENGTH` where the stack contains [array] and the result is [array, array
-    /// length].
-    ArrayLength,
-
     /// Loads an element from an array at a given index.
     ///
     /// Format: `LOAD_ARRAY_ELEMENT` where the stack contains [array, index] and
@@ -284,7 +278,6 @@ impl std::fmt::Display for Instruction {
             Instruction::Await => f.write_str("AWAIT"),
             Instruction::Call(n) => write!(f, "CALL {n}"),
             Instruction::Return => f.write_str("RETURN"),
-            Instruction::ArrayLength => f.write_str("ARRAY_LENGTH"),
         }
     }
 }

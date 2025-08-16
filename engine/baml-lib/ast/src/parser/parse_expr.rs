@@ -249,6 +249,8 @@ pub fn parse_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
         Rule::if_expression => parse_if_expression(stmt_token, diagnostics).map(Stmt::Expression),
         Rule::fn_app => parse_fn_app(stmt_token, diagnostics).map(Stmt::Expression),
         Rule::generic_fn_app => parse_generic_fn_app(stmt_token, diagnostics).map(Stmt::Expression),
+        Rule::expr_block => parse_expr_block(stmt_token, diagnostics)
+            .map(|expr_block| Stmt::Expression(Expression::ExprBlock(expr_block, span.clone()))),
         _ => {
             diagnostics.push_error(DatamodelError::new_static(
                 "Expected statement",

@@ -8,3 +8,4 @@ function GetName(person: string) -> string {
 //     1   RETURN         
 //
 // Class: std::Request with 3 fields
+// Function: len

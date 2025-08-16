@@ -290,6 +290,21 @@ impl Expression {
                 .to_doc()
                 .append(RcDoc::text("."))
                 .append(RcDoc::text(field.clone())),
+            Expression::MethodCall {
+                receiver,
+                method,
+                args,
+                ..
+            } => receiver
+                .to_doc()
+                .append(RcDoc::text("."))
+                .append(RcDoc::text(method.clone()))
+                .append(RcDoc::text("("))
+                .append(RcDoc::intersperse(
+                    args.iter().map(|a| a.to_doc()),
+                    RcDoc::text(",").append(RcDoc::space()),
+                ))
+                .append(RcDoc::text(")")),
             Expression::BoolValue(val, _) => RcDoc::text(val.to_string()),
             Expression::NumericValue(val, _) => RcDoc::text(val.clone()),
             Expression::Identifier(name, _) => RcDoc::text(name.clone()),

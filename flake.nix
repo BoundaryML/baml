@@ -52,8 +52,8 @@
         buildInputs = (with pkgs; [
           cmake
           git
-	  go
-	  gotools
+	        go
+	        gotools
           openssl
           pkg-config
           lld_17
@@ -62,7 +62,7 @@
           ruby.devEnv
           maturin
           pnpm
-	  protoc-gen-go
+	        protoc-gen-go
           vsce # VSCode extension packaging tool
           toolchain
           nodejs
@@ -107,6 +107,16 @@
           rustPlatform.buildRustPackage ({
               inherit pname version;
               src = ./engine;
+              filter = path: type: 
+                  let baseName = baseNameOf path; in
+                  !pkgs.lib.hasInfix "target" path &&
+                  !pkgs.lib.hasInfix ".git" path &&
+                  !pkgs.lib.hasInfix ".jj" path &&
+                  !pkgs.lib.hasInfix ".so" path &&
+                  !pkgs.lib.hasInfix ".node" path &&
+                  !pkgs.lib.hasInfix "node_modules" path &&
+                  baseName != "result";
+              
               LIBCLANG_PATH = pkgs.libclang.lib + "/lib/";
               BINDGEN_EXTRA_CLANG_ARGS = if pkgs.stdenv.isDarwin then
                 "-I${pkgs.llvmPackages_17.libclang.lib}/lib/clang/17/headers "

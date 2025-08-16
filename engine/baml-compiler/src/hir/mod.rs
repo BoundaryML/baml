@@ -414,6 +414,12 @@ pub enum Expression {
         field: String,
         span: Span,
     },
+    MethodCall {
+        receiver: Box<Expression>,
+        method: String,
+        args: Vec<Expression>,
+        span: Span,
+    },
     BoolValue(bool, Span),
     NumericValue(String, Span),
     Identifier(String, Span),
@@ -515,6 +521,7 @@ impl Expression {
         match self {
             Expression::ArrayAccess { span, .. } => span.clone(),
             Expression::FieldAccess { span, .. } => span.clone(),
+            Expression::MethodCall { span, .. } => span.clone(),
             Expression::BoolValue(_, span) => span.clone(),
             Expression::NumericValue(_, span) => span.clone(),
             Expression::Identifier(_, span) => span.clone(),

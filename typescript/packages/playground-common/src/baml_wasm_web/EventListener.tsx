@@ -246,7 +246,10 @@ export const EventListener: React.FC = () => {
           }
         | {
             command: 'run_test';
-            content: { test_name: string };
+            content: {
+              function_name: string;
+              test_name: string;
+            };
           }
       >,
     ) => {
@@ -304,14 +307,11 @@ export const EventListener: React.FC = () => {
           break;
 
         case 'run_test':
-          if (selectedFunc) {
-            setSelectedTestcase(content.test_name);
-            runBamlTests([
-              { functionName: selectedFunc, testName: content.test_name },
-            ]);
-          } else {
-            console.error('No function selected');
-          }
+          setSelectedFunction(content.function_name);
+          setSelectedTestcase(content.test_name);
+          runBamlTests([
+            { functionName: content.function_name, testName: content.test_name },
+          ]);
           // run([content.test_name])
           // setShowTests(true)
           // setClientGraph(false)

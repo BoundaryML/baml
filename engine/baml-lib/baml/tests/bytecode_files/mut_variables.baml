@@ -29,3 +29,4 @@ fn MutableInArg(mut x: int) -> int {
 //      3   RETURN         
 //
 // Class: std::Request with 3 fields
+// Function: len

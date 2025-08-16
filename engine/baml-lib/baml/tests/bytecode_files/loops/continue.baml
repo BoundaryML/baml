@@ -97,3 +97,4 @@ fn ContinueNested() -> int {
 //      21   RETURN              
 //
 // Class: std::Request with 3 fields
+// Function: len

@@ -1,3 +1,22 @@
+/// Typechecking for the BAML language.
+///
+/// The big-step typechecking algorithm goes from `HIR` to `THIR`, inferring
+/// types for expressions and statements wherever possible, and collecting
+/// errors when the types are incompatible.
+///
+/// Type "compatibility" follows the covariance and contravariance rules
+/// typical in statically-typed languages with subtyping.
+///
+/// A value with a type S may be used in a context that expects a value
+/// with type T if S <: T (S is a subtype of T).
+///
+/// Aspirationally, we implement bidirectional typing, a method that is
+/// mostly syntax-directed (doesn't involve search and backtracking),
+/// copes well with subtyping, and produces good error messages.
+/// https://arxiv.org/abs/1908.05839
+///
+/// However, the current implementation is simple and ad-hoc, likely wrong
+/// in several places. Bidirectional typing is the target.
 use std::sync::Arc;
 
 use baml_types::{BamlMap, BamlValueWithMeta};
@@ -8,6 +27,7 @@ use crate::{
     thir::{self as thir, ExprMetadata, THir},
 };
 
+/// Convert HIR to THIR while collecting type errors.
 pub fn typecheck(hir: &Hir, diagnostics: &mut Diagnostics) -> THir<ExprMetadata> {
     let llm_functions = hir.llm_functions.clone();
     let classes: BamlMap<String, hir::Class> = hir
@@ -770,6 +790,23 @@ fn typecheck_expression(
                     .collect(),
                 args: typed_args,
                 meta: (span.clone(), return_type),
+            }
+        }
+        hir::Expression::MethodCall {
+            receiver,
+            method,
+            args,
+            span,
+        } => {
+            // TODO: Typecheck method call.
+            thir::Expr::MethodCall {
+                receiver: Arc::new(typecheck_expression(receiver, context, diagnostics)),
+                method: Arc::new(thir::Expr::FreeVar(method.clone(), (span.clone(), None))),
+                args: args
+                    .iter()
+                    .map(|arg| typecheck_expression(arg, context, diagnostics))
+                    .collect(),
+                meta: (span.clone(), None),
             }
         }
         hir::Expression::ClassConstructor(constructor, span) => {

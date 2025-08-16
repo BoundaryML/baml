@@ -203,12 +203,9 @@ export function activate(context: vscode.ExtensionContext) {
       requestDiagnostics()
 
       openPlaygroundConfig.lastOpenedFunction = args?.functionName ?? 'default'
-      WebviewPanelHost.currentPanel?.postMessage('select_function', {
-        root_path: 'default',
-        function_name: args?.functionName ?? 'default',
-      })
 
       WebviewPanelHost.currentPanel?.postMessage('run_test', {
+        function_name: args?.functionName ?? 'default',
         test_name: args?.testCaseName ?? 'default',
       })
 

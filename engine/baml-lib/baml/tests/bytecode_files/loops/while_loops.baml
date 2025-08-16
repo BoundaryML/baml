@@ -95,3 +95,4 @@ fn WhileWithScope() -> int {
 //      28   RETURN              
 //
 // Class: std::Request with 3 fields
+// Function: len

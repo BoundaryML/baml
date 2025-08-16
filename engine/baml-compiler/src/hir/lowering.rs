@@ -415,17 +415,17 @@ impl Block {
         }
 
         if let Some(block_final_expr) = block.expr.as_ref() {
-            let lifted_expr = Expression::from_ast(block_final_expr);
+            let final_expr = Expression::from_ast(block_final_expr);
 
             // Then add the final statement
             statements.push(if is_function_body {
                 Statement::Return {
-                    expr: lifted_expr,
+                    expr: final_expr,
                     span: block_final_expr.span().clone(),
                 }
             } else {
                 Statement::Expression {
-                    expr: lifted_expr,
+                    expr: final_expr,
                     span: block_final_expr.span().clone(),
                 }
             });
@@ -451,6 +451,17 @@ impl Expression {
             ast::Expression::FieldAccess(base, field, span) => Expression::FieldAccess {
                 base: Box::new(Self::from_ast(base)),
                 field: field.to_string(),
+                span: span.clone(),
+            },
+            ast::Expression::MethodCall {
+                receiver,
+                method,
+                args,
+                span,
+            } => Expression::MethodCall {
+                receiver: Box::new(Self::from_ast(receiver)),
+                method: method.to_string(),
+                args: args.iter().map(Self::from_ast).collect(),
                 span: span.clone(),
             },
             ast::Expression::BoolValue(value, span) => Expression::BoolValue(*value, span.clone()),
