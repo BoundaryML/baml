@@ -391,6 +391,10 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
                     message: message.clone(),
                 }
                 .into_response(),
+                LLMResponse::Cancelled(message) => BamlError::InternalError {
+                    message: format!("Cancelled: {}", message),
+                }
+                .into_response(),
             },
             Err(e) => BamlError::from_anyhow(e).into_response(),
         }
@@ -512,6 +516,10 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
                             .into_response(),
                             LLMResponse::InternalFailure(message) => BamlError::InternalError {
                                 message: message.clone(),
+                            }
+                            .into_response(),
+                            LLMResponse::Cancelled(message) => BamlError::InternalError {
+                                message: format!("Cancelled: {}", message),
                             }
                             .into_response(),
                         },

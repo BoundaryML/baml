@@ -59,7 +59,7 @@ impl InternalBamlRuntime {
             let (history, _) =
                 orchestrate_call(orchestrator, self.ir(), &ctx, &renderer, &baml_args, |s| {
                     renderer.parse(self.ir(), &ctx, s, false)
-                })
+                }, None)
                 .await;
 
             FunctionResult::new_chain(history)

@@ -122,6 +122,7 @@ impl FunctionResultStream {
                         |content| self.renderer.parse(self.ir.as_ref(), &rctx, content, true),
                         |content| self.renderer.parse(self.ir.as_ref(), &rctx, content, false),
                         on_event,
+                        None,
                     )
                     .await;
 

@@ -549,6 +549,7 @@ impl BamlRuntime {
                 LLMResponse::Success(complete_llm_response) => Ok(complete_llm_response),
                 LLMResponse::InternalFailure(e) => Err(anyhow::anyhow!("{}", e)),
                 LLMResponse::UserFailure(e) => Err(anyhow::anyhow!("{}", e)),
+                LLMResponse::Cancelled(e) => Err(anyhow::anyhow!("Cancelled: {}", e)),
                 LLMResponse::LLMFailure(e) => Err(anyhow::anyhow!(
                     "{} {}\n\nRequest options: {}",
                     e.code.to_string(),
