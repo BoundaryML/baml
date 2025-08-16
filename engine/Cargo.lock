@@ -866,7 +866,7 @@ dependencies = [
  "console 0.15.11",
  "console_log",
  "ctrlc",
- "dashmap",
+ "dashmap 5.5.3",
  "derive_more",
  "dialoguer",
  "difference",
@@ -1137,7 +1137,7 @@ dependencies = [
  "cowstr",
  "criterion",
  "crossterm",
- "dashmap",
+ "dashmap 5.5.3",
  "derive-new",
  "derive_more",
  "dissimilar",
@@ -1345,6 +1345,7 @@ dependencies = [
  "baml-types",
  "baml_cffi_macros",
  "cbindgen",
+ "dashmap 6.1.0",
  "env_logger",
  "indexmap 2.10.0",
  "internal-baml-codegen",
@@ -1356,6 +1357,7 @@ dependencies = [
  "protoc-bin-vendored",
  "serde",
  "serde_json",
+ "stream-cancel",
  "tokio",
  "tokio-util",
 ]
@@ -2162,6 +2164,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "dashmap"
+version = "6.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5041cc499144891f3790297212f32a74fb938e5136a14943f338ef9e0ae276cf"
+dependencies = [
+ "cfg-if",
+ "crossbeam-utils",
+ "hashbrown 0.14.5",
+ "lock_api",
+ "once_cell",
+ "parking_lot_core",
+]
+
+[[package]]
 name = "data-encoding"
 version = "2.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2295,7 +2311,7 @@ dependencies = [
  "filetime",
  "indexmap 2.10.0",
  "internal-baml-core",
- "pathdiff 0.1.0",
+ "pathdiff 0.2.3",
  "serde_json",
  "sugar_path",
  "walkdir",

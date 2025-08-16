@@ -144,6 +144,7 @@ func initializeBaml() error {
 		lib.registerFn("call_function_from_c")
 		lib.registerFn("call_function_stream_from_c")
 		lib.registerFn("call_function_parse_from_c")
+		lib.registerFn("cancel_function_call")
 		lib.registerFn("call_object_constructor")
 		lib.registerFn("call_object_method")
 	}()
@@ -191,6 +192,8 @@ func (l *library) registerFn(fnName string) {
 		C.SetCallFunctionStreamFromCFn(fnPtr)
 	case "call_function_parse_from_c":
 		C.SetCallFunctionParseFromCFn(fnPtr)
+	case "cancel_function_call":
+		C.SetCancelFunctionCallFn(fnPtr)
 	case "call_object_method_function":
 		C.SetCallObjectMethodFunctionFn(fnPtr)
 	case "call_object_constructor":
