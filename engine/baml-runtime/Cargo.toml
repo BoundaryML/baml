@@ -66,6 +66,7 @@ internal-baml-jinja.workspace = true
 log.workspace = true
 minijinja.workspace = true
 pin-project-lite.workspace = true
+pretty.workspace = true
 regex.workspace = true
 reqwest-eventsource = "0.6.0"
 scopeguard.workspace = true

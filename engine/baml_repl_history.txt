@@ -1,10 +1,8 @@
-:load ~
-1
-:load ~/code/tmp
-:load ~/code/tmp/baml_src
-:vars
-:reset
-:help
-42
+1 + 2
 :q
-:quit
+ExtractResume("Vaibhav Gupta. BoundaryML (2023-present")
+:q
+ExtractResume("Vaibhav Gupta. BoundaryML (2023-present")
+:q
+ExtractResume2("Vaibhav Gupta. BoundaryML (2023-present")
+:q

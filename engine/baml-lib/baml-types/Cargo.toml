@@ -26,6 +26,7 @@ itertools = "0.14.0"
 log.workspace = true
 minijinja.workspace = true
 once_cell.workspace = true
+pretty.workspace = true
 secrecy.workspace = true
 serde.workspace = true
 serde_json.workspace = true

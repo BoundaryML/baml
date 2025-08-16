@@ -76,7 +76,7 @@ impl TryFrom<LlmRuntime> for BamlAsyncVmRuntime {
 
 impl BamlAsyncVmRuntime {
     pub fn internal(&self) -> &Arc<InternalBamlRuntime> {
-        self.llm_runtime.internal()
+        &self.llm_runtime.inner
     }
 
     pub fn disassemble(&self, function_name: &str) {
@@ -158,7 +158,7 @@ impl BamlAsyncVmRuntime {
 
         let expr_fn = self
             .llm_runtime
-            .internal()
+            .inner
             .ir()
             .expr_fns
             .iter()
@@ -244,7 +244,7 @@ impl BamlAsyncVmRuntime {
 
                     let llm_fn = self
                         .llm_runtime
-                        .internal()
+                        .inner
                         .ir()
                         .find_function(&pending_future.llm_function)
                         .unwrap_or_else(|_| {

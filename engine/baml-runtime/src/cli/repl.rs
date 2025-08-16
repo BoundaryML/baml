@@ -12,7 +12,11 @@ use clap::Args;
 use indexmap::IndexMap;
 use internal_baml_core::ast::Span;
 use jsonish::{ResponseBamlValue, ResponseValueMeta};
-use reedline::{DefaultPrompt, FileBackedHistory, Reedline, Signal};
+use reedline::{
+    default_emacs_keybindings, ColumnarMenu, DefaultCompleter, DefaultPrompt, Emacs,
+    FileBackedHistory, KeyCode, KeyModifiers, MenuBuilder, Reedline, ReedlineEvent, ReedlineMenu,
+    Signal,
+};
 
 use crate::BamlRuntime;
 use baml_compiler::{
@@ -22,6 +26,8 @@ use baml_compiler::{
         typecheck::{typecheck_expression, typecheck_returning_context, VarInfo},
     },
 };
+use pretty::RcDoc;
+use internal_baml_ast::ast::WithName;
 use internal_baml_ast::{parse, parse_standalone_expression};
 use internal_baml_core::ast as baml_ast;
 use internal_baml_core::internal_baml_diagnostics::{Diagnostics, SourceFile};
@@ -65,7 +71,7 @@ impl ReplState {
             .runtime
             .as_ref()
             .ok_or_else(|| anyhow!("No BAML sources loaded. Use :load <path> to load sources."))?;
-        let internal = runtime.internal();
+        let internal = &runtime.inner;
         let hir = Hir::from_ast(&internal.db.ast);
         let mut diagnostics = Diagnostics::default();
         diagnostics.set_source(&(PathBuf::from("repl"), "function_parameters").into());
@@ -88,92 +94,82 @@ impl ReplState {
             .as_ref()
             .ok_or_else(|| anyhow!("No BAML sources loaded. Use :load <path> to load sources."))?;
 
-        #[cfg(feature = "internal")]
-        {
-            let internal = runtime.internal();
+        let internal = &runtime.inner;
 
-            // Convert AST to HIR
-            let hir = Hir::from_ast(&internal.db.ast);
+        // Convert AST to HIR
+        let hir = Hir::from_ast(&internal.db.ast);
 
-            // Typecheck HIR to get THIR
-            let mut diagnostics = Diagnostics::default();
-            let (thir, _) = typecheck_returning_context(&hir, &mut diagnostics);
+        // Typecheck HIR to get THIR
+        let mut diagnostics = Diagnostics::default();
+        let (thir, _) = typecheck_returning_context(&hir, &mut diagnostics);
 
-            // Format the THIR for display
-            let mut output = String::new();
-            output.push_str("=== TYPED HIGH-LEVEL INTERMEDIATE REPRESENTATION (THIR) ===\n\n");
+        // Format the THIR for display
+        let mut output = String::new();
+        output.push_str("=== TYPED HIGH-LEVEL INTERMEDIATE REPRESENTATION (THIR) ===\n\n");
 
-            // Display global assignments
-            if !thir.global_assignments.is_empty() {
-                output.push_str("Global Assignments:\n");
-                for (name, expr) in &thir.global_assignments {
-                    output.push_str(&format!("  {} = {}\n", name, expr.dump_str()));
-                }
-                output.push_str("\n");
+        // Display global assignments
+        if !thir.global_assignments.is_empty() {
+            output.push_str("Global Assignments:\n");
+            for (name, expr) in &thir.global_assignments {
+                output.push_str(&format!("  {} = {}\n", name, expr.dump_str()));
             }
-
-            // Display expression functions
-            if !thir.expr_functions.is_empty() {
-                output.push_str("Expression Functions:\n");
-                for func in &thir.expr_functions {
-                    output.push_str(&format!("  fn {}(", func.name));
-                    let params: Vec<String> = func
-                        .parameters
-                        .iter()
-                        .map(|p| format!("{}: {:?}", p.name, p.r#type))
-                        .collect();
-                    output.push_str(&params.join(", "));
-                    output.push_str(&format!(") -> {:?} {{\n", func.return_type));
-                    output.push_str(&format!("    {}\n", func.body.dump_str()));
-                    output.push_str("  }\n\n");
-                }
-            }
-
-            // Display LLM functions
-            if !thir.llm_functions.is_empty() {
-                output.push_str("LLM Functions:\n");
-                for func in &thir.llm_functions {
-                    output.push_str(&format!("  function {}\n", func.name));
-                }
-                output.push_str("\n");
-            }
-
-            // Display classes
-            if !thir.classes.is_empty() {
-                output.push_str("Classes:\n");
-                for (_name, class) in &thir.classes {
-                    output.push_str(&format!("  class {}\n", class.name));
-                }
-                output.push_str("\n");
-            }
-
-            // Display enums
-            if !thir.enums.is_empty() {
-                output.push_str("Enums:\n");
-                for (_name, enum_def) in &thir.enums {
-                    output.push_str(&format!("  enum {}\n", enum_def.name));
-                }
-                output.push_str("\n");
-            }
-
-            // Show any type errors
-            if diagnostics.has_errors() {
-                output.push_str("Type Errors:\n");
-                for error in diagnostics.errors() {
-                    output.push_str(&format!("  {:?}\n", error));
-                }
-                output.push_str("\n");
-            }
-
-            Ok(output)
+            output.push_str("\n");
         }
 
-        #[cfg(not(feature = "internal"))]
-        {
-            Err(anyhow!(
-                "THIR dumping requires the 'internal' feature to be enabled"
-            ))
+        // Display expression functions
+        if !thir.expr_functions.is_empty() {
+            output.push_str("Expression Functions:\n");
+            for func in &thir.expr_functions {
+                output.push_str(&format!("  fn {}(", func.name));
+                let params: Vec<String> = func
+                    .parameters
+                    .iter()
+                    .map(|p| format!("{}: {:?}", p.name, p.r#type))
+                    .collect();
+                output.push_str(&params.join(", "));
+                output.push_str(&format!(") -> {:?} {{\n", func.return_type));
+                output.push_str(&format!("    {}\n", func.body.dump_str()));
+                output.push_str("  }\n\n");
+            }
         }
+
+        // Display LLM functions
+        if !thir.llm_functions.is_empty() {
+            output.push_str("LLM Functions:\n");
+            for func in &thir.llm_functions {
+                output.push_str(&format!("  function {}\n", func.name));
+            }
+            output.push_str("\n");
+        }
+
+        // Display classes
+        if !thir.classes.is_empty() {
+            output.push_str("Classes:\n");
+            for (_name, class) in &thir.classes {
+                output.push_str(&format!("  class {}\n", class.name));
+            }
+            output.push_str("\n");
+        }
+
+        // Display enums
+        if !thir.enums.is_empty() {
+            output.push_str("Enums:\n");
+            for (_name, enum_def) in &thir.enums {
+                output.push_str(&format!("  enum {}\n", enum_def.name));
+            }
+            output.push_str("\n");
+        }
+
+        // Show any type errors
+        if diagnostics.has_errors() {
+            output.push_str("Type Errors:\n");
+            for error in diagnostics.errors() {
+                output.push_str(&format!("  {:?}\n", error));
+            }
+            output.push_str("\n");
+        }
+
+        Ok(output)
     }
 
     fn reset(&mut self) {
@@ -222,7 +218,7 @@ impl ReplState {
             .ok_or_else(|| anyhow!("No BAML sources loaded. Use :load <path> to load sources."))?;
 
         // Get the internal runtime to access the existing context
-        let internal = runtime.internal();
+        let internal = &runtime.inner;
 
         // Convert AST to HIR from existing loaded sources
         let hir = Hir::from_ast(&internal.db.ast);
@@ -316,44 +312,6 @@ impl ReplState {
         Ok(eval_result.map_meta(|(span, ty)| (span.clone(), ty.clone().map(|t| to_ir_type(&t)))))
     }
 
-    fn parse_simple_value_fallback(&self, input: &str) -> Result<BamlValueWithMeta<ExprMetadata>> {
-        let input = input.trim();
-
-        // Try to parse different types
-        if input == "true" {
-            Ok(BamlValueWithMeta::Bool(true, (Span::fake(), None)))
-        } else if input == "false" {
-            Ok(BamlValueWithMeta::Bool(false, (Span::fake(), None)))
-        } else if input == "null" {
-            Ok(BamlValueWithMeta::Null((Span::fake(), None)))
-        } else if let Ok(int_val) = input.parse::<i64>() {
-            Ok(BamlValueWithMeta::Int(int_val, (Span::fake(), None)))
-        } else if let Ok(float_val) = input.parse::<f64>() {
-            Ok(BamlValueWithMeta::Float(float_val, (Span::fake(), None)))
-        } else if input.starts_with('"') && input.ends_with('"') {
-            let str_val = input[1..input.len() - 1].to_string();
-            Ok(BamlValueWithMeta::String(str_val, (Span::fake(), None)))
-        } else if input.starts_with('[') && input.ends_with(']') {
-            // Simple array parsing (comma separated)
-            let inner = &input[1..input.len() - 1];
-            if inner.trim().is_empty() {
-                Ok(BamlValueWithMeta::List(Vec::new(), (Span::fake(), None)))
-            } else {
-                let items: Result<Vec<_>> = inner
-                    .split(',')
-                    .map(|item| self.parse_simple_value_fallback(item.trim()))
-                    .collect();
-                Ok(BamlValueWithMeta::List(items?, (Span::fake(), None)))
-            }
-        } else {
-            // Treat as string literal if no quotes
-            Ok(BamlValueWithMeta::String(
-                input.to_string(),
-                (Span::fake(), None),
-            ))
-        }
-    }
-
     fn infer_expression_type(&self, input: &str) -> Result<String> {
         let input = input.trim();
 
@@ -364,7 +322,7 @@ impl ReplState {
             .ok_or_else(|| anyhow!("No BAML sources loaded. Use :load <path> to load sources."))?;
 
         // Get the internal runtime to access the existing context
-        let internal = runtime.internal();
+        let internal = &runtime.inner;
 
         // Convert AST to HIR from existing loaded sources
         let hir = Hir::from_ast(&internal.db.ast);
@@ -416,6 +374,62 @@ impl ReplState {
         }
     }
 
+    fn get_completion_candidates(&self) -> Vec<String> {
+        let mut candidates = Vec::new();
+
+        // Add all variable names
+        for var_name in self.variables.keys() {
+            candidates.push(var_name.clone());
+        }
+
+        // Add REPL commands
+        candidates.extend([
+            ":load".to_string(),
+            ":l".to_string(),
+            ":reset".to_string(),
+            ":r".to_string(),
+            ":vars".to_string(),
+            ":v".to_string(),
+            ":thir".to_string(),
+            ":type".to_string(),
+            ":t".to_string(),
+            ":help".to_string(),
+            ":h".to_string(),
+            ":?".to_string(),
+            ":quit".to_string(),
+            ":q".to_string(),
+        ]);
+
+        // Add functions and declarations from THIR if available
+        if let Some(runtime) = &self.runtime {
+            let internal = &runtime.inner;
+
+            // Add function names
+            for function in internal.db.walk_functions() {
+                candidates.push(function.name().to_string());
+            }
+
+            // Add class names
+            for class in internal.db.walk_classes() {
+                candidates.push(class.name().to_string());
+            }
+
+            // Add enum names
+            for enum_walker in internal.db.walk_enums() {
+                candidates.push(enum_walker.name().to_string());
+            }
+
+            // Add client names
+            for client in internal.db.walk_clients() {
+                candidates.push(client.name().to_string());
+            }
+        }
+
+        candidates.sort();
+        candidates.dedup();
+        candidates
+    }
+
     fn format_type(&self, ty: &Type) -> String {
         match ty {
             hir::TypeM::Int(_) => "int".to_string(),
@@ -450,26 +464,10 @@ impl ReplState {
     }
 
     fn format_value(&self, value: &BamlValueWithMeta<ExprMetadata>) -> String {
-        match value {
-            BamlValueWithMeta::Null(_) => "null".to_string(),
-            BamlValueWithMeta::Bool(b, _) => b.to_string(),
-            BamlValueWithMeta::Int(i, _) => i.to_string(),
-            BamlValueWithMeta::Float(f, _) => f.to_string(),
-            BamlValueWithMeta::String(s, _) => format!("\"{}\"", s),
-            BamlValueWithMeta::List(items, _) => {
-                let formatted: Vec<String> =
-                    items.iter().map(|item| self.format_value(item)).collect();
-                format!("[{}]", formatted.join(", "))
-            }
-            BamlValueWithMeta::Map(map, _) => {
-                let formatted: Vec<String> = map
-                    .iter()
-                    .map(|(k, v)| format!("{}: {}", k, self.format_value(v)))
-                    .collect();
-                format!("{{{}}}", formatted.join(", "))
-            }
-            _ => format!("{:?}", value), // Fallback for other types
-        }
+        let doc = value.to_doc();
+        let mut output = Vec::new();
+        doc.render(80, &mut output).unwrap();
+        String::from_utf8(output).unwrap()
     }
 
     fn list_variables(&self) -> String {
@@ -504,12 +502,37 @@ impl ReplArgs {
             );
         }
 
-        // Set up readline with history
+        // Set up readline with history and completion
         let history = Box::new(
             FileBackedHistory::with_file(100, "baml_repl_history.txt".into())
                 .map_err(|_| anyhow!("Failed to set up history"))?,
         );
-        let mut line_editor = Reedline::create().with_history(history);
+
+        // Create completer with initial candidates
+        let completion_candidates = state.get_completion_candidates();
+        let completer = Box::new(DefaultCompleter::new_with_wordlen(completion_candidates, 1));
+
+        // Set up completion menu
+        let completion_menu = Box::new(ColumnarMenu::default().with_name("completion_menu"));
+
+        // Set up keybindings for tab completion
+        let mut keybindings = default_emacs_keybindings();
+        keybindings.add_binding(
+            KeyModifiers::NONE,
+            KeyCode::Tab,
+            ReedlineEvent::UntilFound(vec![
+                ReedlineEvent::Menu("completion_menu".to_string()),
+                ReedlineEvent::MenuNext,
+            ]),
+        );
+
+        let edit_mode = Box::new(Emacs::new(keybindings));
+
+        let mut line_editor = Reedline::create()
+            .with_history(history)
+            .with_completer(completer)
+            .with_menu(ReedlineMenu::EngineCompleter(completion_menu))
+            .with_edit_mode(edit_mode);
         let prompt = DefaultPrompt::default();
 
         println!("BAML REPL - Interactive BAML Expression Evaluator");
@@ -522,6 +545,8 @@ impl ReplArgs {
         println!("  :help (:h, :?)     - Show this help");
         println!("  :quit (:q)         - Exit");
         println!("  x = expr           - Assign expression result to variable x");
+        println!("");
+        println!("💡 Use Tab for autocompletion of commands, variables, and functions");
         println!();
 
         loop {
