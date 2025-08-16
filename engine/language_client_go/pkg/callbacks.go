@@ -12,7 +12,6 @@ import (
 	"sync"
 	"unsafe"
 
-	"github.com/boundaryml/baml/engine/language_client_go/baml_go"
 	"github.com/boundaryml/baml/engine/language_client_go/baml_go/serde"
 	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
 	"google.golang.org/protobuf/proto"
@@ -145,8 +144,7 @@ func trigger_callback(id C.uint32_t, isDone C.int, content *C.int8_t, length C.i
 		case <-callback.ctx.Done():
 			force_close = true
 			callback.channel <- ResultCallback{Error: callback.ctx.Err()}
-			// Tell Rust to cancel this operation
-			baml_go.CancelFunctionCall(id_uint)
+			// Cancellation is now handled early in runtime.go
 			break
 		case callback.channel <- res:
 			break
