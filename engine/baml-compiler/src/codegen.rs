@@ -268,8 +268,11 @@ struct HirCompiler<'g> {
     objects: &'g mut Vec<Object>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct LoopInfo {
+    /// Length of [`HirCompiler::scopes`] before entering the loop body. This helps `break` and
+    /// `continue` know how many scopes they have to pop.
+    pub scope_depth: usize,
     /// List of jump instruction locations to be patched when loop construction is done.
     /// They will point to the loop exit. Used for admitting arbitrary `break`s.
     pub break_patch_list: Vec<usize>,
@@ -509,6 +512,7 @@ impl<'g> HirCompiler<'g> {
 
                         ctx.exit_scope(false);
                     },
+                    |_| {},
                 );
 
                 self.exit_scope(false);
@@ -516,43 +520,85 @@ impl<'g> HirCompiler<'g> {
             hir::Statement::While {
                 condition, block, ..
             } => {
-                // Remember where the loop starts
-                let loop_start = self.bytecode.instructions.len() as isize;
-
                 self.compile_while_loop(
                     |ctx| ctx.compile_expression(condition),
                     |ctx| ctx.compile_block(block),
+                    |_| {},
                 );
             }
             hir::Statement::Break(span) => {
+                let cur_loop = self.assert_loop("break");
+
+                // since we are exiting the loop context, make sure we drop everything before
+                // breaking!
+                let pop_until = cur_loop.scope_depth;
+                self.emit_scope_drops(pop_until);
+
+                let exit_jump = self.next_insn_index() as usize;
+                self.assert_loop("break").break_patch_list.push(exit_jump);
+
                 // NOTE: right now this will generate redundant code when using
                 // `if condition { break }`, since `if` will generate its own jump location and we
                 // will end up with a conditional jump and a regular jump together.
-                let exit_jump = self.emit(Instruction::Jump(0));
-
-                let cur_loop = self.current_loop.as_mut().expect("`break` must have a loop wrapping it, and this should have been checked by validation");
-
-                cur_loop.break_patch_list.push(exit_jump);
+                self.emit(Instruction::Jump(0));
             }
             hir::Statement::Continue(span) => {
+                let cur_loop = self.assert_loop("continue");
+
+                let pop_until = cur_loop.scope_depth;
+                self.emit_scope_drops(pop_until);
+
+                let exit_jump = self.next_insn_index() as usize;
+                self.assert_loop("continue")
+                    .continue_patch_list
+                    .push(exit_jump);
+
                 // NOTE: right now this will generate redundant code when using
                 // `if condition { continue }`, since `if` will generate its own jump location and we
-                // will end up with a conditional jump and a regular jump together.
+                // will end up with a conditional jump and a regular jump together, making the jump
                 // unreachable.
-                let exit_jump = self.emit(Instruction::Jump(0));
-
-                let cur_loop = self.current_loop.as_mut().expect("`continue` must have a loop wrapping it, and this should have been checked by validation");
-
-                cur_loop.continue_patch_list.push(exit_jump);
+                self.emit(Instruction::Jump(0));
             }
 
-            // TODO: I need to report where `continue` is located, or add capability to insert
-            // things ad-hoc.
             hir::Statement::CForLoop {
                 condition,
                 after,
                 block,
-            } => todo!("c-like for loop unmappable to while"),
+            } => match condition {
+                Some(cond) => self.compile_while_loop(
+                    |ctx| ctx.compile_expression(cond),
+                    |ctx| ctx.compile_block(block),
+                    |ctx| {
+                        if let Some(after) = &after {
+                            ctx.compile_statement(after);
+                        }
+                    },
+                ),
+                None => {
+                    // infinite loop.
+
+                    let loop_start = self.next_insn_index();
+
+                    let break_locs = self.wrap_loop_body(|ctx| ctx.compile_block(block));
+
+                    if let Some(after) = &after {
+                        self.compile_statement(after);
+                    }
+
+                    self.emit(Instruction::Jump(loop_start - self.next_insn_index()));
+
+                    for loc in break_locs {
+                        self.patch_jump(loc);
+                    }
+                }
+            },
+        }
+    }
+
+    fn assert_loop(&mut self, name: &'static str) -> &mut LoopInfo {
+        match self.current_loop.as_mut() {
+            None => panic!("`{name}` must have a loop wrapping it, and this should have been checked by validation"),
+            Some(x) => x,
         }
     }
 
@@ -602,76 +648,6 @@ impl<'g> HirCompiler<'g> {
         loop_info: LoopInfo,
         compile_continue: impl FnOnce(&mut Self),
     ) {
-        // find the first of many sequential pops for sequential scope exits, and add them up
-        // so that we can pop all on `break`.
-        // TODO: refactor scope exit so that we can avoid searching for pops that may or may not be
-        // related to scope cleanup.
-        let (first_pop, total_pop_count) = {
-            let block_insns = &self.bytecode.instructions[block_start..];
-
-            let last_pops =
-                block_insns
-                    .iter()
-                    .enumerate()
-                    .rev()
-                    .map_while(|(i, insn)| match insn {
-                        Instruction::Pop(count) | Instruction::PopReplace(count) => {
-                            Some((i + block_start, count))
-                        }
-                        _ => None,
-                    });
-
-            let (first_pop, pop_count) =
-                last_pops.fold((None, 0), |(_, acc), (i, count)| (Some(i), acc + count));
-
-            (first_pop, pop_count)
-        };
-
-        let continue_block_start = self.next_insn_index();
-
-        compile_continue(self);
-
-        let continue_block_is_empty = self.next_insn_index() == continue_block_start;
-
-        // jump back to the start of the loop.
-        self.emit(Instruction::Jump(loop_start - self.next_insn_index()));
-
-        // NOTE: not using tuple because it's very easy to accidentally swap places.
-        // Use a struct with names & destructure it with a pattern if you find it better.
-        let continue_location;
-        let break_location;
-
-        if let Some(block_end_location) = first_pop {
-            // scope has a destructor. We'll patch `continue` to go to the pop instruction. We'll then add a pop that accounts for the full inside block in `break`.
-            // Since `compile_continue`'s output comes right after the block output
-
-            continue_location = block_end_location;
-
-            // `break` should go here (after the jump) and pop the locals, but not the condition
-            // result.
-            break_location = self.emit(Instruction::Pop(total_pop_count));
-        } else {
-            // scope has no destructor, so we can wire `continue` directly the continue block
-            // before the jump. If there's nothing to do @ `continue`, avoid jumping to a jump and
-            // wire it to loop start directly.
-            continue_location = if continue_block_is_empty {
-                loop_start
-            } else {
-                continue_block_start
-            } as usize;
-
-            // and `break` will just go past the end.
-            break_location = self.next_insn_index() as usize;
-        };
-
-        // patch the set continue/break locations.
-        for break_jmp in loop_info.break_patch_list {
-            self.patch_jump_to(break_jmp, break_location);
-        }
-
-        for continue_jmp in loop_info.continue_patch_list {
-            self.patch_jump_to(continue_jmp, continue_location);
-        }
     }
 
     /// Compiles a while loop with custom condition & block logic.
@@ -681,6 +657,8 @@ impl<'g> HirCompiler<'g> {
         &mut self,
         compile_condition: impl FnOnce(&mut Self),
         compile_block: impl FnOnce(&mut Self),
+        // statements that occur between exiting the loop body & beginning the next iteration.
+        compile_after: impl FnOnce(&mut Self),
     ) {
         let loop_start = self.next_insn_index();
 
@@ -690,19 +668,20 @@ impl<'g> HirCompiler<'g> {
         let bail_jump = self.emit(Instruction::JumpIfFalse(0));
         self.emit(Instruction::Pop(1));
 
-        let block_start = self.next_insn_index() as usize;
-        let (loop_info, _) = self.with_loop_info(compile_block);
+        let break_locs = self.wrap_loop_body(compile_block);
 
-        // nothing to be deferred for `continue`.
-        self.finish_loop_with_after(loop_start, block_start, loop_info, |_| {});
+        compile_after(self);
 
-        // breaking the loop from the inside should not pop anything, so skip the next insn.
-        // NOTE: currently this will make `break` jump twice when there are no `pop`s to do (no
-        // defer).
-        self.emit(Instruction::Jump(2));
+        // emit jump to start
+        self.emit(Instruction::Jump(loop_start - self.next_insn_index()));
 
-        let pop_condition = self.emit(Instruction::Pop(1));
-        self.patch_jump_to(bail_jump, pop_condition);
+        let pop_if_condition = self.emit(Instruction::Pop(1));
+        self.patch_jump_to(bail_jump, pop_if_condition);
+
+        // make `break` jump here, since `true` branch of if already popped.
+        for loc in break_locs {
+            self.patch_jump(loc);
+        }
     }
 
     /// Generate bytecode for an expression.
@@ -1103,6 +1082,29 @@ impl<'g> HirCompiler<'g> {
         self.locals_in_scope.push(HashMap::new());
     }
 
+    /// Emits instructions to drop scopes up-to and including `pop_until` index, but does not affect information for
+    /// locals.
+    /// Used in `break` & `continue` to emit appropiate popping instructions.
+    fn emit_scope_drops(&mut self, pop_until: usize) {
+        let scopes = &self.scopes[pop_until..];
+
+        let local_count = scopes
+            .iter()
+            .map(|s| {
+                // see `exit_scope`: depth 0 is function body block, and thus has `return`.
+                if s.depth == 0 {
+                    0
+                } else {
+                    s.locals.len()
+                }
+            })
+            .sum();
+
+        if local_count > 0 {
+            self.emit(Instruction::Pop(local_count));
+        }
+    }
+
     /// Drops the current block scope we're in.
     fn exit_scope(&mut self, scope_has_ending_expr: bool) {
         let scope = self
@@ -1128,21 +1130,36 @@ impl<'g> HirCompiler<'g> {
         }
     }
 
-    /// Wraps `inner` in a context with loop information. Any `break`s that are submitted by
-    /// `inner` to this loop are patched to the next instruction after `inner` returns.
-    /// The parameter to `inner` is the same as `self` and can be ignored, it's used to
-    /// obtain the borrow inside `inner`'s body.
+    /// Wraps loop inside a scope that is fully popped on both `continue` & `break`.
+    /// Returns a patch list of instruction locations for jumps to bail out of the loop, from
+    /// `break`s. Note that there is no cleanup from inside the loop to perform.
     ///
-    /// See [`Self::compile_while_loop`] for a usage example.
-    fn with_loop_info<T>(&mut self, inner: impl FnOnce(&mut Self) -> T) -> (LoopInfo, T) {
-        let old_loop_status = self.current_loop.replace(LoopInfo::default());
+    /// Does **NOT** emit the jump instruction to jump back to the beginning of the loop. This is
+    /// inteded, since it allows adding arbitrary instructions to `continue`
+    fn wrap_loop_body(&mut self, codegen_body: impl FnOnce(&mut Self)) -> Vec<usize> {
+        self.enter_scope();
 
-        let result = inner(self);
+        let old_loop_status = self.current_loop.replace(LoopInfo {
+            scope_depth: self.scopes.len(),
+            break_patch_list: Vec::new(),
+            continue_patch_list: Vec::new(),
+        });
+
+        codegen_body(self);
 
         let loop_info = std::mem::replace(&mut self.current_loop, old_loop_status)
             .expect("should have been pushed before when grabbing old_status");
 
-        (loop_info, result)
+        self.exit_scope(false);
+
+        // `continue` jumps to the end of the block, after popping.
+        let continue_loc = self.next_insn_index();
+
+        for continue_jmp in loop_info.continue_patch_list {
+            self.patch_jump(continue_jmp);
+        }
+
+        loop_info.break_patch_list
     }
 }
 
