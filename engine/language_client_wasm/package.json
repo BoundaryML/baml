@@ -1,0 +1,35 @@
+{
+  "name": "@boundaryml/baml-wasm",
+  "version": "0.1.0",
+  "description": "BAML WASM client for browser environments",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "files": [
+    "dist",
+    "wasm"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "build:wasm": "cd ../language_client_cffi && ./build_wasm.sh && cp -r pkg ../language_client_wasm/wasm",
+    "test": "jest",
+    "test:e2e": "playwright test",
+    "serve:test": "python3 -m http.server 3000",
+    "clean": "rm -rf dist wasm"
+  },
+  "dependencies": {
+    "@bufbuild/protobuf": "^1.6.0"
+  },
+  "devDependencies": {
+    "@bufbuild/protoc-gen-es": "^1.6.0",
+    "@playwright/test": "^1.40.0",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0",
+    "jest": "^29.0.0",
+    "@types/jest": "^29.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

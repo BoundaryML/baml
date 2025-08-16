@@ -21,37 +21,77 @@ pub mod baml {
 
 // WASM-specific exports
 #[cfg(target_arch = "wasm32")]
-mod wasm_exports {
+pub mod wasm_exports {
     use wasm_bindgen::prelude::*;
-    use crate::ffi::runtime::create_baml_runtime;
+    use crate::ffi::runtime::{create_baml_runtime, destroy_baml_runtime};
     use crate::ffi::functions::{call_function_from_c, call_function_stream_from_c};
+    use crate::ffi::callbacks::register_callbacks;
     use std::ffi::CString;
     
     #[wasm_bindgen]
-    pub fn create_baml_runtime_wasm(
-        baml_src: String,
-        config: String,
-        env_vars: String
-    ) -> *mut std::ffi::c_void {
-        let baml_src = CString::new(baml_src).unwrap();
-        let config = CString::new(config).unwrap();
-        let env_vars = CString::new(env_vars).unwrap();
+    pub fn init_wasm() {
+        // Set up console error panic hook for better debugging
+        #[cfg(feature = "console_error_panic_hook")]
+        console_error_panic_hook::set_once();
         
-        create_baml_runtime(
-            baml_src.as_ptr(),
-            config.as_ptr(),
+        // Register WASM-specific callbacks that will call JavaScript functions
+        extern "C" fn result_callback(call_id: u32, is_done: i32, content: *const i8, length: usize) {
+            let data = unsafe {
+                std::slice::from_raw_parts(content as *const u8, length)
+            };
+            // Call JavaScript callback through global object
+            let js_callback = format!("window.__baml_callback_{}", call_id);
+            web_sys::console::log_1(&format!("Callback {} with {} bytes", js_callback, length).into());
+        }
+        
+        extern "C" fn error_callback(call_id: u32, _is_done: i32, content: *const i8, length: usize) {
+            let error_msg = unsafe {
+                std::str::from_utf8_unchecked(std::slice::from_raw_parts(content as *const u8, length))
+            };
+            web_sys::console::error_1(&format!("Error in call {}: {}", call_id, error_msg).into());
+        }
+        
+        extern "C" fn on_tick_callback(call_id: u32) {
+            web_sys::console::log_1(&format!("Tick for call {}", call_id).into());
+        }
+        
+        register_callbacks(result_callback, error_callback, on_tick_callback);
+    }
+    
+    #[wasm_bindgen]
+    pub fn create_baml_runtime_wasm(
+        root_path: String,
+        src_files: String,  // JSON string
+        env_vars: String    // JSON string
+    ) -> usize {
+        // Parse JSON strings
+        let src_files = CString::new(src_files).unwrap();
+        let env_vars = CString::new(env_vars).unwrap();
+        let root_path = CString::new(root_path).unwrap();
+        
+        let runtime = create_baml_runtime(
+            root_path.as_ptr(),
+            src_files.as_ptr(),
             env_vars.as_ptr()
-        ) as *mut std::ffi::c_void
+        );
+        
+        runtime as usize
+    }
+    
+    #[wasm_bindgen]
+    pub fn destroy_baml_runtime_wasm(runtime: usize) {
+        destroy_baml_runtime(runtime as *const std::ffi::c_void);
     }
     
     #[wasm_bindgen]
     pub fn call_function_wasm(
-        runtime: *mut std::ffi::c_void,
+        runtime: usize,
         function_name: String,
         args_proto: Vec<u8>,
         callback_id: u32
-    ) {
-        let function_name = CString::new(function_name).unwrap();
+    ) -> Result<(), JsValue> {
+        let function_name = CString::new(function_name)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
         let args_ptr = args_proto.as_ptr() as *const i8;
         let args_len = args_proto.len();
         
@@ -62,18 +102,24 @@ mod wasm_exports {
             args_len,
             callback_id
         );
+        
+        Ok(())
     }
     
     #[wasm_bindgen]
     pub fn call_function_stream_wasm(
-        runtime: *mut std::ffi::c_void,
+        runtime: usize,
         function_name: String,
         args_proto: Vec<u8>,
-        callback_id: u32
-    ) {
-        let function_name = CString::new(function_name).unwrap();
+        stream_id: String
+    ) -> Result<(), JsValue> {
+        let function_name = CString::new(function_name)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
         let args_ptr = args_proto.as_ptr() as *const i8;
         let args_len = args_proto.len();
+        
+        // Use a deterministic callback ID based on stream_id
+        let callback_id = stream_id.chars().fold(0u32, |acc, c| acc.wrapping_add(c as u32));
         
         call_function_stream_from_c(
             runtime as *const std::ffi::c_void,
@@ -82,5 +128,7 @@ mod wasm_exports {
             args_len,
             callback_id
         );
+        
+        Ok(())
     }
 }

@@ -1,4 +1,5 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::process::Command;
 
 mod protoc_lang_out {
     //! # API to invoke `protoc` command programmatically
@@ -322,6 +323,52 @@ mod protoc_lang_out {
     }
 }
 
+#[cfg(feature = "wasm")]
+fn generate_typescript_proto() {
+    let ts_out_dir = PathBuf::from("../../language_client_wasm/src/proto");
+    
+    // Ensure output directory exists
+    std::fs::create_dir_all(&ts_out_dir).expect("Failed to create WASM client proto dir");
+    
+    // Use buf to generate TypeScript (requires buf CLI installed)
+    let status = Command::new("buf")
+        .args(&[
+            "generate",
+            "--template", "types/buf.gen.yaml",
+            "types/"
+        ])
+        .status();
+    
+    match status {
+        Ok(status) if status.success() => {
+            println!("cargo:warning=Generated TypeScript protobuf types for WASM client");
+        }
+        _ => {
+            // Fallback to protoc if buf is not available
+            println!("cargo:warning=buf not found, trying protoc");
+            
+            let status = Command::new("protoc")
+                .args(&[
+                    "--plugin=protoc-gen-es=node_modules/.bin/protoc-gen-es",
+                    "--es_out", ts_out_dir.to_str().unwrap(),
+                    "--es_opt", "target=ts,import_extension=.js",
+                    "--proto_path", "types",
+                    "types/cffi.proto"
+                ])
+                .status();
+            
+            match status {
+                Ok(status) if status.success() => {
+                    println!("cargo:warning=Generated TypeScript protobuf types using protoc");
+                }
+                _ => {
+                    println!("cargo:warning=Failed to generate TypeScript protobuf types - skipping");
+                }
+            }
+        }
+    }
+}
+
 fn main() -> std::io::Result<()> {
     println!("running build for baml_cffi");
     // Re-run build.rs if these files change.
@@ -341,6 +388,12 @@ fn main() -> std::io::Result<()> {
             .unwrap(),
     );
     prost_build::compile_protos(&["types/cffi.proto"], &["types/"])?;
+
+    // Generate TypeScript protobuf types when building for WASM
+    #[cfg(feature = "wasm")]
+    {
+        generate_typescript_proto();
+    }
 
     {
         let lang = "go";

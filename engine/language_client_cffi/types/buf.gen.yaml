@@ -1,0 +1,7 @@
+version: v1
+plugins:
+  - plugin: es
+    out: ../../../language_client_wasm/src/proto
+    opt:
+      - target=ts
+      - import_extension=.js
