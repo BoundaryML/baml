@@ -75,3 +75,21 @@ x = 1
 :t x
 :t x + x
 x + x
+x = 1
+x
+:t x
+:t x + x
+:t 1 + 2
+:t [x]
+:t [[x]]
+:t [["hello"], [], ["world"]]
+:t []
+ExtractResume(1)
+ExtractResume(resume)
+resume = "Vaibhav. Boundary (2023-Present)"
+ExtractResume(resume)
+:t ExtractResume(resume)
+:t ExtractResume(resume, "hi")
+ExtractResume(resume, "hi")
+resume = "Vaibhav. Boundary (2023-Present)"
+ExtractResume(resume)

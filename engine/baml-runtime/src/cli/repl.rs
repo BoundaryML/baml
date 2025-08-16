@@ -224,15 +224,6 @@ impl ReplState {
         // Get the internal runtime to access the existing context
         let internal = runtime.internal();
 
-        // For now, we'll use a simplified approach that demonstrates the concept
-        // TODO: Implement proper BAML expression parsing and evaluation
-        // This would involve:
-        // 1. Creating a minimal BAML source with the expression
-        // 2. Parsing it with the BAML parser
-        // 3. Converting AST to HIR
-        // 4. Typechecking in the context of the loaded THIR
-        // 5. Evaluating the expression
-
         // Convert AST to HIR from existing loaded sources
         let hir = Hir::from_ast(&internal.db.ast);
 
@@ -298,16 +289,15 @@ impl ReplState {
                                 self.env_vars.clone(),
                             )
                             .await;
-                        Ok(res
-                            .0?
-                            .parsed()
-                            .as_ref()
-                            .expect("TODO")
-                            .as_ref()
-                            .expect("TODO")
-                            .clone()
-                            .0
-                            .map_meta_owned(|_| (Span::fake(), None)))
+                        let function_result = res.0?;
+                        match function_result.parsed() {
+                            Some(Ok(response_baml_value)) => Ok(response_baml_value
+                                .clone()
+                                .0
+                                .map_meta_owned(|_| (Span::fake(), None))),
+                            Some(Err(e)) => Err(anyhow!("Failed to parse function result: {}", e)),
+                            None => Err(anyhow!("No parsed result available from function call")),
+                        }
                     }
                     None => Err(anyhow!(
                         "No BAML sources loaded. Use :load <path> to load sources."
