@@ -247,7 +247,6 @@ enum Scope {
 pub struct PredefinedTypes {
     functions: IndexMap<String, (Type, Vec<(String, Type)>)>,
     classes: HashMap<String, IndexMap<String, Type>>,
-    #[allow(dead_code)]
     enum_definitions: IndexMap<String, Vec<String>>,
     /// TODO: See the comment for [`Type::AliasRef`].
     ///
