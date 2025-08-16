@@ -583,33 +583,18 @@ impl WithRenderRawCurl for AwsClient {
             }
         }
 
-        fn image_format_from_mime(mime: &str) -> String {
-            match mime.strip_prefix("image/") {
-                Some(s) => s.to_string(),
+        fn strip_mime_prefix(mime: &str) -> String {
+            match mime.split_once('/') {
+                Some((_, s)) => s.to_string(),
                 None => mime.to_string(),
             }
-        }
-
-        fn video_format_from_mime(mime: &str) -> Result<&'static str> {
-            Ok(match mime {
-                "video/mp4" => "mp4",
-                "video/mpeg" => "mpeg",
-                "video/mov" => "mov",
-                "video/x-flv" => "flv",
-                "video/mkv" => "mkv",
-                "video/webm" => "webm",
-                _ => anyhow::bail!(
-                    "AWS Bedrock video format not supported: {}. Supported formats: mp4, mpeg, mov, flv, mkv, webm",
-                    mime
-                ),
-            })
         }
 
         fn to_cli_content_block(media: &BamlMedia) -> Result<serde_json::Value> {
             match media.media_type {
                 BamlMediaType::Image => match &media.content {
                     BamlMediaContent::Base64(b64) => {
-                        let format = image_format_from_mime(&media.mime_type_as_ok()?);
+                        let format = strip_mime_prefix(&media.mime_type_as_ok()?);
                         Ok(json!({
                             "image": {
                                 "format": format,
@@ -636,7 +621,7 @@ impl WithRenderRawCurl for AwsClient {
                 BamlMediaType::Video => match &media.content {
                     BamlMediaContent::Base64(b64) => {
                         let mime = media.mime_type_as_ok()?;
-                        let format = video_format_from_mime(&mime)?;
+                        let format = strip_mime_prefix(&mime);
                         Ok(json!({
                             "video": {
                                 "format": format,
@@ -684,33 +669,31 @@ impl WithRenderRawCurl for AwsClient {
             .collect::<Result<Vec<_>>>()?;
 
         // Build CLI command
-        let mut cmd = String::new();
+        let mut cmd_body = String::new();
         let base_cmd = if render_settings.stream && self.supports_streaming() {
             "aws bedrock-runtime converse-stream"
         } else {
             "aws bedrock-runtime converse"
         };
-        cmd.push_str(base_cmd);
+        cmd_body.push_str(base_cmd);
 
         // --model-id
-        cmd.push_str(&format!(
+        cmd_body.push_str(&format!(
             " --model-id '{}'",
             escape(Cow::Borrowed(&self.properties.model))
         ));
 
-        // --messages
-        let messages_str = serde_json::to_string(&messages_json)?;
-        let messages_escaped = escape(Cow::Borrowed(&messages_str));
-        cmd.push_str(&format!(" --messages {}", messages_escaped));
+        // Build --cli-input-json payload
+        let mut root = serde_json::Map::new();
+        // messages are required
+        root.insert("messages".into(), serde_json::Value::Array(messages_json));
 
-        // --system (optional)
+        // system (optional)
         if let Some(blocks) = system_blocks {
-            let system_str = serde_json::to_string(&blocks)?;
-            let system_escaped = escape(Cow::Borrowed(&system_str));
-            cmd.push_str(&format!(" --system {}", system_escaped));
+            root.insert("system".into(), serde_json::Value::Array(blocks));
         }
 
-        // --inference-config (optional)
+        // inferenceConfig (optional)
         if let Some(cfg) = &self.properties.inference_config {
             let mut map = serde_json::Map::new();
             if let Some(v) = cfg.max_tokens {
@@ -726,30 +709,36 @@ impl WithRenderRawCurl for AwsClient {
                 map.insert("stopSequences".into(), json!(v));
             }
             if !map.is_empty() {
-                let cfg_str = serde_json::to_string(&map)?;
-                let cfg_escaped = escape(Cow::Borrowed(&cfg_str));
-                cmd.push_str(&format!(" --inference-config {}", cfg_escaped));
+                root.insert("inferenceConfig".into(), serde_json::Value::Object(map));
             }
         }
 
-        // --additional-model-request-fields (optional)
+        // additionalModelRequestFields (optional)
         if !self.properties.additional_model_request_fields.is_empty() {
             let addl = serde_json::to_value(&self.properties.additional_model_request_fields)?;
-            let addl_str = serde_json::to_string(&addl)?;
-            let addl_escaped = escape(Cow::Borrowed(&addl_str));
-            cmd.push_str(&format!(
-                " --additional-model-request-fields {}",
-                addl_escaped
-            ));
+            root.insert("additionalModelRequestFields".into(), addl);
         }
 
-        // region/profile hints
+        // pretty, multi-line JSON
+        let input_json_str = serde_json::to_string_pretty(&serde_json::Value::Object(root))?;
+        let input_json_escaped = escape(Cow::Borrowed(&input_json_str));
+        cmd_body.push_str(&format!(" --cli-input-json {}", input_json_escaped));
+
+        // Prefix with environment variables instead of --region/--profile flags
+        let mut env_parts: Vec<String> = Vec::new();
         if let Some(region) = &self.properties.region {
-            cmd.push_str(&format!(" --region '{}'", escape(Cow::Borrowed(region))));
+            env_parts.push(format!("AWS_REGION={}", escape(Cow::Borrowed(region))));
         }
         if let Some(profile) = &self.properties.profile {
-            cmd.push_str(&format!(" --profile '{}'", escape(Cow::Borrowed(profile))));
+            env_parts.push(format!("AWS_PROFILE={}", escape(Cow::Borrowed(profile))));
         }
+        let env_prefix = if env_parts.is_empty() {
+            String::new()
+        } else {
+            format!("{} ", env_parts.join(" "))
+        };
+
+        let cmd = format!("{}{}", env_prefix, cmd_body);
 
         Ok(cmd)
     }
