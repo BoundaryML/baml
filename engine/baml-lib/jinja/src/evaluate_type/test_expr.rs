@@ -145,7 +145,7 @@ fn test_enum() {
     );
     assert_eq!(
         assert_fails_to!("enum_arg == \"VALUE_A\"", &types),
-        vec!["enum MyEnum (enum_arg) does not have a value 'enum_arg'"]
+        vec!["Type mismatch: '(enum_arg == VALUE_A)' compares values of different types (enum VALUE_A and literal[\"VALUE_A\"]). Note that starting in baml 0.206.0, strings are not implicitly converted to enum values (e.g. you should use `MyEnum.VALUE_A` instead of `\"VALUE_A\"`)."]
     );
 }
 

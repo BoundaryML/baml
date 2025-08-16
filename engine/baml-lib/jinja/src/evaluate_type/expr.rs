@@ -138,23 +138,12 @@ fn tracker_visit_expr(
                 ast::BinOpKind::Pow => Type::Number,
                 ast::BinOpKind::FloorDiv => Type::Number,
                 ast::BinOpKind::Rem => Type::Number,
-                ast::BinOpKind::Eq => {
-                    match (&lhs, &rhs) {
-                        (Type::EnumValueRef(e1), Type::EnumValueRef(e2)) => {
-                            if e1 == e2 {
-                                Type::Bool
-                            } else {
-                                state.errors.push(TypeError::new_invalid_binop(
-                                    expr,
-                                    &lhs,
-                                    &rhs,
-                                    expr.span(),
-                                ));
-                                Type::Unknown
-                            }
-                        }
-                        (Type::EnumValueRef(_), _) => {
-                            state.errors.push(TypeError::new_invalid_binop(
+                ast::BinOpKind::Eq => match (&lhs, &rhs) {
+                    (Type::EnumValueRef(e1), Type::EnumValueRef(e2)) => {
+                        if e1 == e2 {
+                            Type::Bool
+                        } else {
+                            state.errors.push(TypeError::new_invalid_enum_cmp(
                                 expr,
                                 &lhs,
                                 &rhs,
@@ -162,25 +151,18 @@ fn tracker_visit_expr(
                             ));
                             Type::Unknown
                         }
-                        (_, Type::EnumValueRef(_)) => {
-                            state.errors.push(TypeError::new_invalid_binop(
-                                expr,
-                                &lhs,
-                                &rhs,
-                                expr.span(),
-                            ));
-                            Type::Unknown
-                        }
-                        _ => Type::Bool,
                     }
-                    // state.errors.push(TypeError::new_invalid_binop(
-                    //     &expr,
-                    //     &lhs,
-                    //     &rhs,
-                    //     bin_expr.span(),
-                    // ));
-                    // Type::Unknown
-                }
+                    (Type::EnumValueRef(_), _) | (_, Type::EnumValueRef(_)) => {
+                        state.errors.push(TypeError::new_invalid_enum_cmp(
+                            expr,
+                            &lhs,
+                            &rhs,
+                            expr.span(),
+                        ));
+                        Type::Unknown
+                    }
+                    _ => Type::Bool,
+                },
                 ast::BinOpKind::Ne => Type::Bool,
                 ast::BinOpKind::Lt => Type::Bool,
                 ast::BinOpKind::Gt => Type::Bool,
