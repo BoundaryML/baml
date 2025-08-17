@@ -1,6 +1,7 @@
 import { encodeValue } from './encode.js';
 import { decodeValue, TypeMap } from './decode.js';
 import { CFFIValueHolder } from './proto/cffi_pb.js';
+import { serializeArgs, deserializeResult } from './proto_utils.js';
 
 // Type definitions for WASM exports
 interface WasmExports {
@@ -30,33 +31,40 @@ export class BamlWasmRuntime {
     
     // Load WASM module
     try {
-      // For TypeScript, we'll load the WASM module from a URL
-      // In production, this would be served from your web server
-      const wasmUrl = '/wasm/baml_cffi_bg.wasm';
-      const wasmResponse = await fetch(wasmUrl);
-      const wasmBytes = await wasmResponse.arrayBuffer();
-      
-      const imports = {
-        wbg: {
-          __wbg_log_1d3ae0273d8f4f8a: (arg0: number, arg1: number) => {
-            console.log(getString(arg0, arg1));
-          },
-          __wbg_error_f851667af71bcfc6: (arg0: number, arg1: number) => {
-            console.error(getString(arg0, arg1));
-          }
+      // Check if WASM module is already loaded globally (for testing)
+      if ((globalThis as any).wasmModule) {
+        instance.wasmModule = (globalThis as any).wasmModule;
+      } else {
+        // Load the JS bindings module dynamically to avoid TypeScript errors
+        const wasmModule = await import(/* @vite-ignore */ '../wasm/baml_cffi_bg.js') as any;
+        
+        // Fetch the WASM binary
+        const wasmResponse = await fetch('/wasm/baml_cffi_bg.wasm');
+        const wasmBinary = await wasmResponse.arrayBuffer();
+        
+        // Instantiate the WASM module with proper imports
+        const wasmInstance = await WebAssembly.instantiate(wasmBinary, {
+          './baml_cffi_bg.js': wasmModule
+        });
+        
+        // Set the WASM instance in the bindings
+        wasmModule.__wbg_set_wasm(wasmInstance.instance.exports);
+        
+        // Initialize WASM if init function exists
+        if (wasmModule.init_wasm) {
+          wasmModule.init_wasm();
         }
-      };
-      
-      // Initialize WASM instance
-      const wasmInstance = await WebAssembly.instantiate(wasmBytes, imports);
-      instance.wasmModule = (wasmInstance.instance as any).exports as WasmExports;
-      
-      // Initialize WASM runtime
-      instance.wasmModule.init_wasm();
+        
+        instance.wasmModule = wasmModule as WasmExports;
+      }
       
       // Create BAML runtime
       const srcFilesJson = JSON.stringify(srcFiles);
       const envVarsJson = JSON.stringify(envVars);
+      
+      if (!instance.wasmModule) {
+        throw new Error('WASM module not loaded');
+      }
       
       instance.runtime = instance.wasmModule.create_baml_runtime_wasm(
         rootPath,
@@ -64,8 +72,8 @@ export class BamlWasmRuntime {
         envVarsJson
       );
       
-      if (!instance.runtime) {
-        throw new Error('Failed to create BAML runtime');
+      if (!instance.runtime || instance.runtime === 0) {
+        throw new Error('Failed to create BAML runtime - returned null/0');
       }
       
       return instance;
@@ -83,35 +91,20 @@ export class BamlWasmRuntime {
       throw new Error('Runtime not initialized');
     }
     
-    // Encode arguments
-    const argsHolder = new CFFIValueHolder();
-    argsHolder.value = {
-      case: 'classValue',
-      value: {
-        name: 'Arguments',
-        fields: Object.fromEntries(
-          Object.entries(args).map(([k, v]) => [k, encodeValue(v)])
-        )
-      }
-    };
-    
-    // Serialize to protobuf bytes (placeholder - actual implementation needs protobuf serialization)
-    const protoBytes = new Uint8Array(JSON.stringify(argsHolder).split('').map(c => c.charCodeAt(0)));
+    // Serialize arguments to protobuf bytes
+    const protoBytes = serializeArgs(args);
     
     // Create a promise that will be resolved by the callback
     const callbackId = Math.floor(Math.random() * 1000000);
     
     return new Promise<T>((resolve, reject) => {
-      // Register callback
-      (globalThis as any)[`__baml_callback_${callbackId}`] = (data: Uint8Array, isError: boolean) => {
-        if (isError) {
-          const errorMsg = new TextDecoder().decode(data);
-          reject(new Error(errorMsg));
-        } else {
+      // Register callback object using the global __baml_callbacks registry
+      (window as any).__baml_callbacks = (window as any).__baml_callbacks || {};
+      (window as any).__baml_callbacks[callbackId] = {
+        onResult: (data: Uint8Array, isDone: boolean) => {
           try {
-            // Parse result (placeholder - actual implementation needs protobuf deserialization)
-            const resultJson = new TextDecoder().decode(data);
-            const resultHolder = JSON.parse(resultJson) as CFFIValueHolder;
+            // Deserialize result from protobuf
+            const resultHolder = deserializeResult(data);
             
             // Register response type if provided
             if (responseType) {
@@ -123,10 +116,13 @@ export class BamlWasmRuntime {
           } catch (error) {
             reject(new Error(`Failed to decode result: ${error}`));
           }
+        },
+        onError: (error: string) => {
+          reject(new Error(error));
+        },
+        onTick: () => {
+          console.log(`Function ${functionName} is still processing...`);
         }
-        
-        // Clean up callback
-        delete (globalThis as any)[`__baml_callback_${callbackId}`];
       };
       
       // Call WASM function with callback
@@ -148,51 +144,63 @@ export class BamlWasmRuntime {
       throw new Error('Runtime not initialized');
     }
     
-    // Encode arguments
-    const argsHolder = new CFFIValueHolder();
-    argsHolder.value = {
-      case: 'classValue',
-      value: {
-        name: 'Arguments',
-        fields: Object.fromEntries(
-          Object.entries(args).map(([k, v]) => [k, encodeValue(v)])
-        )
-      }
-    };
-    
-    const protoBytes = new Uint8Array(JSON.stringify(argsHolder).split('').map(c => c.charCodeAt(0)));
+    // Serialize arguments to protobuf bytes
+    const protoBytes = serializeArgs(args);
     
     // Set up streaming with callbacks
     const streamId = Math.random().toString(36).substring(7);
+    const callbackId = Math.floor(Math.random() * 1000000);
     const chunks: any[] = [];
     let resolver: ((value: any) => void) | null = null;
     let isDone = false;
+    let errorOccurred: Error | null = null;
     
-    // Register callback for streaming data
-    (globalThis as any).__baml_stream_callbacks = (globalThis as any).__baml_stream_callbacks || {};
-    (globalThis as any).__baml_stream_callbacks[streamId] = (data: Uint8Array, done: boolean) => {
-      const resultJson = new TextDecoder().decode(data);
-      const holder = JSON.parse(resultJson) as CFFIValueHolder;
-      const decoded = decodeValue(holder, this.typeMap);
-      
-      if (done) {
+    // Register callback for streaming data using the global __baml_callbacks registry
+    (window as any).__baml_callbacks = (window as any).__baml_callbacks || {};
+    (window as any).__baml_callbacks[callbackId] = {
+      onResult: (data: Uint8Array, done: boolean) => {
+        try {
+          // Deserialize result from protobuf
+          const holder = deserializeResult(data);
+          const decoded = decodeValue(holder, this.typeMap);
+          
+          if (done) {
+            isDone = true;
+          }
+          
+          if (resolver) {
+            resolver({ partial: decoded, done });
+            resolver = null;
+          } else {
+            chunks.push({ partial: decoded, done });
+          }
+        } catch (error) {
+          errorOccurred = new Error(`Failed to decode stream chunk: ${error}`);
+          if (resolver) {
+            resolver(null);
+            resolver = null;
+          }
+        }
+      },
+      onError: (error: string) => {
+        errorOccurred = new Error(error);
         isDone = true;
-      }
-      
-      if (resolver) {
-        resolver({ partial: decoded, done });
-        resolver = null;
-      } else {
-        chunks.push({ partial: decoded, done });
+        if (resolver) {
+          resolver(null);
+          resolver = null;
+        }
+      },
+      onTick: () => {
+        console.log(`Stream ${functionName} processing...`);
       }
     };
     
-    // Start streaming call
+    // Start streaming call - use callbackId instead of streamId
     this.wasmModule.call_function_stream_wasm(
       this.runtime,
       functionName,
       protoBytes,
-      streamId
+      callbackId.toString()
     );
     
     // Register response type if provided
@@ -201,10 +209,12 @@ export class BamlWasmRuntime {
     }
     
     // Yield chunks as they arrive
-    while (!isDone) {
+    while (!isDone && !errorOccurred) {
       if (chunks.length > 0) {
         const chunk = chunks.shift();
         if (chunk.done) {
+          // Clean up callback before returning
+          delete (window as any).__baml_callbacks[callbackId];
           return chunk.partial as T;
         }
         yield { partial: chunk.partial as T };
@@ -217,7 +227,12 @@ export class BamlWasmRuntime {
     }
     
     // Clean up callback
-    delete (globalThis as any).__baml_stream_callbacks[streamId];
+    delete (window as any).__baml_callbacks[callbackId];
+    
+    // Check if an error occurred
+    if (errorOccurred) {
+      throw errorOccurred;
+    }
     
     // Return final value
     if (chunks.length > 0) {

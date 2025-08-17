@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>BAML WASM Simple Test</title>
+  <style>
+    body { font-family: system-ui; padding: 20px; }
+    pre { background: #f5f5f5; padding: 10px; }
+    .success { color: green; }
+    .error { color: red; }
+  </style>
+</head>
+<body>
+  <h1>BAML WASM Simple Test</h1>
+  <div id="status">Loading...</div>
+  <pre id="output"></pre>
+
+  <script type="module">
+    const status = document.getElementById('status');
+    const output = document.getElementById('output');
+    
+    async function log(msg) {
+      output.textContent += msg + '\n';
+      console.log(msg);
+    }
+    
+    async function test() {
+      try {
+        await log('Loading WASM bindings...');
+        
+        // Load the JS bindings module
+        const wasmModule = await import('./wasm/baml_cffi_bg.js');
+        await log('Loaded baml_cffi_bg.js');
+        
+        // Now we need to load the actual WASM file
+        await log('Fetching WASM binary...');
+        const wasmResponse = await fetch('./wasm/baml_cffi_bg.wasm');
+        const wasmBinary = await wasmResponse.arrayBuffer();
+        await log(`WASM binary size: ${(wasmBinary.byteLength / 1024 / 1024).toFixed(2)} MB`);
+        
+        // Instantiate the WASM module
+        await log('Instantiating WASM module...');
+        const wasmInstance = await WebAssembly.instantiate(wasmBinary, {
+          './baml_cffi_bg.js': wasmModule
+        });
+        
+        // Set the WASM instance in the bindings
+        wasmModule.__wbg_set_wasm(wasmInstance.instance.exports);
+        await log('WASM instance set in bindings');
+        
+        // Initialize WASM if init function exists
+        if (wasmModule.init_wasm) {
+          await log('Calling init_wasm()...');
+          wasmModule.init_wasm();
+        }
+        
+        // Check exports
+        await log('\n=== Checking exports ===');
+        const exports = Object.keys(wasmModule).filter(k => typeof wasmModule[k] === 'function');
+        await log(`Found ${exports.length} exported functions`);
+        
+        // Check for our specific functions
+        const requiredFunctions = [
+          'create_baml_runtime_wasm',
+          'call_function_wasm', 
+          'destroy_baml_runtime_wasm'
+        ];
+        
+        for (const func of requiredFunctions) {
+          if (wasmModule[func]) {
+            await log(`✓ ${func} found`);
+          } else {
+            await log(`✗ ${func} NOT found`);
+          }
+        }
+        
+        // Try to create a runtime
+        await log('\n=== Testing runtime creation ===');
+        const srcFiles = JSON.stringify({
+          'main.baml': 'function Test() -> string { client Mock\n prompt #"test"# }'
+        });
+        const envVars = JSON.stringify({});
+        
+        await log('Calling create_baml_runtime_wasm...');
+        const runtime = wasmModule.create_baml_runtime_wasm('/', srcFiles, envVars);
+        await log(`Runtime created: ${runtime}`);
+        
+        if (runtime) {
+          await log('Destroying runtime...');
+          wasmModule.destroy_baml_runtime_wasm(runtime);
+          await log('Runtime destroyed');
+        }
+        
+        status.textContent = '✅ Test completed successfully!';
+        status.className = 'success';
+        
+        // Make available globally for console testing
+        window.wasmModule = wasmModule;
+        await log('\n=== wasmModule available in console ===');
+        
+      } catch (error) {
+        status.textContent = '❌ Test failed';
+        status.className = 'error';
+        await log(`\nERROR: ${error.message}`);
+        await log(error.stack);
+      }
+    }
+    
+    test();
+  </script>
+</body>
+</html>

@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>BAML WASM Runtime Debug</title>
+  <style>
+    body { font-family: system-ui; padding: 20px; }
+    pre { background: #f5f5f5; padding: 10px; white-space: pre-wrap; }
+    .success { color: green; }
+    .error { color: red; }
+    button { margin: 5px; padding: 8px 15px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h1>BAML WASM Runtime Debug</h1>
+  <button onclick="runTests()">Run Debug Tests</button>
+  <div id="status">Ready</div>
+  <pre id="output"></pre>
+
+  <script type="module">
+    const output = document.getElementById('output');
+    const status = document.getElementById('status');
+    
+    function log(msg) {
+      output.textContent += msg + '\n';
+      console.log(msg);
+    }
+    
+    window.runTests = async function() {
+      try {
+        output.textContent = '';
+        status.textContent = 'Running...';
+        
+        // Load WASM
+        log('Loading WASM module...');
+        const wasmModule = await import('./wasm/baml_cffi_bg.js');
+        const wasmResponse = await fetch('./wasm/baml_cffi_bg.wasm');
+        const wasmBinary = await wasmResponse.arrayBuffer();
+        const wasmInstance = await WebAssembly.instantiate(wasmBinary, {
+          './baml_cffi_bg.js': wasmModule
+        });
+        wasmModule.__wbg_set_wasm(wasmInstance.instance.exports);
+        if (wasmModule.init_wasm) wasmModule.init_wasm();
+        log('✓ WASM loaded\n');
+        
+        // Test different parameter formats
+        const tests = [
+          {
+            name: 'Test 1: Empty strings',
+            params: ['', '', '']
+          },
+          {
+            name: 'Test 2: Root path only',
+            params: ['/', '', '']
+          },
+          {
+            name: 'Test 3: Empty JSON objects',
+            params: ['/', '{}', '{}']
+          },
+          {
+            name: 'Test 4: Minimal BAML',
+            params: [
+              '/',
+              JSON.stringify({ 'main.baml': '' }),
+              JSON.stringify({})
+            ]
+          },
+          {
+            name: 'Test 5: Simple function',
+            params: [
+              '/',
+              JSON.stringify({
+                'main.baml': 'function Test() -> string {}'
+              }),
+              JSON.stringify({})
+            ]
+          },
+          {
+            name: 'Test 6: With client config',
+            params: [
+              '/',
+              JSON.stringify({
+                'main.baml': `
+client TestClient {
+  provider "openai"
+  model "gpt-4"
+}
+
+function Test() -> string {
+  client TestClient
+  prompt #"test"#
+}`
+              }),
+              JSON.stringify({})
+            ]
+          },
+          {
+            name: 'Test 7: Complete example',
+            params: [
+              '/',
+              JSON.stringify({
+                'main.baml': `
+client TestClient {
+  provider "openai"
+  model "gpt-4"
+}
+
+function Echo(input: string) -> string {
+  client TestClient
+  prompt #"
+    Echo: {{ input }}
+  "#
+}`
+              }),
+              JSON.stringify({ OPENAI_API_KEY: 'test-key' })
+            ]
+          },
+          {
+            name: 'Test 8: Try with baml_src key',
+            params: [
+              JSON.stringify({
+                'main.baml': `function Test() -> string {}`
+              }),
+              '{}',
+              '{}'
+            ]
+          }
+        ];
+        
+        log('=== Testing different parameter formats ===\n');
+        
+        for (const test of tests) {
+          log(`${test.name}`);
+          log(`Params: ${test.params.map(p => p.substring(0, 50) + (p.length > 50 ? '...' : '')).join(' | ')}`);
+          
+          try {
+            const runtime = wasmModule.create_baml_runtime_wasm(...test.params);
+            log(`Result: ${runtime}`);
+            
+            if (runtime && runtime !== 0) {
+              log('✓ SUCCESS - Runtime created!');
+              wasmModule.destroy_baml_runtime_wasm(runtime);
+              log('✓ Runtime destroyed\n');
+            } else {
+              log('✗ Failed - returned 0/null\n');
+            }
+          } catch (error) {
+            log(`✗ Error: ${error.message}\n`);
+          }
+        }
+        
+        // Try to understand the actual function signature
+        log('\n=== Function signature analysis ===');
+        log(`Function: ${wasmModule.create_baml_runtime_wasm}`);
+        log(`Function length: ${wasmModule.create_baml_runtime_wasm.length}`);
+        log(`Function name: ${wasmModule.create_baml_runtime_wasm.name}`);
+        
+        // Check if there are any console errors
+        const originalError = console.error;
+        let capturedErrors = [];
+        console.error = (...args) => {
+          capturedErrors.push(args.join(' '));
+          originalError(...args);
+        };
+        
+        // Try one more time with console error capture
+        log('\n=== Checking for console errors ===');
+        const testRuntime = wasmModule.create_baml_runtime_wasm('/', '{}', '{}');
+        console.error = originalError;
+        
+        if (capturedErrors.length > 0) {
+          log('Console errors detected:');
+          capturedErrors.forEach(err => log(`  ${err}`));
+        } else {
+          log('No console errors detected');
+        }
+        
+        status.textContent = '✅ Debug tests complete';
+        status.className = 'success';
+        
+        // Make available in console
+        window.wasmModule = wasmModule;
+        log('\n=== wasmModule available in console for manual testing ===');
+        
+      } catch (error) {
+        status.textContent = '❌ Debug failed';
+        status.className = 'error';
+        log(`\nFATAL ERROR: ${error.message}`);
+        log(error.stack);
+      }
+    }
+  </script>
+</body>
+</html>

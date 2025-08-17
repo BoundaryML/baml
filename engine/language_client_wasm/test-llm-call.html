@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>BAML WASM LLM Call Test</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+            max-width: 800px;
+            width: 100%;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 2em;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 0.95em;
+        }
+        
+        #status {
+            background: #f0f4ff;
+            border-left: 4px solid #667eea;
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 25px;
+            font-weight: 500;
+            color: #4a5568;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        #status.loading::before {
+            content: '';
+            width: 20px;
+            height: 20px;
+            border: 3px solid #667eea;
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        #status.success {
+            background: #e6fffa;
+            border-color: #38b2ac;
+            color: #234e52;
+        }
+        
+        #status.error {
+            background: #fff5f5;
+            border-color: #fc8181;
+            color: #742a2a;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        #results {
+            background: #f7fafc;
+            border-radius: 12px;
+            padding: 20px;
+            max-height: 500px;
+            overflow-y: auto;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+            font-size: 0.9em;
+        }
+        
+        #results:empty {
+            display: none;
+        }
+        
+        .log-entry {
+            padding: 8px 12px;
+            margin: 4px 0;
+            border-radius: 6px;
+            background: white;
+            border-left: 3px solid #cbd5e0;
+            transition: all 0.2s ease;
+            animation: slideIn 0.3s ease;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        
+        .log-entry:hover {
+            background: #f8faff;
+            border-left-color: #667eea;
+            transform: translateX(5px);
+        }
+        
+        .log-entry.error {
+            background: #fff5f5;
+            border-left-color: #fc8181;
+            color: #742a2a;
+        }
+        
+        .log-entry.success {
+            background: #e6fffa;
+            border-left-color: #38b2ac;
+            color: #234e52;
+        }
+        
+        .log-entry.info {
+            background: #ebf8ff;
+            border-left-color: #4299e1;
+            color: #2c5282;
+        }
+        
+        .timestamp {
+            color: #a0aec0;
+            font-size: 0.85em;
+            margin-right: 10px;
+        }
+        
+        .api-key-input {
+            margin: 20px 0;
+            padding: 20px;
+            background: #f8faff;
+            border-radius: 12px;
+            border: 2px dashed #667eea;
+        }
+        
+        .api-key-input label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #4a5568;
+        }
+        
+        .api-key-input input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 0.95em;
+            transition: all 0.2s;
+        }
+        
+        .api-key-input input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        .button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 12px;
+        }
+        
+        .button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+        
+        .button:active {
+            transform: translateY(0);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 BAML WASM LLM Call Test</h1>
+        <p class="subtitle">Testing WebAssembly runtime with OpenAI API integration</p>
+        
+        <div id="status" class="loading">Initializing...</div>
+        <div id="results"></div>
+    </div>
+    
+    <script type="module">
+        const statusEl = document.getElementById('status');
+        const resultsEl = document.getElementById('results');
+        
+        function log(message, type = 'default') {
+            const div = document.createElement('div');
+            div.className = 'log-entry';
+            
+            // Determine the type class
+            if (type === true || type === 'error') {
+                div.classList.add('error');
+            } else if (message.includes('✓')) {
+                div.classList.add('success');
+            } else if (message.includes('⚠️')) {
+                div.classList.add('error');
+            } else if (message.includes('Calling') || message.includes('Using')) {
+                div.classList.add('info');
+            }
+            
+            // Add timestamp and message
+            const timestamp = document.createElement('span');
+            timestamp.className = 'timestamp';
+            timestamp.textContent = new Date().toLocaleTimeString();
+            
+            const text = document.createElement('span');
+            text.textContent = message;
+            
+            div.appendChild(timestamp);
+            div.appendChild(text);
+            resultsEl.appendChild(div);
+            
+            // Auto-scroll to bottom
+            resultsEl.scrollTop = resultsEl.scrollHeight;
+            
+            console.log(message);
+        }
+        
+        function updateStatus(message, type = 'loading') {
+            statusEl.textContent = message;
+            statusEl.className = type;
+        }
+        
+        // Simple function to create minimal args with just name kwarg and env vars
+        function createSimpleArgs(nameValue, apiKey) {
+            // Build CFFIFunctionArguments with kwargs containing name=nameValue and env vars
+            
+            // Helper to encode variable length integers (protobuf varint)
+            function encodeVarint(value) {
+                const bytes = [];
+                while (value > 127) {
+                    bytes.push((value & 0x7F) | 0x80);
+                    value >>>= 7;
+                }
+                bytes.push(value & 0x7F);
+                return bytes;
+            }
+            
+            // 1. Create CFFIValueHolder with string_value for name
+            const valueBytes = new TextEncoder().encode(nameValue);
+            const valueHolder = [];
+            valueHolder.push(0x1A); // field 3 (string_value), wire type 2
+            valueHolder.push(...encodeVarint(valueBytes.length));
+            valueHolder.push(...valueBytes);
+            
+            // 2. Create CFFIMapEntry with key="name" and value=valueHolder
+            const keyBytes = new TextEncoder().encode('name');
+            const mapEntry = [];
+            mapEntry.push(0x0A); // field 1 (key), wire type 2
+            mapEntry.push(...encodeVarint(keyBytes.length));
+            mapEntry.push(...keyBytes);
+            mapEntry.push(0x12); // field 2 (value), wire type 2
+            mapEntry.push(...encodeVarint(valueHolder.length));
+            mapEntry.push(...valueHolder);
+            
+            // 3. Create CFFIEnvVar for OPENAI_API_KEY if provided
+            const envVarEntries = [];
+            if (apiKey) {
+                const envKeyBytes = new TextEncoder().encode('OPENAI_API_KEY');
+                const envValueBytes = new TextEncoder().encode(apiKey);
+                const envVar = [];
+                envVar.push(0x0A); // field 1 (key), wire type 2
+                envVar.push(...encodeVarint(envKeyBytes.length));
+                envVar.push(...envKeyBytes);
+                envVar.push(0x12); // field 2 (value), wire type 2
+                envVar.push(...encodeVarint(envValueBytes.length));
+                envVar.push(...envValueBytes);
+                envVarEntries.push(envVar);
+            }
+            
+            // 4. Create CFFIFunctionArguments with kwargs and env
+            const funcArgs = [];
+            funcArgs.push(0x0A); // field 1 (kwargs), wire type 2
+            funcArgs.push(...encodeVarint(mapEntry.length));
+            funcArgs.push(...mapEntry);
+            
+            // Add env vars if any
+            for (const envVar of envVarEntries) {
+                funcArgs.push(0x1A); // field 3 (env), wire type 2
+                funcArgs.push(...encodeVarint(envVar.length));
+                funcArgs.push(...envVar);
+            }
+            
+            const result = new Uint8Array(funcArgs);
+            
+            // More readable logging
+            console.log('=== Function Arguments Buffer ===');
+            console.log(`Total size: ${result.length} bytes`);
+            console.log(`API key length: ${apiKey ? apiKey.length : 0} chars`);
+            
+            // Parse and show structure
+            let offset = 0;
+            if (result[offset] === 0x0A) {
+                console.log(`kwargs field at offset ${offset}`);
+                offset += 2; // skip tag and length for simple cases
+            }
+            if (apiKey && result.indexOf(0x1A) > 0) {
+                const envOffset = result.indexOf(0x1A);
+                console.log(`env field at offset ${envOffset}`);
+            }
+            
+            return result;
+        }
+        
+        // Helper to create a proper CFFIFunctionArguments protobuf message
+        function encodeFunctionArgs(kwargs, envVars = {}) {
+            // Create a CFFIFunctionArguments message with kwargs and env vars
+            // This is a simplified encoding - in production you'd use a proper protobuf library
+            
+            const parts = [];
+            
+            // 1. Build kwargs (field 1)
+            if (kwargs.name) {
+                // Build CFFIValueHolder with string_value
+                const valueStr = kwargs.name;
+                const valueBytes = new TextEncoder().encode(valueStr);
+                
+                // string_value is field 3, wire type 2 (length-delimited)
+                const valueHolder = new Uint8Array(2 + valueBytes.length);
+                valueHolder[0] = 0x1A; // (3 << 3) | 2 = 26 = 0x1A
+                valueHolder[1] = valueBytes.length;
+                valueHolder.set(valueBytes, 2);
+                
+                // Build CFFIMapEntry with key "name" and the value holder
+                const keyStr = "name";
+                const keyBytes = new TextEncoder().encode(keyStr);
+                
+                // Build map entry: field 1 (key) and field 2 (value)
+                const mapEntry = new Uint8Array(4 + keyBytes.length + valueHolder.length);
+                let offset = 0;
+                
+                // key is field 1, wire type 2
+                mapEntry[offset++] = 0x0A; // (1 << 3) | 2
+                mapEntry[offset++] = keyBytes.length;
+                mapEntry.set(keyBytes, offset);
+                offset += keyBytes.length;
+                
+                // value is field 2, wire type 2
+                mapEntry[offset++] = 0x12; // (2 << 3) | 2
+                mapEntry[offset++] = valueHolder.length;
+                mapEntry.set(valueHolder, offset);
+                
+                // Add kwargs field (field 1)
+                parts.push([0x0A, mapEntry]); // field 1, wire type 2
+            }
+            
+            // 2. Build env vars (field 3, repeated)
+            for (const [key, value] of Object.entries(envVars)) {
+                // Build CFFIEnvVar message
+                const keyBytes = new TextEncoder().encode(key);
+                const valueBytes = new TextEncoder().encode(value);
+                
+                // CFFIEnvVar has key (field 1) and value (field 2)
+                const envVarSize = 2 + keyBytes.length + 2 + valueBytes.length;
+                const envVar = new Uint8Array(envVarSize);
+                let offset = 0;
+                
+                // key field
+                envVar[offset++] = 0x0A; // field 1, wire type 2
+                envVar[offset++] = keyBytes.length;
+                envVar.set(keyBytes, offset);
+                offset += keyBytes.length;
+                
+                // value field
+                envVar[offset++] = 0x12; // field 2, wire type 2
+                envVar[offset++] = valueBytes.length;
+                envVar.set(valueBytes, offset);
+                
+                // Add env field (field 3)
+                parts.push([0x1A, envVar]); // field 3, wire type 2
+            }
+            
+            // Calculate total size
+            let totalSize = 0;
+            for (const [tag, data] of parts) {
+                totalSize += 1 + 1 + data.length; // tag + length + data
+            }
+            
+            // Build final message
+            const funcArgs = new Uint8Array(totalSize);
+            let offset = 0;
+            for (const [tag, data] of parts) {
+                funcArgs[offset++] = tag;
+                funcArgs[offset++] = data.length;
+                funcArgs.set(data, offset);
+                offset += data.length;
+            }
+            
+            return funcArgs;
+        }
+        
+        async function testLLMCall() {
+            try {
+                // Load the WASM module
+                statusEl.textContent = 'Loading WASM module...';
+                
+                const initWasm = (await import('./wasm/loader.js')).default;
+                const wasmBindings = await initWasm();
+                
+                log('✓ WASM module loaded');
+                
+                // Initialize WASM
+                statusEl.textContent = 'Initializing WASM...';
+                wasmBindings.init_wasm();
+                log('✓ WASM initialized');
+                
+                // Create a runtime with a BAML function that calls an LLM
+                statusEl.textContent = 'Creating BAML runtime with LLM function...';
+                const srcFiles = JSON.stringify({
+                    'main.baml': `
+                        client<llm> TestClient {
+                            provider openai
+                            options {
+                                model "gpt-3.5-turbo"
+                                api_key env.OPENAI_API_KEY
+                            }
+                        }
+                        
+                        function SayHello(name: string) -> string {
+                            client TestClient
+                            prompt #"
+                                Say hello to {{ name }}! Please respond with a friendly greeting.
+                            "#
+                        }
+                    `
+                });
+                
+                // Prompt for API key (for testing only - never hardcode keys!)
+                const apiKey = prompt('Enter your OpenAI API key for testing (starts with sk-):');
+                if (!apiKey || !apiKey.startsWith('sk-')) {
+                    log('No valid API key provided, using fake key for error testing');
+                } else {
+                    log(`Using provided API key (${apiKey.substring(0, 15)}...)`);
+                }
+                
+                // Try passing the env vars in different formats to see what works
+                const envVars = JSON.stringify({
+                    'OPENAI_API_KEY': apiKey || 'sk-fake-key-for-testing'
+                });
+                
+                log(`Env vars JSON length: ${envVars.length} bytes`);
+                
+                const runtime = wasmBindings.create_baml_runtime_wasm('/', srcFiles, envVars);
+                log(`✓ Runtime created: ${runtime}`);
+                
+                // Test LLM function call
+                statusEl.textContent = 'Testing LLM function call...';
+                
+                // Register callback
+                const callbackId = Math.floor(Math.random() * 1000000);
+                window.__baml_callbacks = window.__baml_callbacks || {};
+                
+                let callbackFired = false;
+                window.__baml_callbacks[callbackId] = {
+                    onResult: (data, isDone) => {
+                        callbackFired = true;
+                        log(`✓ Result callback fired! isDone: ${isDone}`);
+                        
+                        // Try to decode the result
+                        try {
+                            const text = new TextDecoder().decode(data);
+                            log(`Result data: ${text.substring(0, 100)}...`);
+                        } catch (e) {
+                            log(`Result data (${data.length} bytes)`);
+                        }
+                    },
+                    onError: (error) => {
+                        callbackFired = true;
+                        log(`✓ Error callback fired: ${error}`);
+                    },
+                    onTick: () => {
+                        log('✓ Tick callback fired');
+                    }
+                };
+                
+                // Call the function with proper arguments
+                try {
+                    // Create CFFIFunctionArguments with name kwarg and env override
+                    const args = createSimpleArgs('World', apiKey);
+                    
+                    log(`Calling function SayHello with name='World' and env override`);
+                    wasmBindings.call_function_wasm(runtime, 'SayHello', args, callbackId);
+                    log('LLM function call initiated');
+                } catch (e) {
+                    log(`Function call error: ${e}`, true);
+                }
+                
+                // Wait for callback
+                statusEl.textContent = 'Waiting for LLM response...';
+                await new Promise(resolve => setTimeout(resolve, 5000));
+                
+                if (!callbackFired) {
+                    log('⚠️ Warning: Callback did not fire within 5 seconds', true);
+                } else {
+                    log('✓ Test completed successfully!');
+                }
+                
+                // Clean up
+                wasmBindings.destroy_baml_runtime_wasm(runtime);
+                log('✓ Runtime destroyed');
+                
+                statusEl.textContent = 'Test complete!';
+                
+            } catch (error) {
+                statusEl.textContent = 'Test failed!';
+                log(`Error: ${error.message || error}`, true);
+                console.error(error);
+            }
+        }
+        
+        // Run the test
+        testLLMCall();
+    </script>
+</body>
+</html>

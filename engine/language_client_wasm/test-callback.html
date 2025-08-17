@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>BAML WASM Callback Test</title>
+</head>
+<body>
+    <h1>BAML WASM Callback Test</h1>
+    <div id="status">Initializing...</div>
+    <div id="results"></div>
+    
+    <script type="module">
+        const statusEl = document.getElementById('status');
+        const resultsEl = document.getElementById('results');
+        
+        function log(message, isError = false) {
+            const div = document.createElement('div');
+            div.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            div.style.color = isError ? 'red' : 'inherit';
+            resultsEl.appendChild(div);
+            console.log(message);
+        }
+        
+        async function testCallbacks() {
+            try {
+                // Load the WASM module
+                statusEl.textContent = 'Loading WASM module...';
+                
+                // Use our custom loader
+                const initWasm = (await import('./wasm/loader.js')).default;
+                const wasmBindings = await initWasm();
+                
+                log('✓ WASM module loaded');
+                
+                // Initialize WASM
+                statusEl.textContent = 'Initializing WASM...';
+                wasmBindings.init_wasm();
+                log('✓ WASM initialized');
+                
+                // Create a runtime with a simple BAML function
+                statusEl.textContent = 'Creating BAML runtime...';
+                const srcFiles = JSON.stringify({
+                    'main.baml': `
+                        function TestFunction(input: string) -> string {
+                            // This is a test function
+                        }
+                    `
+                });
+                const envVars = JSON.stringify({});
+                
+                const runtime = wasmBindings.create_baml_runtime_wasm('/', srcFiles, envVars);
+                log(`✓ Runtime created: ${runtime}`);
+                
+                // Test callback mechanism
+                statusEl.textContent = 'Testing callback mechanism...';
+                
+                // Register a test callback
+                const callbackId = 12345;
+                window.__baml_callbacks = window.__baml_callbacks || {};
+                
+                let callbackFired = false;
+                window.__baml_callbacks[callbackId] = {
+                    onResult: (data, isDone) => {
+                        callbackFired = true;
+                        log(`✓ Result callback fired! isDone: ${isDone}, data length: ${data ? data.length : 0}`);
+                    },
+                    onError: (error) => {
+                        callbackFired = true;
+                        log(`✓ Error callback fired: ${error}`);
+                    },
+                    onTick: () => {
+                        log('✓ Tick callback fired');
+                    }
+                };
+                
+                // Try to call a function (it may fail, but callbacks should fire)
+                try {
+                    // Create a minimal valid protobuf message
+                    // For now, let's try an empty message which should be valid protobuf
+                    const args = new Uint8Array(0); // Empty protobuf message
+                    wasmBindings.call_function_wasm(runtime, 'TestFunction', args, callbackId);
+                    log('Function call initiated');
+                } catch (e) {
+                    log(`Function call error (expected): ${e}`, true);
+                }
+                
+                // Wait a bit to see if callbacks fire
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                if (!callbackFired) {
+                    log('⚠️ Warning: Callbacks did not fire within 1 second', true);
+                }
+                
+                // Clean up
+                wasmBindings.destroy_baml_runtime_wasm(runtime);
+                log('✓ Runtime destroyed');
+                
+                statusEl.textContent = 'Test complete!';
+                
+            } catch (error) {
+                statusEl.textContent = 'Test failed!';
+                log(`Error: ${error.message || error}`, true);
+                console.error(error);
+            }
+        }
+        
+        // Run the test
+        testCallbacks();
+    </script>
+</body>
+</html>
