@@ -429,7 +429,7 @@ impl<'g> HirCompiler<'g> {
                 identifier,
                 iterator,
                 block,
-                span,
+                ..
             } => {
                 // store array, array length & index in stack.
                 // compile as:
@@ -490,8 +490,7 @@ impl<'g> HirCompiler<'g> {
                     |ctx| {
                         ctx.enter_scope();
 
-                        // NOTE: would be nice to have newtype'd indices for these.
-                        let iterator_location = ctx.track_local(identifier.as_str());
+                        ctx.track_local(identifier.as_str());
 
                         // let <iterator name> = array[i];
 
@@ -526,7 +525,7 @@ impl<'g> HirCompiler<'g> {
                     |_| {},
                 );
             }
-            hir::Statement::Break(span) => {
+            hir::Statement::Break(_) => {
                 let cur_loop = self.assert_loop("break");
 
                 // since we are exiting the loop context, make sure we drop everything before
@@ -542,7 +541,7 @@ impl<'g> HirCompiler<'g> {
                 // will end up with a conditional jump and a regular jump together.
                 self.emit(Instruction::Jump(0));
             }
-            hir::Statement::Continue(span) => {
+            hir::Statement::Continue(_) => {
                 let cur_loop = self.assert_loop("continue");
 
                 let pop_until = cur_loop.scope_depth;
@@ -629,25 +628,6 @@ impl<'g> HirCompiler<'g> {
 
     fn next_insn_index(&self) -> isize {
         self.bytecode.instructions.len() as isize
-    }
-
-    /// Finishes compilation of a loop where `continue` should perform more instructions besides running to the start of
-    /// the loop. Loop exits only with `break`/`continue` or custom bail-out instructions that can
-    /// be patched by the user.
-    ///
-    /// # Safety
-    /// This assumes that `compile_continue`'s output does not emit any scope exits itself, and is
-    /// leaves the stack at the same length as was prior to executing said output.
-    ///
-    /// Also assumes that the bytecode prior to what is emitted here has just finished executing
-    /// the inner loop block.
-    fn finish_loop_with_after(
-        &mut self,
-        loop_start: isize,
-        block_start: usize,
-        loop_info: LoopInfo,
-        compile_continue: impl FnOnce(&mut Self),
-    ) {
     }
 
     /// Compiles a while loop with custom condition & block logic.
@@ -790,7 +770,7 @@ impl<'g> HirCompiler<'g> {
                 receiver,
                 method,
                 args,
-                span,
+                ..
             } => {
                 // Push the function onto the stack
                 let Some(&index) = self.globals.get(method) else {
@@ -1151,9 +1131,6 @@ impl<'g> HirCompiler<'g> {
             .expect("should have been pushed before when grabbing old_status");
 
         self.exit_scope(false);
-
-        // `continue` jumps to the end of the block, after popping.
-        let continue_loc = self.next_insn_index();
 
         for continue_jmp in loop_info.continue_patch_list {
             self.patch_jump(continue_jmp);
@@ -2041,13 +2018,11 @@ mod tests {
             expected: vec![(
                 "GCD",
                 vec![
-                    // while (a != b)
                     Instruction::LoadVar(1),
                     Instruction::LoadVar(2),
                     Instruction::CmpOp(CmpOp::NotEq),
-                    Instruction::JumpIfFalse(19),
+                    Instruction::JumpIfFalse(18),
                     Instruction::Pop(1),
-                    // if a > b { a = a - b; } else { b = b - a; }
                     Instruction::LoadVar(1),
                     Instruction::LoadVar(2),
                     Instruction::CmpOp(CmpOp::Gt),
@@ -2063,10 +2038,7 @@ mod tests {
                     Instruction::LoadVar(1),
                     Instruction::BinOp(BinOp::Sub),
                     Instruction::StoreVar(2),
-                    // jump back to loop start
                     Instruction::Jump(-20),
-                    Instruction::Jump(2),
-                    // exit loop: pop condition and return a
                     Instruction::Pop(1),
                     Instruction::LoadVar(1),
                     Instruction::Return,
@@ -2151,7 +2123,7 @@ mod tests {
                     Instruction::LoadVar(1),
                     Instruction::LoadConst(1),
                     Instruction::CmpOp(CmpOp::Lt),
-                    Instruction::JumpIfFalse(17),
+                    Instruction::JumpIfFalse(15),
                     Instruction::Pop(1),
                     Instruction::LoadVar(1),
                     Instruction::LoadConst(2),
@@ -2162,12 +2134,10 @@ mod tests {
                     Instruction::CmpOp(CmpOp::Eq),
                     Instruction::JumpIfFalse(4),
                     Instruction::Pop(1),
-                    Instruction::Jump(4),
+                    Instruction::Jump(5),
                     Instruction::Jump(2),
                     Instruction::Pop(1),
                     Instruction::Jump(-17),
-                    Instruction::Pop(1),
-                    Instruction::Jump(2),
                     Instruction::Pop(1),
                     Instruction::LoadVar(1),
                     Instruction::Return,
@@ -2448,7 +2418,7 @@ mod tests {
                     Instruction::LoadVar(5),
                     Instruction::LoadVar(4),
                     Instruction::CmpOp(CmpOp::Lt),
-                    Instruction::JumpIfFalse(17),
+                    Instruction::JumpIfFalse(15),
                     Instruction::Pop(1),
                     Instruction::LoadVar(3),
                     Instruction::LoadVar(5),
@@ -2463,8 +2433,6 @@ mod tests {
                     Instruction::StoreVar(2),
                     Instruction::Pop(1),
                     Instruction::Jump(-17),
-                    Instruction::Pop(1),
-                    Instruction::Jump(2),
                     Instruction::Pop(1),
                     Instruction::Pop(3),
                     Instruction::LoadVar(2),
@@ -2503,7 +2471,7 @@ mod tests {
                     Instruction::LoadVar(5),
                     Instruction::LoadVar(4),
                     Instruction::CmpOp(CmpOp::Lt),
-                    Instruction::JumpIfFalse(25),
+                    Instruction::JumpIfFalse(24),
                     Instruction::Pop(1),
                     Instruction::LoadVar(3),
                     Instruction::LoadVar(5),
@@ -2515,9 +2483,10 @@ mod tests {
                     Instruction::LoadVar(6),
                     Instruction::LoadConst(2),
                     Instruction::CmpOp(CmpOp::Gt),
-                    Instruction::JumpIfFalse(4),
+                    Instruction::JumpIfFalse(5),
                     Instruction::Pop(1),
-                    Instruction::Jump(9),
+                    Instruction::Pop(1),
+                    Instruction::Jump(10),
                     Instruction::Jump(2),
                     Instruction::Pop(1),
                     Instruction::LoadVar(2),
@@ -2525,9 +2494,7 @@ mod tests {
                     Instruction::BinOp(BinOp::Add),
                     Instruction::StoreVar(2),
                     Instruction::Pop(1),
-                    Instruction::Jump(-25),
-                    Instruction::Pop(1),
-                    Instruction::Jump(2),
+                    Instruction::Jump(-26),
                     Instruction::Pop(1),
                     Instruction::Pop(3),
                     Instruction::LoadVar(2),
@@ -2566,7 +2533,7 @@ mod tests {
                     Instruction::LoadVar(5),
                     Instruction::LoadVar(4),
                     Instruction::CmpOp(CmpOp::Lt),
-                    Instruction::JumpIfFalse(25),
+                    Instruction::JumpIfFalse(24),
                     Instruction::Pop(1),
                     Instruction::LoadVar(3),
                     Instruction::LoadVar(5),
@@ -2578,9 +2545,10 @@ mod tests {
                     Instruction::LoadVar(6),
                     Instruction::LoadConst(2),
                     Instruction::CmpOp(CmpOp::Gt),
-                    Instruction::JumpIfFalse(4),
+                    Instruction::JumpIfFalse(5),
                     Instruction::Pop(1),
-                    Instruction::Jump(7),
+                    Instruction::Pop(1),
+                    Instruction::Jump(8),
                     Instruction::Jump(2),
                     Instruction::Pop(1),
                     Instruction::LoadVar(2),
@@ -2588,9 +2556,7 @@ mod tests {
                     Instruction::BinOp(BinOp::Add),
                     Instruction::StoreVar(2),
                     Instruction::Pop(1),
-                    Instruction::Jump(-25),
-                    Instruction::Pop(1),
-                    Instruction::Jump(2),
+                    Instruction::Jump(-26),
                     Instruction::Pop(1),
                     Instruction::Pop(3),
                     Instruction::LoadVar(2),
@@ -2629,7 +2595,7 @@ mod tests {
                     Instruction::LoadVar(6),
                     Instruction::LoadVar(5),
                     Instruction::CmpOp(CmpOp::Lt),
-                    Instruction::JumpIfFalse(42),
+                    Instruction::JumpIfFalse(38),
                     Instruction::Pop(1),
                     Instruction::LoadVar(4),
                     Instruction::LoadVar(6),
@@ -2646,7 +2612,7 @@ mod tests {
                     Instruction::LoadVar(10),
                     Instruction::LoadVar(9),
                     Instruction::CmpOp(CmpOp::Lt),
-                    Instruction::JumpIfFalse(19),
+                    Instruction::JumpIfFalse(17),
                     Instruction::Pop(1),
                     Instruction::LoadVar(8),
                     Instruction::LoadVar(10),
@@ -2664,13 +2630,9 @@ mod tests {
                     Instruction::Pop(1),
                     Instruction::Jump(-19),
                     Instruction::Pop(1),
-                    Instruction::Jump(2),
-                    Instruction::Pop(1),
                     Instruction::Pop(3),
                     Instruction::Pop(1),
-                    Instruction::Jump(-42),
-                    Instruction::Pop(5),
-                    Instruction::Jump(2),
+                    Instruction::Jump(-40),
                     Instruction::Pop(1),
                     Instruction::Pop(3),
                     Instruction::LoadVar(3),

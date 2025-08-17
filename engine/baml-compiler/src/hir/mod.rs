@@ -61,12 +61,12 @@ impl<T> TypeM<T> {
             TypeM::Float(_) => "float",
             TypeM::Bool(_) => "bool",
             TypeM::Null(_) => "null type",
-            TypeM::Array(type_m, _) => "array",
-            TypeM::Map(type_m, type_m1, _) => "map",
+            TypeM::Array(_, _) => "array",
+            TypeM::Map(_, _, _) => "map",
             TypeM::ClassName(_, _) => "class",
             TypeM::EnumName(_, _) => "enum",
-            TypeM::Union(type_ms, _) => "union",
-            TypeM::Arrow(arrow, _) => "function",
+            TypeM::Union(_, _) => "union",
+            TypeM::Arrow(_, _) => "function",
         }
     }
 }

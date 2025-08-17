@@ -208,7 +208,7 @@ impl TypeContext {
             .or_else(|| self.symbols.get(name))
     }
 
-    pub fn infer_type(&mut self, expr: &hir::Expression) -> Option<Type> {
+    pub fn infer_type(&mut self, _expr: &hir::Expression) -> Option<Type> {
         todo!()
     }
 
@@ -1116,7 +1116,7 @@ fn typecheck_expression(
         // Don't care about parens here, order is defined by Pratt Parser.
         // TODO: Still if we need to print errors we need the entire span of the
         // expr? Also print the expr?
-        hir::Expression::Paren(expr, span) => typecheck_expression(expr, context, diagnostics),
+        hir::Expression::Paren(expr, _) => typecheck_expression(expr, context, diagnostics),
     }
 }
 

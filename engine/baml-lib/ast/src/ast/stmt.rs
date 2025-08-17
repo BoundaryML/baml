@@ -174,8 +174,8 @@ impl Stmt {
         match self {
             Stmt::Let(stmt) => &stmt.identifier,
             Stmt::ForLoop(stmt) => &stmt.identifier,
-            Stmt::Expression(expr) => panic!("expressions don't have identifiers"),
-            Stmt::WhileLoop(expr) => panic!("while loops don't have identifiers"),
+            Stmt::Expression(_) => panic!("expressions don't have identifiers"),
+            Stmt::WhileLoop(_) => panic!("while loops don't have identifiers"),
             Stmt::Break(_) => panic!("break statements don't have identifiers"),
             Stmt::Continue(_) => panic!("continue statements don't have identifiers"),
             Stmt::CForLoop(_) => panic!("c-like for loops don't have identifiers"),

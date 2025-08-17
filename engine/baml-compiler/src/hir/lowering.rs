@@ -574,7 +574,7 @@ impl Expression {
                 // are only visible within that block
                 Expression::ExpressionBlock(Block::from_expression_block(block), span.clone())
             }
-            ast::Expression::Lambda(_args, _body, span) => {
+            ast::Expression::Lambda(_, _, _) => {
                 todo!("lambdas are not yet implemented")
             }
             ast::Expression::ClassConstructor(cc, span) => {

@@ -378,7 +378,7 @@ impl Expression {
                 condition,
                 if_branch,
                 else_branch,
-                span,
+                ..
             } => {
                 let mut doc = RcDoc::text("if")
                     .append(RcDoc::space())
