@@ -734,7 +734,6 @@ impl<T: Clone> Statement<T> {
         T: Clone,
     {
         match self {
-
             Statement::Declare { .. } | Statement::Break(_) | Statement::Continue(_) => {
                 HashSet::new()
             }

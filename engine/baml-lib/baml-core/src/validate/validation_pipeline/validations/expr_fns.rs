@@ -142,7 +142,7 @@ fn validate_stmt(ctx: &mut Context<'_>, stmt: &Stmt, scope: &HashSet<String>) {
             if let Some(init) = &stmt.init_stmt {
                 validate_stmt(ctx, init, scope);
 
-                let init: &Stmt = &*init;
+                let init: &Stmt = init;
 
                 if let Stmt::Let(LetStmt { identifier, .. }) = init {
                     loop_scope.insert(identifier.to_string());
