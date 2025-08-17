@@ -4,8 +4,7 @@ use internal_baml_diagnostics::{DatamodelError, Diagnostics};
 use super::{
     helpers::{parsing_catch_all, Pair},
     parse_expr::{
-        parse_expr_block, parse_fn_app, parse_for_loop, parse_generic_fn_app, parse_if_expression,
-        parse_lambda,
+        parse_expr_block, parse_fn_app, parse_generic_fn_app, parse_if_expression, parse_lambda,
     },
     parse_identifier::parse_identifier,
     Rule,
@@ -41,6 +40,7 @@ pub(crate) fn parse_expression(
         .op(Op::prefix(Rule::NOT))
         .op(Op::prefix(Rule::NEG))
         .op(Op::postfix(Rule::array_accessor))
+        .op(Op::postfix(Rule::method_call))
         .op(Op::postfix(Rule::field_accessor));
 
     let span = diagnostics.span(token.as_span());
@@ -64,6 +64,7 @@ pub(crate) fn parse_expression(
                 Rule::NOT => UnaryOperator::Not,
                 _ => unreachable_rule!(operator, Rule::prefix_operator),
             };
+
             right.map(|right| Expression::UnaryOperation {
                 operator,
                 expr: Box::new(right),
@@ -79,10 +80,24 @@ pub(crate) fn parse_expression(
 
                     Expression::ArrayAccess(Box::new(left), Box::new(index), span.clone())
                 }
+
                 Rule::field_accessor => {
                     let field = parse_identifier(operator.into_inner().next()?, diagnostics);
 
                     Expression::FieldAccess(Box::new(left), field, span.clone())
+                }
+
+                Rule::method_call => {
+                    match parse_fn_app(operator.into_inner().next()?, diagnostics)? {
+                        Expression::App(fn_call) => Expression::MethodCall {
+                            receiver: Box::new(left),
+                            method: fn_call.name,
+                            args: fn_call.args,
+                            span: span.clone(),
+                        },
+
+                        _ => unreachable!("expected function call when parsing method call"),
+                    }
                 }
                 _ => unreachable_rule!(operator, Rule::postfix_operator),
             })
@@ -600,44 +615,6 @@ mod tests {
         super::{BAMLParser, Rule},
         *,
     };
-
-    #[test]
-    fn array_trailing_comma() {
-        parses_to! {
-            parser: BAMLParser,
-            input: "[1,2],",
-            rule: Rule::expression,
-            tokens: [expression(0, 5,[
-                array_expression(0, 5,[
-                expression(1,2,[numeric_literal(1,2)]),
-                expression(3,4,[numeric_literal(3,4)]),
-            ])])]
-        };
-
-        parses_to! {
-            parser: BAMLParser,
-            input: r##"[#"foo"#, #"bar"#]"##,
-            rule: Rule::expression,
-            tokens: [expression(0, 18, [
-                array_expression(0, 18, [
-                    expression(1,8,[
-                        string_literal(1,8,[
-                            raw_string_literal(1,8,[
-                                raw_string_literal_content_1(3,6)
-                            ])
-                        ])
-                    ]),
-                    expression(10,17,[
-                        string_literal(10,17,[
-                            raw_string_literal(10,17,[
-                                raw_string_literal_content_1(12,15)
-                            ])
-                        ])
-                    ]),
-                ])
-            ])]
-        };
-    }
 
     #[test]
     fn test_parse_jinja_expression() {

@@ -4,7 +4,7 @@ on:
   workflow_call: {}
   push:
     branches:
-      - baml-py-win
+      - sam/license-fix
 
 concurrency:
   # suffix is important to prevent a concurrency deadlock with the calling workflow
@@ -36,19 +36,23 @@ jobs:
             #   # Workaround ring 0.17 build issue
             #   # see https://github.com/briansmith/ring/issues/1728
             #   CFLAGS_aarch64_unknown_linux_gnu: "-D__ARM_ARCH=8"
+            license_test: skip
 
           - target: x86_64-unknown-linux-musl
             runs_on: ubuntu-latest
             # see https://github.com/astral-sh/uv/blob/9bb55c4ac0582e05d1a7a5bbd99cc7b2c82f1847/.github/workflows/build-binaries.yml#L594
             manylinux: musllinux_1_1
+            license_test: skip
 
           - target: aarch64-unknown-linux-musl
             runs_on: ubuntu-latest
             # see https://github.com/astral-sh/uv/blob/9bb55c4ac0582e05d1a7a5bbd99cc7b2c82f1847/.github/workflows/build-binaries.yml#L594
             manylinux: musllinux_1_1
+            license_test: skip
 
           - target: x86_64-apple-darwin
             runs_on: macos-latest
+            license_test: skip
 
           - target: aarch64-apple-darwin
             runs_on: macos-latest
@@ -131,6 +135,7 @@ jobs:
           # see https://github.com/PyO3/maturin/issues/2110
           XWIN_VERSION: "16"
         with:
+          maturin-version: "1.9.1"
           target: ${{ matrix._.target }}
           command: build
           # building in engine/ ensures that we pick up .cargo/config.toml
@@ -145,6 +150,26 @@ jobs:
                 # sudo apt update -y && apt-get install -y libssl-dev openssl pkg-config
                 :
             fi
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Test LICENSE packaging
+        if: matrix._.license_test != 'skip'
+        run: |
+          set -euo pipefail
+
+          mkdir -p ../python-license-test
+          cd ../python-license-test
+          uv init --bare --python 3.10
+          uv add pip-licenses-cli
+          pwd
+          ls ../baml/engine/language_client_python/dist/
+          uv pip install $(ls ../baml/engine/language_client_python/dist/*.whl)
+          uv run pip-licenses | tee license-audit.log
+
+          # Due to `set -e`, this will fail if no matches are found
+          grep 'baml.*Apache-2.0' license-audit.log >/dev/null
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4

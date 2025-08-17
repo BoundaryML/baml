@@ -177,6 +177,42 @@ impl Statement {
                 .append(block.to_doc().nest(2))
                 .append(RcDoc::hardline())
                 .append(RcDoc::text("}")),
+            Statement::Break(_) => RcDoc::text("break").append(RcDoc::text(";")),
+            Statement::Continue(_) => RcDoc::text("continue").append(RcDoc::text(";")),
+            Statement::CForLoop {
+                condition,
+                after,
+                block,
+            } => {
+                let condition = condition.as_ref().map(Expression::to_doc);
+                let after = after.as_ref().map(|b| b.to_doc());
+                let block = block.to_doc();
+
+                // for with no init statement.
+                let mut cur = RcDoc::text("for")
+                    .append(RcDoc::space())
+                    .append(RcDoc::text("("))
+                    .append(RcDoc::text(";"));
+
+                cur = match condition {
+                    Some(cond) => cur.append(cond),
+                    None => cur,
+                };
+
+                cur = cur.append(RcDoc::text(";"));
+
+                cur = match after {
+                    Some(after) => cur.append(after),
+                    None => cur,
+                };
+
+                cur = cur.append(RcDoc::text(")")).append(RcDoc::space());
+
+                cur.append(RcDoc::text("{"))
+                    .append(RcDoc::space())
+                    .append(block)
+                    .append(RcDoc::text("}"))
+            }
         }
     }
 }
@@ -279,19 +315,30 @@ impl Block {
 impl Expression {
     pub fn to_doc(&self) -> RcDoc<'static, ()> {
         match self {
-            Expression::ArrayAccess { base, index, .. } => RcDoc::text("base[index]")
-                .append(RcDoc::space())
-                .append(base.to_doc())
-                .append(RcDoc::space())
+            Expression::ArrayAccess { base, index, .. } => base
+                .to_doc()
                 .append(RcDoc::text("["))
                 .append(index.to_doc())
                 .append(RcDoc::text("]")),
-            Expression::FieldAccess { base, field, .. } => RcDoc::text("base.field")
-                .append(RcDoc::space())
-                .append(base.to_doc())
-                .append(RcDoc::space())
+            Expression::FieldAccess { base, field, .. } => base
+                .to_doc()
                 .append(RcDoc::text("."))
                 .append(RcDoc::text(field.clone())),
+            Expression::MethodCall {
+                receiver,
+                method,
+                args,
+                ..
+            } => receiver
+                .to_doc()
+                .append(RcDoc::text("."))
+                .append(RcDoc::text(method.clone()))
+                .append(RcDoc::text("("))
+                .append(RcDoc::intersperse(
+                    args.iter().map(|a| a.to_doc()),
+                    RcDoc::text(",").append(RcDoc::space()),
+                ))
+                .append(RcDoc::text(")")),
             Expression::BoolValue(val, _) => RcDoc::text(val.to_string()),
             Expression::NumericValue(val, _) => RcDoc::text(val.clone()),
             Expression::Identifier(name, _) => RcDoc::text(name.clone()),
@@ -331,24 +378,20 @@ impl Expression {
                 condition,
                 if_branch,
                 else_branch,
-                span,
+                ..
             } => {
                 let mut doc = RcDoc::text("if")
                     .append(RcDoc::space())
                     .append(condition.to_doc())
                     .append(RcDoc::space())
-                    .append(RcDoc::text("{"))
-                    .append(RcDoc::space())
                     .append(if_branch.to_doc())
-                    .append(RcDoc::space())
-                    .append(RcDoc::text("}"));
+                    .append(RcDoc::space());
                 if let Some(else_expr) = else_branch {
                     doc = doc
-                        .append(RcDoc::text(" else {"))
+                        .append(RcDoc::text("else"))
                         .append(RcDoc::space())
                         .append(else_expr.to_doc())
-                        .append(RcDoc::space())
-                        .append(RcDoc::text("}"));
+                        .append(RcDoc::space());
                 }
                 doc
             }

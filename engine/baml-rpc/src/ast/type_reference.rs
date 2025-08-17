@@ -33,6 +33,22 @@ impl TypeMetadata {
     }
 }
 
+impl std::fmt::Display for TypeMetadata {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for check in &self.checks {
+            write!(f, "@check({})", check.name)?;
+        }
+        for assert in &self.asserts {
+            write!(
+                f,
+                "@assert({})",
+                assert.name.as_deref().unwrap_or("unnamed")
+            )?;
+        }
+        Ok(())
+    }
+}
+
 /// FieldType represents the type of either a class field or a function arg.
 /// THIS IS ONLY FOR NON_STREAMING TYPES.
 #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Hash, TS)]
@@ -78,6 +94,84 @@ pub enum TypeReferenceWithMetadata<Metadata> {
         items: Vec<Self>,
         metadata: Metadata,
     },
+}
+
+impl<T: std::fmt::Display> std::fmt::Display for TypeReferenceWithMetadata<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TypeReferenceWithMetadata::Unknown => write!(f, "unknown"),
+            TypeReferenceWithMetadata::String(meta) => write!(f, "string {meta}"),
+            TypeReferenceWithMetadata::Int(meta) => write!(f, "int {meta}"),
+            TypeReferenceWithMetadata::Float(meta) => write!(f, "float {meta}"),
+            TypeReferenceWithMetadata::Bool(meta) => write!(f, "bool {meta}"),
+            TypeReferenceWithMetadata::Media(media_type_definition, meta) => {
+                write!(f, "{media_type_definition} {meta}")
+            }
+            TypeReferenceWithMetadata::Literal(literal_type_definition, _) => {
+                write!(f, "{literal_type_definition}")
+            }
+            TypeReferenceWithMetadata::Class { type_id, metadata }
+            | TypeReferenceWithMetadata::Enum { type_id, metadata }
+            | TypeReferenceWithMetadata::RecursiveTypeAlias { type_id, metadata } => {
+                write!(f, "{} {}", type_id.0, metadata)
+            }
+            TypeReferenceWithMetadata::List(type_reference_with_metadata, metadata) => {
+                write!(f, "{type_reference_with_metadata}[] {metadata}")
+            }
+            TypeReferenceWithMetadata::Map {
+                key,
+                value,
+                metadata,
+            } => write!(f, "map<{key}, {value}> {metadata}"),
+            TypeReferenceWithMetadata::Union {
+                union_type,
+                metadata,
+            } => write!(
+                f,
+                "({}) {}",
+                union_type
+                    .types
+                    .iter()
+                    .map(|t| t.to_string())
+                    .collect::<Vec<_>>()
+                    .join(" | "),
+                metadata
+            ),
+            TypeReferenceWithMetadata::Tuple { items, metadata } => {
+                write!(
+                    f,
+                    "({}) {}",
+                    items
+                        .iter()
+                        .map(|t| t.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                    metadata
+                )
+            }
+        }
+    }
+}
+
+impl std::fmt::Display for MediaTypeDefinition {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MediaTypeDefinition::Image => write!(f, "image"),
+            MediaTypeDefinition::Audio => write!(f, "audio"),
+            MediaTypeDefinition::Pdf => write!(f, "pdf"),
+            MediaTypeDefinition::Video => write!(f, "video"),
+        }
+    }
+}
+
+impl std::fmt::Display for LiteralTypeDefinition {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LiteralTypeDefinition::String(s) => write!(f, "'{s}'"),
+            LiteralTypeDefinition::Int(i) => write!(f, "{i}"),
+            LiteralTypeDefinition::Bool(b) => write!(f, "{}", if *b { "true" } else { "false" }),
+        }
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Hash, TS)]

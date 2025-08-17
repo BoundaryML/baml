@@ -37,6 +37,7 @@ use strip_ansi_escapes::strip_str;
 #[allow(dead_code)]
 fn run_hir_test(test_name: &str, content: &str) {
     let result = get_hir_output(content);
+    println!("result: {result:?}");
     let (without_expected, expected) = parse_expected_from_comments(content);
 
     let actual = result.unwrap_or_else(|e| format!("error: {e}"));
@@ -132,11 +133,11 @@ fn update_expected(test_name: &str, content: &str, actual: &str) {
         let comment_lines: Vec<String> = actual
             .lines()
             .map(|line| {
-                if line.is_empty() {
+                strip_ansi_escapes::strip_str(if line.is_empty() {
                     "//".to_string()
                 } else {
                     format!("// {line}")
-                }
+                })
             })
             .collect();
 

@@ -57,15 +57,36 @@ pub struct ForLoopStmt {
     pub span: Span,
 }
 
+#[derive(Debug, Clone)]
+pub struct CForLoopStmt {
+    pub init_stmt: Option<Box<Stmt>>,
+    pub condition: Option<Expression>,
+    /// Third statement in `for (;;<after>)` construction.
+    pub after_stmt: Option<Box<Stmt>>,
+    pub body: ExpressionBlock,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct WhileStmt {
+    pub condition: Expression,
+    pub body: ExpressionBlock,
+    pub span: Span,
+}
+
 // Stmt(statements) perform actions and not often return values.
 #[derive(Debug, Clone)]
 pub enum Stmt {
     Let(LetStmt),
     ForLoop(ForLoopStmt),
+    CForLoop(CForLoopStmt),
+    WhileLoop(WhileStmt),
     /// Expression with trailing semicolon.
     Expression(Expression),
     Assign(AssignStmt),
     AssignOp(AssignOpStmt),
+    Break(Span),
+    Continue(Span),
 }
 
 impl fmt::Display for AssignOp {
@@ -88,15 +109,38 @@ impl fmt::Display for AssignOp {
 impl fmt::Display for Stmt {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Stmt::Let(stmt) => write!(f, "let {} = {}", stmt.identifier, stmt.expr)?,
-            Stmt::ForLoop(stmt) => write!(f, "for {} in {}", stmt.identifier, stmt.iterator)?,
-            Stmt::Expression(expr) => write!(f, "{expr}")?,
-            Stmt::Assign(stmt) => write!(f, "{} = {}", stmt.identifier, stmt.expr)?,
-            Stmt::AssignOp(stmt) => {
-                write!(f, "{} {} {}", stmt.identifier, stmt.assign_op, stmt.expr)?
+            Stmt::Let(stmt) => write!(f, "let {} = {}", stmt.identifier, stmt.expr),
+            Stmt::ForLoop(stmt) => write!(f, "for {} in {}", stmt.identifier, stmt.iterator),
+            Stmt::CForLoop(stmt) => {
+                f.write_str("for (")?;
+
+                if let Some(init) = stmt.init_stmt.as_ref() {
+                    write!(f, "{init}")?;
+                }
+
+                f.write_str(";")?;
+
+                if let Some(condition) = stmt.condition.as_ref() {
+                    write!(f, "{condition}")?;
+                }
+
+                f.write_str(";")?;
+
+                if let Some(after) = stmt.after_stmt.as_ref() {
+                    write!(f, "{after}")?;
+                }
+
+                write!(f, ") {}", stmt.body)
             }
+            Stmt::Expression(expr) => write!(f, "{expr}"),
+            Stmt::Assign(stmt) => write!(f, "{} = {}", stmt.identifier, stmt.expr),
+            Stmt::AssignOp(stmt) => {
+                write!(f, "{} {} {}", stmt.identifier, stmt.assign_op, stmt.expr)
+            }
+            Stmt::WhileLoop(stmt) => write!(f, "while {} {}", stmt.condition, stmt.body),
+            Stmt::Break(_) => f.write_str("break"),
+            Stmt::Continue(_) => f.write_str("continue"),
         }
-        Ok(())
     }
 }
 
@@ -130,7 +174,11 @@ impl Stmt {
         match self {
             Stmt::Let(stmt) => &stmt.identifier,
             Stmt::ForLoop(stmt) => &stmt.identifier,
-            Stmt::Expression(expr) => panic!("expressions don't have identifiers"),
+            Stmt::Expression(_) => panic!("expressions don't have identifiers"),
+            Stmt::WhileLoop(_) => panic!("while loops don't have identifiers"),
+            Stmt::Break(_) => panic!("break statements don't have identifiers"),
+            Stmt::Continue(_) => panic!("continue statements don't have identifiers"),
+            Stmt::CForLoop(_) => panic!("c-like for loops don't have identifiers"),
             Stmt::Assign(stmt) => &stmt.identifier,
             Stmt::AssignOp(stmt) => &stmt.identifier,
         }
@@ -140,9 +188,12 @@ impl Stmt {
         match self {
             Stmt::Let(stmt) => &stmt.span,
             Stmt::ForLoop(stmt) => &stmt.span,
+            Stmt::CForLoop(stmt) => &stmt.span,
             Stmt::Expression(expr) => expr.span(),
             Stmt::Assign(stmt) => &stmt.span,
             Stmt::AssignOp(stmt) => &stmt.span,
+            Stmt::WhileLoop(stmt) => &stmt.span,
+            Stmt::Break(span) | Stmt::Continue(span) => span,
         }
     }
 

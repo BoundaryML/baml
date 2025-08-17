@@ -1,3 +1,22 @@
+/// Typechecking for the BAML language.
+///
+/// The big-step typechecking algorithm goes from `HIR` to `THIR`, inferring
+/// types for expressions and statements wherever possible, and collecting
+/// errors when the types are incompatible.
+///
+/// Type "compatibility" follows the covariance and contravariance rules
+/// typical in statically-typed languages with subtyping.
+///
+/// A value with a type S may be used in a context that expects a value
+/// with type T if S <: T (S is a subtype of T).
+///
+/// Aspirationally, we implement bidirectional typing, a method that is
+/// mostly syntax-directed (doesn't involve search and backtracking),
+/// copes well with subtyping, and produces good error messages.
+/// https://arxiv.org/abs/1908.05839
+///
+/// However, the current implementation is simple and ad-hoc, likely wrong
+/// in several places. Bidirectional typing is the target.
 use std::sync::Arc;
 
 use baml_types::{BamlMap, BamlValueWithMeta};
@@ -8,6 +27,7 @@ use crate::{
     thir::{self as thir, ExprMetadata, THir},
 };
 
+/// Convert HIR to THIR while collecting type errors.
 pub fn typecheck(hir: &Hir, diagnostics: &mut Diagnostics) -> THir<ExprMetadata> {
     let llm_functions = hir.llm_functions.clone();
     let classes: BamlMap<String, hir::Class> = hir
@@ -146,6 +166,8 @@ pub struct TypeContext {
     // Variables in scope with mutability info
     pub vars: BamlMap<String, VarInfo>,
     pub classes: BamlMap<String, hir::Class>,
+    // Used for knowing whether `break` and `continue` are inside a loop or not.
+    pub is_inside_loop: bool,
 }
 
 impl Default for TypeContext {
@@ -157,8 +179,6 @@ impl Default for TypeContext {
 impl TypeContext {
     pub fn new() -> Self {
         let mut vars = BamlMap::new();
-
-        // TODO: convert true/false into symbols (no infer span), ensure that they are reachable
 
         vars.insert(
             "true".to_string(),
@@ -178,6 +198,7 @@ impl TypeContext {
             symbols: BamlMap::new(),
             vars,
             classes: BamlMap::new(),
+            is_inside_loop: false,
         }
     }
     pub fn get_type(&self, name: &str) -> Option<&Type> {
@@ -187,8 +208,22 @@ impl TypeContext {
             .or_else(|| self.symbols.get(name))
     }
 
-    pub fn infer_type(&mut self, expr: &hir::Expression) -> Option<Type> {
+    pub fn infer_type(&mut self, _expr: &hir::Expression) -> Option<Type> {
         todo!()
+    }
+
+    /// Makes sure that the context passed to `inner` knows it's inside a loop,
+    /// and restores the previous loop information upon return.
+    fn inside_loop<T>(&mut self, inner: impl FnOnce(&mut Self) -> T) -> T {
+        let old = self.is_inside_loop;
+
+        self.is_inside_loop = true;
+
+        let value = inner(self);
+
+        self.is_inside_loop = old;
+
+        value
     }
 }
 
@@ -344,9 +379,12 @@ fn typecheck_statement(
                 span: span.clone(),
             })
         }
-        // TODO: assign op needs more type checking?
-        hir::Statement::Assign { name, value, .. }
-        | hir::Statement::AssignOp { name, value, .. } => {
+        hir::Statement::Assign {
+            name, value, span, ..
+        }
+        | hir::Statement::AssignOp {
+            name, value, span, ..
+        } => {
             let typed_value = typecheck_expression(value, context, diagnostics);
 
             // validate/update type.
@@ -387,7 +425,7 @@ fn typecheck_statement(
                 None => {
                     diagnostics.push_error(DatamodelError::new_validation_error(
                         &format!("Unknown variable {name}"),
-                        value.span(),
+                        span.clone(),
                     ));
                 }
             }
@@ -438,7 +476,9 @@ fn typecheck_statement(
             span,
         } => {
             let typed_condition = typecheck_expression(condition, context, diagnostics);
-            let typed_block = typecheck_block(block, context, diagnostics);
+
+            let typed_block =
+                context.inside_loop(|context| typecheck_block(block, context, diagnostics));
 
             Some(thir::Statement::While {
                 condition: Box::new(typed_condition),
@@ -458,23 +498,84 @@ fn typecheck_statement(
             let mut loop_context = context.clone();
 
             // Infer item type from iterator type
-            if let Some(hir::TypeM::Array(inner_type, _)) = typed_iterator.meta().1.as_ref() {
-                loop_context.vars.insert(
-                    identifier.clone(),
-                    VarInfo {
-                        ty: *inner_type.clone(),
-                        if_mutable: None,
-                    },
-                );
-            }
+            let item_type = if let Some(iterator_type) = typed_iterator.meta().1.as_ref() {
+                if let hir::TypeM::Array(inner_type, _) = iterator_type {
+                    inner_type.as_ref().clone()
+                } else {
+                    diagnostics.push_error(DatamodelError::new_validation_error(
+                        "iterable in `for` loop must be an array",
+                        typed_iterator.span().clone(),
+                    ));
+                    // use int for default - we might want a bottom type here to avoid
+                    // misleading/extraneous errors
+                    hir::TypeM::int()
+                }
+            } else {
+                // could not infer type - use int for default.
+                hir::TypeM::int()
+            };
 
-            let typed_block = typecheck_block(block, &mut loop_context, diagnostics);
+            loop_context.vars.insert(
+                identifier.clone(),
+                VarInfo {
+                    ty: item_type,
+                    if_mutable: None,
+                },
+            );
+
+            let typed_block = loop_context
+                .inside_loop(|loop_context| typecheck_block(block, loop_context, diagnostics));
 
             Some(thir::Statement::ForLoop {
                 identifier: identifier.clone(),
                 iterator: Box::new(typed_iterator),
                 block: typed_block,
                 span: span.clone(),
+            })
+        }
+        hir::Statement::Break(span) | hir::Statement::Continue(span) => {
+            if !context.is_inside_loop {
+                let name = if let hir::Statement::Continue(_) = stmt {
+                    "continue"
+                } else {
+                    "break"
+                };
+
+                diagnostics.push_error(DatamodelError::new_validation_error(
+                    &format!("'{name}' cannot be used outside of a loop"),
+                    span.clone(),
+                ));
+            }
+
+            // give it even on error so that LSP & other source tools can be aware of it.
+            Some(match stmt {
+                hir::Statement::Continue(span) => thir::Statement::Continue(span.clone()),
+                hir::Statement::Break(span) => thir::Statement::Break(span.clone()),
+                _ => panic!("just matched break & continue"),
+            })
+        }
+        hir::Statement::CForLoop {
+            condition,
+            after,
+            block,
+        } => {
+            // make sure that we typecheck with the correct context (condition before block)
+
+            let condition = condition
+                .as_ref()
+                .map(|cond| typecheck_expression(cond, context, diagnostics));
+
+            let after = match after.as_ref() {
+                Some(after) => Some(Box::new(typecheck_statement(after, context, diagnostics)?)),
+                None => None,
+            };
+
+            let block = context.inside_loop(|context| typecheck_block(block, context, diagnostics));
+
+            Some(thir::Statement::CForLoop {
+                condition,
+                after,
+                block,
             })
         }
     }
@@ -715,6 +816,23 @@ fn typecheck_expression(
                     .collect(),
                 args: typed_args,
                 meta: (span.clone(), return_type),
+            }
+        }
+        hir::Expression::MethodCall {
+            receiver,
+            method,
+            args,
+            span,
+        } => {
+            // TODO: Typecheck method call.
+            thir::Expr::MethodCall {
+                receiver: Arc::new(typecheck_expression(receiver, context, diagnostics)),
+                method: Arc::new(thir::Expr::FreeVar(method.clone(), (span.clone(), None))),
+                args: args
+                    .iter()
+                    .map(|arg| typecheck_expression(arg, context, diagnostics))
+                    .collect(),
+                meta: (span.clone(), None),
             }
         }
         hir::Expression::ClassConstructor(constructor, span) => {
@@ -998,7 +1116,7 @@ fn typecheck_expression(
         // Don't care about parens here, order is defined by Pratt Parser.
         // TODO: Still if we need to print errors we need the entire span of the
         // expr? Also print the expr?
-        hir::Expression::Paren(expr, span) => typecheck_expression(expr, context, diagnostics),
+        hir::Expression::Paren(expr, _) => typecheck_expression(expr, context, diagnostics),
     }
 }
 
@@ -1180,8 +1298,6 @@ mod tests {
         }
     }
 
-    // TODO: Fix this test.
-    #[ignore]
     #[test]
     fn typecheck_array_access() {
         let source = r##"

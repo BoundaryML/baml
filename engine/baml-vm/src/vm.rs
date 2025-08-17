@@ -22,11 +22,14 @@ pub enum FunctionKind {
     /// result and then push it on top of the eval stack.
     Llm,
 
-    /// OS interfacing function.
+    /// Builtin or OS interfacing function.
     ///
-    /// VM will handle control flow to a Rust wrapper that calls into the OS
-    /// and returns a result. Needed for features like `fetch`.
-    Native,
+    /// For OS interfacing, VM will handle control flow to a Rust wrapper that
+    /// calls into the OS and returns a result. Needed for features like
+    /// `fetch`.
+    ///
+    /// Builtin functions like `len` work the same way.
+    Native(crate::native::NativeFunction),
 }
 
 /// Represents any Baml function.
@@ -39,6 +42,8 @@ pub struct Function {
     pub arity: usize,
 
     /// Bytecode to execute.
+    ///
+    /// Only relevant if [`Self::kind`] is [`FunctionKind::Exec`].
     pub bytecode: Bytecode,
 
     /// Type of function.
@@ -639,38 +644,36 @@ impl Vm {
             frame.instruction_ptr += 1;
 
             // Runtime debugging information.
-            // #[cfg(debug_assertions)]
-            // {
-            //     let stack = self
-            //         .stack
-            //         .iter()
-            //         .map(|v| crate::debug::display_value(v, &self.objects))
-            //         .collect::<Vec<_>>()
-            //         .join(", ");
+            #[cfg(debug_assertions)]
+            {
+                let stack = self
+                    .stack
+                    .iter()
+                    .map(|v| crate::debug::display_value(v, &self.objects))
+                    .collect::<Vec<_>>()
+                    .join(", ");
 
-            //     eprintln!("[{stack}]");
+                eprintln!("[{stack}]");
 
-            //     let (instruction, metadata) = crate::debug::display_instruction(
-            //         instruction_ptr,
-            //         function,
-            //         &self.stack,
-            //         &self.objects,
-            //         &self.globals,
-            //     );
+                let (instruction, metadata) = crate::debug::display_instruction(
+                    instruction_ptr,
+                    function,
+                    &self.stack,
+                    &self.objects,
+                    &self.globals,
+                );
 
-            //     eprintln!("{instruction} {metadata}");
-            // }
+                eprintln!("{instruction} {metadata}");
+            }
             match function.bytecode.instructions[instruction_ptr as usize] {
                 Instruction::LoadConst(index) => {
                     let value = &function.bytecode.constants[index];
                     self.stack.push(*value);
                 }
-
                 Instruction::LoadVar(index) => {
                     let value = &self.stack[frame.locals_offset + index];
                     self.stack.push(*value);
                 }
-
                 Instruction::StoreVar(index) => {
                     // Consume the value. There are some intricacies when it
                     // comes to consuming the value or not, mainly, should this
@@ -687,12 +690,10 @@ impl Vm {
 
                     self.stack[frame.locals_offset + index] = value;
                 }
-
                 Instruction::LoadGlobal(index) => {
                     let value = &self.globals[index];
                     self.stack.push(*value);
                 }
-
                 Instruction::StoreGlobal(index) => {
                     // Consume the value. Read impl of Instruction::StoreVar.
                     let Some(value) = self.stack.pop() else {
@@ -701,7 +702,6 @@ impl Vm {
 
                     self.globals[index] = value;
                 }
-
                 Instruction::LoadField(index) => {
                     let Some(Value::Object(reference)) = self.stack.pop() else {
                         panic!("expect object, got {:?}", self.stack[self.stack.len() - 1]);
@@ -714,7 +714,6 @@ impl Vm {
                     // Push the value on top of the stack.
                     self.stack.push(instance.fields[index]);
                 }
-
                 Instruction::StoreField(index) => {
                     let Some(value) = self.stack.last() else {
                         return Err(InternalError::UnexpectedEmptyStack.into());
@@ -737,11 +736,9 @@ impl Vm {
                     // TODO: Borrow checker stuff.
                     function = self.objects[frame.function].as_function()?;
                 }
-
                 Instruction::Pop(n) => {
                     self.stack.drain(self.stack.len() - n..);
                 }
-
                 Instruction::PopReplace(n) => {
                     let Some(value) = self.stack.pop() else {
                         return Err(InternalError::UnexpectedEmptyStack.into());
@@ -753,14 +750,12 @@ impl Vm {
                     // Push the value back on top of the stack.
                     self.stack.push(value);
                 }
-
                 Instruction::Jump(offset) => {
                     // Reassign the frame's IP to the new instruction.
                     // Remember that offset can be negative here, so even though
                     // we're adding it can still jump backwards.
                     frame.instruction_ptr = instruction_ptr + offset;
                 }
-
                 Instruction::JumpIfFalse(offset) => match self.stack.last() {
                     // Reassign only if the top of the stack is false.
                     Some(Value::Bool(value)) => {
@@ -781,12 +776,6 @@ impl Vm {
                     // Empty stack, can't execute instruction.
                     None => return Err(InternalError::UnexpectedEmptyStack.into()),
                 },
-
-                // TODO: @antonio VM instructions are implemented as if this was
-                // an interpreted language. But we know all types at compile
-                // time, so we need to treat the stack as `Vec<usize>` instead
-                // of having tagged values, then emit typed instructions like
-                // I64Add, F64Add, etc.
                 Instruction::BinOp(op) => {
                     let Some(right) = self.stack.pop() else {
                         return Err(InternalError::UnexpectedEmptyStack.into());
@@ -843,8 +832,6 @@ impl Vm {
 
                     self.stack.push(result);
                 }
-
-                // TODO: @antonio Same as above.
                 Instruction::CmpOp(op) => {
                     let Some(right) = self.stack.pop() else {
                         return Err(InternalError::UnexpectedEmptyStack.into());
@@ -888,8 +875,6 @@ impl Vm {
 
                     self.stack.push(result);
                 }
-
-                // TODO: @antonio Same as above.
                 Instruction::UnaryOp(op) => {
                     let Some(value) = self.stack.pop() else {
                         return Err(InternalError::UnexpectedEmptyStack.into());
@@ -982,7 +967,6 @@ impl Vm {
                     // Push the element onto the stack
                     self.stack.push(array[index]);
                 }
-
                 Instruction::AllocInstance(index) => {
                     let Object::Class(class) = &self.objects[index] else {
                         panic!("expect class, got {:?}", self.objects[index]);
@@ -1004,7 +988,6 @@ impl Vm {
                     // Same as in the instruction above.
                     function = self.objects[frame.function].as_function()?;
                 }
-
                 Instruction::DispatchFuture(arg_count) => {
                     let args_offset = self.stack.len().saturating_sub(arg_count).saturating_sub(1);
 
@@ -1058,7 +1041,6 @@ impl Vm {
                     // Yield control flow back to the embedder.
                     return Ok(VmExecState::ScheduleFuture(self.objects.len() - 1));
                 }
-
                 Instruction::Await => {
                     let Some(Value::Object(index)) = self.stack.last() else {
                         return Err(InternalError::UnexpectedEmptyStack.into());
@@ -1085,7 +1067,6 @@ impl Vm {
                         }
                     }
                 }
-
                 Instruction::Call(arg_count) => {
                     // Function calls are pushed onto the stack like this:
                     //
@@ -1127,23 +1108,49 @@ impl Vm {
                         return Err(VmError::RuntimeError(RuntimeError::StackOverflow));
                     }
 
-                    // Otherwise push the new frame.
-                    self.frames.push(Frame {
-                        function: *index,
-                        instruction_ptr: 0,
-                        locals_offset,
-                    });
+                    match callee.kind {
+                        FunctionKind::Native(func) => {
+                            let args = self.stack[locals_offset + 1..].to_owned();
 
-                    // Point to next frame.
-                    frame = self.frames.last_mut().expect("last_mut() was pushed above");
+                            // Run Rust native function.
+                            let result = func(self, &args)?;
 
-                    // Grab function ref. We do this to avoid running this
-                    // code at the beginning of each iteration since it's
-                    // totaly unnecessary. The function only changes when the
-                    // frame changes.
-                    function = self.objects[frame.function].as_function()?;
+                            // Drop function call and place result on top.
+                            self.stack.drain(locals_offset..);
+                            self.stack.push(result);
+
+                            // Rust borrow check workaround because we're passing VM as
+                            // mut and technically the frame pointer could be
+                            // invalidated. Frame is Copy so we can maintain a
+                            // local owned copy to avoid this but then we'd need
+                            // to presist changes when moving to a new frame.
+                            frame = self.frames.last_mut().expect("last_mut() was pushed above");
+                            function = self.objects[frame.function].as_function()?;
+                        }
+
+                        FunctionKind::Exec => {
+                            // Otherwise push the new frame.
+                            self.frames.push(Frame {
+                                function: *index,
+                                instruction_ptr: 0,
+                                locals_offset,
+                            });
+
+                            // Point to next frame.
+                            frame = self.frames.last_mut().expect("last_mut() was pushed above");
+
+                            // Grab function ref. We do this to avoid running this
+                            // code at the beginning of each iteration since it's
+                            // totaly unnecessary. The function only changes when the
+                            // frame changes.
+                            function = self.objects[frame.function].as_function()?;
+                        }
+
+                        FunctionKind::Llm => {
+                            return Err(VmError::from(InternalError::InvalidFunctionRef));
+                        }
+                    }
                 }
-
                 Instruction::Return => {
                     // Pop the result from the eval stack.
                     let Some(result) = self.stack.pop() else {

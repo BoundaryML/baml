@@ -1,6 +1,8 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, mem::MaybeUninit};
 
-use internal_baml_ast::ast::{ClassConstructorField, Expression, Stmt, WithName, WithSpan};
+use internal_baml_ast::ast::{
+    ClassConstructorField, Expression, LetStmt, Stmt, WithName, WithSpan,
+};
 use internal_baml_diagnostics::{DatamodelError, DatamodelWarning};
 use itertools::Itertools;
 
@@ -102,6 +104,11 @@ pub(super) fn validate_expr_fns(ctx: &mut Context<'_>) {
 
 fn validate_stmt(ctx: &mut Context<'_>, stmt: &Stmt, scope: &HashSet<String>) {
     match stmt {
+        Stmt::WhileLoop(stmt) => {
+            validate_expression(ctx, &stmt.condition, scope);
+
+            validate_expr_block(ctx, &stmt.body, scope.clone());
+        }
         Stmt::Assign(stmt) => {
             // re: validation is handled by HIR-based typechecking.
             validate_expression(ctx, &stmt.expr, scope);
@@ -121,20 +128,58 @@ fn validate_stmt(ctx: &mut Context<'_>, stmt: &Stmt, scope: &HashSet<String>) {
             let mut loop_scope = scope.clone();
             loop_scope.insert(stmt.identifier.name().to_string());
 
-            // Validate statements in the loop body
-            for stmt in &stmt.body.stmts {
-                validate_stmt(ctx, stmt, &loop_scope);
-                loop_scope.insert(stmt.identifier().name().to_string());
-            }
-
-            // Validate the loop body expression
-            if let Some(expr) = &stmt.body.expr {
-                validate_expression(ctx, expr, &loop_scope);
-            }
+            let body = &stmt.body;
+            validate_expr_block(ctx, body, loop_scope);
         }
         Stmt::Expression(expr) => {
             validate_expression(ctx, expr, scope);
         }
+        Stmt::Break(_) | Stmt::Continue(_) => {}
+        Stmt::CForLoop(stmt) => {
+            // we have to clone the scope anyway for the inner expression block.
+            let mut loop_scope = scope.clone();
+
+            if let Some(init) = &stmt.init_stmt {
+                validate_stmt(ctx, init, scope);
+
+                let init: &Stmt = init;
+
+                if let Stmt::Let(LetStmt { identifier, .. }) = init {
+                    loop_scope.insert(identifier.to_string());
+                }
+            }
+
+            // validate the condition & after statement in the loop header's scope:
+            // bindings declared inside the loop header are available, things from inside the loop
+            // body aren't.
+
+            if let Some(condition) = &stmt.condition {
+                validate_expression(ctx, condition, &loop_scope);
+            }
+
+            if let Some(after) = &stmt.after_stmt {
+                validate_stmt(ctx, after, &loop_scope);
+            }
+
+            validate_expr_block(ctx, &stmt.body, loop_scope);
+        }
+    }
+}
+
+fn validate_expr_block(
+    ctx: &mut Context<'_>,
+    body: &internal_baml_ast::ast::ExpressionBlock,
+    mut scope_for_block: HashSet<String>,
+) {
+    for stmt in &body.stmts {
+        validate_stmt(ctx, stmt, &scope_for_block);
+        if matches!(stmt, Stmt::ForLoop(_) | Stmt::Let(_)) {
+            scope_for_block.insert(stmt.identifier().name().to_string());
+        }
+    }
+
+    if let Some(expr) = &body.expr {
+        validate_expression(ctx, expr, &scope_for_block);
     }
 }
 
@@ -224,16 +269,7 @@ fn validate_expression(ctx: &mut Context<'_>, expr: &Expression, scope: &HashSet
             }
         }
         Expression::ExprBlock(block, _span) => {
-            let mut scope = scope.clone();
-            for stmt in block.stmts.iter() {
-                validate_stmt(ctx, stmt, &scope);
-                if matches!(stmt, Stmt::Let(_) | Stmt::ForLoop(_)) {
-                    scope.insert(stmt.identifier().name().to_string());
-                }
-            }
-            if let Some(expr) = &block.expr {
-                validate_expression(ctx, expr, &scope);
-            }
+            validate_expr_block(ctx, block, scope.clone());
         }
         Expression::If(cond, then, else_, _span) => {
             validate_expression(ctx, cond, scope);

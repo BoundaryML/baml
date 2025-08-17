@@ -12,7 +12,8 @@
 
 mod bytecode;
 pub mod debug;
-mod vm;
+pub mod native;
+pub(crate) mod vm;
 
 pub use bytecode::{BinOp, Bytecode, CmpOp, Instruction, UnaryOp};
 pub use vm::{
