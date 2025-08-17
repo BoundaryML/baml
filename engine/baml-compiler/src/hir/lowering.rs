@@ -320,7 +320,7 @@ impl Block {
 fn lower_stmt(stmt: &ast::Stmt) -> Statement {
     let hir_stmt = match stmt {
         ast::Stmt::CForLoop(stmt) => {
-            // we'll add  a block if we have at least one statement, otherwise we'll just
+            // we'll add  a block if we an init statement, otherwise we'll just
             // use the current context to push the while statement.
 
             let condition = stmt.condition.as_ref().map(Expression::from_ast);
@@ -348,12 +348,13 @@ fn lower_stmt(stmt: &ast::Stmt) -> Statement {
             match init {
                 Some(init) => {
                     // use a block
-                    let mut statements = Vec::new();
-                    statements.push(init);
-                    statements.push(inner_loop);
-
                     Statement::Expression {
-                        expr: Expression::ExpressionBlock(Block { statements }, stmt.span.clone()),
+                        expr: Expression::ExpressionBlock(
+                            Block {
+                                statements: vec![init, inner_loop],
+                            },
+                            stmt.span.clone(),
+                        ),
                         span: stmt.span.clone(),
                     }
                 }
@@ -420,7 +421,7 @@ fn lower_stmt(stmt: &ast::Stmt) -> Statement {
         }) => {
             let lifted_expr = Expression::from_ast(expr);
 
-            let stmt = if *is_mutable {
+            if *is_mutable {
                 Statement::DeclareAndAssign {
                     name: identifier.to_string(),
                     value: lifted_expr,
@@ -432,10 +433,7 @@ fn lower_stmt(stmt: &ast::Stmt) -> Statement {
                     value: lifted_expr,
                     span: span.clone(),
                 }
-            };
-
-            // Then add the actual let statement
-            stmt
+            }
         }
         ast::Stmt::ForLoop(ast::ForLoopStmt {
             identifier,
