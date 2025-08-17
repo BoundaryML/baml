@@ -591,6 +591,13 @@ class BamlAsyncClient:
             "input": input,
         })
         return typing.cast(typing.Union[typing_extensions.Literal[1], typing_extensions.Literal[True], typing_extensions.Literal['string output']], result.cast_to(types, types, stream_types, False, __runtime__))
+    async def LlmReturnNumber(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = await self.__options.merge_options(baml_options).call_function_async(function_name="LlmReturnNumber", args={
+            "n": n,
+        })
+        return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
     async def MakeBlockConstraint(self, 
         baml_options: BamlCallOptions = {},
     ) -> types.Checked["types.BlockConstraint", typing_extensions.Literal['cross_field', 'cross_field']]:
@@ -661,6 +668,13 @@ class BamlAsyncClient:
             "s": s,
         })
         return typing.cast(types.ClassForNullLiteral, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def OpenAIWithAnthropicResponseHello(self, s: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = await self.__options.merge_options(baml_options).call_function_async(function_name="OpenAIWithAnthropicResponseHello", args={
+            "s": s,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     async def OptionalTest_Function(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> typing.List[typing.Optional["types.OptionalTest_ReturnType"]]:
@@ -668,6 +682,34 @@ class BamlAsyncClient:
             "input": input,
         })
         return typing.cast(typing.List[typing.Optional["types.OptionalTest_ReturnType"]], result.cast_to(types, types, stream_types, False, __runtime__))
+    async def PdfInput(self, pdf: baml_py.Pdf,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = await self.__options.merge_options(baml_options).call_function_async(function_name="PdfInput", args={
+            "pdf": pdf,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def PdfInputAnthropic(self, pdf: baml_py.Pdf,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = await self.__options.merge_options(baml_options).call_function_async(function_name="PdfInputAnthropic", args={
+            "pdf": pdf,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def PdfInputOpenai(self, pdf: baml_py.Pdf,prompt: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = await self.__options.merge_options(baml_options).call_function_async(function_name="PdfInputOpenai", args={
+            "pdf": pdf,"prompt": prompt,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def PdfInputVertex(self, pdf: baml_py.Pdf,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = await self.__options.merge_options(baml_options).call_function_async(function_name="PdfInputVertex", args={
+            "pdf": pdf,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     async def PredictAge(self, name: str,
         baml_options: BamlCallOptions = {},
     ) -> types.FooAny:
@@ -1277,6 +1319,104 @@ class BamlAsyncClient:
             "input": input,
         })
         return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def TestOpenAIProviderWithResponsesType(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestOpenAIProviderWithResponsesType", args={
+            "input": input,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def TestOpenAIResponses(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestOpenAIResponses", args={
+            "input": input,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def TestOpenAIResponsesAutoType(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestOpenAIResponsesAutoType", args={
+            "input": input,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def TestOpenAIResponsesConversation(self, topic: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestOpenAIResponsesConversation", args={
+            "topic": topic,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def TestOpenAIResponsesCustomURL(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestOpenAIResponsesCustomURL", args={
+            "input": input,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def TestOpenAIResponsesDifferentModel(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestOpenAIResponsesDifferentModel", args={
+            "input": input,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def TestOpenAIResponsesEndpoint(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestOpenAIResponsesEndpoint", args={
+            "input": input,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def TestOpenAIResponsesExplicit(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestOpenAIResponsesExplicit", args={
+            "input": input,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def TestOpenAIResponsesFunctionCall(self, query: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestOpenAIResponsesFunctionCall", args={
+            "query": query,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def TestOpenAIResponsesImageInput(self, image: typing.Union[baml_py.Image, str],
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestOpenAIResponsesImageInput", args={
+            "image": image,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def TestOpenAIResponsesReasoning(self, problem: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestOpenAIResponsesReasoning", args={
+            "problem": problem,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def TestOpenAIResponsesShorthand(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestOpenAIResponsesShorthand", args={
+            "input": input,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def TestOpenAIResponsesWebSearch(self, query: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestOpenAIResponsesWebSearch", args={
+            "query": query,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def TestOpenAIResponsesWithOpenAIResponseType(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestOpenAIResponsesWithOpenAIResponseType", args={
+            "input": input,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     async def TestOpenAIShorthand(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
@@ -1410,6 +1550,69 @@ class BamlAsyncClient:
             "inp": inp,
         })
         return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def ValidateBasicResponses(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = await self.__options.merge_options(baml_options).call_function_async(function_name="ValidateBasicResponses", args={
+            "input": input,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def ValidateResponseTypes(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = await self.__options.merge_options(baml_options).call_function_async(function_name="ValidateResponseTypes", args={
+            "input": input,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def VideoInputGemini(self, vid: baml_py.Video,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = await self.__options.merge_options(baml_options).call_function_async(function_name="VideoInputGemini", args={
+            "vid": vid,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def VideoInputVertex(self, vid: baml_py.Video,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = await self.__options.merge_options(baml_options).call_function_async(function_name="VideoInputVertex", args={
+            "vid": vid,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def AssignElseIfExpr(self, a: bool,b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = await self.__options.merge_options(baml_options).call_function_async(function_name="AssignElseIfExpr", args={
+            "a": a,"b": b,
+        })
+        return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def BoolToIntWithIfElse(self, b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = await self.__options.merge_options(baml_options).call_function_async(function_name="BoolToIntWithIfElse", args={
+            "b": b,
+        })
+        return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def BoolToIntWithIfElseCallingLlm(self, b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = await self.__options.merge_options(baml_options).call_function_async(function_name="BoolToIntWithIfElseCallingLlm", args={
+            "b": b,
+        })
+        return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def CallReturnOne(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = await self.__options.merge_options(baml_options).call_function_async(function_name="CallReturnOne", args={
+            
+        })
+        return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def ChainedCalls(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = await self.__options.merge_options(baml_options).call_function_async(function_name="ChainedCalls", args={
+            
+        })
+        return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
     async def EchoWorkflow(self, 
         baml_options: BamlCallOptions = {},
     ) -> str:
@@ -1417,6 +1620,55 @@ class BamlAsyncClient:
             
         })
         return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def NormalElseIfStmt(self, a: bool,b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = await self.__options.merge_options(baml_options).call_function_async(function_name="NormalElseIfStmt", args={
+            "a": a,"b": b,
+        })
+        return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def ReturnElseIfExpr(self, a: bool,b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = await self.__options.merge_options(baml_options).call_function_async(function_name="ReturnElseIfExpr", args={
+            "a": a,"b": b,
+        })
+        return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def ReturnNumber(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = await self.__options.merge_options(baml_options).call_function_async(function_name="ReturnNumber", args={
+            "n": n,
+        })
+        return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def ReturnNumberCallingLlm(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = await self.__options.merge_options(baml_options).call_function_async(function_name="ReturnNumberCallingLlm", args={
+            "n": n,
+        })
+        return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def ReturnOne(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = await self.__options.merge_options(baml_options).call_function_async(function_name="ReturnOne", args={
+            
+        })
+        return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def StoreFnCallInLocalVar(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = await self.__options.merge_options(baml_options).call_function_async(function_name="StoreFnCallInLocalVar", args={
+            "n": n,
+        })
+        return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def StoreLlmCallInLocalVar(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = await self.__options.merge_options(baml_options).call_function_async(function_name="StoreLlmCallInLocalVar", args={
+            "n": n,
+        })
+        return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
     
 
 
@@ -2314,6 +2566,18 @@ class BamlStreamClient:
           lambda x: typing.cast(typing.Union[typing_extensions.Literal[1], typing_extensions.Literal[True], typing_extensions.Literal['string output']], x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
+    def LlmReturnNumber(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[int, int]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="LlmReturnNumber", args={
+            "n": n,
+        })
+        return baml_py.BamlStream[int, int](
+          result,
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
     def MakeBlockConstraint(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[types.Checked["stream_types.BlockConstraint", typing_extensions.Literal['cross_field', 'cross_field']], types.Checked["types.BlockConstraint", typing_extensions.Literal['cross_field', 'cross_field']]]:
@@ -2434,6 +2698,18 @@ class BamlStreamClient:
           lambda x: typing.cast(types.ClassForNullLiteral, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
+    def OpenAIWithAnthropicResponseHello(self, s: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="OpenAIWithAnthropicResponseHello", args={
+            "s": s,
+        })
+        return baml_py.BamlStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
     def OptionalTest_Function(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[typing.List[typing.Optional["stream_types.OptionalTest_ReturnType"]], typing.List[typing.Optional["types.OptionalTest_ReturnType"]]]:
@@ -2444,6 +2720,54 @@ class BamlStreamClient:
           result,
           lambda x: typing.cast(typing.List[typing.Optional["stream_types.OptionalTest_ReturnType"]], x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(typing.List[typing.Optional["types.OptionalTest_ReturnType"]], x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def PdfInput(self, pdf: baml_py.Pdf,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="PdfInput", args={
+            "pdf": pdf,
+        })
+        return baml_py.BamlStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def PdfInputAnthropic(self, pdf: baml_py.Pdf,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="PdfInputAnthropic", args={
+            "pdf": pdf,
+        })
+        return baml_py.BamlStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def PdfInputOpenai(self, pdf: baml_py.Pdf,prompt: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="PdfInputOpenai", args={
+            "pdf": pdf,"prompt": prompt,
+        })
+        return baml_py.BamlStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def PdfInputVertex(self, pdf: baml_py.Pdf,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="PdfInputVertex", args={
+            "pdf": pdf,
+        })
+        return baml_py.BamlStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def PredictAge(self, name: str,
@@ -3490,6 +3814,174 @@ class BamlStreamClient:
           lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
+    def TestOpenAIProviderWithResponsesType(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="TestOpenAIProviderWithResponsesType", args={
+            "input": input,
+        })
+        return baml_py.BamlStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def TestOpenAIResponses(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="TestOpenAIResponses", args={
+            "input": input,
+        })
+        return baml_py.BamlStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def TestOpenAIResponsesAutoType(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="TestOpenAIResponsesAutoType", args={
+            "input": input,
+        })
+        return baml_py.BamlStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def TestOpenAIResponsesConversation(self, topic: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="TestOpenAIResponsesConversation", args={
+            "topic": topic,
+        })
+        return baml_py.BamlStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def TestOpenAIResponsesCustomURL(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="TestOpenAIResponsesCustomURL", args={
+            "input": input,
+        })
+        return baml_py.BamlStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def TestOpenAIResponsesDifferentModel(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="TestOpenAIResponsesDifferentModel", args={
+            "input": input,
+        })
+        return baml_py.BamlStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def TestOpenAIResponsesEndpoint(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="TestOpenAIResponsesEndpoint", args={
+            "input": input,
+        })
+        return baml_py.BamlStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def TestOpenAIResponsesExplicit(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="TestOpenAIResponsesExplicit", args={
+            "input": input,
+        })
+        return baml_py.BamlStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def TestOpenAIResponsesFunctionCall(self, query: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="TestOpenAIResponsesFunctionCall", args={
+            "query": query,
+        })
+        return baml_py.BamlStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def TestOpenAIResponsesImageInput(self, image: typing.Union[baml_py.Image, str],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="TestOpenAIResponsesImageInput", args={
+            "image": image,
+        })
+        return baml_py.BamlStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def TestOpenAIResponsesReasoning(self, problem: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="TestOpenAIResponsesReasoning", args={
+            "problem": problem,
+        })
+        return baml_py.BamlStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def TestOpenAIResponsesShorthand(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="TestOpenAIResponsesShorthand", args={
+            "input": input,
+        })
+        return baml_py.BamlStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def TestOpenAIResponsesWebSearch(self, query: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="TestOpenAIResponsesWebSearch", args={
+            "query": query,
+        })
+        return baml_py.BamlStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def TestOpenAIResponsesWithOpenAIResponseType(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="TestOpenAIResponsesWithOpenAIResponseType", args={
+            "input": input,
+        })
+        return baml_py.BamlStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
     def TestOpenAIShorthand(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[str, str]:
@@ -3718,6 +4210,114 @@ class BamlStreamClient:
           lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
+    def ValidateBasicResponses(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="ValidateBasicResponses", args={
+            "input": input,
+        })
+        return baml_py.BamlStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def ValidateResponseTypes(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="ValidateResponseTypes", args={
+            "input": input,
+        })
+        return baml_py.BamlStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def VideoInputGemini(self, vid: baml_py.Video,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="VideoInputGemini", args={
+            "vid": vid,
+        })
+        return baml_py.BamlStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def VideoInputVertex(self, vid: baml_py.Video,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="VideoInputVertex", args={
+            "vid": vid,
+        })
+        return baml_py.BamlStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def AssignElseIfExpr(self, a: bool,b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.Optional[int], int]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="AssignElseIfExpr", args={
+            "a": a,"b": b,
+        })
+        return baml_py.BamlStream[typing.Optional[int], int](
+          result,
+          lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def BoolToIntWithIfElse(self, b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.Optional[int], int]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="BoolToIntWithIfElse", args={
+            "b": b,
+        })
+        return baml_py.BamlStream[typing.Optional[int], int](
+          result,
+          lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def BoolToIntWithIfElseCallingLlm(self, b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.Optional[int], int]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="BoolToIntWithIfElseCallingLlm", args={
+            "b": b,
+        })
+        return baml_py.BamlStream[typing.Optional[int], int](
+          result,
+          lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def CallReturnOne(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.Optional[int], int]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="CallReturnOne", args={
+            
+        })
+        return baml_py.BamlStream[typing.Optional[int], int](
+          result,
+          lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def ChainedCalls(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.Optional[int], int]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="ChainedCalls", args={
+            
+        })
+        return baml_py.BamlStream[typing.Optional[int], int](
+          result,
+          lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
     def EchoWorkflow(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[typing.Optional[str], str]:
@@ -3728,6 +4328,90 @@ class BamlStreamClient:
           result,
           lambda x: typing.cast(typing.Optional[str], x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def NormalElseIfStmt(self, a: bool,b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.Optional[int], int]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="NormalElseIfStmt", args={
+            "a": a,"b": b,
+        })
+        return baml_py.BamlStream[typing.Optional[int], int](
+          result,
+          lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def ReturnElseIfExpr(self, a: bool,b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.Optional[int], int]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="ReturnElseIfExpr", args={
+            "a": a,"b": b,
+        })
+        return baml_py.BamlStream[typing.Optional[int], int](
+          result,
+          lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def ReturnNumber(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.Optional[int], int]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="ReturnNumber", args={
+            "n": n,
+        })
+        return baml_py.BamlStream[typing.Optional[int], int](
+          result,
+          lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def ReturnNumberCallingLlm(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.Optional[int], int]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="ReturnNumberCallingLlm", args={
+            "n": n,
+        })
+        return baml_py.BamlStream[typing.Optional[int], int](
+          result,
+          lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def ReturnOne(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.Optional[int], int]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="ReturnOne", args={
+            
+        })
+        return baml_py.BamlStream[typing.Optional[int], int](
+          result,
+          lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def StoreFnCallInLocalVar(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.Optional[int], int]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="StoreFnCallInLocalVar", args={
+            "n": n,
+        })
+        return baml_py.BamlStream[typing.Optional[int], int](
+          result,
+          lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def StoreLlmCallInLocalVar(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.Optional[int], int]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="StoreLlmCallInLocalVar", args={
+            "n": n,
+        })
+        return baml_py.BamlStream[typing.Optional[int], int](
+          result,
+          lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     
@@ -4256,6 +4940,13 @@ class BamlHttpRequestClient:
             "input": input,
         }, mode="request")
         return result
+    async def LlmReturnNumber(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="LlmReturnNumber", args={
+            "n": n,
+        }, mode="request")
+        return result
     async def MakeBlockConstraint(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -4326,11 +5017,46 @@ class BamlHttpRequestClient:
             "s": s,
         }, mode="request")
         return result
+    async def OpenAIWithAnthropicResponseHello(self, s: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="OpenAIWithAnthropicResponseHello", args={
+            "s": s,
+        }, mode="request")
+        return result
     async def OptionalTest_Function(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
         result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="OptionalTest_Function", args={
             "input": input,
+        }, mode="request")
+        return result
+    async def PdfInput(self, pdf: baml_py.Pdf,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="PdfInput", args={
+            "pdf": pdf,
+        }, mode="request")
+        return result
+    async def PdfInputAnthropic(self, pdf: baml_py.Pdf,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="PdfInputAnthropic", args={
+            "pdf": pdf,
+        }, mode="request")
+        return result
+    async def PdfInputOpenai(self, pdf: baml_py.Pdf,prompt: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="PdfInputOpenai", args={
+            "pdf": pdf,"prompt": prompt,
+        }, mode="request")
+        return result
+    async def PdfInputVertex(self, pdf: baml_py.Pdf,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="PdfInputVertex", args={
+            "pdf": pdf,
         }, mode="request")
         return result
     async def PredictAge(self, name: str,
@@ -4942,6 +5668,104 @@ class BamlHttpRequestClient:
             "input": input,
         }, mode="request")
         return result
+    async def TestOpenAIProviderWithResponsesType(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestOpenAIProviderWithResponsesType", args={
+            "input": input,
+        }, mode="request")
+        return result
+    async def TestOpenAIResponses(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestOpenAIResponses", args={
+            "input": input,
+        }, mode="request")
+        return result
+    async def TestOpenAIResponsesAutoType(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestOpenAIResponsesAutoType", args={
+            "input": input,
+        }, mode="request")
+        return result
+    async def TestOpenAIResponsesConversation(self, topic: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestOpenAIResponsesConversation", args={
+            "topic": topic,
+        }, mode="request")
+        return result
+    async def TestOpenAIResponsesCustomURL(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestOpenAIResponsesCustomURL", args={
+            "input": input,
+        }, mode="request")
+        return result
+    async def TestOpenAIResponsesDifferentModel(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestOpenAIResponsesDifferentModel", args={
+            "input": input,
+        }, mode="request")
+        return result
+    async def TestOpenAIResponsesEndpoint(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestOpenAIResponsesEndpoint", args={
+            "input": input,
+        }, mode="request")
+        return result
+    async def TestOpenAIResponsesExplicit(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestOpenAIResponsesExplicit", args={
+            "input": input,
+        }, mode="request")
+        return result
+    async def TestOpenAIResponsesFunctionCall(self, query: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestOpenAIResponsesFunctionCall", args={
+            "query": query,
+        }, mode="request")
+        return result
+    async def TestOpenAIResponsesImageInput(self, image: typing.Union[baml_py.Image, str],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestOpenAIResponsesImageInput", args={
+            "image": image,
+        }, mode="request")
+        return result
+    async def TestOpenAIResponsesReasoning(self, problem: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestOpenAIResponsesReasoning", args={
+            "problem": problem,
+        }, mode="request")
+        return result
+    async def TestOpenAIResponsesShorthand(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestOpenAIResponsesShorthand", args={
+            "input": input,
+        }, mode="request")
+        return result
+    async def TestOpenAIResponsesWebSearch(self, query: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestOpenAIResponsesWebSearch", args={
+            "query": query,
+        }, mode="request")
+        return result
+    async def TestOpenAIResponsesWithOpenAIResponseType(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestOpenAIResponsesWithOpenAIResponseType", args={
+            "input": input,
+        }, mode="request")
+        return result
     async def TestOpenAIShorthand(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -5075,11 +5899,123 @@ class BamlHttpRequestClient:
             "inp": inp,
         }, mode="request")
         return result
+    async def ValidateBasicResponses(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ValidateBasicResponses", args={
+            "input": input,
+        }, mode="request")
+        return result
+    async def ValidateResponseTypes(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ValidateResponseTypes", args={
+            "input": input,
+        }, mode="request")
+        return result
+    async def VideoInputGemini(self, vid: baml_py.Video,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="VideoInputGemini", args={
+            "vid": vid,
+        }, mode="request")
+        return result
+    async def VideoInputVertex(self, vid: baml_py.Video,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="VideoInputVertex", args={
+            "vid": vid,
+        }, mode="request")
+        return result
+    async def AssignElseIfExpr(self, a: bool,b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="AssignElseIfExpr", args={
+            "a": a,"b": b,
+        }, mode="request")
+        return result
+    async def BoolToIntWithIfElse(self, b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="BoolToIntWithIfElse", args={
+            "b": b,
+        }, mode="request")
+        return result
+    async def BoolToIntWithIfElseCallingLlm(self, b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="BoolToIntWithIfElseCallingLlm", args={
+            "b": b,
+        }, mode="request")
+        return result
+    async def CallReturnOne(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="CallReturnOne", args={
+            
+        }, mode="request")
+        return result
+    async def ChainedCalls(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ChainedCalls", args={
+            
+        }, mode="request")
+        return result
     async def EchoWorkflow(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
         result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="EchoWorkflow", args={
             
+        }, mode="request")
+        return result
+    async def NormalElseIfStmt(self, a: bool,b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="NormalElseIfStmt", args={
+            "a": a,"b": b,
+        }, mode="request")
+        return result
+    async def ReturnElseIfExpr(self, a: bool,b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ReturnElseIfExpr", args={
+            "a": a,"b": b,
+        }, mode="request")
+        return result
+    async def ReturnNumber(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ReturnNumber", args={
+            "n": n,
+        }, mode="request")
+        return result
+    async def ReturnNumberCallingLlm(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ReturnNumberCallingLlm", args={
+            "n": n,
+        }, mode="request")
+        return result
+    async def ReturnOne(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ReturnOne", args={
+            
+        }, mode="request")
+        return result
+    async def StoreFnCallInLocalVar(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="StoreFnCallInLocalVar", args={
+            "n": n,
+        }, mode="request")
+        return result
+    async def StoreLlmCallInLocalVar(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="StoreLlmCallInLocalVar", args={
+            "n": n,
         }, mode="request")
         return result
     
@@ -5608,6 +6544,13 @@ class BamlHttpStreamRequestClient:
             "input": input,
         }, mode="stream")
         return result
+    async def LlmReturnNumber(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="LlmReturnNumber", args={
+            "n": n,
+        }, mode="stream")
+        return result
     async def MakeBlockConstraint(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -5678,11 +6621,46 @@ class BamlHttpStreamRequestClient:
             "s": s,
         }, mode="stream")
         return result
+    async def OpenAIWithAnthropicResponseHello(self, s: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="OpenAIWithAnthropicResponseHello", args={
+            "s": s,
+        }, mode="stream")
+        return result
     async def OptionalTest_Function(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
         result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="OptionalTest_Function", args={
             "input": input,
+        }, mode="stream")
+        return result
+    async def PdfInput(self, pdf: baml_py.Pdf,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="PdfInput", args={
+            "pdf": pdf,
+        }, mode="stream")
+        return result
+    async def PdfInputAnthropic(self, pdf: baml_py.Pdf,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="PdfInputAnthropic", args={
+            "pdf": pdf,
+        }, mode="stream")
+        return result
+    async def PdfInputOpenai(self, pdf: baml_py.Pdf,prompt: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="PdfInputOpenai", args={
+            "pdf": pdf,"prompt": prompt,
+        }, mode="stream")
+        return result
+    async def PdfInputVertex(self, pdf: baml_py.Pdf,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="PdfInputVertex", args={
+            "pdf": pdf,
         }, mode="stream")
         return result
     async def PredictAge(self, name: str,
@@ -6294,6 +7272,104 @@ class BamlHttpStreamRequestClient:
             "input": input,
         }, mode="stream")
         return result
+    async def TestOpenAIProviderWithResponsesType(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestOpenAIProviderWithResponsesType", args={
+            "input": input,
+        }, mode="stream")
+        return result
+    async def TestOpenAIResponses(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestOpenAIResponses", args={
+            "input": input,
+        }, mode="stream")
+        return result
+    async def TestOpenAIResponsesAutoType(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestOpenAIResponsesAutoType", args={
+            "input": input,
+        }, mode="stream")
+        return result
+    async def TestOpenAIResponsesConversation(self, topic: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestOpenAIResponsesConversation", args={
+            "topic": topic,
+        }, mode="stream")
+        return result
+    async def TestOpenAIResponsesCustomURL(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestOpenAIResponsesCustomURL", args={
+            "input": input,
+        }, mode="stream")
+        return result
+    async def TestOpenAIResponsesDifferentModel(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestOpenAIResponsesDifferentModel", args={
+            "input": input,
+        }, mode="stream")
+        return result
+    async def TestOpenAIResponsesEndpoint(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestOpenAIResponsesEndpoint", args={
+            "input": input,
+        }, mode="stream")
+        return result
+    async def TestOpenAIResponsesExplicit(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestOpenAIResponsesExplicit", args={
+            "input": input,
+        }, mode="stream")
+        return result
+    async def TestOpenAIResponsesFunctionCall(self, query: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestOpenAIResponsesFunctionCall", args={
+            "query": query,
+        }, mode="stream")
+        return result
+    async def TestOpenAIResponsesImageInput(self, image: typing.Union[baml_py.Image, str],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestOpenAIResponsesImageInput", args={
+            "image": image,
+        }, mode="stream")
+        return result
+    async def TestOpenAIResponsesReasoning(self, problem: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestOpenAIResponsesReasoning", args={
+            "problem": problem,
+        }, mode="stream")
+        return result
+    async def TestOpenAIResponsesShorthand(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestOpenAIResponsesShorthand", args={
+            "input": input,
+        }, mode="stream")
+        return result
+    async def TestOpenAIResponsesWebSearch(self, query: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestOpenAIResponsesWebSearch", args={
+            "query": query,
+        }, mode="stream")
+        return result
+    async def TestOpenAIResponsesWithOpenAIResponseType(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestOpenAIResponsesWithOpenAIResponseType", args={
+            "input": input,
+        }, mode="stream")
+        return result
     async def TestOpenAIShorthand(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -6427,11 +7503,123 @@ class BamlHttpStreamRequestClient:
             "inp": inp,
         }, mode="stream")
         return result
+    async def ValidateBasicResponses(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ValidateBasicResponses", args={
+            "input": input,
+        }, mode="stream")
+        return result
+    async def ValidateResponseTypes(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ValidateResponseTypes", args={
+            "input": input,
+        }, mode="stream")
+        return result
+    async def VideoInputGemini(self, vid: baml_py.Video,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="VideoInputGemini", args={
+            "vid": vid,
+        }, mode="stream")
+        return result
+    async def VideoInputVertex(self, vid: baml_py.Video,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="VideoInputVertex", args={
+            "vid": vid,
+        }, mode="stream")
+        return result
+    async def AssignElseIfExpr(self, a: bool,b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="AssignElseIfExpr", args={
+            "a": a,"b": b,
+        }, mode="stream")
+        return result
+    async def BoolToIntWithIfElse(self, b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="BoolToIntWithIfElse", args={
+            "b": b,
+        }, mode="stream")
+        return result
+    async def BoolToIntWithIfElseCallingLlm(self, b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="BoolToIntWithIfElseCallingLlm", args={
+            "b": b,
+        }, mode="stream")
+        return result
+    async def CallReturnOne(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="CallReturnOne", args={
+            
+        }, mode="stream")
+        return result
+    async def ChainedCalls(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ChainedCalls", args={
+            
+        }, mode="stream")
+        return result
     async def EchoWorkflow(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
         result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="EchoWorkflow", args={
             
+        }, mode="stream")
+        return result
+    async def NormalElseIfStmt(self, a: bool,b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="NormalElseIfStmt", args={
+            "a": a,"b": b,
+        }, mode="stream")
+        return result
+    async def ReturnElseIfExpr(self, a: bool,b: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ReturnElseIfExpr", args={
+            "a": a,"b": b,
+        }, mode="stream")
+        return result
+    async def ReturnNumber(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ReturnNumber", args={
+            "n": n,
+        }, mode="stream")
+        return result
+    async def ReturnNumberCallingLlm(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ReturnNumberCallingLlm", args={
+            "n": n,
+        }, mode="stream")
+        return result
+    async def ReturnOne(self, 
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ReturnOne", args={
+            
+        }, mode="stream")
+        return result
+    async def StoreFnCallInLocalVar(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="StoreFnCallInLocalVar", args={
+            "n": n,
+        }, mode="stream")
+        return result
+    async def StoreLlmCallInLocalVar(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="StoreLlmCallInLocalVar", args={
+            "n": n,
         }, mode="stream")
         return result
     

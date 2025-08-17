@@ -30,6 +30,7 @@ import (
 	"os"
 	"strings"
 
+	"example.com/integ-tests/baml_client/type_builder"
 	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 )
 
