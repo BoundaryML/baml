@@ -52,6 +52,7 @@ impl AsyncRuntime {
     where
         F: Future<Output = ()> + 'static,
     {
+        web_sys::console::log_1(&"AsyncRuntime::spawn_local called in WASM".into());
         spawn_local(future);
     }
     

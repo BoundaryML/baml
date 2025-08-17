@@ -21,9 +21,20 @@ pub extern "C" fn call_function_from_c(
     length: usize,
     id: u32,
 ) -> *const c_void {
+    #[cfg(target_arch = "wasm32")]
+    web_sys::console::log_1(&format!("call_function_from_c called with id {}", id).into());
+    
     match call_function_from_c_inner(runtime, function_name, encoded_args, length, id) {
-        Ok(_) => null(),
-        Err(e) => handle_ffi_error(e),
+        Ok(_) => {
+            #[cfg(target_arch = "wasm32")]
+            web_sys::console::log_1(&format!("call_function_from_c_inner succeeded for id {}", id).into());
+            null()
+        },
+        Err(e) => {
+            #[cfg(target_arch = "wasm32")]
+            web_sys::console::error_1(&format!("call_function_from_c_inner failed for id {}: {:?}", id, e).into());
+            handle_ffi_error(e)
+        },
     }
 }
 
@@ -48,6 +59,9 @@ fn call_function_from_c_inner(
     length: usize,
     id: u32,
 ) -> Result<()> {
+    #[cfg(target_arch = "wasm32")]
+    web_sys::console::log_1(&format!("call_function_from_c_inner entered with id {}", id).into());
+    
     // Safety: assume that the pointers provided are valid.
     let runtime = unsafe { &*(runtime as *const BamlRuntime) };
 
@@ -71,7 +85,12 @@ fn call_function_from_c_inner(
     let ctx = runtime.create_ctx_manager(BamlValue::String("cffi".to_string()), None);
 
     // Spawn an async task to await the future and call the callback when done.
+    #[cfg(target_arch = "wasm32")]
+    web_sys::console::log_1(&format!("Spawning async task for function {} with callback {}", func_name, id).into());
+    
     AsyncRuntime::spawn_local(async move {
+        #[cfg(target_arch = "wasm32")]
+        web_sys::console::log_1(&format!("Inside async task for callback {}", id).into());
         let result = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| async {
             // TODO: There's a race condition bug here. Technically we should COPY the type builder, not just clone it.
             let type_builder = type_builder.map(|t| t.type_builder.as_ref().clone());

@@ -28,31 +28,83 @@ pub mod wasm_exports {
     use crate::ffi::callbacks::register_callbacks;
     use std::ffi::CString;
     
+    // JavaScript callback functions will be called through web_sys
+    
     #[wasm_bindgen]
     pub fn init_wasm() {
         // Set up console error panic hook for better debugging
         #[cfg(feature = "console_error_panic_hook")]
         console_error_panic_hook::set_once();
         
+        // Initialize baml_log directly in init_wasm
+        // This ensures BAML logging is set up before any callbacks are registered
+        match baml_log::init() {
+            Ok(_) => web_sys::console::log_1(&"BAML logger initialized".into()),
+            Err(e) => web_sys::console::error_1(&format!("Failed to initialize BAML logger: {e:#}").into()),
+        }
+        
         // Register WASM-specific callbacks that will call JavaScript functions
         extern "C" fn result_callback(call_id: u32, is_done: i32, content: *const i8, length: usize) {
             let data = unsafe {
                 std::slice::from_raw_parts(content as *const u8, length)
             };
+            
+            // Convert data to JavaScript array format
+            let data_array = data.iter()
+                .map(|b| b.to_string())
+                .collect::<Vec<String>>()
+                .join(",");
+            
             // Call JavaScript callback through global object
-            let js_callback = format!("window.__baml_callback_{}", call_id);
-            web_sys::console::log_1(&format!("Callback {} with {} bytes", js_callback, length).into());
+            let js_code = format!(
+                "if (window.__baml_callbacks && window.__baml_callbacks[{}]) {{
+                    const data = new Uint8Array([{}]);
+                    window.__baml_callbacks[{}].onResult(data, {});
+                    console.log('Callback {} invoked with {} bytes');
+                }}",
+                call_id,
+                data_array,
+                call_id,
+                is_done != 0,
+                call_id,
+                length
+            );
+            web_sys::js_sys::eval(&js_code).ok();
         }
         
         extern "C" fn error_callback(call_id: u32, _is_done: i32, content: *const i8, length: usize) {
             let error_msg = unsafe {
                 std::str::from_utf8_unchecked(std::slice::from_raw_parts(content as *const u8, length))
             };
-            web_sys::console::error_1(&format!("Error in call {}: {}", call_id, error_msg).into());
+            
+            // Call JavaScript callback through global object
+            let js_code = format!(
+                "if (window.__baml_callbacks && window.__baml_callbacks[{}]) {{
+                    window.__baml_callbacks[{}].onError('{}');
+                    console.log('Error callback {} invoked: {}');
+                }}",
+                call_id,
+                call_id,
+                error_msg.replace('\'', "\\'").replace('"', "\\\"").replace('\n', "\\n"),
+                call_id,
+                error_msg.replace('\'', "\\'").replace('"', "\\\"").replace('\n', "\\n")
+            );
+            web_sys::js_sys::eval(&js_code).ok();
         }
         
         extern "C" fn on_tick_callback(call_id: u32) {
-            web_sys::console::log_1(&format!("Tick for call {}", call_id).into());
+            // Call JavaScript callback through global object
+            let js_code = format!(
+                "if (window.__baml_callbacks && window.__baml_callbacks[{}] && window.__baml_callbacks[{}].onTick) {{
+                    window.__baml_callbacks[{}].onTick();
+                    console.log('Tick callback {} invoked');
+                }}",
+                call_id,
+                call_id,
+                call_id,
+                call_id
+            );
+            web_sys::js_sys::eval(&js_code).ok();
         }
         
         register_callbacks(result_callback, error_callback, on_tick_callback);
