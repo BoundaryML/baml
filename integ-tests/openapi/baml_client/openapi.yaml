@@ -548,6 +548,19 @@ paths:
                   - READING
                   $ref: '#/components/schemas/Hobby'
       operationId: ExtractHobby
+  /call/ExtractName:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/ExtractName'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: ExtractNameResponse
+                type: string
+      operationId: ExtractName
   /call/ExtractNames:
     post:
       requestBody:
@@ -679,6 +692,32 @@ paths:
                 - THREE
                 $ref: '#/components/schemas/EnumOutput'
       operationId: FnEnumOutput
+  /call/FnFailRetryConstantDelay:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/FnFailRetryConstantDelay'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: FnFailRetryConstantDelayResponse
+                type: string
+      operationId: FnFailRetryConstantDelay
+  /call/FnFailRetryExponentialDelay:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/FnFailRetryExponentialDelay'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: FnFailRetryExponentialDelayResponse
+                type: string
+      operationId: FnFailRetryExponentialDelay
   /call/FnLiteralClassInputOutput:
     post:
       requestBody:
@@ -1031,19 +1070,6 @@ paths:
                 - type: boolean
                 - type: string
       operationId: LiteralUnionsTest
-  /call/LlmReturnNumber:
-    post:
-      requestBody:
-        $ref: '#/components/requestBodies/LlmReturnNumber'
-      responses:
-        '200':
-          description: Successful operation
-          content:
-            application/json:
-              schema:
-                title: LlmReturnNumberResponse
-                type: integer
-      operationId: LlmReturnNumber
   /call/MakeBlockConstraint:
     post:
       requestBody:
@@ -1207,19 +1233,6 @@ paths:
                 title: NullLiteralClassHelloResponse
                 $ref: '#/components/schemas/ClassForNullLiteral'
       operationId: NullLiteralClassHello
-  /call/OpenAIWithAnthropicResponseHello:
-    post:
-      requestBody:
-        $ref: '#/components/requestBodies/OpenAIWithAnthropicResponseHello'
-      responses:
-        '200':
-          description: Successful operation
-          content:
-            application/json:
-              schema:
-                title: OpenAIWithAnthropicResponseHelloResponse
-                type: string
-      operationId: OpenAIWithAnthropicResponseHello
   /call/OptionalTest_Function:
     post:
       requestBody:
@@ -1235,58 +1248,6 @@ paths:
                 items:
                   $ref: '#/components/schemas/OptionalTest_ReturnType'
       operationId: OptionalTest_Function
-  /call/PdfInput:
-    post:
-      requestBody:
-        $ref: '#/components/requestBodies/PdfInput'
-      responses:
-        '200':
-          description: Successful operation
-          content:
-            application/json:
-              schema:
-                title: PdfInputResponse
-                type: string
-      operationId: PdfInput
-  /call/PdfInputAnthropic:
-    post:
-      requestBody:
-        $ref: '#/components/requestBodies/PdfInputAnthropic'
-      responses:
-        '200':
-          description: Successful operation
-          content:
-            application/json:
-              schema:
-                title: PdfInputAnthropicResponse
-                type: string
-      operationId: PdfInputAnthropic
-  /call/PdfInputOpenai:
-    post:
-      requestBody:
-        $ref: '#/components/requestBodies/PdfInputOpenai'
-      responses:
-        '200':
-          description: Successful operation
-          content:
-            application/json:
-              schema:
-                title: PdfInputOpenaiResponse
-                type: string
-      operationId: PdfInputOpenai
-  /call/PdfInputVertex:
-    post:
-      requestBody:
-        $ref: '#/components/requestBodies/PdfInputVertex'
-      responses:
-        '200':
-          description: Successful operation
-          content:
-            application/json:
-              schema:
-                title: PdfInputVertexResponse
-                type: string
-      operationId: PdfInputVertex
   /call/PredictAge:
     post:
       requestBody:
@@ -1707,6 +1668,19 @@ paths:
                 title: TellStoryResponse
                 type: string
       operationId: TellStory
+  /call/TestAbortFallbackChain:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestAbortFallbackChain'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestAbortFallbackChainResponse
+                type: string
+      operationId: TestAbortFallbackChain
   /call/TestAnthropic:
     post:
       requestBody:
@@ -2462,188 +2436,6 @@ paths:
                 title: TestOpenAIO1WithMaxTokensResponse
                 type: string
       operationId: TestOpenAIO1WithMaxTokens
-  /call/TestOpenAIProviderWithResponsesType:
-    post:
-      requestBody:
-        $ref: '#/components/requestBodies/TestOpenAIProviderWithResponsesType'
-      responses:
-        '200':
-          description: Successful operation
-          content:
-            application/json:
-              schema:
-                title: TestOpenAIProviderWithResponsesTypeResponse
-                type: string
-      operationId: TestOpenAIProviderWithResponsesType
-  /call/TestOpenAIResponses:
-    post:
-      requestBody:
-        $ref: '#/components/requestBodies/TestOpenAIResponses'
-      responses:
-        '200':
-          description: Successful operation
-          content:
-            application/json:
-              schema:
-                title: TestOpenAIResponsesResponse
-                type: string
-      operationId: TestOpenAIResponses
-  /call/TestOpenAIResponsesAutoType:
-    post:
-      requestBody:
-        $ref: '#/components/requestBodies/TestOpenAIResponsesAutoType'
-      responses:
-        '200':
-          description: Successful operation
-          content:
-            application/json:
-              schema:
-                title: TestOpenAIResponsesAutoTypeResponse
-                type: string
-      operationId: TestOpenAIResponsesAutoType
-  /call/TestOpenAIResponsesConversation:
-    post:
-      requestBody:
-        $ref: '#/components/requestBodies/TestOpenAIResponsesConversation'
-      responses:
-        '200':
-          description: Successful operation
-          content:
-            application/json:
-              schema:
-                title: TestOpenAIResponsesConversationResponse
-                type: string
-      operationId: TestOpenAIResponsesConversation
-  /call/TestOpenAIResponsesCustomURL:
-    post:
-      requestBody:
-        $ref: '#/components/requestBodies/TestOpenAIResponsesCustomURL'
-      responses:
-        '200':
-          description: Successful operation
-          content:
-            application/json:
-              schema:
-                title: TestOpenAIResponsesCustomURLResponse
-                type: string
-      operationId: TestOpenAIResponsesCustomURL
-  /call/TestOpenAIResponsesDifferentModel:
-    post:
-      requestBody:
-        $ref: '#/components/requestBodies/TestOpenAIResponsesDifferentModel'
-      responses:
-        '200':
-          description: Successful operation
-          content:
-            application/json:
-              schema:
-                title: TestOpenAIResponsesDifferentModelResponse
-                type: string
-      operationId: TestOpenAIResponsesDifferentModel
-  /call/TestOpenAIResponsesEndpoint:
-    post:
-      requestBody:
-        $ref: '#/components/requestBodies/TestOpenAIResponsesEndpoint'
-      responses:
-        '200':
-          description: Successful operation
-          content:
-            application/json:
-              schema:
-                title: TestOpenAIResponsesEndpointResponse
-                type: string
-      operationId: TestOpenAIResponsesEndpoint
-  /call/TestOpenAIResponsesExplicit:
-    post:
-      requestBody:
-        $ref: '#/components/requestBodies/TestOpenAIResponsesExplicit'
-      responses:
-        '200':
-          description: Successful operation
-          content:
-            application/json:
-              schema:
-                title: TestOpenAIResponsesExplicitResponse
-                type: string
-      operationId: TestOpenAIResponsesExplicit
-  /call/TestOpenAIResponsesFunctionCall:
-    post:
-      requestBody:
-        $ref: '#/components/requestBodies/TestOpenAIResponsesFunctionCall'
-      responses:
-        '200':
-          description: Successful operation
-          content:
-            application/json:
-              schema:
-                title: TestOpenAIResponsesFunctionCallResponse
-                type: string
-      operationId: TestOpenAIResponsesFunctionCall
-  /call/TestOpenAIResponsesImageInput:
-    post:
-      requestBody:
-        $ref: '#/components/requestBodies/TestOpenAIResponsesImageInput'
-      responses:
-        '200':
-          description: Successful operation
-          content:
-            application/json:
-              schema:
-                title: TestOpenAIResponsesImageInputResponse
-                type: string
-      operationId: TestOpenAIResponsesImageInput
-  /call/TestOpenAIResponsesReasoning:
-    post:
-      requestBody:
-        $ref: '#/components/requestBodies/TestOpenAIResponsesReasoning'
-      responses:
-        '200':
-          description: Successful operation
-          content:
-            application/json:
-              schema:
-                title: TestOpenAIResponsesReasoningResponse
-                type: string
-      operationId: TestOpenAIResponsesReasoning
-  /call/TestOpenAIResponsesShorthand:
-    post:
-      requestBody:
-        $ref: '#/components/requestBodies/TestOpenAIResponsesShorthand'
-      responses:
-        '200':
-          description: Successful operation
-          content:
-            application/json:
-              schema:
-                title: TestOpenAIResponsesShorthandResponse
-                type: string
-      operationId: TestOpenAIResponsesShorthand
-  /call/TestOpenAIResponsesWebSearch:
-    post:
-      requestBody:
-        $ref: '#/components/requestBodies/TestOpenAIResponsesWebSearch'
-      responses:
-        '200':
-          description: Successful operation
-          content:
-            application/json:
-              schema:
-                title: TestOpenAIResponsesWebSearchResponse
-                type: string
-      operationId: TestOpenAIResponsesWebSearch
-  /call/TestOpenAIResponsesWithOpenAIResponseType:
-    post:
-      requestBody:
-        $ref: '#/components/requestBodies/TestOpenAIResponsesWithOpenAIResponseType'
-      responses:
-        '200':
-          description: Successful operation
-          content:
-            application/json:
-              schema:
-                title: TestOpenAIResponsesWithOpenAIResponseTypeResponse
-                type: string
-      operationId: TestOpenAIResponsesWithOpenAIResponseType
   /call/TestOpenAIShorthand:
     post:
       requestBody:
@@ -2891,58 +2683,6 @@ paths:
                 title: UseNestedBlockConstraintResponse
                 type: integer
       operationId: UseNestedBlockConstraint
-  /call/ValidateBasicResponses:
-    post:
-      requestBody:
-        $ref: '#/components/requestBodies/ValidateBasicResponses'
-      responses:
-        '200':
-          description: Successful operation
-          content:
-            application/json:
-              schema:
-                title: ValidateBasicResponsesResponse
-                type: string
-      operationId: ValidateBasicResponses
-  /call/ValidateResponseTypes:
-    post:
-      requestBody:
-        $ref: '#/components/requestBodies/ValidateResponseTypes'
-      responses:
-        '200':
-          description: Successful operation
-          content:
-            application/json:
-              schema:
-                title: ValidateResponseTypesResponse
-                type: string
-      operationId: ValidateResponseTypes
-  /call/VideoInputGemini:
-    post:
-      requestBody:
-        $ref: '#/components/requestBodies/VideoInputGemini'
-      responses:
-        '200':
-          description: Successful operation
-          content:
-            application/json:
-              schema:
-                title: VideoInputGeminiResponse
-                type: string
-      operationId: VideoInputGemini
-  /call/VideoInputVertex:
-    post:
-      requestBody:
-        $ref: '#/components/requestBodies/VideoInputVertex'
-      responses:
-        '200':
-          description: Successful operation
-          content:
-            application/json:
-              schema:
-                title: VideoInputVertexResponse
-                type: string
-      operationId: VideoInputVertex
 components:
   requestBodies:
     AaaSamOutputFormat:
@@ -3567,6 +3307,22 @@ components:
             required:
             - text
             additionalProperties: false
+    ExtractName:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: ExtractNameRequest
+            type: object
+            properties:
+              text:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - text
+            additionalProperties: false
     ExtractNames:
       required: true
       content:
@@ -3717,6 +3473,44 @@ components:
                 $ref: '#/components/schemas/BamlOptions'
             required:
             - input
+            additionalProperties: false
+    FnFailRetryConstantDelay:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: FnFailRetryConstantDelayRequest
+            type: object
+            properties:
+              delay_ms:
+                type: integer
+              retries:
+                type: integer
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - delay_ms
+            - retries
+            additionalProperties: false
+    FnFailRetryExponentialDelay:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: FnFailRetryExponentialDelayRequest
+            type: object
+            properties:
+              initial_delay_ms:
+                type: integer
+              retries:
+                type: integer
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - initial_delay_ms
+            - retries
             additionalProperties: false
     FnLiteralClassInputOutput:
       required: true
@@ -4144,22 +3938,6 @@ components:
             required:
             - input
             additionalProperties: false
-    LlmReturnNumber:
-      required: true
-      content:
-        application/json:
-          schema:
-            title: LlmReturnNumberRequest
-            type: object
-            properties:
-              n:
-                type: integer
-              __baml_options__:
-                nullable: true
-                $ref: '#/components/schemas/BamlOptions'
-            required:
-            - n
-            additionalProperties: false
     MakeBlockConstraint:
       required: true
       content:
@@ -4323,22 +4101,6 @@ components:
             required:
             - s
             additionalProperties: false
-    OpenAIWithAnthropicResponseHello:
-      required: true
-      content:
-        application/json:
-          schema:
-            title: OpenAIWithAnthropicResponseHelloRequest
-            type: object
-            properties:
-              s:
-                type: string
-              __baml_options__:
-                nullable: true
-                $ref: '#/components/schemas/BamlOptions'
-            required:
-            - s
-            additionalProperties: false
     OptionalTest_Function:
       required: true
       content:
@@ -4354,73 +4116,6 @@ components:
                 $ref: '#/components/schemas/BamlOptions'
             required:
             - input
-            additionalProperties: false
-    PdfInput:
-      required: true
-      content:
-        application/json:
-          schema:
-            title: PdfInputRequest
-            type: object
-            properties:
-              pdf:
-                $ref: '#/components/schemas/BamlPdf'
-              __baml_options__:
-                nullable: true
-                $ref: '#/components/schemas/BamlOptions'
-            required:
-            - pdf
-            additionalProperties: false
-    PdfInputAnthropic:
-      required: true
-      content:
-        application/json:
-          schema:
-            title: PdfInputAnthropicRequest
-            type: object
-            properties:
-              pdf:
-                $ref: '#/components/schemas/BamlPdf'
-              __baml_options__:
-                nullable: true
-                $ref: '#/components/schemas/BamlOptions'
-            required:
-            - pdf
-            additionalProperties: false
-    PdfInputOpenai:
-      required: true
-      content:
-        application/json:
-          schema:
-            title: PdfInputOpenaiRequest
-            type: object
-            properties:
-              pdf:
-                $ref: '#/components/schemas/BamlPdf'
-              prompt:
-                type: string
-              __baml_options__:
-                nullable: true
-                $ref: '#/components/schemas/BamlOptions'
-            required:
-            - pdf
-            - prompt
-            additionalProperties: false
-    PdfInputVertex:
-      required: true
-      content:
-        application/json:
-          schema:
-            title: PdfInputVertexRequest
-            type: object
-            properties:
-              pdf:
-                $ref: '#/components/schemas/BamlPdf'
-              __baml_options__:
-                nullable: true
-                $ref: '#/components/schemas/BamlOptions'
-            required:
-            - pdf
             additionalProperties: false
     PredictAge:
       required: true
@@ -4902,6 +4597,22 @@ components:
                 $ref: '#/components/schemas/BamlOptions'
             required:
             - story
+            additionalProperties: false
+    TestAbortFallbackChain:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestAbortFallbackChainRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
             additionalProperties: false
     TestAnthropic:
       required: true
@@ -5838,232 +5549,6 @@ components:
             required:
             - input
             additionalProperties: false
-    TestOpenAIProviderWithResponsesType:
-      required: true
-      content:
-        application/json:
-          schema:
-            title: TestOpenAIProviderWithResponsesTypeRequest
-            type: object
-            properties:
-              input:
-                type: string
-              __baml_options__:
-                nullable: true
-                $ref: '#/components/schemas/BamlOptions'
-            required:
-            - input
-            additionalProperties: false
-    TestOpenAIResponses:
-      required: true
-      content:
-        application/json:
-          schema:
-            title: TestOpenAIResponsesRequest
-            type: object
-            properties:
-              input:
-                type: string
-              __baml_options__:
-                nullable: true
-                $ref: '#/components/schemas/BamlOptions'
-            required:
-            - input
-            additionalProperties: false
-    TestOpenAIResponsesAutoType:
-      required: true
-      content:
-        application/json:
-          schema:
-            title: TestOpenAIResponsesAutoTypeRequest
-            type: object
-            properties:
-              input:
-                type: string
-              __baml_options__:
-                nullable: true
-                $ref: '#/components/schemas/BamlOptions'
-            required:
-            - input
-            additionalProperties: false
-    TestOpenAIResponsesConversation:
-      required: true
-      content:
-        application/json:
-          schema:
-            title: TestOpenAIResponsesConversationRequest
-            type: object
-            properties:
-              topic:
-                type: string
-              __baml_options__:
-                nullable: true
-                $ref: '#/components/schemas/BamlOptions'
-            required:
-            - topic
-            additionalProperties: false
-    TestOpenAIResponsesCustomURL:
-      required: true
-      content:
-        application/json:
-          schema:
-            title: TestOpenAIResponsesCustomURLRequest
-            type: object
-            properties:
-              input:
-                type: string
-              __baml_options__:
-                nullable: true
-                $ref: '#/components/schemas/BamlOptions'
-            required:
-            - input
-            additionalProperties: false
-    TestOpenAIResponsesDifferentModel:
-      required: true
-      content:
-        application/json:
-          schema:
-            title: TestOpenAIResponsesDifferentModelRequest
-            type: object
-            properties:
-              input:
-                type: string
-              __baml_options__:
-                nullable: true
-                $ref: '#/components/schemas/BamlOptions'
-            required:
-            - input
-            additionalProperties: false
-    TestOpenAIResponsesEndpoint:
-      required: true
-      content:
-        application/json:
-          schema:
-            title: TestOpenAIResponsesEndpointRequest
-            type: object
-            properties:
-              input:
-                type: string
-              __baml_options__:
-                nullable: true
-                $ref: '#/components/schemas/BamlOptions'
-            required:
-            - input
-            additionalProperties: false
-    TestOpenAIResponsesExplicit:
-      required: true
-      content:
-        application/json:
-          schema:
-            title: TestOpenAIResponsesExplicitRequest
-            type: object
-            properties:
-              input:
-                type: string
-              __baml_options__:
-                nullable: true
-                $ref: '#/components/schemas/BamlOptions'
-            required:
-            - input
-            additionalProperties: false
-    TestOpenAIResponsesFunctionCall:
-      required: true
-      content:
-        application/json:
-          schema:
-            title: TestOpenAIResponsesFunctionCallRequest
-            type: object
-            properties:
-              query:
-                type: string
-              __baml_options__:
-                nullable: true
-                $ref: '#/components/schemas/BamlOptions'
-            required:
-            - query
-            additionalProperties: false
-    TestOpenAIResponsesImageInput:
-      required: true
-      content:
-        application/json:
-          schema:
-            title: TestOpenAIResponsesImageInputRequest
-            type: object
-            properties:
-              image:
-                oneOf:
-                - $ref: '#/components/schemas/BamlImage'
-                - type: string
-              __baml_options__:
-                nullable: true
-                $ref: '#/components/schemas/BamlOptions'
-            required:
-            - image
-            additionalProperties: false
-    TestOpenAIResponsesReasoning:
-      required: true
-      content:
-        application/json:
-          schema:
-            title: TestOpenAIResponsesReasoningRequest
-            type: object
-            properties:
-              problem:
-                type: string
-              __baml_options__:
-                nullable: true
-                $ref: '#/components/schemas/BamlOptions'
-            required:
-            - problem
-            additionalProperties: false
-    TestOpenAIResponsesShorthand:
-      required: true
-      content:
-        application/json:
-          schema:
-            title: TestOpenAIResponsesShorthandRequest
-            type: object
-            properties:
-              input:
-                type: string
-              __baml_options__:
-                nullable: true
-                $ref: '#/components/schemas/BamlOptions'
-            required:
-            - input
-            additionalProperties: false
-    TestOpenAIResponsesWebSearch:
-      required: true
-      content:
-        application/json:
-          schema:
-            title: TestOpenAIResponsesWebSearchRequest
-            type: object
-            properties:
-              query:
-                type: string
-              __baml_options__:
-                nullable: true
-                $ref: '#/components/schemas/BamlOptions'
-            required:
-            - query
-            additionalProperties: false
-    TestOpenAIResponsesWithOpenAIResponseType:
-      required: true
-      content:
-        application/json:
-          schema:
-            title: TestOpenAIResponsesWithOpenAIResponseTypeRequest
-            type: object
-            properties:
-              input:
-                type: string
-              __baml_options__:
-                nullable: true
-                $ref: '#/components/schemas/BamlOptions'
-            required:
-            - input
-            additionalProperties: false
     TestOpenAIShorthand:
       required: true
       content:
@@ -6357,70 +5842,6 @@ components:
                 $ref: '#/components/schemas/BamlOptions'
             required:
             - inp
-            additionalProperties: false
-    ValidateBasicResponses:
-      required: true
-      content:
-        application/json:
-          schema:
-            title: ValidateBasicResponsesRequest
-            type: object
-            properties:
-              input:
-                type: string
-              __baml_options__:
-                nullable: true
-                $ref: '#/components/schemas/BamlOptions'
-            required:
-            - input
-            additionalProperties: false
-    ValidateResponseTypes:
-      required: true
-      content:
-        application/json:
-          schema:
-            title: ValidateResponseTypesRequest
-            type: object
-            properties:
-              input:
-                type: string
-              __baml_options__:
-                nullable: true
-                $ref: '#/components/schemas/BamlOptions'
-            required:
-            - input
-            additionalProperties: false
-    VideoInputGemini:
-      required: true
-      content:
-        application/json:
-          schema:
-            title: VideoInputGeminiRequest
-            type: object
-            properties:
-              vid:
-                $ref: '#/components/schemas/BamlVideo'
-              __baml_options__:
-                nullable: true
-                $ref: '#/components/schemas/BamlOptions'
-            required:
-            - vid
-            additionalProperties: false
-    VideoInputVertex:
-      required: true
-      content:
-        application/json:
-          schema:
-            title: VideoInputVertexRequest
-            type: object
-            properties:
-              vid:
-                $ref: '#/components/schemas/BamlVideo'
-              __baml_options__:
-                nullable: true
-                $ref: '#/components/schemas/BamlOptions'
-            required:
-            - vid
             additionalProperties: false
   schemas:
     BamlImage:

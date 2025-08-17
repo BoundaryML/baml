@@ -6,7 +6,8 @@ export declare class BamlStream<PartialOutputType, FinalOutputType> {
     private ctxManager;
     private task;
     private eventQueue;
-    constructor(ffiStream: FunctionResultStream, partialCoerce: (result: any) => PartialOutputType, finalCoerce: (result: any) => FinalOutputType, ctxManager: RuntimeContextManager);
+    private abortController?;
+    constructor(ffiStream: FunctionResultStream, partialCoerce: (result: any) => PartialOutputType, finalCoerce: (result: any) => FinalOutputType, ctxManager: RuntimeContextManager, abortController?: AbortController);
     private driveToCompletion;
     private driveToCompletionInBg;
     [Symbol.asyncIterator](): AsyncIterableIterator<PartialOutputType>;

@@ -15,6 +15,7 @@ use internal_baml_core::{
 };
 use internal_baml_jinja::RenderedPrompt;
 use internal_llm_client::{AllowedRoleMetadata, ClientSpec};
+use stream_cancel::Tripwire;
 
 use super::prepare_function::PreparedFunction;
 use crate::{
@@ -48,6 +49,15 @@ impl InternalBamlRuntime {
         prepared_func_call: PreparedFunction<'ir>,
         ctx: RuntimeContext,
     ) -> Result<crate::FunctionResult> {
+        self.call_function_impl_with_tripwire(prepared_func_call, ctx, None).await
+    }
+    
+    pub(crate) async fn call_function_impl_with_tripwire<'ir>(
+        &'ir self,
+        prepared_func_call: PreparedFunction<'ir>,
+        ctx: RuntimeContext,
+        cancel_tripwire: Option<Tripwire>,
+    ) -> Result<crate::FunctionResult> {
         let future = async {
             let renderer =
                 PromptRenderer::from_function(&prepared_func_call.func, self.ir(), &ctx)?;
@@ -59,7 +69,7 @@ impl InternalBamlRuntime {
             let (history, _) =
                 orchestrate_call(orchestrator, self.ir(), &ctx, &renderer, &baml_args, |s| {
                     renderer.parse(self.ir(), &ctx, s, false)
-                }, None)
+                }, cancel_tripwire)
                 .await;
 
             FunctionResult::new_chain(history)

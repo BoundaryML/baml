@@ -1,5 +1,5 @@
 import type { BamlRuntime, FunctionResult, BamlCtxManager, ClientRegistry, Image, Audio, Pdf, Video, Collector } from "@boundaryml/baml"
-import { toBamlError, BamlStream, type HTTPRequest } from "@boundaryml/baml"
+import { toBamlError, BamlStream, BamlAbortError, type HTTPRequest } from "@boundaryml/baml"
 import type { Checked, Check, RecursivePartialNull as MovedRecursivePartialNull } from "./types"
 import type { partial_types } from "./partial_types"
 import type * as types from "./types"
@@ -21,6 +21,7 @@ type BamlCallOptions = {
   clientRegistry?: ClientRegistry
   collector?: Collector | Collector[]
   env?: Record<string, string | undefined>
+  abortController?: AbortController
 }
 
 export class BamlAsyncClient {
@@ -77,6 +78,12 @@ export class BamlAsyncClient {
   ): Promise<{{func.return_type.serialize_type(pkg)}}> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+      const signal = options.abortController?.signal;
+      
+      if (signal?.aborted) {
+        throw new BamlAbortError('Operation was aborted', signal.reason);
+      }
+      
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -94,6 +101,7 @@ export class BamlAsyncClient {
         options.clientRegistry,
         collector,
         env,
+        signal,
       )
       return raw.parsed(false) as {{func.return_type.serialize_type(pkg)}}
     } catch (error) {
@@ -119,10 +127,16 @@ class BamlStreamClient {
       {% for (name, arg_type) in func.args -%}
       {{name}}{% if arg_type.meta().is_optional() %}?{% endif %}: {{arg_type.serialize_type(pkg)}},
       {%- endfor %}
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined>, abortController?: AbortController }
   ): BamlStream<{{ func.stream_return_type.serialize_type(pkg) }}, {{ func.return_type.serialize_type(pkg) }}> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+      const signal = options.abortController?.signal;
+      
+      if (signal?.aborted) {
+        throw new BamlAbortError('Operation was aborted', signal.reason);
+      }
+      
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -141,12 +155,14 @@ class BamlStreamClient {
         options.clientRegistry,
         collector,
         env,
+        signal,
       )
       return new BamlStream<{{ func.stream_return_type.serialize_type(pkg) }}, {{ func.return_type.serialize_type(pkg) }}>(
         raw,
         (a): {{ func.stream_return_type.serialize_type(pkg) }} => a,
         (a): {{ func.return_type.serialize_type(pkg) }} => a,
         this.ctxManager.cloneContext(),
+        options.abortController,
       )
     } catch (error) {
       throw toBamlError(error);

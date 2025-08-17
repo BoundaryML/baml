@@ -673,6 +673,126 @@ impl BamlRuntime {
         .await;
         res
     }
+    
+    pub async fn call_function_with_tripwire(
+        &self,
+        function_name: String,
+        params: &BamlMap<String, BamlValue>,
+        ctx: &RuntimeContextManager,
+        tb: Option<&TypeBuilder>,
+        cb: Option<&ClientRegistry>,
+        collectors: Option<Vec<Arc<Collector>>>,
+        env_vars: HashMap<String, String>,
+        cancel_tripwire: Option<stream_cancel::Tripwire>,
+    ) -> (Result<FunctionResult>, FunctionCallId) {
+        let res = Box::pin(self.call_function_with_expr_events_tripwire(
+            function_name,
+            params,
+            ctx,
+            tb,
+            cb,
+            collectors,
+            env_vars,
+            None,
+            cancel_tripwire,
+        ))
+        .await;
+        res
+    }
+
+    pub async fn call_function_with_expr_events_tripwire(
+        &self,
+        function_name: String,
+        params: &BamlMap<String, BamlValue>,
+        ctx: &RuntimeContextManager,
+        tb: Option<&TypeBuilder>,
+        cb: Option<&ClientRegistry>,
+        collectors: Option<Vec<Arc<Collector>>>,
+        env_vars: HashMap<String, String>,
+        expr_tx: Option<mpsc::UnboundedSender<Vec<internal_baml_diagnostics::SerializedSpan>>>,
+        cancel_tripwire: Option<stream_cancel::Tripwire>,
+    ) -> (Result<FunctionResult>, FunctionCallId) {
+        // baml_log::info!("env vars: {:#?}", env_vars.clone());
+        baml_log::set_from_env(&env_vars).unwrap();
+
+        log::trace!("Calling function: {function_name}");
+        log::debug!("collectors: {:#?}", &collectors);
+
+        let call = self
+            .tracer_wrapper
+            .get_or_create_tracer(&env_vars)
+            .start_call(&function_name, ctx, params, true, false, collectors.clone());
+        let curr_call_id = call.curr_call_id();
+
+        let fake_syntax_span = Span::fake();
+        let response =
+            match ctx.create_ctx(tb, cb, env_vars.clone(), call.new_call_id_stack.clone()) {
+                Ok(rctx) => {
+                    let is_expr_fn = self
+                        .inner
+                        .ir()
+                        .expr_fns
+                        .iter()
+                        .any(|f| f.elem.name == function_name);
+                    let call_id_stack = rctx.call_id_stack.clone();
+                    if !is_expr_fn {
+                        // TODO: is this the right naming?
+                        let prepared_func =
+                            match self.inner.prepare_function(function_name.clone(), params) {
+                                Ok(prepared_func) => prepared_func,
+                                Err(e) => {
+                                    let err_anyhow = e.into_error();
+                                    let trace_event = TraceEvent::new_function_end(
+                                        call_id_stack.clone(),
+                                        Err((&err_anyhow).to_baml_error()),
+                                    );
+                                    BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
+                                    return (Err(err_anyhow), curr_call_id);
+                                }
+                            };
+
+                        // Call (CANNOT RETURN HERE until trace event is finished)
+                        let result = self.inner.call_function_impl_with_tripwire(prepared_func, rctx, cancel_tripwire).await;
+                        // eprintln!("result: {:?}", result);
+                        // Trace event
+                        let trace_event = TraceEvent::new_function_end(
+                            call_id_stack.clone(),
+                            match &result {
+                                Ok(result) => match result.result_with_constraints_content() {
+                                    Ok(value) => Ok(value
+                                        .0
+                                        .map_meta(|f| f.3.to_non_streaming_type(self.inner.ir()))),
+                                    Err(e) => Err((&e).to_baml_error()),
+                                },
+                                Err(e) => Err(e.to_baml_error()),
+                            },
+                        );
+                        BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
+
+                        result
+                    } else {
+                        // Expr functions don't support cancellation yet, so just call the regular version
+                        return self.call_function_with_expr_events(
+                            function_name,
+                            params,
+                            ctx,
+                            tb,
+                            cb,
+                            collectors,
+                            env_vars,
+                            expr_tx,
+                        )
+                        .await;
+                    }
+                }
+                Err(e) => Err(e),
+            };
+
+        let span = self.tracer_wrapper
+            .get_or_create_tracer(&env_vars)
+            .finish_call(call, ctx, None);
+        (response, curr_call_id)
+    }
 
     /// TODO: this is a placeholder since expr fns are not LLM calls. So this is a dummy.
     pub fn dummy_llm_placeholder_for_expr_fn() -> LLMResponse {

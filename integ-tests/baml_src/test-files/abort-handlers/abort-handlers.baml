@@ -1,35 +1,39 @@
 // Test functions for abort handler functionality
 // These functions are designed to fail and retry to test cancellation
 
+retry_policy AbortTestConstantRetry {
+  max_retries 5
+  strategy {
+    type constant_delay
+    delay_ms 100
+  }
+}
+
+retry_policy AbortTestExponentialRetry {
+  max_retries 5
+  strategy {
+    type exponential_backoff
+    initial_delay_ms 100
+    multiplier 2
+    max_delay_ms 1000
+  }
+}
+
 client AbortTestRetryConstant {
   provider openai
+  retry_policy AbortTestConstantRetry
   options {
     model "gpt-4o-mini"
     api_key env.OPENAI_API_KEY
-  }
-  retry_policy {
-    max_retries 5
-    strategy {
-      type constant_delay
-      delay_ms 100
-    }
   }
 }
 
 client AbortTestRetryExponential {
   provider openai
+  retry_policy AbortTestExponentialRetry
   options {
     model "gpt-4o-mini"
     api_key env.OPENAI_API_KEY
-  }
-  retry_policy {
-    max_retries 5
-    strategy {
-      type exponential_backoff
-      initial_delay_ms 100
-      multiplier 2
-      max_delay_ms 1000
-    }
   }
 }
 

@@ -14,6 +14,7 @@ use napi_derive::napi;
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    abort_controller::{js_abort_signal_to_rust_tripwire, cleanup_operation},
     errors::{from_anyhow_error, invalid_argument_error},
     parse_ts_types,
     types::{
@@ -109,6 +110,7 @@ impl BamlRuntime {
         cb: Option<&ClientRegistry>,
         collectors: Vec<&Collector>,
         env_vars: HashMap<String, String>,
+        signal: Option<JsObject>, // NEW: AbortSignal parameter
     ) -> napi::Result<JsObject> {
         let args = parse_ts_types::js_object_to_baml_value(env, args)?;
 
@@ -119,6 +121,9 @@ impl BamlRuntime {
             )));
         }
         let args_map = args.as_map_owned().unwrap();
+        
+        // Convert AbortSignal to Tripwire
+        let (operation_id, tripwire) = js_abort_signal_to_rust_tripwire(env, signal)?;
 
         let baml_runtime = self.inner.clone();
         let ctx_mng = ctx.inner.clone();
@@ -131,17 +136,35 @@ impl BamlRuntime {
             .collect::<Vec<_>>();
 
         let fut = async move {
-            let result = baml_runtime
-                .call_function(
-                    function_name,
-                    &args_map,
-                    &ctx_mng,
-                    tb.as_ref(),
-                    cb.as_ref(),
-                    Some(collector_list),
-                    env_vars,
-                )
-                .await;
+            let result = if let Some(tripwire) = tripwire {
+                baml_runtime
+                    .call_function_with_tripwire(
+                        function_name,
+                        &args_map,
+                        &ctx_mng,
+                        tb.as_ref(),
+                        cb.as_ref(),
+                        Some(collector_list),
+                        env_vars,
+                        Some(tripwire),
+                    )
+                    .await
+            } else {
+                baml_runtime
+                    .call_function(
+                        function_name,
+                        &args_map,
+                        &ctx_mng,
+                        tb.as_ref(),
+                        cb.as_ref(),
+                        Some(collector_list),
+                        env_vars,
+                    )
+                    .await
+            };
+            
+            // Clean up the operation trigger
+            cleanup_operation(operation_id);
 
             result
                 .0
@@ -163,6 +186,7 @@ impl BamlRuntime {
         cb: Option<&ClientRegistry>,
         collectors: Vec<&Collector>,
         env_vars: HashMap<String, String>,
+        signal: Option<JsObject>, // NEW: AbortSignal parameter (sync doesn't actually use it)
     ) -> napi::Result<FunctionResult> {
         let args = parse_ts_types::js_object_to_baml_value(env, args)?;
 
@@ -208,6 +232,7 @@ impl BamlRuntime {
         client_registry: Option<&ClientRegistry>,
         collectors: Vec<&Collector>,
         env_vars: HashMap<String, String>,
+        signal: Option<JsObject>, // NEW: AbortSignal parameter
     ) -> napi::Result<FunctionResultStream> {
         let args: BamlValue = parse_ts_types::js_object_to_baml_value(env, args)?;
         if !args.is_map() {
@@ -260,6 +285,7 @@ impl BamlRuntime {
         client_registry: Option<&ClientRegistry>,
         collectors: Vec<&Collector>,
         env_vars: HashMap<String, String>,
+        signal: Option<JsObject>, // NEW: AbortSignal parameter  
     ) -> napi::Result<FunctionResultStream> {
         let args: BamlValue = parse_ts_types::js_object_to_baml_value(env, args)?;
         if !args.is_map() {

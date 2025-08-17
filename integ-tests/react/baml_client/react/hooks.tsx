@@ -2210,6 +2210,56 @@ export function useExtractHobby(
   }
 }
 /**
+ * A specialized hook for the ExtractName BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - text: string
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** string
+ * - **Streaming Partial:** string
+ * - **Streaming Final:** string
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useExtractName({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useExtractName({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useExtractName(props: HookInput<'ExtractName', { stream: false }>): HookOutput<'ExtractName', { stream: false }>
+export function useExtractName(props?: HookInput<'ExtractName', { stream?: true }>): HookOutput<'ExtractName', { stream: true }>
+export function useExtractName(
+  props: HookInput<'ExtractName', { stream?: boolean }> = {},
+): HookOutput<'ExtractName', { stream: true }> | HookOutput<'ExtractName', { stream: false }> {
+  let action: ServerAction = Actions.ExtractName;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.ExtractName;
+    return useBamlAction(action, props)
+  } else {
+    return useBamlAction(action, props as HookInput<'ExtractName', { stream: false }>)
+  }
+}
+/**
  * A specialized hook for the ExtractNames BAML function that supports both streaming and non‑streaming responses.
  *
  * **Input Types:**
@@ -2661,6 +2711,110 @@ export function useFnEnumOutput(
     return useBamlAction(action, props)
   } else {
     return useBamlAction(action, props as HookInput<'FnEnumOutput', { stream: false }>)
+  }
+}
+/**
+ * A specialized hook for the FnFailRetryConstantDelay BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - retries: number
+ *
+ * - delay_ms: number
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** string
+ * - **Streaming Partial:** string
+ * - **Streaming Final:** string
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useFnFailRetryConstantDelay({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useFnFailRetryConstantDelay({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useFnFailRetryConstantDelay(props: HookInput<'FnFailRetryConstantDelay', { stream: false }>): HookOutput<'FnFailRetryConstantDelay', { stream: false }>
+export function useFnFailRetryConstantDelay(props?: HookInput<'FnFailRetryConstantDelay', { stream?: true }>): HookOutput<'FnFailRetryConstantDelay', { stream: true }>
+export function useFnFailRetryConstantDelay(
+  props: HookInput<'FnFailRetryConstantDelay', { stream?: boolean }> = {},
+): HookOutput<'FnFailRetryConstantDelay', { stream: true }> | HookOutput<'FnFailRetryConstantDelay', { stream: false }> {
+  let action: ServerAction = Actions.FnFailRetryConstantDelay;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.FnFailRetryConstantDelay;
+    return useBamlAction(action, props)
+  } else {
+    return useBamlAction(action, props as HookInput<'FnFailRetryConstantDelay', { stream: false }>)
+  }
+}
+/**
+ * A specialized hook for the FnFailRetryExponentialDelay BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - retries: number
+ *
+ * - initial_delay_ms: number
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** string
+ * - **Streaming Partial:** string
+ * - **Streaming Final:** string
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useFnFailRetryExponentialDelay({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useFnFailRetryExponentialDelay({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useFnFailRetryExponentialDelay(props: HookInput<'FnFailRetryExponentialDelay', { stream: false }>): HookOutput<'FnFailRetryExponentialDelay', { stream: false }>
+export function useFnFailRetryExponentialDelay(props?: HookInput<'FnFailRetryExponentialDelay', { stream?: true }>): HookOutput<'FnFailRetryExponentialDelay', { stream: true }>
+export function useFnFailRetryExponentialDelay(
+  props: HookInput<'FnFailRetryExponentialDelay', { stream?: boolean }> = {},
+): HookOutput<'FnFailRetryExponentialDelay', { stream: true }> | HookOutput<'FnFailRetryExponentialDelay', { stream: false }> {
+  let action: ServerAction = Actions.FnFailRetryExponentialDelay;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.FnFailRetryExponentialDelay;
+    return useBamlAction(action, props)
+  } else {
+    return useBamlAction(action, props as HookInput<'FnFailRetryExponentialDelay', { stream: false }>)
   }
 }
 /**
@@ -3918,56 +4072,6 @@ export function useLiteralUnionsTest(
   }
 }
 /**
- * A specialized hook for the LlmReturnNumber BAML function that supports both streaming and non‑streaming responses.
- *
- * **Input Types:**
- *
- * - n: number
- *
- *
- * **Return Type:**
- * - **Non‑streaming:** number
- * - **Streaming Partial:** number
- * - **Streaming Final:** number
- *
- * **Usage Patterns:**
- * 1. **Non‑streaming (Default)**
- *    - Best for quick responses and simple UI updates.
- * 2. **Streaming**
- *    - Ideal for long‑running operations or real‑time feedback.
- *
- * **Edge Cases:**
- * - Ensure robust error handling via `onError`.
- * - Handle cases where partial data may be incomplete or missing.
- *
- * @example
- * ```tsx
- * // Basic non‑streaming usage:
- * const { data, error, isLoading, mutate } = useLlmReturnNumber({ stream: false});
- *
- * // Streaming usage:
- * const { data, streamData, isLoading, error, mutate } = useLlmReturnNumber({
- *   stream: true | undefined,
- *   onStreamData: (partial) => console.log('Partial update:', partial),
- *   onFinalData: (final) => console.log('Final result:', final),
- *   onError: (err) => console.error('Error:', err),
- * });
- * ```
- */
-export function useLlmReturnNumber(props: HookInput<'LlmReturnNumber', { stream: false }>): HookOutput<'LlmReturnNumber', { stream: false }>
-export function useLlmReturnNumber(props?: HookInput<'LlmReturnNumber', { stream?: true }>): HookOutput<'LlmReturnNumber', { stream: true }>
-export function useLlmReturnNumber(
-  props: HookInput<'LlmReturnNumber', { stream?: boolean }> = {},
-): HookOutput<'LlmReturnNumber', { stream: true }> | HookOutput<'LlmReturnNumber', { stream: false }> {
-  let action: ServerAction = Actions.LlmReturnNumber;
-  if (isStreamingProps(props)) {
-    action = StreamingActions.LlmReturnNumber;
-    return useBamlAction(action, props)
-  } else {
-    return useBamlAction(action, props as HookInput<'LlmReturnNumber', { stream: false }>)
-  }
-}
-/**
  * A specialized hook for the MakeBlockConstraint BAML function that supports both streaming and non‑streaming responses.
  *
  * **Input Types:**
@@ -4458,56 +4562,6 @@ export function useNullLiteralClassHello(
   }
 }
 /**
- * A specialized hook for the OpenAIWithAnthropicResponseHello BAML function that supports both streaming and non‑streaming responses.
- *
- * **Input Types:**
- *
- * - s: string
- *
- *
- * **Return Type:**
- * - **Non‑streaming:** string
- * - **Streaming Partial:** string
- * - **Streaming Final:** string
- *
- * **Usage Patterns:**
- * 1. **Non‑streaming (Default)**
- *    - Best for quick responses and simple UI updates.
- * 2. **Streaming**
- *    - Ideal for long‑running operations or real‑time feedback.
- *
- * **Edge Cases:**
- * - Ensure robust error handling via `onError`.
- * - Handle cases where partial data may be incomplete or missing.
- *
- * @example
- * ```tsx
- * // Basic non‑streaming usage:
- * const { data, error, isLoading, mutate } = useOpenAIWithAnthropicResponseHello({ stream: false});
- *
- * // Streaming usage:
- * const { data, streamData, isLoading, error, mutate } = useOpenAIWithAnthropicResponseHello({
- *   stream: true | undefined,
- *   onStreamData: (partial) => console.log('Partial update:', partial),
- *   onFinalData: (final) => console.log('Final result:', final),
- *   onError: (err) => console.error('Error:', err),
- * });
- * ```
- */
-export function useOpenAIWithAnthropicResponseHello(props: HookInput<'OpenAIWithAnthropicResponseHello', { stream: false }>): HookOutput<'OpenAIWithAnthropicResponseHello', { stream: false }>
-export function useOpenAIWithAnthropicResponseHello(props?: HookInput<'OpenAIWithAnthropicResponseHello', { stream?: true }>): HookOutput<'OpenAIWithAnthropicResponseHello', { stream: true }>
-export function useOpenAIWithAnthropicResponseHello(
-  props: HookInput<'OpenAIWithAnthropicResponseHello', { stream?: boolean }> = {},
-): HookOutput<'OpenAIWithAnthropicResponseHello', { stream: true }> | HookOutput<'OpenAIWithAnthropicResponseHello', { stream: false }> {
-  let action: ServerAction = Actions.OpenAIWithAnthropicResponseHello;
-  if (isStreamingProps(props)) {
-    action = StreamingActions.OpenAIWithAnthropicResponseHello;
-    return useBamlAction(action, props)
-  } else {
-    return useBamlAction(action, props as HookInput<'OpenAIWithAnthropicResponseHello', { stream: false }>)
-  }
-}
-/**
  * A specialized hook for the OptionalTest_Function BAML function that supports both streaming and non‑streaming responses.
  *
  * **Input Types:**
@@ -4555,208 +4609,6 @@ export function useOptionalTest_Function(
     return useBamlAction(action, props)
   } else {
     return useBamlAction(action, props as HookInput<'OptionalTest_Function', { stream: false }>)
-  }
-}
-/**
- * A specialized hook for the PdfInput BAML function that supports both streaming and non‑streaming responses.
- *
- * **Input Types:**
- *
- * - pdf: Pdf
- *
- *
- * **Return Type:**
- * - **Non‑streaming:** string
- * - **Streaming Partial:** string
- * - **Streaming Final:** string
- *
- * **Usage Patterns:**
- * 1. **Non‑streaming (Default)**
- *    - Best for quick responses and simple UI updates.
- * 2. **Streaming**
- *    - Ideal for long‑running operations or real‑time feedback.
- *
- * **Edge Cases:**
- * - Ensure robust error handling via `onError`.
- * - Handle cases where partial data may be incomplete or missing.
- *
- * @example
- * ```tsx
- * // Basic non‑streaming usage:
- * const { data, error, isLoading, mutate } = usePdfInput({ stream: false});
- *
- * // Streaming usage:
- * const { data, streamData, isLoading, error, mutate } = usePdfInput({
- *   stream: true | undefined,
- *   onStreamData: (partial) => console.log('Partial update:', partial),
- *   onFinalData: (final) => console.log('Final result:', final),
- *   onError: (err) => console.error('Error:', err),
- * });
- * ```
- */
-export function usePdfInput(props: HookInput<'PdfInput', { stream: false }>): HookOutput<'PdfInput', { stream: false }>
-export function usePdfInput(props?: HookInput<'PdfInput', { stream?: true }>): HookOutput<'PdfInput', { stream: true }>
-export function usePdfInput(
-  props: HookInput<'PdfInput', { stream?: boolean }> = {},
-): HookOutput<'PdfInput', { stream: true }> | HookOutput<'PdfInput', { stream: false }> {
-  let action: ServerAction = Actions.PdfInput;
-  if (isStreamingProps(props)) {
-    action = StreamingActions.PdfInput;
-    return useBamlAction(action, props)
-  } else {
-    return useBamlAction(action, props as HookInput<'PdfInput', { stream: false }>)
-  }
-}
-/**
- * A specialized hook for the PdfInputAnthropic BAML function that supports both streaming and non‑streaming responses.
- *
- * **Input Types:**
- *
- * - pdf: Pdf
- *
- *
- * **Return Type:**
- * - **Non‑streaming:** string
- * - **Streaming Partial:** string
- * - **Streaming Final:** string
- *
- * **Usage Patterns:**
- * 1. **Non‑streaming (Default)**
- *    - Best for quick responses and simple UI updates.
- * 2. **Streaming**
- *    - Ideal for long‑running operations or real‑time feedback.
- *
- * **Edge Cases:**
- * - Ensure robust error handling via `onError`.
- * - Handle cases where partial data may be incomplete or missing.
- *
- * @example
- * ```tsx
- * // Basic non‑streaming usage:
- * const { data, error, isLoading, mutate } = usePdfInputAnthropic({ stream: false});
- *
- * // Streaming usage:
- * const { data, streamData, isLoading, error, mutate } = usePdfInputAnthropic({
- *   stream: true | undefined,
- *   onStreamData: (partial) => console.log('Partial update:', partial),
- *   onFinalData: (final) => console.log('Final result:', final),
- *   onError: (err) => console.error('Error:', err),
- * });
- * ```
- */
-export function usePdfInputAnthropic(props: HookInput<'PdfInputAnthropic', { stream: false }>): HookOutput<'PdfInputAnthropic', { stream: false }>
-export function usePdfInputAnthropic(props?: HookInput<'PdfInputAnthropic', { stream?: true }>): HookOutput<'PdfInputAnthropic', { stream: true }>
-export function usePdfInputAnthropic(
-  props: HookInput<'PdfInputAnthropic', { stream?: boolean }> = {},
-): HookOutput<'PdfInputAnthropic', { stream: true }> | HookOutput<'PdfInputAnthropic', { stream: false }> {
-  let action: ServerAction = Actions.PdfInputAnthropic;
-  if (isStreamingProps(props)) {
-    action = StreamingActions.PdfInputAnthropic;
-    return useBamlAction(action, props)
-  } else {
-    return useBamlAction(action, props as HookInput<'PdfInputAnthropic', { stream: false }>)
-  }
-}
-/**
- * A specialized hook for the PdfInputOpenai BAML function that supports both streaming and non‑streaming responses.
- *
- * **Input Types:**
- *
- * - pdf: Pdf
- *
- * - prompt: string
- *
- *
- * **Return Type:**
- * - **Non‑streaming:** string
- * - **Streaming Partial:** string
- * - **Streaming Final:** string
- *
- * **Usage Patterns:**
- * 1. **Non‑streaming (Default)**
- *    - Best for quick responses and simple UI updates.
- * 2. **Streaming**
- *    - Ideal for long‑running operations or real‑time feedback.
- *
- * **Edge Cases:**
- * - Ensure robust error handling via `onError`.
- * - Handle cases where partial data may be incomplete or missing.
- *
- * @example
- * ```tsx
- * // Basic non‑streaming usage:
- * const { data, error, isLoading, mutate } = usePdfInputOpenai({ stream: false});
- *
- * // Streaming usage:
- * const { data, streamData, isLoading, error, mutate } = usePdfInputOpenai({
- *   stream: true | undefined,
- *   onStreamData: (partial) => console.log('Partial update:', partial),
- *   onFinalData: (final) => console.log('Final result:', final),
- *   onError: (err) => console.error('Error:', err),
- * });
- * ```
- */
-export function usePdfInputOpenai(props: HookInput<'PdfInputOpenai', { stream: false }>): HookOutput<'PdfInputOpenai', { stream: false }>
-export function usePdfInputOpenai(props?: HookInput<'PdfInputOpenai', { stream?: true }>): HookOutput<'PdfInputOpenai', { stream: true }>
-export function usePdfInputOpenai(
-  props: HookInput<'PdfInputOpenai', { stream?: boolean }> = {},
-): HookOutput<'PdfInputOpenai', { stream: true }> | HookOutput<'PdfInputOpenai', { stream: false }> {
-  let action: ServerAction = Actions.PdfInputOpenai;
-  if (isStreamingProps(props)) {
-    action = StreamingActions.PdfInputOpenai;
-    return useBamlAction(action, props)
-  } else {
-    return useBamlAction(action, props as HookInput<'PdfInputOpenai', { stream: false }>)
-  }
-}
-/**
- * A specialized hook for the PdfInputVertex BAML function that supports both streaming and non‑streaming responses.
- *
- * **Input Types:**
- *
- * - pdf: Pdf
- *
- *
- * **Return Type:**
- * - **Non‑streaming:** string
- * - **Streaming Partial:** string
- * - **Streaming Final:** string
- *
- * **Usage Patterns:**
- * 1. **Non‑streaming (Default)**
- *    - Best for quick responses and simple UI updates.
- * 2. **Streaming**
- *    - Ideal for long‑running operations or real‑time feedback.
- *
- * **Edge Cases:**
- * - Ensure robust error handling via `onError`.
- * - Handle cases where partial data may be incomplete or missing.
- *
- * @example
- * ```tsx
- * // Basic non‑streaming usage:
- * const { data, error, isLoading, mutate } = usePdfInputVertex({ stream: false});
- *
- * // Streaming usage:
- * const { data, streamData, isLoading, error, mutate } = usePdfInputVertex({
- *   stream: true | undefined,
- *   onStreamData: (partial) => console.log('Partial update:', partial),
- *   onFinalData: (final) => console.log('Final result:', final),
- *   onError: (err) => console.error('Error:', err),
- * });
- * ```
- */
-export function usePdfInputVertex(props: HookInput<'PdfInputVertex', { stream: false }>): HookOutput<'PdfInputVertex', { stream: false }>
-export function usePdfInputVertex(props?: HookInput<'PdfInputVertex', { stream?: true }>): HookOutput<'PdfInputVertex', { stream: true }>
-export function usePdfInputVertex(
-  props: HookInput<'PdfInputVertex', { stream?: boolean }> = {},
-): HookOutput<'PdfInputVertex', { stream: true }> | HookOutput<'PdfInputVertex', { stream: false }> {
-  let action: ServerAction = Actions.PdfInputVertex;
-  if (isStreamingProps(props)) {
-    action = StreamingActions.PdfInputVertex;
-    return useBamlAction(action, props)
-  } else {
-    return useBamlAction(action, props as HookInput<'PdfInputVertex', { stream: false }>)
   }
 }
 /**
@@ -6213,6 +6065,56 @@ export function useTellStory(
     return useBamlAction(action, props)
   } else {
     return useBamlAction(action, props as HookInput<'TellStory', { stream: false }>)
+  }
+}
+/**
+ * A specialized hook for the TestAbortFallbackChain BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - input: string
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** string
+ * - **Streaming Partial:** string
+ * - **Streaming Final:** string
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useTestAbortFallbackChain({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useTestAbortFallbackChain({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useTestAbortFallbackChain(props: HookInput<'TestAbortFallbackChain', { stream: false }>): HookOutput<'TestAbortFallbackChain', { stream: false }>
+export function useTestAbortFallbackChain(props?: HookInput<'TestAbortFallbackChain', { stream?: true }>): HookOutput<'TestAbortFallbackChain', { stream: true }>
+export function useTestAbortFallbackChain(
+  props: HookInput<'TestAbortFallbackChain', { stream?: boolean }> = {},
+): HookOutput<'TestAbortFallbackChain', { stream: true }> | HookOutput<'TestAbortFallbackChain', { stream: false }> {
+  let action: ServerAction = Actions.TestAbortFallbackChain;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.TestAbortFallbackChain;
+    return useBamlAction(action, props)
+  } else {
+    return useBamlAction(action, props as HookInput<'TestAbortFallbackChain', { stream: false }>)
   }
 }
 /**
@@ -9066,706 +8968,6 @@ export function useTestOpenAIO1WithMaxTokens(
   }
 }
 /**
- * A specialized hook for the TestOpenAIProviderWithResponsesType BAML function that supports both streaming and non‑streaming responses.
- *
- * **Input Types:**
- *
- * - input: string
- *
- *
- * **Return Type:**
- * - **Non‑streaming:** string
- * - **Streaming Partial:** string
- * - **Streaming Final:** string
- *
- * **Usage Patterns:**
- * 1. **Non‑streaming (Default)**
- *    - Best for quick responses and simple UI updates.
- * 2. **Streaming**
- *    - Ideal for long‑running operations or real‑time feedback.
- *
- * **Edge Cases:**
- * - Ensure robust error handling via `onError`.
- * - Handle cases where partial data may be incomplete or missing.
- *
- * @example
- * ```tsx
- * // Basic non‑streaming usage:
- * const { data, error, isLoading, mutate } = useTestOpenAIProviderWithResponsesType({ stream: false});
- *
- * // Streaming usage:
- * const { data, streamData, isLoading, error, mutate } = useTestOpenAIProviderWithResponsesType({
- *   stream: true | undefined,
- *   onStreamData: (partial) => console.log('Partial update:', partial),
- *   onFinalData: (final) => console.log('Final result:', final),
- *   onError: (err) => console.error('Error:', err),
- * });
- * ```
- */
-export function useTestOpenAIProviderWithResponsesType(props: HookInput<'TestOpenAIProviderWithResponsesType', { stream: false }>): HookOutput<'TestOpenAIProviderWithResponsesType', { stream: false }>
-export function useTestOpenAIProviderWithResponsesType(props?: HookInput<'TestOpenAIProviderWithResponsesType', { stream?: true }>): HookOutput<'TestOpenAIProviderWithResponsesType', { stream: true }>
-export function useTestOpenAIProviderWithResponsesType(
-  props: HookInput<'TestOpenAIProviderWithResponsesType', { stream?: boolean }> = {},
-): HookOutput<'TestOpenAIProviderWithResponsesType', { stream: true }> | HookOutput<'TestOpenAIProviderWithResponsesType', { stream: false }> {
-  let action: ServerAction = Actions.TestOpenAIProviderWithResponsesType;
-  if (isStreamingProps(props)) {
-    action = StreamingActions.TestOpenAIProviderWithResponsesType;
-    return useBamlAction(action, props)
-  } else {
-    return useBamlAction(action, props as HookInput<'TestOpenAIProviderWithResponsesType', { stream: false }>)
-  }
-}
-/**
- * A specialized hook for the TestOpenAIResponses BAML function that supports both streaming and non‑streaming responses.
- *
- * **Input Types:**
- *
- * - input: string
- *
- *
- * **Return Type:**
- * - **Non‑streaming:** string
- * - **Streaming Partial:** string
- * - **Streaming Final:** string
- *
- * **Usage Patterns:**
- * 1. **Non‑streaming (Default)**
- *    - Best for quick responses and simple UI updates.
- * 2. **Streaming**
- *    - Ideal for long‑running operations or real‑time feedback.
- *
- * **Edge Cases:**
- * - Ensure robust error handling via `onError`.
- * - Handle cases where partial data may be incomplete or missing.
- *
- * @example
- * ```tsx
- * // Basic non‑streaming usage:
- * const { data, error, isLoading, mutate } = useTestOpenAIResponses({ stream: false});
- *
- * // Streaming usage:
- * const { data, streamData, isLoading, error, mutate } = useTestOpenAIResponses({
- *   stream: true | undefined,
- *   onStreamData: (partial) => console.log('Partial update:', partial),
- *   onFinalData: (final) => console.log('Final result:', final),
- *   onError: (err) => console.error('Error:', err),
- * });
- * ```
- */
-export function useTestOpenAIResponses(props: HookInput<'TestOpenAIResponses', { stream: false }>): HookOutput<'TestOpenAIResponses', { stream: false }>
-export function useTestOpenAIResponses(props?: HookInput<'TestOpenAIResponses', { stream?: true }>): HookOutput<'TestOpenAIResponses', { stream: true }>
-export function useTestOpenAIResponses(
-  props: HookInput<'TestOpenAIResponses', { stream?: boolean }> = {},
-): HookOutput<'TestOpenAIResponses', { stream: true }> | HookOutput<'TestOpenAIResponses', { stream: false }> {
-  let action: ServerAction = Actions.TestOpenAIResponses;
-  if (isStreamingProps(props)) {
-    action = StreamingActions.TestOpenAIResponses;
-    return useBamlAction(action, props)
-  } else {
-    return useBamlAction(action, props as HookInput<'TestOpenAIResponses', { stream: false }>)
-  }
-}
-/**
- * A specialized hook for the TestOpenAIResponsesAutoType BAML function that supports both streaming and non‑streaming responses.
- *
- * **Input Types:**
- *
- * - input: string
- *
- *
- * **Return Type:**
- * - **Non‑streaming:** string
- * - **Streaming Partial:** string
- * - **Streaming Final:** string
- *
- * **Usage Patterns:**
- * 1. **Non‑streaming (Default)**
- *    - Best for quick responses and simple UI updates.
- * 2. **Streaming**
- *    - Ideal for long‑running operations or real‑time feedback.
- *
- * **Edge Cases:**
- * - Ensure robust error handling via `onError`.
- * - Handle cases where partial data may be incomplete or missing.
- *
- * @example
- * ```tsx
- * // Basic non‑streaming usage:
- * const { data, error, isLoading, mutate } = useTestOpenAIResponsesAutoType({ stream: false});
- *
- * // Streaming usage:
- * const { data, streamData, isLoading, error, mutate } = useTestOpenAIResponsesAutoType({
- *   stream: true | undefined,
- *   onStreamData: (partial) => console.log('Partial update:', partial),
- *   onFinalData: (final) => console.log('Final result:', final),
- *   onError: (err) => console.error('Error:', err),
- * });
- * ```
- */
-export function useTestOpenAIResponsesAutoType(props: HookInput<'TestOpenAIResponsesAutoType', { stream: false }>): HookOutput<'TestOpenAIResponsesAutoType', { stream: false }>
-export function useTestOpenAIResponsesAutoType(props?: HookInput<'TestOpenAIResponsesAutoType', { stream?: true }>): HookOutput<'TestOpenAIResponsesAutoType', { stream: true }>
-export function useTestOpenAIResponsesAutoType(
-  props: HookInput<'TestOpenAIResponsesAutoType', { stream?: boolean }> = {},
-): HookOutput<'TestOpenAIResponsesAutoType', { stream: true }> | HookOutput<'TestOpenAIResponsesAutoType', { stream: false }> {
-  let action: ServerAction = Actions.TestOpenAIResponsesAutoType;
-  if (isStreamingProps(props)) {
-    action = StreamingActions.TestOpenAIResponsesAutoType;
-    return useBamlAction(action, props)
-  } else {
-    return useBamlAction(action, props as HookInput<'TestOpenAIResponsesAutoType', { stream: false }>)
-  }
-}
-/**
- * A specialized hook for the TestOpenAIResponsesConversation BAML function that supports both streaming and non‑streaming responses.
- *
- * **Input Types:**
- *
- * - topic: string
- *
- *
- * **Return Type:**
- * - **Non‑streaming:** string
- * - **Streaming Partial:** string
- * - **Streaming Final:** string
- *
- * **Usage Patterns:**
- * 1. **Non‑streaming (Default)**
- *    - Best for quick responses and simple UI updates.
- * 2. **Streaming**
- *    - Ideal for long‑running operations or real‑time feedback.
- *
- * **Edge Cases:**
- * - Ensure robust error handling via `onError`.
- * - Handle cases where partial data may be incomplete or missing.
- *
- * @example
- * ```tsx
- * // Basic non‑streaming usage:
- * const { data, error, isLoading, mutate } = useTestOpenAIResponsesConversation({ stream: false});
- *
- * // Streaming usage:
- * const { data, streamData, isLoading, error, mutate } = useTestOpenAIResponsesConversation({
- *   stream: true | undefined,
- *   onStreamData: (partial) => console.log('Partial update:', partial),
- *   onFinalData: (final) => console.log('Final result:', final),
- *   onError: (err) => console.error('Error:', err),
- * });
- * ```
- */
-export function useTestOpenAIResponsesConversation(props: HookInput<'TestOpenAIResponsesConversation', { stream: false }>): HookOutput<'TestOpenAIResponsesConversation', { stream: false }>
-export function useTestOpenAIResponsesConversation(props?: HookInput<'TestOpenAIResponsesConversation', { stream?: true }>): HookOutput<'TestOpenAIResponsesConversation', { stream: true }>
-export function useTestOpenAIResponsesConversation(
-  props: HookInput<'TestOpenAIResponsesConversation', { stream?: boolean }> = {},
-): HookOutput<'TestOpenAIResponsesConversation', { stream: true }> | HookOutput<'TestOpenAIResponsesConversation', { stream: false }> {
-  let action: ServerAction = Actions.TestOpenAIResponsesConversation;
-  if (isStreamingProps(props)) {
-    action = StreamingActions.TestOpenAIResponsesConversation;
-    return useBamlAction(action, props)
-  } else {
-    return useBamlAction(action, props as HookInput<'TestOpenAIResponsesConversation', { stream: false }>)
-  }
-}
-/**
- * A specialized hook for the TestOpenAIResponsesCustomURL BAML function that supports both streaming and non‑streaming responses.
- *
- * **Input Types:**
- *
- * - input: string
- *
- *
- * **Return Type:**
- * - **Non‑streaming:** string
- * - **Streaming Partial:** string
- * - **Streaming Final:** string
- *
- * **Usage Patterns:**
- * 1. **Non‑streaming (Default)**
- *    - Best for quick responses and simple UI updates.
- * 2. **Streaming**
- *    - Ideal for long‑running operations or real‑time feedback.
- *
- * **Edge Cases:**
- * - Ensure robust error handling via `onError`.
- * - Handle cases where partial data may be incomplete or missing.
- *
- * @example
- * ```tsx
- * // Basic non‑streaming usage:
- * const { data, error, isLoading, mutate } = useTestOpenAIResponsesCustomURL({ stream: false});
- *
- * // Streaming usage:
- * const { data, streamData, isLoading, error, mutate } = useTestOpenAIResponsesCustomURL({
- *   stream: true | undefined,
- *   onStreamData: (partial) => console.log('Partial update:', partial),
- *   onFinalData: (final) => console.log('Final result:', final),
- *   onError: (err) => console.error('Error:', err),
- * });
- * ```
- */
-export function useTestOpenAIResponsesCustomURL(props: HookInput<'TestOpenAIResponsesCustomURL', { stream: false }>): HookOutput<'TestOpenAIResponsesCustomURL', { stream: false }>
-export function useTestOpenAIResponsesCustomURL(props?: HookInput<'TestOpenAIResponsesCustomURL', { stream?: true }>): HookOutput<'TestOpenAIResponsesCustomURL', { stream: true }>
-export function useTestOpenAIResponsesCustomURL(
-  props: HookInput<'TestOpenAIResponsesCustomURL', { stream?: boolean }> = {},
-): HookOutput<'TestOpenAIResponsesCustomURL', { stream: true }> | HookOutput<'TestOpenAIResponsesCustomURL', { stream: false }> {
-  let action: ServerAction = Actions.TestOpenAIResponsesCustomURL;
-  if (isStreamingProps(props)) {
-    action = StreamingActions.TestOpenAIResponsesCustomURL;
-    return useBamlAction(action, props)
-  } else {
-    return useBamlAction(action, props as HookInput<'TestOpenAIResponsesCustomURL', { stream: false }>)
-  }
-}
-/**
- * A specialized hook for the TestOpenAIResponsesDifferentModel BAML function that supports both streaming and non‑streaming responses.
- *
- * **Input Types:**
- *
- * - input: string
- *
- *
- * **Return Type:**
- * - **Non‑streaming:** string
- * - **Streaming Partial:** string
- * - **Streaming Final:** string
- *
- * **Usage Patterns:**
- * 1. **Non‑streaming (Default)**
- *    - Best for quick responses and simple UI updates.
- * 2. **Streaming**
- *    - Ideal for long‑running operations or real‑time feedback.
- *
- * **Edge Cases:**
- * - Ensure robust error handling via `onError`.
- * - Handle cases where partial data may be incomplete or missing.
- *
- * @example
- * ```tsx
- * // Basic non‑streaming usage:
- * const { data, error, isLoading, mutate } = useTestOpenAIResponsesDifferentModel({ stream: false});
- *
- * // Streaming usage:
- * const { data, streamData, isLoading, error, mutate } = useTestOpenAIResponsesDifferentModel({
- *   stream: true | undefined,
- *   onStreamData: (partial) => console.log('Partial update:', partial),
- *   onFinalData: (final) => console.log('Final result:', final),
- *   onError: (err) => console.error('Error:', err),
- * });
- * ```
- */
-export function useTestOpenAIResponsesDifferentModel(props: HookInput<'TestOpenAIResponsesDifferentModel', { stream: false }>): HookOutput<'TestOpenAIResponsesDifferentModel', { stream: false }>
-export function useTestOpenAIResponsesDifferentModel(props?: HookInput<'TestOpenAIResponsesDifferentModel', { stream?: true }>): HookOutput<'TestOpenAIResponsesDifferentModel', { stream: true }>
-export function useTestOpenAIResponsesDifferentModel(
-  props: HookInput<'TestOpenAIResponsesDifferentModel', { stream?: boolean }> = {},
-): HookOutput<'TestOpenAIResponsesDifferentModel', { stream: true }> | HookOutput<'TestOpenAIResponsesDifferentModel', { stream: false }> {
-  let action: ServerAction = Actions.TestOpenAIResponsesDifferentModel;
-  if (isStreamingProps(props)) {
-    action = StreamingActions.TestOpenAIResponsesDifferentModel;
-    return useBamlAction(action, props)
-  } else {
-    return useBamlAction(action, props as HookInput<'TestOpenAIResponsesDifferentModel', { stream: false }>)
-  }
-}
-/**
- * A specialized hook for the TestOpenAIResponsesEndpoint BAML function that supports both streaming and non‑streaming responses.
- *
- * **Input Types:**
- *
- * - input: string
- *
- *
- * **Return Type:**
- * - **Non‑streaming:** string
- * - **Streaming Partial:** string
- * - **Streaming Final:** string
- *
- * **Usage Patterns:**
- * 1. **Non‑streaming (Default)**
- *    - Best for quick responses and simple UI updates.
- * 2. **Streaming**
- *    - Ideal for long‑running operations or real‑time feedback.
- *
- * **Edge Cases:**
- * - Ensure robust error handling via `onError`.
- * - Handle cases where partial data may be incomplete or missing.
- *
- * @example
- * ```tsx
- * // Basic non‑streaming usage:
- * const { data, error, isLoading, mutate } = useTestOpenAIResponsesEndpoint({ stream: false});
- *
- * // Streaming usage:
- * const { data, streamData, isLoading, error, mutate } = useTestOpenAIResponsesEndpoint({
- *   stream: true | undefined,
- *   onStreamData: (partial) => console.log('Partial update:', partial),
- *   onFinalData: (final) => console.log('Final result:', final),
- *   onError: (err) => console.error('Error:', err),
- * });
- * ```
- */
-export function useTestOpenAIResponsesEndpoint(props: HookInput<'TestOpenAIResponsesEndpoint', { stream: false }>): HookOutput<'TestOpenAIResponsesEndpoint', { stream: false }>
-export function useTestOpenAIResponsesEndpoint(props?: HookInput<'TestOpenAIResponsesEndpoint', { stream?: true }>): HookOutput<'TestOpenAIResponsesEndpoint', { stream: true }>
-export function useTestOpenAIResponsesEndpoint(
-  props: HookInput<'TestOpenAIResponsesEndpoint', { stream?: boolean }> = {},
-): HookOutput<'TestOpenAIResponsesEndpoint', { stream: true }> | HookOutput<'TestOpenAIResponsesEndpoint', { stream: false }> {
-  let action: ServerAction = Actions.TestOpenAIResponsesEndpoint;
-  if (isStreamingProps(props)) {
-    action = StreamingActions.TestOpenAIResponsesEndpoint;
-    return useBamlAction(action, props)
-  } else {
-    return useBamlAction(action, props as HookInput<'TestOpenAIResponsesEndpoint', { stream: false }>)
-  }
-}
-/**
- * A specialized hook for the TestOpenAIResponsesExplicit BAML function that supports both streaming and non‑streaming responses.
- *
- * **Input Types:**
- *
- * - input: string
- *
- *
- * **Return Type:**
- * - **Non‑streaming:** string
- * - **Streaming Partial:** string
- * - **Streaming Final:** string
- *
- * **Usage Patterns:**
- * 1. **Non‑streaming (Default)**
- *    - Best for quick responses and simple UI updates.
- * 2. **Streaming**
- *    - Ideal for long‑running operations or real‑time feedback.
- *
- * **Edge Cases:**
- * - Ensure robust error handling via `onError`.
- * - Handle cases where partial data may be incomplete or missing.
- *
- * @example
- * ```tsx
- * // Basic non‑streaming usage:
- * const { data, error, isLoading, mutate } = useTestOpenAIResponsesExplicit({ stream: false});
- *
- * // Streaming usage:
- * const { data, streamData, isLoading, error, mutate } = useTestOpenAIResponsesExplicit({
- *   stream: true | undefined,
- *   onStreamData: (partial) => console.log('Partial update:', partial),
- *   onFinalData: (final) => console.log('Final result:', final),
- *   onError: (err) => console.error('Error:', err),
- * });
- * ```
- */
-export function useTestOpenAIResponsesExplicit(props: HookInput<'TestOpenAIResponsesExplicit', { stream: false }>): HookOutput<'TestOpenAIResponsesExplicit', { stream: false }>
-export function useTestOpenAIResponsesExplicit(props?: HookInput<'TestOpenAIResponsesExplicit', { stream?: true }>): HookOutput<'TestOpenAIResponsesExplicit', { stream: true }>
-export function useTestOpenAIResponsesExplicit(
-  props: HookInput<'TestOpenAIResponsesExplicit', { stream?: boolean }> = {},
-): HookOutput<'TestOpenAIResponsesExplicit', { stream: true }> | HookOutput<'TestOpenAIResponsesExplicit', { stream: false }> {
-  let action: ServerAction = Actions.TestOpenAIResponsesExplicit;
-  if (isStreamingProps(props)) {
-    action = StreamingActions.TestOpenAIResponsesExplicit;
-    return useBamlAction(action, props)
-  } else {
-    return useBamlAction(action, props as HookInput<'TestOpenAIResponsesExplicit', { stream: false }>)
-  }
-}
-/**
- * A specialized hook for the TestOpenAIResponsesFunctionCall BAML function that supports both streaming and non‑streaming responses.
- *
- * **Input Types:**
- *
- * - query: string
- *
- *
- * **Return Type:**
- * - **Non‑streaming:** string
- * - **Streaming Partial:** string
- * - **Streaming Final:** string
- *
- * **Usage Patterns:**
- * 1. **Non‑streaming (Default)**
- *    - Best for quick responses and simple UI updates.
- * 2. **Streaming**
- *    - Ideal for long‑running operations or real‑time feedback.
- *
- * **Edge Cases:**
- * - Ensure robust error handling via `onError`.
- * - Handle cases where partial data may be incomplete or missing.
- *
- * @example
- * ```tsx
- * // Basic non‑streaming usage:
- * const { data, error, isLoading, mutate } = useTestOpenAIResponsesFunctionCall({ stream: false});
- *
- * // Streaming usage:
- * const { data, streamData, isLoading, error, mutate } = useTestOpenAIResponsesFunctionCall({
- *   stream: true | undefined,
- *   onStreamData: (partial) => console.log('Partial update:', partial),
- *   onFinalData: (final) => console.log('Final result:', final),
- *   onError: (err) => console.error('Error:', err),
- * });
- * ```
- */
-export function useTestOpenAIResponsesFunctionCall(props: HookInput<'TestOpenAIResponsesFunctionCall', { stream: false }>): HookOutput<'TestOpenAIResponsesFunctionCall', { stream: false }>
-export function useTestOpenAIResponsesFunctionCall(props?: HookInput<'TestOpenAIResponsesFunctionCall', { stream?: true }>): HookOutput<'TestOpenAIResponsesFunctionCall', { stream: true }>
-export function useTestOpenAIResponsesFunctionCall(
-  props: HookInput<'TestOpenAIResponsesFunctionCall', { stream?: boolean }> = {},
-): HookOutput<'TestOpenAIResponsesFunctionCall', { stream: true }> | HookOutput<'TestOpenAIResponsesFunctionCall', { stream: false }> {
-  let action: ServerAction = Actions.TestOpenAIResponsesFunctionCall;
-  if (isStreamingProps(props)) {
-    action = StreamingActions.TestOpenAIResponsesFunctionCall;
-    return useBamlAction(action, props)
-  } else {
-    return useBamlAction(action, props as HookInput<'TestOpenAIResponsesFunctionCall', { stream: false }>)
-  }
-}
-/**
- * A specialized hook for the TestOpenAIResponsesImageInput BAML function that supports both streaming and non‑streaming responses.
- *
- * **Input Types:**
- *
- * - image: Image | string
- *
- *
- * **Return Type:**
- * - **Non‑streaming:** string
- * - **Streaming Partial:** string
- * - **Streaming Final:** string
- *
- * **Usage Patterns:**
- * 1. **Non‑streaming (Default)**
- *    - Best for quick responses and simple UI updates.
- * 2. **Streaming**
- *    - Ideal for long‑running operations or real‑time feedback.
- *
- * **Edge Cases:**
- * - Ensure robust error handling via `onError`.
- * - Handle cases where partial data may be incomplete or missing.
- *
- * @example
- * ```tsx
- * // Basic non‑streaming usage:
- * const { data, error, isLoading, mutate } = useTestOpenAIResponsesImageInput({ stream: false});
- *
- * // Streaming usage:
- * const { data, streamData, isLoading, error, mutate } = useTestOpenAIResponsesImageInput({
- *   stream: true | undefined,
- *   onStreamData: (partial) => console.log('Partial update:', partial),
- *   onFinalData: (final) => console.log('Final result:', final),
- *   onError: (err) => console.error('Error:', err),
- * });
- * ```
- */
-export function useTestOpenAIResponsesImageInput(props: HookInput<'TestOpenAIResponsesImageInput', { stream: false }>): HookOutput<'TestOpenAIResponsesImageInput', { stream: false }>
-export function useTestOpenAIResponsesImageInput(props?: HookInput<'TestOpenAIResponsesImageInput', { stream?: true }>): HookOutput<'TestOpenAIResponsesImageInput', { stream: true }>
-export function useTestOpenAIResponsesImageInput(
-  props: HookInput<'TestOpenAIResponsesImageInput', { stream?: boolean }> = {},
-): HookOutput<'TestOpenAIResponsesImageInput', { stream: true }> | HookOutput<'TestOpenAIResponsesImageInput', { stream: false }> {
-  let action: ServerAction = Actions.TestOpenAIResponsesImageInput;
-  if (isStreamingProps(props)) {
-    action = StreamingActions.TestOpenAIResponsesImageInput;
-    return useBamlAction(action, props)
-  } else {
-    return useBamlAction(action, props as HookInput<'TestOpenAIResponsesImageInput', { stream: false }>)
-  }
-}
-/**
- * A specialized hook for the TestOpenAIResponsesReasoning BAML function that supports both streaming and non‑streaming responses.
- *
- * **Input Types:**
- *
- * - problem: string
- *
- *
- * **Return Type:**
- * - **Non‑streaming:** string
- * - **Streaming Partial:** string
- * - **Streaming Final:** string
- *
- * **Usage Patterns:**
- * 1. **Non‑streaming (Default)**
- *    - Best for quick responses and simple UI updates.
- * 2. **Streaming**
- *    - Ideal for long‑running operations or real‑time feedback.
- *
- * **Edge Cases:**
- * - Ensure robust error handling via `onError`.
- * - Handle cases where partial data may be incomplete or missing.
- *
- * @example
- * ```tsx
- * // Basic non‑streaming usage:
- * const { data, error, isLoading, mutate } = useTestOpenAIResponsesReasoning({ stream: false});
- *
- * // Streaming usage:
- * const { data, streamData, isLoading, error, mutate } = useTestOpenAIResponsesReasoning({
- *   stream: true | undefined,
- *   onStreamData: (partial) => console.log('Partial update:', partial),
- *   onFinalData: (final) => console.log('Final result:', final),
- *   onError: (err) => console.error('Error:', err),
- * });
- * ```
- */
-export function useTestOpenAIResponsesReasoning(props: HookInput<'TestOpenAIResponsesReasoning', { stream: false }>): HookOutput<'TestOpenAIResponsesReasoning', { stream: false }>
-export function useTestOpenAIResponsesReasoning(props?: HookInput<'TestOpenAIResponsesReasoning', { stream?: true }>): HookOutput<'TestOpenAIResponsesReasoning', { stream: true }>
-export function useTestOpenAIResponsesReasoning(
-  props: HookInput<'TestOpenAIResponsesReasoning', { stream?: boolean }> = {},
-): HookOutput<'TestOpenAIResponsesReasoning', { stream: true }> | HookOutput<'TestOpenAIResponsesReasoning', { stream: false }> {
-  let action: ServerAction = Actions.TestOpenAIResponsesReasoning;
-  if (isStreamingProps(props)) {
-    action = StreamingActions.TestOpenAIResponsesReasoning;
-    return useBamlAction(action, props)
-  } else {
-    return useBamlAction(action, props as HookInput<'TestOpenAIResponsesReasoning', { stream: false }>)
-  }
-}
-/**
- * A specialized hook for the TestOpenAIResponsesShorthand BAML function that supports both streaming and non‑streaming responses.
- *
- * **Input Types:**
- *
- * - input: string
- *
- *
- * **Return Type:**
- * - **Non‑streaming:** string
- * - **Streaming Partial:** string
- * - **Streaming Final:** string
- *
- * **Usage Patterns:**
- * 1. **Non‑streaming (Default)**
- *    - Best for quick responses and simple UI updates.
- * 2. **Streaming**
- *    - Ideal for long‑running operations or real‑time feedback.
- *
- * **Edge Cases:**
- * - Ensure robust error handling via `onError`.
- * - Handle cases where partial data may be incomplete or missing.
- *
- * @example
- * ```tsx
- * // Basic non‑streaming usage:
- * const { data, error, isLoading, mutate } = useTestOpenAIResponsesShorthand({ stream: false});
- *
- * // Streaming usage:
- * const { data, streamData, isLoading, error, mutate } = useTestOpenAIResponsesShorthand({
- *   stream: true | undefined,
- *   onStreamData: (partial) => console.log('Partial update:', partial),
- *   onFinalData: (final) => console.log('Final result:', final),
- *   onError: (err) => console.error('Error:', err),
- * });
- * ```
- */
-export function useTestOpenAIResponsesShorthand(props: HookInput<'TestOpenAIResponsesShorthand', { stream: false }>): HookOutput<'TestOpenAIResponsesShorthand', { stream: false }>
-export function useTestOpenAIResponsesShorthand(props?: HookInput<'TestOpenAIResponsesShorthand', { stream?: true }>): HookOutput<'TestOpenAIResponsesShorthand', { stream: true }>
-export function useTestOpenAIResponsesShorthand(
-  props: HookInput<'TestOpenAIResponsesShorthand', { stream?: boolean }> = {},
-): HookOutput<'TestOpenAIResponsesShorthand', { stream: true }> | HookOutput<'TestOpenAIResponsesShorthand', { stream: false }> {
-  let action: ServerAction = Actions.TestOpenAIResponsesShorthand;
-  if (isStreamingProps(props)) {
-    action = StreamingActions.TestOpenAIResponsesShorthand;
-    return useBamlAction(action, props)
-  } else {
-    return useBamlAction(action, props as HookInput<'TestOpenAIResponsesShorthand', { stream: false }>)
-  }
-}
-/**
- * A specialized hook for the TestOpenAIResponsesWebSearch BAML function that supports both streaming and non‑streaming responses.
- *
- * **Input Types:**
- *
- * - query: string
- *
- *
- * **Return Type:**
- * - **Non‑streaming:** string
- * - **Streaming Partial:** string
- * - **Streaming Final:** string
- *
- * **Usage Patterns:**
- * 1. **Non‑streaming (Default)**
- *    - Best for quick responses and simple UI updates.
- * 2. **Streaming**
- *    - Ideal for long‑running operations or real‑time feedback.
- *
- * **Edge Cases:**
- * - Ensure robust error handling via `onError`.
- * - Handle cases where partial data may be incomplete or missing.
- *
- * @example
- * ```tsx
- * // Basic non‑streaming usage:
- * const { data, error, isLoading, mutate } = useTestOpenAIResponsesWebSearch({ stream: false});
- *
- * // Streaming usage:
- * const { data, streamData, isLoading, error, mutate } = useTestOpenAIResponsesWebSearch({
- *   stream: true | undefined,
- *   onStreamData: (partial) => console.log('Partial update:', partial),
- *   onFinalData: (final) => console.log('Final result:', final),
- *   onError: (err) => console.error('Error:', err),
- * });
- * ```
- */
-export function useTestOpenAIResponsesWebSearch(props: HookInput<'TestOpenAIResponsesWebSearch', { stream: false }>): HookOutput<'TestOpenAIResponsesWebSearch', { stream: false }>
-export function useTestOpenAIResponsesWebSearch(props?: HookInput<'TestOpenAIResponsesWebSearch', { stream?: true }>): HookOutput<'TestOpenAIResponsesWebSearch', { stream: true }>
-export function useTestOpenAIResponsesWebSearch(
-  props: HookInput<'TestOpenAIResponsesWebSearch', { stream?: boolean }> = {},
-): HookOutput<'TestOpenAIResponsesWebSearch', { stream: true }> | HookOutput<'TestOpenAIResponsesWebSearch', { stream: false }> {
-  let action: ServerAction = Actions.TestOpenAIResponsesWebSearch;
-  if (isStreamingProps(props)) {
-    action = StreamingActions.TestOpenAIResponsesWebSearch;
-    return useBamlAction(action, props)
-  } else {
-    return useBamlAction(action, props as HookInput<'TestOpenAIResponsesWebSearch', { stream: false }>)
-  }
-}
-/**
- * A specialized hook for the TestOpenAIResponsesWithOpenAIResponseType BAML function that supports both streaming and non‑streaming responses.
- *
- * **Input Types:**
- *
- * - input: string
- *
- *
- * **Return Type:**
- * - **Non‑streaming:** string
- * - **Streaming Partial:** string
- * - **Streaming Final:** string
- *
- * **Usage Patterns:**
- * 1. **Non‑streaming (Default)**
- *    - Best for quick responses and simple UI updates.
- * 2. **Streaming**
- *    - Ideal for long‑running operations or real‑time feedback.
- *
- * **Edge Cases:**
- * - Ensure robust error handling via `onError`.
- * - Handle cases where partial data may be incomplete or missing.
- *
- * @example
- * ```tsx
- * // Basic non‑streaming usage:
- * const { data, error, isLoading, mutate } = useTestOpenAIResponsesWithOpenAIResponseType({ stream: false});
- *
- * // Streaming usage:
- * const { data, streamData, isLoading, error, mutate } = useTestOpenAIResponsesWithOpenAIResponseType({
- *   stream: true | undefined,
- *   onStreamData: (partial) => console.log('Partial update:', partial),
- *   onFinalData: (final) => console.log('Final result:', final),
- *   onError: (err) => console.error('Error:', err),
- * });
- * ```
- */
-export function useTestOpenAIResponsesWithOpenAIResponseType(props: HookInput<'TestOpenAIResponsesWithOpenAIResponseType', { stream: false }>): HookOutput<'TestOpenAIResponsesWithOpenAIResponseType', { stream: false }>
-export function useTestOpenAIResponsesWithOpenAIResponseType(props?: HookInput<'TestOpenAIResponsesWithOpenAIResponseType', { stream?: true }>): HookOutput<'TestOpenAIResponsesWithOpenAIResponseType', { stream: true }>
-export function useTestOpenAIResponsesWithOpenAIResponseType(
-  props: HookInput<'TestOpenAIResponsesWithOpenAIResponseType', { stream?: boolean }> = {},
-): HookOutput<'TestOpenAIResponsesWithOpenAIResponseType', { stream: true }> | HookOutput<'TestOpenAIResponsesWithOpenAIResponseType', { stream: false }> {
-  let action: ServerAction = Actions.TestOpenAIResponsesWithOpenAIResponseType;
-  if (isStreamingProps(props)) {
-    action = StreamingActions.TestOpenAIResponsesWithOpenAIResponseType;
-    return useBamlAction(action, props)
-  } else {
-    return useBamlAction(action, props as HookInput<'TestOpenAIResponsesWithOpenAIResponseType', { stream: false }>)
-  }
-}
-/**
  * A specialized hook for the TestOpenAIShorthand BAML function that supports both streaming and non‑streaming responses.
  *
  * **Input Types:**
@@ -10705,205 +9907,5 @@ export function useUseNestedBlockConstraint(
     return useBamlAction(action, props)
   } else {
     return useBamlAction(action, props as HookInput<'UseNestedBlockConstraint', { stream: false }>)
-  }
-}
-/**
- * A specialized hook for the ValidateBasicResponses BAML function that supports both streaming and non‑streaming responses.
- *
- * **Input Types:**
- *
- * - input: string
- *
- *
- * **Return Type:**
- * - **Non‑streaming:** string
- * - **Streaming Partial:** string
- * - **Streaming Final:** string
- *
- * **Usage Patterns:**
- * 1. **Non‑streaming (Default)**
- *    - Best for quick responses and simple UI updates.
- * 2. **Streaming**
- *    - Ideal for long‑running operations or real‑time feedback.
- *
- * **Edge Cases:**
- * - Ensure robust error handling via `onError`.
- * - Handle cases where partial data may be incomplete or missing.
- *
- * @example
- * ```tsx
- * // Basic non‑streaming usage:
- * const { data, error, isLoading, mutate } = useValidateBasicResponses({ stream: false});
- *
- * // Streaming usage:
- * const { data, streamData, isLoading, error, mutate } = useValidateBasicResponses({
- *   stream: true | undefined,
- *   onStreamData: (partial) => console.log('Partial update:', partial),
- *   onFinalData: (final) => console.log('Final result:', final),
- *   onError: (err) => console.error('Error:', err),
- * });
- * ```
- */
-export function useValidateBasicResponses(props: HookInput<'ValidateBasicResponses', { stream: false }>): HookOutput<'ValidateBasicResponses', { stream: false }>
-export function useValidateBasicResponses(props?: HookInput<'ValidateBasicResponses', { stream?: true }>): HookOutput<'ValidateBasicResponses', { stream: true }>
-export function useValidateBasicResponses(
-  props: HookInput<'ValidateBasicResponses', { stream?: boolean }> = {},
-): HookOutput<'ValidateBasicResponses', { stream: true }> | HookOutput<'ValidateBasicResponses', { stream: false }> {
-  let action: ServerAction = Actions.ValidateBasicResponses;
-  if (isStreamingProps(props)) {
-    action = StreamingActions.ValidateBasicResponses;
-    return useBamlAction(action, props)
-  } else {
-    return useBamlAction(action, props as HookInput<'ValidateBasicResponses', { stream: false }>)
-  }
-}
-/**
- * A specialized hook for the ValidateResponseTypes BAML function that supports both streaming and non‑streaming responses.
- *
- * **Input Types:**
- *
- * - input: string
- *
- *
- * **Return Type:**
- * - **Non‑streaming:** string
- * - **Streaming Partial:** string
- * - **Streaming Final:** string
- *
- * **Usage Patterns:**
- * 1. **Non‑streaming (Default)**
- *    - Best for quick responses and simple UI updates.
- * 2. **Streaming**
- *    - Ideal for long‑running operations or real‑time feedback.
- *
- * **Edge Cases:**
- * - Ensure robust error handling via `onError`.
- * - Handle cases where partial data may be incomplete or missing.
- *
- * @example
- * ```tsx
- * // Basic non‑streaming usage:
- * const { data, error, isLoading, mutate } = useValidateResponseTypes({ stream: false});
- *
- * // Streaming usage:
- * const { data, streamData, isLoading, error, mutate } = useValidateResponseTypes({
- *   stream: true | undefined,
- *   onStreamData: (partial) => console.log('Partial update:', partial),
- *   onFinalData: (final) => console.log('Final result:', final),
- *   onError: (err) => console.error('Error:', err),
- * });
- * ```
- */
-export function useValidateResponseTypes(props: HookInput<'ValidateResponseTypes', { stream: false }>): HookOutput<'ValidateResponseTypes', { stream: false }>
-export function useValidateResponseTypes(props?: HookInput<'ValidateResponseTypes', { stream?: true }>): HookOutput<'ValidateResponseTypes', { stream: true }>
-export function useValidateResponseTypes(
-  props: HookInput<'ValidateResponseTypes', { stream?: boolean }> = {},
-): HookOutput<'ValidateResponseTypes', { stream: true }> | HookOutput<'ValidateResponseTypes', { stream: false }> {
-  let action: ServerAction = Actions.ValidateResponseTypes;
-  if (isStreamingProps(props)) {
-    action = StreamingActions.ValidateResponseTypes;
-    return useBamlAction(action, props)
-  } else {
-    return useBamlAction(action, props as HookInput<'ValidateResponseTypes', { stream: false }>)
-  }
-}
-/**
- * A specialized hook for the VideoInputGemini BAML function that supports both streaming and non‑streaming responses.
- *
- * **Input Types:**
- *
- * - vid: Video
- *
- *
- * **Return Type:**
- * - **Non‑streaming:** string
- * - **Streaming Partial:** string
- * - **Streaming Final:** string
- *
- * **Usage Patterns:**
- * 1. **Non‑streaming (Default)**
- *    - Best for quick responses and simple UI updates.
- * 2. **Streaming**
- *    - Ideal for long‑running operations or real‑time feedback.
- *
- * **Edge Cases:**
- * - Ensure robust error handling via `onError`.
- * - Handle cases where partial data may be incomplete or missing.
- *
- * @example
- * ```tsx
- * // Basic non‑streaming usage:
- * const { data, error, isLoading, mutate } = useVideoInputGemini({ stream: false});
- *
- * // Streaming usage:
- * const { data, streamData, isLoading, error, mutate } = useVideoInputGemini({
- *   stream: true | undefined,
- *   onStreamData: (partial) => console.log('Partial update:', partial),
- *   onFinalData: (final) => console.log('Final result:', final),
- *   onError: (err) => console.error('Error:', err),
- * });
- * ```
- */
-export function useVideoInputGemini(props: HookInput<'VideoInputGemini', { stream: false }>): HookOutput<'VideoInputGemini', { stream: false }>
-export function useVideoInputGemini(props?: HookInput<'VideoInputGemini', { stream?: true }>): HookOutput<'VideoInputGemini', { stream: true }>
-export function useVideoInputGemini(
-  props: HookInput<'VideoInputGemini', { stream?: boolean }> = {},
-): HookOutput<'VideoInputGemini', { stream: true }> | HookOutput<'VideoInputGemini', { stream: false }> {
-  let action: ServerAction = Actions.VideoInputGemini;
-  if (isStreamingProps(props)) {
-    action = StreamingActions.VideoInputGemini;
-    return useBamlAction(action, props)
-  } else {
-    return useBamlAction(action, props as HookInput<'VideoInputGemini', { stream: false }>)
-  }
-}
-/**
- * A specialized hook for the VideoInputVertex BAML function that supports both streaming and non‑streaming responses.
- *
- * **Input Types:**
- *
- * - vid: Video
- *
- *
- * **Return Type:**
- * - **Non‑streaming:** string
- * - **Streaming Partial:** string
- * - **Streaming Final:** string
- *
- * **Usage Patterns:**
- * 1. **Non‑streaming (Default)**
- *    - Best for quick responses and simple UI updates.
- * 2. **Streaming**
- *    - Ideal for long‑running operations or real‑time feedback.
- *
- * **Edge Cases:**
- * - Ensure robust error handling via `onError`.
- * - Handle cases where partial data may be incomplete or missing.
- *
- * @example
- * ```tsx
- * // Basic non‑streaming usage:
- * const { data, error, isLoading, mutate } = useVideoInputVertex({ stream: false});
- *
- * // Streaming usage:
- * const { data, streamData, isLoading, error, mutate } = useVideoInputVertex({
- *   stream: true | undefined,
- *   onStreamData: (partial) => console.log('Partial update:', partial),
- *   onFinalData: (final) => console.log('Final result:', final),
- *   onError: (err) => console.error('Error:', err),
- * });
- * ```
- */
-export function useVideoInputVertex(props: HookInput<'VideoInputVertex', { stream: false }>): HookOutput<'VideoInputVertex', { stream: false }>
-export function useVideoInputVertex(props?: HookInput<'VideoInputVertex', { stream?: true }>): HookOutput<'VideoInputVertex', { stream: true }>
-export function useVideoInputVertex(
-  props: HookInput<'VideoInputVertex', { stream?: boolean }> = {},
-): HookOutput<'VideoInputVertex', { stream: true }> | HookOutput<'VideoInputVertex', { stream: false }> {
-  let action: ServerAction = Actions.VideoInputVertex;
-  if (isStreamingProps(props)) {
-    action = StreamingActions.VideoInputVertex;
-    return useBamlAction(action, props)
-  } else {
-    return useBamlAction(action, props as HookInput<'VideoInputVertex', { stream: false }>)
   }
 }
