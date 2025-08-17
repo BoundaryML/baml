@@ -14,6 +14,8 @@
 package baml_client
 
 import (
+	"reflect"
+
 	"example.com/integ-tests/baml_client/stream_types"
 	"example.com/integ-tests/baml_client/types"
 )
@@ -243,6 +245,7 @@ var typeMap = map[string]reflect.Type{
 	"TYPES.Union__EmailAddress__PhoneNumber":                                        reflect.TypeOf(types.Union2EmailAddressOrPhoneNumber{}),
 	"TYPES.Union__Event__Resume":                                                    reflect.TypeOf(types.Union2EventOrResume{}),
 	"TYPES.Union__float__int":                                                       reflect.TypeOf(types.Union2FloatOrInt{}),
+	"TYPES.Union__image__string":                                                    reflect.TypeOf(types.Union2ImageOrString{}),
 	"TYPES.Union__int__string":                                                      reflect.TypeOf(types.Union2IntOrString{}),
 	"TYPES.Union__JsonTemplate__SimpleTag":                                          reflect.TypeOf(types.Union2JsonTemplateOrSimpleTag{}),
 	"TYPES.Union__string_barisa__string_ox_burger":                                  reflect.TypeOf(types.Union2KbarisaOrKox_burger{}),
