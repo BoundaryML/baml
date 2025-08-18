@@ -326,7 +326,7 @@ expr_block = { BLOCK_OPEN ~ NEWLINE? ~ (stmt | comment_block | empty_lines)* ~ e
 // With operator overloading (implicit function call) + side effects.
 //
 // Just allow any expr and fix the parser.
-stmt = { (((let_expr | assign_op_stmt | assign_stmt | fn_app | generic_fn_app | BREAK_KEYWORD | CONTINUE_KEYWORD | return_stmt) ~ SEMICOLON) | for_loop | if_expression | while_loop | expr_block) ~ trailing_comment? ~ NEWLINE? }
+stmt = { (((let_expr | assign_op_stmt | assign_stmt | fn_app | generic_fn_app | BREAK_KEYWORD | CONTINUE_KEYWORD | return_stmt | assert_stmt) ~ SEMICOLON) | for_loop | if_expression | while_loop | expr_block) ~ trailing_comment? ~ NEWLINE? }
 
 // Let-binding statement.
 let_expr = { "let" ~ MUT_KEYWORD? ~ identifier ~ "=" ~ expression }
@@ -371,6 +371,8 @@ c_for_init_stmt = { let_expr | assign_op_stmt | assign_stmt | fn_app | generic_f
 c_for_after_stmt = {  assign_op_stmt | assign_stmt | fn_app | generic_fn_app }
 
 return_stmt = { "return" ~ expression? }
+
+assert_stmt = { "assert" ~ expression }
 
 // Anonymous function.
 lambda = { named_argument_list ~ "=>" ~ expression }
