@@ -47,7 +47,8 @@
     "./native": "./native.js",
     "./type_builder": "./type_builder.js",
     "./errors": "./errors.js",
-    "./browser": "./browser.js"
+    "./browser": "./browser.js",
+    "./logging": "./logging.js"
   },
   "napi": {
     "binaryName": "baml",
