@@ -3,7 +3,7 @@
 //! This files contains the convertions between Baml AST nodes to HIR nodes.
 
 use baml_types::{type_meta::base::StreamingBehavior, Constraint, ConstraintLevel, TypeValue};
-use internal_baml_ast::ast::{self, App, Attribute, ReturnStmt, WithName, WithSpan};
+use internal_baml_ast::ast::{self, App, AssertStmt, Attribute, ReturnStmt, WithName, WithSpan};
 use internal_baml_diagnostics::Span;
 
 use crate::hir::{
@@ -477,7 +477,10 @@ fn lower_stmt(stmt: &ast::Stmt) -> Statement {
             expr: Expression::from_ast(value),
             span: span.clone(),
         },
-        ast::Stmt::Assert(_) => todo!("lower assert to HIR"),
+        ast::Stmt::Assert(AssertStmt { value, span }) => Statement::Assert {
+            condition: Expression::from_ast(value),
+            span: span.clone(),
+        },
     };
     hir_stmt
 }

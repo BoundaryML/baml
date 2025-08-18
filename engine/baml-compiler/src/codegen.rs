@@ -558,7 +558,6 @@ impl<'g> HirCompiler<'g> {
                 // unreachable.
                 self.emit(Instruction::Jump(0));
             }
-
             hir::Statement::CForLoop {
                 condition,
                 after,
@@ -591,6 +590,7 @@ impl<'g> HirCompiler<'g> {
                     }
                 }
             },
+            hir::Statement::Assert { .. } => todo!("assert bytecode"),
         }
     }
 

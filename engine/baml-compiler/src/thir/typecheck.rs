@@ -19,7 +19,7 @@
 /// in several places. Bidirectional typing is the target.
 use std::sync::Arc;
 
-use baml_types::{BamlMap, BamlValueWithMeta};
+use baml_types::{type_meta::base::StreamingBehavior, BamlMap, BamlValueWithMeta};
 use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Diagnostics, Span};
 
 use crate::{
@@ -374,14 +374,12 @@ fn typecheck_statement(
             match cur_type {
                 Some(has) => {
                     if !has.eq_up_to_span(return_type) {
-                        let mut s = String::new();
-
-                        _ = expr.to_doc().render_fmt(10, &mut s);
+                        let src = render_doc_to_string(expr.to_doc());
 
                         diagnostics.push_error(DatamodelError::new_type_mismatch_error(
                             return_type.name_for_user(),
                             has.name_for_user(),
-                            &s,
+                            &src,
                             span.clone(),
                         ));
                     }
@@ -612,7 +610,46 @@ fn typecheck_statement(
                 block,
             })
         }
+        hir::Statement::Assert {
+            condition: hir_cond,
+            span,
+        } => {
+            let mut condition = typecheck_expression(hir_cond, context, diagnostics);
+
+            let bool = TypeM::Bool(TypeMeta {
+                span: condition.span().clone(),
+                constraints: vec![],
+                streaming_behavior: StreamingBehavior::default(),
+            });
+
+            match &mut condition.meta_mut().1 {
+                Some(cur_type) => {
+                    if !cur_type.eq_up_to_span(&bool) {
+                        diagnostics.push_error(DatamodelError::new_type_mismatch_error(
+                            bool.name_for_user(),
+                            cur_type.name_for_user(),
+                            &render_doc_to_string(hir_cond.to_doc()),
+                            span.clone(),
+                        ));
+                    }
+                }
+                cond @ None => {
+                    *cond = Some(bool);
+                }
+            }
+
+            Some(thir::Statement::Assert {
+                condition,
+                span: span.clone(),
+            })
+        }
     }
+}
+
+fn render_doc_to_string(doc: pretty::RcDoc<'static>) -> String {
+    let mut s = String::new();
+    _ = doc.render_fmt(10, &mut s);
+    s
 }
 
 /// Typecheck an expression and infer its type
