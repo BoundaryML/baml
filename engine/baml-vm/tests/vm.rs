@@ -1134,3 +1134,91 @@ fn for_loop_nested() -> anyhow::Result<()> {
         expected: VmExecState::Complete(Value::Int(21)),
     })
 }
+
+#[cfg(test)]
+mod c_for_loops {
+
+    use super::*;
+
+    #[test]
+    fn sum_to_ten() -> anyhow::Result<()> {
+        assert_vm_executes(Program {
+            source: r#"
+                fn SumToTen() -> int {
+                    let mut s = 0;
+
+                    for (let mut i = 1; i <= 10; i += 1) {
+                        s += i;
+                    }
+
+                    s
+                }
+                "#,
+            function: "SumToTen",
+            expected: VmExecState::Complete(Value::Int(55)),
+        })
+    }
+
+    #[test]
+    fn after_with_break_continue() -> anyhow::Result<()> {
+        assert_vm_executes(Program {
+            source: r#"
+                fn SumToTen() -> int {
+                    let mut s = 0;
+
+                    for (let mut i = 0; ; s += i) {
+                        i += 1;
+                        if i > 10 {
+                            let x = 0; // this tests that popping is correct.
+                            break;
+                        }
+                        if i == 5 {
+                            // since `s += i` is in the for loop's after, this 'continue' is
+                            // actually irrelevant and the function does the same as SumToTen.
+                            // That's the behavior we're looking for.
+                            continue;
+                        }
+                    }
+
+                    s
+                }"#,
+            function: "SumToTen",
+            expected: VmExecState::Complete(Value::Int(55)),
+        })
+    }
+
+    #[test]
+    fn only_cond() -> anyhow::Result<()> {
+        assert_vm_executes(Program {
+            source: r#"
+                fn OnlyCond() -> int {
+                    let mut s = 0;
+
+                    for (; false;) {
+                    }
+
+                    s
+                }"#,
+            function: "OnlyCond",
+            expected: VmExecState::Complete(Value::Int(0)),
+        })
+    }
+
+    #[test]
+    fn endless() -> anyhow::Result<()> {
+        assert_vm_executes(Program {
+            source: r#"
+                fn Nothing() -> int {
+                    let mut s = 0;
+
+                    for (;;) {
+                        break;
+                    }
+
+                    s
+                }"#,
+            function: "Nothing",
+            expected: VmExecState::Complete(Value::Int(0)),
+        })
+    }
+}

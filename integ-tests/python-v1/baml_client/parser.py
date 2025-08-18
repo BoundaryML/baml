@@ -1324,6 +1324,18 @@ class LlmResponseParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="EchoWorkflow", llm_response=llm_response, mode="request")
         return typing.cast(str, result)
 
+    def IterativeFibonacci(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="IterativeFibonacci", llm_response=llm_response, mode="request")
+        return typing.cast(int, result)
+
+    def LengthOfArray(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="LengthOfArray", llm_response=llm_response, mode="request")
+        return typing.cast(int, result)
+
     def NormalElseIfStmt(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> int:
@@ -1364,6 +1376,18 @@ class LlmResponseParser:
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> int:
         result = self.__options.merge_options(baml_options).parse_response(function_name="StoreLlmCallInLocalVar", llm_response=llm_response, mode="request")
+        return typing.cast(int, result)
+
+    def SumArray(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="SumArray", llm_response=llm_response, mode="request")
+        return typing.cast(int, result)
+
+    def SumFromTo(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="SumFromTo", llm_response=llm_response, mode="request")
         return typing.cast(int, result)
 
     
@@ -2676,6 +2700,18 @@ class LlmStreamParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="EchoWorkflow", llm_response=llm_response, mode="stream")
         return typing.cast(typing.Optional[str], result)
 
+    def IterativeFibonacci(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional[int]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="IterativeFibonacci", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[int], result)
+
+    def LengthOfArray(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional[int]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="LengthOfArray", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[int], result)
+
     def NormalElseIfStmt(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Optional[int]:
@@ -2716,6 +2752,18 @@ class LlmStreamParser:
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Optional[int]:
         result = self.__options.merge_options(baml_options).parse_response(function_name="StoreLlmCallInLocalVar", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[int], result)
+
+    def SumArray(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional[int]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="SumArray", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[int], result)
+
+    def SumFromTo(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional[int]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="SumFromTo", llm_response=llm_response, mode="stream")
         return typing.cast(typing.Optional[int], result)
 
     

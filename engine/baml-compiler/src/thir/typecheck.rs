@@ -208,7 +208,7 @@ impl TypeContext {
             .or_else(|| self.symbols.get(name))
     }
 
-    pub fn infer_type(&mut self, expr: &hir::Expression) -> Option<Type> {
+    pub fn infer_type(&mut self, _expr: &hir::Expression) -> Option<Type> {
         todo!()
     }
 
@@ -379,9 +379,12 @@ fn typecheck_statement(
                 span: span.clone(),
             })
         }
-        // TODO: assign op needs more type checking?
-        hir::Statement::Assign { name, value, .. }
-        | hir::Statement::AssignOp { name, value, .. } => {
+        hir::Statement::Assign {
+            name, value, span, ..
+        }
+        | hir::Statement::AssignOp {
+            name, value, span, ..
+        } => {
             let typed_value = typecheck_expression(value, context, diagnostics);
 
             // validate/update type.
@@ -422,7 +425,7 @@ fn typecheck_statement(
                 None => {
                     diagnostics.push_error(DatamodelError::new_validation_error(
                         &format!("Unknown variable {name}"),
-                        value.span(),
+                        span.clone(),
                     ));
                 }
             }
@@ -530,7 +533,6 @@ fn typecheck_statement(
                 span: span.clone(),
             })
         }
-
         hir::Statement::Break(span) | hir::Statement::Continue(span) => {
             if !context.is_inside_loop {
                 let name = if let hir::Statement::Continue(_) = stmt {
@@ -550,6 +552,30 @@ fn typecheck_statement(
                 hir::Statement::Continue(span) => thir::Statement::Continue(span.clone()),
                 hir::Statement::Break(span) => thir::Statement::Break(span.clone()),
                 _ => panic!("just matched break & continue"),
+            })
+        }
+        hir::Statement::CForLoop {
+            condition,
+            after,
+            block,
+        } => {
+            // make sure that we typecheck with the correct context (condition before block)
+
+            let condition = condition
+                .as_ref()
+                .map(|cond| typecheck_expression(cond, context, diagnostics));
+
+            let after = match after.as_ref() {
+                Some(after) => Some(Box::new(typecheck_statement(after, context, diagnostics)?)),
+                None => None,
+            };
+
+            let block = context.inside_loop(|context| typecheck_block(block, context, diagnostics));
+
+            Some(thir::Statement::CForLoop {
+                condition,
+                after,
+                block,
             })
         }
     }
@@ -1090,7 +1116,7 @@ fn typecheck_expression(
         // Don't care about parens here, order is defined by Pratt Parser.
         // TODO: Still if we need to print errors we need the entire span of the
         // expr? Also print the expr?
-        hir::Expression::Paren(expr, span) => typecheck_expression(expr, context, diagnostics),
+        hir::Expression::Paren(expr, _) => typecheck_expression(expr, context, diagnostics),
     }
 }
 

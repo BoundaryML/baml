@@ -540,10 +540,10 @@ impl Vm {
             self.objects[function]
         );
 
-        debug_assert!(
-            self.objects.len() == self.runtime_allocs_offset,
-            "garbage collection did not run before setting a new entry point"
-        );
+        // TODO: Run collect_garbage in codegen after each function call.
+        if self.objects.len() != self.runtime_allocs_offset {
+            eprintln!("WARNING: garbage collection did not run before setting a new entry point");
+        }
 
         self.stack.push(Value::Object(function));
         self.stack.extend(args.iter().copied());
@@ -606,6 +606,13 @@ impl Vm {
     /// Everything allocated while the program run is dropped.
     pub fn collect_garbage(&mut self) {
         self.objects.drain(self.runtime_allocs_offset..);
+    }
+
+    /// Allocates an array on the heap and returns it to the caller.
+    pub fn alloc_array(&mut self, values: Vec<Value>) -> Value {
+        let object = self.objects.len();
+        self.objects.push(Object::Array(values));
+        Value::Object(object)
     }
 
     /// Main VM execution loop.

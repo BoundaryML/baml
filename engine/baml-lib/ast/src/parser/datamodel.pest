@@ -363,7 +363,13 @@ while_loop = { "while" ~  expression ~  expr_block  }
 // for r in resumes {
 //   ExtractResume(x)
 // }
-for_loop = { "for" ~ identifier ~ "in" ~ expression ~ expr_block }
+for_loop = { "for" ~ (iterator_for_loop | c_for_loop) ~ expr_block }
+iterator_for_loop = { identifier ~ "in" ~ expression }
+c_for_loop = {  "(" ~ c_for_init_stmt? ~ ";" ~ expression? ~ ";" ~ c_for_after_stmt? ~ ")" }
+// NOTE: let_expr ... list copied from `stmt` rule, discarding nonsensical stmts
+c_for_init_stmt = { let_expr | assign_op_stmt | assign_stmt | fn_app | generic_fn_app }
+// same as above but without `let`.
+c_for_after_stmt = {  assign_op_stmt | assign_stmt | fn_app | generic_fn_app }
 
 // Anonymous function.
 lambda = { named_argument_list ~ "=>" ~ expression }

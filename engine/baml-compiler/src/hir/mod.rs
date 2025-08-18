@@ -61,12 +61,12 @@ impl<T> TypeM<T> {
             TypeM::Float(_) => "float",
             TypeM::Bool(_) => "bool",
             TypeM::Null(_) => "null type",
-            TypeM::Array(type_m, _) => "array",
-            TypeM::Map(type_m, type_m1, _) => "map",
+            TypeM::Array(_, _) => "array",
+            TypeM::Map(_, _, _) => "map",
             TypeM::ClassName(_, _) => "class",
             TypeM::EnumName(_, _) => "enum",
-            TypeM::Union(type_ms, _) => "union",
-            TypeM::Arrow(arrow, _) => "function",
+            TypeM::Union(_, _) => "union",
+            TypeM::Arrow(_, _) => "function",
         }
     }
 }
@@ -363,7 +363,7 @@ pub enum Statement {
         span: Span,
     },
     While {
-        condition: Box<Expression>,
+        condition: Expression,
         block: Block,
         span: Span,
     },
@@ -372,6 +372,12 @@ pub enum Statement {
         iterator: Box<Expression>,
         block: Block,
         span: Span,
+    },
+    /// C-like for-loop that can't be directly mapped to `while` because it has either no condition or has after statement
+    CForLoop {
+        condition: Option<Expression>,
+        after: Option<Box<Statement>>,
+        block: Block,
     },
     Break(Span),
     Continue(Span),
@@ -444,7 +450,7 @@ pub enum Expression {
     // MethodCall(Box<Expression>, String, Vec<Expression>), // TODO.
     ClassConstructor(ClassConstructor, Span),
     /// Expression block - has its own scope with statements and evaluates to a value
-    ExpressionBlock(Box<Block>, Span),
+    ExpressionBlock(Block, Span),
     BinaryOperation {
         left: Box<Expression>,
         operator: BinaryOperator,

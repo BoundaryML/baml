@@ -132,18 +132,6 @@ impl<T> Block<T> {
         }
         free_vars
     }
-
-    pub fn temporary_same_state(&self, other: &Block<T>) -> bool
-    where
-        T: Clone + std::fmt::Debug,
-    {
-        self.return_value.temporary_same_state(&other.return_value)
-            && self
-                .statements
-                .iter()
-                .zip(other.statements.iter())
-                .all(|(s1, s2)| s1.temporary_same_state(s2))
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -352,193 +340,6 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
-        }
-    }
-
-    /// This quick hack of a function checks whether two expressions are
-    /// equal in terms of reduction state. This test is used to detect
-    /// if the evaluation stepper is stuck.
-    pub fn temporary_same_state(&self, other: &Expr<T>) -> bool {
-        match (self, other) {
-            (Expr::Atom(a1), Expr::Atom(a2)) => a1.clone().value() == a2.clone().value(),
-            (Expr::Atom(_), _) => false,
-
-            (Expr::Block(b1, _), Expr::Block(b2, _)) => b1.temporary_same_state(b2),
-            (Expr::Block(_, _), _) => false,
-
-            (Expr::Builtin(b1, _), Expr::Builtin(b2, _)) => b1 == b2,
-            (Expr::Builtin(_, _), _) => false,
-
-            (Expr::FreeVar(n1, _), Expr::FreeVar(n2, _)) => n1 == n2,
-            (Expr::FreeVar(_, _), _) => false,
-
-            (Expr::Function(name1, body1, _), Expr::Function(name2, body2, _)) => {
-                name1 == name2 && body1.temporary_same_state(body2)
-            }
-            (Expr::Function(_, _, _), _) => false,
-            (
-                Expr::Call {
-                    func: f1, args: x1, ..
-                },
-                Expr::Call {
-                    func: f2, args: x2, ..
-                },
-            ) => {
-                f1.temporary_same_state(f2)
-                    && x1
-                        .iter()
-                        .zip(x2.iter())
-                        .all(|(a1, a2)| a1.temporary_same_state(a2))
-            }
-            (Expr::Call { .. }, _) => false,
-
-            (
-                Expr::MethodCall {
-                    receiver: r1,
-                    method: m1,
-                    args: a1,
-                    ..
-                },
-                Expr::MethodCall {
-                    receiver: r2,
-                    method: m2,
-                    args: a2,
-                    ..
-                },
-            ) => {
-                r1.temporary_same_state(r2)
-                    && m1.temporary_same_state(m2)
-                    && a1
-                        .iter()
-                        .zip(a2.iter())
-                        .all(|(a1, a2)| a1.temporary_same_state(a2))
-            }
-            (Expr::MethodCall { .. }, _) => false,
-
-            (
-                Expr::ClassConstructor {
-                    name: n1,
-                    fields: e1,
-                    spread: s1,
-                    ..
-                },
-                Expr::ClassConstructor {
-                    name: n2,
-                    fields: e2,
-                    spread: s2,
-                    ..
-                },
-            ) => {
-                n1 == n2
-                    && e1.len() == e2.len()
-                    && e1
-                        .iter()
-                        .zip(e2.iter())
-                        .all(|((_k1, v1), (_k2, v2))| v1.temporary_same_state(v2))
-                    && (match (s1, s2) {
-                        (Some(s1), Some(s2)) => s1.temporary_same_state(s2),
-                        (None, None) => true,
-                        _ => false,
-                    })
-            }
-            (Expr::ClassConstructor { .. }, _) => false,
-
-            (Expr::Map(e1, _), Expr::Map(e2, _)) => {
-                e1.len() == e2.len()
-                    && e1
-                        .iter()
-                        .zip(e2.iter())
-                        .all(|((_k1, v1), (_k2, v2))| v1.temporary_same_state(v2))
-            }
-            (Expr::Map(_, _), _) => false,
-
-            (Expr::List(e1, _), Expr::List(e2, _)) => {
-                e1.len() == e2.len()
-                    && e1
-                        .iter()
-                        .zip(e2.iter())
-                        .all(|(a1, a2)| a1.temporary_same_state(a2))
-            }
-            (Expr::List(_, _), _) => false,
-
-            (Expr::If(cond1, then1, else1, _), Expr::If(cond2, then2, else2, _)) => {
-                let else_same = match (&else1, &else2) {
-                    (Some(e1), Some(e2)) => e1.temporary_same_state(e2),
-                    (None, None) => true,
-                    _ => false,
-                };
-                cond1.temporary_same_state(cond2) && then1.temporary_same_state(then2) && else_same
-            }
-            (Expr::If(_, _, _, _), _) => false,
-            (
-                Expr::ForLoop {
-                    item: i1,
-                    iterable: iter1,
-                    body: body1,
-                    ..
-                },
-                Expr::ForLoop {
-                    item: i2,
-                    iterable: iter2,
-                    body: body2,
-                    ..
-                },
-            ) => i1 == i2 && iter1.temporary_same_state(iter2) && body1.temporary_same_state(body2),
-            (Expr::ForLoop { .. }, _) => false,
-            (
-                Expr::ArrayAccess {
-                    base: base1,
-                    index: index1,
-                    ..
-                },
-                Expr::ArrayAccess {
-                    base: base2,
-                    index: index2,
-                    ..
-                },
-            ) => base1.temporary_same_state(base2) && index1.temporary_same_state(index2),
-            (Expr::ArrayAccess { .. }, _) => false,
-            (
-                Expr::FieldAccess {
-                    base: base1,
-                    field: field1,
-                    ..
-                },
-                Expr::FieldAccess {
-                    base: base2,
-                    field: field2,
-                    ..
-                },
-            ) => base1.temporary_same_state(base2) && field1 == field2,
-            (Expr::FieldAccess { .. }, _) => false,
-            (
-                Expr::BinaryOperation {
-                    left,
-                    operator,
-                    right,
-                    ..
-                },
-                Expr::BinaryOperation {
-                    left: left2,
-                    operator: operator2,
-                    right: right2,
-                    ..
-                },
-            ) => {
-                left.temporary_same_state(left2)
-                    && operator == operator2
-                    && right.temporary_same_state(right2)
-            }
-            (Expr::BinaryOperation { .. }, _) => false,
-            (
-                Expr::UnaryOperation { operator, expr, .. },
-                Expr::UnaryOperation {
-                    operator: operator2,
-                    expr: expr2,
-                    ..
-                },
-            ) => operator == operator2 && expr.temporary_same_state(expr2),
-            (Expr::UnaryOperation { .. }, _) => false,
         }
     }
 }
@@ -849,6 +650,12 @@ pub enum Statement<T> {
         block: Block<T>,
         span: Span,
     },
+    /// like [`crate::hir::Statement::CForLoop`]
+    CForLoop {
+        condition: Option<Expr<T>>,
+        after: Option<Box<Statement<T>>>,
+        block: Block<T>,
+    },
     Break(Span),
     Continue(Span),
 }
@@ -901,6 +708,24 @@ impl<T: Clone> Statement<T> {
             }
             Statement::Break(_) => "break".to_string(),
             Statement::Continue(_) => "continue".to_string(),
+            Statement::CForLoop {
+                condition,
+                after,
+                block,
+            } => {
+                let condition = condition
+                    .as_ref()
+                    .map(Expr::dump_str)
+                    .unwrap_or_else(String::new);
+
+                let after = after
+                    .as_ref()
+                    .map(|s| s.dump_str())
+                    .unwrap_or_else(String::new);
+                let block = block.dump_str();
+
+                format!("for (;{condition};{after}) {{ {block} }}")
+            }
         }
     }
 
@@ -909,127 +734,55 @@ impl<T: Clone> Statement<T> {
         T: Clone,
     {
         match self {
-            Statement::Let {
-                name,
-                value,
-                span: _,
-            } => value.free_vars(),
-            Statement::Declare { name, span: _ } => HashSet::new(),
-            Statement::Assign { name, value } => value.free_vars(),
-            Statement::DeclareAndAssign {
-                name,
-                value,
-                span: _,
-            } => value.free_vars(),
-            Statement::FunctionReturn { expr, span: _ } => expr.free_vars(),
-            Statement::Expression { expr, span: _ } => expr.free_vars(),
-            Statement::While {
-                condition,
-                block,
-                span: _,
-            } => {
-                let mut free_vars = condition.free_vars();
-                free_vars.extend(block.free_vars());
-                free_vars
+            Statement::Declare { .. } | Statement::Break(_) | Statement::Continue(_) => {
+                HashSet::new()
             }
-            Statement::ForLoop {
-                identifier,
-                iterator,
-                block,
-                span: _,
-            } => {
-                let mut free_vars = iterator.free_vars();
-                free_vars.extend(block.free_vars());
-                free_vars
-            }
-            Statement::Break(_) | Statement::Continue(_) => HashSet::new(),
-        }
-    }
 
-    pub fn temporary_same_state(&self, other: &Statement<T>) -> bool
-    where
-        T: Clone + std::fmt::Debug,
-    {
-        match (self, other) {
-            (
-                Statement::Let {
-                    name,
-                    value,
-                    span: _,
-                },
-                Statement::Let {
-                    name: _,
-                    value: _,
-                    span: _,
-                },
-            ) => value.temporary_same_state(value),
-            (
-                Statement::Let {
-                    name: _,
-                    value: _,
-                    span: _,
-                },
-                _,
-            ) => false,
-            (Statement::Declare { name, span: _ }, Statement::Declare { name: _, span: _ }) => true,
-            (Statement::Declare { name: _, span: _ }, _) => false,
-            (Statement::Assign { name, value }, Statement::Assign { name: _, value: _ }) => {
-                value.temporary_same_state(value)
+            Statement::Let { value, .. }
+            | Statement::Assign { value, .. }
+            | Statement::DeclareAndAssign { value, .. } => value.free_vars(),
+
+            Statement::FunctionReturn { expr, .. } | Statement::Expression { expr, .. } => {
+                expr.free_vars()
             }
-            (Statement::Assign { name: _, value: _ }, _) => false,
-            (
-                Statement::DeclareAndAssign {
-                    name,
-                    value,
-                    span: _,
-                },
-                Statement::DeclareAndAssign {
-                    name: _,
-                    value: value2,
-                    span: _,
-                },
-            ) => value.temporary_same_state(value2),
-            (Statement::DeclareAndAssign { .. }, _) => false,
-            (
-                Statement::FunctionReturn { expr, span: _ },
-                Statement::FunctionReturn { expr: _, span: _ },
-            ) => expr.temporary_same_state(expr),
-            (Statement::FunctionReturn { .. }, _) => false,
-            (
-                Statement::Expression { expr, span: _ },
-                Statement::Expression { expr: _, span: _ },
-            ) => expr.temporary_same_state(expr),
-            (Statement::Expression { .. }, _) => false,
-            (
-                Statement::While {
-                    condition,
-                    block,
-                    span: _,
-                },
-                Statement::While {
-                    condition: _,
-                    block: block2,
-                    span: _,
-                },
-            ) => condition.temporary_same_state(condition) && block.temporary_same_state(block2),
-            (Statement::While { .. }, _) => false,
-            (
-                Statement::ForLoop {
-                    identifier: _,
-                    iterator,
-                    block,
-                    span: _,
-                },
-                Statement::ForLoop {
-                    identifier: _,
-                    iterator: iterator2,
-                    block: block2,
-                    span: _,
-                },
-            ) => iterator.temporary_same_state(iterator2) && block.temporary_same_state(block2),
-            (Statement::ForLoop { .. }, _) => false,
-            (Statement::Break(_), other) => matches!(other, Statement::Break(_)),
-            (Statement::Continue(_), other) => matches!(other, Statement::Continue(_)),
+
+            Statement::While {
+                condition: expr,
+                block,
+                ..
+            }
+            | Statement::ForLoop {
+                iterator: expr,
+                block,
+                ..
+            } => {
+                let mut free_vars = expr.free_vars();
+                free_vars.extend(block.free_vars());
+                free_vars
+            }
+
+            Statement::CForLoop {
+                condition,
+                after,
+                block,
+            } => {
+                let condition_vars = condition
+                    .as_ref()
+                    .map(Expr::free_vars)
+                    .unwrap_or_else(HashSet::new);
+
+                let after_vars = after
+                    .as_ref()
+                    .map(|s| s.free_vars())
+                    .unwrap_or_else(HashSet::new);
+
+                let mut block_vars = block.free_vars();
+
+                block_vars.extend(condition_vars);
+                block_vars.extend(after_vars);
+
+                block_vars
+            }
         }
     }
 }

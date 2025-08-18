@@ -72,8 +72,8 @@ pub fn bench_iterative_fib(c: &mut Criterion) {
                             if n == 0 {
                                 b
                             } else {
-                                let mut i = 0;
-                                while i < n {
+                                let mut i = 1;
+                                while i <= n {
                                     let c = a + b;
                                     a = b;
                                     b = c;

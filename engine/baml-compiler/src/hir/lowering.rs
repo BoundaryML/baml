@@ -292,126 +292,8 @@ impl Block {
 
         // Process statements, checking for if expressions in let bindings
         for stmt in &block.stmts {
-            match stmt {
-                ast::Stmt::Break(span) => statements.push(Statement::Break(span.clone())),
-                ast::Stmt::Continue(span) => statements.push(Statement::Continue(span.clone())),
-                ast::Stmt::WhileLoop(ast::WhileStmt {
-                    condition,
-                    body,
-                    span,
-                }) => {
-                    // lowering to HIR is trivial, since HIR maps 1:1 with this.
-
-                    let hir_condition = Expression::from_ast(condition);
-
-                    let hir_body = Block::from_expression_block(body);
-
-                    statements.push(Statement::While {
-                        condition: Box::new(hir_condition),
-                        block: hir_body,
-                        span: span.clone(),
-                    })
-                }
-                ast::Stmt::Assign(ast::AssignStmt {
-                    identifier,
-                    expr,
-                    span,
-                }) => {
-                    statements.push(Statement::Assign {
-                        name: identifier.to_string(),
-                        value: Expression::from_ast(expr),
-                        span: span.clone(),
-                    });
-                }
-                ast::Stmt::AssignOp(ast::AssignOpStmt {
-                    identifier,
-                    assign_op,
-                    expr,
-                    span,
-                }) => {
-                    statements.push(Statement::AssignOp {
-                        name: identifier.to_string(),
-                        assign_op: match assign_op {
-                            ast::AssignOp::AddAssign => hir::AssignOp::AddAssign,
-                            ast::AssignOp::SubAssign => hir::AssignOp::SubAssign,
-                            ast::AssignOp::MulAssign => hir::AssignOp::MulAssign,
-                            ast::AssignOp::DivAssign => hir::AssignOp::DivAssign,
-                            ast::AssignOp::ModAssign => hir::AssignOp::ModAssign,
-                            ast::AssignOp::BitXorAssign => hir::AssignOp::BitXorAssign,
-                            ast::AssignOp::BitAndAssign => hir::AssignOp::BitAndAssign,
-                            ast::AssignOp::BitOrAssign => hir::AssignOp::BitOrAssign,
-                            ast::AssignOp::ShlAssign => hir::AssignOp::ShlAssign,
-                            ast::AssignOp::ShrAssign => hir::AssignOp::ShrAssign,
-                        },
-                        value: Expression::from_ast(expr),
-                        span: span.clone(),
-                    });
-                }
-                ast::Stmt::Let(ast::LetStmt {
-                    identifier,
-                    is_mutable,
-                    expr,
-                    span,
-                }) => {
-                    let lifted_expr = Expression::from_ast(expr);
-
-                    let stmt = if *is_mutable {
-                        Statement::DeclareAndAssign {
-                            name: identifier.to_string(),
-                            value: lifted_expr,
-                            span: span.clone(),
-                        }
-                    } else {
-                        Statement::Let {
-                            name: identifier.to_string(),
-                            value: lifted_expr,
-                            span: span.clone(),
-                        }
-                    };
-
-                    // Then add the actual let statement
-                    statements.push(stmt);
-                }
-                ast::Stmt::ForLoop(ast::ForLoopStmt {
-                    identifier,
-                    iterator,
-                    body,
-                    span,
-                }) => {
-                    // Lower for loop to HIR
-                    let lifted_iterator = Expression::from_ast(iterator);
-
-                    // Add the for loop statement
-                    statements.push(Statement::ForLoop {
-                        identifier: identifier.name().to_string(),
-                        iterator: Box::new(lifted_iterator),
-                        block: Block::from_expression_block(body),
-                        span: span.clone(),
-                    });
-                }
-                ast::Stmt::Expression(expr) => {
-                    let hir_expr = Expression::from_ast(expr);
-
-                    // Expressions that contain blocks themselves will deal with
-                    // return expressions recursively. But expressions that have
-                    // no blocks (like function calls or 2 + 2) must drop the
-                    // returned value, so we insert semicolon expressions.
-                    if matches!(
-                        expr,
-                        ast::Expression::If(..) | ast::Expression::ExprBlock(..)
-                    ) {
-                        statements.push(Statement::Expression {
-                            expr: hir_expr,
-                            span: expr.span().clone(),
-                        });
-                    } else {
-                        statements.push(Statement::SemicolonExpression {
-                            expr: hir_expr,
-                            span: expr.span().clone(),
-                        });
-                    }
-                }
-            }
+            let hir_stmt = lower_stmt(stmt);
+            statements.push(hir_stmt);
         }
 
         if let Some(block_final_expr) = block.expr.as_ref() {
@@ -433,6 +315,167 @@ impl Block {
 
         Block { statements }
     }
+}
+
+fn lower_stmt(stmt: &ast::Stmt) -> Statement {
+    let hir_stmt = match stmt {
+        ast::Stmt::CForLoop(stmt) => {
+            // we'll add  a block if we an init statement, otherwise we'll just
+            // use the current context to push the while statement.
+
+            let condition = stmt.condition.as_ref().map(Expression::from_ast);
+            let init = stmt.init_stmt.as_ref().map(|b| lower_stmt(b));
+            let block = Block::from_expression_block(&stmt.body);
+            let after = stmt
+                .after_stmt
+                .as_ref()
+                .map(|b| lower_stmt(b))
+                .map(Box::new);
+
+            let inner_loop = match (condition, after) {
+                (Some(condition), None) => Statement::While {
+                    condition,
+                    block,
+                    span: stmt.span.clone(),
+                },
+                (condition, after) => Statement::CForLoop {
+                    condition,
+                    after,
+                    block,
+                },
+            };
+
+            match init {
+                Some(init) => {
+                    // use a block
+                    Statement::Expression {
+                        expr: Expression::ExpressionBlock(
+                            Block {
+                                statements: vec![init, inner_loop],
+                            },
+                            stmt.span.clone(),
+                        ),
+                        span: stmt.span.clone(),
+                    }
+                }
+                // just inner loop
+                None => inner_loop,
+            }
+        }
+
+        ast::Stmt::Break(span) => Statement::Break(span.clone()),
+        ast::Stmt::Continue(span) => Statement::Continue(span.clone()),
+        ast::Stmt::WhileLoop(ast::WhileStmt {
+            condition,
+            body,
+            span,
+        }) => {
+            // lowering to HIR is trivial, since HIR maps 1:1 with this.
+
+            let condition = Expression::from_ast(condition);
+
+            let body = Block::from_expression_block(body);
+
+            Statement::While {
+                condition,
+                block: body,
+                span: span.clone(),
+            }
+        }
+        ast::Stmt::Assign(ast::AssignStmt {
+            identifier,
+            expr,
+            span,
+        }) => Statement::Assign {
+            name: identifier.to_string(),
+            value: Expression::from_ast(expr),
+            span: span.clone(),
+        },
+        ast::Stmt::AssignOp(ast::AssignOpStmt {
+            identifier,
+            assign_op,
+            expr,
+            span,
+        }) => Statement::AssignOp {
+            name: identifier.to_string(),
+            assign_op: match assign_op {
+                ast::AssignOp::AddAssign => hir::AssignOp::AddAssign,
+                ast::AssignOp::SubAssign => hir::AssignOp::SubAssign,
+                ast::AssignOp::MulAssign => hir::AssignOp::MulAssign,
+                ast::AssignOp::DivAssign => hir::AssignOp::DivAssign,
+                ast::AssignOp::ModAssign => hir::AssignOp::ModAssign,
+                ast::AssignOp::BitXorAssign => hir::AssignOp::BitXorAssign,
+                ast::AssignOp::BitAndAssign => hir::AssignOp::BitAndAssign,
+                ast::AssignOp::BitOrAssign => hir::AssignOp::BitOrAssign,
+                ast::AssignOp::ShlAssign => hir::AssignOp::ShlAssign,
+                ast::AssignOp::ShrAssign => hir::AssignOp::ShrAssign,
+            },
+            value: Expression::from_ast(expr),
+            span: span.clone(),
+        },
+        ast::Stmt::Let(ast::LetStmt {
+            identifier,
+            is_mutable,
+            expr,
+            span,
+        }) => {
+            let lifted_expr = Expression::from_ast(expr);
+
+            if *is_mutable {
+                Statement::DeclareAndAssign {
+                    name: identifier.to_string(),
+                    value: lifted_expr,
+                    span: span.clone(),
+                }
+            } else {
+                Statement::Let {
+                    name: identifier.to_string(),
+                    value: lifted_expr,
+                    span: span.clone(),
+                }
+            }
+        }
+        ast::Stmt::ForLoop(ast::ForLoopStmt {
+            identifier,
+            iterator,
+            body,
+            span,
+        }) => {
+            // Lower for loop to HIR
+            let lifted_iterator = Expression::from_ast(iterator);
+
+            // Add the for loop statement
+            Statement::ForLoop {
+                identifier: identifier.name().to_string(),
+                iterator: Box::new(lifted_iterator),
+                block: Block::from_expression_block(body),
+                span: span.clone(),
+            }
+        }
+        ast::Stmt::Expression(expr) => {
+            let hir_expr = Expression::from_ast(expr);
+
+            // Expressions that contain blocks themselves will deal with
+            // return expressions recursively. But expressions that have
+            // no blocks (like function calls or 2 + 2) must drop the
+            // returned value, so we insert semicolon expressions.
+            if matches!(
+                expr,
+                ast::Expression::If(..) | ast::Expression::ExprBlock(..)
+            ) {
+                Statement::Expression {
+                    expr: hir_expr,
+                    span: expr.span().clone(),
+                }
+            } else {
+                Statement::SemicolonExpression {
+                    expr: hir_expr,
+                    span: expr.span().clone(),
+                }
+            }
+        }
+    };
+    hir_stmt
 }
 
 impl Expression {
@@ -527,12 +570,9 @@ impl Expression {
                 // Expression blocks are lowered to HIR preserving their structure
                 // This maintains proper scoping - variables defined inside the block
                 // are only visible within that block
-                Expression::ExpressionBlock(
-                    Box::new(Block::from_expression_block(block)),
-                    span.clone(),
-                )
+                Expression::ExpressionBlock(Block::from_expression_block(block), span.clone())
             }
-            ast::Expression::Lambda(_args, _body, span) => {
+            ast::Expression::Lambda(_, _, _) => {
                 todo!("lambdas are not yet implemented")
             }
             ast::Expression::ClassConstructor(cc, span) => {

@@ -268,8 +268,11 @@ struct HirCompiler<'g> {
     objects: &'g mut Vec<Object>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct LoopInfo {
+    /// Length of [`HirCompiler::scopes`] before entering the loop body. This helps `break` and
+    /// `continue` know how many scopes they have to pop.
+    pub scope_depth: usize,
     /// List of jump instruction locations to be patched when loop construction is done.
     /// They will point to the loop exit. Used for admitting arbitrary `break`s.
     pub break_patch_list: Vec<usize>,
@@ -371,12 +374,10 @@ impl<'g> HirCompiler<'g> {
             hir::Statement::Declare { name, .. } => {
                 self.declare_mut(name);
             }
-
             hir::Statement::Assign { name, value, .. } => {
                 self.compile_expression(value);
                 self.emit(Instruction::StoreVar(self.locals[name]));
             }
-
             hir::Statement::AssignOp {
                 name,
                 value,
@@ -428,7 +429,7 @@ impl<'g> HirCompiler<'g> {
                 identifier,
                 iterator,
                 block,
-                span,
+                ..
             } => {
                 // store array, array length & index in stack.
                 // compile as:
@@ -489,8 +490,7 @@ impl<'g> HirCompiler<'g> {
                     |ctx| {
                         ctx.enter_scope();
 
-                        // NOTE: would be nice to have newtype'd indices for these.
-                        let iterator_location = ctx.track_local(identifier.as_str());
+                        ctx.track_local(identifier.as_str());
 
                         // let <iterator name> = array[i];
 
@@ -511,6 +511,7 @@ impl<'g> HirCompiler<'g> {
 
                         ctx.exit_scope(false);
                     },
+                    |_| {},
                 );
 
                 self.exit_scope(false);
@@ -518,35 +519,85 @@ impl<'g> HirCompiler<'g> {
             hir::Statement::While {
                 condition, block, ..
             } => {
-                // Remember where the loop starts
-                let loop_start = self.bytecode.instructions.len() as isize;
-
                 self.compile_while_loop(
                     |ctx| ctx.compile_expression(condition),
                     |ctx| ctx.compile_block(block),
+                    |_| {},
                 );
             }
-            hir::Statement::Break(span) => {
+            hir::Statement::Break(_) => {
+                let cur_loop = self.assert_loop("break");
+
+                // since we are exiting the loop context, make sure we drop everything before
+                // breaking!
+                let pop_until = cur_loop.scope_depth;
+                self.emit_scope_drops(pop_until);
+
+                let exit_jump = self.next_insn_index() as usize;
+                self.assert_loop("break").break_patch_list.push(exit_jump);
+
                 // NOTE: right now this will generate redundant code when using
                 // `if condition { break }`, since `if` will generate its own jump location and we
                 // will end up with a conditional jump and a regular jump together.
-                let exit_jump = self.emit(Instruction::Jump(0));
-
-                let cur_loop = self.current_loop.as_mut().expect("`break` must have a loop wrapping it, and this should have been checked by validation");
-
-                cur_loop.break_patch_list.push(exit_jump);
+                self.emit(Instruction::Jump(0));
             }
-            hir::Statement::Continue(span) => {
+            hir::Statement::Continue(_) => {
+                let cur_loop = self.assert_loop("continue");
+
+                let pop_until = cur_loop.scope_depth;
+                self.emit_scope_drops(pop_until);
+
+                let exit_jump = self.next_insn_index() as usize;
+                self.assert_loop("continue")
+                    .continue_patch_list
+                    .push(exit_jump);
+
                 // NOTE: right now this will generate redundant code when using
                 // `if condition { continue }`, since `if` will generate its own jump location and we
-                // will end up with a conditional jump and a regular jump together.
+                // will end up with a conditional jump and a regular jump together, making the jump
                 // unreachable.
-                let exit_jump = self.emit(Instruction::Jump(0));
-
-                let cur_loop = self.current_loop.as_mut().expect("`continue` must have a loop wrapping it, and this should have been checked by validation");
-
-                cur_loop.continue_patch_list.push(exit_jump);
+                self.emit(Instruction::Jump(0));
             }
+
+            hir::Statement::CForLoop {
+                condition,
+                after,
+                block,
+            } => match condition {
+                Some(cond) => self.compile_while_loop(
+                    |ctx| ctx.compile_expression(cond),
+                    |ctx| ctx.compile_block(block),
+                    |ctx| {
+                        if let Some(after) = &after {
+                            ctx.compile_statement(after);
+                        }
+                    },
+                ),
+                None => {
+                    // infinite loop.
+
+                    let loop_start = self.next_insn_index();
+
+                    let break_locs = self.wrap_loop_body(|ctx| ctx.compile_block(block));
+
+                    if let Some(after) = &after {
+                        self.compile_statement(after);
+                    }
+
+                    self.emit(Instruction::Jump(loop_start - self.next_insn_index()));
+
+                    for loc in break_locs {
+                        self.patch_jump(loc);
+                    }
+                }
+            },
+        }
+    }
+
+    fn assert_loop(&mut self, name: &'static str) -> &mut LoopInfo {
+        match self.current_loop.as_mut() {
+            None => panic!("`{name}` must have a loop wrapping it, and this should have been checked by validation"),
+            Some(x) => x,
         }
     }
 
@@ -586,82 +637,30 @@ impl<'g> HirCompiler<'g> {
         &mut self,
         compile_condition: impl FnOnce(&mut Self),
         compile_block: impl FnOnce(&mut Self),
+        // statements that occur between exiting the loop body & beginning the next iteration.
+        compile_after: impl FnOnce(&mut Self),
     ) {
         let loop_start = self.next_insn_index();
+
         compile_condition(self);
-        // Jump out of loop if false
-        let exit_jump = self.emit(Instruction::JumpIfFalse(0));
-        // Pop condition
+
+        // this jump needs cleaning up, so it's not the same as `break`.
+        let bail_jump = self.emit(Instruction::JumpIfFalse(0));
         self.emit(Instruction::Pop(1));
 
-        let block_start = self.next_insn_index() as usize;
+        let break_locs = self.wrap_loop_body(compile_block);
 
-        // compile block with continue/break context.
-        let (loop_info, _) = self.with_loop_info(compile_block);
+        compile_after(self);
 
-        // find the first of many sequential pops for sequential scope exits, and add them up
-        // so that we can pop all on `break`.
-        // TODO: when scope exit uses
-        let (first_pop, total_pop_count) = {
-            let block_insns = &self.bytecode.instructions[block_start..];
-
-            let last_pops =
-                block_insns
-                    .iter()
-                    .enumerate()
-                    .rev()
-                    .map_while(|(i, insn)| match insn {
-                        Instruction::Pop(count) | Instruction::PopReplace(count) => {
-                            Some((i + block_start, count))
-                        }
-                        _ => None,
-                    });
-
-            let (first_pop, pop_count) =
-                last_pops.fold((None, 0), |(_, acc), (i, count)| (Some(i), acc + count));
-
-            (first_pop, pop_count)
-        };
-
-        // jump back to the start of the loop.
+        // emit jump to start
         self.emit(Instruction::Jump(loop_start - self.next_insn_index()));
 
-        // NOTE: not using tuple because it's very easy to accidentally swap places.
-        // Use a struct with names & destructure it with a pattern if you find it better.
-        let continue_location;
-        let break_location;
+        let pop_if_condition = self.emit(Instruction::Pop(1));
+        self.patch_jump_to(bail_jump, pop_if_condition);
 
-        if let Some(block_end_location) = first_pop {
-            // scope has a destructor. We'll patch `continue` to go to the pop instruction. We'll then add a pop that accounts for the full inside block in `break`.
-
-            continue_location = block_end_location;
-
-            // `break` should go here (after the jump) and pop the locals, but not the condition
-            // result.
-            break_location = self.emit(Instruction::Pop(total_pop_count));
-        } else {
-            // scope has no destructor, so we can wire `continue` directly to loop start
-            continue_location = loop_start as usize;
-
-            // and `break` will just go past the end.
-            break_location = self.next_insn_index() as usize;
-        };
-
-        // jump over itself & the next instruction, since `break` should not pop anything.
-        self.emit(Instruction::Jump(2));
-
-        // finally, exit jump (where the condition hasn't been popped) should go here, so that
-        // it can pop the condition.
-        self.patch_jump(exit_jump);
-        self.emit(Instruction::Pop(1));
-
-        // patch the set continue/break locations.
-        for break_jmp in loop_info.break_patch_list {
-            self.patch_jump_to(break_jmp, break_location);
-        }
-
-        for continue_jmp in loop_info.continue_patch_list {
-            self.patch_jump_to(continue_jmp, continue_location);
+        // make `break` jump here, since `true` branch of if already popped.
+        for loc in break_locs {
+            self.patch_jump(loc);
         }
     }
 
@@ -771,7 +770,7 @@ impl<'g> HirCompiler<'g> {
                 receiver,
                 method,
                 args,
-                span,
+                ..
             } => {
                 // Push the function onto the stack
                 let Some(&index) = self.globals.get(method) else {
@@ -1063,6 +1062,29 @@ impl<'g> HirCompiler<'g> {
         self.locals_in_scope.push(HashMap::new());
     }
 
+    /// Emits instructions to drop scopes up-to and including `pop_until` index, but does not affect information for
+    /// locals.
+    /// Used in `break` & `continue` to emit appropriate popping instructions.
+    fn emit_scope_drops(&mut self, pop_until: usize) {
+        let scopes = &self.scopes[pop_until..];
+
+        let local_count = scopes
+            .iter()
+            .map(|s| {
+                // see `exit_scope`: depth 0 is function body block, and thus has `return`.
+                if s.depth == 0 {
+                    0
+                } else {
+                    s.locals.len()
+                }
+            })
+            .sum();
+
+        if local_count > 0 {
+            self.emit(Instruction::Pop(local_count));
+        }
+    }
+
     /// Drops the current block scope we're in.
     fn exit_scope(&mut self, scope_has_ending_expr: bool) {
         let scope = self
@@ -1088,21 +1110,33 @@ impl<'g> HirCompiler<'g> {
         }
     }
 
-    /// Wraps `inner` in a context with loop information. Any `break`s that are submitted by
-    /// `inner` to this loop are patched to the next instruction after `inner` returns.
-    /// The parameter to `inner` is the same as `self` and can be ignored, it's used to
-    /// obtain the borrow inside `inner`'s body.
+    /// Wraps loop inside a scope that is fully popped on both `continue` & `break`.
+    /// Returns a patch list of instruction locations for jumps to bail out of the loop, from
+    /// `break`s. Note that there is no cleanup from inside the loop to perform.
     ///
-    /// See [`Self::compile_while_loop`] for a usage example.
-    fn with_loop_info<T>(&mut self, inner: impl FnOnce(&mut Self) -> T) -> (LoopInfo, T) {
-        let old_loop_status = self.current_loop.replace(LoopInfo::default());
+    /// Does **NOT** emit the jump instruction to jump back to the beginning of the loop. This is
+    /// inteded, since it allows adding arbitrary instructions to `continue`
+    fn wrap_loop_body(&mut self, codegen_body: impl FnOnce(&mut Self)) -> Vec<usize> {
+        self.enter_scope();
 
-        let result = inner(self);
+        let old_loop_status = self.current_loop.replace(LoopInfo {
+            scope_depth: self.scopes.len(),
+            break_patch_list: Vec::new(),
+            continue_patch_list: Vec::new(),
+        });
+
+        codegen_body(self);
 
         let loop_info = std::mem::replace(&mut self.current_loop, old_loop_status)
             .expect("should have been pushed before when grabbing old_status");
 
-        (loop_info, result)
+        self.exit_scope(false);
+
+        for continue_jmp in loop_info.continue_patch_list {
+            self.patch_jump(continue_jmp);
+        }
+
+        loop_info.break_patch_list
     }
 }
 
@@ -1984,13 +2018,11 @@ mod tests {
             expected: vec![(
                 "GCD",
                 vec![
-                    // while (a != b)
                     Instruction::LoadVar(1),
                     Instruction::LoadVar(2),
                     Instruction::CmpOp(CmpOp::NotEq),
-                    Instruction::JumpIfFalse(19),
+                    Instruction::JumpIfFalse(18),
                     Instruction::Pop(1),
-                    // if a > b { a = a - b; } else { b = b - a; }
                     Instruction::LoadVar(1),
                     Instruction::LoadVar(2),
                     Instruction::CmpOp(CmpOp::Gt),
@@ -2006,10 +2038,7 @@ mod tests {
                     Instruction::LoadVar(1),
                     Instruction::BinOp(BinOp::Sub),
                     Instruction::StoreVar(2),
-                    // jump back to loop start
                     Instruction::Jump(-20),
-                    Instruction::Jump(2),
-                    // exit loop: pop condition and return a
                     Instruction::Pop(1),
                     Instruction::LoadVar(1),
                     Instruction::Return,
@@ -2094,7 +2123,7 @@ mod tests {
                     Instruction::LoadVar(1),
                     Instruction::LoadConst(1),
                     Instruction::CmpOp(CmpOp::Lt),
-                    Instruction::JumpIfFalse(17),
+                    Instruction::JumpIfFalse(15),
                     Instruction::Pop(1),
                     Instruction::LoadVar(1),
                     Instruction::LoadConst(2),
@@ -2105,12 +2134,10 @@ mod tests {
                     Instruction::CmpOp(CmpOp::Eq),
                     Instruction::JumpIfFalse(4),
                     Instruction::Pop(1),
-                    Instruction::Jump(4),
+                    Instruction::Jump(5),
                     Instruction::Jump(2),
                     Instruction::Pop(1),
                     Instruction::Jump(-17),
-                    Instruction::Pop(1),
-                    Instruction::Jump(2),
                     Instruction::Pop(1),
                     Instruction::LoadVar(1),
                     Instruction::Return,
@@ -2144,7 +2171,7 @@ mod tests {
                     Instruction::LoadConst(0),
                     // while true { ... }
                     Instruction::LoadConst(1),
-                    Instruction::JumpIfFalse(20),
+                    Instruction::JumpIfFalse(19),
                     Instruction::Pop(1),
                     // if limit == 0 { break; }
                     Instruction::LoadVar(1),
@@ -2152,7 +2179,7 @@ mod tests {
                     Instruction::CmpOp(CmpOp::Eq),
                     Instruction::JumpIfFalse(4),
                     Instruction::Pop(1),
-                    Instruction::Jump(12),
+                    Instruction::Jump(13),
                     Instruction::Jump(2),
                     Instruction::Pop(1),
                     // result = result * limit;
@@ -2167,7 +2194,6 @@ mod tests {
                     Instruction::StoreVar(1),
                     // loop back and exit
                     Instruction::Jump(-19),
-                    Instruction::Jump(2),
                     Instruction::Pop(1),
                     // return result
                     Instruction::LoadVar(2),
@@ -2209,7 +2235,7 @@ mod tests {
                     Instruction::LoadConst(1),
                     // while should_continue { ... }
                     Instruction::LoadVar(3),
-                    Instruction::JumpIfFalse(22),
+                    Instruction::JumpIfFalse(21),
                     Instruction::Pop(1),
                     // result = result * limit;
                     Instruction::LoadVar(2),
@@ -2227,13 +2253,12 @@ mod tests {
                     Instruction::CmpOp(CmpOp::NotEq),
                     Instruction::JumpIfFalse(4),
                     Instruction::Pop(1),
-                    Instruction::Jump(-16),
+                    Instruction::Jump(5),
                     Instruction::Jump(4),
                     Instruction::Pop(1),
                     Instruction::LoadConst(4),
                     Instruction::StoreVar(3),
                     Instruction::Jump(-21),
-                    Instruction::Jump(2),
                     Instruction::Pop(1),
                     // return result
                     Instruction::LoadVar(2),
@@ -2263,24 +2288,21 @@ mod tests {
                 "Nested",
                 vec![
                     Instruction::LoadConst(0),
-                    Instruction::JumpIfFalse(18),
+                    Instruction::JumpIfFalse(15),
                     Instruction::Pop(1),
                     Instruction::LoadConst(1),
-                    Instruction::JumpIfFalse(5),
+                    Instruction::JumpIfFalse(4),
                     Instruction::Pop(1),
-                    Instruction::Jump(-3),
+                    Instruction::Jump(1),
                     Instruction::Jump(-4),
-                    Instruction::Jump(2),
                     Instruction::Pop(1),
                     Instruction::LoadConst(2),
                     Instruction::JumpIfFalse(4),
                     Instruction::Pop(1),
-                    Instruction::Jump(2),
+                    Instruction::Jump(3),
                     Instruction::Jump(2),
                     Instruction::Pop(1),
-                    Instruction::Jump(-16),
-                    Instruction::Pop(1),
-                    Instruction::Jump(2),
+                    Instruction::Jump(-15),
                     Instruction::Pop(1),
                     Instruction::LoadConst(3),
                     Instruction::Return,
@@ -2311,26 +2333,24 @@ mod tests {
                 vec![
                     Instruction::LoadConst(0),
                     Instruction::LoadConst(1),
-                    Instruction::JumpIfFalse(20),
+                    Instruction::JumpIfFalse(18),
                     Instruction::Pop(1),
                     Instruction::LoadConst(2),
-                    Instruction::JumpIfFalse(9),
+                    Instruction::JumpIfFalse(8),
                     Instruction::Pop(1),
                     Instruction::LoadVar(1),
                     Instruction::LoadConst(3),
                     Instruction::BinOp(BinOp::Add),
                     Instruction::StoreVar(1),
-                    Instruction::Jump(2),
+                    Instruction::Jump(3),
                     Instruction::Jump(-8),
-                    Instruction::Jump(2),
                     Instruction::Pop(1),
                     Instruction::LoadVar(1),
                     Instruction::LoadConst(4),
                     Instruction::BinOp(BinOp::Add),
                     Instruction::StoreVar(1),
-                    Instruction::Jump(2),
-                    Instruction::Jump(-19),
-                    Instruction::Jump(2),
+                    Instruction::Jump(3),
+                    Instruction::Jump(-18),
                     Instruction::Pop(1),
                     Instruction::LoadVar(1),
                     Instruction::Return,
@@ -2391,7 +2411,7 @@ mod tests {
                     Instruction::LoadVar(5),
                     Instruction::LoadVar(4),
                     Instruction::CmpOp(CmpOp::Lt),
-                    Instruction::JumpIfFalse(17),
+                    Instruction::JumpIfFalse(15),
                     Instruction::Pop(1),
                     Instruction::LoadVar(3),
                     Instruction::LoadVar(5),
@@ -2406,8 +2426,6 @@ mod tests {
                     Instruction::StoreVar(2),
                     Instruction::Pop(1),
                     Instruction::Jump(-17),
-                    Instruction::Pop(1),
-                    Instruction::Jump(2),
                     Instruction::Pop(1),
                     Instruction::Pop(3),
                     Instruction::LoadVar(2),
@@ -2446,7 +2464,7 @@ mod tests {
                     Instruction::LoadVar(5),
                     Instruction::LoadVar(4),
                     Instruction::CmpOp(CmpOp::Lt),
-                    Instruction::JumpIfFalse(25),
+                    Instruction::JumpIfFalse(24),
                     Instruction::Pop(1),
                     Instruction::LoadVar(3),
                     Instruction::LoadVar(5),
@@ -2458,9 +2476,10 @@ mod tests {
                     Instruction::LoadVar(6),
                     Instruction::LoadConst(2),
                     Instruction::CmpOp(CmpOp::Gt),
-                    Instruction::JumpIfFalse(4),
+                    Instruction::JumpIfFalse(5),
                     Instruction::Pop(1),
-                    Instruction::Jump(9),
+                    Instruction::Pop(1),
+                    Instruction::Jump(10),
                     Instruction::Jump(2),
                     Instruction::Pop(1),
                     Instruction::LoadVar(2),
@@ -2468,9 +2487,7 @@ mod tests {
                     Instruction::BinOp(BinOp::Add),
                     Instruction::StoreVar(2),
                     Instruction::Pop(1),
-                    Instruction::Jump(-25),
-                    Instruction::Pop(1),
-                    Instruction::Jump(2),
+                    Instruction::Jump(-26),
                     Instruction::Pop(1),
                     Instruction::Pop(3),
                     Instruction::LoadVar(2),
@@ -2509,7 +2526,7 @@ mod tests {
                     Instruction::LoadVar(5),
                     Instruction::LoadVar(4),
                     Instruction::CmpOp(CmpOp::Lt),
-                    Instruction::JumpIfFalse(25),
+                    Instruction::JumpIfFalse(24),
                     Instruction::Pop(1),
                     Instruction::LoadVar(3),
                     Instruction::LoadVar(5),
@@ -2521,9 +2538,10 @@ mod tests {
                     Instruction::LoadVar(6),
                     Instruction::LoadConst(2),
                     Instruction::CmpOp(CmpOp::Gt),
-                    Instruction::JumpIfFalse(4),
+                    Instruction::JumpIfFalse(5),
                     Instruction::Pop(1),
-                    Instruction::Jump(7),
+                    Instruction::Pop(1),
+                    Instruction::Jump(8),
                     Instruction::Jump(2),
                     Instruction::Pop(1),
                     Instruction::LoadVar(2),
@@ -2531,9 +2549,7 @@ mod tests {
                     Instruction::BinOp(BinOp::Add),
                     Instruction::StoreVar(2),
                     Instruction::Pop(1),
-                    Instruction::Jump(-25),
-                    Instruction::Pop(1),
-                    Instruction::Jump(2),
+                    Instruction::Jump(-26),
                     Instruction::Pop(1),
                     Instruction::Pop(3),
                     Instruction::LoadVar(2),
@@ -2572,7 +2588,7 @@ mod tests {
                     Instruction::LoadVar(6),
                     Instruction::LoadVar(5),
                     Instruction::CmpOp(CmpOp::Lt),
-                    Instruction::JumpIfFalse(42),
+                    Instruction::JumpIfFalse(38),
                     Instruction::Pop(1),
                     Instruction::LoadVar(4),
                     Instruction::LoadVar(6),
@@ -2589,7 +2605,7 @@ mod tests {
                     Instruction::LoadVar(10),
                     Instruction::LoadVar(9),
                     Instruction::CmpOp(CmpOp::Lt),
-                    Instruction::JumpIfFalse(19),
+                    Instruction::JumpIfFalse(17),
                     Instruction::Pop(1),
                     Instruction::LoadVar(8),
                     Instruction::LoadVar(10),
@@ -2607,13 +2623,9 @@ mod tests {
                     Instruction::Pop(1),
                     Instruction::Jump(-19),
                     Instruction::Pop(1),
-                    Instruction::Jump(2),
-                    Instruction::Pop(1),
                     Instruction::Pop(3),
                     Instruction::Pop(1),
-                    Instruction::Jump(-42),
-                    Instruction::Pop(5),
-                    Instruction::Jump(2),
+                    Instruction::Jump(-40),
                     Instruction::Pop(1),
                     Instruction::Pop(3),
                     Instruction::LoadVar(3),

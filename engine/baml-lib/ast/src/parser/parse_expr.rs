@@ -8,8 +8,8 @@ use super::{
 use crate::{
     assert_correct_parser,
     ast::{
-        self, expr::ExprFn, App, ArgumentsList, AssignOp, AssignOpStmt, AssignStmt, Expression,
-        ExpressionBlock, ForLoopStmt, LetStmt, Stmt, TopLevelAssignment, *,
+        self, expr::ExprFn, App, ArgumentsList, AssignOp, AssignOpStmt, AssignStmt, CForLoopStmt,
+        Expression, ExpressionBlock, ForLoopStmt, LetStmt, Stmt, TopLevelAssignment, *,
     },
     parser::{
         parse_arguments::parse_arguments_list, parse_expression::parse_expression,
@@ -83,10 +83,10 @@ pub fn parse_top_level_assignment(
             None
         }
 
-        Stmt::ForLoop(stmt) => {
+        s @ (Stmt::ForLoop(_) | Stmt::CForLoop(_)) => {
             diagnostics.push_error(DatamodelError::new_static(
                 "for loops are not allowed at top level, only let statements are allowed",
-                stmt.span.clone(),
+                s.span().clone(),
             ));
 
             None
@@ -145,13 +145,17 @@ fn parse_while_loop(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Stm
     }))
 }
 
-pub fn parse_for_loop(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Stmt> {
-    assert_correct_parser!(token, Rule::for_loop);
-    let span = diagnostics.span(token.as_span());
-    let mut tokens = token.into_inner();
+fn parse_iterator_for_loop(
+    rule: Pair<'_>,
+    span: Span,
+    body: ExpressionBlock,
+    diagnostics: &mut Diagnostics,
+) -> Option<Stmt> {
+    assert_correct_parser!(rule, Rule::iterator_for_loop);
+    let mut tokens = rule.into_inner();
     let identifier = parse_identifier(tokens.next()?, diagnostics);
     let iterator = parse_expression(tokens.next()?, diagnostics)?;
-    let body = parse_expr_block(tokens.next()?, diagnostics)?;
+
     Some(Stmt::ForLoop(ForLoopStmt {
         identifier,
         iterator,
@@ -160,13 +164,105 @@ pub fn parse_for_loop(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<
     }))
 }
 
+fn parse_c_for_loop(
+    rule: Pair<'_>,
+    span: Span,
+    body: ExpressionBlock,
+    diagnostics: &mut Diagnostics,
+) -> Option<Stmt> {
+    assert_correct_parser!(rule, Rule::c_for_loop);
+
+    let mut tokens = rule.into_inner();
+
+    let init_stmt = if tokens
+        .peek()
+        .is_some_and(|p| matches!(p.as_rule(), Rule::c_for_init_stmt))
+    {
+        let inner = tokens.next().unwrap().into_inner().next()?;
+
+        let span = diagnostics.span(inner.as_span());
+
+        parse_statement_inner_rule(inner, span, diagnostics).map(Box::new)
+    } else {
+        None
+    };
+
+    let condition = if tokens
+        .peek()
+        .is_some_and(|p| matches!(p.as_rule(), Rule::expression))
+    {
+        parse_expression(tokens.next().unwrap(), diagnostics)
+    } else {
+        None
+    };
+
+    let after_stmt = if let Some(rule) = tokens.next() {
+        assert_correct_parser!(rule, Rule::c_for_after_stmt);
+        let inner = rule.into_inner().next()?;
+        let span = diagnostics.span(inner.as_span());
+
+        parse_statement_inner_rule(inner, span, diagnostics).map(Box::new)
+    } else {
+        None
+    };
+
+    Some(Stmt::CForLoop(CForLoopStmt {
+        init_stmt,
+        condition,
+        after_stmt,
+        body,
+        span,
+    }))
+}
+
+fn parse_for_loop(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Stmt> {
+    assert_correct_parser!(token, Rule::for_loop);
+    let span = diagnostics.span(token.as_span());
+    let mut tokens = token.into_inner();
+
+    let in_between_rule = tokens.next()?;
+
+    let body = parse_expr_block(tokens.next()?, diagnostics)?;
+
+    match in_between_rule.as_rule() {
+        Rule::iterator_for_loop => {
+            parse_iterator_for_loop(in_between_rule, span, body, diagnostics)
+        }
+        Rule::c_for_loop => parse_c_for_loop(in_between_rule, span, body, diagnostics),
+        _ => panic!("unexpected in-between rule in for-loop."),
+    }
+}
+
 pub fn parse_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Stmt> {
     assert_correct_parser!(token, Rule::stmt);
     let span = diagnostics.span(token.as_span());
     let mut tokens = token.into_inner();
 
     let stmt_token = tokens.next()?;
-    let stmt = match stmt_token.as_rule() {
+    let stmt = parse_statement_inner_rule(stmt_token, span.clone(), diagnostics);
+
+    let maybe_semicolon = tokens.next();
+    match maybe_semicolon {
+        Some(p) if p.as_str() == ";" => {}
+        _ => {
+            if matches!(stmt, Some(Stmt::Let(_))) {
+                diagnostics.push_error(DatamodelError::new_static(
+                    "Statement must end with a semicolon.",
+                    span,
+                ));
+            }
+        }
+    }
+
+    stmt
+}
+
+fn parse_statement_inner_rule(
+    stmt_token: Pair<'_>,
+    span: Span,
+    diagnostics: &mut Diagnostics,
+) -> Option<Stmt> {
+    match stmt_token.as_rule() {
         Rule::assign_stmt => {
             let mut assignment_tokens = stmt_token.into_inner();
 
@@ -179,7 +275,7 @@ pub fn parse_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
                 Stmt::Assign(AssignStmt {
                     identifier,
                     expr: body,
-                    span: span.clone(),
+                    span,
                 })
             })
         }
@@ -214,7 +310,7 @@ pub fn parse_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
                     identifier,
                     assign_op,
                     expr: body,
-                    span: span.clone(),
+                    span,
                 })
             })
         }
@@ -238,7 +334,7 @@ pub fn parse_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
                     identifier,
                     is_mutable,
                     expr: body,
-                    span: span.clone(),
+                    span,
                 })
             })
         }
@@ -252,28 +348,10 @@ pub fn parse_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
         Rule::expr_block => parse_expr_block(stmt_token, diagnostics)
             .map(|expr_block| Stmt::Expression(Expression::ExprBlock(expr_block, span.clone()))),
         _ => {
-            diagnostics.push_error(DatamodelError::new_static(
-                "Expected statement",
-                span.clone(),
-            ));
+            diagnostics.push_error(DatamodelError::new_static("Expected statement", span));
             None
         }
-    };
-
-    let maybe_semicolon = tokens.next();
-    match maybe_semicolon {
-        Some(p) if p.as_str() == ";" => {}
-        _ => {
-            if matches!(stmt, Some(Stmt::Let(_))) {
-                diagnostics.push_error(DatamodelError::new_static(
-                    "Statement must end with a semicolon.",
-                    span.clone(),
-                ));
-            }
-        }
     }
-
-    stmt
 }
 
 fn parse_assignment_expr(

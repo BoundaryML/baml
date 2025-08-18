@@ -179,6 +179,40 @@ impl Statement {
                 .append(RcDoc::text("}")),
             Statement::Break(_) => RcDoc::text("break").append(RcDoc::text(";")),
             Statement::Continue(_) => RcDoc::text("continue").append(RcDoc::text(";")),
+            Statement::CForLoop {
+                condition,
+                after,
+                block,
+            } => {
+                let condition = condition.as_ref().map(Expression::to_doc);
+                let after = after.as_ref().map(|b| b.to_doc());
+                let block = block.to_doc();
+
+                // for with no init statement.
+                let mut cur = RcDoc::text("for")
+                    .append(RcDoc::space())
+                    .append(RcDoc::text("("))
+                    .append(RcDoc::text(";"));
+
+                cur = match condition {
+                    Some(cond) => cur.append(cond),
+                    None => cur,
+                };
+
+                cur = cur.append(RcDoc::text(";"));
+
+                cur = match after {
+                    Some(after) => cur.append(after),
+                    None => cur,
+                };
+
+                cur = cur.append(RcDoc::text(")")).append(RcDoc::space());
+
+                cur.append(RcDoc::text("{"))
+                    .append(RcDoc::space())
+                    .append(block)
+                    .append(RcDoc::text("}"))
+            }
         }
     }
 }
@@ -344,7 +378,7 @@ impl Expression {
                 condition,
                 if_branch,
                 else_branch,
-                span,
+                ..
             } => {
                 let mut doc = RcDoc::text("if")
                     .append(RcDoc::space())
