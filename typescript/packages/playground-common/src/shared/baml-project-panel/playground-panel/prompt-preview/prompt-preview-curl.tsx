@@ -1,6 +1,7 @@
 import { CopyButton } from '@baml/ui/custom/copy-button';
 import { useAtomValue } from 'jotai';
 import { atom } from 'jotai';
+import { useSetAtom } from 'jotai';
 import { loadable } from 'jotai/utils';
 import { useTheme } from 'next-themes';
 import { useEffect, useState } from 'react';
@@ -22,11 +23,15 @@ type CurlResult =
   | undefined
   | Error;
 
+// When incremented, forces recomputation of the curl output
+export const curlRefreshAtom = atom<number>(0);
+
 const baseCurlAtom = atom<Promise<CurlResult>>(async (get) => {
   const rt = get(runtimeAtom).rt;
   const ctx = get(ctxAtom);
   const envVars = get(apiKeysAtom);
   const files = get(filesAtom); // Add files dependency to track content changes
+  const refreshTick = get(curlRefreshAtom); // Depend on manual refresh trigger
   const { selectedFn, selectedTc } = get(selectionAtom);
 
   if (!selectedFn || !rt || !selectedTc || !ctx) {
@@ -225,6 +230,7 @@ const SyntaxHighlightedCurl = ({ text }: { text: string }) => {
 
 export const PromptPreviewCurl = () => {
   const curl = useAtomValue(curlAtom);
+  const triggerRefresh = useSetAtom(curlRefreshAtom);
 
   // Memoize the rendered content to prevent unnecessary re-renders
   const renderedContent = useMemo(() => {
@@ -261,6 +267,14 @@ export const PromptPreviewCurl = () => {
           variant="outline"
           showToast={false}
         />
+        <button
+          type="button"
+          onClick={() => triggerRefresh((v) => v + 1)}
+          className="absolute top-1 right-12 opacity-0 transition-opacity group-hover:opacity-100 z-30 px-2 py-0.5 text-xs border rounded"
+          title="Reload cURL"
+        >
+          Reload
+        </button>
         <SyntaxHighlightedCurl text={value.curlTextWithoutSecrets} />
       </div>
     );
