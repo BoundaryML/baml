@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use anyhow::Result;
 use baml_types::{GetEnvVar, StringOr};
@@ -279,11 +279,20 @@ impl FinishReasonFilter {
 pub(crate) struct UnresolvedRolesSelection {
     pub allowed: Option<Vec<StringOr>>,
     pub default: Option<StringOr>,
+    pub remap: Option<Vec<(String, StringOr)>>,
 }
 
 impl UnresolvedRolesSelection {
-    pub fn new(allowed: Option<Vec<StringOr>>, default: Option<StringOr>) -> Self {
-        Self { allowed, default }
+    pub fn new(
+        allowed: Option<Vec<StringOr>>,
+        default: Option<StringOr>,
+        remap: Option<Vec<(String, StringOr)>>,
+    ) -> Self {
+        Self {
+            allowed,
+            default,
+            remap,
+        }
     }
 
     pub fn required_env_vars(&self) -> HashSet<String> {
@@ -315,6 +324,24 @@ impl UnresolvedRolesSelection {
             .map(|default| default.resolve(ctx))
             .transpose()?;
 
+        let remap = self
+            .remap
+            .as_ref()
+            .map(|remap| {
+                remap
+                    .iter()
+                    .map(|(k, v)| Ok((k.to_string(), v.resolve(ctx)?)))
+                    .collect::<Result<Vec<_>>>()
+            })
+            .transpose()?;
+
+        let remap: Option<HashMap<String, String>> = remap.map(|remap| {
+            remap
+                .into_iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect()
+        });
+
         match (&allowed, &default) {
             (Some(allowed), Some(default)) => {
                 if !allowed.contains(default) {
@@ -329,7 +356,41 @@ impl UnresolvedRolesSelection {
             }
             _ => {}
         }
-        Ok(RolesSelection { allowed, default })
+
+        match (&allowed, &remap) {
+            (Some(allowed), Some(remap)) => {
+                for (k, _) in remap.iter() {
+                    if !allowed.contains(k) {
+                        return Err(anyhow::anyhow!(
+                            "remap_role must be in allowed_roles: {}. Not found in {:?}",
+                            k,
+                            allowed
+                        ));
+                    }
+                }
+            }
+            (None, Some(remap)) => {
+                let allowed = ["system", "user", "assistant"]
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect::<Vec<_>>();
+                for (k, _) in remap.iter() {
+                    if !allowed.contains(k) {
+                        return Err(anyhow::anyhow!(
+                            "remap_role must be in allowed_roles: {}. Not found in {:?}",
+                            k,
+                            allowed
+                        ));
+                    }
+                }
+            }
+            _ => {}
+        }
+        Ok(RolesSelection {
+            allowed,
+            default,
+            remap,
+        })
     }
 }
 
@@ -337,6 +398,9 @@ impl UnresolvedRolesSelection {
 pub struct RolesSelection {
     allowed: Option<Vec<String>>,
     default: Option<String>,
+    // key must be in allowed_roles.
+    // target is what the HTTP request will use.
+    remap: Option<HashMap<String, String>>,
 }
 
 impl RolesSelection {
@@ -345,6 +409,10 @@ impl RolesSelection {
             Some(allowed) => allowed.clone(),
             None => f(),
         }
+    }
+
+    pub fn remap(&self) -> Option<HashMap<String, String>> {
+        self.remap.clone()
     }
 
     pub fn default_or_else(&self, f: impl FnOnce() -> String) -> String {

@@ -1,5 +1,6 @@
 use std::{
     fmt,
+    ops::Deref,
     sync::{Arc, Mutex},
 };
 
@@ -9,7 +10,10 @@ use internal_baml_core::{
     internal_baml_parser_database::ParserDatabase, ir::repr::TypeBuilderEntry,
 };
 
-use crate::runtime_context::{PropertyAttributes, RuntimeClassOverride, RuntimeEnumOverride};
+use crate::{
+    runtime::InternalBamlRuntime,
+    runtime_context::{PropertyAttributes, RuntimeClassOverride, RuntimeEnumOverride},
+};
 
 type MetaData = Arc<Mutex<IndexMap<String, BamlValue>>>;
 
@@ -104,6 +108,18 @@ impl ClassBuilder {
         }
     }
 
+    // TODO: Figure out captured lifetime issue and return Iterator.
+    // Iterator that holds mutex lock seems tricky.
+    pub fn list_properties_key_value(&self) -> Vec<(String, ClassPropertyBuilder)> {
+        self.properties
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|(name, prop)| (name.clone(), prop.lock().unwrap().deref().to_owned()))
+            .collect()
+    }
+
+    // TODO: Unify function above and this one (split because of CFFI).
     pub fn list_properties(&self) -> Vec<String> {
         let properties = self.properties.lock().unwrap();
         properties.keys().cloned().collect()
@@ -122,6 +138,15 @@ impl ClassBuilder {
                 meta: Default::default(),
             }))
         }))
+    }
+
+    pub fn remove_property(&self, name: &str) {
+        let mut properties = self.properties.lock().unwrap();
+        properties.shift_remove(name);
+    }
+
+    pub fn reset(&self) {
+        self.properties.lock().unwrap().clear();
     }
 }
 
@@ -500,6 +525,14 @@ impl TypeBuilder {
         }
     }
 
+    pub fn reset(&self) {
+        self.classes.lock().unwrap().clear();
+        self.enums.lock().unwrap().clear();
+        self.type_aliases.lock().unwrap().clear();
+        self.recursive_type_aliases.lock().unwrap().clear();
+        self.recursive_classes.lock().unwrap().clear();
+    }
+
     pub fn upsert_class(&self, name: &str) -> Arc<Mutex<ClassBuilder>> {
         Arc::clone(
             self.classes
@@ -636,7 +669,7 @@ impl TypeBuilder {
     ///
     /// Python, TS and Ruby wrappers will call this function when the user runs
     /// `type_builder.add_baml("BAML CODE")`
-    pub fn add_baml(&self, baml: &str, rt: &crate::BamlRuntime) -> anyhow::Result<()> {
+    pub fn add_baml(&self, baml: &str, rt: &InternalBamlRuntime) -> anyhow::Result<()> {
         use internal_baml_core::{
             internal_baml_ast::parse_type_builder_contents_from_str,
             internal_baml_diagnostics::{Diagnostics, SourceFile},
@@ -658,7 +691,7 @@ impl TypeBuilder {
 
         // TODO: A bunch of mem usage here but at least we drop this one at the
         // end of the function, unlike scoped DBs for type builders.
-        let mut scoped_db = rt.inner.db.clone();
+        let mut scoped_db = rt.db.clone();
 
         let local_ast =
             validate_type_builder_entries(&mut diagnostics, &scoped_db, &type_builder_entries);
@@ -676,7 +709,7 @@ impl TypeBuilder {
         }
 
         let (classes, enums, type_aliases, recursive_classes, recursive_aliases) =
-            IntermediateRepr::type_builder_entries_from_scoped_db(&scoped_db, &rt.inner.db)
+            IntermediateRepr::type_builder_entries_from_scoped_db(&scoped_db, &rt.db)
                 .map_err(|e| anyhow::anyhow!("{:?}", e))?;
 
         self.add_entries(
@@ -1185,7 +1218,7 @@ mod tests {
             }
         "##;
 
-        builder.add_baml(baml, &runtime)?;
+        builder.add_baml(baml, runtime.internal())?;
         println!("{builder}");
         builder.to_overrides();
         Ok(())

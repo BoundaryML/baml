@@ -9,6 +9,7 @@ import { useAtom } from 'jotai';
 import { useAtomValue } from 'jotai';
 import {
   AlertTriangleIcon,
+  Code,
   Compass,
   File,
   GitForkIcon,
@@ -25,6 +26,7 @@ import type { BAMLProject } from '../../../lib/exampleProjects';
 import { Editable } from '../../_components/EditableText';
 import { unsavedChangesAtom } from '../_atoms/atoms';
 import { currentEditorFilesAtom } from '../_atoms/atoms';
+import { EmbedDialog } from './EmbedDialog';
 import { GithubStars } from './GithubStars';
 
 const ShareButton = ({
@@ -60,7 +62,7 @@ const ShareButton = ({
 
           posthog.capture('share_url', { id: urlId });
 
-          const newUrl = `${window.location.origin}/${urlId}`;
+          const newUrl = `${window?.location.origin}/${urlId}`;
           window.history.replaceState(
             { ...window.history.state, as: newUrl, url: newUrl },
             '',
@@ -69,10 +71,10 @@ const ShareButton = ({
           setUnsavedChanges(false);
           // }
 
-          navigator.clipboard.writeText(`${window.location.origin}/${urlId}`);
+          navigator.clipboard.writeText(`${window?.location.origin}/${urlId}`);
 
           toast.success('URL copied to clipboard', {
-            description: `${window.location.origin}/${urlId}`,
+            description: `${window?.location.origin}/${urlId}`,
           });
         } catch (e) {
           posthog.capture('share_url_failed', { error: JSON.stringify(e) });
@@ -107,6 +109,8 @@ export const TopNavbar = ({
   projectNameInputRef,
   unsavedChanges,
 }: ProjectHeaderProps) => {
+  const [embedDialogOpen, setEmbedDialogOpen] = useState(false);
+
   return (
     <div className="flex flex-row items-center gap-x-12 border-b-[0px] min-h-[55px]">
       <div className="flex flex-col items-center py-1 h-full whitespace-nowrap lg:pr-4 tour-title w-[200px] ">
@@ -151,7 +155,7 @@ export const TopNavbar = ({
       {project.id !== 'all-projects' && project.id !== null ? (
         <div className="flex flex-col justify-center items-center h-full">
           <Link
-            href={`/all-projects`}
+            href="/all-projects"
             target="_blank"
             className="flex flex-row gap-x-2 items-center px-2 py-1 text-sm text-white whitespace-pre-wrap bg-purple-500 rounded-sm dark:bg-purple-600 hover:bg-purple-300 dark:hover:bg-purple-700 h-fit"
           >
@@ -163,7 +167,7 @@ export const TopNavbar = ({
 
       <div className="flex flex-col justify-center items-center h-full">
         <Link
-          href={`/new-project`}
+          href="/new-project"
           target="_blank"
           className="flex flex-row gap-x-2 items-center px-2 py-1 text-sm text-white whitespace-pre-wrap bg-purple-500 rounded-sm dark:bg-purple-600 hover:bg-purple-600 dark:hover:bg-purple-700 h-fit"
         >
@@ -171,6 +175,24 @@ export const TopNavbar = ({
           <span className="whitespace-nowrap">New project</span>
         </Link>
       </div>
+
+      <div className="flex flex-col justify-center items-center h-full">
+        <Button
+          onClick={() => setEmbedDialogOpen(true)}
+          className="flex flex-row gap-x-2 items-center px-2 py-1 text-sm text-white whitespace-pre-wrap bg-blue-500 rounded-sm dark:bg-blue-600 hover:bg-blue-300 dark:hover:bg-blue-700 h-fit"
+        >
+          <Code size={16} strokeWidth={2} />
+          <span className="whitespace-nowrap">Embed</span>
+        </Button>
+      </div>
+
+      <EmbedDialog
+        open={embedDialogOpen}
+        onOpenChange={setEmbedDialogOpen}
+        shareId={project.id}
+        project={project}
+        projectName={projectName}
+      />
 
       {unsavedChanges ? (
         <div className="flex flex-row items-center whitespace-nowrap text-muted-foreground">

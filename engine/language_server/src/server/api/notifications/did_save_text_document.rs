@@ -84,7 +84,7 @@ impl super::SyncNotificationHandler for DidSaveTextDocument {
 // Do not use this yet, it seems it has an outdated view of the project files and it generates
 // stale baml clients
 impl super::BackgroundDocumentNotificationHandler for DidSaveTextDocument {
-    fn document_url(params: &types::DidSaveTextDocumentParams) -> Cow<types::Url> {
+    fn document_url(params: &types::DidSaveTextDocumentParams) -> Cow<'_, types::Url> {
         Cow::Borrowed(&params.text_document.uri)
     }
 

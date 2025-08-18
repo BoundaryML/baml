@@ -79,6 +79,7 @@ $RECYCLE.BIN/
 .nfs*
 .node_repl_history
 .npm
+.pnpm-store/
 .nuxt
 .nyc_output
 .nyc_output/
@@ -160,6 +161,8 @@ artifacts
 .direnv
 .rollup.cache
 typescript/apps/vscode-ext/dist/playground
+typescript/vscode-ext/packages/vscode/server/baml-cli
+jj-workflow.mdc
 
 # mise
 .mise.local.toml

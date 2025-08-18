@@ -1,14 +1,12 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, mem::MaybeUninit};
 
 use internal_baml_ast::ast::{
-    ClassConstructor, ClassConstructorField, Expression, Stmt, WithName, WithSpan,
+    AssertStmt, ClassConstructorField, Expression, LetStmt, ReturnStmt, Stmt, WithName, WithSpan,
 };
 use internal_baml_diagnostics::{DatamodelError, DatamodelWarning};
 use itertools::Itertools;
 
-use crate::{
-    ir, ir::builtin::is_builtin_identifier, validate::validation_pipeline::context::Context,
-};
+use crate::{ir, validate::validation_pipeline::context::Context};
 
 /// Builtin functions.
 ///
@@ -66,6 +64,8 @@ pub(super) fn validate_expr_fns(ctx: &mut Context<'_>) {
         taken_names.insert(expr_fn.name().to_owned());
     }
 
+    // Expression validation is now handled by HIR-based typechecking in the validation pipeline
+    // Only keep the experimental warnings for toplevel assignments
     for expr_fn in ctx.db.walk_expr_fns() {
         let mut scope: HashSet<String> = expr_fn
             .expr_fn()
@@ -75,27 +75,48 @@ pub(super) fn validate_expr_fns(ctx: &mut Context<'_>) {
             .map(|(arg_name, _arg)| arg_name.to_string())
             .collect();
 
+        scope.insert("true".to_string());
+        scope.insert("false".to_string());
+
         scope.extend(taken_names.iter().cloned());
         expr_fn.expr_fn().body.stmts.iter().for_each(|s| {
             validate_stmt(ctx, s, &scope);
-            scope.insert(s.identifier().name().to_string());
+            if matches!(s, Stmt::ForLoop(_) | Stmt::Let(_)) {
+                scope.insert(s.identifier().name().to_string());
+            }
         });
-        validate_expression(ctx, &expr_fn.expr_fn().body.expr, &scope);
+        if let Some(expr) = &expr_fn.expr_fn().body.expr {
+            validate_expression(ctx, expr, &scope);
+        }
     }
 
     for toplevel_assignment in ctx.db.walk_toplevel_assignments() {
-        let scope: HashSet<String> = taken_names.clone();
         ctx.push_warning(DatamodelWarning::new(
             "Variable assignment is experimental, and will break in the future.".to_string(),
             toplevel_assignment.expr().span().clone(),
         ));
 
+        // Create a scope for toplevel assignments that includes all taken names
+        let scope = taken_names.clone();
         validate_expression(ctx, toplevel_assignment.expr(), &scope);
     }
 }
 
 fn validate_stmt(ctx: &mut Context<'_>, stmt: &Stmt, scope: &HashSet<String>) {
     match stmt {
+        Stmt::WhileLoop(stmt) => {
+            validate_expression(ctx, &stmt.condition, scope);
+
+            validate_expr_block(ctx, &stmt.body, scope.clone());
+        }
+        Stmt::Assign(stmt) => {
+            // re: validation is handled by HIR-based typechecking.
+            validate_expression(ctx, &stmt.expr, scope);
+        }
+        Stmt::AssignOp(stmt) => {
+            // re: validation is handled by HIR-based typechecking.
+            validate_expression(ctx, &stmt.expr, scope);
+        }
         Stmt::Let(stmt) => {
             validate_expression(ctx, &stmt.expr, scope);
         }
@@ -107,15 +128,61 @@ fn validate_stmt(ctx: &mut Context<'_>, stmt: &Stmt, scope: &HashSet<String>) {
             let mut loop_scope = scope.clone();
             loop_scope.insert(stmt.identifier.name().to_string());
 
-            // Validate statements in the loop body
-            for stmt in &stmt.body.stmts {
-                validate_stmt(ctx, stmt, &loop_scope);
-                loop_scope.insert(stmt.identifier().name().to_string());
+            let body = &stmt.body;
+            validate_expr_block(ctx, body, loop_scope);
+        }
+        Stmt::Expression(expr) => {
+            validate_expression(ctx, expr, scope);
+        }
+        Stmt::Break(_) | Stmt::Continue(_) => {}
+        Stmt::CForLoop(stmt) => {
+            // we have to clone the scope anyway for the inner expression block.
+            let mut loop_scope = scope.clone();
+
+            if let Some(init) = &stmt.init_stmt {
+                validate_stmt(ctx, init, scope);
+
+                let init: &Stmt = init;
+
+                if let Stmt::Let(LetStmt { identifier, .. }) = init {
+                    loop_scope.insert(identifier.to_string());
+                }
             }
 
-            // Validate the loop body expression
-            validate_expression(ctx, &stmt.body.expr, &loop_scope);
+            // validate the condition & after statement in the loop header's scope:
+            // bindings declared inside the loop header are available, things from inside the loop
+            // body aren't.
+
+            if let Some(condition) = &stmt.condition {
+                validate_expression(ctx, condition, &loop_scope);
+            }
+
+            if let Some(after) = &stmt.after_stmt {
+                validate_stmt(ctx, after, &loop_scope);
+            }
+
+            validate_expr_block(ctx, &stmt.body, loop_scope);
         }
+        Stmt::Return(ReturnStmt { value, .. }) | Stmt::Assert(AssertStmt { value, .. }) => {
+            validate_expression(ctx, value, scope);
+        }
+    }
+}
+
+fn validate_expr_block(
+    ctx: &mut Context<'_>,
+    body: &internal_baml_ast::ast::ExpressionBlock,
+    mut scope_for_block: HashSet<String>,
+) {
+    for stmt in &body.stmts {
+        validate_stmt(ctx, stmt, &scope_for_block);
+        if matches!(stmt, Stmt::ForLoop(_) | Stmt::Let(_)) {
+            scope_for_block.insert(stmt.identifier().name().to_string());
+        }
+    }
+
+    if let Some(expr) = &body.expr {
+        validate_expression(ctx, expr, &scope_for_block);
     }
 }
 
@@ -140,7 +207,7 @@ fn validate_expression(ctx: &mut Context<'_>, expr: &Expression, scope: &HashSet
             }
 
             // Validate generics.
-            if is_builtin_identifier(app.name.name()) && app.type_args.is_empty() {
+            if ir::builtin::is_builtin_identifier(app.name.name()) && app.type_args.is_empty() {
                 ctx.push_error(DatamodelError::new_anyhow_error(
                     anyhow::anyhow!(
                         "Generic function {} must have a type argument. Try adding a type argument like this: {}<Type>",
@@ -154,17 +221,17 @@ fn validate_expression(ctx: &mut Context<'_>, expr: &Expression, scope: &HashSet
                 validate_expression(ctx, arg, scope);
             }
         }
-        Expression::Array(items, span) => {
+        Expression::Array(items, _span) => {
             for item in items {
                 validate_expression(ctx, item, scope);
             }
         }
-        Expression::Map(fields, span) => {
+        Expression::Map(fields, _span) => {
             for (_key, value) in fields {
                 validate_expression(ctx, value, scope);
             }
         }
-        Expression::BoolValue(_, span) => {}
+        Expression::BoolValue(_, _span) => {}
         Expression::StringValue(_, _) => {}
         Expression::NumericValue(_, _) => {}
         Expression::RawStringValue(_) => {}
@@ -197,27 +264,23 @@ fn validate_expression(ctx: &mut Context<'_>, expr: &Expression, scope: &HashSet
 
             for field in &cc.fields {
                 match field {
-                    ClassConstructorField::Named(field_name, value) => {}
+                    ClassConstructorField::Named(_field_name, _value) => {}
                     ClassConstructorField::Spread(expr) => {
                         validate_expression(ctx, expr, scope);
                     }
                 }
             }
         }
-        Expression::ExprBlock(block, span) => {
-            let mut scope = scope.clone();
-            for stmt in block.stmts.iter() {
-                validate_stmt(ctx, stmt, &scope);
-                scope.insert(stmt.identifier().name().to_string());
-            }
-            validate_expression(ctx, &block.expr, &scope);
+        Expression::ExprBlock(block, _span) => {
+            validate_expr_block(ctx, block, scope.clone());
         }
-        Expression::If(cond, then, else_, span) => {
+        Expression::If(cond, then, else_, _span) => {
             validate_expression(ctx, cond, scope);
             validate_expression(ctx, then, scope);
             if let Some(else_) = else_ {
                 validate_expression(ctx, else_, scope);
             }
         }
+        _ => {} // Handle other expression variants
     }
 }

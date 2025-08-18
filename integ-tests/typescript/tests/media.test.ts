@@ -6,8 +6,8 @@ describe("Media Tests", () => {
   it("should work with image from url", async () => {
     let res = await b.TestImageInput(
       Image.fromUrl(
-        "https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png",
-      ),
+        "https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png"
+      )
     );
     expect(res.toLowerCase()).toMatch(/(green|yellow|ogre|shrek)/);
   });
@@ -25,8 +25,8 @@ describe("Media Tests", () => {
   it("should work with audio from url", async () => {
     let res = await b.AudioInput(
       Audio.fromUrl(
-        "https://actions.google.com/sounds/v1/emergency/beeper_emergency_call.ogg",
-      ),
+        "https://actions.google.com/sounds/v1/emergency/beeper_emergency_call.ogg"
+      )
     );
 
     expect(res.toLowerCase()).toContain("no");
@@ -36,13 +36,13 @@ describe("Media Tests", () => {
     let res = await b.PdfInput(
       Pdf.fromUrl(
         "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf"
-      ),
+      )
     );
     expect(res.toLowerCase()).toMatch(/(dummy|pdf|document)/);
   });
 
   it("should work with pdf from base 64", async () => {
-    let res = await b.PdfInput(Pdf.fromBase64(pdf_b64));
+    let res = await b.PdfInput(Pdf.fromBase64("application/pdf", pdf_b64));
     expect(res.toLowerCase()).toMatch(/(bookmarks|pdf|sample|usage)/);
   });
 
@@ -52,11 +52,15 @@ describe("Media Tests", () => {
     let res = await b.VideoInputGemini(
       Video.fromUrl("https://youtu.be/dQw4w9WgXcQ?si=aQdfsK0DdcDtCCud")
     );
-    expect(res.toLowerCase()).toMatch(/(singing|rickroll|dancing|80s|pop|music)/);
+    expect(res.toLowerCase()).toMatch(
+      /(singing|rickroll|dancing|80s|pop|music)/
+    );
   });
 
   it("should work with video from base 64", async () => {
-    let res = await b.VideoInputGemini(Video.fromBase64("video/mp4", video_b64));
+    let res = await b.VideoInputGemini(
+      Video.fromBase64("video/mp4", video_b64)
+    );
     expect(res.toLowerCase()).toMatch(/(cartoon|sky|field)/);
   });
 });

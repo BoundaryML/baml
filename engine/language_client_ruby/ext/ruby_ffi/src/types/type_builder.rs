@@ -40,6 +40,10 @@ impl TypeBuilder {
         }
     }
 
+    pub fn reset(&self) {
+        self.inner.reset();
+    }
+
     pub fn r#enum(&self, name: String) -> EnumBuilder {
         EnumBuilder {
             inner: self.inner.upsert_enum(name.as_str()),
@@ -122,7 +126,7 @@ impl TypeBuilder {
     ) -> Result<()> {
         rb_self
             .inner
-            .add_baml(&baml, &runtime.inner)
+            .add_baml(&baml, runtime.inner.internal())
             .map_err(|e| magnus::Error::new(ruby.exception_runtime_error(), e.to_string()))
     }
 
@@ -141,6 +145,8 @@ impl TypeBuilder {
         cls.define_singleton_method("new", function!(TypeBuilder::new, 0))?;
         cls.define_method("to_s", method!(TypeBuilder::to_s, 0))?;
         cls.define_method("enum", method!(TypeBuilder::r#enum, 1))?;
+        // TODO: Not exposed, Ruby doesn't work right now.
+        // cls.define_method("reset", method!(TypeBuilder::reset, 0))?;
         // "class" is used by Kernel: https://ruby-doc.org/core-3.0.2/Kernel.html#method-i-class
         cls.define_method("class_", method!(TypeBuilder::class, 1))?;
         cls.define_method("list", method!(TypeBuilder::list, 1))?;
@@ -256,6 +262,14 @@ impl EnumValueBuilder {
 }
 
 impl ClassBuilder {
+    pub fn reset(&self) {
+        self.inner.lock().unwrap().reset();
+    }
+
+    pub fn remove_property(&self, name: String) {
+        self.inner.lock().unwrap().remove_property(name.as_str());
+    }
+
     pub fn field(&self) -> FieldType {
         baml_types::TypeIR::class(&self.name).into()
     }
@@ -273,6 +287,9 @@ impl ClassBuilder {
 
         cls.define_method("field", method!(ClassBuilder::field, 0))?;
         cls.define_method("property", method!(ClassBuilder::property, 1))?;
+        // TODO: Not exposed, Ruby doesn't work right now.
+        // cls.define_method("reset", method!(ClassBuilder::reset, 0))?;
+        // cls.define_method("remove_property", method!(ClassBuilder::remove_property, 1))?;
 
         Ok(())
     }

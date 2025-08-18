@@ -1,7 +1,7 @@
 //! Manual Rust evaluator for UDFs defined in YAML.
 //!
 //! ## Problem with `if` branches
-//! Consider the Jinja expression:  
+//! Consider the Jinja expression:
 //! ```jinja
 //! raw.output_tokens_details.cached_tokens if raw.output_token_details else 1
 //! ```
@@ -146,75 +146,6 @@ struct MatchedFunction<'a> {
     // minijinja::Expression because those are handles too.
     constants: BamlMap<&'a str, Constant>,
     returns: BamlMap<&'a str, OutputExpression>,
-}
-
-#[cfg(test)]
-mod tests {
-
-    use super::*;
-    use crate::{
-        config::gather_all_outputs,
-        tests::{data, load_sample_udf},
-    };
-
-    #[test]
-    fn parse_yaml_file() {
-        let deser = load_sample_udf();
-
-        insta::assert_yaml_snapshot!(deser);
-    }
-
-    #[test]
-    fn find_all_outputs() {
-        let udf = load_sample_udf();
-
-        let result = gather_all_outputs(&udf);
-
-        insta::assert_debug_snapshot!(result);
-    }
-
-    #[test]
-    fn compute_jinja_matches() {
-        let udf = load_sample_udf();
-
-        let mock = [
-            // this one has everything
-            data::openai(),
-            // this one doesn't have one of the returns (since only openai defines it)
-            data::anthropic(),
-            // this one won't have any returns, so both should be undefined.
-            data::none_match(),
-            // this one will have returns, but they should have detected zeroes.
-            data::anthropic_with_bad_raw(),
-        ];
-
-        let all_names = gather_all_outputs(&udf);
-
-        let mut context = CompileContext::with_outputs(&all_names);
-
-        let match_res = mock.map(|mock| {
-            match_and_compute_row(&udf, serde_json::to_value(mock).unwrap(), &mut context).unwrap()
-        });
-
-        insta::assert_debug_snapshot!(match_res);
-    }
-
-    #[test]
-    fn match_functions() {
-        let udf = load_sample_udf();
-
-        let mock = [
-            data::openai(),
-            data::gemini(),
-            data::anthropic(),
-            data::none_match(),
-        ];
-
-        let results = mock
-            .map(|resp| find_function_for_row(&udf, &serde_json::to_value(resp).unwrap()).unwrap());
-
-        insta::assert_debug_snapshot!(results);
-    }
 }
 
 /// Evaluate selected outputs of function
@@ -440,4 +371,73 @@ fn find_function_for_row<'c>(
     }
 
     Ok(Some(eval))
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+    use crate::{
+        config::gather_all_outputs,
+        tests::{data, load_sample_udf},
+    };
+
+    #[test]
+    fn parse_yaml_file() {
+        let deser = load_sample_udf();
+
+        insta::assert_yaml_snapshot!(deser);
+    }
+
+    #[test]
+    fn find_all_outputs() {
+        let udf = load_sample_udf();
+
+        let result = gather_all_outputs(&udf);
+
+        insta::assert_debug_snapshot!(result);
+    }
+
+    #[test]
+    fn compute_jinja_matches() {
+        let udf = load_sample_udf();
+
+        let mock = [
+            // this one has everything
+            data::openai(),
+            // this one doesn't have one of the returns (since only openai defines it)
+            data::anthropic(),
+            // this one won't have any returns, so both should be undefined.
+            data::none_match(),
+            // this one will have returns, but they should have detected zeroes.
+            data::anthropic_with_bad_raw(),
+        ];
+
+        let all_names = gather_all_outputs(&udf);
+
+        let mut context = CompileContext::with_outputs(&all_names);
+
+        let match_res = mock.map(|mock| {
+            match_and_compute_row(&udf, serde_json::to_value(mock).unwrap(), &mut context).unwrap()
+        });
+
+        insta::assert_debug_snapshot!(match_res);
+    }
+
+    #[test]
+    fn match_functions() {
+        let udf = load_sample_udf();
+
+        let mock = [
+            data::openai(),
+            data::gemini(),
+            data::anthropic(),
+            data::none_match(),
+        ];
+
+        let results = mock
+            .map(|resp| find_function_for_row(&udf, &serde_json::to_value(resp).unwrap()).unwrap());
+
+        insta::assert_debug_snapshot!(results);
+    }
 }

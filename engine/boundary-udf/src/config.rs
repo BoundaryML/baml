@@ -5,7 +5,7 @@ use thiserror::Error;
 
 /// Collects all outputs declared in the configuration file, regardless of which functions declare
 /// them.
-pub fn gather_all_outputs<'a>(udf: &'a UDFConfig) -> IndexSet<&'a str> {
+pub fn gather_all_outputs(udf: &UDFConfig) -> IndexSet<&str> {
     // DFS on tree of override sets.
     // Order doesn't matter since we just want to gather everything.
 
@@ -15,8 +15,8 @@ pub fn gather_all_outputs<'a>(udf: &'a UDFConfig) -> IndexSet<&'a str> {
     let mut set = IndexSet::new();
 
     loop {
-        set.extend(dfs_top.into_iter().flat_map(extract_outputs));
-        dfs_stack.extend(dfs_top.into_iter().map(|func| &func.overrides));
+        set.extend(dfs_top.iter().flat_map(extract_outputs));
+        dfs_stack.extend(dfs_top.iter().map(|func| &func.overrides));
 
         dfs_top = match dfs_stack.pop() {
             Some(next) => next,
@@ -26,7 +26,7 @@ pub fn gather_all_outputs<'a>(udf: &'a UDFConfig) -> IndexSet<&'a str> {
 
     return set;
 
-    fn extract_outputs<'a>(func: &'a Function) -> impl Iterator<Item = &'a str> {
+    fn extract_outputs(func: &Function) -> impl Iterator<Item = &str> {
         func.returns.keys().map(AsRef::as_ref)
     }
 }
@@ -79,7 +79,7 @@ impl UDFConfig {
     /// Verifies that the configuration is valid beyond deserialization format.
     /// Checked invariants:
     /// - At least one return is declared in the configuration: `gather_all_outputs` will return a
-    /// non-empty set.
+    ///   non-empty set.
     pub fn check(&self) -> Result<(), UDFConfigError> {
         fn find_returns(overrides: &[Function]) -> bool {
             for ov in overrides {

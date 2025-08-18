@@ -17,6 +17,7 @@ pub mod test_constraints;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod test_executor;
 
+pub mod async_vm_runtime;
 mod runtime_methods;
 pub mod tracing;
 pub mod tracingv2;
@@ -299,10 +300,16 @@ impl BamlRuntime {
         baml_src_reader: BamlSrcReader,
     ) -> RuntimeContextManager {
         let ctx = RuntimeContextManager::new(baml_src_reader);
-        let tags: HashMap<String, BamlValue> = [("baml.language", language)]
-            .into_iter()
-            .map(|(k, v)| (k.to_string(), v))
-            .collect();
+        let tags: HashMap<String, BamlValue> = [
+            ("baml.language", language),
+            (
+                "baml.runtime",
+                BamlValue::String(env!("CARGO_PKG_VERSION").to_string()),
+            ),
+        ]
+        .into_iter()
+        .map(|(k, v)| (k.to_string(), v))
+        .collect();
         ctx.upsert_tags(tags);
         ctx
     }
@@ -316,10 +323,16 @@ impl BamlRuntime {
         baml_src_reader: BamlSrcReader,
     ) -> RuntimeContextManager {
         let ctx = RuntimeContextManager::new(baml_src_reader);
-        let tags: HashMap<String, BamlValue> = [(
-            "baml.language".to_string(),
-            BamlValue::String("wasm".to_string()),
-        )]
+        let tags: HashMap<String, BamlValue> = [
+            (
+                "baml.language".to_string(),
+                BamlValue::String("wasm".to_string()),
+            ),
+            (
+                "baml.runtime".to_string(),
+                BamlValue::String(env!("CARGO_PKG_VERSION").to_string()),
+            ),
+        ]
         .into_iter()
         .collect();
         ctx.upsert_tags(tags);
@@ -660,6 +673,26 @@ impl BamlRuntime {
         res
     }
 
+    /// TODO: this is a placeholder since expr fns are not LLM calls. So this is a dummy.
+    pub fn dummy_llm_placeholder_for_expr_fn() -> LLMResponse {
+        LLMResponse::Success(LLMCompleteResponse {
+            client: "openai".to_string(),
+            model: "gpt-3.5-turbo".to_string(),
+            prompt: RenderedPrompt::Completion("Sample raw response".to_string()),
+            request_options: BamlMap::new(),
+            content: "Sample raw response".to_string(),
+            start_time: SystemTime::now(),
+            latency: Duration::from_millis(2025),
+            metadata: LLMCompleteResponseMetadata {
+                baml_is_complete: true,
+                finish_reason: Some("stop".to_string()),
+                prompt_tokens: Some(50),
+                output_tokens: Some(50),
+                total_tokens: Some(100),
+            },
+        })
+    }
+
     pub async fn call_function_with_expr_events(
         &self,
         function_name: String,
@@ -693,14 +726,20 @@ impl BamlRuntime {
                         .expr_fns
                         .iter()
                         .any(|f| f.elem.name == function_name);
+                    let call_id_stack = rctx.call_id_stack.clone();
                     if !is_expr_fn {
-                        let call_id_stack = rctx.call_id_stack.clone();
                         // TODO: is this the right naming?
                         let prepared_func =
                             match self.inner.prepare_function(function_name.clone(), params) {
                                 Ok(prepared_func) => prepared_func,
                                 Err(e) => {
-                                    return (e.into(), curr_call_id);
+                                    let err_anyhow = e.into_error();
+                                    let trace_event = TraceEvent::new_function_end(
+                                        call_id_stack.clone(),
+                                        Err((&err_anyhow).to_baml_error()),
+                                    );
+                                    BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
+                                    return (Err(err_anyhow), curr_call_id);
                                 }
                             };
 
@@ -807,31 +846,38 @@ impl BamlRuntime {
                                 })
                             })
                             .transpose();
-                        // TODO: this is a placeholder since this is an expr fn, and there was no llm call. So this is a dummy.
-                        let llm_response = LLMResponse::Success(LLMCompleteResponse {
-                            client: "openai".to_string(),
-                            model: "gpt-3.5-turbo".to_string(),
-                            prompt: RenderedPrompt::Completion("Sample raw response".to_string()),
-                            request_options: BamlMap::new(),
-                            content: "Sample raw response".to_string(),
-                            start_time: SystemTime::now(),
-                            latency: Duration::from_millis(2025),
-                            metadata: LLMCompleteResponseMetadata {
-                                baml_is_complete: true,
-                                finish_reason: Some("stop".to_string()),
-                                prompt_tokens: Some(50),
-                                output_tokens: Some(50),
-                                total_tokens: Some(100),
-                            },
-                        });
-                        Ok(FunctionResult::new(
+
+                        let result: Result<FunctionResult> = Ok(FunctionResult::new(
                             OrchestrationScope { scope: vec![] },
-                            llm_response,
+                            Self::dummy_llm_placeholder_for_expr_fn(),
                             res,
-                        ))
+                        ));
+
+                        let trace_event = TraceEvent::new_function_end(
+                            call_id_stack.clone(),
+                            match &result {
+                                Ok(result) => match result.result_with_constraints_content() {
+                                    Ok(value) => Ok(value
+                                        .0
+                                        .map_meta(|f| f.3.to_non_streaming_type(self.inner.ir()))),
+                                    Err(e) => Err((&e).to_baml_error()),
+                                },
+                                Err(e) => Err(e.to_baml_error()),
+                            },
+                        );
+                        BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
+
+                        result
                     }
                 }
-                Err(e) => Err(e),
+                Err(e) => {
+                    let trace_event = TraceEvent::new_function_end(
+                        call.new_call_id_stack.clone(),
+                        Err((&e).to_baml_error()),
+                    );
+                    BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
+                    Err(e)
+                }
             };
 
         #[cfg(not(target_arch = "wasm32"))]

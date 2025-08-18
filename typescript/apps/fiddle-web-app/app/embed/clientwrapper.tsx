@@ -2,18 +2,21 @@
 import { filesAtom, useWaitForWasm } from '@baml/playground-common';
 import { PromptPreview } from '@baml/playground-common/prompt-preview';
 import { JotaiProvider } from '@baml/playground-common/jotai-provider';
+import { CodeMirrorViewer } from '@baml/playground-common/codemirror-viewer';
+import { EventListener } from '@baml/playground-common/event-listener';
 import { ResizableHandle, ResizablePanelGroup } from '@baml/ui/resizable';
 import { ResizablePanel } from '@baml/ui/resizable';
-import { ScrollArea } from '@baml/ui/scroll-area';
-import { useAtom, useAtomValue } from 'jotai';
-import dynamic from 'next/dynamic';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { isMobile } from 'react-device-detect';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { activeFileNameAtom } from '../[project_id]/_atoms/atoms';
 import { ErrorBoundary } from 'react-error-boundary';
 import { Button } from '@baml/ui/button';
 import { RefreshCcw } from 'lucide-react';
+import { BrandedLoading } from '../_components/BrandedLoading';
+import FileViewer from '../[project_id]/_components/Tree/FileViewer';
+import { useSearchParams } from 'next/navigation';
 
 // Custom Error Boundary component
 const CustomErrorBoundary: React.FC<{ children: React.ReactNode; message?: string }> = ({
@@ -61,54 +64,80 @@ const CustomErrorBoundary: React.FC<{ children: React.ReactNode; message?: strin
   );
 };
 
-// Placeholder components
-const CodeMirrorViewer: React.FC<any> = ({ fileContent, onContentChange }) => {
-  return (
-    <textarea
-      value={fileContent?.code || ''}
-      onChange={(e) => onContentChange(e.target.value)}
-      className="w-full h-full p-4 font-mono text-sm bg-transparent border-none outline-none resize-none"
-    />
-  );
-};
 
-const EventListener: React.FC = () => {
-  return null;
-};
-
+type EditorFile = { path: string; content: string };
 
 interface EmbedComponentProps {
-  bamlContent: string;
+  files: EditorFile[];
+  // All UI toggles and optional default file are taken from URL via useSearchParams
 }
 
-export default function EmbedComponent({ bamlContent }: EmbedComponentProps) {
+export default function EmbedComponent({ files }: EmbedComponentProps) {
   return (
     <JotaiProvider>
-      <EmbedComponentInner bamlContent={bamlContent} />
+      <EmbedComponentInner files={files} />
     </JotaiProvider>
   );
 }
 
-function EmbedComponentInner({ bamlContent }: EmbedComponentProps) {
-  const [files, setFiles] = useAtom(filesAtom);
+function EmbedComponentInner({ files }: EmbedComponentProps) {
+  const [editorFiles, setEditorFiles] = useAtom(filesAtom);
   const [isLoading, setIsLoading] = useState(true);
+  const [previewReady, setPreviewReady] = useState(false);
   const isWasmReady = useWaitForWasm();
   const activeFileNameAtomValue = useAtomValue(activeFileNameAtom);
+  const setActiveFileName = useSetAtom(activeFileNameAtom);
+  const searchParams = useSearchParams();
+  const uiToggles = useMemo(() => {
+    const getBool = (key: string, defaultValue: boolean) => {
+      const val = searchParams.get(key);
+      if (val === null) return defaultValue;
+      return val === 'true';
+    };
+    return {
+      showFileTree: getBool('showFileTree', false),
+      showFile: getBool('showFile', true),
+      showPlayground: getBool('showPlayground', true),
+    };
+  }, [searchParams]);
 
   // Use fallback active file name when WASM is not ready
-  const activeFileName = isWasmReady ? activeFileNameAtomValue : 'main.baml';
+  const fallbackFileName = files.find((f) => f.path.endsWith('.baml'))?.path || 'main.baml';
+  const activeFileName = isWasmReady ? activeFileNameAtomValue : fallbackFileName;
 
   useEffect(() => {
-    // Set the files with the BAML content passed from the server
-    setFiles({
-      'main.baml': bamlContent,
-    });
+    // Populate files atom from provided project files
+    const record: Record<string, string> = {};
+    for (const f of files) {
+      record[f.path] = f.content;
+    }
+    setEditorFiles(record);
     setIsLoading(false);
-  }, [bamlContent, setFiles]);
+  }, [files, setEditorFiles]);
 
-  // Wait for WASM to be ready before rendering
-  if (isLoading || !isWasmReady) {
-    return <div className="text-white">Loading BAML file...</div>;
+  // Apply default file if provided via URL (takes precedence once on mount when valid)
+  const appliedDefaultRef = useRef(false);
+  useEffect(() => {
+    if (isLoading || appliedDefaultRef.current) return;
+    const availablePaths = Object.keys(editorFiles);
+    const isValidPath = (p: string | null | undefined) => !!p && availablePaths.includes(p);
+    const defaultFile = searchParams.get('defaultFile') ?? undefined;
+    if (isValidPath(defaultFile)) {
+      appliedDefaultRef.current = true;
+      setActiveFileName(defaultFile as string);
+    }
+  }, [isLoading, editorFiles, setActiveFileName, searchParams]);
+
+  // Mark preview as ready after first paint to avoid flash between loader and preview
+  useEffect(() => {
+    if (!isLoading && isWasmReady && !previewReady) {
+      const id = requestAnimationFrame(() => setPreviewReady(true));
+      return () => cancelAnimationFrame(id);
+    }
+  }, [isLoading, isWasmReady, previewReady]);
+
+  if (isLoading) {
+    return <BrandedLoading />;
   }
 
   return (
@@ -118,54 +147,69 @@ function EmbedComponentInner({ bamlContent }: EmbedComponentProps) {
       </div>
       {/* <h1 className='text-xl font-bold text-gray-500'>This is an embeddable React Component!</h1> */}
       {/* <p className='text-gray-600'>You can use this inside an iframe.</p> */}
-      <ResizablePanelGroup
-        className="min-h-[200px] w-full rounded-lg overflow-clip"
-        direction="horizontal"
-      >
-        <ResizablePanel defaultSize={50}>
-          <div className="flex pl-1 w-full h-full tour-editor dark:bg-muted/70 overflow-y-auto">
-            {activeFileName && (
-              <CodeMirrorViewer
-                lang="baml"
-                fileContent={{
-                  code: files[activeFileName] || '',
-                  language: 'baml',
-                  id: activeFileName,
-                }}
-                hideLineNumbers={true}
-                shouldScrollDown={false}
-                onContentChange={(v: string) => {
-                  const newFiles: Record<string, string> = {};
-                  Object.entries(files).map(([key, value]) => {
-                    const newVal = key === activeFileName ? v : value;
-                    newFiles[key] = newVal;
-                  });
-                  setFiles(newFiles);
-                }}
-              />
-            )}
-          </div>
-        </ResizablePanel>
-        <ResizableHandle className="" />
-        {!isMobile && (
-          <ResizablePanel defaultSize={50} className="tour-playground">
-            <div className="flex flex-row h-full">
-              <PlaygroundView />
+      <div className="flex w-full h-full">
+        {uiToggles.showFileTree && (
+          <div className="w-64 h-full dark:bg-[#020309] bg-muted">
+            <div className="flex flex-col pb-2 w-full h-full">
+              <FileViewer />
             </div>
-          </ResizablePanel>
+          </div>
         )}
-      </ResizablePanelGroup>
+
+        <div className="flex-1 flex flex-col w-full h-full">
+          <ResizablePanelGroup
+            className="min-h-[200px] w-full rounded-lg overflow-clip"
+            direction="horizontal"
+          >
+            {uiToggles.showFile && (
+              <ResizablePanel defaultSize={uiToggles.showPlayground && !isMobile ? 50 : 100}>
+                <div className="flex pl-1 w-full h-full tour-editor dark:bg-muted/70 overflow-y-auto">
+                  {activeFileName && (
+                    <CodeMirrorViewer
+                      lang="baml"
+                      fileContent={{
+                        code: editorFiles[activeFileName] || '',
+                        language: 'baml',
+                        id: activeFileName,
+                      }}
+                      hideLineNumbers={true}
+                      shouldScrollDown={false}
+                      onContentChange={(v: string) => {
+                        const newFiles: Record<string, string> = {};
+                        Object.entries(editorFiles).forEach(([key, value]) => {
+                          newFiles[key] = key === activeFileName ? v : value;
+                        });
+                        setEditorFiles(newFiles);
+                      }}
+                    />
+                  )}
+                </div>
+              </ResizablePanel>
+            )}
+            {uiToggles.showFile && uiToggles.showPlayground && !isMobile && <ResizableHandle className="" />}
+            {uiToggles.showPlayground && !isMobile && (
+              <ResizablePanel defaultSize={uiToggles.showFile ? 50 : 100} className="tour-playground">
+                <div className="flex flex-row h-full">
+                  <PlaygroundView onReady={() => { /* handled by RAF hook */ }} />
+                </div>
+              </ResizablePanel>
+            )}
+          </ResizablePanelGroup>
+        </div>
+      </div>
     </div>
   );
 }
 
-const PlaygroundView = () => {
+const PlaygroundView = ({ onReady }: { onReady: () => void }) => {
   return (
     <>
       <CustomErrorBoundary message="Error loading playground">
-        <Suspense fallback={<div>Loading...</div>}>
+        <Suspense fallback={null}>
           <div className="flex flex-col w-full h-full">
-            <PromptPreview />
+            <OnMount onReady={onReady}>
+              <PromptPreview />
+            </OnMount>
           </div>
 
           {/* <InitialTour /> */}
@@ -175,3 +219,12 @@ const PlaygroundView = () => {
     </>
   );
 };
+
+const OnMount = ({ onReady, children }: { onReady: () => void; children: React.ReactNode }) => {
+  useEffect(() => {
+    onReady();
+  }, [onReady]);
+  return <>{children}</>;
+};
+
+// Using shared BrandedLoading and InlineLoading components

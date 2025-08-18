@@ -1,8 +1,6 @@
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
-use baml_runtime::{
-    runtime_interface::ExperimentalTracingInterface, BamlRuntime as CoreBamlRuntime,
-};
+use baml_runtime::runtime_interface::ExperimentalTracingInterface;
 use pyo3::{
     prelude::{pymethods, PyResult},
     pyclass,
@@ -20,6 +18,11 @@ type PickleReduceResult = PyResult<(
     ),
 )>;
 
+// Switch between runtimes here by importing the one you want to use.
+
+// pub use baml_runtime::BamlRuntime as CoreBamlRuntime;
+pub use baml_runtime::async_vm_runtime::BamlAsyncVmRuntime as CoreBamlRuntime;
+
 use crate::{
     errors::{BamlError, BamlInvalidArgumentError},
     parse_py_type::parse_py_type,
@@ -33,7 +36,14 @@ use crate::{
     },
 };
 
-crate::lang_wrapper!(BamlRuntime, CoreBamlRuntime, clone_safe, root_path: String = String::new(), env_vars: HashMap<String, String> = HashMap::new(), files: HashMap<String, String> = HashMap::new());
+crate::lang_wrapper!(
+    BamlRuntime,
+    CoreBamlRuntime,
+    clone_safe,
+    root_path: String = String::new(),
+    env_vars: HashMap<String, String> = HashMap::new(),
+    files: HashMap<String, String> = HashMap::new()
+);
 
 #[derive(Debug, Clone)]
 #[pyclass]
@@ -101,6 +111,10 @@ impl BamlRuntime {
             self.files.clone(),
         );
         Ok((cls.getattr("_create_from_state")?.into(), args))
+    }
+
+    fn disassemble(&self, function_name: String) {
+        self.inner.disassemble(&function_name);
     }
 
     /// Static method to recreate BamlRuntime from pickle state

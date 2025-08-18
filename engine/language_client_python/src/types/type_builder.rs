@@ -1,3 +1,5 @@
+use std::ops::Deref;
+
 use baml_runtime::type_builder::{self, WithMeta};
 use baml_types::{ir_type::UnionConstructor, BamlValue};
 use pyo3::{
@@ -35,6 +37,10 @@ impl TypeBuilder {
     #[new]
     pub fn new() -> Self {
         type_builder::TypeBuilder::new().into()
+    }
+
+    pub fn reset(&self) {
+        self.inner.reset();
     }
 
     /// provides a detailed string representation of the typebuilder for python users.
@@ -135,7 +141,7 @@ impl TypeBuilder {
         rt: &crate::runtime::BamlRuntime,
     ) -> Result<(), pyo3::PyErr> {
         self.inner
-            .add_baml(baml, &rt.inner)
+            .add_baml(baml, rt.inner.internal())
             .map_err(BamlError::from_anyhow)
     }
 }
@@ -148,6 +154,10 @@ impl FieldType {
 
     pub fn optional(&self) -> FieldType {
         self.inner.lock().unwrap().clone().as_optional().into()
+    }
+
+    pub fn __eq__(&self, other: &FieldType) -> bool {
+        self.inner.lock().unwrap().deref() == other.inner.lock().unwrap().deref()
     }
 }
 
@@ -213,6 +223,24 @@ impl ClassBuilder {
         baml_types::TypeIR::class(&self.name).into()
     }
 
+    pub fn list_properties(&self) -> Vec<(String, ClassPropertyBuilder)> {
+        self.inner
+            .lock()
+            .unwrap()
+            .list_properties_key_value()
+            .into_iter()
+            .map(|(name, prop_builder)| (name, prop_builder.into()))
+            .collect()
+    }
+
+    pub fn remove_property(&self, name: &str) {
+        self.inner.lock().unwrap().remove_property(name);
+    }
+
+    pub fn reset(&self) {
+        self.inner.lock().unwrap().reset();
+    }
+
     pub fn property(&self, name: &str) -> ClassPropertyBuilder {
         self.inner.lock().unwrap().upsert_property(name).into()
     }
@@ -226,6 +254,17 @@ impl ClassPropertyBuilder {
             .unwrap()
             .set_type(r#type.inner.lock().unwrap().clone());
         self.inner.clone().into()
+    }
+
+    pub fn get_type(&self) -> PyResult<FieldType> {
+        self.inner
+            .lock()
+            .unwrap()
+            .r#type()
+            .map(FieldType::from)
+            .ok_or_else(|| BamlError::from_anyhow(anyhow::anyhow!(
+                "attempted to read a property that has no defined type, this is likely an internal bug"
+            )))
     }
 
     #[pyo3(signature = (alias = None))]

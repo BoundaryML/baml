@@ -7,44 +7,23 @@
     "defaultBranch": "main"
   },
   "files": {
-    "ignoreUnknown": false,
-    "ignore": [
-      ".next",
-      "dist",
-      "**/dist/**",
-      "build",
-      "**/build/**",
-      "bin",
-      "**/bin/**",
-      "node_modules",
-      "**/node_modules/**",
-      "**/baml_client/**",
-      "**/generated/**",
-      "**/target/**",
-      "**/.turbo/**",
-      "**/coverage/**",
-      "engine/**",
-      "integ-tests/**",
-      "typescript/**",
-      "tools/**",
-      "patches/**",
-      "jetbrains/**",
-      "pnpm-lock.yaml"
+    "include": [
+      "typescript/packages/sage-interface/**/*.ts",
+      "typescript/packages/sage-interface/**/*.tsx"
     ]
   },
   "json": {
     "formatter": {
       "enabled": true,
       "indentStyle": "space",
-      "indentWidth": 2
+      "indentWidth": 2,
+      "lineWidth": 100
     }
   },
   "formatter": {
     "enabled": true,
-    "indentStyle": "space"
-  },
-  "organizeImports": {
-    "enabled": true
+    "indentStyle": "space",
+    "lineWidth": 100
   },
   "linter": {
     "enabled": true,
@@ -56,12 +35,7 @@
         "useExhaustiveDependencies": "warn",
         "useHookAtTopLevel": "error"
       },
-      "nursery": {
-        "noCommonJs": "error",
-        "noNestedTernary": "off",
-        "useAtIndex": "error",
-        "useCollapsedIf": "error"
-      },
+      "nursery": {},
       "style": {
         "noNegationElse": "off",
         "useNodejsImportProtocol": "error",

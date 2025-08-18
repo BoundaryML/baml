@@ -828,7 +828,7 @@ impl<T> BamlValueWithMeta<T> {
 
     /// Iterating over a `BamlValueWithMeta` produces a depth-first traversal
     /// of the value and all its children.
-    pub fn iter(&self) -> BamlValueWithMetaIterator<T> {
+    pub fn iter(&self) -> BamlValueWithMetaIterator<'_, T> {
         BamlValueWithMetaIterator::new(self)
     }
 

@@ -150,7 +150,7 @@ export namespace partial_types {
       created?: string | null
       modified?: string | null
       tags: string[]
-      attributes: Record<string, string | number | boolean>
+      attributes: Record<string, string | number | boolean | null>
     }
     export interface PrimaryData {
       values: (string | number | number)[]
@@ -159,7 +159,7 @@ export namespace partial_types {
     }
     export interface Record {
       id?: number | null
-      data: Record<string, string | number | boolean>
+      data: Record<string, string | number | boolean | null>
       related?: Record[] | null
     }
     export interface ResponseMetadata {

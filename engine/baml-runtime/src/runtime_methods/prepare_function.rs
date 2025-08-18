@@ -107,7 +107,7 @@ impl InternalBamlRuntime {
         &self,
         function_name: String,
         params: &BamlMap<String, BamlValue>,
-    ) -> Result<PreparedFunction, PrepareFunctionError> {
+    ) -> Result<PreparedFunction<'_>, PrepareFunctionError> {
         let func = match self.get_function(&function_name) {
             Ok(func) => func,
             Err(error) => {

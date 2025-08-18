@@ -48,7 +48,7 @@ impl ParsingContext<'_> {
         }
     }
 
-    pub(crate) fn enter_scope(&self, scope: &str) -> ParsingContext {
+    pub(crate) fn enter_scope(&self, scope: &str) -> ParsingContext<'_> {
         let mut new_scope = self.scope.clone();
         new_scope.push(scope.to_string());
         ParsingContext {
@@ -67,7 +67,7 @@ impl ParsingContext<'_> {
         &self,
         cls_value_pair: (String, jsonish::Value),
         is_coerce: bool,
-    ) -> ParsingContext {
+    ) -> ParsingContext<'_> {
         let mut new_visited_coerce = self.visited_during_coerce.clone();
         let mut new_visited_try_cast = self.visited_during_try_cast.clone();
         if is_coerce {
