@@ -65,7 +65,7 @@ class BamlPdf {
      */
     asUrl() {
         if (!this.isUrl()) {
-            throw new Error("Audio is not a URL");
+            throw new Error("Pdf is not a URL");
         }
         return this.content;
     }
