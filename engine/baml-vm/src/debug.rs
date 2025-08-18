@@ -111,6 +111,7 @@ pub fn display_instruction(
         | Instruction::DispatchFuture(_)
         | Instruction::Await
         | Instruction::Call(_)
+        | Instruction::Assert
         | Instruction::Return => String::new(),
     };
 
@@ -161,7 +162,10 @@ fn instruction_color(instruction: &Instruction) -> Color {
         }
         Instruction::Jump(_) | Instruction::JumpIfFalse(_) => Color::Yellow,
         Instruction::Call(_) => Color::Magenta,
-        Instruction::Return | Instruction::Pop(_) | Instruction::PopReplace(_) => Color::Red,
+        Instruction::Assert
+        | Instruction::Return
+        | Instruction::Pop(_)
+        | Instruction::PopReplace(_) => Color::Red,
         Instruction::AllocInstance(_) | Instruction::AllocArray(_) => Color::Cyan,
         Instruction::DispatchFuture(_) | Instruction::Await => Color::BrightGreen,
     }
