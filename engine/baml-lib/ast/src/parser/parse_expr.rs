@@ -224,6 +224,14 @@ fn parse_statement_inner_rule(
     diagnostics: &mut Diagnostics,
 ) -> Option<Stmt> {
     match stmt_token.as_rule() {
+        Rule::return_stmt => {
+            let value = stmt_token
+                .into_inner()
+                .next()
+                .and_then(|rule| parse_expression(rule, diagnostics));
+
+            Some(Stmt::Return(ReturnStmt { value, span }))
+        }
         Rule::assign_stmt => {
             let mut assignment_tokens = stmt_token.into_inner();
 
