@@ -27,22 +27,22 @@ export declare class BamlPdf {
      */
     static fromUrlAsync(url: string): Promise<BamlPdf>;
     /**
-     * Check if the audio is stored as a URL
+     * Check if the pdf is stored as a URL
      */
     isUrl(): boolean;
     /**
-     * Get the URL of the audio if it's stored as a URL
-     * @throws Error if the audio is not stored as a URL
+     * Get the URL of the pdf if it's stored as a URL
+     * @throws Error if the pdf is not stored as a URL
      */
     asUrl(): string;
     /**
-     * Get the base64 data and media type if the audio is stored as base64
+     * Get the base64 data and media type if the pdf is stored as base64
      * @returns [base64Data, mediaType]
-     * @throws Error if the audio is not stored as base64
+     * @throws Error if the pdf is not stored as base64
      */
     asBase64(): [string, string];
     /**
-     * Convert the audio to a JSON representation
+     * Convert the pdf to a JSON representation
      */
     toJSON(): {
         url: string;

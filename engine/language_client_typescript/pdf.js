@@ -54,14 +54,14 @@ class BamlPdf {
         return BamlPdf.fromBlob(blob);
     }
     /**
-     * Check if the audio is stored as a URL
+     * Check if the pdf is stored as a URL
      */
     isUrl() {
         return this.type === "url";
     }
     /**
-     * Get the URL of the audio if it's stored as a URL
-     * @throws Error if the audio is not stored as a URL
+     * Get the URL of the pdf if it's stored as a URL
+     * @throws Error if the pdf is not stored as a URL
      */
     asUrl() {
         if (!this.isUrl()) {
@@ -70,18 +70,18 @@ class BamlPdf {
         return this.content;
     }
     /**
-     * Get the base64 data and media type if the audio is stored as base64
+     * Get the base64 data and media type if the pdf is stored as base64
      * @returns [base64Data, mediaType]
-     * @throws Error if the audio is not stored as base64
+     * @throws Error if the pdf is not stored as base64
      */
     asBase64() {
         if (this.type !== "base64") {
-            throw new Error("Audio is not base64");
+            throw new Error("Pdf is not base64");
         }
         return [this.content, this.mediaType || ""];
     }
     /**
-     * Convert the audio to a JSON representation
+     * Convert the pdf to a JSON representation
      */
     toJSON() {
         if (this.type === "url") {
