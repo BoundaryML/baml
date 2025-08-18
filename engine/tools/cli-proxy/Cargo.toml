@@ -1,0 +1,18 @@
+[package]
+name = "cli-proxy"
+version.workspace = true
+authors.workspace = true
+description = "CLI proxy tool for recording and replaying stdin/stdout interactions"
+license-file.workspace = true
+edition = "2021"
+
+[[bin]]
+name = "cli-proxy"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+base64.workspace = true
+clap.workspace = true
+serde.workspace = true
+serde_json.workspace = true
