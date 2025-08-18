@@ -28,7 +28,7 @@ async def test_pdf_input():
     
     # Create a Pdf object from Base64 data
     pdf_b64 = "JVBERi0K..."
-    pdf = Pdf.from_base64(pdf_b64)
+    pdf = Pdf.from_base64("application/pdf", pdf_b64)
     res2 = await b.TestPdfInput(pdf=pdf)
 ```
 
