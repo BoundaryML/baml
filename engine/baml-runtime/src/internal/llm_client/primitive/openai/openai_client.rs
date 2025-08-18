@@ -140,9 +140,11 @@ impl ProviderStrategy {
                     either::Either::Right(messages) => {
                         // Check if we have any non-text content (multimodal)
                         let has_media = messages.iter().any(|msg| {
-                            msg.parts.iter().any(|part| !matches!(part, ChatMessagePart::Text(_)))
+                            msg.parts
+                                .iter()
+                                .any(|part| !matches!(part, ChatMessagePart::Text(_)))
                         });
-                        
+
                         if has_media {
                             // Use structured array format for multimodal content
                             let structured_messages: Result<Vec<_>> = messages
@@ -259,14 +261,13 @@ impl ProviderStrategy {
                                             }
                                         })
                                         .collect();
-                                    
+
                                     Ok(json!({
                                         "role": msg.role,
                                         "content": content_parts?
                                     }))
                                 })
                                 .collect();
-                            
                             json!(structured_messages?)
                         } else {
                             // For text-only content, we can use either string or structured format
