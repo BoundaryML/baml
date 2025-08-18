@@ -23,7 +23,7 @@ use baml_types::{BamlMap, BamlValueWithMeta};
 use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Diagnostics, Span};
 
 use crate::{
-    hir::{self, Hir, Type},
+    hir::{self, Hir, Type, TypeM, TypeMeta},
     thir::{self as thir, ExprMetadata, THir},
 };
 
@@ -118,6 +118,8 @@ pub fn typecheck(hir: &Hir, diagnostics: &mut Diagnostics) -> THir<ExprMetadata>
             );
         }
 
+        func_context.function_return_type = Some(&func.return_type);
+
         // Convert HIR block to THIR block with type inference
         let typed_body = typecheck_block(&func.body, &mut func_context, diagnostics);
 
@@ -160,7 +162,7 @@ pub struct VarInfo {
 }
 
 #[derive(Clone, Debug)]
-pub struct TypeContext {
+pub struct TypeContext<'func> {
     // Function names and other non-variable symbols
     pub symbols: BamlMap<String, Type>,
     // Variables in scope with mutability info
@@ -168,15 +170,17 @@ pub struct TypeContext {
     pub classes: BamlMap<String, hir::Class>,
     // Used for knowing whether `break` and `continue` are inside a loop or not.
     pub is_inside_loop: bool,
+
+    pub function_return_type: Option<&'func TypeM<TypeMeta>>,
 }
 
-impl Default for TypeContext {
+impl Default for TypeContext<'_> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl TypeContext {
+impl TypeContext<'_> {
     pub fn new() -> Self {
         let mut vars = BamlMap::new();
 
@@ -199,8 +203,10 @@ impl TypeContext {
             vars,
             classes: BamlMap::new(),
             is_inside_loop: false,
+            function_return_type: None,
         }
     }
+
     pub fn get_type(&self, name: &str) -> Option<&Type> {
         self.vars
             .get(name)
@@ -357,7 +363,35 @@ fn typecheck_statement(
             })
         }
         hir::Statement::Return { expr, span } => {
-            let typed_expr = typecheck_expression(expr, context, diagnostics);
+            let mut typed_expr = typecheck_expression(expr, context, diagnostics);
+
+            let return_type = context
+                .function_return_type
+                .expect("must have return type when typechecking inside function");
+
+            let cur_type = &mut typed_expr.meta_mut().1;
+
+            match cur_type {
+                Some(has) => {
+                    if !has.eq_up_to_span(return_type) {
+                        let mut s = String::new();
+
+                        _ = expr.to_doc().render_fmt(10, &mut s);
+
+                        diagnostics.push_error(DatamodelError::new_type_mismatch_error(
+                            return_type.name_for_user(),
+                            has.name_for_user(),
+                            &s,
+                            span.clone(),
+                        ));
+                    }
+                }
+                None => {
+                    // infer type from function return.
+                    *cur_type = Some(return_type.clone());
+                }
+            }
+
             Some(thir::Statement::FunctionReturn {
                 expr: typed_expr,
                 span: span.clone(),

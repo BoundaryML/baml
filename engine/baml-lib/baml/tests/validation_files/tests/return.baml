@@ -4,17 +4,17 @@ fn EarlyReturn(x: int) -> int {
    x + 5
 }
 
-fn WithStack(x: int) -> null {
+fn WithStack(x: int) -> int {
    let a = 1;
 
-   // both 'return' and 'return null' should be allowed if context allows it.
+   // NOTE: currently there's no empty returns.
 
-   if a == 0 { return; }
+   if a == 0 { return 0; }
    
    {
       let b = 1;
       if a != b {
-         return;
+         return 0;
       }
    }
    
@@ -23,19 +23,41 @@ fn WithStack(x: int) -> null {
       let b = 3;
       while b != c {
          if true {
-	          return null;
+	          return 0;
 	     }
       }
 	}
-}
 
-fn BadVoidReturn(x: int) -> int {
-
-   // should error with 'return null, expected int`
-   return;
+    7
 }
 
 fn BadValueReturn(x: int) -> string {
    // should error with `return int, expected string`
    return 1;
 }
+
+// warning: Workflow functions are experimental, and will break in the future.
+//   -->  tests/return.baml:1
+//    | 
+//    | 
+//  1 | fn EarlyReturn(x: int) -> int {
+//    | 
+// warning: Workflow functions are experimental, and will break in the future.
+//   -->  tests/return.baml:7
+//    | 
+//  6 | 
+//  7 | fn WithStack(x: int) -> int {
+//    | 
+// warning: Workflow functions are experimental, and will break in the future.
+//   -->  tests/return.baml:34
+//    | 
+// 33 | 
+// 34 | fn BadValueReturn(x: int) -> string {
+//    | 
+// error: Expected a string value, but received int value `1`.
+//   -->  tests/return.baml:36
+//    | 
+// 35 |    // should error with `return int, expected string`
+// 36 |    return 1;
+// 37 | }
+//    | 

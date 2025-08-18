@@ -225,10 +225,8 @@ fn parse_statement_inner_rule(
 ) -> Option<Stmt> {
     match stmt_token.as_rule() {
         Rule::return_stmt => {
-            let value = stmt_token
-                .into_inner()
-                .next()
-                .and_then(|rule| parse_expression(rule, diagnostics));
+            let return_value = stmt_token.into_inner().next()?;
+            let value = parse_expression(return_value, diagnostics)?;
 
             Some(Stmt::Return(ReturnStmt { value, span }))
         }

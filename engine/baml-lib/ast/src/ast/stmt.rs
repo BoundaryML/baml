@@ -76,7 +76,7 @@ pub struct WhileStmt {
 
 #[derive(Debug, Clone)]
 pub struct ReturnStmt {
-    pub value: Option<Expression>,
+    pub value: Expression,
     pub span: Span,
 }
 
@@ -147,10 +147,7 @@ impl fmt::Display for Stmt {
             Stmt::WhileLoop(stmt) => write!(f, "while {} {}", stmt.condition, stmt.body),
             Stmt::Break(_) => f.write_str("break"),
             Stmt::Continue(_) => f.write_str("continue"),
-            Stmt::Return(stmt) => match stmt.value.as_ref() {
-                Some(value) => write!(f, "return {value}"),
-                None => write!(f, "return"),
-            },
+            Stmt::Return(ReturnStmt { value, .. }) => write!(f, "return {value}"),
         }
     }
 }
