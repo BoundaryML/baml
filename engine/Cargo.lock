@@ -4383,6 +4383,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "lsp-proxy"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "clap",
+ "crossbeam-channel",
+ "language-server",
+ "lsp-server",
+ "lsp-types",
+ "serde",
+ "serde_json",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "lsp-server"
 version = "0.7.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"

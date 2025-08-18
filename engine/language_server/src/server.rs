@@ -196,7 +196,7 @@ impl Server {
             let lsp_sender = server.connection.make_sender();
             let playground_tx = server.session.playground_tx.clone();
             server.tokio_runtime.spawn(async move {
-                let port_picker = match playground2::port_picker::pick().await {
+                let port_picks = match playground2::port_picker::pick().await {
                     Ok(port_picker) => port_picker,
                     Err(e) => {
                         tracing::error!("Failed to pick ports: {}", e);
@@ -208,15 +208,16 @@ impl Server {
                         app_state: playground2::server::AppState {
                             broadcast_rx,
                             playground_tx,
-                            port_picker.proxy_port,
+                            playground_port: port_picks.playground_port,
+                            proxy_port: port_picks.proxy_port,
                         },
-                    }.run(port_picker.playground_listener),
-                    playground2::ProxyServer{}.run(port_picker.proxy_listener)
+                    }.run(port_picks.playground_listener),
+                    playground2::ProxyServer{}.run(port_picks.proxy_listener)
                 );
                 lsp_sender.send(Message::Notification(lsp_server::Notification::new(
                     "baml/port".to_string(),
                     serde_json::to_value(PortNotificationParams {
-                        port: port_picker.playground_port,
+                        port: port_picks.playground_port,
                     }).unwrap(),
                 ))).unwrap();
                 let _ = http_services.await;

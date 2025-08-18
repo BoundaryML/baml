@@ -25,6 +25,7 @@ members = [
   "llm-response-parser",
   "boundary-udf",
   "tokio-console-demo",
+  "tools/lsp-proxy",
 ]
 default-members = [
   "baml-compiler",

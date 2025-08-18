@@ -32,6 +32,8 @@ pub enum LangServerToWasmMessage {
 pub struct AppState {
     pub broadcast_rx: broadcast::Receiver<LangServerToWasmMessage>,
     pub playground_tx: broadcast::Sender<PreSendToWasmMessage>,
+    pub playground_port: u16,
+    pub proxy_port: u16,
 }
 
 impl Clone for AppState {
@@ -39,6 +41,8 @@ impl Clone for AppState {
         Self {
             broadcast_rx: self.broadcast_rx.resubscribe(),
             playground_tx: self.playground_tx.clone(),
+            playground_port: self.playground_port,
+            proxy_port: self.proxy_port,
         }
     }
 }
