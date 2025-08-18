@@ -74,6 +74,12 @@ pub struct WhileStmt {
     pub span: Span,
 }
 
+#[derive(Debug, Clone)]
+pub struct ReturnStmt {
+    pub value: Option<Expression>,
+    pub span: Span,
+}
+
 // Stmt(statements) perform actions and not often return values.
 #[derive(Debug, Clone)]
 pub enum Stmt {
@@ -87,6 +93,7 @@ pub enum Stmt {
     AssignOp(AssignOpStmt),
     Break(Span),
     Continue(Span),
+    Return(ReturnStmt),
 }
 
 impl fmt::Display for AssignOp {
@@ -140,6 +147,10 @@ impl fmt::Display for Stmt {
             Stmt::WhileLoop(stmt) => write!(f, "while {} {}", stmt.condition, stmt.body),
             Stmt::Break(_) => f.write_str("break"),
             Stmt::Continue(_) => f.write_str("continue"),
+            Stmt::Return(stmt) => match stmt.value.as_ref() {
+                Some(value) => write!(f, "return {value}"),
+                None => write!(f, "return"),
+            },
         }
     }
 }
@@ -178,6 +189,7 @@ impl Stmt {
             Stmt::WhileLoop(_) => panic!("while loops don't have identifiers"),
             Stmt::Break(_) => panic!("break statements don't have identifiers"),
             Stmt::Continue(_) => panic!("continue statements don't have identifiers"),
+            Stmt::Return(_) => panic!("return statements don't have identifiers"),
             Stmt::CForLoop(_) => panic!("c-like for loops don't have identifiers"),
             Stmt::Assign(stmt) => &stmt.identifier,
             Stmt::AssignOp(stmt) => &stmt.identifier,
@@ -189,10 +201,12 @@ impl Stmt {
             Stmt::Let(stmt) => &stmt.span,
             Stmt::ForLoop(stmt) => &stmt.span,
             Stmt::CForLoop(stmt) => &stmt.span,
-            Stmt::Expression(expr) => expr.span(),
             Stmt::Assign(stmt) => &stmt.span,
             Stmt::AssignOp(stmt) => &stmt.span,
             Stmt::WhileLoop(stmt) => &stmt.span,
+            Stmt::Return(stmt) => &stmt.span,
+
+            Stmt::Expression(expr) => expr.span(),
             Stmt::Break(span) | Stmt::Continue(span) => span,
         }
     }

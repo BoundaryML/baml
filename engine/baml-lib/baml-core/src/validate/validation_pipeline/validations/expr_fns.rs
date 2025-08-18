@@ -163,6 +163,11 @@ fn validate_stmt(ctx: &mut Context<'_>, stmt: &Stmt, scope: &HashSet<String>) {
 
             validate_expr_block(ctx, &stmt.body, loop_scope);
         }
+        Stmt::Return(stmt) => {
+            if let Some(val) = stmt.value.as_ref() {
+                validate_expression(ctx, val, scope);
+            }
+        }
     }
 }
 

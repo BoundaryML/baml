@@ -362,7 +362,6 @@ fn lower_stmt(stmt: &ast::Stmt) -> Statement {
                 None => inner_loop,
             }
         }
-
         ast::Stmt::Break(span) => Statement::Break(span.clone()),
         ast::Stmt::Continue(span) => Statement::Continue(span.clone()),
         ast::Stmt::WhileLoop(ast::WhileStmt {
@@ -474,6 +473,7 @@ fn lower_stmt(stmt: &ast::Stmt) -> Statement {
                 }
             }
         }
+        ast::Stmt::Return(return_stmt) => todo!("return statement (should always have value!)"),
     };
     hir_stmt
 }
