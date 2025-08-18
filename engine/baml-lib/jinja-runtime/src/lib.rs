@@ -3,6 +3,10 @@ use colored::*;
 mod chat_message_part;
 
 mod output_format;
+#[cfg(test)]
+mod test_enum_comparison;
+#[cfg(test)]
+mod test_enum_template;
 use indexmap::IndexMap;
 use internal_baml_core::ir::{jinja_helpers::get_env, repr::IntermediateRepr};
 pub use output_format::types;

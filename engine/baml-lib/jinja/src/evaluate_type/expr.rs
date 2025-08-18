@@ -152,6 +152,11 @@ fn tracker_visit_expr(
                             Type::Unknown
                         }
                     }
+                    // Allow enum-string comparisons with the new value_cmp implementation
+                    (Type::EnumValueRef(_), Type::String) | (Type::String, Type::EnumValueRef(_)) => {
+                        Type::Bool
+                    }
+                    // Other mixed enum comparisons are still invalid
                     (Type::EnumValueRef(_), _) | (_, Type::EnumValueRef(_)) => {
                         state.errors.push(TypeError::new_invalid_enum_cmp(
                             expr,
@@ -163,12 +168,42 @@ fn tracker_visit_expr(
                     }
                     _ => Type::Bool,
                 },
-                ast::BinOpKind::Ne => Type::Bool,
-                ast::BinOpKind::Lt => Type::Bool,
-                ast::BinOpKind::Gt => Type::Bool,
+                ast::BinOpKind::Ne => match (&lhs, &rhs) {
+                    // Allow enum-string comparisons for Ne as well
+                    (Type::EnumValueRef(_), Type::String) | (Type::String, Type::EnumValueRef(_)) => {
+                        Type::Bool
+                    }
+                    _ => Type::Bool,
+                },
+                ast::BinOpKind::Lt => match (&lhs, &rhs) {
+                    // Allow enum-string comparisons for ordering
+                    (Type::EnumValueRef(_), Type::String) | (Type::String, Type::EnumValueRef(_)) => {
+                        Type::Bool
+                    }
+                    _ => Type::Bool,
+                },
+                ast::BinOpKind::Gt => match (&lhs, &rhs) {
+                    // Allow enum-string comparisons for ordering
+                    (Type::EnumValueRef(_), Type::String) | (Type::String, Type::EnumValueRef(_)) => {
+                        Type::Bool
+                    }
+                    _ => Type::Bool,
+                },
                 ast::BinOpKind::In => Type::Bool,
-                ast::BinOpKind::Lte => Type::Bool,
-                ast::BinOpKind::Gte => Type::Bool,
+                ast::BinOpKind::Lte => match (&lhs, &rhs) {
+                    // Allow enum-string comparisons for ordering
+                    (Type::EnumValueRef(_), Type::String) | (Type::String, Type::EnumValueRef(_)) => {
+                        Type::Bool
+                    }
+                    _ => Type::Bool,
+                },
+                ast::BinOpKind::Gte => match (&lhs, &rhs) {
+                    // Allow enum-string comparisons for ordering
+                    (Type::EnumValueRef(_), Type::String) | (Type::String, Type::EnumValueRef(_)) => {
+                        Type::Bool
+                    }
+                    _ => Type::Bool,
+                },
                 ast::BinOpKind::Concat => Type::String,
                 ast::BinOpKind::ScAnd => Type::Bool,
                 ast::BinOpKind::ScOr => Type::Bool,

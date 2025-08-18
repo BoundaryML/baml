@@ -191,8 +191,15 @@ impl Object for MinijinjaBamlEnumValue {
         ObjectRepr::Map
     }
 
-    fn get_value(self: &Arc<Self>, _key: &minijinja::Value) -> Option<minijinja::Value> {
-        None
+    fn get_value(self: &Arc<Self>, key: &minijinja::Value) -> Option<minijinja::Value> {
+        match key.as_str()? {
+            "value" => Some(minijinja::Value::from(self.value.clone())),
+            "alias" => self.alias.as_ref().map(|a| minijinja::Value::from(a.clone())),
+            "display" => Some(minijinja::Value::from(
+                self.alias.as_ref().unwrap_or(&self.value).clone()
+            )),
+            _ => None,
+        }
     }
 
     fn enumerate(self: &Arc<Self>) -> Enumerator {
@@ -203,6 +210,20 @@ impl Object for MinijinjaBamlEnumValue {
         std::fmt::Display::fmt(self, f)
     }
 
+    fn value_cmp(self: &Arc<Self>, other: &minijinja::Value) -> Option<std::cmp::Ordering> {
+        // Compare to strings - compare against value name only, NOT alias
+        if let Some(other_str) = other.as_str() {
+            return Some(self.value.as_str().cmp(other_str));
+        }
+        
+        // Delegate to custom_cmp for object comparisons
+        if let Some(other_obj) = other.as_object() {
+            return self.custom_cmp(other_obj);
+        }
+        
+        None
+    }
+    
     fn custom_cmp(
         self: &Arc<Self>,
         other: &minijinja::value::DynObject,
