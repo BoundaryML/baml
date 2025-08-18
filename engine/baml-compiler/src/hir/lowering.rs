@@ -477,6 +477,7 @@ fn lower_stmt(stmt: &ast::Stmt) -> Statement {
             expr: Expression::from_ast(value),
             span: span.clone(),
         },
+        ast::Stmt::Assert(_) => todo!("lower assert to HIR"),
     };
     hir_stmt
 }
