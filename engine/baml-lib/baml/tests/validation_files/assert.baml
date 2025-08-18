@@ -6,7 +6,7 @@ fn assertOk() -> int {
 }
 
 fn assertNotOk() -> int {
-	asert 3 == 1;
+	assert 3 == 1;
 
 	2
 }

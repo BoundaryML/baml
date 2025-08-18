@@ -225,6 +225,13 @@ fn parse_statement_inner_rule(
     diagnostics: &mut Diagnostics,
 ) -> Option<Stmt> {
     match stmt_token.as_rule() {
+        Rule::assert_stmt => {
+            let assert_value = stmt_token.into_inner().next()?;
+            let value = parse_expression(assert_value, diagnostics)?;
+
+            Some(Stmt::Assert(AssertStmt { value, span }))
+        }
+
         Rule::return_stmt => {
             let return_value = stmt_token.into_inner().next()?;
             let value = parse_expression(return_value, diagnostics)?;
