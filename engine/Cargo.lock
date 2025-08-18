@@ -918,7 +918,7 @@ dependencies = [
 
 [[package]]
 name = "baml-cli"
-version = "0.204.0"
+version = "0.205.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -1006,8 +1006,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml-compiler"
+version = "0.205.0"
+dependencies = [
+ "anyhow",
+ "baml-types",
+ "baml-vm",
+ "internal-baml-ast",
+ "internal-baml-diagnostics",
+ "internal-baml-parser-database",
+ "itertools 0.14.0",
+ "pretty",
+]
+
+[[package]]
 name = "baml-derive"
-version = "0.204.0"
+version = "0.205.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1016,7 +1030,7 @@ dependencies = [
 
 [[package]]
 name = "baml-hot-reload"
-version = "0.204.0"
+version = "0.205.0"
 dependencies = [
  "anyhow",
  "notify-debouncer-full",
@@ -1030,6 +1044,7 @@ name = "baml-ids"
 version = "0.0.1"
 dependencies = [
  "anyhow",
+ "getrandom 0.2.16",
  "serde",
  "serde_json",
  "time",
@@ -1039,8 +1054,10 @@ dependencies = [
 
 [[package]]
 name = "baml-lib"
-version = "0.204.0"
+version = "0.205.0"
 dependencies = [
+ "baml-compiler",
+ "baml-vm",
  "base64 0.13.1",
  "dissimilar",
  "either",
@@ -1055,7 +1072,7 @@ dependencies = [
 
 [[package]]
 name = "baml-log"
-version = "0.204.0"
+version = "0.205.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1069,7 +1086,7 @@ dependencies = [
 
 [[package]]
 name = "baml-lsp-types"
-version = "0.204.0"
+version = "0.205.0"
 dependencies = [
  "anyhow",
  "baml-runtime",
@@ -1099,7 +1116,7 @@ dependencies = [
 
 [[package]]
 name = "baml-python-ffi"
-version = "0.204.0"
+version = "0.205.0"
 dependencies = [
  "anyhow",
  "baml-cli",
@@ -1161,6 +1178,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_with",
+ "sha2",
  "static_assertions",
  "strsim 0.11.1",
  "strum",
@@ -1176,7 +1194,7 @@ dependencies = [
 
 [[package]]
 name = "baml-runtime"
-version = "0.204.0"
+version = "0.205.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -1193,10 +1211,12 @@ dependencies = [
  "aws-smithy-types",
  "axum 0.7.9",
  "axum-extra",
+ "baml-compiler",
  "baml-ids",
  "baml-log",
  "baml-rpc",
  "baml-types",
+ "baml-vm",
  "base64 0.22.1",
  "bytes",
  "cfg-if",
@@ -1264,6 +1284,7 @@ dependencies = [
  "serde-wasm-bindgen 0.6.5",
  "serde_json",
  "serial_test",
+ "sha2",
  "shell-escape",
  "static_assertions",
  "stream-cancel",
@@ -1296,7 +1317,7 @@ dependencies = [
 
 [[package]]
 name = "baml-schema-build"
-version = "0.204.0"
+version = "0.205.0"
 dependencies = [
  "anyhow",
  "baml-ids",
@@ -1341,7 +1362,7 @@ dependencies = [
 
 [[package]]
 name = "baml-types"
-version = "0.204.0"
+version = "0.205.0"
 dependencies = [
  "anyhow",
  "baml-ids",
@@ -1366,7 +1387,7 @@ dependencies = [
 
 [[package]]
 name = "baml-typescript-ffi"
-version = "0.204.0"
+version = "0.205.0"
 dependencies = [
  "anyhow",
  "baml-cli",
@@ -1389,8 +1410,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml-vm"
+version = "0.205.0"
+dependencies = [
+ "anyhow",
+ "baml-compiler",
+ "baml-types",
+ "colored 2.2.0",
+ "criterion",
+ "internal-baml-core",
+ "internal-baml-diagnostics",
+ "internal-baml-parser-database",
+ "tokio",
+]
+
+[[package]]
 name = "baml_cffi"
-version = "0.204.0"
+version = "0.205.0"
 dependencies = [
  "anyhow",
  "baml-cli",
@@ -1536,7 +1572,7 @@ dependencies = [
 
 [[package]]
 name = "bstd"
-version = "0.204.0"
+version = "0.205.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -2369,7 +2405,7 @@ dependencies = [
 
 [[package]]
 name = "dir-writer"
-version = "0.204.0"
+version = "0.205.0"
 dependencies = [
  "anyhow",
  "baml-log",
@@ -2377,7 +2413,7 @@ dependencies = [
  "filetime",
  "indexmap 2.9.0",
  "internal-baml-core",
- "pathdiff 0.2.3",
+ "pathdiff 0.1.0",
  "serde_json",
  "sugar_path",
  "walkdir",
@@ -2876,7 +2912,7 @@ dependencies = [
 
 [[package]]
 name = "generators-go"
-version = "0.204.0"
+version = "0.205.0"
 dependencies = [
  "anyhow",
  "askama",
@@ -2889,7 +2925,7 @@ dependencies = [
 
 [[package]]
 name = "generators-lib"
-version = "0.204.0"
+version = "0.205.0"
 dependencies = [
  "anyhow",
  "baml-log",
@@ -2906,7 +2942,7 @@ dependencies = [
 
 [[package]]
 name = "generators-openapi"
-version = "0.204.0"
+version = "0.205.0"
 dependencies = [
  "anyhow",
  "askama",
@@ -2925,7 +2961,7 @@ dependencies = [
 
 [[package]]
 name = "generators-python"
-version = "0.204.0"
+version = "0.205.0"
 dependencies = [
  "anyhow",
  "askama",
@@ -2938,7 +2974,7 @@ dependencies = [
 
 [[package]]
 name = "generators-ruby"
-version = "0.204.0"
+version = "0.205.0"
 dependencies = [
  "anyhow",
  "askama",
@@ -2951,7 +2987,7 @@ dependencies = [
 
 [[package]]
 name = "generators-typescript"
-version = "0.204.0"
+version = "0.205.0"
 dependencies = [
  "anyhow",
  "askama",
@@ -3726,7 +3762,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-ast"
-version = "0.204.0"
+version = "0.205.0"
 dependencies = [
  "anyhow",
  "baml-types",
@@ -3747,7 +3783,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-codegen"
-version = "0.204.0"
+version = "0.205.0"
 dependencies = [
  "anyhow",
  "askama",
@@ -3776,9 +3812,10 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-core"
-version = "0.204.0"
+version = "0.205.0"
 dependencies = [
  "anyhow",
+ "baml-compiler",
  "baml-derive",
  "baml-rpc",
  "baml-types",
@@ -3816,7 +3853,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-diagnostics"
-version = "0.204.0"
+version = "0.205.0"
 dependencies = [
  "anyhow",
  "colored 2.2.0",
@@ -3829,7 +3866,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-jinja"
-version = "0.204.0"
+version = "0.205.0"
 dependencies = [
  "anyhow",
  "askama",
@@ -3850,7 +3887,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-jinja-types"
-version = "0.204.0"
+version = "0.205.0"
 dependencies = [
  "anyhow",
  "askama",
@@ -3869,7 +3906,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-parser-database"
-version = "0.204.0"
+version = "0.205.0"
 dependencies = [
  "anyhow",
  "baml-derive",
@@ -3895,7 +3932,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-prompt-parser"
-version = "0.204.0"
+version = "0.205.0"
 dependencies = [
  "internal-baml-ast",
  "internal-baml-diagnostics",
@@ -3907,7 +3944,7 @@ dependencies = [
 
 [[package]]
 name = "internal-llm-client"
-version = "0.204.0"
+version = "0.205.0"
 dependencies = [
  "anyhow",
  "aws-config",
@@ -4090,7 +4127,7 @@ checksum = "9dbbfed4e59ba9750e15ba154fdfd9329cee16ff3df539c2666b70f58cc32105"
 
 [[package]]
 name = "jsonish"
-version = "0.204.0"
+version = "0.205.0"
 dependencies = [
  "anyhow",
  "assert-json-diff",
@@ -4178,7 +4215,7 @@ dependencies = [
 
 [[package]]
 name = "language-server"
-version = "0.204.0"
+version = "0.205.0"
 dependencies = [
  "anyhow",
  "axum 0.8.4",
@@ -4301,7 +4338,7 @@ checksum = "241eaef5fd12c88705a01fc1066c48c4b36e0dd4377dcdc7ec3942cea7a69956"
 
 [[package]]
 name = "llm-response-parser"
-version = "0.204.0"
+version = "0.205.0"
 dependencies = [
  "anyhow",
  "serde",
@@ -6944,7 +6981,7 @@ checksum = "8f50febec83f5ee1df3015341d8bd429f2d1cc62bcba7ea2076759d315084683"
 
 [[package]]
 name = "test-harness"
-version = "0.204.0"
+version = "0.205.0"
 dependencies = [
  "anyhow",
  "baml-log",
