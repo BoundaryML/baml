@@ -65,7 +65,7 @@ class BamlVideo {
      */
     asUrl() {
         if (!this.isUrl()) {
-            throw new Error("Audio is not a URL");
+            throw new Error("Video is not a URL");
         }
         return this.content;
     }
