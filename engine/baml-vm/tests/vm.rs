@@ -1222,3 +1222,61 @@ mod c_for_loops {
         })
     }
 }
+
+#[cfg(test)]
+mod return_stmt {
+
+    use super::*;
+
+    #[test]
+    fn early_return() -> anyhow::Result<()> {
+        assert_vm_executes(Program {
+            source: r#"
+                fn EarlyReturn(x: int) -> int {
+                   if x == 42 { return 1; }
+                   
+                   x + 5
+                }
+
+                fn main() -> int {
+                    EarlyReturn(42)
+                }
+                "#,
+            function: "main",
+            expected: VmExecState::Complete(Value::Int(1)),
+        })
+    }
+
+    #[test]
+    fn with_stack() -> anyhow::Result<()> {
+        assert_vm_executes(Program {
+            source: r#"
+                fn WithStack() -> int {
+                   let a = 1;
+
+                   if a == 0 { return 0; }
+                   
+                   {
+                      let b = 1;
+                      if a != b {
+                         return 0;
+                      }
+                   }
+                   
+                   {
+                      let c = 2;
+                      let b = 3;
+                      while b != c {
+                         if true {
+                              return 0;
+                         }
+                      }
+                    }
+
+                    7
+                }"#,
+            function: "WithStack",
+            expected: VmExecState::Complete(Value::Int(0)),
+        })
+    }
+}

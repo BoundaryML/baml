@@ -2634,4 +2634,118 @@ mod tests {
             )],
         })
     }
+
+    mod return_stmt {
+        use super::*;
+
+        #[test]
+        fn early_return() -> anyhow::Result<()> {
+            assert_compiles(Program {
+                source: "
+                fn EarlyReturn(x: int) -> int {
+                  if x == 42 { return 1; }
+                  
+                  x + 5
+                }
+            ",
+                expected: vec![(
+                    "EarlyReturn",
+                    vec![
+                        Instruction::LoadVar(1),   // x
+                        Instruction::LoadConst(0), // 42
+                        Instruction::CmpOp(CmpOp::Eq),
+                        Instruction::JumpIfFalse(5), // to 8
+                        Instruction::Pop(1),
+                        Instruction::LoadConst(1), // 1
+                        Instruction::Return,
+                        Instruction::Jump(2), // to 9
+                        Instruction::Pop(1),
+                        Instruction::LoadVar(1),   // x
+                        Instruction::LoadConst(2), // 5
+                        Instruction::BinOp(BinOp::Add),
+                        Instruction::Return,
+                    ],
+                )],
+            })
+        }
+
+        #[test]
+        fn with_stack() -> anyhow::Result<()> {
+            assert_compiles(Program {
+                source: "
+                fn WithStack(x: int) -> int {
+                  let a = 1;
+
+                  // NOTE: currently there's no empty returns.
+
+                  if a == 0 { return 0; }
+                  
+                  {
+                     let b = 1;
+                     if a != b {
+                        return 0;
+                     }
+                  }
+                  
+                  {
+                     let c = 2;
+                     let b = 3;
+                     while b != c {
+                        if true {
+                           return 0;
+                        }
+                     }
+                  }
+
+                   7
+                }
+            ",
+                expected: vec![(
+                    "WithStack",
+                    vec![
+                        Instruction::LoadConst(0), // 1
+                        Instruction::LoadVar(2),   // a
+                        Instruction::LoadConst(1), // 0
+                        Instruction::CmpOp(CmpOp::Eq),
+                        Instruction::JumpIfFalse(5), // to 9
+                        Instruction::Pop(1),
+                        Instruction::LoadConst(2), // 0
+                        Instruction::Return,
+                        Instruction::Jump(2), // to 10
+                        Instruction::Pop(1),
+                        Instruction::LoadConst(3), // 1
+                        Instruction::LoadVar(2),   // a
+                        Instruction::LoadVar(3),   // b
+                        Instruction::CmpOp(CmpOp::NotEq),
+                        Instruction::JumpIfFalse(5), // to 19
+                        Instruction::Pop(1),
+                        Instruction::LoadConst(4), // 0
+                        Instruction::Return,
+                        Instruction::Jump(2), // to 20
+                        Instruction::Pop(1),
+                        Instruction::Pop(1),
+                        Instruction::LoadConst(5), // 2
+                        Instruction::LoadConst(6), // 3
+                        Instruction::LoadVar(4),   // b
+                        Instruction::LoadVar(3),   // c
+                        Instruction::CmpOp(CmpOp::NotEq),
+                        Instruction::JumpIfFalse(10), // to 36
+                        Instruction::Pop(1),
+                        Instruction::LoadConst(7),   // true
+                        Instruction::JumpIfFalse(5), // to 34
+                        Instruction::Pop(1),
+                        Instruction::LoadConst(8), // 0
+                        Instruction::Return,
+                        Instruction::Jump(2), // to 35
+                        Instruction::Pop(1),
+                        Instruction::Jump(-12), // to 23
+                        Instruction::Pop(1),
+                        Instruction::Pop(2),
+                        Instruction::LoadConst(9), // 7
+                        Instruction::Return,
+                    ],
+                )],
+            })
+        }
+    }
 }
