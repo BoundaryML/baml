@@ -28,6 +28,7 @@ pub enum LangServerToWasmMessage {
     PlaygroundMessage(FrontendMessage),
 }
 
+#[derive(Debug)]
 pub struct AppState {
     pub broadcast_rx: broadcast::Receiver<LangServerToWasmMessage>,
     pub playground_tx: broadcast::Sender<PreSendToWasmMessage>,
@@ -44,8 +45,7 @@ impl Clone for AppState {
 
 #[derive(Debug)]
 pub struct Playground2Server {
-    pub broadcast_rx: broadcast::Receiver<LangServerToWasmMessage>,
-    pub playground_tx: broadcast::Sender<PreSendToWasmMessage>,
+    pub app_state: AppState,
 }
 
 impl Playground2Server {
@@ -53,19 +53,13 @@ impl Playground2Server {
         // Determine the static files directory
         let dist_dir = playground_static_assets().await?;
 
-        // Create the app state
-        let state = AppState {
-            broadcast_rx: self.broadcast_rx.resubscribe(),
-            playground_tx: self.playground_tx.clone(),
-        };
-
         let app = Router::new()
             .route("/health", get(health_check))
             .route("/ping", get(ping_handler))
             .route("/ws", get(ws_handler))
             .route("/rpc", get(ws_rpc_handler))
             .fallback_service(ServeDir::new(dist_dir))
-            .with_state(state);
+            .with_state(self.app_state);
 
         tracing::info!("Starting Playground2 server on {}", listener.local_addr().unwrap());
         axum::serve(listener, app).await.map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)
@@ -83,6 +77,11 @@ async fn health_check() -> &'static str {
 async fn playground_static_assets() -> anyhow::Result<PathBuf> {
     const GITHUB_REPO: &str = "BoundaryML/baml";
 
+    if std::env::var("VSCODE_DEBUG_MODE")
+        .map(|v| v == "true")
+        .unwrap_or(false)
+    {
+        // Use cargo-relative path for local dist
         let local_dist = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../typescript/apps/playground/dist");
         tracing::info!(
@@ -90,33 +89,21 @@ async fn playground_static_assets() -> anyhow::Result<PathBuf> {
             local_dist.display()
         );
         Ok(local_dist)
-    // if std::env::var("VSCODE_DEBUG_MODE")
-    //     .map(|v| v == "true")
-    //     .unwrap_or(false)
-    // {
-    //     // Use cargo-relative path for local dist
-    //     let local_dist = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-    //         .join("../../typescript/apps/playground/dist");
-    //     tracing::info!(
-    //         "VSCODE_DEBUG_MODE is set. Using local playground dist at {}",
-    //         local_dist.display()
-    //     );
-    //     Ok(local_dist)
-    // } else {
-    //     let version = env!("CARGO_PKG_VERSION");
-    //     // Test release
-    //     // let version = "test-zed";
+    } else {
+        let version = env!("CARGO_PKG_VERSION");
+        // Test release
+        // let version = "test-zed";
 
-    //     match get_playground_dist(GITHUB_REPO, version).await {
-    //         Ok(dir) => Ok(std::path::PathBuf::from(dir)),
-    //         Err(e) => {
-    //             tracing::error!(
-    //                 "Failed to prepare playground web UI: {e}. Serving error page instead."
-    //             );
-    //             Err(e)
-    //         }
-    //     }
-    // }
+        match get_playground_dist(GITHUB_REPO, version).await {
+            Ok(dir) => Ok(std::path::PathBuf::from(dir)),
+            Err(e) => {
+                tracing::error!(
+                    "Failed to prepare playground web UI: {e}. Serving error page instead."
+                );
+                Err(e)
+            }
+        }
+    }
 }
 
 

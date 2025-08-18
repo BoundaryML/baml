@@ -254,7 +254,7 @@ export const EventListener: React.FC = () => {
       >,
     ) => {
       const { command, content } = event.data;
-      console.debug('lorem ipsum sit amet', {command, content});
+      console.debug('EventListener handling command', {command, content});
 
       switch (command) {
         case 'add_project':
@@ -307,15 +307,8 @@ export const EventListener: React.FC = () => {
           break;
 
         case 'run_test':
-          console.info('running test command received', {
-            content,
-            selectedFunc,
-          });
-          console.info('setting selected function', content.function_name);
           setSelectedFunction(content.function_name);
-          console.info('setting selected testcase', content.test_name);
           setSelectedTestcase(content.test_name);
-          console.info('running baml test', content.test_name);
           runBamlTests([
             { functionName: content.function_name, testName: content.test_name },
           ]);

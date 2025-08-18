@@ -204,9 +204,12 @@ impl Server {
                     }
                 };
                 let http_services = futures::future::join(
-                    playground2::Playground2Server{
-                        broadcast_rx,
-                        playground_tx,
+                    playground2::Playground2Server {
+                        app_state: playground2::server::AppState {
+                            broadcast_rx,
+                            playground_tx,
+                            port_picker.proxy_port,
+                        },
                     }.run(port_picker.playground_listener),
                     playground2::ProxyServer{}.run(port_picker.proxy_listener)
                 );
