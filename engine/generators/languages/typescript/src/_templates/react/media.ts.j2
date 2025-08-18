@@ -31,9 +31,9 @@ function createSSRProxyHandler<T extends object>(
   };
 }
 
-{% for media_type in ['Image', 'Audio', 'Video', 'Pdf'] %}
+{% for media_type in ["Image", "Audio", "Video", "Pdf"] %}
 /**
- * Browser-compatible implementation of BamlImage
+ * Browser-compatible implementation of Baml{{ media_type }}
  */
 export class Baml{{ media_type }} {
   private constructor(
@@ -43,28 +43,28 @@ export class Baml{{ media_type }} {
   ) {}
 
   /**
-   * Create a BamlImage from a URL
+   * Create a Baml{{ media_type }} from a URL
    */
   static fromUrl(url: string, mediaType?: string): Baml{{ media_type }} {
     return new Baml{{ media_type }}('url', url, mediaType)
   }
 
   /**
-   * Create a BamlImage from base64 encoded data
+   * Create a Baml{{ media_type }} from base64 encoded data
    */
   static fromBase64(mediaType: string, base64: string): Baml{{ media_type }} {
     return new Baml{{ media_type }}('base64', base64, mediaType)
   }
 
   /**
-   * Create a BamlImage from a File object
+   * Create a Baml{{ media_type }} from a File object
    */
   static async fromFile(file: File): Promise<Baml{{ media_type }}> {
     return Baml{{ media_type }}.fromBlob(file, file.type)
   }
 
   /**
-   * Create a BamlImage from a Blob object
+   * Create a Baml{{ media_type }} from a Blob object
    */
   static async fromBlob(blob: Blob, mediaType?: string): Promise<Baml{{ media_type }}> {
     const base64 = await new Promise<string>((resolve, reject) => {
@@ -79,7 +79,7 @@ export class Baml{{ media_type }} {
   }
 
   /**
-   * Create a BamlImage by fetching from a URL
+   * Create a Baml{{ media_type }} by fetching from a URL
    */
   static async fromUrlToBase64(url: string): Promise<Baml{{ media_type }}> {
     const response = await fetch(url)
@@ -88,15 +88,15 @@ export class Baml{{ media_type }} {
   }
 
   /**
-   * Check if the image is stored as a URL
+   * Check if the {{ media_type }} is stored as a URL
    */
   isUrl(): boolean {
     return this.type === 'url'
   }
 
   /**
-   * Get the URL of the image if it's stored as a URL
-   * @throws Error if the image is not stored as a URL
+   * Get the URL of the {{ media_type }} if it's stored as a URL
+   * @throws Error if the {{ media_type }} is not stored as a URL
    */
   asUrl(): string {
     if (!this.isUrl()) {
@@ -106,9 +106,9 @@ export class Baml{{ media_type }} {
   }
 
   /**
-   * Get the base64 data and media type if the image is stored as base64
+   * Get the base64 data and media type if the {{ media_type }} is stored as base64
    * @returns [base64Data, mediaType]
-   * @throws Error if the image is not stored as base64
+   * @throws Error if the {{ media_type }} is not stored as base64
    */
   asBase64(): [string, string] {
     if (this.type !== 'base64') {
