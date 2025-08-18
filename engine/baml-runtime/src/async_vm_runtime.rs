@@ -568,7 +568,7 @@ fn try_vm_value_from_baml_value(vm: &mut Vm, value: &BamlValue) -> anyhow::Resul
             }
 
             Ok(vm.alloc_array(array))
-        },
+        }
         _ => todo!("handle strings and objects"),
     }
 }
