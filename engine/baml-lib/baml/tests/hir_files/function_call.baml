@@ -36,4 +36,3 @@ function CallTest() -> int {
 //  4 | 
 //  5 | function CallTest() -> int {
 //    | 
-//

@@ -38,4 +38,3 @@ function simpleIf() -> string {
 //    | 
 //  1 | function simpleIf() -> string {
 //    | 
-//
