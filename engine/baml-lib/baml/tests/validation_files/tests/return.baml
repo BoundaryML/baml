@@ -1,5 +1,5 @@
 fn EarlyReturn(x: int) -> int {
-   if (x == 42) return 1;
+   if x == 42 { return 1; }
    
    x + 5
 }
