@@ -30,10 +30,7 @@ use internal_llm_client::{ClientProvider, ClientSpec, UnresolvedClientProperty};
 use serde::Serialize;
 
 use super::builtin::{builtin_classes, builtin_generic_fn, builtin_ir, is_builtin_identifier};
-use crate::{
-    validate::validation_pipeline::validations::expr_typecheck::infer_types_in_context,
-    Configuration,
-};
+use crate::Configuration;
 
 /// This class represents the intermediate representation of the BAML AST.
 /// It is a representation of the BAML AST that is easier to work with than the
@@ -310,22 +307,31 @@ fn convert_function_body(
     function_body: ast::ExpressionBlock,
     db: &ParserDatabase,
 ) -> Result<Expr<ExprMetadata>> {
-    function_body.expr.repr(db).map(|fn_body| {
-        let mut stmts = function_body.stmts.clone();
-        stmts.reverse();
-        let expr = stmts
-            .iter()
-            .fold(fn_body, |acc, stmt| match stmt.body().repr(db) {
-                Ok(stmt_expr) => Expr::Let(
-                    stmt.identifier().name().to_string(),
-                    Arc::new(stmt_expr),
-                    Arc::new(acc),
-                    (stmt.span().clone(), None),
-                ),
-                Err(e) => acc,
-            });
-        expr
-    })
+    function_body
+        .expr
+        .map(|e| e.repr(db))
+        .unwrap_or_else(|| {
+            eprintln!("TODO @greg: convert blocks with no return types to lambda terms");
+            // Placeholder just to allow compilation.
+            Ok(Expr::Atom(BamlValueWithMeta::Null((Span::fake(), None))))
+        })
+        .map(|fn_body| {
+            let mut stmts = function_body.stmts.clone();
+            stmts.reverse();
+            let expr = stmts
+                .iter()
+                .filter(|stmt| matches!(stmt, ast::Stmt::Let(_))) // TODO: @greg
+                .fold(fn_body, |acc, stmt| match stmt.body().repr(db) {
+                    Ok(stmt_expr) => Expr::Let(
+                        stmt.identifier().name().to_string(),
+                        Arc::new(stmt_expr),
+                        Arc::new(acc),
+                        (stmt.span().clone(), None),
+                    ),
+                    Err(e) => acc,
+                });
+            expr
+        })
 }
 
 impl WithRepr<Expr<ExprMetadata>> for ast::Expression {
@@ -494,6 +500,78 @@ impl WithRepr<Expr<ExprMetadata>> for ast::Expression {
                     (span.clone(), None),
                 ))
             }
+            ast::Expression::ArrayAccess(base, index, span) => {
+                let base_ir = base.repr(db)?;
+                let index_ir = index.repr(db)?;
+                Ok(Expr::ArrayAccess {
+                    base: Arc::new(base_ir),
+                    index: Arc::new(index_ir),
+                    meta: (span.clone(), None), // Type will be inferred later
+                })
+            }
+            ast::Expression::FieldAccess(base, field, span) => {
+                let base_ir = base.repr(db)?;
+                Ok(Expr::FieldAccess {
+                    base: Arc::new(base_ir),
+                    field: field.name().to_string(),
+                    meta: (span.clone(), None), // Type will be inferred later
+                })
+            }
+            // TODO: impl this (needs to compile, can't panic).
+            ast::Expression::MethodCall { span, .. } => {
+                Ok(Expr::Atom(BamlValueWithMeta::Null((span.clone(), None))))
+            }
+            ast::Expression::BinaryOperation {
+                left,
+                operator,
+                right,
+                span,
+            } => {
+                let left_ir = left.repr(db)?;
+                let right_ir = right.repr(db)?;
+                Ok(Expr::BinaryOperation {
+                    left: Arc::new(left_ir),
+                    operator: match operator {
+                        ast::BinaryOperator::Eq => expr::BinaryOperator::Eq,
+                        ast::BinaryOperator::Neq => expr::BinaryOperator::Neq,
+                        ast::BinaryOperator::Lt => expr::BinaryOperator::Lt,
+                        ast::BinaryOperator::LtEq => expr::BinaryOperator::LtEq,
+                        ast::BinaryOperator::Gt => expr::BinaryOperator::Gt,
+                        ast::BinaryOperator::GtEq => expr::BinaryOperator::GtEq,
+                        ast::BinaryOperator::Add => expr::BinaryOperator::Add,
+                        ast::BinaryOperator::Sub => expr::BinaryOperator::Sub,
+                        ast::BinaryOperator::Mul => expr::BinaryOperator::Mul,
+                        ast::BinaryOperator::Div => expr::BinaryOperator::Div,
+                        ast::BinaryOperator::Mod => expr::BinaryOperator::Mod,
+                        ast::BinaryOperator::BitAnd => expr::BinaryOperator::BitAnd,
+                        ast::BinaryOperator::BitOr => expr::BinaryOperator::BitOr,
+                        ast::BinaryOperator::BitXor => expr::BinaryOperator::BitXor,
+                        ast::BinaryOperator::Shl => expr::BinaryOperator::Shl,
+                        ast::BinaryOperator::Shr => expr::BinaryOperator::Shr,
+                        ast::BinaryOperator::And => expr::BinaryOperator::And,
+                        ast::BinaryOperator::Or => expr::BinaryOperator::Or,
+                    },
+                    right: Arc::new(right_ir),
+                    meta: (span.clone(), None),
+                })
+            }
+            ast::Expression::UnaryOperation {
+                expr,
+                operator,
+                span,
+            } => {
+                let expr_ir = expr.repr(db)?;
+                Ok(Expr::UnaryOperation {
+                    expr: Arc::new(expr_ir),
+                    operator: match operator {
+                        ast::UnaryOperator::Not => expr::UnaryOperator::Not,
+                        ast::UnaryOperator::Neg => expr::UnaryOperator::Neg,
+                    },
+                    meta: (span.clone(), None),
+                })
+            }
+            // Don't care.
+            ast::Expression::Paren(expr, span) => expr.repr(db),
         }
     }
 }
@@ -799,16 +877,10 @@ impl IntermediateRepr {
         repr.classes.sort_by(|a, b| a.elem.name.cmp(&b.elem.name));
         repr.functions
             .sort_by(|a, b| a.elem.name().cmp(b.elem.name()));
+        repr.expr_fns.sort_by(|a, b| a.elem.name.cmp(&b.elem.name));
         repr.clients.sort_by(|a, b| a.elem.name.cmp(&b.elem.name));
         repr.retry_policies
             .sort_by(|a, b| a.elem.name.0.cmp(&b.elem.name.0));
-
-        let mut typing_context = initial_typing_context(&repr);
-        for expr_fn in repr.expr_fns.iter_mut() {
-            let expr = expr_fn.elem.expr.clone();
-            let inferred_expr = infer_types_in_context(&mut typing_context, Arc::new(expr));
-            expr_fn.elem.expr = Arc::unwrap_or_clone(inferred_expr);
-        }
 
         // Strip out builtin classes.
         repr.classes
@@ -2249,6 +2321,74 @@ pub fn annotate_variable(
                 meta: meta.clone(),
             }
         }
+        Expr::ArrayAccess { base, index, meta } => {
+            let new_base = annotate_variable(
+                target.clone(),
+                r#type.clone(),
+                Arc::unwrap_or_clone(base.clone()),
+            );
+            let new_index = annotate_variable(
+                target.clone(),
+                r#type.clone(),
+                Arc::unwrap_or_clone(index.clone()),
+            );
+            Expr::ArrayAccess {
+                base: Arc::new(new_base),
+                index: Arc::new(new_index),
+                meta: meta.clone(),
+            }
+        }
+        Expr::FieldAccess { base, field, meta } => {
+            let new_base = annotate_variable(
+                target.clone(),
+                r#type.clone(),
+                Arc::unwrap_or_clone(base.clone()),
+            );
+            Expr::FieldAccess {
+                base: Arc::new(new_base),
+                field: field.clone(),
+                meta: meta.clone(),
+            }
+        }
+        Expr::BinaryOperation {
+            left,
+            right,
+            operator,
+            meta,
+        } => {
+            let new_left = annotate_variable(
+                target.clone(),
+                r#type.clone(),
+                Arc::unwrap_or_clone(left.clone()),
+            );
+            let new_right = annotate_variable(
+                target.clone(),
+                r#type.clone(),
+                Arc::unwrap_or_clone(right.clone()),
+            );
+            Expr::BinaryOperation {
+                left: Arc::new(new_left),
+                operator: operator.clone(),
+                right: Arc::new(new_right),
+                meta: meta.clone(),
+            }
+        }
+        Expr::UnaryOperation {
+            expr,
+            operator,
+            meta,
+        } => {
+            let new_expr = annotate_variable(
+                target.clone(),
+                r#type.clone(),
+                Arc::unwrap_or_clone(expr.clone()),
+            );
+            Expr::UnaryOperation {
+                expr: Arc::new(new_expr),
+                operator: operator.clone(),
+                meta: meta.clone(),
+            }
+        }
     }
 }
 
@@ -2754,6 +2894,25 @@ fn specialize_generics(expr: &Expr<ExprMetadata>, ctx: &mut HashMap<Name, Expr<E
         Expr::ForLoop { iterable, body, .. } => {
             specialize_generics(iterable, ctx);
             specialize_generics(body, ctx);
+        }
+        Expr::ArrayAccess { base, index, .. } => {
+            specialize_generics(base, ctx);
+            specialize_generics(index, ctx);
+        }
+        Expr::FieldAccess { base, .. } => {
+            specialize_generics(base, ctx);
+        }
+        Expr::BinaryOperation {
+            left,
+            operator,
+            right,
+            ..
+        } => {
+            specialize_generics(left, ctx);
+            specialize_generics(right, ctx);
+        }
+        Expr::UnaryOperation { expr, .. } => {
+            specialize_generics(expr, ctx);
         }
     }
 }

@@ -1560,7 +1560,11 @@ impl WasmRuntime {
 
     #[wasm_bindgen]
     pub async fn run_tests(
-        &mut self,
+        // NOTE: This needs to be `&self` so that the runtime can be read
+        // by the UI, e.g to re-enumerate functions. In case you *really* need `&mut` access,
+        // consider `RwLock`, ideally only for the data you're going to be mutating and not the
+        // entire runtime.
+        &self,
         function_test_pairs: js_sys::Array,
         on_partial_response: js_sys::Function,
         get_baml_src_cb: js_sys::Function,

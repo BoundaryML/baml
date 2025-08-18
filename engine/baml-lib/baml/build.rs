@@ -1,6 +1,8 @@
 use std::{env, fs, io::Write as _, path};
 
 const VALIDATIONS_ROOT_DIR: &str = "tests/validation_files";
+const HIR_ROOT_DIR: &str = "tests/hir_files";
+const BYTECODE_ROOT_DIR: &str = "tests/bytecode_files";
 const CARGO_MANIFEST_DIR: &str = env!("CARGO_MANIFEST_DIR");
 const BAML_CLI_INIT_DIR: &str = "/../../baml-runtime/src/cli/initial_project/baml_src";
 const PROMPT_FIDDLE_EXAMPLE_DIR: &str =
@@ -19,6 +21,8 @@ fn main() {
             "tests/validation_files/prompt_fiddle_example.baml",
         );
         build_validation_tests();
+        build_hir_tests();
+        build_bytecode_tests();
         // build_reformat_tests();
     }
 }
@@ -88,4 +92,40 @@ fn test_name(schema_file_path: &str) -> String {
         .trim_start_matches('/')
         .trim_end_matches(".baml")
         .replace(['/', '\\'], "_")
+}
+
+fn build_hir_tests() {
+    println!("cargo:rerun-if-changed={HIR_ROOT_DIR}");
+    let mut all_schemas = Vec::new();
+    find_all_schemas("", &mut all_schemas, HIR_ROOT_DIR);
+
+    let mut out_file = out_file("hir_tests.rs");
+
+    for schema_path in &all_schemas {
+        let test_name = test_name(schema_path);
+        let file_path = schema_path.trim_start_matches('/');
+        writeln!(
+            out_file,
+            "#[test] fn {test_name}() {{ run_hir_test(\"{file_path}\", include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/{HIR_ROOT_DIR}/{file_path}\"))); }}"
+        )
+        .unwrap();
+    }
+}
+
+fn build_bytecode_tests() {
+    println!("cargo:rerun-if-changed={BYTECODE_ROOT_DIR}");
+    let mut all_schemas = Vec::new();
+    find_all_schemas("", &mut all_schemas, BYTECODE_ROOT_DIR);
+
+    let mut out_file = out_file("bytecode_tests.rs");
+
+    for schema_path in &all_schemas {
+        let test_name = test_name(schema_path);
+        let file_path = schema_path.trim_start_matches('/');
+        writeln!(
+            out_file,
+            "#[test] fn {test_name}() {{ run_bytecode_test(\"{file_path}\", include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/{BYTECODE_ROOT_DIR}/{file_path}\"))); }}"
+        )
+        .unwrap();
+    }
 }

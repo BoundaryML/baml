@@ -43,8 +43,12 @@ export async function updateUrl(
   revalidatePath(`/`);
 }
 
-export async function loadUrl(urlId: string): Promise<BAMLProject> {
+export async function loadUrl(urlId: string): Promise<BAMLProject | undefined> {
   const user = await kv.get(urlId);
+
+  if (!user) {
+    return undefined;
+  }
   // console.log("loading files", user);
 
   return user as BAMLProject;

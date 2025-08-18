@@ -27,3 +27,5 @@ env_logger.workspace = true
 indoc.workspace = true
 either = "1.8.1"
 strip-ansi-escapes = "0.2.0"
+baml-compiler = { path = "../../baml-compiler" }
+baml-vm = { path = "../../baml-vm" }

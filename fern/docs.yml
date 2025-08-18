@@ -318,6 +318,9 @@ navigation:
           - page: REST API (other languages)
             icon: fa-regular fa-network-wired
             path: 01-guide/02-languages/rest.mdx
+          - page: Elixir
+            icon: fa-brands fa-erlang
+            path: 01-guide/02-languages/elixir.mdx
       - section: Framework Integration
         icon: fa-solid fa-plug
         contents:

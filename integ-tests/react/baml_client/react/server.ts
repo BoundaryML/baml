@@ -1341,6 +1341,24 @@ export const LiteralUnionsTest = async (
 };
 
 /**
+ * Executes the "LlmReturnNumber" BAML action.
+ *
+ * This server action calls the underlying BAML function "LlmReturnNumber"
+ * with the specified parameters.
+ *
+ * @param { number } n - Input parameter.
+ *
+ * @returns {Promise<number>} A promise that resolves with the result of the action.
+ */
+export const LlmReturnNumber = async (
+  n: number,
+): Promise<number> => {
+  return b.LlmReturnNumber(
+    n,
+  );
+};
+
+/**
  * Executes the "MakeBlockConstraint" BAML action.
  *
  * This server action calls the underlying BAML function "MakeBlockConstraint"
@@ -3341,12 +3359,12 @@ export const TestOpenAIResponsesFunctionCall = async (
  * This server action calls the underlying BAML function "TestOpenAIResponsesImageInput"
  * with the specified parameters.
  *
- * @param { Image | string } image - Input parameter.
+ * @param { Image | string | Pdf | Audio } image - Input parameter.
  *
  * @returns {Promise<string>} A promise that resolves with the result of the action.
  */
 export const TestOpenAIResponsesImageInput = async (
-  image: Image | string,
+  image: Image | string | Pdf | Audio,
 ): Promise<string> => {
   return b.TestOpenAIResponsesImageInput(
     image,

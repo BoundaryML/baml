@@ -24,7 +24,7 @@ pest = "2.8.1"
 pest_derive = "2.8.1"
 either = "1.8.1"
 test-log = "0.2.16"
-pretty = "0.12.3"
+pretty = { workspace = true }
 regex.workspace = true
 
 [dev-dependencies]

@@ -47,6 +47,7 @@ impl std::ops::Index<ArgumentId> for BlockArg {
 pub struct BlockArg {
     /// The field's type.
     pub field_type: FieldType,
+    pub is_mutable: bool,
 
     /// The location of this field in the text representation.
     pub(crate) span: Span,

@@ -5,8 +5,48 @@ use super::{Expression, ExpressionBlock, Identifier, Span};
 #[derive(Debug, Clone)]
 pub struct LetStmt {
     pub identifier: Identifier,
+    pub is_mutable: bool,
     pub expr: Expression,
     pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct AssignStmt {
+    pub identifier: Identifier,
+    pub expr: Expression,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct AssignOpStmt {
+    pub identifier: Identifier,
+    pub assign_op: AssignOp,
+    pub expr: Expression,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum AssignOp {
+    /// The `+=` operator (addition)
+    AddAssign,
+    /// The `-=` operator (subtraction)
+    SubAssign,
+    /// The `*=` operator (multiplication)
+    MulAssign,
+    /// The `/=` operator (division)
+    DivAssign,
+    /// The `%=` operator (modulus)
+    ModAssign,
+    /// The `^=` operator (bitwise xor)
+    BitXorAssign,
+    /// The `&=` operator (bitwise and)
+    BitAndAssign,
+    /// The `|=` operator (bitwise or)
+    BitOrAssign,
+    /// The `<<=` operator (shift left)
+    ShlAssign,
+    /// The `>>=` operator (shift right)
+    ShrAssign,
 }
 
 #[derive(Debug, Clone)]
@@ -17,20 +57,98 @@ pub struct ForLoopStmt {
     pub span: Span,
 }
 
+#[derive(Debug, Clone)]
+pub struct CForLoopStmt {
+    pub init_stmt: Option<Box<Stmt>>,
+    pub condition: Option<Expression>,
+    /// Third statement in `for (;;<after>)` construction.
+    pub after_stmt: Option<Box<Stmt>>,
+    pub body: ExpressionBlock,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct WhileStmt {
+    pub condition: Expression,
+    pub body: ExpressionBlock,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct ReturnStmt {
+    pub value: Expression,
+    pub span: Span,
+}
+
 // Stmt(statements) perform actions and not often return values.
 #[derive(Debug, Clone)]
 pub enum Stmt {
     Let(LetStmt),
     ForLoop(ForLoopStmt),
+    CForLoop(CForLoopStmt),
+    WhileLoop(WhileStmt),
+    /// Expression with trailing semicolon.
+    Expression(Expression),
+    Assign(AssignStmt),
+    AssignOp(AssignOpStmt),
+    Break(Span),
+    Continue(Span),
+    Return(ReturnStmt),
+}
+
+impl fmt::Display for AssignOp {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            AssignOp::AddAssign => "+=",
+            AssignOp::SubAssign => "-=",
+            AssignOp::MulAssign => "*=",
+            AssignOp::DivAssign => "/=",
+            AssignOp::ModAssign => "%=",
+            AssignOp::BitAndAssign => "&=",
+            AssignOp::BitOrAssign => "|=",
+            AssignOp::BitXorAssign => "^=",
+            AssignOp::ShlAssign => "<<=",
+            AssignOp::ShrAssign => ">>=",
+        })
+    }
 }
 
 impl fmt::Display for Stmt {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Stmt::Let(stmt) => write!(f, "let {} = {}", stmt.identifier, stmt.expr)?,
-            Stmt::ForLoop(stmt) => write!(f, "for {} in {}", stmt.identifier, stmt.iterator)?,
+            Stmt::Let(stmt) => write!(f, "let {} = {}", stmt.identifier, stmt.expr),
+            Stmt::ForLoop(stmt) => write!(f, "for {} in {}", stmt.identifier, stmt.iterator),
+            Stmt::CForLoop(stmt) => {
+                f.write_str("for (")?;
+
+                if let Some(init) = stmt.init_stmt.as_ref() {
+                    write!(f, "{init}")?;
+                }
+
+                f.write_str(";")?;
+
+                if let Some(condition) = stmt.condition.as_ref() {
+                    write!(f, "{condition}")?;
+                }
+
+                f.write_str(";")?;
+
+                if let Some(after) = stmt.after_stmt.as_ref() {
+                    write!(f, "{after}")?;
+                }
+
+                write!(f, ") {}", stmt.body)
+            }
+            Stmt::Expression(expr) => write!(f, "{expr}"),
+            Stmt::Assign(stmt) => write!(f, "{} = {}", stmt.identifier, stmt.expr),
+            Stmt::AssignOp(stmt) => {
+                write!(f, "{} {} {}", stmt.identifier, stmt.assign_op, stmt.expr)
+            }
+            Stmt::WhileLoop(stmt) => write!(f, "while {} {}", stmt.condition, stmt.body),
+            Stmt::Break(_) => f.write_str("break"),
+            Stmt::Continue(_) => f.write_str("continue"),
+            Stmt::Return(ReturnStmt { value, .. }) => write!(f, "return {value}"),
         }
-        Ok(())
     }
 }
 
@@ -46,10 +164,15 @@ impl Stmt {
                 stmt1.iterator.assert_eq_up_to_span(&stmt2.iterator);
                 stmt1.body.assert_eq_up_to_span(&stmt2.body);
             }
-            (Stmt::Let(_), Stmt::ForLoop(_)) => {
-                panic!("Types do not match: {self:?} and {other:?}")
+            (Stmt::Expression(expr1), Stmt::Expression(expr2)) => {
+                expr1.assert_eq_up_to_span(expr2);
             }
-            (Stmt::ForLoop(_), Stmt::Let(_)) => {
+
+            (Stmt::Assign(stmt1), Stmt::Assign(stmt2)) => {
+                stmt1.identifier.assert_eq_up_to_span(&stmt2.identifier);
+                stmt1.expr.assert_eq_up_to_span(&stmt2.expr);
+            }
+            (_, _) => {
                 panic!("Types do not match: {self:?} and {other:?}")
             }
         }
@@ -59,6 +182,14 @@ impl Stmt {
         match self {
             Stmt::Let(stmt) => &stmt.identifier,
             Stmt::ForLoop(stmt) => &stmt.identifier,
+            Stmt::Expression(_) => panic!("expressions don't have identifiers"),
+            Stmt::WhileLoop(_) => panic!("while loops don't have identifiers"),
+            Stmt::Break(_) => panic!("break statements don't have identifiers"),
+            Stmt::Continue(_) => panic!("continue statements don't have identifiers"),
+            Stmt::Return(_) => panic!("return statements don't have identifiers"),
+            Stmt::CForLoop(_) => panic!("c-like for loops don't have identifiers"),
+            Stmt::Assign(stmt) => &stmt.identifier,
+            Stmt::AssignOp(stmt) => &stmt.identifier,
         }
     }
 
@@ -66,13 +197,22 @@ impl Stmt {
         match self {
             Stmt::Let(stmt) => &stmt.span,
             Stmt::ForLoop(stmt) => &stmt.span,
+            Stmt::CForLoop(stmt) => &stmt.span,
+            Stmt::Assign(stmt) => &stmt.span,
+            Stmt::AssignOp(stmt) => &stmt.span,
+            Stmt::WhileLoop(stmt) => &stmt.span,
+            Stmt::Return(stmt) => &stmt.span,
+
+            Stmt::Expression(expr) => expr.span(),
+            Stmt::Break(span) | Stmt::Continue(span) => span,
         }
     }
 
+    // TODO: Get rid of this, just match over the type and grab the body.
     pub fn body(&self) -> &Expression {
         match self {
             Stmt::Let(stmt) => &stmt.expr,
-            Stmt::ForLoop(stmt) => &stmt.body.expr,
+            _ => panic!("body() called on non-let statement"),
         }
     }
 }

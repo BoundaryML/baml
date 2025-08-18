@@ -24,7 +24,7 @@ fn Foo() -> Bar {
 //  5 | 
 //  6 | fn Foo() -> Bar {
 //    | 
-// error: Error validating: Bar.a expected type int @stream.done, but found string
+// error: Error validating: Bar.a expected type int, but found string
 //   -->  expr/constructors_invalid.baml:7
 //    | 
 //  6 | fn Foo() -> Bar {

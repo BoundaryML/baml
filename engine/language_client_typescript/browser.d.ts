@@ -10,13 +10,21 @@
  * import { Image, Audio } from '@boundaryml/baml'
  * ```
  */
-import { BamlAudio } from './audio';
-import { BamlImage } from './image';
-import type { BamlAudio as BamlAudioType } from './audio';
-import type { BamlImage as BamlImageType } from './image';
+import { BamlAudio } from "./audio";
+import { BamlImage } from "./image";
+import { BamlVideo } from "./video";
+import { BamlPdf } from "./pdf";
+import type { BamlAudio as BamlAudioType } from "./audio";
+import type { BamlImage as BamlImageType } from "./image";
+import type { BamlPdf as BamlPdfType } from "./pdf";
+import type { BamlVideo as BamlVideoType } from "./video";
 declare const ImageImpl: typeof BamlImage;
 declare const AudioImpl: typeof BamlAudio;
+declare const PdfImpl: typeof BamlPdf;
+declare const VideoImpl: typeof BamlVideo;
 export type Image = BamlImageType;
 export type Audio = BamlAudioType;
-export { ImageImpl as Image, AudioImpl as Audio };
+export type Pdf = BamlPdfType;
+export type Video = BamlVideoType;
+export { ImageImpl as Image, AudioImpl as Audio, PdfImpl as Pdf, VideoImpl as Video, };
 //# sourceMappingURL=browser.d.ts.map
