@@ -92,6 +92,43 @@ end
 ```
 </Tab>
 
+<Tab title="Go">
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    
+    b "example.com/baml_client"
+)
+
+func main() {
+    ctx := context.Background()
+    
+    tb := b.NewTypeBuilder()
+    _, err := tb.Category.AddValue("VALUE3")
+    if err != nil {
+        panic(fmt.Sprintf("Failed to add value: %v", err))
+    }
+    _, err = tb.Category.AddValue("VALUE4")
+    if err != nil {
+        panic(fmt.Sprintf("Failed to add value: %v", err))
+    }
+    
+    // Pass the typebuilder
+    res, err := b.DynamicCategorizer(ctx, "some input", b.WithTypeBuilder(tb))
+    if err != nil {
+        panic(fmt.Sprintf("Failed to categorize: %v", err))
+    }
+    
+    // Now res can be VALUE1, VALUE2, VALUE3, or VALUE4
+    fmt.Printf("Result: %v\n", res)
+}
+```
+</Tab>
+
 <Tab title="OpenAPI">
 Dynamic types are not yet supported when used via OpenAPI.
 
@@ -178,6 +215,46 @@ def run
 end
 ```
 </Tab>
+
+<Tab title="Go">
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    
+    b "example.com/baml_client"
+)
+
+func main() {
+    ctx := context.Background()
+    
+    tb := b.NewTypeBuilder()
+    _, err := tb.User.AddProperty("email", tb.String())
+    if err != nil {
+        panic(fmt.Sprintf("Failed to add property: %v", err))
+    }
+    address, err := tb.User.AddProperty("address", tb.String())
+    if err != nil {
+        panic(fmt.Sprintf("Failed to add property: %v", err))
+    }
+    err = address.SetDescription("The user's address")
+    if err != nil {
+        panic(fmt.Sprintf("Failed to set description: %v", err))
+    }
+    
+    res, err := b.DynamicUserCreator(ctx, "some user info", b.WithTypeBuilder(tb))
+    if err != nil {
+        panic(fmt.Sprintf("Failed to create user: %v", err))
+    }
+    
+    // Now res can have email and address fields
+    fmt.Printf("Result: %+v\n", res)
+}
+```
+</Tab>
 </Tabs>
 
 
@@ -252,6 +329,47 @@ tb.ChatResponse.addProperty("tools",
 ```ruby
 tb = Baml::TypeBuilder.new
 tb.ChatResponse.add_property("tools", tb.union([tb.GetWeather.type(), tb.GetNews.type()]).list).description("The tool calls in the response")
+```
+</Tab>
+
+<Tab title="Go">
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    
+    b "example.com/baml_client"
+)
+
+func main() {
+    ctx := context.Background()
+    
+    tb := b.NewTypeBuilder()
+    toolsField, err := tb.Union([]baml.FieldType{
+        // we could comment one of these if we wanted!
+        tb.GetWeather.Type(), 
+        tb.GetNews.Type()
+    }).List()
+    
+    toolsField, err := tb.ChatResponse.AddProperty("tools", toolsField)
+    if err != nil {
+        panic(fmt.Sprintf("Failed to add property: %v", err))
+    }
+    err = toolsField.SetDescription("The tool calls in the response")
+    if err != nil {
+        panic(fmt.Sprintf("Failed to set description: %v", err))
+    }
+    
+    // Example usage would depend on having a Chat function defined
+    // res, err := b.Chat(ctx, messages, b.WithTypeBuilder(tb))
+    // if err != nil {
+    //     panic(fmt.Sprintf("Failed to chat: %v", err))
+    // }
+    // fmt.Printf("Result: %+v\n", res)
+}
 ```
 </Tab>
 
@@ -332,6 +450,63 @@ Note that you must attach the new types to the existing Return Type of your BAML
     end
     ```
   </Tab>
+
+  <Tab title="Go" language="go">
+    ```go Go
+    package main
+
+    import (
+        "context"
+        "fmt"
+        
+        b "example.com/baml_client"
+    )
+
+    func main() {
+        ctx := context.Background()
+        
+        tb := b.NewTypeBuilder()
+        hobbiesEnum, err := tb.AddEnum("Hobbies")
+        if err != nil {
+            panic(fmt.Sprintf("Failed to add enum: %v", err))
+        }
+        _, err = hobbiesEnum.AddValue("Soccer")
+        if err != nil {
+            panic(fmt.Sprintf("Failed to add value: %v", err))
+        }
+        _, err = hobbiesEnum.AddValue("Reading")
+        if err != nil {
+            panic(fmt.Sprintf("Failed to add value: %v", err))
+        }
+
+        addressClass, err := tb.AddClass("Address")
+        if err != nil {
+            panic(fmt.Sprintf("Failed to add class: %v", err))
+        }
+        addressClass.AddProperty("street", tb.String()).Description("The user's street address")
+        if err != nil {
+            panic(fmt.Sprintf("Failed to add property: %v", err))
+        }
+
+        _, err = tb.User.AddProperty("hobby", hobbiesEnum.Type().Optional())
+        if err != nil {
+            panic(fmt.Sprintf("Failed to add property: %v", err))
+        }
+        _, err = tb.User.AddProperty("address", addressClass.Type().Optional())
+        if err != nil {
+            panic(fmt.Sprintf("Failed to add property: %v", err))
+        }
+        
+        res, err := b.DynamicUserCreator(ctx, "some user info", b.WithTypeBuilder(tb))
+        if err != nil {
+            panic(fmt.Sprintf("Failed to create user: %v", err))
+        }
+        
+        // Now res might have the hobby property, which can be Soccer or Reading
+        fmt.Printf("Result: %+v\n", res)
+    }
+    ```
+  </Tab>
 </Tabs>
 
 
@@ -375,6 +550,20 @@ tb.User.addProperty("email", tb.string()).description("The user's email")
 ```ruby
 tb = Baml::TypeBuilder.new
 tb.User.add_property("email", tb.string).description("The user's email")
+```
+</Tab>
+
+<Tab title="Go" language="go">
+```go
+tb := b.NewTypeBuilder()
+email, err := tb.User.AddProperty("email", tb.String())
+if err != nil {
+    panic(fmt.Sprintf("Failed to get property: %v", err))
+}
+err = email.SetDescription("The user's email")
+if err != nil {
+    panic(fmt.Sprintf("Failed to set description: %v", err))
+}
 ```
 </Tab>
 </Tabs>
@@ -456,6 +645,30 @@ tb.add_baml("
     VALUE5
   }
 ")
+```
+</Tab>
+
+<Tab title="Go">
+```go Go
+tb := b.NewTypeBuilder()
+tb.AddBaml(`
+  // Creates a new class Address that does not exist in the BAML source.
+  class Address {
+    street string
+    city string
+    state string
+  }
+
+  // Modifies the existing @@dynamic User class to add the new address property.
+  dynamic class User {
+    address Address
+  }
+
+  // Modifies the existing @@dynamic Category enum to add a new variant.
+  dynamic enum Category {
+    VALUE5
+  }
+`)
 ```
 </Tab>
 
