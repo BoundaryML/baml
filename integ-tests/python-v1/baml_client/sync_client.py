@@ -1604,6 +1604,20 @@ class BamlSyncClient:
             
         })
         return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    def IterativeFibonacci(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = self.__options.merge_options(baml_options).call_function_sync(function_name="IterativeFibonacci", args={
+            "n": n,
+        })
+        return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
+    def LengthOfArray(self, arr: typing.List[int],
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = self.__options.merge_options(baml_options).call_function_sync(function_name="LengthOfArray", args={
+            "arr": arr,
+        })
+        return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
     def NormalElseIfStmt(self, a: bool,b: bool,
         baml_options: BamlCallOptions = {},
     ) -> int:
@@ -1651,6 +1665,20 @@ class BamlSyncClient:
     ) -> int:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="StoreLlmCallInLocalVar", args={
             "n": n,
+        })
+        return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
+    def SumArray(self, arr: typing.List[int],
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = self.__options.merge_options(baml_options).call_function_sync(function_name="SumArray", args={
+            "arr": arr,
+        })
+        return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
+    def SumFromTo(self, x: int,y: int,
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = self.__options.merge_options(baml_options).call_function_sync(function_name="SumFromTo", args={
+            "x": x,"y": y,
         })
         return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
     
@@ -4266,6 +4294,30 @@ class BamlStreamClient:
           lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
+    def IterativeFibonacci(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[typing.Optional[int], int]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="IterativeFibonacci", args={
+            "n": n,
+        })
+        return baml_py.BamlSyncStream[typing.Optional[int], int](
+          result,
+          lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def LengthOfArray(self, arr: typing.List[int],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[typing.Optional[int], int]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="LengthOfArray", args={
+            "arr": arr,
+        })
+        return baml_py.BamlSyncStream[typing.Optional[int], int](
+          result,
+          lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
     def NormalElseIfStmt(self, a: bool,b: bool,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[typing.Optional[int], int]:
@@ -4343,6 +4395,30 @@ class BamlStreamClient:
     ) -> baml_py.BamlSyncStream[typing.Optional[int], int]:
         ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="StoreLlmCallInLocalVar", args={
             "n": n,
+        })
+        return baml_py.BamlSyncStream[typing.Optional[int], int](
+          result,
+          lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def SumArray(self, arr: typing.List[int],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[typing.Optional[int], int]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="SumArray", args={
+            "arr": arr,
+        })
+        return baml_py.BamlSyncStream[typing.Optional[int], int](
+          result,
+          lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def SumFromTo(self, x: int,y: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[typing.Optional[int], int]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="SumFromTo", args={
+            "x": x,"y": y,
         })
         return baml_py.BamlSyncStream[typing.Optional[int], int](
           result,
@@ -5877,6 +5953,20 @@ class BamlHttpRequestClient:
             
         }, mode="request")
         return result
+    def IterativeFibonacci(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="IterativeFibonacci", args={
+            "n": n,
+        }, mode="request")
+        return result
+    def LengthOfArray(self, arr: typing.List[int],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="LengthOfArray", args={
+            "arr": arr,
+        }, mode="request")
+        return result
     def NormalElseIfStmt(self, a: bool,b: bool,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -5924,6 +6014,20 @@ class BamlHttpRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="StoreLlmCallInLocalVar", args={
             "n": n,
+        }, mode="request")
+        return result
+    def SumArray(self, arr: typing.List[int],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="SumArray", args={
+            "arr": arr,
+        }, mode="request")
+        return result
+    def SumFromTo(self, x: int,y: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="SumFromTo", args={
+            "x": x,"y": y,
         }, mode="request")
         return result
     
@@ -7453,6 +7557,20 @@ class BamlHttpStreamRequestClient:
             
         }, mode="stream")
         return result
+    def IterativeFibonacci(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="IterativeFibonacci", args={
+            "n": n,
+        }, mode="stream")
+        return result
+    def LengthOfArray(self, arr: typing.List[int],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="LengthOfArray", args={
+            "arr": arr,
+        }, mode="stream")
+        return result
     def NormalElseIfStmt(self, a: bool,b: bool,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -7500,6 +7618,20 @@ class BamlHttpStreamRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="StoreLlmCallInLocalVar", args={
             "n": n,
+        }, mode="stream")
+        return result
+    def SumArray(self, arr: typing.List[int],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="SumArray", args={
+            "arr": arr,
+        }, mode="stream")
+        return result
+    def SumFromTo(self, x: int,y: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="SumFromTo", args={
+            "x": x,"y": y,
         }, mode="stream")
         return result
     
