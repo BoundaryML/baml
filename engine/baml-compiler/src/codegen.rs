@@ -593,7 +593,7 @@ impl<'g> HirCompiler<'g> {
             hir::Statement::Assert { condition, .. } => {
                 self.compile_expression(condition);
                 self.emit(Instruction::Assert);
-            },
+            }
         }
     }
 

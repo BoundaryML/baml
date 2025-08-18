@@ -1,7 +1,7 @@
 use std::{collections::HashSet, mem::MaybeUninit};
 
 use internal_baml_ast::ast::{
-    AssertStmt, ClassConstructorField, Expression, LetStmt, ReturnStmt, Stmt, WithName, WithSpan
+    AssertStmt, ClassConstructorField, Expression, LetStmt, ReturnStmt, Stmt, WithName, WithSpan,
 };
 use internal_baml_diagnostics::{DatamodelError, DatamodelWarning};
 use itertools::Itertools;
