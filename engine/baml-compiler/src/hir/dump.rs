@@ -117,18 +117,20 @@ impl Statement {
                 .append(RcDoc::space())
                 .append(RcDoc::text(name.clone()))
                 .append(RcDoc::text(";")),
-            Statement::Assign { name, value, .. } => RcDoc::text(name.clone())
+            Statement::Assign { left, value, .. } => left
+                .to_doc()
                 .append(RcDoc::space())
                 .append(RcDoc::text("="))
                 .append(RcDoc::space())
                 .append(value.to_doc())
                 .append(RcDoc::text(";")),
             Statement::AssignOp {
-                name,
+                left,
                 value,
                 assign_op,
                 ..
-            } => RcDoc::text(name.clone())
+            } => left
+                .to_doc()
                 .append(RcDoc::space())
                 .append(assign_op.to_doc())
                 .append(RcDoc::space())

@@ -266,14 +266,14 @@ fn parse_statement_inner_rule(
         Rule::assign_stmt => {
             let mut assignment_tokens = stmt_token.into_inner();
 
-            let identifier = parse_identifier(assignment_tokens.next()?, diagnostics);
+            let lhs = parse_expression(assignment_tokens.next()?, diagnostics)?;
 
             let rhs = assignment_tokens.next()?;
             let rhs_span = diagnostics.span(rhs.as_span());
             let maybe_body = parse_assignment_expr(diagnostics, rhs, rhs_span);
             maybe_body.map(|body| {
                 Stmt::Assign(AssignStmt {
-                    identifier,
+                    left: lhs,
                     expr: body,
                     span,
                 })
@@ -282,7 +282,7 @@ fn parse_statement_inner_rule(
         Rule::assign_op_stmt => {
             let mut assignment_tokens = stmt_token.into_inner();
 
-            let identifier = parse_identifier(assignment_tokens.next()?, diagnostics);
+            let lhs = parse_expression(assignment_tokens.next()?, diagnostics)?;
 
             let op_token = assignment_tokens.next()?;
 
@@ -307,7 +307,7 @@ fn parse_statement_inner_rule(
 
             maybe_body.map(|body| {
                 Stmt::AssignOp(AssignOpStmt {
-                    identifier,
+                    left: lhs,
                     assign_op,
                     expr: body,
                     span,

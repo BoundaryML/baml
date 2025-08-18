@@ -278,6 +278,8 @@ pub struct LlmFunction {
 pub struct Class {
     pub name: String,
     pub fields: Vec<Field>,
+    // TODO: Allow LLM functions here.
+    pub methods: Vec<ExprFunction>,
     pub span: Span,
 }
 
@@ -332,12 +334,12 @@ pub enum Statement {
     },
     /// Assign a mutable variable.
     Assign {
-        name: String,
+        left: Expression,
         value: Expression,
         span: Span,
     },
     AssignOp {
-        name: String,
+        left: Expression,
         assign_op: AssignOp,
         value: Expression,
         span: Span,

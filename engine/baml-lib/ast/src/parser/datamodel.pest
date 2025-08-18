@@ -11,7 +11,7 @@ type_expression_block = { identifier ~ identifier ~ named_argument_list? ~ BLOCK
 dynamic_type_expression_block = { identifier ~ type_expression_block }
 
 type_expression_contents = {
-    (type_expression | block_attribute | comment_block | empty_lines | BLOCK_LEVEL_CATCH_ALL)*
+    (expr_fn | type_expression | block_attribute | comment_block | empty_lines | BLOCK_LEVEL_CATCH_ALL)*
 }
 type_expression          = {
     identifier ~ field_type_chain? ~ (NEWLINE? ~ (field_attribute | trailing_comment))* ~ NEWLINE?
@@ -331,8 +331,10 @@ stmt = { (((let_expr | assign_op_stmt | assign_stmt | fn_app | generic_fn_app | 
 // Let-binding statement.
 let_expr = { "let" ~ MUT_KEYWORD? ~ identifier ~ "=" ~ expression }
 
-assign_stmt = { identifier ~ "=" ~ expression }
-assign_op_stmt = { identifier ~ assign_op ~ expression }
+// Needs to supports things like `object.getter().field = value`, so can't be
+// just `identifier ~ "=" ~ expression`.
+assign_stmt = { expression ~ "=" ~ expression }
+assign_op_stmt = { expression ~ assign_op ~ expression }
 
 assign_op = _{ BIT_SHL_ASSIGN | BIT_SHR_ASSIGN | ADD_ASSIGN | SUB_ASSIGN | MUL_ASSIGN | DIV_ASSIGN | MOD_ASSIGN | BIT_AND_ASSIGN | BIT_OR_ASSIGN | BIT_XOR_ASSIGN }
 

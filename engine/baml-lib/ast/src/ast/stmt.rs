@@ -12,14 +12,14 @@ pub struct LetStmt {
 
 #[derive(Debug, Clone)]
 pub struct AssignStmt {
-    pub identifier: Identifier,
+    pub left: Expression,
     pub expr: Expression,
     pub span: Span,
 }
 
 #[derive(Debug, Clone)]
 pub struct AssignOpStmt {
-    pub identifier: Identifier,
+    pub left: Expression,
     pub assign_op: AssignOp,
     pub expr: Expression,
     pub span: Span,
@@ -133,9 +133,9 @@ impl fmt::Display for Stmt {
                 write!(f, ") {}", stmt.body)
             }
             Stmt::Expression(expr) => write!(f, "{expr}"),
-            Stmt::Assign(stmt) => write!(f, "{} = {}", stmt.identifier, stmt.expr),
+            Stmt::Assign(stmt) => write!(f, "{} = {}", stmt.left, stmt.expr),
             Stmt::AssignOp(stmt) => {
-                write!(f, "{} {} {}", stmt.identifier, stmt.assign_op, stmt.expr)
+                write!(f, "{} {} {}", stmt.left, stmt.assign_op, stmt.expr)
             }
             Stmt::WhileLoop(stmt) => write!(f, "while {} {}", stmt.condition, stmt.body),
             Stmt::Break(_) => f.write_str("break"),
@@ -161,7 +161,7 @@ impl Stmt {
             }
 
             (Stmt::Assign(stmt1), Stmt::Assign(stmt2)) => {
-                stmt1.identifier.assert_eq_up_to_span(&stmt2.identifier);
+                stmt1.left.assert_eq_up_to_span(&stmt2.left);
                 stmt1.expr.assert_eq_up_to_span(&stmt2.expr);
             }
             (_, _) => {
@@ -179,8 +179,20 @@ impl Stmt {
             Stmt::Break(_) => panic!("break statements don't have identifiers"),
             Stmt::Continue(_) => panic!("continue statements don't have identifiers"),
             Stmt::CForLoop(_) => panic!("c-like for loops don't have identifiers"),
-            Stmt::Assign(stmt) => &stmt.identifier,
-            Stmt::AssignOp(stmt) => &stmt.identifier,
+            Stmt::Assign(stmt) => match &stmt.left {
+                Expression::Identifier(id) => id,
+                _ => panic!(
+                    "left side of assignment is not an identifier: {:?}",
+                    stmt.left
+                ),
+            },
+            Stmt::AssignOp(stmt) => match &stmt.left {
+                Expression::Identifier(id) => id,
+                _ => panic!(
+                    "left side of assignment is not an identifier: {:?}",
+                    stmt.left
+                ),
+            },
         }
     }
 

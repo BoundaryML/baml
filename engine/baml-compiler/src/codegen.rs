@@ -374,16 +374,29 @@ impl<'g> HirCompiler<'g> {
             hir::Statement::Declare { name, .. } => {
                 self.declare_mut(name);
             }
-            hir::Statement::Assign { name, value, .. } => {
+            hir::Statement::Assign { left, value, .. } => {
                 self.compile_expression(value);
+
+                // TODO: Hanlde field & array accessors.
+                let name = match left {
+                    hir::Expression::Identifier(name, _) => name,
+                    _ => panic!("left side of assignment is not an identifier: {:?}", left),
+                };
+
                 self.emit(Instruction::StoreVar(self.locals[name]));
             }
             hir::Statement::AssignOp {
-                name,
+                left,
                 value,
                 assign_op,
                 ..
             } => {
+                // TODO: Handle field & array accessors.
+                let name = match left {
+                    hir::Expression::Identifier(name, _) => name,
+                    _ => panic!("left side of assignment is not an identifier: {:?}", left),
+                };
+
                 self.emit(Instruction::LoadVar(self.locals[name]));
                 self.compile_expression(value);
 

@@ -380,12 +380,18 @@ fn typecheck_statement(
             })
         }
         hir::Statement::Assign {
-            name, value, span, ..
+            left, value, span, ..
         }
         | hir::Statement::AssignOp {
-            name, value, span, ..
+            left, value, span, ..
         } => {
             let typed_value = typecheck_expression(value, context, diagnostics);
+
+            // TODO: Handle field & array accessors.
+            let name = match left {
+                hir::Expression::Identifier(name, _) => name,
+                _ => panic!("left side of assignment is not an identifier: {:?}", left),
+            };
 
             // validate/update type.
             match context.vars.get_mut(name) {

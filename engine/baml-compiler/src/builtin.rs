@@ -17,6 +17,7 @@ pub mod enums {
 pub fn builtin_classes() -> Vec<Class> {
     vec![Class {
         name: String::from(classes::REQUEST),
+        methods: vec![],
         fields: vec![
             Field {
                 name: String::from("base_url"),

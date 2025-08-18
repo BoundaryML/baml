@@ -382,22 +382,18 @@ fn lower_stmt(stmt: &ast::Stmt) -> Statement {
                 span: span.clone(),
             }
         }
-        ast::Stmt::Assign(ast::AssignStmt {
-            identifier,
-            expr,
-            span,
-        }) => Statement::Assign {
-            name: identifier.to_string(),
+        ast::Stmt::Assign(ast::AssignStmt { left, expr, span }) => Statement::Assign {
+            left: Expression::from_ast(left),
             value: Expression::from_ast(expr),
             span: span.clone(),
         },
         ast::Stmt::AssignOp(ast::AssignOpStmt {
-            identifier,
+            left,
             assign_op,
             expr,
             span,
         }) => Statement::AssignOp {
-            name: identifier.to_string(),
+            left: Expression::from_ast(left),
             assign_op: match assign_op {
                 ast::AssignOp::AddAssign => hir::AssignOp::AddAssign,
                 ast::AssignOp::SubAssign => hir::AssignOp::SubAssign,
@@ -681,6 +677,7 @@ impl Class {
                     span: field.span().clone(),
                 })
                 .collect(),
+            methods: class.methods.iter().map(ExprFunction::from_ast).collect(),
             span: class.span().clone(),
         }
     }
