@@ -244,14 +244,38 @@ pub enum ObjectType {
     Function(FunctionType),
     Class,
     String,
-    Future,
+    Future(FutureType),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FunctionType {
+    /// Top of function type lattice: represents all function types.
     Any,
     Callable,
     Llm,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FutureType {
+    /// Top of future type lattice: represents all future types.
+    Any,
+    Pending,
+    Ready,
+}
+
+impl From<&Future> for FutureType {
+    fn from(value: &Future) -> Self {
+        match value {
+            Future::Pending(_) => Self::Pending,
+            Future::Ready(_) => Self::Ready,
+        }
+    }
+}
+
+impl From<FutureType> for ObjectType {
+    fn from(value: FutureType) -> Self {
+        ObjectType::Future(value)
+    }
 }
 
 impl ObjectType {
@@ -262,7 +286,7 @@ impl ObjectType {
             Object::Instance(_) => Self::Instance,
             Object::String(_) => Self::String,
             Object::Array(_) => Self::Array,
-            Object::Future(_) => Self::Future,
+            Object::Future(fut) => Self::Future(fut.into()),
         }
     }
 }
@@ -283,15 +307,12 @@ impl From<FunctionType> for ObjectType {
     }
 }
 
-impl From<FunctionType> for Type {
-    fn from(value: FunctionType) -> Self {
-        ObjectType::from(value).into()
-    }
-}
-
-impl From<ObjectType> for Type {
-    fn from(value: ObjectType) -> Self {
-        Self::Object(value)
+impl<Ob> From<Ob> for Type
+where
+    Ob: Into<ObjectType>,
+{
+    fn from(value: Ob) -> Self {
+        Type::Object(value.into())
     }
 }
 
@@ -348,6 +369,9 @@ pub enum InternalError {
 
     /// Array index is negative.
     ArrayIndexIsNegative(i64),
+
+    /// Instruction pointer is negative.
+    NegativeInstructionPtr(isize),
 }
 
 /// Errors that can happen at runtime.
@@ -411,7 +435,7 @@ pub struct Frame {
     /// and it's easier to operate on an [`isize`] and cast it to [`usize`]
     /// only once (when we index into [`Bytecode::instructions`]). However,
     /// this number should never be negative, otherwise indexing into the
-    /// instruction vec will panic.
+    /// instruction vec will throw [`InternalError::NegativeInstructionPtr`].
     pub instruction_ptr: isize,
 
     /// Local variables offset in the eval stack.
@@ -644,17 +668,28 @@ impl Vm {
 
     /// Returns a reference to the pending future.
     ///
-    /// Panics if the future is not pending.
-    pub fn pending_future(&self, future: ObjectIndex) -> &LlmFuture {
+    /// Returns [`InternalError::TypeError`] if the future is not pending, or not a future.
+    pub fn pending_future(&self, future: ObjectIndex) -> Result<&LlmFuture, InternalError> {
         match &self.objects[future] {
-            Object::Future(Future::Pending(llm_future)) => llm_future,
-            _ => panic!("expect pending future, got {:?}", self.objects[future]),
+            Object::Future(Future::Pending(llm_future)) => Ok(llm_future),
+            other => Err(InternalError::TypeError {
+                expected: FutureType::Pending.into(),
+                got: ObjectType::of(other).into(),
+            }),
         }
     }
 
-    pub fn fulfil_future(&mut self, future_index: ObjectIndex, value: Value) {
+    pub fn fulfil_future(
+        &mut self,
+        future_index: ObjectIndex,
+        value: Value,
+    ) -> Result<(), InternalError> {
         let Object::Future(future) = &mut self.objects[future_index] else {
-            panic!("expect future, got {:?}", self.objects[future_index]);
+            return Err(InternalError::TypeError {
+                expected: FutureType::Any.into(),
+                got: ObjectType::of(&self.objects[future_index]).into(),
+            }
+            .into());
         };
 
         *future = Future::Ready(value);
@@ -671,6 +706,8 @@ impl Vm {
                 self.stack.push(value);
             }
         }
+
+        Ok(())
     }
 
     /// Keeps only compile time necessary objects.
@@ -718,6 +755,11 @@ impl Vm {
             // Current instruction pointer.
             let instruction_ptr = frame.instruction_ptr;
 
+            // `core::intrinsics::unlikely` is only available on nightly.
+            if instruction_ptr < 0 {
+                return Err(InternalError::NegativeInstructionPtr(instruction_ptr).into());
+            };
+
             // Move the frame's IP to the next instruction. We'll deal with
             // jump offsets later.
             frame.instruction_ptr += 1;
@@ -744,6 +786,7 @@ impl Vm {
 
                 eprintln!("{instruction} {metadata}");
             }
+
             match function.bytecode.instructions[instruction_ptr as usize] {
                 Instruction::LoadConst(index) => {
                     let value = &function.bytecode.constants[index];
@@ -1116,9 +1159,11 @@ impl Vm {
                 Instruction::Await => {
                     let value = self.stack.ensure_stack_top()?;
 
-                    let wanted_type = ObjectType::Future;
+                    let wanted_type = FutureType::Any;
 
-                    let index = self.objects.as_object(&self.stack[value], wanted_type)?;
+                    let index = self
+                        .objects
+                        .as_object(&self.stack[value], wanted_type.into())?;
 
                     let Object::Future(awaiting) = &self.objects[index] else {
                         return Err(VmError::from(InternalError::TypeError {
