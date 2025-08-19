@@ -4350,6 +4350,7 @@ dependencies = [
 [[package]]
 name = "minijinja"
 version = "2.11.0"
+source = "git+https://github.com/boundaryml/minijinja.git?branch=main#ee25c021c8bb78d7ca11fa99972918eea4585330"
 dependencies = [
  "aho-corasick",
  "indexmap 2.10.0",

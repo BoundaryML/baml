@@ -54,6 +54,7 @@ impl IntoMiniJinjaValue for BamlValue {
                 minijinja::Value::from_object(MinijinjaBamlEnumValue {
                     value: value.clone(),
                     alias,
+                    enum_name: name.clone(),
                 })
             }
             BamlValue::Class(name, m) => {
@@ -172,6 +173,7 @@ impl Object for MinijinjaBamlEnumType {
 pub struct MinijinjaBamlEnumValue {
     pub value: String,
     pub alias: Option<String>,
+    pub enum_name: String,
 }
 
 impl std::fmt::Display for MinijinjaBamlEnumValue {
@@ -192,12 +194,16 @@ impl Object for MinijinjaBamlEnumValue {
     }
 
     fn get_value(self: &Arc<Self>, key: &minijinja::Value) -> Option<minijinja::Value> {
+        // TODO: add jinja type-checking for this in evaluate_type to allow this
         match key.as_str()? {
+            "value_str" => Some(minijinja::Value::from(self.value.clone())),
             "value" => Some(minijinja::Value::from(self.value.clone())),
             "alias" => self.alias.as_ref().map(|a| minijinja::Value::from(a.clone())),
             "display" => Some(minijinja::Value::from(
                 self.alias.as_ref().unwrap_or(&self.value).clone()
             )),
+            "name" => Some(minijinja::Value::from(self.enum_name.clone())),
+            "enum_name" => Some(minijinja::Value::from(self.enum_name.clone())),
             _ => None,
         }
     }
@@ -212,18 +218,20 @@ impl Object for MinijinjaBamlEnumValue {
 
     fn value_cmp(self: &Arc<Self>, other: &minijinja::Value) -> Option<std::cmp::Ordering> {
         // Compare to strings - compare against value name only, NOT alias
+        // This is critical to preserving backwards compatibility with enum value handling
+        // pre-0.206.0, where enum values were simply modelled as `string` in minijinja.
         if let Some(other_str) = other.as_str() {
             return Some(self.value.as_str().cmp(other_str));
         }
-        
+
         // Delegate to custom_cmp for object comparisons
         if let Some(other_obj) = other.as_object() {
             return self.custom_cmp(other_obj);
         }
-        
+
         None
     }
-    
+
     fn custom_cmp(
         self: &Arc<Self>,
         other: &minijinja::value::DynObject,

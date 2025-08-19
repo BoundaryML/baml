@@ -93,7 +93,7 @@ fn parse_as_function_call(
 // Helper function to check if union is nullable enum (enum + nullish only)
 fn extract_enum_from_nullable_union(types: &[Type]) -> Option<&str> {
     let mut enum_name: Option<&str> = None;
-    
+
     for t in types {
         match t {
             Type::EnumValueRef(name) => {
@@ -113,7 +113,7 @@ fn extract_enum_from_nullable_union(types: &[Type]) -> Option<&str> {
             }
         }
     }
-    
+
     enum_name
 }
 
@@ -152,9 +152,19 @@ fn tracker_visit_expr(
 
             // First check for nullable enum patterns before strict enum handling
             // Handle nullable enum to string literal comparisons
-            if let (Type::Union(union_types), Type::Literal(LiteralValue::String(str_val))) = (&lhs, &rhs) {
+            if let (Type::Union(union_types), Type::Literal(LiteralValue::String(str_val))) =
+                (&lhs, &rhs)
+            {
                 if let Some(enum_name) = extract_enum_from_nullable_union(union_types) {
-                    if matches!(bin_expr.op, ast::BinOpKind::Eq | ast::BinOpKind::Ne | ast::BinOpKind::Lt | ast::BinOpKind::Gt | ast::BinOpKind::Lte | ast::BinOpKind::Gte) {
+                    if matches!(
+                        bin_expr.op,
+                        ast::BinOpKind::Eq
+                            | ast::BinOpKind::Ne
+                            | ast::BinOpKind::Lt
+                            | ast::BinOpKind::Gt
+                            | ast::BinOpKind::Lte
+                            | ast::BinOpKind::Gte
+                    ) {
                         state.errors.push(TypeError::new_enum_literal_suggestion(
                             expr,
                             enum_name,
@@ -166,9 +176,19 @@ fn tracker_visit_expr(
                     }
                 }
             }
-            if let (Type::Literal(LiteralValue::String(str_val)), Type::Union(union_types)) = (&lhs, &rhs) {
+            if let (Type::Literal(LiteralValue::String(str_val)), Type::Union(union_types)) =
+                (&lhs, &rhs)
+            {
                 if let Some(enum_name) = extract_enum_from_nullable_union(union_types) {
-                    if matches!(bin_expr.op, ast::BinOpKind::Eq | ast::BinOpKind::Ne | ast::BinOpKind::Lt | ast::BinOpKind::Gt | ast::BinOpKind::Lte | ast::BinOpKind::Gte) {
+                    if matches!(
+                        bin_expr.op,
+                        ast::BinOpKind::Eq
+                            | ast::BinOpKind::Ne
+                            | ast::BinOpKind::Lt
+                            | ast::BinOpKind::Gt
+                            | ast::BinOpKind::Lte
+                            | ast::BinOpKind::Gte
+                    ) {
                         state.errors.push(TypeError::new_enum_literal_suggestion(
                             expr,
                             enum_name,
@@ -180,11 +200,19 @@ fn tracker_visit_expr(
                     }
                 }
             }
-            
+
             // Handle nullable enum vs generic string
             if let (Type::Union(union_types), Type::String) = (&lhs, &rhs) {
                 if let Some(enum_name) = extract_enum_from_nullable_union(union_types) {
-                    if matches!(bin_expr.op, ast::BinOpKind::Eq | ast::BinOpKind::Ne | ast::BinOpKind::Lt | ast::BinOpKind::Gt | ast::BinOpKind::Lte | ast::BinOpKind::Gte) {
+                    if matches!(
+                        bin_expr.op,
+                        ast::BinOpKind::Eq
+                            | ast::BinOpKind::Ne
+                            | ast::BinOpKind::Lt
+                            | ast::BinOpKind::Gt
+                            | ast::BinOpKind::Lte
+                            | ast::BinOpKind::Gte
+                    ) {
                         state.errors.push(TypeError::new_enum_string_cmp_deprecated(
                             expr,
                             enum_name,
@@ -196,7 +224,15 @@ fn tracker_visit_expr(
             }
             if let (Type::String, Type::Union(union_types)) = (&lhs, &rhs) {
                 if let Some(enum_name) = extract_enum_from_nullable_union(union_types) {
-                    if matches!(bin_expr.op, ast::BinOpKind::Eq | ast::BinOpKind::Ne | ast::BinOpKind::Lt | ast::BinOpKind::Gt | ast::BinOpKind::Lte | ast::BinOpKind::Gte) {
+                    if matches!(
+                        bin_expr.op,
+                        ast::BinOpKind::Eq
+                            | ast::BinOpKind::Ne
+                            | ast::BinOpKind::Lt
+                            | ast::BinOpKind::Gt
+                            | ast::BinOpKind::Lte
+                            | ast::BinOpKind::Gte
+                    ) {
                         state.errors.push(TypeError::new_enum_string_cmp_deprecated(
                             expr,
                             enum_name,
@@ -211,9 +247,17 @@ fn tracker_visit_expr(
             if let (Type::Union(left_types), Type::Union(right_types)) = (&lhs, &rhs) {
                 let left_enum = extract_enum_from_nullable_union(left_types);
                 let right_enum = extract_enum_from_nullable_union(right_types);
-                
+
                 if let (Some(left), Some(right)) = (left_enum, right_enum) {
-                    if matches!(bin_expr.op, ast::BinOpKind::Eq | ast::BinOpKind::Ne | ast::BinOpKind::Lt | ast::BinOpKind::Gt | ast::BinOpKind::Lte | ast::BinOpKind::Gte) {
+                    if matches!(
+                        bin_expr.op,
+                        ast::BinOpKind::Eq
+                            | ast::BinOpKind::Ne
+                            | ast::BinOpKind::Lt
+                            | ast::BinOpKind::Gt
+                            | ast::BinOpKind::Lte
+                            | ast::BinOpKind::Gte
+                    ) {
                         if left == right {
                             return Type::Bool;
                         } else {
@@ -234,9 +278,12 @@ fn tracker_visit_expr(
                 // Both are EnumValueRef - only allow comparison ops between same enum
                 (Type::EnumValueRef(e1), Type::EnumValueRef(e2)) => {
                     match bin_expr.op {
-                        ast::BinOpKind::Eq | ast::BinOpKind::Ne 
-                        | ast::BinOpKind::Lt | ast::BinOpKind::Gt 
-                        | ast::BinOpKind::Lte | ast::BinOpKind::Gte => {
+                        ast::BinOpKind::Eq
+                        | ast::BinOpKind::Ne
+                        | ast::BinOpKind::Lt
+                        | ast::BinOpKind::Gt
+                        | ast::BinOpKind::Lte
+                        | ast::BinOpKind::Gte => {
                             if e1 == e2 {
                                 Type::Bool
                             } else {
@@ -265,9 +312,12 @@ fn tracker_visit_expr(
                 (Type::EnumValueRef(enum_name), Type::Literal(LiteralValue::String(str_val)))
                 | (Type::Literal(LiteralValue::String(str_val)), Type::EnumValueRef(enum_name)) => {
                     match bin_expr.op {
-                        ast::BinOpKind::Eq | ast::BinOpKind::Ne 
-                        | ast::BinOpKind::Lt | ast::BinOpKind::Gt 
-                        | ast::BinOpKind::Lte | ast::BinOpKind::Gte => {
+                        ast::BinOpKind::Eq
+                        | ast::BinOpKind::Ne
+                        | ast::BinOpKind::Lt
+                        | ast::BinOpKind::Gt
+                        | ast::BinOpKind::Lte
+                        | ast::BinOpKind::Gte => {
                             state.errors.push(TypeError::new_enum_literal_suggestion(
                                 expr,
                                 enum_name,
@@ -293,9 +343,12 @@ fn tracker_visit_expr(
                 (Type::EnumValueRef(enum_name), Type::String)
                 | (Type::String, Type::EnumValueRef(enum_name)) => {
                     match bin_expr.op {
-                        ast::BinOpKind::Eq | ast::BinOpKind::Ne 
-                        | ast::BinOpKind::Lt | ast::BinOpKind::Gt 
-                        | ast::BinOpKind::Lte | ast::BinOpKind::Gte => {
+                        ast::BinOpKind::Eq
+                        | ast::BinOpKind::Ne
+                        | ast::BinOpKind::Lt
+                        | ast::BinOpKind::Gt
+                        | ast::BinOpKind::Lte
+                        | ast::BinOpKind::Gte => {
                             state.errors.push(TypeError::new_enum_string_cmp_deprecated(
                                 expr,
                                 enum_name,
@@ -326,33 +379,31 @@ fn tracker_visit_expr(
                     Type::Unknown
                 }
                 // No enums involved - fall through to normal operator handling
-                _ => {
-                    match bin_expr.op {
-                        ast::BinOpKind::Add => {
-                            if lhs.is_subtype_of(&Type::String) || rhs.is_subtype_of(&Type::String) {
-                                Type::String
-                            } else {
-                                Type::Number
-                            }
+                _ => match bin_expr.op {
+                    ast::BinOpKind::Add => {
+                        if lhs.is_subtype_of(&Type::String) || rhs.is_subtype_of(&Type::String) {
+                            Type::String
+                        } else {
+                            Type::Number
                         }
-                        ast::BinOpKind::Sub => Type::Number,
-                        ast::BinOpKind::Mul => Type::Number,
-                        ast::BinOpKind::Div => Type::Number,
-                        ast::BinOpKind::Pow => Type::Number,
-                        ast::BinOpKind::FloorDiv => Type::Number,
-                        ast::BinOpKind::Rem => Type::Number,
-                        ast::BinOpKind::Eq => Type::Bool,
-                        ast::BinOpKind::Ne => Type::Bool,
-                        ast::BinOpKind::Lt => Type::Bool,
-                        ast::BinOpKind::Gt => Type::Bool,
-                        ast::BinOpKind::Lte => Type::Bool,
-                        ast::BinOpKind::Gte => Type::Bool,
-                        ast::BinOpKind::In => Type::Bool,
-                        ast::BinOpKind::Concat => Type::String,
-                        ast::BinOpKind::ScAnd => Type::Bool,
-                        ast::BinOpKind::ScOr => Type::Bool,
                     }
-                }
+                    ast::BinOpKind::Sub => Type::Number,
+                    ast::BinOpKind::Mul => Type::Number,
+                    ast::BinOpKind::Div => Type::Number,
+                    ast::BinOpKind::Pow => Type::Number,
+                    ast::BinOpKind::FloorDiv => Type::Number,
+                    ast::BinOpKind::Rem => Type::Number,
+                    ast::BinOpKind::Eq => Type::Bool,
+                    ast::BinOpKind::Ne => Type::Bool,
+                    ast::BinOpKind::Lt => Type::Bool,
+                    ast::BinOpKind::Gt => Type::Bool,
+                    ast::BinOpKind::Lte => Type::Bool,
+                    ast::BinOpKind::Gte => Type::Bool,
+                    ast::BinOpKind::In => Type::Bool,
+                    ast::BinOpKind::Concat => Type::String,
+                    ast::BinOpKind::ScAnd => Type::Bool,
+                    ast::BinOpKind::ScOr => Type::Bool,
+                },
             }
         }
         ast::Expr::IfExpr(expr) => {
@@ -662,13 +713,6 @@ fn infer_const_type(v: &minijinja::value::Value) -> Type {
 pub fn evaluate_type(expr: &ast::Expr, types: &PredefinedTypes) -> Result<Type, Vec<TypeError>> {
     let mut state = ScopeTracker::new();
     let result = tracker_visit_expr(expr, &mut state, types);
-
-    // state.errors.push(TypeError::new_invalid_enum_cmp(
-    //     expr,
-    //     &Type::EnumValueRef("LOREM_TODO".into()),
-    //     &Type::EnumValueRef("IPSUM_TODO".into()),
-    //     expr.span(),
-    // ));
 
     if state.errors.is_empty() {
         Ok(result)

@@ -11,6 +11,7 @@ mod tests {
         let status = Value::from_object(MinijinjaBamlEnumValue {
             value: "InProgress".to_string(),
             alias: Some("in_progress".to_string()),
+            enum_name: "Status".to_string(),
         });
         
         // Test equality comparison with value name
@@ -53,6 +54,8 @@ mod tests {
         value: {{ status.value }}
         alias: {{ status.alias }}
         display: {{ status.display }}
+        name: {{ status.name }}
+        enum_name: {{ status.enum_name }}
         "#;
         
         env.add_template("test4", template4).unwrap();
@@ -61,6 +64,8 @@ mod tests {
         assert!(output4.contains("value: InProgress"));
         assert!(output4.contains("alias: in_progress"));
         assert!(output4.contains("display: in_progress"));
+        assert!(output4.contains("name: Status"));
+        assert!(output4.contains("enum_name: Status"));
         
         // Test ordering in template
         let template5 = r#"

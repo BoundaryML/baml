@@ -9,6 +9,7 @@ mod tests {
         let enum_val = Value::from_object(MinijinjaBamlEnumValue {
             value: "Refund".to_string(),
             alias: Some("gimmie".to_string()),
+            enum_name: "PaymentType".to_string(),
         });
         let value_name = Value::from("Refund");
         let alias_name = Value::from("gimmie");
@@ -28,6 +29,7 @@ mod tests {
         let enum_val = Value::from_object(MinijinjaBamlEnumValue {
             value: "Payment".to_string(),
             alias: None,
+            enum_name: "PaymentType".to_string(),
         });
         let value_name = Value::from("Payment");
         
@@ -41,14 +43,17 @@ mod tests {
         let enum1 = Value::from_object(MinijinjaBamlEnumValue {
             value: "Active".to_string(),
             alias: Some("active_status".to_string()),
+            enum_name: "Status".to_string(),
         });
         let enum2 = Value::from_object(MinijinjaBamlEnumValue {
             value: "Active".to_string(),
             alias: Some("active_status".to_string()),
+            enum_name: "Status".to_string(),
         });
         let enum3 = Value::from_object(MinijinjaBamlEnumValue {
             value: "Inactive".to_string(),
             alias: None,
+            enum_name: "Status".to_string(),
         });
         
         assert_eq!(enum1 == enum2, true);
@@ -61,6 +66,7 @@ mod tests {
         let enum_val = Value::from_object(MinijinjaBamlEnumValue {
             value: "Beta".to_string(),
             alias: None,
+            enum_name: "GreekLetter".to_string(),
         });
         let alpha = Value::from("Alpha");
         let beta = Value::from("Beta");
@@ -82,10 +88,12 @@ mod tests {
         let enum_with_alias = Value::from_object(MinijinjaBamlEnumValue {
             value: "InProgress".to_string(),
             alias: Some("in_progress".to_string()),
+            enum_name: "Status".to_string(),
         });
         let enum_no_alias = Value::from_object(MinijinjaBamlEnumValue {
             value: "Complete".to_string(),
             alias: None,
+            enum_name: "Status".to_string(),
         });
         
         // Test .value property
@@ -123,6 +131,28 @@ mod tests {
                 .get_value(&Value::from("display")),
             Some(Value::from("Complete"))
         );
+        
+        // Test .name and .enum_name properties
+        assert_eq!(
+            enum_with_alias.as_object().unwrap()
+                .get_value(&Value::from("name")),
+            Some(Value::from("Status"))
+        );
+        assert_eq!(
+            enum_with_alias.as_object().unwrap()
+                .get_value(&Value::from("enum_name")),
+            Some(Value::from("Status"))
+        );
+        assert_eq!(
+            enum_no_alias.as_object().unwrap()
+                .get_value(&Value::from("name")),
+            Some(Value::from("Status"))
+        );
+        assert_eq!(
+            enum_no_alias.as_object().unwrap()
+                .get_value(&Value::from("enum_name")),
+            Some(Value::from("Status"))
+        );
     }
     
     #[test]
@@ -131,10 +161,12 @@ mod tests {
         let enum_with_alias = MinijinjaBamlEnumValue {
             value: "Refund".to_string(),
             alias: Some("gimmie".to_string()),
+            enum_name: "PaymentType".to_string(),
         };
         let enum_no_alias = MinijinjaBamlEnumValue {
             value: "Payment".to_string(),
             alias: None,
+            enum_name: "PaymentType".to_string(),
         };
         
         assert_eq!(format!("{}", enum_with_alias), "gimmie");
@@ -147,6 +179,7 @@ mod tests {
         let enum_val = Value::from_object(MinijinjaBamlEnumValue {
             value: "MyValue".to_string(),
             alias: Some("my-value".to_string()),
+            enum_name: "MyEnum".to_string(),
         });
         
         assert_eq!(enum_val == Value::from("MyValue"), true);
@@ -161,6 +194,7 @@ mod tests {
         let enum_val = Value::from_object(MinijinjaBamlEnumValue {
             value: "123".to_string(),
             alias: None,
+            enum_name: "NumberEnum".to_string(),
         });
         
         assert_eq!(enum_val == Value::from(123), false);

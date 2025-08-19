@@ -473,6 +473,7 @@ pub fn render_prompt(
                 .map(|v| MinijinjaBamlEnumValue {
                     value: v.name().to_string(),
                     alias: v.alias(&eval_ctx).unwrap_or(None),
+                    enum_name: enum_name.clone(),
                 })
                 .collect::<Vec<_>>();
             (enum_name, enum_values)
@@ -2112,10 +2113,10 @@ Enum value is not equal to MyEnum.VALUE_A, as expected
 Enum value should not equal MyEnum.VALUE_A, but it does
 {% endif %}
 
-{% if enum_arg != "VALUE_B" %}
-Enum value is not equal to the "VALUE_B" string, as expected
+{% if enum_arg == "VALUE_B" %}
+Enum value is equal to the "VALUE_B" string, as expected
 {% else %}
-Enum value should not equal the "VALUE_B" string, but it does
+Enum value should equal the "VALUE_B" string, but it does not
 {% endif %}
 
 {% if enum_arg != "ALIAS_B" %}
@@ -2156,7 +2157,7 @@ Enum value is equal to MyEnum.VALUE_B, as expected
 
 Enum value is not equal to MyEnum.VALUE_A, as expected
 
-Enum value is not equal to the "VALUE_B" string, as expected
+Enum value is equal to the "VALUE_B" string, as expected
 
 Enum value is not equal to the "ALIAS_B" string, as expected
 "#
