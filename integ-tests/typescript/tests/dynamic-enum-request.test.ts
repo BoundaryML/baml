@@ -22,7 +22,7 @@ describe("Dynamic Enum Request Tests", () => {
     // Verify the enum values are included in the schema/prompt
     const messageContent = requestBody.messages[0].content[0].text;
     expect(messageContent).toBe(`"DynEnumThree.TRICYCLE" renders as: bike with three wheels
-"other" renders as: TRIPOD
+"other" renders as: for use with cameras
 
 Available dynamic enum values:
   - TRICYCLE: bike with three wheels
