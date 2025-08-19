@@ -511,9 +511,11 @@ impl PredefinedTypes {
     pub fn as_enum(&self, name: &str) -> Option<&EnumDefinition> {
         self.enum_definitions.get(name)
     }
-    
+
     pub fn as_enum_values(&self, name: &str) -> Option<Vec<String>> {
-        self.enum_definitions.get(name).map(|def| def.values.iter().map(|v| v.name.clone()).collect())
+        self.enum_definitions
+            .get(name)
+            .map(|def| def.values.iter().map(|v| v.name.clone()).collect())
     }
 
     pub fn as_function(&self, name: &str) -> Option<&(Type, Vec<(String, Type)>)> {
@@ -529,17 +531,26 @@ impl PredefinedTypes {
     }
 
     pub fn add_enum(&mut self, name: &str, values: Vec<String>) {
-        self.add_enum_with_metadata(name, values.into_iter().map(|v| EnumValueDefinition {
-            name: v,
-            alias: None,
-        }).collect());
+        self.add_enum_with_metadata(
+            name,
+            values
+                .into_iter()
+                .map(|v| EnumValueDefinition {
+                    name: v,
+                    alias: None,
+                })
+                .collect(),
+        );
     }
-    
+
     pub fn add_enum_with_metadata(&mut self, name: &str, values: Vec<EnumValueDefinition>) {
-        self.enum_definitions.insert(name.to_string(), EnumDefinition {
-            name: name.to_string(),
-            values,
-        });
+        self.enum_definitions.insert(
+            name.to_string(),
+            EnumDefinition {
+                name: name.to_string(),
+                values,
+            },
+        );
     }
 
     pub fn add_alias(&mut self, name: &str, target: Type) {

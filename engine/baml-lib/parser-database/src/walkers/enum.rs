@@ -32,21 +32,25 @@ impl<'db> EnumWalker<'db> {
     /// For some reason this has a symbol naming conflict with ClassWalker::add_to_types
     /// so we name it differently here.
     pub fn add_enums_to_types(self, types: &mut internal_baml_jinja_types::PredefinedTypes) {
-        let values = self.values().map(|v| {
-            let alias = v.get_default_attributes()
-                .and_then(|attrs| attrs.alias().as_ref())
-                .and_then(|unresolved| {
-                    // For now, we'll extract simple string values
-                    // TODO: This needs proper EvaluationContext to resolve template expressions
-                    extract_simple_string_value(unresolved)
-                });
-            
-            internal_baml_jinja_types::EnumValueDefinition {
-                name: v.name().to_string(),
-                alias,
-            }
-        }).collect();
-        
+        let values = self
+            .values()
+            .map(|v| {
+                let alias = v
+                    .get_default_attributes()
+                    .and_then(|attrs| attrs.alias().as_ref())
+                    .and_then(|unresolved| {
+                        // For now, we'll extract simple string values
+                        // TODO: This needs proper EvaluationContext to resolve template expressions
+                        extract_simple_string_value(unresolved)
+                    });
+
+                internal_baml_jinja_types::EnumValueDefinition {
+                    name: v.name().to_string(),
+                    alias,
+                }
+            })
+            .collect();
+
         types.add_enum_with_metadata(self.name(), values);
     }
 }
@@ -86,7 +90,9 @@ impl<'db> WithName for EnumValueWalker<'db> {
     }
 }
 
-fn extract_simple_string_value(unresolved: &baml_types::UnresolvedValue<internal_baml_diagnostics::Span>) -> Option<String> {
+fn extract_simple_string_value(
+    unresolved: &baml_types::UnresolvedValue<internal_baml_diagnostics::Span>,
+) -> Option<String> {
     // TODO: This is a temporary solution until we have proper EvaluationContext access
     // For now, we'll only extract simple string literals that don't require template resolution
     match unresolved {
@@ -95,7 +101,7 @@ fn extract_simple_string_value(unresolved: &baml_types::UnresolvedValue<internal
                 baml_types::StringOr::Value(s) => Some(s.clone()),
                 _ => None, // Skip env vars and jinja expressions for now
             }
-        },
+        }
         _ => None, // Skip complex template expressions for now
     }
 }

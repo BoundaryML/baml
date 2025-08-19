@@ -349,36 +349,38 @@ fn tracker_visit_expr(
             let rhs = tracker_visit_expr(&bin_expr.right, state, types);
 
             // Handle enum operations with the helper function
-            if let Some(result) = handle_enum_binary_operation(expr, bin_expr, &lhs, &rhs, state, types) {
+            if let Some(result) =
+                handle_enum_binary_operation(expr, bin_expr, &lhs, &rhs, state, types)
+            {
                 return result;
             }
 
             // No enums involved - fall through to normal operator handling
             match bin_expr.op {
-                    ast::BinOpKind::Add => {
-                        if lhs.is_subtype_of(&Type::String) || rhs.is_subtype_of(&Type::String) {
-                            Type::String
-                        } else {
-                            Type::Number
-                        }
+                ast::BinOpKind::Add => {
+                    if lhs.is_subtype_of(&Type::String) || rhs.is_subtype_of(&Type::String) {
+                        Type::String
+                    } else {
+                        Type::Number
                     }
-                    ast::BinOpKind::Sub => Type::Number,
-                    ast::BinOpKind::Mul => Type::Number,
-                    ast::BinOpKind::Div => Type::Number,
-                    ast::BinOpKind::Pow => Type::Number,
-                    ast::BinOpKind::FloorDiv => Type::Number,
-                    ast::BinOpKind::Rem => Type::Number,
-                    ast::BinOpKind::Eq => Type::Bool,
-                    ast::BinOpKind::Ne => Type::Bool,
-                    ast::BinOpKind::Lt => Type::Bool,
-                    ast::BinOpKind::Gt => Type::Bool,
-                    ast::BinOpKind::Lte => Type::Bool,
-                    ast::BinOpKind::Gte => Type::Bool,
-                    ast::BinOpKind::In => Type::Bool,
-                    ast::BinOpKind::Concat => Type::String,
-                    ast::BinOpKind::ScAnd => Type::Bool,
-                    ast::BinOpKind::ScOr => Type::Bool,
                 }
+                ast::BinOpKind::Sub => Type::Number,
+                ast::BinOpKind::Mul => Type::Number,
+                ast::BinOpKind::Div => Type::Number,
+                ast::BinOpKind::Pow => Type::Number,
+                ast::BinOpKind::FloorDiv => Type::Number,
+                ast::BinOpKind::Rem => Type::Number,
+                ast::BinOpKind::Eq => Type::Bool,
+                ast::BinOpKind::Ne => Type::Bool,
+                ast::BinOpKind::Lt => Type::Bool,
+                ast::BinOpKind::Gt => Type::Bool,
+                ast::BinOpKind::Lte => Type::Bool,
+                ast::BinOpKind::Gte => Type::Bool,
+                ast::BinOpKind::In => Type::Bool,
+                ast::BinOpKind::Concat => Type::String,
+                ast::BinOpKind::ScAnd => Type::Bool,
+                ast::BinOpKind::ScOr => Type::Bool,
+            }
         }
         ast::Expr::IfExpr(expr) => {
             let _test = tracker_visit_expr(&expr.test_expr, state, types);
