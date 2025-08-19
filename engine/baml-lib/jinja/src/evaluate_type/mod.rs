@@ -7,7 +7,7 @@ mod test_expr;
 mod test_stmt;
 mod types;
 
-use std::{fmt::Debug, ops::Index};
+use std::{collections::HashSet, fmt::Debug, ops::Index};
 
 use indexmap::{IndexMap, IndexSet};
 use minijinja::machinery::{ast::Expr, Span};
@@ -141,6 +141,7 @@ impl TypeError {
     // either some ordering issue or closest match algorithm does weird stuff
     // and returns results non-deterministically. See commented test in
     // baml-lib/jinja/src/evaluate_type/test_expr.rs
+    // NB(sam): this is probably because valid_args is a HashSet, not an IndexSet
     fn new_unknown_arg(func: &str, span: Span, name: &str, valid_args: HashSet<&String>) -> Self {
         let names = valid_args.into_iter().collect::<Vec<_>>();
         let mut close_names = sort_by_match(name, &names, Some(3));
