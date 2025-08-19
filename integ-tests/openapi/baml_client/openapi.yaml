@@ -1507,6 +1507,19 @@ paths:
                 type: object
                 additionalProperties: true
       operationId: RecursiveUnionTest
+  /call/RenderDynamicClass:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/RenderDynamicClass'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: RenderDynamicClassResponse
+                type: string
+      operationId: RenderDynamicClass
   /call/RenderDynamicEnum:
     post:
       requestBody:
@@ -4711,6 +4724,22 @@ components:
             required:
             - input
             additionalProperties: false
+    RenderDynamicClass:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: RenderDynamicClassRequest
+            type: object
+            properties:
+              input:
+                $ref: '#/components/schemas/RenderTestClass'
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
     RenderDynamicEnum:
       required: true
       content:
@@ -4719,22 +4748,22 @@ components:
             title: RenderDynamicEnumRequest
             type: object
             properties:
+              bike:
+                enum:
+                - BIKE
+                - SCOOTER
+                $ref: '#/components/schemas/RenderTestEnum'
               other:
                 enum:
-                - TRICYCLE
-                - TRIANGLE
-                $ref: '#/components/schemas/DynEnumThree'
-              tricycle:
-                enum:
-                - TRICYCLE
-                - TRIANGLE
-                $ref: '#/components/schemas/DynEnumThree'
+                - BIKE
+                - SCOOTER
+                $ref: '#/components/schemas/RenderTestEnum'
               __baml_options__:
                 nullable: true
                 $ref: '#/components/schemas/BamlOptions'
             required:
+            - bike
             - other
-            - tricycle
             additionalProperties: false
     ReturnAliasWithMergedAttributes:
       required: true
@@ -7799,6 +7828,38 @@ components:
       required:
       - value
       additionalProperties: false
+    RenderEnumInput:
+      type: object
+      properties:
+        testKey:
+          type: string
+      required:
+      - testKey
+      additionalProperties: false
+    RenderStatusEnum:
+      enum:
+      - ACTIVE
+      - INACTIVE
+      type: string
+    RenderTestClass:
+      type: object
+      properties:
+        name:
+          type: string
+        status:
+          enum:
+          - ACTIVE
+          - INACTIVE
+          $ref: '#/components/schemas/RenderStatusEnum'
+      required:
+      - name
+      - status
+      additionalProperties: false
+    RenderTestEnum:
+      enum:
+      - BIKE
+      - SCOOTER
+      type: string
     Resume:
       type: object
       properties:

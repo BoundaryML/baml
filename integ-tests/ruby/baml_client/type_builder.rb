@@ -182,6 +182,14 @@ module BamlClient
           ClassBuilder.new(@registry, "Person", Set[ "name",  "hair_color", ])
       end
 
+      def RenderEnumInput
+          ClassBuilder.new(@registry, "RenderEnumInput", Set[ "testKey", ])
+      end
+
+      def RenderTestClass
+          ClassBuilder.new(@registry, "RenderTestClass", Set[ "name",  "status", ])
+      end
+
       def SomeClassNestedDynamic
           ClassBuilder.new(@registry, "SomeClassNestedDynamic", Set[ "hi", ])
       end
@@ -206,6 +214,14 @@ module BamlClient
 
       def Hobby
           EnumBuilder.new(@registry, "Hobby", Set[ "SPORTS",  "MUSIC",  "READING", ])
+      end
+
+      def RenderStatusEnum
+          EnumBuilder.new(@registry, "RenderStatusEnum", Set[ "ACTIVE",  "INACTIVE", ])
+      end
+
+      def RenderTestEnum
+          EnumBuilder.new(@registry, "RenderTestEnum", Set[ "BIKE",  "SCOOTER", ])
       end
 
   end

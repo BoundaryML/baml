@@ -806,11 +806,18 @@ class BamlSyncClient:
             "input": input,
         })
         return typing.cast(types.RecursiveUnion, result.cast_to(types, types, stream_types, False, __runtime__))
-    def RenderDynamicEnum(self, tricycle: typing.Union[types.DynEnumThree, str],other: typing.Union[types.DynEnumThree, str],
+    def RenderDynamicClass(self, input: types.RenderTestClass,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).call_function_sync(function_name="RenderDynamicClass", args={
+            "input": input,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    def RenderDynamicEnum(self, bike: typing.Union[types.RenderTestEnum, str],other: typing.Union[types.RenderTestEnum, str],
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="RenderDynamicEnum", args={
-            "tricycle": tricycle,"other": other,
+            "bike": bike,"other": other,
         })
         return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def ReturnAliasWithMergedAttributes(self, money: int,
@@ -2919,11 +2926,23 @@ class BamlStreamClient:
           lambda x: typing.cast(types.RecursiveUnion, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
-    def RenderDynamicEnum(self, tricycle: typing.Union[types.DynEnumThree, str],other: typing.Union[types.DynEnumThree, str],
+    def RenderDynamicClass(self, input: types.RenderTestClass,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="RenderDynamicClass", args={
+            "input": input,
+        })
+        return baml_py.BamlSyncStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def RenderDynamicEnum(self, bike: typing.Union[types.RenderTestEnum, str],other: typing.Union[types.RenderTestEnum, str],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[str, str]:
         ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="RenderDynamicEnum", args={
-            "tricycle": tricycle,"other": other,
+            "bike": bike,"other": other,
         })
         return baml_py.BamlSyncStream[str, str](
           result,
@@ -5136,11 +5155,18 @@ class BamlHttpRequestClient:
             "input": input,
         }, mode="request")
         return result
-    def RenderDynamicEnum(self, tricycle: typing.Union[types.DynEnumThree, str],other: typing.Union[types.DynEnumThree, str],
+    def RenderDynamicClass(self, input: types.RenderTestClass,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="RenderDynamicClass", args={
+            "input": input,
+        }, mode="request")
+        return result
+    def RenderDynamicEnum(self, bike: typing.Union[types.RenderTestEnum, str],other: typing.Union[types.RenderTestEnum, str],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="RenderDynamicEnum", args={
-            "tricycle": tricycle,"other": other,
+            "bike": bike,"other": other,
         }, mode="request")
         return result
     def ReturnAliasWithMergedAttributes(self, money: int,
@@ -6733,11 +6759,18 @@ class BamlHttpStreamRequestClient:
             "input": input,
         }, mode="stream")
         return result
-    def RenderDynamicEnum(self, tricycle: typing.Union[types.DynEnumThree, str],other: typing.Union[types.DynEnumThree, str],
+    def RenderDynamicClass(self, input: types.RenderTestClass,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="RenderDynamicClass", args={
+            "input": input,
+        }, mode="stream")
+        return result
+    def RenderDynamicEnum(self, bike: typing.Union[types.RenderTestEnum, str],other: typing.Union[types.RenderTestEnum, str],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="RenderDynamicEnum", args={
-            "tricycle": tricycle,"other": other,
+            "bike": bike,"other": other,
         }, mode="stream")
         return result
     def ReturnAliasWithMergedAttributes(self, money: int,

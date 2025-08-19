@@ -640,6 +640,12 @@ class LlmResponseParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="RecursiveUnionTest", llm_response=llm_response, mode="request")
         return typing.cast(types.RecursiveUnion, result)
 
+    def RenderDynamicClass(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="RenderDynamicClass", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
     def RenderDynamicEnum(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> str:
@@ -2009,6 +2015,12 @@ class LlmStreamParser:
     ) -> stream_types.RecursiveUnion:
         result = self.__options.merge_options(baml_options).parse_response(function_name="RecursiveUnionTest", llm_response=llm_response, mode="stream")
         return typing.cast(stream_types.RecursiveUnion, result)
+
+    def RenderDynamicClass(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="RenderDynamicClass", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
 
     def RenderDynamicEnum(
         self, llm_response: str, baml_options: BamlCallOptions = {},

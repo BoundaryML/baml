@@ -157,6 +157,16 @@ export enum OrderStatus {
   CANCELLED = "CANCELLED",
 }
 
+export enum RenderStatusEnum {
+  ACTIVE = "ACTIVE",
+  INACTIVE = "INACTIVE",
+}
+
+export enum RenderTestEnum {
+  BIKE = "BIKE",
+  SCOOTER = "SCOOTER",
+}
+
 export enum Tag {
   Security = "Security",
   AI = "AI",
@@ -675,6 +685,19 @@ export interface Recipe {
 export interface RecursiveAliasDependency {
   value: JsonValue
   
+}
+
+export interface RenderEnumInput {
+  testKey: string
+  
+  [key: string]: any;
+}
+
+export interface RenderTestClass {
+  name: string
+  status: (string | RenderStatusEnum)
+  
+  [key: string]: any;
 }
 
 export interface Resume {

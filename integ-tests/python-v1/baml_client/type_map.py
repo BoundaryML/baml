@@ -253,6 +253,12 @@ type_map = {
     "types.RecursiveAliasDependency": types.RecursiveAliasDependency,
     "stream_types.RecursiveAliasDependency": stream_types.RecursiveAliasDependency,
 
+    "types.RenderEnumInput": types.RenderEnumInput,
+    "stream_types.RenderEnumInput": stream_types.RenderEnumInput,
+
+    "types.RenderTestClass": types.RenderTestClass,
+    "stream_types.RenderTestClass": stream_types.RenderTestClass,
+
     "types.Resume": types.Resume,
     "stream_types.Resume": stream_types.Resume,
 
@@ -347,6 +353,10 @@ type_map = {
     "types.OptionalTest_CategoryType": types.OptionalTest_CategoryType,
 
     "types.OrderStatus": types.OrderStatus,
+
+    "types.RenderStatusEnum": types.RenderStatusEnum,
+
+    "types.RenderTestEnum": types.RenderTestEnum,
 
     "types.Tag": types.Tag,
 

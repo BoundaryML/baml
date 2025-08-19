@@ -6413,7 +6413,7 @@ func RecursiveUnionTest(ctx context.Context, input types.RecursiveUnion, opts ..
 	}
 }
 
-func RenderDynamicEnum(ctx context.Context, tricycle types.DynEnumThree, other types.DynEnumThree, opts ...CallOptionFunc) (string, error) {
+func RenderDynamicClass(ctx context.Context, input types.RenderTestClass, opts ...CallOptionFunc) (string, error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -6421,7 +6421,69 @@ func RenderDynamicEnum(ctx context.Context, tricycle types.DynEnumThree, other t
 	}
 
 	args := baml.BamlFunctionArguments{
-		Kwargs: map[string]any{"tricycle": tricycle, "other": other},
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	encoded, err := args.Encode()
+	if err != nil {
+		panic(err)
+	}
+
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "RenderDynamicClass", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "RenderDynamicClass", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
+	}
+}
+
+func RenderDynamicEnum(ctx context.Context, bike types.RenderTestEnum, other types.RenderTestEnum, opts ...CallOptionFunc) (string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"bike": bike, "other": other},
 		Env:    getEnvVars(callOpts.env),
 	}
 

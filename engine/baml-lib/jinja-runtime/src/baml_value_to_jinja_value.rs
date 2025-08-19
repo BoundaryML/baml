@@ -196,7 +196,7 @@ impl Object for MinijinjaBamlEnumValue {
     fn get_value(self: &Arc<Self>, key: &minijinja::Value) -> Option<minijinja::Value> {
         // TODO: add jinja type-checking for this in evaluate_type to allow this
         match key.as_str()? {
-            "value_str" => Some(minijinja::Value::from(self.value.clone())),
+            "value" => Some(minijinja::Value::from(self.value.clone())),
             // CLAUDE: do not add more fields here.
             _ => None,
         }

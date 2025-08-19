@@ -1262,6 +1262,142 @@ func (u OrderStatus) BamlEncodeName() *cffi.CFFITypeName {
 	}
 }
 
+type RenderStatusEnum string
+
+const (
+	RenderStatusEnumACTIVE   RenderStatusEnum = "ACTIVE"
+	RenderStatusEnumINACTIVE RenderStatusEnum = "INACTIVE"
+)
+
+// Values returns all allowed values for the RenderStatusEnum type.
+func (RenderStatusEnum) Values() []RenderStatusEnum {
+	return []RenderStatusEnum{
+		RenderStatusEnumACTIVE,
+		RenderStatusEnumINACTIVE,
+	}
+}
+
+// IsValid checks whether the given RenderStatusEnum value is valid.
+func (e RenderStatusEnum) IsValid() bool {
+
+	// dynamic enums are always valid
+	return true
+
+}
+
+// MarshalJSON customizes JSON marshaling for RenderStatusEnum.
+func (e RenderStatusEnum) MarshalJSON() ([]byte, error) {
+	if !e.IsValid() {
+		return nil, fmt.Errorf("invalid RenderStatusEnum: %q", e)
+	}
+	return json.Marshal(string(e))
+}
+
+// UnmarshalJSON customizes JSON unmarshaling for RenderStatusEnum.
+func (e *RenderStatusEnum) UnmarshalJSON(data []byte) error {
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		return err
+	}
+	*e = RenderStatusEnum(s)
+	if !e.IsValid() {
+		return fmt.Errorf("invalid RenderStatusEnum: %q", s)
+	}
+	return nil
+}
+
+func (e *RenderStatusEnum) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
+	name := holder.Name
+	if name.Name != "RenderStatusEnum" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
+		panic(fmt.Sprintf("expected types.RenderStatusEnum, got %s.%s", string(name.Namespace.String()), string(name.Name)))
+	}
+	value := holder.Value
+	*e = RenderStatusEnum(value)
+}
+
+func (e RenderStatusEnum) Encode() (*cffi.CFFIValueHolder, error) {
+	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
+}
+
+func (e RenderStatusEnum) BamlTypeName() string {
+	return "RenderStatusEnum"
+}
+
+func (u RenderStatusEnum) BamlEncodeName() *cffi.CFFITypeName {
+	return &cffi.CFFITypeName{
+		Name:      "RenderStatusEnum",
+		Namespace: cffi.CFFITypeNamespace_TYPES,
+	}
+}
+
+type RenderTestEnum string
+
+const (
+	RenderTestEnumBIKE    RenderTestEnum = "BIKE"
+	RenderTestEnumSCOOTER RenderTestEnum = "SCOOTER"
+)
+
+// Values returns all allowed values for the RenderTestEnum type.
+func (RenderTestEnum) Values() []RenderTestEnum {
+	return []RenderTestEnum{
+		RenderTestEnumBIKE,
+		RenderTestEnumSCOOTER,
+	}
+}
+
+// IsValid checks whether the given RenderTestEnum value is valid.
+func (e RenderTestEnum) IsValid() bool {
+
+	// dynamic enums are always valid
+	return true
+
+}
+
+// MarshalJSON customizes JSON marshaling for RenderTestEnum.
+func (e RenderTestEnum) MarshalJSON() ([]byte, error) {
+	if !e.IsValid() {
+		return nil, fmt.Errorf("invalid RenderTestEnum: %q", e)
+	}
+	return json.Marshal(string(e))
+}
+
+// UnmarshalJSON customizes JSON unmarshaling for RenderTestEnum.
+func (e *RenderTestEnum) UnmarshalJSON(data []byte) error {
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		return err
+	}
+	*e = RenderTestEnum(s)
+	if !e.IsValid() {
+		return fmt.Errorf("invalid RenderTestEnum: %q", s)
+	}
+	return nil
+}
+
+func (e *RenderTestEnum) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
+	name := holder.Name
+	if name.Name != "RenderTestEnum" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
+		panic(fmt.Sprintf("expected types.RenderTestEnum, got %s.%s", string(name.Namespace.String()), string(name.Name)))
+	}
+	value := holder.Value
+	*e = RenderTestEnum(value)
+}
+
+func (e RenderTestEnum) Encode() (*cffi.CFFIValueHolder, error) {
+	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
+}
+
+func (e RenderTestEnum) BamlTypeName() string {
+	return "RenderTestEnum"
+}
+
+func (u RenderTestEnum) BamlEncodeName() *cffi.CFFITypeName {
+	return &cffi.CFFITypeName{
+		Name:      "RenderTestEnum",
+		Namespace: cffi.CFFITypeNamespace_TYPES,
+	}
+}
+
 type Tag string
 
 const (

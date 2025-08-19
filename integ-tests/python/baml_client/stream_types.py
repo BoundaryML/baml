@@ -23,7 +23,7 @@ class StreamState(BaseModel, typing.Generic[StreamStateValueT]):
     value: StreamStateValueT
     state: typing_extensions.Literal["Pending", "Incomplete", "Complete"]
 # #########################################################################
-# Generated classes (99)
+# Generated classes (101)
 # #########################################################################
 
 class AnotherObject(BaseModel):
@@ -368,6 +368,15 @@ class Recipe(BaseModel):
 
 class RecursiveAliasDependency(BaseModel):
     value: typing.Optional["JsonValue"] = None
+
+class RenderEnumInput(BaseModel):
+    model_config = ConfigDict(extra='allow')
+    testKey: typing.Optional[str] = None
+
+class RenderTestClass(BaseModel):
+    model_config = ConfigDict(extra='allow')
+    name: typing.Optional[str] = None
+    status: typing.Optional[typing.Union[types.RenderStatusEnum, str]] = None
 
 class Resume(BaseModel):
     name: typing.Optional[str] = None
