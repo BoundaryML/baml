@@ -96,12 +96,7 @@ fn extract_simple_string_value(
     // TODO: This is a temporary solution until we have proper EvaluationContext access
     // For now, we'll only extract simple string literals that don't require template resolution
     match unresolved {
-        baml_types::UnresolvedValue::String(string_or, _) => {
-            match string_or {
-                baml_types::StringOr::Value(s) => Some(s.clone()),
-                _ => None, // Skip env vars and jinja expressions for now
-            }
-        }
+        baml_types::UnresolvedValue::String(baml_types::StringOr::Value(s), _) => Some(s.clone()),
         _ => None, // Skip complex template expressions for now
     }
 }
