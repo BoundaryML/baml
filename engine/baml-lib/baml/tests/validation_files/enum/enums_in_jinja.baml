@@ -124,25 +124,6 @@ function TestEnumJinjaSyntax(status: Status, priority: Priority, nullable_status
             {% endif %}
         {% endfor %}
 
-        // ========= NULLABLE ENUM HANDLING =========
-        
-        // Null check first
-        {% if nullable_status is none %}
-            No status provided
-        {% elif nullable_status == "Active" %}
-            Nullable status is Active
-        {% else %}
-            Nullable status: {{ nullable_status }}
-        {% endif %}
-        
-        // Safe navigation pattern
-        {% if nullable_status and nullable_status == "Pending" %}
-            Safely checked pending status
-        {% endif %}
-        
-        // Default value for nullable
-        Final Status: {{ nullable_status if nullable_status else "No status" }}
-
         // ========= CROSS-ENUM TYPE ERRORS =========
         
         // Comparing different enum types (should be type error)
@@ -195,206 +176,206 @@ function TestEnumJinjaSyntax(status: Status, priority: Priority, nullable_status
 }
 
 // warning: Use `Status.Active` instead of "Active" - comparing enums with strings will soon be deprecated.
-//   -->  enum/enum_jinja_syntax_validation.baml:20
+//   -->  enum/enums_in_jinja.baml:20
 //    | 
 // 19 |         // Exact value name matches (should generate warnings)
 // 20 |         {% if status == "Active" %}
 //    | 
 // warning: Use `Status.Pending` instead of "Pending" - comparing enums with strings will soon be deprecated.
-//   -->  enum/enum_jinja_syntax_validation.baml:24
+//   -->  enum/enums_in_jinja.baml:24
 //    | 
 // 23 |         
 // 24 |         {% if status == "Pending" %}
 //    | 
 // warning: Use `Status.Inactive` instead of "Inactive" - comparing enums with strings will soon be deprecated.
-//   -->  enum/enum_jinja_syntax_validation.baml:29
+//   -->  enum/enums_in_jinja.baml:29
 //    | 
 // 28 |         // Reverse comparisons
 // 29 |         {% if "Inactive" == status %}
 //    | 
 // warning: Use `Status.Active` instead of "Active" - comparing enums with strings will soon be deprecated.
-//   -->  enum/enum_jinja_syntax_validation.baml:34
+//   -->  enum/enums_in_jinja.baml:34
 //    | 
 // 33 |         // Inequality
 // 34 |         {% if status != "Active" %}
 //    | 
 // warning: Use `Status.Active` instead of "active" - comparing enums with strings will soon be deprecated.
-//   -->  enum/enum_jinja_syntax_validation.baml:41
+//   -->  enum/enums_in_jinja.baml:41
 //    | 
 // 40 |         // Comparing to alias (should suggest value name)
 // 41 |         {% if status == "active" %}
 //    | 
 // warning: Did you mean `Priority.High` instead of "urgent" (alias)? Enums are not equal to their alias values.
-//   -->  enum/enum_jinja_syntax_validation.baml:45
+//   -->  enum/enums_in_jinja.baml:45
 //    | 
 // 44 |         
 // 45 |         {% if priority == "urgent" %}
 //    | 
 // warning: Use `Status.Active` instead of "ACTIVE" - comparing enums with strings will soon be deprecated.
-//   -->  enum/enum_jinja_syntax_validation.baml:52
+//   -->  enum/enums_in_jinja.baml:52
 //    | 
 // 51 |         // Wrong case (should suggest correct case)
 // 52 |         {% if status == "ACTIVE" %}
 //    | 
 // warning: Use `Priority.High` instead of "high" - comparing enums with strings will soon be deprecated.
-//   -->  enum/enum_jinja_syntax_validation.baml:56
+//   -->  enum/enums_in_jinja.baml:56
 //    | 
 // 55 |         
 // 56 |         {% if priority == "high" %}
 //    | 
 // warning: Use `Status.Active` instead of "Active" - comparing enums with strings will soon be deprecated.
-//   -->  enum/enum_jinja_syntax_validation.baml:63
+//   -->  enum/enums_in_jinja.baml:63
 //    | 
 // 62 |         // Multiple enum comparisons with OR
 // 63 |         {% if status == "Active" or status == "Pending" %}
 //    | 
 // warning: Use `Status.Pending` instead of "Pending" - comparing enums with strings will soon be deprecated.
-//   -->  enum/enum_jinja_syntax_validation.baml:63
+//   -->  enum/enums_in_jinja.baml:63
 //    | 
 // 62 |         // Multiple enum comparisons with OR
 // 63 |         {% if status == "Active" or status == "Pending" %}
 //    | 
 // warning: Use `Status.Active` instead of "Active" - comparing enums with strings will soon be deprecated.
-//   -->  enum/enum_jinja_syntax_validation.baml:68
+//   -->  enum/enums_in_jinja.baml:68
 //    | 
 // 67 |         // Complex boolean expressions
 // 68 |         {% if (status == "Active" or priority == "High") and nullable_status != "Inactive" %}
 //    | 
 // warning: Use `Priority.High` instead of "High" - comparing enums with strings will soon be deprecated.
-//   -->  enum/enum_jinja_syntax_validation.baml:68
+//   -->  enum/enums_in_jinja.baml:68
 //    | 
 // 67 |         // Complex boolean expressions
 // 68 |         {% if (status == "Active" or priority == "High") and nullable_status != "Inactive" %}
 //    | 
 // warning: Use `Status.Inactive` instead of "Inactive" - comparing enums with strings will soon be deprecated.
-//   -->  enum/enum_jinja_syntax_validation.baml:73
+//   -->  enum/enums_in_jinja.baml:73
 //    | 
 // 72 |         // Negation
 // 73 |         {% if not (status == "Inactive") %}
 //    | 
 // warning: Use `Status.Active` instead of "Active" - comparing enums with strings will soon be deprecated.
-//   -->  enum/enum_jinja_syntax_validation.baml:80
+//   -->  enum/enums_in_jinja.baml:80
 //    | 
 // 79 |         // If/elif/else chains
 // 80 |         {% if status == "Active" %}
 //    | 
 // warning: Use `Status.Pending` instead of "Pending" - comparing enums with strings will soon be deprecated.
-//   -->  enum/enum_jinja_syntax_validation.baml:82
+//   -->  enum/enums_in_jinja.baml:82
 //    | 
 // 81 |             Active status
 // 82 |         {% elif status == "Pending" %}
 //    | 
 // warning: Use `Status.Inactive` instead of "Inactive" - comparing enums with strings will soon be deprecated.
-//   -->  enum/enum_jinja_syntax_validation.baml:84
+//   -->  enum/enums_in_jinja.baml:84
 //    | 
 // 83 |             Pending status
 // 84 |         {% elif status == "Inactive" %}
 //    | 
 // warning: Use `Priority.High` instead of "High" - comparing enums with strings will soon be deprecated.
-//   -->  enum/enum_jinja_syntax_validation.baml:91
+//   -->  enum/enums_in_jinja.baml:91
 //    | 
 // 90 |         // Ternary operators
 // 91 |         Result: {{ "High Priority" if priority == "High" else "Normal Priority" }}
 //    | 
 // warning: Use `Status.Active` instead of "Active" - comparing enums with strings will soon be deprecated.
-//   -->  enum/enum_jinja_syntax_validation.baml:92
+//   -->  enum/enums_in_jinja.baml:92
 //    | 
 // 91 |         Result: {{ "High Priority" if priority == "High" else "Normal Priority" }}
 // 92 |         Status: {{ "Active" if status == "Active" else "Not Active" }}
 //    | 
 // warning: Use one of: Status.Pending, Status.Active - comparing enums with strings will soon be deprecated.
-//   -->  enum/enum_jinja_syntax_validation.baml:97
+//   -->  enum/enums_in_jinja.baml:97
 //    | 
 // 96 |         // Less than (should suggest available values)
 // 97 |         {% if status < "ZZZ" %}
 //    | 
 // warning: Use one of: Priority.High, Priority.Low - comparing enums with strings will soon be deprecated.
-//   -->  enum/enum_jinja_syntax_validation.baml:102
+//   -->  enum/enums_in_jinja.baml:102
 //    | 
 // 101 |         // Greater than
 // 102 |         {% if priority > "AAA" %}
 //    | 
 // warning: Use `Status.Active` instead of "Active" - comparing enums with strings will soon be deprecated.
-//   -->  enum/enum_jinja_syntax_validation.baml:107
+//   -->  enum/enums_in_jinja.baml:107
 //    | 
 // 106 |         // Mixed ordering
 // 107 |         {% if status >= "Active" and priority <= "Medium" %}
 //    | 
-// warning: Use one of: Priority.High, Priority.Low - comparing enums with strings will soon be deprecated.
-//   -->  enum/enum_jinja_syntax_validation.baml:107
+// warning: Use one of: Priority.Low, Priority.High - comparing enums with strings will soon be deprecated.
+//   -->  enum/enums_in_jinja.baml:107
 //    | 
 // 106 |         // Mixed ordering
 // 107 |         {% if status >= "Active" and priority <= "Medium" %}
 //    | 
 // warning: Cannot compare enums of different types: enum Status vs (literal["Active"] | literal["Inactive"] | literal["Pending"] | literal["Unknown"]) - comparing different enums will soon be deprecated.
-//   -->  enum/enum_jinja_syntax_validation.baml:115
+//   -->  enum/enums_in_jinja.baml:115
 //    | 
 // 114 |         {% for s in ["Active", "Inactive", "Pending", "Unknown"] %}
 // 115 |             {% if status == s %}
 //    | 
 // warning: Cannot compare enums of different types: enum Priority vs (literal["High"] | literal["Low"] | literal["Medium"]) - comparing different enums will soon be deprecated.
-//   -->  enum/enum_jinja_syntax_validation.baml:122
+//   -->  enum/enums_in_jinja.baml:122
 //    | 
 // 121 |         {% for p in ["High", "Medium", "Low"] %}
 // 122 |             {% if priority == p %}
 //    | 
 // warning: Cannot compare enums of different types: enum Status vs enum Priority - comparing different enums will soon be deprecated.
-//   -->  enum/enum_jinja_syntax_validation.baml:149
+//   -->  enum/enums_in_jinja.baml:130
 //    | 
-// 148 |         // Comparing different enum types (should be type error)
-// 149 |         {% if status == priority %}
+// 129 |         // Comparing different enum types (should be type error)
+// 130 |         {% if status == priority %}
 //    | 
 // warning: Use one of: Status.Inactive, Status.Active - comparing enums with strings will soon be deprecated.
-//   -->  enum/enum_jinja_syntax_validation.baml:163
+//   -->  enum/enums_in_jinja.baml:144
 //    | 
-// 162 |         // Typos and fuzzy matching
-// 163 |         {% if status == "Activ" %}
+// 143 |         // Typos and fuzzy matching
+// 144 |         {% if status == "Activ" %}
 //    | 
-// warning: Use one of: Priority.High, Priority.Low - comparing enums with strings will soon be deprecated.
-//   -->  enum/enum_jinja_syntax_validation.baml:167
+// warning: Use one of: Priority.Low, Priority.High - comparing enums with strings will soon be deprecated.
+//   -->  enum/enums_in_jinja.baml:148
 //    | 
-// 166 |         
-// 167 |         {% if priority == "Hgh" %}
+// 147 |         
+// 148 |         {% if priority == "Hgh" %}
+//    | 
+// warning: Use one of: Status.Pending, Status.Active - comparing enums with strings will soon be deprecated.
+//   -->  enum/enums_in_jinja.baml:153
+//    | 
+// 152 |         // Non-existent values
+// 153 |         {% if status == "Unknown" %}
 //    | 
 // warning: Use one of: Status.Active, Status.Pending - comparing enums with strings will soon be deprecated.
-//   -->  enum/enum_jinja_syntax_validation.baml:172
+//   -->  enum/enums_in_jinja.baml:158
 //    | 
-// 171 |         // Non-existent values
-// 172 |         {% if status == "Unknown" %}
-//    | 
-// warning: Use one of: Status.Active, Status.Pending - comparing enums with strings will soon be deprecated.
-//   -->  enum/enum_jinja_syntax_validation.baml:177
-//    | 
-// 176 |         // Empty string
-// 177 |         {% if status == "" %}
+// 157 |         // Empty string
+// 158 |         {% if status == "" %}
 //    | 
 // warning: Use `Status.Active` instead of "Active" - comparing enums with strings will soon be deprecated.
-//   -->  enum/enum_jinja_syntax_validation.baml:184
+//   -->  enum/enums_in_jinja.baml:165
 //    | 
-// 183 |         // Deeply nested logic
-// 184 |         {% if (status == "Active" and priority == "High") or (status == "Pending" and priority != "Low") %}
+// 164 |         // Deeply nested logic
+// 165 |         {% if (status == "Active" and priority == "High") or (status == "Pending" and priority != "Low") %}
 //    | 
 // warning: Use `Priority.High` instead of "High" - comparing enums with strings will soon be deprecated.
-//   -->  enum/enum_jinja_syntax_validation.baml:184
+//   -->  enum/enums_in_jinja.baml:165
 //    | 
-// 183 |         // Deeply nested logic
-// 184 |         {% if (status == "Active" and priority == "High") or (status == "Pending" and priority != "Low") %}
+// 164 |         // Deeply nested logic
+// 165 |         {% if (status == "Active" and priority == "High") or (status == "Pending" and priority != "Low") %}
 //    | 
 // warning: Use `Status.Pending` instead of "Pending" - comparing enums with strings will soon be deprecated.
-//   -->  enum/enum_jinja_syntax_validation.baml:184
+//   -->  enum/enums_in_jinja.baml:165
 //    | 
-// 183 |         // Deeply nested logic
-// 184 |         {% if (status == "Active" and priority == "High") or (status == "Pending" and priority != "Low") %}
+// 164 |         // Deeply nested logic
+// 165 |         {% if (status == "Active" and priority == "High") or (status == "Pending" and priority != "Low") %}
 //    | 
 // warning: Use `Priority.Low` instead of "Low" - comparing enums with strings will soon be deprecated.
-//   -->  enum/enum_jinja_syntax_validation.baml:184
+//   -->  enum/enums_in_jinja.baml:165
 //    | 
-// 183 |         // Deeply nested logic
-// 184 |         {% if (status == "Active" and priority == "High") or (status == "Pending" and priority != "Low") %}
+// 164 |         // Deeply nested logic
+// 165 |         {% if (status == "Active" and priority == "High") or (status == "Pending" and priority != "Low") %}
 //    | 
 // warning: Use `Status.Active` instead of "Active" - comparing enums with strings will soon be deprecated.
-//   -->  enum/enum_jinja_syntax_validation.baml:190
+//   -->  enum/enums_in_jinja.baml:171
 //    | 
-// 189 |         {% for item in ["test"] %}
-// 190 |             {% if status == "Active" and item == "test" %}
+// 170 |         {% for item in ["test"] %}
+// 171 |             {% if status == "Active" and item == "test" %}
 //    | 

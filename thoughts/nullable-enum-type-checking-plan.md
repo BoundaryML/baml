@@ -150,7 +150,7 @@ For comparisons with generic `Type::String` (not literal):
                 state.errors.push(TypeError::new_enum_literal_suggestion(
                     expr,
                     enum_name,
-                    "lorem-ipsum-todo-placeholder", // Existing pattern for generic string
+                    "<value>",
                     types,
                     expr.span(),
                 ));
@@ -175,12 +175,34 @@ For comparisons with generic `Type::String` (not literal):
 3. `"Pending" == nullable_status`
 4. `nullable_status != "Inactive"`
 5. `nullable_status > "AAA"` (ordering comparisons)
+6. `nullable_priority == "High"` where `nullable_priority: Priority?`
+7. `nullable_status <= "Zzz"` (less-than-equal comparison)
+8. `nullable_status >= "Active"` (greater-than-equal comparison)
+9. Nested nullable enum comparisons: `(nullable_status == "Active") and (nullable_priority != "Low")`
+10. String concatenation patterns: `nullable_status + "_suffix"` (if we want to warn on this)
+
+### Nullable Enum Cross-Comparisons
+
+11. `nullable_status1 == nullable_status2` where both are `Status?`
+12. `nullable_status == nullable_priority` where types are `Status?` vs `Priority?` (should error)
+13. `nullable_status != nullable_priority` (cross-enum comparison error)
+
+### Edge Cases for Nullable Enums
+
+14. `null == nullable_status` (null comparison)
+15. `nullable_status == null` (null comparison reverse)
+16. `nullable_status and nullable_status == "Active"` (safe navigation pattern)
+17. `nullable_status or "Default"` (fallback pattern)
 
 ### Should NOT Generate Enum Warnings
 
 1. `status_or_string == "Active"` where `status_or_string: Status | string`
 2. `mixed_type == "Something"` where `mixed_type: Status | int | string`
 3. `string_var == "Active"` where `string_var: string`
+4. `enum_with_string == "Active"` where `enum_with_string: Status | string | null`
+5. `complex_union == "Test"` where `complex_union: Status | Priority | string`
+6. `nullable_string == "Value"` where `nullable_string: string?`
+7. `int_or_enum == "123"` where `int_or_enum: int | Status`
 
 ## Test File Updates
 
