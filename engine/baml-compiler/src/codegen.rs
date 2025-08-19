@@ -1215,6 +1215,8 @@ impl hir::Expression {
 
 #[cfg(test)]
 mod tests {
+    use baml_vm::EvalStack;
+
     use super::*;
     use crate::test::ast;
 
