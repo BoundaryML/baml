@@ -15,7 +15,7 @@ use minijinja::machinery::{ast::Expr, Span};
 pub use self::{
     expr::evaluate_type,
     stmt::get_variable_types,
-    types::{JinjaContext, PredefinedTypes, Type},
+    types::{EnumDefinition, EnumValueDefinition, JinjaContext, PredefinedTypes, Type},
 };
 
 #[derive(Debug, Clone)]
@@ -212,6 +212,120 @@ impl TypeError {
                 ),
                 span,
             }
+        }
+    }
+    
+    fn new_enum_literal_suggestion(
+        expr: &Expr,
+        enum_name: &str,
+        literal_value: &str,
+        types: &types::PredefinedTypes,
+        span: Span
+    ) -> Self {
+        let enum_def = match types.as_enum(enum_name) {
+            Some(def) => def,
+            None => return Self::new_invalid_enum_cmp(expr, &Type::EnumValueRef(enum_name.to_string()), &Type::Literal(LiteralValue::String(literal_value.to_string())), span),
+        };
+        
+        // 1. EXACT VALUE NAME MATCH
+        if enum_def.values.iter().any(|v| v.name == literal_value) {
+            return Self {
+                message: format!(
+                    "Consider using enum value: Instead of '{} == \"{}\"', use '{} == {}.{}' for better type safety",
+                    pretty_print::pretty_print(expr), literal_value, 
+                    pretty_print::pretty_print(expr), enum_name, literal_value
+                ),
+                span,
+            };
+        }
+        
+        // 2. CASE-INSENSITIVE VALUE NAME MATCH
+        if let Some(correct_case) = enum_def.values.iter()
+            .find(|v| v.name.to_lowercase() == literal_value.to_lowercase()) {
+            return Self {
+                message: format!(
+                    "Did you mean '{}.{}'? (Note: enum comparisons are case-sensitive)",
+                    enum_name, correct_case.name
+                ),
+                span,
+            };
+        }
+        
+        // 3. EXACT ALIAS MATCH
+        if let Some(value_for_alias) = enum_def.values.iter()
+            .find(|v| v.alias.as_ref() == Some(&literal_value.to_string())) {
+            return Self {
+                message: format!(
+                    "Alias detected: Instead of '{} == \"{}\"' (alias), use '{} == {}.{}' (value name)",
+                    pretty_print::pretty_print(expr), literal_value,
+                    pretty_print::pretty_print(expr), enum_name, value_for_alias.name
+                ),
+                span,
+            };
+        }
+        
+        // 4. CASE-INSENSITIVE ALIAS MATCH
+        if let Some(value_for_alias) = enum_def.values.iter()
+            .find(|v| v.alias.as_ref().map(|a| a.to_lowercase()) == Some(literal_value.to_lowercase())) {
+            return Self {
+                message: format!(
+                    "Alias detected (case mismatch): Did you mean '{}.{}'? (comparing against alias '{}')",
+                    enum_name, value_for_alias.name, 
+                    value_for_alias.alias.as_ref().unwrap()
+                ),
+                span,
+            };
+        }
+        
+        // 5. FUZZY MATCH using existing sort_by_match function
+        let mut all_searchable_terms = Vec::new();
+        let mut term_to_value_name = std::collections::HashMap::new();
+        for value in &enum_def.values {
+            all_searchable_terms.push(value.name.clone());
+            term_to_value_name.insert(value.name.clone(), value.name.clone());
+            
+            if let Some(alias) = &value.alias {
+                all_searchable_terms.push(alias.clone());
+                term_to_value_name.insert(alias.clone(), value.name.clone());
+            }
+        }
+        
+        let close_matches = sort_by_match(literal_value, &all_searchable_terms, Some(3));
+        if !close_matches.is_empty() {
+            let unique_values: std::collections::HashSet<_> = close_matches.iter()
+                .filter_map(|term| term_to_value_name.get(*term))
+                .collect();
+            let suggestions: Vec<_> = unique_values.iter()
+                .map(|v| format!("{}.{}", enum_name, v))
+                .collect();
+            
+            return Self {
+                message: format!(
+                    "Did you mean one of: {}? Available {} values: {}",
+                    suggestions.join(", "),
+                    enum_name,
+                    enum_def.values.iter().map(|v| format!("{}.{}", enum_name, v.name)).collect::<Vec<_>>().join(", ")
+                ),
+                span,
+            };
+        }
+        
+        // 6. FALLBACK: Show all available values and aliases
+        let mut suggestions = Vec::new();
+        for value in &enum_def.values {
+            suggestions.push(format!("{}.{}", enum_name, value.name));
+            if let Some(alias) = &value.alias {
+                suggestions.push(format!("  (alias: \"{}\")", alias));
+            }
+        }
+        
+        Self {
+            message: format!(
+                "No match found for \"{}\". Available {} values:\n{}",
+                literal_value, enum_name,
+                suggestions.join("\n")
+            ),
+            span,
         }
     }
 

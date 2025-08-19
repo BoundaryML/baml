@@ -50,7 +50,8 @@
       "Bash(npx biome check:*)",
       "Bash(npx tsc:*)",
       "Bash(npx tsc:*)",
-      "WebFetch(domain:www.npmjs.com)"
+      "WebFetch(domain:www.npmjs.com)",
+      "Bash(UPDATE_EXPECT=1 cargo nextest run enum_comparison_edge_cases enum_string_comparison)"
     ],
     "deny": []
   }

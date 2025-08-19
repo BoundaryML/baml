@@ -82,7 +82,7 @@ generator target {
     output_type "python/pydantic"
 }
 
-// warning: Type mismatch: '(status == Active)' compares values of different types (enum Status and literal["Active"]). Starting in baml 0.206.0, strings are not implicitly converted to enum values (e.g. you should use `MyEnum.VALUE_A` instead of `"VALUE_A"`).
+// warning: Consider using enum value: Instead of '(status == Active) == "Active"', use '(status == Active) == Status.Active' for better type safety
 //   -->  enum/enum_string_comparison.baml:72
 //    | 
 // 71 |         // Test in ternary operator

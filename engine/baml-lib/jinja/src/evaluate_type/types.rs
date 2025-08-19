@@ -14,6 +14,18 @@ use minijinja::machinery::{
 
 use super::TypeError;
 
+#[derive(Debug, Clone)]
+pub struct EnumDefinition {
+    pub name: String,
+    pub values: Vec<EnumValueDefinition>,
+}
+
+#[derive(Debug, Clone)]
+pub struct EnumValueDefinition {
+    pub name: String,
+    pub alias: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Type {
     Unknown,
@@ -247,7 +259,7 @@ enum Scope {
 pub struct PredefinedTypes {
     functions: IndexMap<String, (Type, Vec<(String, Type)>)>,
     classes: HashMap<String, IndexMap<String, Type>>,
-    enum_definitions: IndexMap<String, Vec<String>>,
+    enum_definitions: IndexMap<String, EnumDefinition>,
     /// TODO: See the comment for [`Type::AliasRef`].
     ///
     /// We should use this but we can't without a significant refactor.
@@ -496,8 +508,12 @@ impl PredefinedTypes {
         self.classes.get(name)
     }
 
-    pub fn as_enum(&self, name: &str) -> Option<&Vec<String>> {
+    pub fn as_enum(&self, name: &str) -> Option<&EnumDefinition> {
         self.enum_definitions.get(name)
+    }
+    
+    pub fn as_enum_values(&self, name: &str) -> Option<Vec<String>> {
+        self.enum_definitions.get(name).map(|def| def.values.iter().map(|v| v.name.clone()).collect())
     }
 
     pub fn as_function(&self, name: &str) -> Option<&(Type, Vec<(String, Type)>)> {
@@ -513,7 +529,17 @@ impl PredefinedTypes {
     }
 
     pub fn add_enum(&mut self, name: &str, values: Vec<String>) {
-        self.enum_definitions.insert(name.to_string(), values);
+        self.add_enum_with_metadata(name, values.into_iter().map(|v| EnumValueDefinition {
+            name: v,
+            alias: None,
+        }).collect());
+    }
+    
+    pub fn add_enum_with_metadata(&mut self, name: &str, values: Vec<EnumValueDefinition>) {
+        self.enum_definitions.insert(name.to_string(), EnumDefinition {
+            name: name.to_string(),
+            values,
+        });
     }
 
     pub fn add_alias(&mut self, name: &str, target: Type) {
@@ -570,8 +596,8 @@ impl PredefinedTypes {
         enum_value: &str,
         span: Span,
     ) -> (Type, Option<TypeError>) {
-        if let Some(values) = self.as_enum(enum_name) {
-            if values.contains(&enum_value.to_string()) {
+        if let Some(enum_def) = self.as_enum(enum_name) {
+            if enum_def.values.iter().any(|v| v.name == enum_value) {
                 return (Type::EnumValueRef(enum_value.to_string()), None);
             } else {
                 return (
