@@ -2668,6 +2668,7 @@ mod tests {
                 source: "
                 fn EarlyReturn(x: int) -> int {
                   if x == 42 { return 1; }
+
                   x + 5
                 }
             ",
@@ -2702,12 +2703,14 @@ mod tests {
                   // NOTE: currently there's no empty returns.
 
                   if a == 0 { return 0; }
+
                   {
                      let b = 1;
                      if a != b {
                         return 0;
                      }
                   }
+
                   {
                      let c = 2;
                      let b = 3;
