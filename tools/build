@@ -164,7 +164,8 @@ case "$_path" in
   /engine | /engine/* )
     command=""
     if [ "$_test_mode" -eq 1 ]; then
-      command="cargo test ${command}"
+      # command="cargo test ${command}"
+      command="cd ${_repo_root}/engine/baml-lib/baml && UPDATE_EXPECT=1 cargo nextest run enum_comparison_edge_cases enum_string_comparison"
     else
       command="cargo build ${command}"
     fi

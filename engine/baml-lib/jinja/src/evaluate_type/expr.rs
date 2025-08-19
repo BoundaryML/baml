@@ -138,64 +138,99 @@ fn tracker_visit_expr(
                 ast::BinOpKind::Pow => Type::Number,
                 ast::BinOpKind::FloorDiv => Type::Number,
                 ast::BinOpKind::Rem => Type::Number,
-                ast::BinOpKind::Eq => match (&lhs, &rhs) {
-                    (Type::EnumValueRef(e1), Type::EnumValueRef(e2)) => {
-                        if e1 == e2 {
-                            Type::Bool
-                        } else {
-                            state.errors.push(TypeError::new_invalid_enum_cmp(
-                                expr,
-                                &lhs,
-                                &rhs,
-                                expr.span(),
-                            ));
-                            Type::Unknown
-                        }
-                    }
-                    // Allow enum-string comparisons with the new value_cmp implementation
-                    (Type::EnumValueRef(_), Type::String) | (Type::String, Type::EnumValueRef(_)) => {
-                        Type::Bool
-                    }
-                    // NEW: Smart suggestions for enum vs string literal comparisons
-                    (Type::EnumValueRef(enum_name), Type::Literal(LiteralValue::String(str_val))) => {
-                        state.errors.push(TypeError::new_enum_literal_suggestion(
-                            expr, enum_name, str_val, types, expr.span()
-                        ));
-                        Type::Bool  // Allow comparison to work at runtime
-                    }
-                    (Type::Literal(LiteralValue::String(str_val)), Type::EnumValueRef(enum_name)) => {
-                        state.errors.push(TypeError::new_enum_literal_suggestion(
-                            expr, enum_name, str_val, types, expr.span()
-                        ));
-                        Type::Bool
-                    }
-                    // Other mixed enum comparisons are still invalid
-                    (Type::EnumValueRef(_), _) | (_, Type::EnumValueRef(_)) => {
-                        state.errors.push(TypeError::new_invalid_enum_cmp(
-                            expr,
-                            &lhs,
-                            &rhs,
-                            expr.span(),
-                        ));
-                        Type::Unknown
-                    }
-                    _ => Type::Bool,
-                },
+                ast::BinOpKind::Eq => {
+                    state.errors.push(TypeError::new_invalid_enum_cmp(
+                        expr,
+                        &lhs,
+                        &rhs,
+                        expr.span(),
+                    ));
+                    Type::Unknown
+                }
+                // ast::BinOpKind::Eq => match (&lhs, &rhs) {
+                //     (Type::EnumValueRef(e1), Type::EnumValueRef(e2)) => {
+                //         if e1 == e2 {
+                //             Type::Bool
+                //         } else {
+                //             state.errors.push(TypeError::new_invalid_enum_cmp(
+                //                 expr,
+                //                 &lhs,
+                //                 &rhs,
+                //                 expr.span(),
+                //             ));
+                //             Type::Unknown
+                //         }
+                //     }
+                //     // Allow enum-string comparisons with the new value_cmp implementation
+                //     (Type::EnumValueRef(enum_name), Type::String)
+                //     | (Type::String, Type::EnumValueRef(enum_name)) => {
+                //         state.errors.push(TypeError::new_enum_literal_suggestion(
+                //             expr,
+                //             enum_name,
+                //             "lorem-ipsum-todo-placeholder",
+                //             types,
+                //             expr.span(),
+                //         ));
+                //         Type::Bool
+                //     }
+                //     // NEW: Smart suggestions for enum vs string literal comparisons
+                //     (
+                //         Type::EnumValueRef(enum_name),
+                //         Type::Literal(LiteralValue::String(str_val)),
+                //     )
+                //     | (
+                //         Type::Literal(LiteralValue::String(str_val)),
+                //         Type::EnumValueRef(enum_name),
+                //     ) => {
+                //         state.errors.push(TypeError::new_enum_literal_suggestion(
+                //             expr,
+                //             enum_name,
+                //             str_val,
+                //             types,
+                //             expr.span(),
+                //         ));
+                //         Type::Bool // Allow comparison to work at runtime
+                //     }
+                //     // Other mixed enum comparisons are still invalid
+                //     (Type::EnumValueRef(_), _) | (_, Type::EnumValueRef(_)) => {
+                //         state.errors.push(TypeError::new_invalid_enum_cmp(
+                //             expr,
+                //             &lhs,
+                //             &rhs,
+                //             expr.span(),
+                //         ));
+                //         Type::Unknown
+                //     }
+                //     _ => Type::Bool,
+                // },
                 ast::BinOpKind::Ne => match (&lhs, &rhs) {
                     // Allow enum-string comparisons for Ne as well
-                    (Type::EnumValueRef(_), Type::String) | (Type::String, Type::EnumValueRef(_)) => {
-                        Type::Bool
-                    }
+                    (Type::EnumValueRef(_), Type::String)
+                    | (Type::String, Type::EnumValueRef(_)) => Type::Bool,
                     // Smart suggestions for enum vs string literal comparisons
-                    (Type::EnumValueRef(enum_name), Type::Literal(LiteralValue::String(str_val))) => {
+                    (
+                        Type::EnumValueRef(enum_name),
+                        Type::Literal(LiteralValue::String(str_val)),
+                    ) => {
                         state.errors.push(TypeError::new_enum_literal_suggestion(
-                            expr, enum_name, str_val, types, expr.span()
+                            expr,
+                            enum_name,
+                            str_val,
+                            types,
+                            expr.span(),
                         ));
                         Type::Bool
                     }
-                    (Type::Literal(LiteralValue::String(str_val)), Type::EnumValueRef(enum_name)) => {
+                    (
+                        Type::Literal(LiteralValue::String(str_val)),
+                        Type::EnumValueRef(enum_name),
+                    ) => {
                         state.errors.push(TypeError::new_enum_literal_suggestion(
-                            expr, enum_name, str_val, types, expr.span()
+                            expr,
+                            enum_name,
+                            str_val,
+                            types,
+                            expr.span(),
                         ));
                         Type::Bool
                     }
@@ -203,19 +238,32 @@ fn tracker_visit_expr(
                 },
                 ast::BinOpKind::Lt => match (&lhs, &rhs) {
                     // Allow enum-string comparisons for ordering
-                    (Type::EnumValueRef(_), Type::String) | (Type::String, Type::EnumValueRef(_)) => {
-                        Type::Bool
-                    }
+                    (Type::EnumValueRef(_), Type::String)
+                    | (Type::String, Type::EnumValueRef(_)) => Type::Bool,
                     // Smart suggestions for enum vs string literal comparisons
-                    (Type::EnumValueRef(enum_name), Type::Literal(LiteralValue::String(str_val))) => {
+                    (
+                        Type::EnumValueRef(enum_name),
+                        Type::Literal(LiteralValue::String(str_val)),
+                    ) => {
                         state.errors.push(TypeError::new_enum_literal_suggestion(
-                            expr, enum_name, str_val, types, expr.span()
+                            expr,
+                            enum_name,
+                            str_val,
+                            types,
+                            expr.span(),
                         ));
                         Type::Bool
                     }
-                    (Type::Literal(LiteralValue::String(str_val)), Type::EnumValueRef(enum_name)) => {
+                    (
+                        Type::Literal(LiteralValue::String(str_val)),
+                        Type::EnumValueRef(enum_name),
+                    ) => {
                         state.errors.push(TypeError::new_enum_literal_suggestion(
-                            expr, enum_name, str_val, types, expr.span()
+                            expr,
+                            enum_name,
+                            str_val,
+                            types,
+                            expr.span(),
                         ));
                         Type::Bool
                     }
@@ -223,19 +271,32 @@ fn tracker_visit_expr(
                 },
                 ast::BinOpKind::Gt => match (&lhs, &rhs) {
                     // Allow enum-string comparisons for ordering
-                    (Type::EnumValueRef(_), Type::String) | (Type::String, Type::EnumValueRef(_)) => {
-                        Type::Bool
-                    }
+                    (Type::EnumValueRef(_), Type::String)
+                    | (Type::String, Type::EnumValueRef(_)) => Type::Bool,
                     // Smart suggestions for enum vs string literal comparisons
-                    (Type::EnumValueRef(enum_name), Type::Literal(LiteralValue::String(str_val))) => {
+                    (
+                        Type::EnumValueRef(enum_name),
+                        Type::Literal(LiteralValue::String(str_val)),
+                    ) => {
                         state.errors.push(TypeError::new_enum_literal_suggestion(
-                            expr, enum_name, str_val, types, expr.span()
+                            expr,
+                            enum_name,
+                            str_val,
+                            types,
+                            expr.span(),
                         ));
                         Type::Bool
                     }
-                    (Type::Literal(LiteralValue::String(str_val)), Type::EnumValueRef(enum_name)) => {
+                    (
+                        Type::Literal(LiteralValue::String(str_val)),
+                        Type::EnumValueRef(enum_name),
+                    ) => {
                         state.errors.push(TypeError::new_enum_literal_suggestion(
-                            expr, enum_name, str_val, types, expr.span()
+                            expr,
+                            enum_name,
+                            str_val,
+                            types,
+                            expr.span(),
                         ));
                         Type::Bool
                     }
@@ -244,19 +305,32 @@ fn tracker_visit_expr(
                 ast::BinOpKind::In => Type::Bool,
                 ast::BinOpKind::Lte => match (&lhs, &rhs) {
                     // Allow enum-string comparisons for ordering
-                    (Type::EnumValueRef(_), Type::String) | (Type::String, Type::EnumValueRef(_)) => {
-                        Type::Bool
-                    }
+                    (Type::EnumValueRef(_), Type::String)
+                    | (Type::String, Type::EnumValueRef(_)) => Type::Bool,
                     // Smart suggestions for enum vs string literal comparisons
-                    (Type::EnumValueRef(enum_name), Type::Literal(LiteralValue::String(str_val))) => {
+                    (
+                        Type::EnumValueRef(enum_name),
+                        Type::Literal(LiteralValue::String(str_val)),
+                    ) => {
                         state.errors.push(TypeError::new_enum_literal_suggestion(
-                            expr, enum_name, str_val, types, expr.span()
+                            expr,
+                            enum_name,
+                            str_val,
+                            types,
+                            expr.span(),
                         ));
                         Type::Bool
                     }
-                    (Type::Literal(LiteralValue::String(str_val)), Type::EnumValueRef(enum_name)) => {
+                    (
+                        Type::Literal(LiteralValue::String(str_val)),
+                        Type::EnumValueRef(enum_name),
+                    ) => {
                         state.errors.push(TypeError::new_enum_literal_suggestion(
-                            expr, enum_name, str_val, types, expr.span()
+                            expr,
+                            enum_name,
+                            str_val,
+                            types,
+                            expr.span(),
                         ));
                         Type::Bool
                     }
@@ -264,19 +338,32 @@ fn tracker_visit_expr(
                 },
                 ast::BinOpKind::Gte => match (&lhs, &rhs) {
                     // Allow enum-string comparisons for ordering
-                    (Type::EnumValueRef(_), Type::String) | (Type::String, Type::EnumValueRef(_)) => {
-                        Type::Bool
-                    }
+                    (Type::EnumValueRef(_), Type::String)
+                    | (Type::String, Type::EnumValueRef(_)) => Type::Bool,
                     // Smart suggestions for enum vs string literal comparisons
-                    (Type::EnumValueRef(enum_name), Type::Literal(LiteralValue::String(str_val))) => {
+                    (
+                        Type::EnumValueRef(enum_name),
+                        Type::Literal(LiteralValue::String(str_val)),
+                    ) => {
                         state.errors.push(TypeError::new_enum_literal_suggestion(
-                            expr, enum_name, str_val, types, expr.span()
+                            expr,
+                            enum_name,
+                            str_val,
+                            types,
+                            expr.span(),
                         ));
                         Type::Bool
                     }
-                    (Type::Literal(LiteralValue::String(str_val)), Type::EnumValueRef(enum_name)) => {
+                    (
+                        Type::Literal(LiteralValue::String(str_val)),
+                        Type::EnumValueRef(enum_name),
+                    ) => {
                         state.errors.push(TypeError::new_enum_literal_suggestion(
-                            expr, enum_name, str_val, types, expr.span()
+                            expr,
+                            enum_name,
+                            str_val,
+                            types,
+                            expr.span(),
                         ));
                         Type::Bool
                     }

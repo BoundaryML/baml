@@ -11,13 +11,9 @@ enum TaskStatus {
     Cancelled
 }
 
-client<llm> TestClient {
-    provider baml-openai-chat
-}
-
 // Test various comparison scenarios that should generate warnings or work correctly
 function TestEnumComparisonEdgeCases(priority: Priority, status: TaskStatus) -> string {
-    client TestClient
+    client "openai/gpt-4o-mini"
     prompt #"
         // Test 1: Comparing enum to its value name (should work)
         {% if priority == "High" %}
@@ -84,7 +80,6 @@ function TestEnumComparisonEdgeCases(priority: Priority, status: TaskStatus) -> 
 
 // Test comparisons with nullable enums
 function TestNullableEnumComparison(priority: Priority?, status: TaskStatus | null) -> string {
-    client TestClient
     prompt #"
         // Check for null first
         {% if priority is none %}
@@ -103,8 +98,4 @@ function TestNullableEnumComparison(priority: Priority?, status: TaskStatus | nu
         // Default value for nullable
         Priority: {{ priority if priority else "No priority set" }}
     "#
-}
-
-generator target {
-    output_type "python/pydantic"
 }

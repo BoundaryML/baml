@@ -10,12 +10,8 @@ enum Category {
     Adjustment
 }
 
-client<llm> TestClient {
-    provider baml-openai-chat
-}
-
 function TestEnumStringComparison(status: Status, category: Category) -> string {
-    client TestClient
+    client "openai/gpt-4o-mini"
     prompt #"
         Testing enum to string comparisons:
         
@@ -58,7 +54,7 @@ function TestEnumStringComparison(status: Status, category: Category) -> string 
 }
 
 function TestEnumComparisonsInConditions(status: Status) -> string {
-    client TestClient
+    client "openai/gpt-4o-mini"
     prompt #"
         {% if status == "Active" or status == "Pending" %}
             Status is either Active or Pending
@@ -78,13 +74,9 @@ function TestEnumComparisonsInConditions(status: Status) -> string {
     "#
 }
 
-generator target {
-    output_type "python/pydantic"
-}
-
-// warning: Consider using enum value: Instead of '(status == Active) == "Active"', use '(status == Active) == Status.Active' for better type safety
-//   -->  enum/enum_string_comparison.baml:72
+// warning: Type mismatch: '(status == Active)' compares values of different types (enum Status and literal["Active"]). Starting in baml 0.206.0, strings are not implicitly converted to enum values (e.g. you should use `MyEnum.VALUE_A` instead of `"VALUE_A"`).
+//   -->  enum/enum_string_comparison.baml:68
 //    | 
-// 71 |         // Test in ternary operator
-// 72 |         Result: {{ "Active" if status == "Active" else "Not Active" }}
+// 67 |         // Test in ternary operator
+// 68 |         Result: {{ "Active" if status == "Active" else "Not Active" }}
 //    | 
