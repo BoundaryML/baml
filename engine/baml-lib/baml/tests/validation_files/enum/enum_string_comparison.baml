@@ -74,9 +74,81 @@ function TestEnumComparisonsInConditions(status: Status) -> string {
     "#
 }
 
-// warning: Type mismatch: '(status == Active)' compares values of different types (enum Status and literal["Active"]). Starting in baml 0.206.0, strings are not implicitly converted to enum values (e.g. you should use `MyEnum.VALUE_A` instead of `"VALUE_A"`).
+// warning: Consider using enum value: Instead of '(status == Active) == "Active"', use '(status == Active) == Status.Active' for better type safety
+//   -->  enum/enum_string_comparison.baml:19
+//    | 
+// 18 |         // These should work - comparing to value name
+// 19 |         {% if status == "Active" %}
+//    | 
+// warning: Consider using enum value: Instead of '(Inactive == status) == "Inactive"', use '(Inactive == status) == Status.Inactive' for better type safety
+//   -->  enum/enum_string_comparison.baml:23
+//    | 
+// 22 |         
+// 23 |         {% if "Inactive" == status %}
+//    | 
+// warning: Consider using enum value: Instead of '(status != Pending) == "Pending"', use '(status != Pending) == Status.Pending' for better type safety
+//   -->  enum/enum_string_comparison.baml:27
+//    | 
+// 26 |         
+// 27 |         {% if status != "Pending" %}
+//    | 
+// warning: Did you mean 'Status.Active'? (Note: enum comparisons are case-sensitive)
+//   -->  enum/enum_string_comparison.baml:32
+//    | 
+// 31 |         // These compare to alias - should NOT match
+// 32 |         {% if status == "active" %}
+//    | 
+// warning: Alias detected: Instead of '(category == gimmie) == "gimmie"' (alias), use '(category == gimmie) == Category.Refund' (value name)
+//   -->  enum/enum_string_comparison.baml:36
+//    | 
+// 35 |         
+// 36 |         {% if category == "gimmie" %}
+//    | 
+// warning: Did you mean one of: Status.Active, Status.Pending? Available Status values: Status.Active, Status.Inactive, Status.Pending
+//   -->  enum/enum_string_comparison.baml:41
+//    | 
+// 40 |         // Test ordering comparisons
+// 41 |         {% if status < "ZZZ" %}
+//    | 
+// warning: Did you mean one of: Status.Active, Status.Inactive? Available Status values: Status.Active, Status.Inactive, Status.Pending
+//   -->  enum/enum_string_comparison.baml:45
+//    | 
+// 44 |         
+// 45 |         {% if status > "AAA" %}
+//    | 
+// warning: Consider using enum value: Instead of '(status == Active) == "Active"', use '(status == Active) == Status.Active' for better type safety
+//   -->  enum/enum_string_comparison.baml:59
+//    | 
+// 58 |     prompt #"
+// 59 |         {% if status == "Active" or status == "Pending" %}
+//    | 
+// warning: Consider using enum value: Instead of '(status == Pending) == "Pending"', use '(status == Pending) == Status.Pending' for better type safety
+//   -->  enum/enum_string_comparison.baml:59
+//    | 
+// 58 |     prompt #"
+// 59 |         {% if status == "Active" or status == "Pending" %}
+//    | 
+// warning: Consider using enum value: Instead of '(status == Inactive) == "Inactive"', use '(status == Inactive) == Status.Inactive' for better type safety
+//   -->  enum/enum_string_comparison.baml:61
+//    | 
+// 60 |             Status is either Active or Pending
+// 61 |         {% elif status == "Inactive" %}
+//    | 
+// warning: Consider using enum value: Instead of '(status == Active) == "Active"', use '(status == Active) == Status.Active' for better type safety
 //   -->  enum/enum_string_comparison.baml:68
 //    | 
 // 67 |         // Test in ternary operator
 // 68 |         Result: {{ "Active" if status == "Active" else "Not Active" }}
+//    | 
+// warning: Consider using enum value: Instead of '(status == Active) == "Active"', use '(status == Active) == Status.Active' for better type safety
+//   -->  enum/enum_string_comparison.baml:71
+//    | 
+// 70 |         // Test complex conditions
+// 71 |         {% if status == "Active" and category != "Refund" %}
+//    | 
+// warning: Variable `category` does not exist. Did you mean one of these: `_`, `ctx`, `status`?
+//   -->  enum/enum_string_comparison.baml:71
+//    | 
+// 70 |         // Test complex conditions
+// 71 |         {% if status == "Active" and category != "Refund" %}
 //    | 

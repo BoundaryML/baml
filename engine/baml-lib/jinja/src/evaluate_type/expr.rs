@@ -122,7 +122,14 @@ fn tracker_visit_expr(
         ast::Expr::BinOp(bin_expr) => {
             let lhs = tracker_visit_expr(&bin_expr.left, state, types);
             let rhs = tracker_visit_expr(&bin_expr.right, state, types);
+
             // TODO: Check for type compatibility
+            // state.errors.push(TypeError::new_invalid_enum_cmp(
+            //     expr,
+            //     &lhs,
+            //     &rhs,
+            //     expr.span(),
+            // ));
 
             match bin_expr.op {
                 ast::BinOpKind::Add => {
@@ -138,71 +145,71 @@ fn tracker_visit_expr(
                 ast::BinOpKind::Pow => Type::Number,
                 ast::BinOpKind::FloorDiv => Type::Number,
                 ast::BinOpKind::Rem => Type::Number,
-                ast::BinOpKind::Eq => {
-                    state.errors.push(TypeError::new_invalid_enum_cmp(
-                        expr,
-                        &lhs,
-                        &rhs,
-                        expr.span(),
-                    ));
-                    Type::Unknown
-                }
-                // ast::BinOpKind::Eq => match (&lhs, &rhs) {
-                //     (Type::EnumValueRef(e1), Type::EnumValueRef(e2)) => {
-                //         if e1 == e2 {
-                //             Type::Bool
-                //         } else {
-                //             state.errors.push(TypeError::new_invalid_enum_cmp(
-                //                 expr,
-                //                 &lhs,
-                //                 &rhs,
-                //                 expr.span(),
-                //             ));
-                //             Type::Unknown
-                //         }
-                //     }
-                //     // Allow enum-string comparisons with the new value_cmp implementation
-                //     (Type::EnumValueRef(enum_name), Type::String)
-                //     | (Type::String, Type::EnumValueRef(enum_name)) => {
-                //         state.errors.push(TypeError::new_enum_literal_suggestion(
-                //             expr,
-                //             enum_name,
-                //             "lorem-ipsum-todo-placeholder",
-                //             types,
-                //             expr.span(),
-                //         ));
-                //         Type::Bool
-                //     }
-                //     // NEW: Smart suggestions for enum vs string literal comparisons
-                //     (
-                //         Type::EnumValueRef(enum_name),
-                //         Type::Literal(LiteralValue::String(str_val)),
-                //     )
-                //     | (
-                //         Type::Literal(LiteralValue::String(str_val)),
-                //         Type::EnumValueRef(enum_name),
-                //     ) => {
-                //         state.errors.push(TypeError::new_enum_literal_suggestion(
-                //             expr,
-                //             enum_name,
-                //             str_val,
-                //             types,
-                //             expr.span(),
-                //         ));
-                //         Type::Bool // Allow comparison to work at runtime
-                //     }
-                //     // Other mixed enum comparisons are still invalid
-                //     (Type::EnumValueRef(_), _) | (_, Type::EnumValueRef(_)) => {
-                //         state.errors.push(TypeError::new_invalid_enum_cmp(
-                //             expr,
-                //             &lhs,
-                //             &rhs,
-                //             expr.span(),
-                //         ));
-                //         Type::Unknown
-                //     }
-                //     _ => Type::Bool,
-                // },
+                // ast::BinOpKind::Eq => {
+                //     state.errors.push(TypeError::new_invalid_enum_cmp(
+                //         expr,
+                //         &lhs,
+                //         &rhs,
+                //         expr.span(),
+                //     ));
+                //     Type::Bool
+                // }
+                ast::BinOpKind::Eq => match (&lhs, &rhs) {
+                    (Type::EnumValueRef(e1), Type::EnumValueRef(e2)) => {
+                        if e1 == e2 {
+                            Type::Bool
+                        } else {
+                            state.errors.push(TypeError::new_invalid_enum_cmp(
+                                expr,
+                                &lhs,
+                                &rhs,
+                                expr.span(),
+                            ));
+                            Type::Unknown
+                        }
+                    }
+                    // Allow enum-string comparisons with the new value_cmp implementation
+                    (Type::EnumValueRef(enum_name), Type::String)
+                    | (Type::String, Type::EnumValueRef(enum_name)) => {
+                        state.errors.push(TypeError::new_enum_literal_suggestion(
+                            expr,
+                            enum_name,
+                            "lorem-ipsum-todo-placeholder",
+                            types,
+                            expr.span(),
+                        ));
+                        Type::Bool
+                    }
+                    // NEW: Smart suggestions for enum vs string literal comparisons
+                    (
+                        Type::EnumValueRef(enum_name),
+                        Type::Literal(LiteralValue::String(str_val)),
+                    )
+                    | (
+                        Type::Literal(LiteralValue::String(str_val)),
+                        Type::EnumValueRef(enum_name),
+                    ) => {
+                        state.errors.push(TypeError::new_enum_literal_suggestion(
+                            expr,
+                            enum_name,
+                            str_val,
+                            types,
+                            expr.span(),
+                        ));
+                        Type::Bool // Allow comparison to work at runtime
+                    }
+                    // Other mixed enum comparisons are still invalid
+                    (Type::EnumValueRef(_), _) | (_, Type::EnumValueRef(_)) => {
+                        state.errors.push(TypeError::new_invalid_enum_cmp(
+                            expr,
+                            &lhs,
+                            &rhs,
+                            expr.span(),
+                        ));
+                        Type::Unknown
+                    }
+                    _ => Type::Bool,
+                },
                 ast::BinOpKind::Ne => match (&lhs, &rhs) {
                     // Allow enum-string comparisons for Ne as well
                     (Type::EnumValueRef(_), Type::String)
@@ -681,6 +688,13 @@ fn infer_const_type(v: &minijinja::value::Value) -> Type {
 pub fn evaluate_type(expr: &ast::Expr, types: &PredefinedTypes) -> Result<Type, Vec<TypeError>> {
     let mut state = ScopeTracker::new();
     let result = tracker_visit_expr(expr, &mut state, types);
+
+    // state.errors.push(TypeError::new_invalid_enum_cmp(
+    //     expr,
+    //     &Type::EnumValueRef("LOREM_TODO".into()),
+    //     &Type::EnumValueRef("IPSUM_TODO".into()),
+    //     expr.span(),
+    // ));
 
     if state.errors.is_empty() {
         Ok(result)
