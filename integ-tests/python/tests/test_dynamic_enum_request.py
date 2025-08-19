@@ -1,6 +1,5 @@
 import pytest
 from ..baml_client import b
-from ..baml_client.sync_client import b as sync_b
 from ..baml_client.type_builder import TypeBuilder
 
 
