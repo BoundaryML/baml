@@ -7,8 +7,9 @@ mod test_expr;
 mod test_stmt;
 mod types;
 
-use std::{collections::HashSet, fmt::Debug, ops::Index};
+use std::{fmt::Debug, ops::Index};
 
+use indexmap::{IndexMap, IndexSet};
 use minijinja::machinery::{ast::Expr, Span};
 
 pub use self::{
@@ -189,7 +190,6 @@ impl TypeError {
         Self { message: format!("{message}\n\nSee: https://docs.rs/minijinja/latest/minijinja/filters/index.html#functions for the compelete list"), span }
     }
 
-
     fn new_enum_literal_suggestion(
         expr: &Expr,
         enum_name: &str,
@@ -199,13 +199,7 @@ impl TypeError {
     ) -> Self {
         let enum_def = match types.as_enum(enum_name) {
             Some(def) => def,
-            None => {
-                return Self::new_enum_string_cmp_deprecated(
-                    expr,
-                    enum_name,
-                    span,
-                )
-            }
+            None => return Self::new_enum_string_cmp_deprecated(expr, enum_name, span),
         };
 
         // 1. EXACT VALUE NAME MATCH
@@ -264,7 +258,7 @@ impl TypeError {
 
         // 5. FUZZY MATCH using existing sort_by_match function
         let mut all_searchable_terms = Vec::new();
-        let mut term_to_value_name = std::collections::HashMap::new();
+        let mut term_to_value_name = IndexMap::new();
         for value in &enum_def.values {
             all_searchable_terms.push(value.name.clone());
             term_to_value_name.insert(value.name.clone(), value.name.clone());
@@ -277,7 +271,7 @@ impl TypeError {
 
         let close_matches = sort_by_match(literal_value, &all_searchable_terms, Some(3));
         if !close_matches.is_empty() {
-            let unique_values: std::collections::HashSet<_> = close_matches
+            let unique_values: IndexSet<_> = close_matches
                 .iter()
                 .filter_map(|term| term_to_value_name.get(*term))
                 .collect();
@@ -317,11 +311,7 @@ impl TypeError {
         }
     }
 
-    fn new_enum_string_cmp_deprecated(
-        _expr: &Expr,
-        enum_name: &str,
-        span: Span,
-    ) -> Self {
+    fn new_enum_string_cmp_deprecated(_expr: &Expr, enum_name: &str, span: Span) -> Self {
         Self {
             message: format!(
                 "Comparing enum {} to string variable - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.",

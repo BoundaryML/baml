@@ -172,7 +172,7 @@ function TestUnionTypesNoWarnings(input: MyInput) -> string {
 // 45 |         Status is Pending (reversed)
 // 46 |     {% elif input.nullable_status != "Inactive" %}
 //    | 
-// warning: Use one of: Status.Inactive, Status.Active - comparing enums with strings will soon be deprecated.
+// warning: Use one of: Status.Active, Status.Inactive - comparing enums with strings will soon be deprecated.
 //   -->  enum/nullable_enums_in_jinja.baml:51
 //    | 
 // 50 |     // Ordering comparisons with nullable enums
@@ -226,7 +226,7 @@ function TestUnionTypesNoWarnings(input: MyInput) -> string {
 // 88 |     // Different enum type comparisons (should error)
 // 89 |     {% if input.nullable_status == input.nullable_priority %}
 //    | 
-// warning: Use one of: Status.Inactive, Status.Pending - comparing enums with strings will soon be deprecated.
+// warning: Use one of: Status.Pending, Status.Inactive - comparing enums with strings will soon be deprecated.
 //   -->  enum/nullable_enums_in_jinja.baml:91
 //    | 
 // 90 |         Comparing Status? to Priority? (should error)

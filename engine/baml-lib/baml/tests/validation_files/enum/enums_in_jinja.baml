@@ -289,13 +289,13 @@ function TestEnumJinjaSyntax(status: Status, priority: Priority, nullable_status
 // 91 |         Result: {{ "High Priority" if priority == "High" else "Normal Priority" }}
 // 92 |         Status: {{ "Active" if status == "Active" else "Not Active" }}
 //    | 
-// warning: Use one of: Status.Pending, Status.Active - comparing enums with strings will soon be deprecated.
+// warning: Use one of: Status.Active, Status.Pending - comparing enums with strings will soon be deprecated.
 //   -->  enum/enums_in_jinja.baml:97
 //    | 
 // 96 |         // Less than (should suggest available values)
 // 97 |         {% if status < "ZZZ" %}
 //    | 
-// warning: Use one of: Priority.High, Priority.Low - comparing enums with strings will soon be deprecated.
+// warning: Use one of: Priority.Low, Priority.High - comparing enums with strings will soon be deprecated.
 //   -->  enum/enums_in_jinja.baml:102
 //    | 
 // 101 |         // Greater than
@@ -343,7 +343,7 @@ function TestEnumJinjaSyntax(status: Status, priority: Priority, nullable_status
 // 147 |         
 // 148 |         {% if priority == "Hgh" %}
 //    | 
-// warning: Use one of: Status.Active, Status.Pending - comparing enums with strings will soon be deprecated.
+// warning: Use one of: Status.Pending, Status.Active - comparing enums with strings will soon be deprecated.
 //   -->  enum/enums_in_jinja.baml:153
 //    | 
 // 152 |         // Non-existent values
