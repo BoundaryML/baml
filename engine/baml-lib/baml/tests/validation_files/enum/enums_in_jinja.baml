@@ -289,7 +289,7 @@ function TestEnumJinjaSyntax(status: Status, priority: Priority, nullable_status
 // 91 |         Result: {{ "High Priority" if priority == "High" else "Normal Priority" }}
 // 92 |         Status: {{ "Active" if status == "Active" else "Not Active" }}
 //    | 
-// warning: Use one of: Status.Active, Status.Pending - comparing enums with strings will soon be deprecated.
+// warning: Use one of: Status.Pending, Status.Active - comparing enums with strings will soon be deprecated.
 //   -->  enum/enums_in_jinja.baml:97
 //    | 
 // 96 |         // Less than (should suggest available values)
@@ -313,19 +313,19 @@ function TestEnumJinjaSyntax(status: Status, priority: Priority, nullable_status
 // 106 |         // Mixed ordering
 // 107 |         {% if status >= "Active" and priority <= "Medium" %}
 //    | 
-// warning: Cannot compare enums of different types: enum Status vs (literal["Active"] | literal["Inactive"] | literal["Pending"] | literal["Unknown"]) - comparing different enums will soon be deprecated.
+// warning: Comparing enum Status to string variable - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
 //   -->  enum/enums_in_jinja.baml:115
 //    | 
 // 114 |         {% for s in ["Active", "Inactive", "Pending", "Unknown"] %}
 // 115 |             {% if status == s %}
 //    | 
-// warning: Cannot compare enums of different types: enum Priority vs (literal["High"] | literal["Low"] | literal["Medium"]) - comparing different enums will soon be deprecated.
+// warning: Comparing enum Priority to string variable - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
 //   -->  enum/enums_in_jinja.baml:122
 //    | 
 // 121 |         {% for p in ["High", "Medium", "Low"] %}
 // 122 |             {% if priority == p %}
 //    | 
-// warning: Cannot compare enums of different types: enum Status vs enum Priority - comparing different enums will soon be deprecated.
+// warning: Use one of: Status.Pending, Status.Inactive - comparing enums with strings will soon be deprecated.
 //   -->  enum/enums_in_jinja.baml:130
 //    | 
 // 129 |         // Comparing different enum types (should be type error)
@@ -337,7 +337,7 @@ function TestEnumJinjaSyntax(status: Status, priority: Priority, nullable_status
 // 143 |         // Typos and fuzzy matching
 // 144 |         {% if status == "Activ" %}
 //    | 
-// warning: Use one of: Priority.Low, Priority.High - comparing enums with strings will soon be deprecated.
+// warning: Use one of: Priority.High, Priority.Low - comparing enums with strings will soon be deprecated.
 //   -->  enum/enums_in_jinja.baml:148
 //    | 
 // 147 |         
@@ -349,7 +349,7 @@ function TestEnumJinjaSyntax(status: Status, priority: Priority, nullable_status
 // 152 |         // Non-existent values
 // 153 |         {% if status == "Unknown" %}
 //    | 
-// warning: Use one of: Status.Pending, Status.Active - comparing enums with strings will soon be deprecated.
+// warning: Use one of: Status.Active, Status.Pending - comparing enums with strings will soon be deprecated.
 //   -->  enum/enums_in_jinja.baml:158
 //    | 
 // 157 |         // Empty string

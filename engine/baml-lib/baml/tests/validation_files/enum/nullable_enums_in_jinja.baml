@@ -172,13 +172,13 @@ function TestUnionTypesNoWarnings(input: MyInput) -> string {
 // 45 |         Status is Pending (reversed)
 // 46 |     {% elif input.nullable_status != "Inactive" %}
 //    | 
-// warning: Use one of: Status.Active, Status.Inactive - comparing enums with strings will soon be deprecated.
+// warning: Use one of: Status.Inactive, Status.Active - comparing enums with strings will soon be deprecated.
 //   -->  enum/nullable_enums_in_jinja.baml:51
 //    | 
 // 50 |     // Ordering comparisons with nullable enums
 // 51 |     {% if input.nullable_status > "AAA" %}
 //    | 
-// warning: Use one of: Status.Pending, Status.Inactive, Status.Active - comparing enums with strings will soon be deprecated.
+// warning: Use one of: Status.Active, Status.Pending, Status.Inactive - comparing enums with strings will soon be deprecated.
 //   -->  enum/nullable_enums_in_jinja.baml:53
 //    | 
 // 52 |         Status comes after AAA alphabetically
@@ -220,13 +220,13 @@ function TestUnionTypesNoWarnings(input: MyInput) -> string {
 // 71 |     // Safe navigation patterns (still should warn on the enum comparison)
 // 72 |     {% if input.nullable_status and input.nullable_status == "Pending" %}
 //    | 
-// warning: Cannot compare enums of different types: enum Status vs enum Priority - comparing different enums will soon be deprecated.
+// warning: Use one of: Status.Pending, Status.Inactive - comparing enums with strings will soon be deprecated.
 //   -->  enum/nullable_enums_in_jinja.baml:89
 //    | 
 // 88 |     // Different enum type comparisons (should error)
 // 89 |     {% if input.nullable_status == input.nullable_priority %}
 //    | 
-// warning: Cannot compare enums of different types: enum Status vs enum Priority - comparing different enums will soon be deprecated.
+// warning: Use one of: Status.Inactive, Status.Pending - comparing enums with strings will soon be deprecated.
 //   -->  enum/nullable_enums_in_jinja.baml:91
 //    | 
 // 90 |         Comparing Status? to Priority? (should error)
