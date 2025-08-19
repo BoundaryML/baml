@@ -261,19 +261,22 @@ COMMA = { "," }
 // Operators
 // #################################################
 
+// NOTE: ~ !"=" is needed to allow assignments like `a += 1`
+// If not used, PEST assumes this is an addition and right hand side is "= 1".
+
 // Arithmetic
-ADD = { "+" }
-SUB = { "-" }
-MUL = { "*" }
-DIV = { "/" }
-MOD = { "%" }
+ADD = { "+" ~ !"=" }
+SUB = { "-" ~ !"=" }
+MUL = { "*" ~ !"=" }
+DIV = { "/" ~ !"=" }
+MOD = { "%" ~ !"=" }
 
 // Bitwise
-BIT_AND = { "&" }
-BIT_OR = { "|" }
-BIT_XOR = { "^" }
-BIT_SHL = { "<<" }
-BIT_SHR = { ">>" }
+BIT_AND = { "&" ~ !"=" }
+BIT_OR = { "|" ~ !"=" }
+BIT_XOR = { "^" ~ !"=" }
+BIT_SHL = { "<<" ~ !"=" }
+BIT_SHR = { ">>" ~ !"=" }
 
 // Comparison
 EQ = { "==" }
@@ -331,8 +334,17 @@ stmt = { (((let_expr | assign_op_stmt | assign_stmt | fn_app | generic_fn_app | 
 // Let-binding statement.
 let_expr = { "let" ~ MUT_KEYWORD? ~ identifier ~ "=" ~ expression }
 
-// Needs to supports things like `object.getter().field = value`, so can't be
-// just `identifier ~ "=" ~ expression`.
+// NOTE: Needs to supports things like `object.getter().field[x + y] = value`,
+// so can't be just `identifier ~ "=" ~ expression`.
+//
+// Though having expression as LHS is also tricky since we need to make sure
+// that `a += 1` is not treaded as `a` + `= 1` (addition, infix operator).
+// This is solved by forcing infix operators like `+` to not be followed by `=`.
+//
+// Another solution if this fails at some point is having an assignable_expression
+// rule with no infix operators:
+//
+// assignable_expression = { prefix_operator* ~ primary_expression ~ postfix_operator* }
 assign_stmt = { expression ~ "=" ~ expression }
 assign_op_stmt = { expression ~ assign_op ~ expression }
 
