@@ -9,7 +9,7 @@ fn Factorial(mut limit: int) -> int {
 		result = result * limit;
 		limit = limit - 1;
 
-        if limit != 0 {
+        if (limit != 0) {
             continue;
         } else {
             should_continue = false;

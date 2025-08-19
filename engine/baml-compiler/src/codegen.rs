@@ -1151,7 +1151,7 @@ impl hir::Expression {
     /// ```ignore
     /// let a = {
     ///     let b = 1;
-    ///     if b == 1 {
+    ///     if (b == 1) {
     ///         1
     ///     } else {
     ///         2
@@ -1163,7 +1163,7 @@ impl hir::Expression {
     ///
     /// ```ignore
     /// let mut a = 0;
-    /// if a == 0 {
+    /// if (a == 0) {
     ///     a = 1;
     /// } else {
     ///     a = 2;
@@ -1322,7 +1322,7 @@ mod tests {
         assert_compiles(Program {
             source: "
                 fn main(b: bool) -> int {
-                    if b { 1 } else { 2 }
+                    if (b) { 1 } else { 2 }
                 }
             ",
             expected: vec![(
@@ -1346,7 +1346,7 @@ mod tests {
         assert_compiles(Program {
             source: "
                 fn main(b: bool) -> int {
-                    if b {
+                    if (b) {
                         let a = 1;
                         a
                     } else {
@@ -1380,7 +1380,7 @@ mod tests {
         assert_compiles(Program {
             source: "
                 fn main(b: bool) -> int {
-                    let i = if b { 1 } else { 2 };
+                    let i = if (b) { 1 } else { 2 };
                     i
                 }
             ",
@@ -1406,7 +1406,7 @@ mod tests {
         assert_compiles(Program {
             source: "
                 fn main(b: bool) -> int {
-                    let i = if b {
+                    let i = if (b) {
                         let a = 1;
                         a
                     } else {
@@ -1449,7 +1449,7 @@ mod tests {
                 fn main(b: bool) -> int {
                     let a = 1;
 
-                    if b {
+                    if (b) {
                         let x = 1;
                         let y = 2;
                         identity(x);
@@ -1497,9 +1497,9 @@ mod tests {
         assert_compiles(Program {
             source: "
                 fn main(a: bool, b: bool) -> int {
-                    if a {
+                    if (a) {
                         1
-                    } else if b {
+                    } else if (b) {
                         2
                     } else {
                         3
@@ -1533,10 +1533,10 @@ mod tests {
         assert_compiles(Program {
             source: "
                 fn main(a: bool, b: bool) -> int {
-                    if a {
+                    if (a) {
                         let x = 1;
                         x
-                    } else if b {
+                    } else if (b) {
                         let y = 2;
                         y
                     } else {
@@ -1578,9 +1578,9 @@ mod tests {
         assert_compiles(Program {
             source: "
                 fn main(a: bool, b: bool) -> int {
-                    let result = if a {
+                    let result = if (a) {
                         1
-                    } else if b {
+                    } else if (b) {
                         2
                     } else {
                         3
@@ -1617,10 +1617,10 @@ mod tests {
         assert_compiles(Program {
             source: "
                 fn main(a: bool, b: bool) -> int {
-                    let result = if a {
+                    let result = if (a) {
                         let x = 1;
                         x
-                    } else if b {
+                    } else if (b) {
                         let y = 2;
                         y
                     } else {
@@ -2008,7 +2008,7 @@ mod tests {
             source: r#"
                 fn GCD(mut a: int, mut b: int) -> int {
                     while (a != b) {
-                        if a > b {
+                        if (a > b) {
                             a = a - b;
                         } else {
                             b = b - a;
@@ -2064,7 +2064,7 @@ mod tests {
                         let c = 3;
                         a = b + c;
 
-                        if a == 5 {
+                        if (a == 5) {
                             a = 10;
                         }
                     }
@@ -2111,7 +2111,7 @@ mod tests {
                     while a < 5 {
                         a += 1;
 
-                        if a == 2 {
+                        if (a == 2) {
                             break;
                         }
                     }
@@ -2157,7 +2157,7 @@ mod tests {
                     let mut result = 1;
 
                     while true {
-                        if limit == 0 {
+                        if (limit == 0) {
                             break;
                         }
                         result = result * limit;
@@ -2219,7 +2219,7 @@ mod tests {
                         result = result * limit;
                         limit = limit - 1;
 
-                        if limit != 0 {
+                        if (limit != 0) {
                             continue;
                         } else {
                             should_continue = false;
@@ -2280,7 +2280,7 @@ mod tests {
                         while false {
                             continue;
                         }
-                        if false {
+                        if (false) {
                             continue;
                         }
                     }
@@ -2446,7 +2446,7 @@ mod tests {
                     let mut result = 0;
 
                     for x in xs {
-                        if x > 10 {
+                        if (x > 10) {
                             break;
                         }
                         result += x;
@@ -2508,7 +2508,7 @@ mod tests {
                     let mut result = 0;
 
                     for x in xs {
-                        if x > 10 {
+                        if (x > 10) {
                             continue;
                         }
                         result += x;
@@ -2646,7 +2646,7 @@ mod tests {
             assert_compiles(Program {
                 source: "
                 fn EarlyReturn(x: int) -> int {
-                  if x == 42 { return 1; }
+                  if (x == 42) { return 1; }
                   
                   x + 5
                 }
@@ -2681,11 +2681,11 @@ mod tests {
 
                   // NOTE: currently there's no empty returns.
 
-                  if a == 0 { return 0; }
+                  if (a == 0) { return 0; }
                   
                   {
                      let b = 1;
-                     if a != b {
+                     if (a != b) {
                         return 0;
                      }
                   }
@@ -2693,8 +2693,8 @@ mod tests {
                   {
                      let c = 2;
                      let b = 3;
-                     while b != c {
-                        if true {
+                     while (b != c) {
+                        if (true) {
                            return 0;
                         }
                      }

@@ -353,7 +353,13 @@ fn_args = { expression? ~ ("," ~ expression)* }
 fn_app = { identifier ~ "(" ~ fn_args ~ ")" }
 
 // If expression.
-if_expression = { "if" ~ expression ~ expr_block ~ ( "else" ~ (expr_block | if_expression) )? }
+if_expression = { "if" ~ if_predicate ~ expr_block ~ ( "else" ~ (expr_block | if_expression) )? }
+
+// If predicate allows both parenthesized and unparenthesized expressions
+// Validation will enforce parentheses are required
+if_predicate = { parenthesized_predicate | unparenthesized_predicate }
+parenthesized_predicate = { "(" ~ expression ~ ")" }
+unparenthesized_predicate = { expression }
 
 while_loop = { "while" ~  expression ~  expr_block  }
 

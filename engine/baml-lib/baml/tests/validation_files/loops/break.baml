@@ -4,7 +4,7 @@ fn Factorial(mut limit: int) -> int {
 
 
 	while true {
-		if limit == 0 {
+		if (limit == 0) {
 			break;
 		}
 		result = result * limit;

@@ -502,11 +502,38 @@ pub fn parse_function_body(
     parse_expr_block(token, diagnostics)
 }
 
+fn parse_if_predicate(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Expression> {
+    assert_correct_parser!(token, Rule::if_predicate);
+    let span = diagnostics.span(token.as_span());
+    let mut tokens = token.into_inner();
+    let predicate_rule = tokens.next()?;
+    
+    match predicate_rule.as_rule() {
+        Rule::parenthesized_predicate => {
+            // Extract expression from parentheses
+            let mut inner_tokens = predicate_rule.into_inner();
+            parse_expression(inner_tokens.next()?, diagnostics)
+        }
+        Rule::unparenthesized_predicate => {
+            // Generate validation error for unparenthesized predicate
+            diagnostics.push_error(DatamodelError::new_validation_error(
+                "If statement predicate must be wrapped in parentheses. Use `if (condition) { ... }` instead of `if condition { ... }`",
+                span,
+            ));
+            // Still parse the expression to continue parsing
+            let mut inner_tokens = predicate_rule.into_inner();
+            parse_expression(inner_tokens.next()?, diagnostics)
+        }
+        _ => unreachable_rule!(predicate_rule, Rule::if_predicate),
+    }
+}
+
 pub fn parse_if_expression(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Expression> {
     assert_correct_parser!(token, Rule::if_expression);
     let span = diagnostics.span(token.as_span());
     let mut tokens = token.into_inner();
-    let condition = parse_expression(tokens.next()?, diagnostics)?;
+    let predicate_token = tokens.next()?;
+    let condition = parse_if_predicate(predicate_token, diagnostics)?;
 
     // TODO: Some weird parsing going on here, figure out rules and spans.
     let then_branch_expr_block = tokens.next()?;

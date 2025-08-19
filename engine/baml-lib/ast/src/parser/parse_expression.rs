@@ -634,4 +634,43 @@ mod tests {
             _ => panic!("Expected JinjaExpression, got {expr:?}"),
         }
     }
+
+    #[test]
+    fn test_if_expression_parenthesized_predicate() {
+        let input = "if (x > 0) { 1 } else { 0 }";
+        let root_path = "test_file.baml";
+        let source = SourceFile::new_static(root_path.into(), input);
+        let mut diagnostics = Diagnostics::new(root_path.into());
+        diagnostics.set_source(&source);
+
+        let pair = BAMLParser::parse(Rule::if_expression, input)
+            .unwrap()
+            .next()
+            .unwrap();
+        let expr = super::super::parse_expr::parse_if_expression(pair, &mut diagnostics);
+        
+        // Should parse successfully without errors
+        assert!(expr.is_some());
+        assert_eq!(diagnostics.errors().len(), 0);
+    }
+
+    #[test]
+    fn test_if_expression_unparenthesized_predicate_error() {
+        let input = "if x > 0 { 1 } else { 0 }";
+        let root_path = "test_file.baml";
+        let source = SourceFile::new_static(root_path.into(), input);
+        let mut diagnostics = Diagnostics::new(root_path.into());
+        diagnostics.set_source(&source);
+
+        let pair = BAMLParser::parse(Rule::if_expression, input)
+            .unwrap()
+            .next()
+            .unwrap();
+        let expr = super::super::parse_expr::parse_if_expression(pair, &mut diagnostics);
+        
+        // Should parse but generate a validation error
+        assert!(expr.is_some());
+        assert_eq!(diagnostics.errors().len(), 1);
+        assert!(diagnostics.errors()[0].message().contains("predicate must be wrapped in parentheses"));
+    }
 }
