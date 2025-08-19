@@ -86,8 +86,11 @@ Multiple value tests:
         #     "task priority level": "high"
         # }
         # """
-        assert message_content == """Input class data: {
-    "name": "test-item",
+        assert (
+            message_content
+            == """Input class data: {
     "status": PENDING,
+    "name": "test-item",
     "priority": "high",
 }"""
+        )
