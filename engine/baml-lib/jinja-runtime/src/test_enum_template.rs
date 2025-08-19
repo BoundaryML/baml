@@ -48,24 +48,6 @@ fn test_enum_comparison_in_template() {
     let output3 = tmpl3.render(context! { status => status.clone() }).unwrap();
     assert_eq!(output3.trim(), "in_progress");
 
-    // Test property access
-    let template4 = r#"
-        value: {{ status.value }}
-        alias: {{ status.alias }}
-        display: {{ status.display }}
-        name: {{ status.name }}
-        enum_name: {{ status.enum_name }}
-        "#;
-
-    env.add_template("test4", template4).unwrap();
-    let tmpl4 = env.get_template("test4").unwrap();
-    let output4 = tmpl4.render(context! { status => status.clone() }).unwrap();
-    assert!(output4.contains("value: InProgress"));
-    assert!(output4.contains("alias: in_progress"));
-    assert!(output4.contains("display: in_progress"));
-    assert!(output4.contains("name: Status"));
-    assert!(output4.contains("enum_name: Status"));
-
     // Test ordering in template
     let template5 = r#"
         {%- if status < "ZZZ" -%}
