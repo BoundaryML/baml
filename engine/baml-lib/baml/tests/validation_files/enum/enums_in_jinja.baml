@@ -248,6 +248,12 @@ function TestEnumJinjaSyntax(status: Status, priority: Priority, nullable_status
 // 68 |         {% if (status == "Active" or priority == "High") and nullable_status != "Inactive" %}
 //    | 
 // warning: Use `Status.Inactive` instead of "Inactive" - comparing enums with strings will soon be deprecated.
+//   -->  enum/enums_in_jinja.baml:68
+//    | 
+// 67 |         // Complex boolean expressions
+// 68 |         {% if (status == "Active" or priority == "High") and nullable_status != "Inactive" %}
+//    | 
+// warning: Use `Status.Inactive` instead of "Inactive" - comparing enums with strings will soon be deprecated.
 //   -->  enum/enums_in_jinja.baml:73
 //    | 
 // 72 |         // Negation
@@ -283,7 +289,7 @@ function TestEnumJinjaSyntax(status: Status, priority: Priority, nullable_status
 // 91 |         Result: {{ "High Priority" if priority == "High" else "Normal Priority" }}
 // 92 |         Status: {{ "Active" if status == "Active" else "Not Active" }}
 //    | 
-// warning: Use one of: Status.Pending, Status.Active - comparing enums with strings will soon be deprecated.
+// warning: Use one of: Status.Active, Status.Pending - comparing enums with strings will soon be deprecated.
 //   -->  enum/enums_in_jinja.baml:97
 //    | 
 // 96 |         // Less than (should suggest available values)
@@ -301,7 +307,7 @@ function TestEnumJinjaSyntax(status: Status, priority: Priority, nullable_status
 // 106 |         // Mixed ordering
 // 107 |         {% if status >= "Active" and priority <= "Medium" %}
 //    | 
-// warning: Use one of: Priority.Low, Priority.High - comparing enums with strings will soon be deprecated.
+// warning: Use one of: Priority.High, Priority.Low - comparing enums with strings will soon be deprecated.
 //   -->  enum/enums_in_jinja.baml:107
 //    | 
 // 106 |         // Mixed ordering
@@ -325,7 +331,7 @@ function TestEnumJinjaSyntax(status: Status, priority: Priority, nullable_status
 // 129 |         // Comparing different enum types (should be type error)
 // 130 |         {% if status == priority %}
 //    | 
-// warning: Use one of: Status.Inactive, Status.Active - comparing enums with strings will soon be deprecated.
+// warning: Use one of: Status.Active, Status.Inactive - comparing enums with strings will soon be deprecated.
 //   -->  enum/enums_in_jinja.baml:144
 //    | 
 // 143 |         // Typos and fuzzy matching
@@ -337,13 +343,13 @@ function TestEnumJinjaSyntax(status: Status, priority: Priority, nullable_status
 // 147 |         
 // 148 |         {% if priority == "Hgh" %}
 //    | 
-// warning: Use one of: Status.Pending, Status.Active - comparing enums with strings will soon be deprecated.
+// warning: Use one of: Status.Active, Status.Pending - comparing enums with strings will soon be deprecated.
 //   -->  enum/enums_in_jinja.baml:153
 //    | 
 // 152 |         // Non-existent values
 // 153 |         {% if status == "Unknown" %}
 //    | 
-// warning: Use one of: Status.Active, Status.Pending - comparing enums with strings will soon be deprecated.
+// warning: Use one of: Status.Pending, Status.Active - comparing enums with strings will soon be deprecated.
 //   -->  enum/enums_in_jinja.baml:158
 //    | 
 // 157 |         // Empty string

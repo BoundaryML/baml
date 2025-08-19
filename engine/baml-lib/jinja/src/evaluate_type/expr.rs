@@ -90,6 +90,33 @@ fn parse_as_function_call(
     }
 }
 
+// Helper function to check if union is nullable enum (enum + nullish only)
+fn extract_enum_from_nullable_union(types: &[Type]) -> Option<&str> {
+    let mut enum_name: Option<&str> = None;
+    
+    for t in types {
+        match t {
+            Type::EnumValueRef(name) => {
+                if enum_name.is_some() {
+                    // Multiple different enums in union - not a simple nullable enum
+                    return None;
+                }
+                enum_name = Some(name);
+            }
+            Type::None | Type::Undefined => {
+                // Nullish types are allowed in nullable enums
+                continue;
+            }
+            _ => {
+                // Any other type (String, Int, etc.) means this isn't a nullable enum
+                return None;
+            }
+        }
+    }
+    
+    enum_name
+}
+
 fn tracker_visit_expr(
     expr: &ast::Expr<'_>,
     state: &mut ScopeTracker,
@@ -123,7 +150,86 @@ fn tracker_visit_expr(
             let lhs = tracker_visit_expr(&bin_expr.left, state, types);
             let rhs = tracker_visit_expr(&bin_expr.right, state, types);
 
-            // First check if either operand is an EnumValueRef for strict handling
+            // First check for nullable enum patterns before strict enum handling
+            // Handle nullable enum to string literal comparisons
+            if let (Type::Union(union_types), Type::Literal(LiteralValue::String(str_val))) = (&lhs, &rhs) {
+                if let Some(enum_name) = extract_enum_from_nullable_union(union_types) {
+                    if matches!(bin_expr.op, ast::BinOpKind::Eq | ast::BinOpKind::Ne | ast::BinOpKind::Lt | ast::BinOpKind::Gt | ast::BinOpKind::Lte | ast::BinOpKind::Gte) {
+                        state.errors.push(TypeError::new_enum_literal_suggestion(
+                            expr,
+                            enum_name,
+                            str_val,
+                            types,
+                            expr.span(),
+                        ));
+                        return Type::Bool;
+                    }
+                }
+            }
+            if let (Type::Literal(LiteralValue::String(str_val)), Type::Union(union_types)) = (&lhs, &rhs) {
+                if let Some(enum_name) = extract_enum_from_nullable_union(union_types) {
+                    if matches!(bin_expr.op, ast::BinOpKind::Eq | ast::BinOpKind::Ne | ast::BinOpKind::Lt | ast::BinOpKind::Gt | ast::BinOpKind::Lte | ast::BinOpKind::Gte) {
+                        state.errors.push(TypeError::new_enum_literal_suggestion(
+                            expr,
+                            enum_name,
+                            str_val,
+                            types,
+                            expr.span(),
+                        ));
+                        return Type::Bool;
+                    }
+                }
+            }
+            
+            // Handle nullable enum vs generic string
+            if let (Type::Union(union_types), Type::String) = (&lhs, &rhs) {
+                if let Some(enum_name) = extract_enum_from_nullable_union(union_types) {
+                    if matches!(bin_expr.op, ast::BinOpKind::Eq | ast::BinOpKind::Ne | ast::BinOpKind::Lt | ast::BinOpKind::Gt | ast::BinOpKind::Lte | ast::BinOpKind::Gte) {
+                        state.errors.push(TypeError::new_enum_string_cmp_deprecated(
+                            expr,
+                            enum_name,
+                            expr.span(),
+                        ));
+                        return Type::Bool;
+                    }
+                }
+            }
+            if let (Type::String, Type::Union(union_types)) = (&lhs, &rhs) {
+                if let Some(enum_name) = extract_enum_from_nullable_union(union_types) {
+                    if matches!(bin_expr.op, ast::BinOpKind::Eq | ast::BinOpKind::Ne | ast::BinOpKind::Lt | ast::BinOpKind::Gt | ast::BinOpKind::Lte | ast::BinOpKind::Gte) {
+                        state.errors.push(TypeError::new_enum_string_cmp_deprecated(
+                            expr,
+                            enum_name,
+                            expr.span(),
+                        ));
+                        return Type::Bool;
+                    }
+                }
+            }
+
+            // Handle nullable-to-nullable enum comparisons
+            if let (Type::Union(left_types), Type::Union(right_types)) = (&lhs, &rhs) {
+                let left_enum = extract_enum_from_nullable_union(left_types);
+                let right_enum = extract_enum_from_nullable_union(right_types);
+                
+                if let (Some(left), Some(right)) = (left_enum, right_enum) {
+                    if matches!(bin_expr.op, ast::BinOpKind::Eq | ast::BinOpKind::Ne | ast::BinOpKind::Lt | ast::BinOpKind::Gt | ast::BinOpKind::Lte | ast::BinOpKind::Gte) {
+                        if left == right {
+                            return Type::Bool;
+                        } else {
+                            state.errors.push(TypeError::new_invalid_enum_cmp(
+                                expr,
+                                &Type::EnumValueRef(left.to_string()),
+                                &Type::EnumValueRef(right.to_string()),
+                                expr.span(),
+                            ));
+                            return Type::Bool;
+                        }
+                    }
+                }
+            }
+
+            // Now check if either operand is an EnumValueRef for strict handling
             match (&lhs, &rhs) {
                 // Both are EnumValueRef - only allow comparison ops between same enum
                 (Type::EnumValueRef(e1), Type::EnumValueRef(e2)) => {

@@ -149,6 +149,90 @@ function TestUnionTypesNoWarnings(input: MyInput) -> string {
 }
 
 // warning: Use `Status.Active` instead of "Active" - comparing enums with strings will soon be deprecated.
+//   -->  enum/nullable_enums_in_jinja.baml:40
+//    | 
+// 39 |     // Basic nullable enum to string literal comparisons
+// 40 |     {% if input.nullable_status == "Active" %}
+//    | 
+// warning: Use `Status.Inactive` instead of "inactive" - comparing enums with strings will soon be deprecated.
+//   -->  enum/nullable_enums_in_jinja.baml:42
+//    | 
+// 41 |         Status is Active
+// 42 |     {% elif input.nullable_status == "inactive" %}
+//    | 
+// warning: Use `Status.Pending` instead of "Pending" - comparing enums with strings will soon be deprecated.
+//   -->  enum/nullable_enums_in_jinja.baml:44
+//    | 
+// 43 |         Status is inactive (alias)
+// 44 |     {% elif "Pending" == input.nullable_status %}
+//    | 
+// warning: Use `Status.Inactive` instead of "Inactive" - comparing enums with strings will soon be deprecated.
+//   -->  enum/nullable_enums_in_jinja.baml:46
+//    | 
+// 45 |         Status is Pending (reversed)
+// 46 |     {% elif input.nullable_status != "Inactive" %}
+//    | 
+// warning: Use one of: Status.Active, Status.Inactive - comparing enums with strings will soon be deprecated.
+//   -->  enum/nullable_enums_in_jinja.baml:51
+//    | 
+// 50 |     // Ordering comparisons with nullable enums
+// 51 |     {% if input.nullable_status > "AAA" %}
+//    | 
+// warning: Use one of: Status.Pending, Status.Inactive, Status.Active - comparing enums with strings will soon be deprecated.
+//   -->  enum/nullable_enums_in_jinja.baml:53
+//    | 
+// 52 |         Status comes after AAA alphabetically
+// 53 |     {% elif input.nullable_status <= "Zzz" %}
+//    | 
+// warning: Use `Status.Active` instead of "Active" - comparing enums with strings will soon be deprecated.
+//   -->  enum/nullable_enums_in_jinja.baml:55
+//    | 
+// 54 |         Status comes before or equals Zzz
+// 55 |     {% elif input.nullable_status >= "Active" %}
+//    | 
+// warning: Use `Priority.High` instead of "High" - comparing enums with strings will soon be deprecated.
+//   -->  enum/nullable_enums_in_jinja.baml:60
+//    | 
+// 59 |     // Multiple nullable enum comparisons
+// 60 |     {% if input.nullable_priority == "High" %}
+//    | 
+// warning: Use `Priority.Low` instead of "Low" - comparing enums with strings will soon be deprecated.
+//   -->  enum/nullable_enums_in_jinja.baml:62
+//    | 
+// 61 |         Priority is High
+// 62 |     {% elif input.nullable_priority != "Low" %}
+//    | 
+// warning: Use `Status.Active` instead of "Active" - comparing enums with strings will soon be deprecated.
+//   -->  enum/nullable_enums_in_jinja.baml:67
+//    | 
+// 66 |     // Complex boolean expressions with nullable enums
+// 67 |     {% if (input.nullable_status == "Active") and (input.nullable_priority != "Low") %}
+//    | 
+// warning: Use `Priority.Low` instead of "Low" - comparing enums with strings will soon be deprecated.
+//   -->  enum/nullable_enums_in_jinja.baml:67
+//    | 
+// 66 |     // Complex boolean expressions with nullable enums
+// 67 |     {% if (input.nullable_status == "Active") and (input.nullable_priority != "Low") %}
+//    | 
+// warning: Use `Status.Pending` instead of "Pending" - comparing enums with strings will soon be deprecated.
+//   -->  enum/nullable_enums_in_jinja.baml:72
+//    | 
+// 71 |     // Safe navigation patterns (still should warn on the enum comparison)
+// 72 |     {% if input.nullable_status and input.nullable_status == "Pending" %}
+//    | 
+// warning: Cannot compare enums of different types: enum Status vs enum Priority - comparing different enums will soon be deprecated.
+//   -->  enum/nullable_enums_in_jinja.baml:89
+//    | 
+// 88 |     // Different enum type comparisons (should error)
+// 89 |     {% if input.nullable_status == input.nullable_priority %}
+//    | 
+// warning: Cannot compare enums of different types: enum Status vs enum Priority - comparing different enums will soon be deprecated.
+//   -->  enum/nullable_enums_in_jinja.baml:91
+//    | 
+// 90 |         Comparing Status? to Priority? (should error)
+// 91 |     {% elif input.nullable_status != input.nullable_priority %}
+//    | 
+// warning: Use `Status.Active` instead of "Active" - comparing enums with strings will soon be deprecated.
 //   -->  enum/nullable_enums_in_jinja.baml:143
 //    | 
 // 142 |     // Regular enum and string (existing behavior)
