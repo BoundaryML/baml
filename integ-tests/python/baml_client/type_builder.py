@@ -22,11 +22,11 @@ class TypeBuilder(type_builder.TypeBuilder):
         super().__init__(classes=set(
           ["AnotherObject","BigNumbers","BinaryNode","Blah","BlockConstraint","BlockConstraintForParam","BookOrder","ClassForNullLiteral","ClassOptionalOutput","ClassOptionalOutput2","ClassToRecAlias","ClassWithBlockDone","ClassWithImage","ClassWithoutDone","ClientDetails1559","ComplexMemoryObject","CompoundBigNumbers","ContactInfo","CustomStory","CustomTaskResult","Document1559","DummyOutput","DynInputOutput","DynamicClassOne","DynamicClassTwo","DynamicOutput","DynamicSchema","Earthling","Education","Email","EmailAddress","Event","FakeImage","FlightConfirmation","FooAny","Forest","FormatterTest0","FormatterTest1","FormatterTest2","FormatterTest3","GroceryReceipt","Haiku","InnerClass","InnerClass2","InputClass","InputClassNested","LinkedList","LinkedListAliasNode","LiteralClassHello","LiteralClassOne","LiteralClassTwo","MaintainFieldOrder","MalformedConstraints","MalformedConstraints2","Martian","MemoryObject","MergeAttrs","NamedArgsSingleClass","Nested","Nested2","NestedBlockConstraint","NestedBlockConstraintForParam","Node","NodeWithAliasIndirection","Note1599","OptionalListAndMap","OptionalTest_Prop1","OptionalTest_ReturnType","OrderInfo","OriginalA","OriginalB","Person","PhoneNumber","Quantity","RaysData","ReceiptInfo","ReceiptItem","Recipe","RecursiveAliasDependency","Resume","Schema","SearchParams","SemanticContainer","SimpleTag","SmallThing","SomeClassNestedDynamic","StringToClassEntry","TestClassAlias","TestClassNested","TestClassWithEnum","TestMemoryOutput","TestOutputClass","Tree","TwoStoriesOneTitle","TwoStoriesOneTitleCheck","UnionTest_ReturnType","UniverseQuestion","UniverseQuestionInput","WithReasoning",]
         ), enums=set(
-          ["AliasedEnum","Category","Category2","Category3","Color","DataType","DynEnumOne","DynEnumTwo","EnumInClass","EnumOutput","Hobby","MapKey","NamedArgsSingleEnum","NamedArgsSingleEnumList","OptionalTest_CategoryType","OrderStatus","Tag","TestEnum",]
+          ["AliasedEnum","Category","Category2","Category3","Color","DataType","DynEnumOne","DynEnumThree","DynEnumTwo","EnumInClass","EnumOutput","Hobby","MapKey","NamedArgsSingleEnum","NamedArgsSingleEnumList","OptionalTest_CategoryType","OrderStatus","Tag","TestEnum",]
         ), runtime=DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME)
 
     # #########################################################################
-    # Generated enums 18
+    # Generated enums 19
     # #########################################################################
 
     @property
@@ -56,6 +56,10 @@ class TypeBuilder(type_builder.TypeBuilder):
     @property
     def DynEnumOne(self) -> "DynEnumOneBuilder":
         return DynEnumOneBuilder(self)
+
+    @property
+    def DynEnumThree(self) -> "DynEnumThreeBuilder":
+        return DynEnumThreeBuilder(self)
 
     @property
     def DynEnumTwo(self) -> "DynEnumTwoBuilder":
@@ -505,7 +509,7 @@ class TypeBuilder(type_builder.TypeBuilder):
 
 
 # #########################################################################
-# Generated enums 18
+# Generated enums 19
 # #########################################################################
 
 class AliasedEnumAst:
@@ -862,6 +866,58 @@ class DynEnumOneValues:
             raise AttributeError(f"Value {name} not found.")
         return self.__bldr.value(name)
 
+    
+    
+
+
+class DynEnumThreeAst:
+    def __init__(self, tb: type_builder.TypeBuilder):
+        _tb = tb._tb # type: ignore (we know how to use this private attribute)
+        self._bldr = _tb.enum("DynEnumThree")
+        self._values: typing.Set[str] = set([  "TRICYCLE",  "TRIANGLE",  ])
+        self._vals = DynEnumThreeValues(self._bldr, self._values)
+
+    def type(self) -> baml_py.FieldType:
+        return self._bldr.field()
+
+    @property
+    def values(self) -> "DynEnumThreeValues":
+        return self._vals
+
+
+class DynEnumThreeBuilder(DynEnumThreeAst):
+    def __init__(self, tb: type_builder.TypeBuilder):
+        super().__init__(tb)
+
+    
+    def list_values(self) -> typing.List[typing.Tuple[str, baml_py.EnumValueBuilder]]:
+        return [(name, self._bldr.value(name)) for name in self._values]
+
+    def add_value(self, name: str) -> baml_py.EnumValueBuilder:
+        if name in self._values:
+            raise ValueError(f"Value {name} already exists.")
+        return self._bldr.value(name)
+    
+
+class DynEnumThreeValues:
+    def __init__(self, enum_bldr: baml_py.EnumBuilder, values: typing.Set[str]):
+        self.__bldr = enum_bldr
+        self.__values = values # type: ignore (we know how to use this private attribute) # noqa: F821
+
+    
+    def __getattr__(self, name: str) -> baml_py.EnumValueBuilder:
+        if name not in self.__values:
+            raise AttributeError(f"Value {name} not found.")
+        return self.__bldr.value(name)
+
+    
+    @property
+    def TRICYCLE(self) -> baml_py.EnumValueBuilder:
+        return self.__bldr.value("TRICYCLE")
+    
+    @property
+    def TRIANGLE(self) -> baml_py.EnumValueBuilder:
+        return self.__bldr.value("TRIANGLE")
     
     
 

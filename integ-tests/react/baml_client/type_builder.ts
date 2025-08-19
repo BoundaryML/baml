@@ -240,6 +240,8 @@ export default class TypeBuilder {
     
     DynEnumOne: EnumBuilder<'DynEnumOne'>;
     
+    DynEnumThree: EnumBuilder<'DynEnumThree', "TRICYCLE" | "TRIANGLE">;
+    
     DynEnumTwo: EnumBuilder<'DynEnumTwo'>;
     
     EnumInClass: EnumViewer<'EnumInClass', "ONE" | "TWO">;
@@ -269,7 +271,7 @@ export default class TypeBuilder {
             "AnotherObject","BigNumbers","BinaryNode","Blah","BlockConstraint","BlockConstraintForParam","BookOrder","ClassForNullLiteral","ClassOptionalOutput","ClassOptionalOutput2","ClassToRecAlias","ClassWithBlockDone","ClassWithImage","ClassWithoutDone","ClientDetails1559","ComplexMemoryObject","CompoundBigNumbers","ContactInfo","CustomStory","CustomTaskResult","Document1559","DummyOutput","DynInputOutput","DynamicClassOne","DynamicClassTwo","DynamicOutput","DynamicSchema","Earthling","Education","Email","EmailAddress","Event","FakeImage","FlightConfirmation","FooAny","Forest","FormatterTest0","FormatterTest1","FormatterTest2","FormatterTest3","GroceryReceipt","Haiku","InnerClass","InnerClass2","InputClass","InputClassNested","LinkedList","LinkedListAliasNode","LiteralClassHello","LiteralClassOne","LiteralClassTwo","MaintainFieldOrder","MalformedConstraints","MalformedConstraints2","Martian","MemoryObject","MergeAttrs","NamedArgsSingleClass","Nested","Nested2","NestedBlockConstraint","NestedBlockConstraintForParam","Node","NodeWithAliasIndirection","Note1599","OptionalListAndMap","OptionalTest_Prop1","OptionalTest_ReturnType","OrderInfo","OriginalA","OriginalB","Person","PhoneNumber","Quantity","RaysData","ReceiptInfo","ReceiptItem","Recipe","RecursiveAliasDependency","Resume","Schema","SearchParams","SemanticContainer","SimpleTag","SmallThing","SomeClassNestedDynamic","StringToClassEntry","TestClassAlias","TestClassNested","TestClassWithEnum","TestMemoryOutput","TestOutputClass","Tree","TwoStoriesOneTitle","TwoStoriesOneTitleCheck","UnionTest_ReturnType","UniverseQuestion","UniverseQuestionInput","WithReasoning",
           ]),
           enums: new Set([
-            "AliasedEnum","Category","Category2","Category3","Color","DataType","DynEnumOne","DynEnumTwo","EnumInClass","EnumOutput","Hobby","MapKey","NamedArgsSingleEnum","NamedArgsSingleEnumList","OptionalTest_CategoryType","OrderStatus","Tag","TestEnum",
+            "AliasedEnum","Category","Category2","Category3","Color","DataType","DynEnumOne","DynEnumThree","DynEnumTwo","EnumInClass","EnumOutput","Hobby","MapKey","NamedArgsSingleEnum","NamedArgsSingleEnumList","OptionalTest_CategoryType","OrderStatus","Tag","TestEnum",
           ]),
           runtime: DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME
         });
@@ -697,6 +699,10 @@ export default class TypeBuilder {
         
         this.DynEnumOne = this.tb.enumBuilder("DynEnumOne", [
           
+        ]);
+        
+        this.DynEnumThree = this.tb.enumBuilder("DynEnumThree", [
+          "TRICYCLE","TRIANGLE",
         ]);
         
         this.DynEnumTwo = this.tb.enumBuilder("DynEnumTwo", [

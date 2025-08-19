@@ -37,7 +37,7 @@ def get_checks(checks: typing.Dict[CheckName, Check]) -> typing.List[Check]:
 def all_succeeded(checks: typing.Dict[CheckName, Check]) -> bool:
     return all(check.status == "succeeded" for check in get_checks(checks))
 # #########################################################################
-# Generated enums (18)
+# Generated enums (19)
 # #########################################################################
 
 class AliasedEnum(str, Enum):
@@ -79,6 +79,10 @@ class DataType(str, Enum):
 
 class DynEnumOne(str, Enum):
     pass
+
+class DynEnumThree(str, Enum):
+    TRICYCLE = "TRICYCLE"
+    TRIANGLE = "TRIANGLE"
 
 class DynEnumTwo(str, Enum):
     pass

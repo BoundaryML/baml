@@ -10,6 +10,12 @@ enum DynEnumTwo {
   @@dynamic
 }
 
+enum DynEnumThree {
+  TRICYCLE @alias("bike with three wheels")
+  TRIANGLE
+  @@dynamic
+}
+
 class SomeClassNestedDynamic {
   hi string
   @@dynamic
@@ -111,5 +117,65 @@ function ExtractDynamicCategories(input: string) -> DynEnumTwo[] {
     {{ input }}
 
     {{ ctx.output_format }}
+  "#
+}
+
+function RenderDynamicEnum(tricycle: DynEnumThree, other: DynEnumThree) -> string {
+  client GPT35
+  prompt #"
+    "DynEnumThree.TRICYCLE" renders as: {{ tricycle }}
+    "other" renders as: {{ other }}
+    
+    Available dynamic enum values:
+      - TRICYCLE: {{ DynEnumThree.TRICYCLE }}
+      - TRIANGLE: {{ DynEnumThree.TRIANGLE }}
+
+    Enum comparison tests:
+
+    {% if tricycle == DynEnumThree.TRICYCLE %}
+    DynEnumThree matches TRICYCLE enum value, as expected
+    {% else %}
+    DynEnumThree should match TRICYCLE enum value, but does not
+    {% endif %}
+
+    {% if tricycle != DynEnumThree.TRIANGLE %}
+    DynEnumThree is not TRIANGLE, as expected
+    {% else %}
+    DynEnumThree should not be TRIANGLE, but it is
+    {% endif %}
+
+    {% if tricycle == "TRICYCLE" %}
+    DynEnumThree equals TRICYCLE string, as expected
+    {% else %}
+    DynEnumThree should equal TRICYCLE string, but does not
+    {% endif %}
+
+    {% if tricycle != "TRIANGLE" %}
+    DynEnumThree is not equal to TRIANGLE string, as expected
+    {% else %}
+    DynEnumThree should not equal TRIANGLE string, but it does
+    {% endif %}
+
+    Multiple value tests:
+
+    {% if tricycle == DynEnumThree.TRICYCLE or tricycle == DynEnumThree.TRIANGLE %}
+    DynEnumThree is either TRICYCLE or TRIANGLE
+    {% elif tricycle == DynEnumThree.TRIANGLE %}
+    DynEnumThree is TRIANGLE
+    {% else %}
+    DynEnumThree is unknown
+    {% endif %}
+
+    {% if other == DynEnumThree.TRICYCLE %}
+    Other is TRICYCLE
+    {% else %}
+    Other is not TRICYCLE
+    {% endif %}
+
+    {% if other == "TRIPOD" %}
+    Other is TRIPOD
+    {% else %}
+    Other is not TRIPOD
+    {% endif %}
   "#
 }

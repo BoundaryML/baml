@@ -196,6 +196,10 @@ module BamlClient
           EnumBuilder.new(@registry, "DynEnumOne", Set[])
       end
 
+      def DynEnumThree
+          EnumBuilder.new(@registry, "DynEnumThree", Set[ "TRICYCLE",  "TRIANGLE", ])
+      end
+
       def DynEnumTwo
           EnumBuilder.new(@registry, "DynEnumTwo", Set[])
       end

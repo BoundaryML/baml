@@ -227,6 +227,7 @@ var typeMap = map[string]reflect.Type{
 	"TYPES.Color":                     reflect.TypeOf(types.Color("")),
 	"TYPES.DataType":                  reflect.TypeOf(types.DataType("")),
 	"TYPES.DynEnumOne":                reflect.TypeOf(types.DynEnumOne("")),
+	"TYPES.DynEnumThree":              reflect.TypeOf(types.DynEnumThree("")),
 	"TYPES.DynEnumTwo":                reflect.TypeOf(types.DynEnumTwo("")),
 	"TYPES.EnumInClass":               reflect.TypeOf(types.EnumInClass("")),
 	"TYPES.EnumOutput":                reflect.TypeOf(types.EnumOutput("")),

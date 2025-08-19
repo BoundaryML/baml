@@ -319,6 +319,46 @@ func (t *DynEnumOneEnumBuilder) Type() (baml.Type, error) {
 	return t.inner.Type()
 }
 
+type DynEnumThreeEnumBuilder struct {
+	inner baml.EnumBuilder
+}
+
+func (t *DynEnumThreeEnumBuilder) ListValues() ([]EnumValueBuilder, error) {
+	result, err := t.inner.ListValues()
+	if err != nil {
+		return nil, err
+	}
+	builders := make([]EnumValueBuilder, len(result))
+	for i, p := range result {
+		builders[i] = p
+	}
+	return builders, nil
+}
+
+func (t *DynEnumThreeEnumBuilder) AddValue(value string) (EnumValueBuilder, error) {
+	return t.inner.AddValue(value)
+}
+
+func (t *DynEnumThreeEnumBuilder) ValueTRICYCLE() (EnumValueBuilder, error) {
+	return t.inner.Value("TRICYCLE")
+}
+
+func (t *DynEnumThreeEnumBuilder) ValueTRIANGLE() (EnumValueBuilder, error) {
+	return t.inner.Value("TRIANGLE")
+}
+
+func (t *TypeBuilder) DynEnumThree() (*DynEnumThreeEnumBuilder, error) {
+	bld, err := t.inner.Enum("DynEnumThree")
+	if err != nil {
+		return nil, err
+	}
+	return &DynEnumThreeEnumBuilder{inner: bld}, nil
+}
+
+func (t *DynEnumThreeEnumBuilder) Type() (baml.Type, error) {
+	return t.inner.Type()
+}
+
 type DynEnumTwoEnumBuilder struct {
 	inner baml.EnumBuilder
 }

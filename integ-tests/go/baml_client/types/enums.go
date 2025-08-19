@@ -540,6 +540,74 @@ func (u DynEnumOne) BamlEncodeName() *cffi.CFFITypeName {
 	}
 }
 
+type DynEnumThree string
+
+const (
+	DynEnumThreeTRICYCLE DynEnumThree = "TRICYCLE"
+	DynEnumThreeTRIANGLE DynEnumThree = "TRIANGLE"
+)
+
+// Values returns all allowed values for the DynEnumThree type.
+func (DynEnumThree) Values() []DynEnumThree {
+	return []DynEnumThree{
+		DynEnumThreeTRICYCLE,
+		DynEnumThreeTRIANGLE,
+	}
+}
+
+// IsValid checks whether the given DynEnumThree value is valid.
+func (e DynEnumThree) IsValid() bool {
+
+	// dynamic enums are always valid
+	return true
+
+}
+
+// MarshalJSON customizes JSON marshaling for DynEnumThree.
+func (e DynEnumThree) MarshalJSON() ([]byte, error) {
+	if !e.IsValid() {
+		return nil, fmt.Errorf("invalid DynEnumThree: %q", e)
+	}
+	return json.Marshal(string(e))
+}
+
+// UnmarshalJSON customizes JSON unmarshaling for DynEnumThree.
+func (e *DynEnumThree) UnmarshalJSON(data []byte) error {
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		return err
+	}
+	*e = DynEnumThree(s)
+	if !e.IsValid() {
+		return fmt.Errorf("invalid DynEnumThree: %q", s)
+	}
+	return nil
+}
+
+func (e *DynEnumThree) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
+	name := holder.Name
+	if name.Name != "DynEnumThree" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
+		panic(fmt.Sprintf("expected types.DynEnumThree, got %s.%s", string(name.Namespace.String()), string(name.Name)))
+	}
+	value := holder.Value
+	*e = DynEnumThree(value)
+}
+
+func (e DynEnumThree) Encode() (*cffi.CFFIValueHolder, error) {
+	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
+}
+
+func (e DynEnumThree) BamlTypeName() string {
+	return "DynEnumThree"
+}
+
+func (u DynEnumThree) BamlEncodeName() *cffi.CFFITypeName {
+	return &cffi.CFFITypeName{
+		Name:      "DynEnumThree",
+		Namespace: cffi.CFFITypeNamespace_TYPES,
+	}
+}
+
 type DynEnumTwo string
 
 const (

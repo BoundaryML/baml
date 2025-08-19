@@ -328,6 +328,8 @@ type_map = {
 
     "types.DynEnumOne": types.DynEnumOne,
 
+    "types.DynEnumThree": types.DynEnumThree,
+
     "types.DynEnumTwo": types.DynEnumTwo,
 
     "types.EnumInClass": types.EnumInClass,

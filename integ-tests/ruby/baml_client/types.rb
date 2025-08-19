@@ -34,7 +34,7 @@ module BamlClient
       const :checks, T::Hash[Symbol, Check]
   end
   # #########################################################################
-  # Generated enums (18)
+  # Generated enums (19)
   # #########################################################################
 
   class AliasedEnum < T::Enum
@@ -93,6 +93,13 @@ module BamlClient
   end
 
   class DynEnumOne < T::Enum
+  end
+
+  class DynEnumThree < T::Enum
+      enums do
+          TRICYCLE = new("TRICYCLE")
+          TRIANGLE = new("TRIANGLE")
+      end
   end
 
   class DynEnumTwo < T::Enum

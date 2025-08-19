@@ -93,6 +93,11 @@ export enum DataType {
 export enum DynEnumOne {
 }
 
+export enum DynEnumThree {
+  TRICYCLE = "TRICYCLE",
+  TRIANGLE = "TRIANGLE",
+}
+
 export enum DynEnumTwo {
 }
 
