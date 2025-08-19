@@ -90,6 +90,19 @@ fn parse_as_function_call(
     }
 }
 
+// Helper function to check if binary operator is a comparison operator
+fn is_comparison_op(op: &ast::BinOpKind) -> bool {
+    matches!(
+        op,
+        ast::BinOpKind::Eq
+            | ast::BinOpKind::Ne
+            | ast::BinOpKind::Lt
+            | ast::BinOpKind::Gt
+            | ast::BinOpKind::Lte
+            | ast::BinOpKind::Gte
+    )
+}
+
 // Helper function to check if union is nullable enum (enum + nullish only)
 fn extract_enum_from_nullable_union(types: &[Type]) -> Option<&str> {
     let mut enum_name: Option<&str> = None;
@@ -115,6 +128,191 @@ fn extract_enum_from_nullable_union(types: &[Type]) -> Option<&str> {
     }
 
     enum_name
+}
+
+// Helper function to handle enum binary operations
+fn handle_enum_binary_operation(
+    expr: &ast::Expr,
+    bin_expr: &ast::Spanned<ast::BinOp>,
+    lhs: &Type,
+    rhs: &Type,
+    state: &mut ScopeTracker,
+    types: &PredefinedTypes,
+) -> Option<Type> {
+    // First check for nullable enum patterns before strict enum handling
+    // Handle nullable enum to string literal comparisons
+    if let (Type::Union(union_types), Type::Literal(LiteralValue::String(str_val))) = (lhs, rhs) {
+        if let Some(enum_name) = extract_enum_from_nullable_union(union_types) {
+            if is_comparison_op(&bin_expr.op) {
+                state.errors.push(TypeError::new_enum_literal_suggestion(
+                    expr,
+                    enum_name,
+                    str_val,
+                    types,
+                    expr.span(),
+                ));
+                return Some(Type::Bool);
+            }
+        }
+    }
+    if let (Type::Literal(LiteralValue::String(str_val)), Type::Union(union_types)) = (lhs, rhs) {
+        if let Some(enum_name) = extract_enum_from_nullable_union(union_types) {
+            if is_comparison_op(&bin_expr.op) {
+                state.errors.push(TypeError::new_enum_literal_suggestion(
+                    expr,
+                    enum_name,
+                    str_val,
+                    types,
+                    expr.span(),
+                ));
+                return Some(Type::Bool);
+            }
+        }
+    }
+
+    // Handle nullable enum vs generic string
+    if let (Type::Union(union_types), Type::String) = (lhs, rhs) {
+        if let Some(enum_name) = extract_enum_from_nullable_union(union_types) {
+            if is_comparison_op(&bin_expr.op) {
+                state.errors.push(TypeError::new_enum_string_cmp_deprecated(
+                    expr,
+                    enum_name,
+                    expr.span(),
+                ));
+                return Some(Type::Bool);
+            }
+        }
+    }
+    if let (Type::String, Type::Union(union_types)) = (lhs, rhs) {
+        if let Some(enum_name) = extract_enum_from_nullable_union(union_types) {
+            if is_comparison_op(&bin_expr.op) {
+                state.errors.push(TypeError::new_enum_string_cmp_deprecated(
+                    expr,
+                    enum_name,
+                    expr.span(),
+                ));
+                return Some(Type::Bool);
+            }
+        }
+    }
+
+    // Handle nullable-to-nullable enum comparisons
+    if let (Type::Union(left_types), Type::Union(right_types)) = (lhs, rhs) {
+        let left_enum = extract_enum_from_nullable_union(left_types);
+        let right_enum = extract_enum_from_nullable_union(right_types);
+
+        if let (Some(left), Some(right)) = (left_enum, right_enum) {
+            if is_comparison_op(&bin_expr.op) {
+                if left == right {
+                    return Some(Type::Bool);
+                } else {
+                    state.errors.push(TypeError::new_enum_literal_suggestion(
+                        expr,
+                        left,
+                        "different_enum",
+                        types,
+                        expr.span(),
+                    ));
+                    return Some(Type::Bool);
+                }
+            }
+        }
+    }
+
+    // Now check if either operand is an EnumValueRef for strict handling
+    match (lhs, rhs) {
+        // Both are EnumValueRef - only allow comparison ops between same enum
+        (Type::EnumValueRef(e1), Type::EnumValueRef(e2)) => {
+            match &bin_expr.op {
+                op if is_comparison_op(op) => {
+                    if e1 == e2 {
+                        Some(Type::Bool)
+                    } else {
+                        state.errors.push(TypeError::new_enum_literal_suggestion(
+                            expr,
+                            e1,
+                            "different_enum",
+                            types,
+                            expr.span(),
+                        ));
+                        Some(Type::Unknown)
+                    }
+                }
+                _ => {
+                    // Disallow arithmetic/string ops on enums
+                    state.errors.push(TypeError::new_enum_literal_suggestion(
+                        expr,
+                        e1,
+                        "arithmetic_operation",
+                        types,
+                        expr.span(),
+                    ));
+                    Some(Type::Unknown)
+                }
+            }
+        }
+        // EnumValueRef with string literal - suggest proper enum syntax
+        (Type::EnumValueRef(enum_name), Type::Literal(LiteralValue::String(str_val)))
+        | (Type::Literal(LiteralValue::String(str_val)), Type::EnumValueRef(enum_name)) => {
+            match &bin_expr.op {
+                op if is_comparison_op(op) => {
+                    state.errors.push(TypeError::new_enum_literal_suggestion(
+                        expr,
+                        enum_name,
+                        str_val,
+                        types,
+                        expr.span(),
+                    ));
+                    Some(Type::Bool)
+                }
+                _ => {
+                    // Disallow arithmetic/string ops on enums
+                    state.errors.push(TypeError::new_enum_literal_suggestion(
+                        expr,
+                        enum_name,
+                        str_val,
+                        types,
+                        expr.span(),
+                    ));
+                    Some(Type::Unknown)
+                }
+            }
+        }
+        // EnumValueRef with generic string - placeholder message
+        (Type::EnumValueRef(enum_name), Type::String)
+        | (Type::String, Type::EnumValueRef(enum_name)) => {
+            match &bin_expr.op {
+                op if is_comparison_op(op) => {
+                    state.errors.push(TypeError::new_enum_string_cmp_deprecated(
+                        expr,
+                        enum_name,
+                        expr.span(),
+                    ));
+                    Some(Type::Bool)
+                }
+                _ => {
+                    // Disallow arithmetic/string ops on enums
+                    state.errors.push(TypeError::new_enum_string_cmp_deprecated(
+                        expr,
+                        enum_name,
+                        expr.span(),
+                    ));
+                    Some(Type::Unknown)
+                }
+            }
+        }
+        // Any other combination with EnumValueRef is invalid
+        (Type::EnumValueRef(enum_name), _) | (_, Type::EnumValueRef(enum_name)) => {
+            state.errors.push(TypeError::new_enum_string_cmp_deprecated(
+                expr,
+                enum_name,
+                expr.span(),
+            ));
+            Some(Type::Unknown)
+        }
+        // No enums involved - return None to fall through to normal operator handling
+        _ => None,
+    }
 }
 
 fn tracker_visit_expr(
@@ -150,236 +348,13 @@ fn tracker_visit_expr(
             let lhs = tracker_visit_expr(&bin_expr.left, state, types);
             let rhs = tracker_visit_expr(&bin_expr.right, state, types);
 
-            // First check for nullable enum patterns before strict enum handling
-            // Handle nullable enum to string literal comparisons
-            if let (Type::Union(union_types), Type::Literal(LiteralValue::String(str_val))) =
-                (&lhs, &rhs)
-            {
-                if let Some(enum_name) = extract_enum_from_nullable_union(union_types) {
-                    if matches!(
-                        bin_expr.op,
-                        ast::BinOpKind::Eq
-                            | ast::BinOpKind::Ne
-                            | ast::BinOpKind::Lt
-                            | ast::BinOpKind::Gt
-                            | ast::BinOpKind::Lte
-                            | ast::BinOpKind::Gte
-                    ) {
-                        state.errors.push(TypeError::new_enum_literal_suggestion(
-                            expr,
-                            enum_name,
-                            str_val,
-                            types,
-                            expr.span(),
-                        ));
-                        return Type::Bool;
-                    }
-                }
-            }
-            if let (Type::Literal(LiteralValue::String(str_val)), Type::Union(union_types)) =
-                (&lhs, &rhs)
-            {
-                if let Some(enum_name) = extract_enum_from_nullable_union(union_types) {
-                    if matches!(
-                        bin_expr.op,
-                        ast::BinOpKind::Eq
-                            | ast::BinOpKind::Ne
-                            | ast::BinOpKind::Lt
-                            | ast::BinOpKind::Gt
-                            | ast::BinOpKind::Lte
-                            | ast::BinOpKind::Gte
-                    ) {
-                        state.errors.push(TypeError::new_enum_literal_suggestion(
-                            expr,
-                            enum_name,
-                            str_val,
-                            types,
-                            expr.span(),
-                        ));
-                        return Type::Bool;
-                    }
-                }
+            // Handle enum operations with the helper function
+            if let Some(result) = handle_enum_binary_operation(expr, bin_expr, &lhs, &rhs, state, types) {
+                return result;
             }
 
-            // Handle nullable enum vs generic string
-            if let (Type::Union(union_types), Type::String) = (&lhs, &rhs) {
-                if let Some(enum_name) = extract_enum_from_nullable_union(union_types) {
-                    if matches!(
-                        bin_expr.op,
-                        ast::BinOpKind::Eq
-                            | ast::BinOpKind::Ne
-                            | ast::BinOpKind::Lt
-                            | ast::BinOpKind::Gt
-                            | ast::BinOpKind::Lte
-                            | ast::BinOpKind::Gte
-                    ) {
-                        state.errors.push(TypeError::new_enum_string_cmp_deprecated(
-                            expr,
-                            enum_name,
-                            expr.span(),
-                        ));
-                        return Type::Bool;
-                    }
-                }
-            }
-            if let (Type::String, Type::Union(union_types)) = (&lhs, &rhs) {
-                if let Some(enum_name) = extract_enum_from_nullable_union(union_types) {
-                    if matches!(
-                        bin_expr.op,
-                        ast::BinOpKind::Eq
-                            | ast::BinOpKind::Ne
-                            | ast::BinOpKind::Lt
-                            | ast::BinOpKind::Gt
-                            | ast::BinOpKind::Lte
-                            | ast::BinOpKind::Gte
-                    ) {
-                        state.errors.push(TypeError::new_enum_string_cmp_deprecated(
-                            expr,
-                            enum_name,
-                            expr.span(),
-                        ));
-                        return Type::Bool;
-                    }
-                }
-            }
-
-            // Handle nullable-to-nullable enum comparisons
-            if let (Type::Union(left_types), Type::Union(right_types)) = (&lhs, &rhs) {
-                let left_enum = extract_enum_from_nullable_union(left_types);
-                let right_enum = extract_enum_from_nullable_union(right_types);
-
-                if let (Some(left), Some(right)) = (left_enum, right_enum) {
-                    if matches!(
-                        bin_expr.op,
-                        ast::BinOpKind::Eq
-                            | ast::BinOpKind::Ne
-                            | ast::BinOpKind::Lt
-                            | ast::BinOpKind::Gt
-                            | ast::BinOpKind::Lte
-                            | ast::BinOpKind::Gte
-                    ) {
-                        if left == right {
-                            return Type::Bool;
-                        } else {
-                            state.errors.push(TypeError::new_invalid_enum_cmp(
-                                expr,
-                                &Type::EnumValueRef(left.to_string()),
-                                &Type::EnumValueRef(right.to_string()),
-                                expr.span(),
-                            ));
-                            return Type::Bool;
-                        }
-                    }
-                }
-            }
-
-            // Now check if either operand is an EnumValueRef for strict handling
-            match (&lhs, &rhs) {
-                // Both are EnumValueRef - only allow comparison ops between same enum
-                (Type::EnumValueRef(e1), Type::EnumValueRef(e2)) => {
-                    match bin_expr.op {
-                        ast::BinOpKind::Eq
-                        | ast::BinOpKind::Ne
-                        | ast::BinOpKind::Lt
-                        | ast::BinOpKind::Gt
-                        | ast::BinOpKind::Lte
-                        | ast::BinOpKind::Gte => {
-                            if e1 == e2 {
-                                Type::Bool
-                            } else {
-                                state.errors.push(TypeError::new_invalid_enum_cmp(
-                                    expr,
-                                    &lhs,
-                                    &rhs,
-                                    expr.span(),
-                                ));
-                                Type::Unknown
-                            }
-                        }
-                        _ => {
-                            // Disallow arithmetic/string ops on enums
-                            state.errors.push(TypeError::new_invalid_enum_cmp(
-                                expr,
-                                &lhs,
-                                &rhs,
-                                expr.span(),
-                            ));
-                            Type::Unknown
-                        }
-                    }
-                }
-                // EnumValueRef with string literal - suggest proper enum syntax
-                (Type::EnumValueRef(enum_name), Type::Literal(LiteralValue::String(str_val)))
-                | (Type::Literal(LiteralValue::String(str_val)), Type::EnumValueRef(enum_name)) => {
-                    match bin_expr.op {
-                        ast::BinOpKind::Eq
-                        | ast::BinOpKind::Ne
-                        | ast::BinOpKind::Lt
-                        | ast::BinOpKind::Gt
-                        | ast::BinOpKind::Lte
-                        | ast::BinOpKind::Gte => {
-                            state.errors.push(TypeError::new_enum_literal_suggestion(
-                                expr,
-                                enum_name,
-                                str_val,
-                                types,
-                                expr.span(),
-                            ));
-                            Type::Bool
-                        }
-                        _ => {
-                            // Disallow arithmetic/string ops on enums
-                            state.errors.push(TypeError::new_invalid_enum_cmp(
-                                expr,
-                                &lhs,
-                                &rhs,
-                                expr.span(),
-                            ));
-                            Type::Unknown
-                        }
-                    }
-                }
-                // EnumValueRef with generic string - placeholder message
-                (Type::EnumValueRef(enum_name), Type::String)
-                | (Type::String, Type::EnumValueRef(enum_name)) => {
-                    match bin_expr.op {
-                        ast::BinOpKind::Eq
-                        | ast::BinOpKind::Ne
-                        | ast::BinOpKind::Lt
-                        | ast::BinOpKind::Gt
-                        | ast::BinOpKind::Lte
-                        | ast::BinOpKind::Gte => {
-                            state.errors.push(TypeError::new_enum_string_cmp_deprecated(
-                                expr,
-                                enum_name,
-                                expr.span(),
-                            ));
-                            Type::Bool
-                        }
-                        _ => {
-                            // Disallow arithmetic/string ops on enums
-                            state.errors.push(TypeError::new_invalid_enum_cmp(
-                                expr,
-                                &lhs,
-                                &rhs,
-                                expr.span(),
-                            ));
-                            Type::Unknown
-                        }
-                    }
-                }
-                // Any other combination with EnumValueRef is invalid
-                (Type::EnumValueRef(_), _) | (_, Type::EnumValueRef(_)) => {
-                    state.errors.push(TypeError::new_invalid_enum_cmp(
-                        expr,
-                        &lhs,
-                        &rhs,
-                        expr.span(),
-                    ));
-                    Type::Unknown
-                }
-                // No enums involved - fall through to normal operator handling
-                _ => match bin_expr.op {
+            // No enums involved - fall through to normal operator handling
+            match bin_expr.op {
                     ast::BinOpKind::Add => {
                         if lhs.is_subtype_of(&Type::String) || rhs.is_subtype_of(&Type::String) {
                             Type::String
@@ -403,8 +378,7 @@ fn tracker_visit_expr(
                     ast::BinOpKind::Concat => Type::String,
                     ast::BinOpKind::ScAnd => Type::Bool,
                     ast::BinOpKind::ScOr => Type::Bool,
-                },
-            }
+                }
         }
         ast::Expr::IfExpr(expr) => {
             let _test = tracker_visit_expr(&expr.test_expr, state, types);

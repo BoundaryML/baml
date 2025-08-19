@@ -9,7 +9,6 @@ mod types;
 
 use std::{collections::HashSet, fmt::Debug, ops::Index};
 
-use baml_types::LiteralValue;
 use minijinja::machinery::{ast::Expr, Span};
 
 pub use self::{
@@ -190,29 +189,6 @@ impl TypeError {
         Self { message: format!("{message}\n\nSee: https://docs.rs/minijinja/latest/minijinja/filters/index.html#functions for the compelete list"), span }
     }
 
-    fn new_invalid_enum_cmp(expr: &Expr, lhs: &Type, rhs: &Type, span: Span) -> Self {
-        match (lhs, rhs) {
-            (Type::String, _) | (_, Type::String) | (Type::Literal(LiteralValue::String(_)), _) | (_, Type::Literal(LiteralValue::String(_))) => {
-                Self {
-                    message: format!(
-                        "Type mismatch: '{}' compares values of different types ({} and {}). Starting in baml 0.206.0, strings are not implicitly converted to enum values (e.g. you should use `MyEnum.VALUE_A` instead of `\"VALUE_A\"`).",
-                        pretty_print::pretty_print(expr),
-                        lhs.name(),
-                        rhs.name()
-                    ),
-                    span,
-                }
-            }
-            _ => Self {
-                message: format!(
-                    "Cannot compare enums of different types: {} vs {} - comparing different enums will soon be deprecated.",
-                    lhs.name(),
-                    rhs.name()
-                ),
-                span,
-            }
-        }
-    }
 
     fn new_enum_literal_suggestion(
         expr: &Expr,
@@ -224,10 +200,9 @@ impl TypeError {
         let enum_def = match types.as_enum(enum_name) {
             Some(def) => def,
             None => {
-                return Self::new_invalid_enum_cmp(
+                return Self::new_enum_string_cmp_deprecated(
                     expr,
-                    &Type::EnumValueRef(enum_name.to_string()),
-                    &Type::Literal(LiteralValue::String(literal_value.to_string())),
+                    enum_name,
                     span,
                 )
             }

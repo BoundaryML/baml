@@ -145,7 +145,7 @@ fn test_enum() {
     );
     assert_eq!(
         assert_fails_to!("enum_arg == \"VALUE_A\"", &types),
-        vec!["Type mismatch: '(enum_arg == VALUE_A)' compares values of different types (enum VALUE_A and literal[\"VALUE_A\"]). Starting in baml 0.206.0, strings are not implicitly converted to enum values (e.g. you should use `MyEnum.VALUE_A` instead of `\"VALUE_A\"`)."]
+        vec!["Comparing enum VALUE_A to string variable - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339."]
     );
 }
 
