@@ -565,9 +565,7 @@ mod tests {
         // Test content with the stored base64 and some other base64 content
         let stored_base64 = "c3RvcmVkIGRhdGE="; // "stored data" in base64
         let other_base64 = "b3RoZXIgZGF0YQ=="; // "other data" in base64
-        let input_content = format!(
-            "Stored: {stored_base64} Other: {other_base64} More text"
-        );
+        let input_content = format!("Stored: {stored_base64} Other: {other_base64} More text");
 
         let result =
             blob_storage::extract_blobs_from_string(&input_content, &cache, function_call_id);
