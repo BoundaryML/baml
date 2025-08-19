@@ -267,7 +267,7 @@ impl TypeError {
         {
             return Self {
                 message: format!(
-                    "Use `{}.{}` instead of \"{}\" (alias) - comparing enums with strings will soon be deprecated.",
+                    "Did you mean `{}.{}` instead of \"{}\" (alias)? Enums are not equal to their alias values.",
                     enum_name, value_for_alias.name, literal_value
                 ),
                 span,
@@ -280,7 +280,7 @@ impl TypeError {
         }) {
             return Self {
                 message: format!(
-                    "Use `{}.{}` instead of \"{}\" (alias) - comparing enums with strings will soon be deprecated.",
+                    "Did you mean `{}.{}` instead of \"{}\" (alias)? Enums are not equal to their alias values.",
                     enum_name, value_for_alias.name, literal_value
                 ),
                 span,

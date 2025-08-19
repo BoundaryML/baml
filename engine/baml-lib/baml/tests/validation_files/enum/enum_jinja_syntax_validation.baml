@@ -224,7 +224,7 @@ function TestEnumJinjaSyntax(status: Status, priority: Priority, nullable_status
 // 40 |         // Comparing to alias (should suggest value name)
 // 41 |         {% if status == "active" %}
 //    | 
-// warning: Use `Priority.High` instead of "urgent" (alias) - comparing enums with strings will soon be deprecated.
+// warning: Did you mean `Priority.High` instead of "urgent" (alias)? Enums are not equal to their alias values.
 //   -->  enum/enum_jinja_syntax_validation.baml:45
 //    | 
 // 44 |         
@@ -302,7 +302,7 @@ function TestEnumJinjaSyntax(status: Status, priority: Priority, nullable_status
 // 91 |         Result: {{ "High Priority" if priority == "High" else "Normal Priority" }}
 // 92 |         Status: {{ "Active" if status == "Active" else "Not Active" }}
 //    | 
-// warning: Use one of: Status.Active, Status.Pending - comparing enums with strings will soon be deprecated.
+// warning: Use one of: Status.Pending, Status.Active - comparing enums with strings will soon be deprecated.
 //   -->  enum/enum_jinja_syntax_validation.baml:97
 //    | 
 // 96 |         // Less than (should suggest available values)
@@ -320,7 +320,7 @@ function TestEnumJinjaSyntax(status: Status, priority: Priority, nullable_status
 // 106 |         // Mixed ordering
 // 107 |         {% if status >= "Active" and priority <= "Medium" %}
 //    | 
-// warning: Use one of: Priority.High, Priority.Low - comparing enums with strings will soon be deprecated.
+// warning: Use one of: Priority.Low, Priority.High - comparing enums with strings will soon be deprecated.
 //   -->  enum/enum_jinja_syntax_validation.baml:107
 //    | 
 // 106 |         // Mixed ordering
@@ -350,7 +350,7 @@ function TestEnumJinjaSyntax(status: Status, priority: Priority, nullable_status
 // 162 |         // Typos and fuzzy matching
 // 163 |         {% if status == "Activ" %}
 //    | 
-// warning: Use one of: Priority.Low, Priority.High - comparing enums with strings will soon be deprecated.
+// warning: Use one of: Priority.High, Priority.Low - comparing enums with strings will soon be deprecated.
 //   -->  enum/enum_jinja_syntax_validation.baml:167
 //    | 
 // 166 |         
