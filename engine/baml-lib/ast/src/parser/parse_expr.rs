@@ -343,8 +343,7 @@ fn parse_statement_inner_rule(
         Rule::while_loop => parse_while_loop(stmt_token, diagnostics),
         Rule::for_loop => parse_for_loop(stmt_token, diagnostics),
         Rule::if_expression => parse_if_expression(stmt_token, diagnostics).map(Stmt::Expression),
-        Rule::fn_app => parse_fn_app(stmt_token, diagnostics).map(Stmt::Expression),
-        Rule::generic_fn_app => parse_generic_fn_app(stmt_token, diagnostics).map(Stmt::Expression),
+        Rule::expression => parse_expression(stmt_token, diagnostics).map(Stmt::Expression),
         Rule::expr_block => parse_expr_block(stmt_token, diagnostics)
             .map(|expr_block| Stmt::Expression(Expression::ExprBlock(expr_block, span.clone()))),
         _ => {
