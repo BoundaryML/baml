@@ -2668,11 +2668,6 @@ mod tests {
                 source: "
                 fn EarlyReturn(x: int) -> int {
                   if x == 42 { return 1; }
-<<<<<<< Updated upstream
-
-=======
-
->>>>>>> Stashed changes
                   x + 5
                 }
             ",
@@ -2707,22 +2702,12 @@ mod tests {
                   // NOTE: currently there's no empty returns.
 
                   if a == 0 { return 0; }
-<<<<<<< Updated upstream
-
-=======
-
->>>>>>> Stashed changes
                   {
                      let b = 1;
                      if a != b {
                         return 0;
                      }
                   }
-<<<<<<< Updated upstream
-
-=======
-
->>>>>>> Stashed changes
                   {
                      let c = 2;
                      let b = 3;
