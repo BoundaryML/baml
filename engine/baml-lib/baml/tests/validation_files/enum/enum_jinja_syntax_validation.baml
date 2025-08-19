@@ -308,7 +308,7 @@ function TestEnumJinjaSyntax(status: Status, priority: Priority, nullable_status
 // 96 |         // Less than (should suggest available values)
 // 97 |         {% if status < "ZZZ" %}
 //    | 
-// warning: Use one of: Priority.Low, Priority.High - comparing enums with strings will soon be deprecated.
+// warning: Use one of: Priority.High, Priority.Low - comparing enums with strings will soon be deprecated.
 //   -->  enum/enum_jinja_syntax_validation.baml:102
 //    | 
 // 101 |         // Greater than
@@ -320,7 +320,7 @@ function TestEnumJinjaSyntax(status: Status, priority: Priority, nullable_status
 // 106 |         // Mixed ordering
 // 107 |         {% if status >= "Active" and priority <= "Medium" %}
 //    | 
-// warning: Use one of: Priority.Low, Priority.High - comparing enums with strings will soon be deprecated.
+// warning: Use one of: Priority.High, Priority.Low - comparing enums with strings will soon be deprecated.
 //   -->  enum/enum_jinja_syntax_validation.baml:107
 //    | 
 // 106 |         // Mixed ordering
@@ -344,7 +344,7 @@ function TestEnumJinjaSyntax(status: Status, priority: Priority, nullable_status
 // 148 |         // Comparing different enum types (should be type error)
 // 149 |         {% if status == priority %}
 //    | 
-// warning: Use one of: Status.Active, Status.Inactive - comparing enums with strings will soon be deprecated.
+// warning: Use one of: Status.Inactive, Status.Active - comparing enums with strings will soon be deprecated.
 //   -->  enum/enum_jinja_syntax_validation.baml:163
 //    | 
 // 162 |         // Typos and fuzzy matching
@@ -356,7 +356,7 @@ function TestEnumJinjaSyntax(status: Status, priority: Priority, nullable_status
 // 166 |         
 // 167 |         {% if priority == "Hgh" %}
 //    | 
-// warning: Use one of: Status.Pending, Status.Active - comparing enums with strings will soon be deprecated.
+// warning: Use one of: Status.Active, Status.Pending - comparing enums with strings will soon be deprecated.
 //   -->  enum/enum_jinja_syntax_validation.baml:172
 //    | 
 // 171 |         // Non-existent values

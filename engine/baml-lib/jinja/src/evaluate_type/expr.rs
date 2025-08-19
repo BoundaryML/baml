@@ -190,11 +190,9 @@ fn tracker_visit_expr(
                         ast::BinOpKind::Eq | ast::BinOpKind::Ne 
                         | ast::BinOpKind::Lt | ast::BinOpKind::Gt 
                         | ast::BinOpKind::Lte | ast::BinOpKind::Gte => {
-                            state.errors.push(TypeError::new_enum_literal_suggestion(
+                            state.errors.push(TypeError::new_enum_string_cmp_deprecated(
                                 expr,
                                 enum_name,
-                                "lorem-ipsum-todo-placeholder",
-                                types,
                                 expr.span(),
                             ));
                             Type::Bool

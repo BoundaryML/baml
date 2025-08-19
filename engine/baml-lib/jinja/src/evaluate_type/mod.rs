@@ -342,6 +342,20 @@ impl TypeError {
         }
     }
 
+    fn new_enum_string_cmp_deprecated(
+        _expr: &Expr,
+        enum_name: &str,
+        span: Span,
+    ) -> Self {
+        Self {
+            message: format!(
+                "Comparing enum {} to string variable - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.",
+                enum_name
+            ),
+            span,
+        }
+    }
+
     fn new_invalid_type(expr: &Expr, got: &Type, expected: &str, span: Span) -> Self {
         Self {
             message: format!(
