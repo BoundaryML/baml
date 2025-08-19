@@ -70,6 +70,7 @@ export declare class ClassBuilder {
 
 export declare class ClassPropertyBuilder {
   setType(fieldType: FieldType): ClassPropertyBuilder
+  getType(): FieldType
   alias(alias?: string | undefined | null): ClassPropertyBuilder
   description(description?: string | undefined | null): ClassPropertyBuilder
 }
@@ -252,11 +253,11 @@ export interface BamlLogEvent {
   startTime: string
 }
 
-export declare function get_version(): string
+export declare export declare function get_version(): string
 
-export declare function getLogLevel(): string
+export declare export declare function getLogLevel(): string
 
-export declare function invoke_runtime_cli(params: Array<string>): number
+export declare export declare function invoke_runtime_cli(params: Array<string>): number
 
 export interface LogEventMetadata {
   eventId: string
@@ -264,8 +265,9 @@ export interface LogEventMetadata {
   rootEventId: string
 }
 
-export declare function setLogJsonMode(useJson: boolean): void
+export declare export declare function setLogJsonMode(useJson: boolean): void
 
-export declare function setLogLevel(level: string): void
+export declare export declare function setLogLevel(level: string): void
 
-export declare function setLogMaxChunkLength(length: number): void
+export declare export declare function setLogMaxChunkLength(length: number): void
+
