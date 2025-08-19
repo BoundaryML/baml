@@ -1,225 +1,223 @@
-#[cfg(test)]
-mod tests {
-    use crate::baml_value_to_jinja_value::MinijinjaBamlEnumValue;
-    use minijinja::value::Value;
+use minijinja::value::Value;
 
-    #[test]
-    fn test_enum_string_comparison_value_name() {
-        // Test that enum compares to value name, not alias
-        let enum_val = Value::from_object(MinijinjaBamlEnumValue {
-            value: "Refund".to_string(),
-            alias: Some("gimmie".to_string()),
-            enum_name: "PaymentType".to_string(),
-        });
-        let value_name = Value::from("Refund");
-        let alias_name = Value::from("gimmie");
+use crate::baml_value_to_jinja_value::MinijinjaBamlEnumValue;
 
-        // Should equal value name
-        assert_eq!(enum_val == value_name, true);
-        assert_eq!(value_name == enum_val, true); // Commutativity
+#[test]
+fn test_enum_string_comparison_value_name() {
+    // Test that enum compares to value name, not alias
+    let enum_val = Value::from_object(MinijinjaBamlEnumValue {
+        value: "Refund".to_string(),
+        alias: Some("gimmie".to_string()),
+        enum_name: "PaymentType".to_string(),
+    });
+    let value_name = Value::from("Refund");
+    let alias_name = Value::from("gimmie");
 
-        // Should NOT equal alias
-        assert_eq!(enum_val == alias_name, false);
-        assert_eq!(alias_name == enum_val, false);
-    }
+    // Should equal value name
+    assert_eq!(enum_val, value_name);
+    assert_eq!(value_name, enum_val); // Commutativity
 
-    #[test]
-    fn test_enum_string_comparison_no_alias() {
-        // Test enum without alias
-        let enum_val = Value::from_object(MinijinjaBamlEnumValue {
-            value: "Payment".to_string(),
-            alias: None,
-            enum_name: "PaymentType".to_string(),
-        });
-        let value_name = Value::from("Payment");
+    // Should NOT equal alias
+    assert_ne!(enum_val, alias_name);
+    assert_ne!(alias_name, enum_val);
+}
 
-        assert_eq!(enum_val == value_name, true);
-        assert_eq!(value_name == enum_val, true);
-    }
+#[test]
+fn test_enum_string_comparison_no_alias() {
+    // Test enum without alias
+    let enum_val = Value::from_object(MinijinjaBamlEnumValue {
+        value: "Payment".to_string(),
+        alias: None,
+        enum_name: "PaymentType".to_string(),
+    });
+    let value_name = Value::from("Payment");
 
-    #[test]
-    fn test_enum_to_enum_comparison() {
-        // Test that enum-to-enum comparison still works
-        let enum1 = Value::from_object(MinijinjaBamlEnumValue {
-            value: "Active".to_string(),
-            alias: Some("active_status".to_string()),
-            enum_name: "Status".to_string(),
-        });
-        let enum2 = Value::from_object(MinijinjaBamlEnumValue {
-            value: "Active".to_string(),
-            alias: Some("active_status".to_string()),
-            enum_name: "Status".to_string(),
-        });
-        let enum3 = Value::from_object(MinijinjaBamlEnumValue {
-            value: "Inactive".to_string(),
-            alias: None,
-            enum_name: "Status".to_string(),
-        });
+    assert_eq!(enum_val, value_name);
+    assert_eq!(value_name, enum_val);
+}
 
-        assert_eq!(enum1 == enum2, true);
-        assert_eq!(enum1 == enum3, false);
-    }
+#[test]
+fn test_enum_to_enum_comparison() {
+    // Test that enum-to-enum comparison still works
+    let enum1 = Value::from_object(MinijinjaBamlEnumValue {
+        value: "Active".to_string(),
+        alias: Some("active_status".to_string()),
+        enum_name: "Status".to_string(),
+    });
+    let enum2 = Value::from_object(MinijinjaBamlEnumValue {
+        value: "Active".to_string(),
+        alias: Some("active_status".to_string()),
+        enum_name: "Status".to_string(),
+    });
+    let enum3 = Value::from_object(MinijinjaBamlEnumValue {
+        value: "Inactive".to_string(),
+        alias: None,
+        enum_name: "Status".to_string(),
+    });
 
-    #[test]
-    fn test_enum_ordering() {
-        // Test ordering consistency
-        let enum_val = Value::from_object(MinijinjaBamlEnumValue {
-            value: "Beta".to_string(),
-            alias: None,
-            enum_name: "GreekLetter".to_string(),
-        });
-        let alpha = Value::from("Alpha");
-        let beta = Value::from("Beta");
-        let gamma = Value::from("Gamma");
+    assert_eq!(enum1, enum2);
+    assert_ne!(enum1, enum3);
+}
 
-        assert_eq!(enum_val.cmp(&alpha), std::cmp::Ordering::Greater);
-        assert_eq!(alpha.cmp(&enum_val), std::cmp::Ordering::Less);
+#[test]
+fn test_enum_ordering() {
+    // Test ordering consistency
+    let enum_val = Value::from_object(MinijinjaBamlEnumValue {
+        value: "Beta".to_string(),
+        alias: None,
+        enum_name: "GreekLetter".to_string(),
+    });
+    let alpha = Value::from("Alpha");
+    let beta = Value::from("Beta");
+    let gamma = Value::from("Gamma");
 
-        assert_eq!(enum_val.cmp(&beta), std::cmp::Ordering::Equal);
-        assert_eq!(beta.cmp(&enum_val), std::cmp::Ordering::Equal);
+    assert_eq!(enum_val.cmp(&alpha), std::cmp::Ordering::Greater);
+    assert_eq!(alpha.cmp(&enum_val), std::cmp::Ordering::Less);
 
-        assert_eq!(enum_val.cmp(&gamma), std::cmp::Ordering::Less);
-        assert_eq!(gamma.cmp(&enum_val), std::cmp::Ordering::Greater);
-    }
+    assert_eq!(enum_val.cmp(&beta), std::cmp::Ordering::Equal);
+    assert_eq!(beta.cmp(&enum_val), std::cmp::Ordering::Equal);
 
-    #[test]
-    fn test_enum_properties() {
-        // Test .value, .alias, and .display properties
-        let enum_with_alias = Value::from_object(MinijinjaBamlEnumValue {
-            value: "InProgress".to_string(),
-            alias: Some("in_progress".to_string()),
-            enum_name: "Status".to_string(),
-        });
-        let enum_no_alias = Value::from_object(MinijinjaBamlEnumValue {
-            value: "Complete".to_string(),
-            alias: None,
-            enum_name: "Status".to_string(),
-        });
+    assert_eq!(enum_val.cmp(&gamma), std::cmp::Ordering::Less);
+    assert_eq!(gamma.cmp(&enum_val), std::cmp::Ordering::Greater);
+}
 
-        // Test .value property
-        assert_eq!(
-            enum_with_alias
-                .as_object()
-                .unwrap()
-                .get_value(&Value::from("value")),
-            Some(Value::from("InProgress"))
-        );
-        assert_eq!(
-            enum_no_alias
-                .as_object()
-                .unwrap()
-                .get_value(&Value::from("value")),
-            Some(Value::from("Complete"))
-        );
+#[test]
+fn test_enum_properties() {
+    // Test .value, .alias, and .display properties
+    let enum_with_alias = Value::from_object(MinijinjaBamlEnumValue {
+        value: "InProgress".to_string(),
+        alias: Some("in_progress".to_string()),
+        enum_name: "Status".to_string(),
+    });
+    let enum_no_alias = Value::from_object(MinijinjaBamlEnumValue {
+        value: "Complete".to_string(),
+        alias: None,
+        enum_name: "Status".to_string(),
+    });
 
-        // Test .alias property
-        assert_eq!(
-            enum_with_alias
-                .as_object()
-                .unwrap()
-                .get_value(&Value::from("alias")),
-            Some(Value::from("in_progress"))
-        );
-        assert_eq!(
-            enum_no_alias
-                .as_object()
-                .unwrap()
-                .get_value(&Value::from("alias")),
-            None
-        );
+    // Test .value property
+    assert_eq!(
+        enum_with_alias
+            .as_object()
+            .unwrap()
+            .get_value(&Value::from("value")),
+        Some(Value::from("InProgress"))
+    );
+    assert_eq!(
+        enum_no_alias
+            .as_object()
+            .unwrap()
+            .get_value(&Value::from("value")),
+        Some(Value::from("Complete"))
+    );
 
-        // Test .display property
-        assert_eq!(
-            enum_with_alias
-                .as_object()
-                .unwrap()
-                .get_value(&Value::from("display")),
-            Some(Value::from("in_progress"))
-        );
-        assert_eq!(
-            enum_no_alias
-                .as_object()
-                .unwrap()
-                .get_value(&Value::from("display")),
-            Some(Value::from("Complete"))
-        );
+    // Test .alias property
+    assert_eq!(
+        enum_with_alias
+            .as_object()
+            .unwrap()
+            .get_value(&Value::from("alias")),
+        Some(Value::from("in_progress"))
+    );
+    assert_eq!(
+        enum_no_alias
+            .as_object()
+            .unwrap()
+            .get_value(&Value::from("alias")),
+        None
+    );
 
-        // Test .name and .enum_name properties
-        assert_eq!(
-            enum_with_alias
-                .as_object()
-                .unwrap()
-                .get_value(&Value::from("name")),
-            Some(Value::from("Status"))
-        );
-        assert_eq!(
-            enum_with_alias
-                .as_object()
-                .unwrap()
-                .get_value(&Value::from("enum_name")),
-            Some(Value::from("Status"))
-        );
-        assert_eq!(
-            enum_no_alias
-                .as_object()
-                .unwrap()
-                .get_value(&Value::from("name")),
-            Some(Value::from("Status"))
-        );
-        assert_eq!(
-            enum_no_alias
-                .as_object()
-                .unwrap()
-                .get_value(&Value::from("enum_name")),
-            Some(Value::from("Status"))
-        );
-    }
+    // Test .display property
+    assert_eq!(
+        enum_with_alias
+            .as_object()
+            .unwrap()
+            .get_value(&Value::from("display")),
+        Some(Value::from("in_progress"))
+    );
+    assert_eq!(
+        enum_no_alias
+            .as_object()
+            .unwrap()
+            .get_value(&Value::from("display")),
+        Some(Value::from("Complete"))
+    );
 
-    #[test]
-    fn test_enum_display_formatting() {
-        // Test that display/render uses alias when available
-        let enum_with_alias = MinijinjaBamlEnumValue {
-            value: "Refund".to_string(),
-            alias: Some("gimmie".to_string()),
-            enum_name: "PaymentType".to_string(),
-        };
-        let enum_no_alias = MinijinjaBamlEnumValue {
-            value: "Payment".to_string(),
-            alias: None,
-            enum_name: "PaymentType".to_string(),
-        };
+    // Test .name and .enum_name properties
+    assert_eq!(
+        enum_with_alias
+            .as_object()
+            .unwrap()
+            .get_value(&Value::from("name")),
+        Some(Value::from("Status"))
+    );
+    assert_eq!(
+        enum_with_alias
+            .as_object()
+            .unwrap()
+            .get_value(&Value::from("enum_name")),
+        Some(Value::from("Status"))
+    );
+    assert_eq!(
+        enum_no_alias
+            .as_object()
+            .unwrap()
+            .get_value(&Value::from("name")),
+        Some(Value::from("Status"))
+    );
+    assert_eq!(
+        enum_no_alias
+            .as_object()
+            .unwrap()
+            .get_value(&Value::from("enum_name")),
+        Some(Value::from("Status"))
+    );
+}
 
-        assert_eq!(format!("{}", enum_with_alias), "gimmie");
-        assert_eq!(format!("{}", enum_no_alias), "Payment");
-    }
+#[test]
+fn test_enum_display_formatting() {
+    // Test that display/render uses alias when available
+    let enum_with_alias = MinijinjaBamlEnumValue {
+        value: "Refund".to_string(),
+        alias: Some("gimmie".to_string()),
+        enum_name: "PaymentType".to_string(),
+    };
+    let enum_no_alias = MinijinjaBamlEnumValue {
+        value: "Payment".to_string(),
+        alias: None,
+        enum_name: "PaymentType".to_string(),
+    };
 
-    #[test]
-    fn test_enum_case_sensitivity() {
-        // Test that comparisons are case-sensitive
-        let enum_val = Value::from_object(MinijinjaBamlEnumValue {
-            value: "MyValue".to_string(),
-            alias: Some("my-value".to_string()),
-            enum_name: "MyEnum".to_string(),
-        });
+    assert_eq!(format!("{enum_with_alias}"), "gimmie");
+    assert_eq!(format!("{enum_no_alias}"), "Payment");
+}
 
-        assert_eq!(enum_val == Value::from("MyValue"), true);
-        assert_eq!(enum_val == Value::from("myvalue"), false);
-        assert_eq!(enum_val == Value::from("MYVALUE"), false);
-        assert_eq!(enum_val == Value::from("my-value"), false); // Alias not used for comparison
-    }
+#[test]
+fn test_enum_case_sensitivity() {
+    // Test that comparisons are case-sensitive
+    let enum_val = Value::from_object(MinijinjaBamlEnumValue {
+        value: "MyValue".to_string(),
+        alias: Some("my-value".to_string()),
+        enum_name: "MyEnum".to_string(),
+    });
 
-    #[test]
-    fn test_enum_comparison_with_non_string() {
-        // Test that enum doesn't equal non-string types
-        let enum_val = Value::from_object(MinijinjaBamlEnumValue {
-            value: "123".to_string(),
-            alias: None,
-            enum_name: "NumberEnum".to_string(),
-        });
+    assert_eq!(enum_val, Value::from("MyValue"));
+    assert_ne!(enum_val, Value::from("myvalue"));
+    assert_ne!(enum_val, Value::from("MYVALUE"));
+    assert_ne!(enum_val, Value::from("my-value")); // Alias not used for comparison
+}
 
-        assert_eq!(enum_val == Value::from(123), false);
-        assert_eq!(enum_val == Value::from(123.0), false);
-        assert_eq!(enum_val == Value::from(true), false);
-        assert_eq!(enum_val == Value::from(()), false); // None/null
-    }
+#[test]
+fn test_enum_comparison_with_non_string() {
+    // Test that enum doesn't equal non-string types
+    let enum_val = Value::from_object(MinijinjaBamlEnumValue {
+        value: "123".to_string(),
+        alias: None,
+        enum_name: "NumberEnum".to_string(),
+    });
+
+    assert_ne!(enum_val, Value::from(123));
+    assert_ne!(enum_val, Value::from(123.0));
+    assert_ne!(enum_val, Value::from(true));
+    assert_ne!(enum_val, Value::from(())); // None/null
 }
