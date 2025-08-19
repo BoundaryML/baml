@@ -26,7 +26,10 @@ use std::io::IsTerminal;
 
 use colored::{Color, Colorize};
 
-use crate::{Function, Instruction, Object, Value};
+use crate::{
+    vm::{EvalStack, ObjectPool, StackIndex},
+    Function, Instruction, Object, Value,
+};
 
 /// Context aware instruction display.
 ///
@@ -45,8 +48,8 @@ use crate::{Function, Instruction, Object, Value};
 pub fn display_instruction(
     instruction_ptr: isize,
     function: &Function,
-    stack: &[Value],
-    objects: &[Object],
+    stack: &EvalStack,
+    objects: &ObjectPool,
     globals: &[Value],
 ) -> (String, String) {
     let instruction = &function.bytecode.instructions[instruction_ptr as usize];
@@ -81,7 +84,9 @@ pub fn display_instruction(
                 break 'field String::new();
             }
 
-            let Value::Object(reference) = stack[stack.len() - 2] else {
+            // TODO: prevent panic here
+
+            let Value::Object(reference) = stack[unsafe { StackIndex::from_raw(stack.len() - 2) }] else {
                 break 'field String::from("(ERROR: value not an object)");
             };
 
@@ -122,7 +127,7 @@ pub fn display_instruction(
 /// The default display for objects is just a reference number. If we want
 /// all the information, we have to dereference the object and call it's
 /// `to_string` implementation.
-pub fn display_value(value: &Value, objects: &[Object]) -> String {
+pub fn display_value(value: &Value, objects: &ObjectPool) -> String {
     match value {
         Value::Object(index) => match &objects[*index] {
             // This one's a bit tricky to print.
@@ -215,8 +220,8 @@ impl Col {
 /// symmetric and returns the entire table.
 pub fn display_bytecode(
     function: &Function,
-    stack: &[Value],
-    objects: &[Object],
+    stack: &EvalStack,
+    objects: &ObjectPool,
     globals: &[Value],
     use_colors: bool,
 ) -> String {
@@ -319,7 +324,12 @@ pub fn display_bytecode(
 }
 
 /// Prints the dissassembly of a function.
-pub fn disassemble(function: &Function, stack: &[Value], objects: &[Object], globals: &[Value]) {
+pub fn disassemble(
+    function: &Function,
+    stack: &EvalStack,
+    objects: &ObjectPool,
+    globals: &[Value],
+) {
     let use_colors = std::io::stdout().is_terminal();
 
     let disassembly = display_bytecode(function, stack, objects, globals, use_colors);

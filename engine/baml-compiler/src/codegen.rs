@@ -4,7 +4,7 @@ use std::collections::{HashMap, HashSet};
 
 use baml_vm::{
     BamlVmProgram, BinOp, Bytecode, Class, CmpOp, Function, FunctionKind, Instruction, Object,
-    UnaryOp, Value,
+    ObjectIndex, ObjectPool, UnaryOp, Value,
 };
 use internal_baml_parser_database::ParserDatabase;
 
@@ -63,7 +63,7 @@ fn compile_hir_to_bytecode(hir: &hir::Hir) -> anyhow::Result<BamlVmProgram> {
         resolved_globals.insert(name.clone(), resolved_globals.len());
     }
 
-    let mut objects = Vec::with_capacity(resolved_globals.len());
+    let mut objects = ObjectPool::from_vec(Vec::with_capacity(resolved_globals.len()));
     let mut globals = Vec::with_capacity(resolved_globals.len());
 
     let mut loop_vars_counter = ForLoopVarCounters::new();
@@ -80,8 +80,8 @@ fn compile_hir_to_bytecode(hir: &hir::Hir) -> anyhow::Result<BamlVmProgram> {
         )?;
 
         // Add the function to the globals and objects pools.
-        globals.push(Value::Object(objects.len()));
-        objects.push(Object::Function(bytecode_function));
+        let object_index = objects.insert(Object::Function(bytecode_function));
+        globals.push(Value::Object(object_index));
     }
 
     for func in &hir.llm_functions {
@@ -93,8 +93,8 @@ fn compile_hir_to_bytecode(hir: &hir::Hir) -> anyhow::Result<BamlVmProgram> {
             locals_in_scope: vec![func.parameters.iter().map(|p| p.name.clone()).collect()],
         });
 
-        globals.push(Value::Object(objects.len()));
-        objects.push(bytecode_llm_function);
+        let object_index = objects.insert(bytecode_llm_function);
+        globals.push(Value::Object(object_index));
     }
 
     // Add classes to objects
@@ -104,8 +104,8 @@ fn compile_hir_to_bytecode(hir: &hir::Hir) -> anyhow::Result<BamlVmProgram> {
             field_names: class.fields.iter().map(|f| f.name.clone()).collect(),
         };
 
-        globals.push(Value::Object(objects.len()));
-        objects.push(Object::Class(bytecode_class));
+        let object_index = objects.insert(Object::Class(bytecode_class));
+        globals.push(Value::Object(object_index));
     }
 
     for (name, (func, arity)) in native_fns {
@@ -117,15 +117,18 @@ fn compile_hir_to_bytecode(hir: &hir::Hir) -> anyhow::Result<BamlVmProgram> {
             locals_in_scope: vec![], // TODO.
         });
 
-        globals.push(Value::Object(objects.len()));
-        objects.push(native_function);
+        let object_index = objects.insert(native_function);
+        globals.push(Value::Object(object_index));
     }
 
     let resolved_function_names = objects
         .iter()
         .enumerate()
         .filter_map(|(i, obj)| match obj {
-            Object::Function(f) => Some((f.name.clone(), (i, f.kind))),
+            Object::Function(f) => Some((
+                f.name.clone(),
+                (unsafe { ObjectIndex::from_raw(i) }, f.kind),
+            )),
             _ => None,
         })
         .collect();
@@ -183,7 +186,7 @@ fn compile_hir_function(
     classes: &HashMap<String, HashMap<String, usize>>,
     llm_functions: &HashSet<String>,
     loop_var_counter: &mut ForLoopVarCounters,
-    objects: &mut Vec<Object>,
+    objects: &mut ObjectPool,
 ) -> anyhow::Result<Function> {
     let mut compiler = HirCompiler::new(globals, classes, llm_functions, loop_var_counter, objects);
     compiler.compile_function(func)
@@ -265,7 +268,7 @@ struct HirCompiler<'g> {
     bytecode: Bytecode,
 
     /// Objects pool.
-    objects: &'g mut Vec<Object>,
+    objects: &'g mut ObjectPool,
 }
 
 #[derive(Debug)]
@@ -287,7 +290,7 @@ impl<'g> HirCompiler<'g> {
         classes: &'g HashMap<String, HashMap<String, usize>>,
         llm_functions: &'g HashSet<String>,
         var_counters: &'g mut ForLoopVarCounters,
-        objects: &'g mut Vec<Object>,
+        objects: &'g mut ObjectPool,
     ) -> Self {
         Self {
             globals,
@@ -707,8 +710,7 @@ impl<'g> HirCompiler<'g> {
             hir::Expression::StringValue(string, _)
             | hir::Expression::RawStringValue(string, _) => {
                 // Allocate the string in the objects pool
-                self.objects.push(Object::String(string.clone()));
-                let object_index = self.objects.len() - 1;
+                let object_index = self.objects.insert(Object::String(string.clone()));
 
                 // Add a constant that points to the string object
                 let const_index = self.add_constant(Value::Object(object_index));
@@ -1248,7 +1250,13 @@ mod tests {
 
             eprintln!(
                 "---- fn {function_name}() ----\n{}",
-                baml_vm::debug::display_bytecode(function, &[], &objects, &globals, true)
+                baml_vm::debug::display_bytecode(
+                    function,
+                    &EvalStack::default(),
+                    &objects,
+                    &globals,
+                    true
+                )
             );
 
             assert_eq!(
@@ -1835,7 +1843,7 @@ mod tests {
         } = compile(&ast)?;
 
         let main = objects[resolved_function_names["main"].0].as_function()?;
-        baml_vm::debug::disassemble(main, &[], &objects, &globals);
+        baml_vm::debug::disassemble(main, &EvalStack::default(), &objects, &globals);
 
         let expected_locals_in_scope = [
             vec!["<fn main>", "x", "a", "h"],

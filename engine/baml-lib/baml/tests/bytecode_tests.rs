@@ -84,8 +84,8 @@ fn get_bytecode_output(content: &str) -> Result<String, String> {
                     baml_vm::Object::Function(func) => {
                         output.push_str(&format!("Function: {}\n", func.name));
                         output.push_str(&baml_vm::debug::display_bytecode(
-                            func,
-                            &[], // empty stack
+                            &func,
+                            &baml_vm::EvalStack::default(),
                             &objects,
                             &globals,
                             false, // no colors for golden tests
@@ -109,9 +109,7 @@ fn get_bytecode_output(content: &str) -> Result<String, String> {
                     baml_vm::Object::Array(arr) => {
                         output.push_str(&format!("Array with {} elements\n", arr.len()));
                     }
-                    baml_vm::Object::Iterator { iterable, index } => {
-                        output.push_str(&format!("Iterator: iterable={iterable}, index={index}\n"));
-                    }
+
                     baml_vm::Object::Future(_) => {
                         output.push_str("Future\n");
                     }
