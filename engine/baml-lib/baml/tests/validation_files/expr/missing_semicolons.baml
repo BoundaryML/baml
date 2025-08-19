@@ -17,12 +17,7 @@ let x = 1
 //    | 
 //  6 | 
 //  7 | let x = 1
-//    | 
-// error: Invalid name for `type alias`: Must start with an uppercase letter.
-//   -->  expr/missing_semicolons.baml:7
-//    | 
-//  6 | 
-//  7 | let x = 1
+//  8 | 
 //    | 
 // error: Error validating: Unknown field `let` in function
 //   -->  expr/missing_semicolons.baml:3

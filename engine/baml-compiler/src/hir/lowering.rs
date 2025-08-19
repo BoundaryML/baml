@@ -140,9 +140,9 @@ impl TypeM<TypeMeta> {
                 TypeValue::Int => TypeM::Int(meta),
                 TypeValue::String => TypeM::String(meta),
                 TypeValue::Bool => TypeM::Bool(meta),
-                TypeValue::Float => TypeM::String(meta), // TODO: Add Float type to TypeM
-                TypeValue::Null => TypeM::String(meta),  // TODO: Add Null type to TypeM
-                TypeValue::Media(_) => TypeM::String(meta), // TODO: Add Media type to TypeM
+                TypeValue::Float => TypeM::Float(meta),
+                TypeValue::Null => TypeM::Null(meta),
+                TypeValue::Media(m) => TypeM::Media(*m, meta),
             },
             ast::FieldType::List(_, inner, dims, _, _) => {
                 // Respect multi-dimensional arrays (e.g., int[][] has dims=2)
@@ -169,6 +169,7 @@ impl TypeM<TypeMeta> {
             TypeM::String(meta) => meta,
             TypeM::Float(meta) => meta,
             TypeM::Bool(meta) => meta,
+            TypeM::Media(_, meta) => meta,
             TypeM::Null(meta) => meta,
             TypeM::Array(_, meta) => meta,
             TypeM::Map(_, _, meta) => meta,
@@ -194,6 +195,7 @@ impl TypeM<TypeMeta> {
             TypeM::Int(_) => false,
             TypeM::Float(_) => false,
             TypeM::String(_) => false,
+            TypeM::Media(_, _) => false,
             TypeM::Bool(_) => false,
             TypeM::Array(_, _) => false,
             TypeM::Map(_, _, _) => false,

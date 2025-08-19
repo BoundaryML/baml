@@ -21,29 +21,13 @@ pub(crate) fn parse_assignment(pair: Pair<'_>, diagnostics: &mut Diagnostics) ->
 
     let span = pair.as_span();
 
-    let mut consumed_definition_keyword = false;
-
     let mut identifier: Option<Identifier> = None;
     let mut field_type: Option<FieldType> = None;
 
     for current in pair.into_inner() {
         match current.as_rule() {
             Rule::identifier => {
-                if !consumed_definition_keyword {
-                    consumed_definition_keyword = true;
-                    match current.as_str() {
-                        "type" => {} // Ok, type alias.
-
-                        other => diagnostics.push_error(DatamodelError::new_validation_error(
-                            &format!("Unexpected keyword used in assignment: {other}"),
-                            diagnostics.span(current.as_span()),
-                        )),
-                    }
-                } else {
-                    // There are two identifiers, the second one is the name of
-                    // the type alias.
-                    identifier = Some(parse_identifier(current, diagnostics));
-                }
+                identifier = Some(parse_identifier(current, diagnostics));
             }
 
             Rule::assignment => {} // Ok, equal sign.
@@ -53,7 +37,7 @@ pub(crate) fn parse_assignment(pair: Pair<'_>, diagnostics: &mut Diagnostics) ->
             Rule::field_type => field_type = parse_field_type(current, diagnostics),
 
             Rule::field_type_with_attr => {
-                field_type = parse_field_type_with_attr(current, false, diagnostics)
+                field_type = parse_field_type_with_attr(current, false, diagnostics);
             }
 
             _ => parsing_catch_all(current, "type_alias"),

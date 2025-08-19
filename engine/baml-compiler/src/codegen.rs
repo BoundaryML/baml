@@ -2108,7 +2108,7 @@ mod tests {
                 fn main() -> int {
                     let mut a = 1;
 
-                    while a < 5 {
+                    while (a < 5) {
                         a += 1;
 
                         if (a == 2) {
@@ -2156,7 +2156,7 @@ mod tests {
                 fn Factorial(mut limit: int) -> int {
                     let mut result = 1;
 
-                    while true {
+                    while (true) {
                         if (limit == 0) {
                             break;
                         }
@@ -2215,7 +2215,7 @@ mod tests {
 
                     // used to make the loop break without relying on `break` implementation.
                     let mut should_continue = true;
-                    while should_continue {
+                    while (should_continue) {
                         result = result * limit;
                         limit = limit - 1;
 
@@ -2276,8 +2276,8 @@ mod tests {
         assert_compiles(Program {
             source: r#"
                 fn Nested() -> int {
-                    while true {
-                        while false {
+                    while (true) {
+                        while (false) {
                             continue;
                         }
                         if (false) {
@@ -2320,8 +2320,8 @@ mod tests {
             source: r#"
                 fn Nested() -> int {
                     let mut a = 5;
-                    while true {
-                        while true {
+                    while (true) {
+                        while (true) {
                             a = a + 1;
                             break;
                         }

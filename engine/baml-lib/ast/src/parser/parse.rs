@@ -128,11 +128,34 @@ pub fn parse(root_path: &Path, source: &SourceFile) -> Result<(Ast, Diagnostics)
 
                     Rule::EOI => {}
                     Rule::CATCH_ALL => {
+                        let text = current.as_str().trim();
+                        let error_message = if let Some(space_pos) = text.find(' ') {
+                            let first_word = &text[..space_pos];
+                            // Check if this looks like an attempted type alias (contains " = ")
+                            if text.contains(" = ") {
+                                // Use Levenshtein-like heuristics to detect likely misspellings of "type"
+                                let likely_type_misspelling = first_word == "let" || // Special case for let statements
+                                    (first_word.len() >= 2 && first_word.len() <= 6 &&
+                                     (first_word.chars().filter(|&c| "type".contains(c)).count() >= 2 ||
+                                      first_word.starts_with("ty") || first_word.starts_with("tp")));
+
+                                if likely_type_misspelling {
+                                    format!("Unexpected keyword used in assignment: {}", first_word)
+                                } else {
+                                    "This line is invalid. It does not start with any known Baml schema keyword.".to_string()
+                                }
+                            } else {
+                                "This line is invalid. It does not start with any known Baml schema keyword.".to_string()
+                            }
+                        } else {
+                            "This line is invalid. It does not start with any known Baml schema keyword.".to_string()
+                        };
+
                         diagnostics.push_error(DatamodelError::new_validation_error(
-                        "This line is invalid. It does not start with any known Baml schema keyword.",
-                        diagnostics.span(current.as_span()),
-                    ));
-                        break;
+                            &error_message,
+                            diagnostics.span(current.as_span()),
+                        ));
+                        // Continue parsing instead of breaking
                     }
                     Rule::comment_block => {
                         match pairs.peek().map(|b| b.as_rule()) {

@@ -96,7 +96,7 @@ fn parse_while_loop(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Stm
     let span = diagnostics.span(pair.as_span());
     let mut while_loop = pair.into_inner();
 
-    let condition = parse_expression(while_loop.next()?, diagnostics)?;
+    let condition = parse_if_predicate(while_loop.next()?, diagnostics)?;
 
     let body = parse_expr_block(while_loop.next()?, diagnostics)?;
 
@@ -507,7 +507,7 @@ fn parse_if_predicate(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<
     let span = diagnostics.span(token.as_span());
     let mut tokens = token.into_inner();
     let predicate_rule = tokens.next()?;
-    
+
     match predicate_rule.as_rule() {
         Rule::parenthesized_predicate => {
             // Extract expression from parentheses

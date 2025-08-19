@@ -209,7 +209,7 @@ fn exec_if_branch() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: "
             fn run_if(b: bool) -> int {
-                if b { 1 } else { 2 }
+                if (b) { 1 } else { 2 }
             }
 
             fn main() -> int {
@@ -227,7 +227,7 @@ fn exec_else_branch() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: "
             fn run_if(b: bool) -> int {
-                if b { 1 } else { 2 }
+                if (b) { 1 } else { 2 }
             }
 
             fn main() -> int {
@@ -245,9 +245,9 @@ fn exec_else_if_branch() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: "
             fn run_if(a: bool, b: bool) -> int {
-                if a {
+                if (a) {
                     1
-                } else if b {
+                } else if (b) {
                     2
                 } else {
                     3
@@ -881,9 +881,9 @@ fn while_loop() -> anyhow::Result<()> {
     const SOURCE: &str = r#"
         fn GCD(mut a: int, mut b: int) -> int {
 
-            while a != b {
+            while (a != b) {
 
-               if a > b {
+               if (a > b) {
                    a = a - b;
                } else {
                    b = b - a;
@@ -913,8 +913,8 @@ fn break_factorial() -> anyhow::Result<()> {
             fn Factorial(mut limit: int) -> int {
                 let mut result = 1;
 
-                while true {
-                    if limit == 0 {
+                while (true) {
+                    if (limit == 0) {
                         break;
                     }
                     result = result * limit;
@@ -939,8 +939,8 @@ fn break_nested_loops() -> anyhow::Result<()> {
         source: r#"
             fn Nested() -> int {
                 let mut a = 5;
-                while true {
-                    while true {
+                while (true) {
+                    while (true) {
                         a = a + 1;
                         break;
                     }
@@ -968,11 +968,11 @@ fn continue_factorial() -> anyhow::Result<()> {
 
                 // used to make the loop break without relying on `break` implementation.
                 let mut should_continue = true;
-                while should_continue {
+                while (should_continue) {
                     result = result * limit;
                     limit = limit - 1;
 
-                    if limit != 0 {
+                    if (limit != 0) {
                         continue;
                     } else {
                         should_continue = false;
@@ -997,11 +997,11 @@ fn continue_nested() -> anyhow::Result<()> {
         source: r#"
             fn ContinueNested() -> int {
                 let mut execute = true;
-                while execute {
-                    while false {
+                while (execute) {
+                    while (false) {
                         continue;
                     }
-                    if false {
+                    if (false) {
                         continue;
                     }
                     execute = false;
@@ -1026,7 +1026,7 @@ fn while_with_scope() -> anyhow::Result<()> {
             let mut a = 0;
             let mut b = 1;
 
-            while n > 0 {
+            while (n > 0) {
                 n -= 1;
                 let t = a + b;
                 b = a;
@@ -1079,7 +1079,7 @@ fn for_loop_with_break() -> anyhow::Result<()> {
                 let mut result = 0;
 
                 for x in xs {
-                    if x > 10 {
+                    if (x > 10) {
                         break;
                     }
                     result += x;
@@ -1105,7 +1105,7 @@ fn for_loop_with_continue() -> anyhow::Result<()> {
                 let mut result = 0;
 
                 for x in xs {
-                    if x > 10 {
+                    if (x > 10) {
                         continue;
                     }
                     result += x;
@@ -1182,11 +1182,11 @@ mod c_for_loops {
 
                     for (let mut i = 0; ; s += i) {
                         i += 1;
-                        if i > 10 {
+                        if (i > 10) {
                             let x = 0; // this tests that popping is correct.
                             break;
                         }
-                        if i == 5 {
+                        if (i == 5) {
                             // since `s += i` is in the for loop's after, this 'continue' is
                             // actually irrelevant and the function does the same as SumToTen.
                             // That's the behavior we're looking for.
@@ -1247,7 +1247,7 @@ mod return_stmt {
         assert_vm_executes(Program {
             source: r#"
                 fn EarlyReturn(x: int) -> int {
-                   if x == 42 { return 1; }
+                   if (x == 42) { return 1; }
                    
                    x + 5
                 }
@@ -1268,11 +1268,11 @@ mod return_stmt {
                 fn WithStack() -> int {
                    let a = 1;
 
-                   if a == 0 { return 0; }
+                   if (a == 0) { return 0; }
                    
                    {
                       let b = 1;
-                      if a != b {
+                      if (a != b) {
                          return 0;
                       }
                    }
@@ -1280,8 +1280,8 @@ mod return_stmt {
                    {
                       let c = 2;
                       let b = 3;
-                      while b != c {
-                         if true {
+                      while (b != c) {
+                         if (true) {
                               return 0;
                          }
                       }

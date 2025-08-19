@@ -1,5 +1,5 @@
 function simpleIf() -> string {
-    let x = if true { "yes" } else { "no" }
+    let x = if (true) { "yes" } else { "no" }
     x
 }
 
@@ -7,13 +7,13 @@ function simpleIf() -> string {
 //   -->  test.baml:2
 //    | 
 //  1 | function simpleIf() -> string {
-//  2 |     let x = if true { "yes" } else { "no" }
+//  2 |     let x = if (true) { "yes" } else { "no" }
 //  3 |     x
 //    | 
 // error: Error validating Function "simpleIf": This field declaration is invalid. It is either missing a name or a type.
 //   -->  test.baml:3
 //    | 
-//  2 |     let x = if true { "yes" } else { "no" }
+//  2 |     let x = if (true) { "yes" } else { "no" }
 //  3 |     x
 //    | 
 // error: Invalid name for `function`: Must start with an uppercase letter.
@@ -26,7 +26,7 @@ function simpleIf() -> string {
 //   -->  test.baml:2
 //    | 
 //  1 | function simpleIf() -> string {
-//  2 |     let x = if true { "yes" } else { "no" }
+//  2 |     let x = if (true) { "yes" } else { "no" }
 //    | 
 // error: Error validating: Missing `prompt` and `client` fields in function. Add to the block:
 // ```

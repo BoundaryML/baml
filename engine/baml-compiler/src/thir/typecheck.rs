@@ -373,9 +373,8 @@ fn typecheck_statement(
 
             match cur_type {
                 Some(has) => {
-                    if !has.eq_up_to_span(return_type) {
+                    if !has.is_subtype(return_type) {
                         let src = render_doc_to_string(expr.to_doc());
-
                         diagnostics.push_error(DatamodelError::new_type_mismatch_error(
                             return_type.name_for_user(),
                             has.name_for_user(),
@@ -455,10 +454,7 @@ fn typecheck_statement(
                     )),
                 },
                 None => {
-                    diagnostics.push_error(DatamodelError::new_validation_error(
-                        &format!("Unknown variable {name}"),
-                        span.clone(),
-                    ));
+                    // Diagnostic handled in baml-core.
                 }
             }
 
@@ -724,10 +720,7 @@ fn typecheck_expression(
             // Look up type in context
             let var_type = context.get_type(name).cloned();
             if var_type.is_none() {
-                diagnostics.push_error(DatamodelError::new_validation_error(
-                    &format!("Unknown variable {name}"),
-                    span.clone(),
-                ));
+                // Unknown-identifier diagnostic already reported by baml-core validation.
             }
             thir::Expr::FreeVar(name.clone(), (span.clone(), var_type))
         }
@@ -809,14 +802,29 @@ fn typecheck_expression(
 
             let (param_types, return_type, is_known_function) = match &func_type {
                 Some(hir::TypeM::Arrow(arrow, _)) => {
-                    (arrow.inputs.clone(), Some(*arrow.output.clone()), true)
+                    // Special case for std::fetch_value: use the first type argument as return type
+                    if func_name == crate::builtin::functions::FETCH_VALUE && !type_args.is_empty()
+                    {
+                        if let hir::TypeArg::Type(return_type) = &type_args[0] {
+                            (arrow.inputs.clone(), Some(return_type.clone()), true)
+                        } else {
+                            (arrow.inputs.clone(), Some(*arrow.output.clone()), true)
+                        }
+                    } else {
+                        (arrow.inputs.clone(), Some(*arrow.output.clone()), true)
+                    }
                 }
                 _ => {
                     diagnostics.push_error(DatamodelError::new_validation_error(
                         &format!("Unknown function {func_name}"),
                         span.clone(),
                     ));
-                    (vec![], None, false)
+                    // Return a placeholder type to prevent downstream type errors
+                    (
+                        vec![],
+                        Some(hir::TypeM::Null(hir::TypeMeta::default())),
+                        false,
+                    )
                 }
             };
 

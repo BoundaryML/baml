@@ -5,7 +5,7 @@ fn Factorial(mut limit: int) -> int {
 
     // used to make the loop break without relying on `break` implementation.
     let mut should_continue = true;
-	while should_continue {
+	while (should_continue) {
 		result = result * limit;
 		limit = limit - 1;
 
@@ -28,8 +28,8 @@ fn ContinueOutsideLoop() -> int {
 }
 
 fn ContinueNested() -> int {
-    while true {
-        while true {
+    while (true) {
+        while (true) {
             continue;
         }
     }

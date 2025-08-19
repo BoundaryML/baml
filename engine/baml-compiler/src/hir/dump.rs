@@ -56,6 +56,7 @@ impl TypeM<TypeMeta> {
             TypeM::Float(_) => RcDoc::text("float"),
             TypeM::String(_) => RcDoc::text("string"),
             TypeM::Bool(_) => RcDoc::text("bool"),
+            TypeM::Media(_, _) => RcDoc::text("media"), // TODO: Be more specific?
             TypeM::Array(inner, _) => RcDoc::text("array").append(inner.to_doc()),
             TypeM::Map(key, value, _) => RcDoc::text("map<")
                 .append(key.to_doc())
@@ -156,7 +157,9 @@ impl Statement {
                 condition, block, ..
             } => RcDoc::text("while")
                 .append(RcDoc::space())
+                .append(RcDoc::text("("))
                 .append(condition.to_doc())
+                .append(RcDoc::text(")"))
                 .append(RcDoc::space())
                 .append(RcDoc::text("{"))
                 .append(RcDoc::hardline())
@@ -386,7 +389,9 @@ impl Expression {
             } => {
                 let mut doc = RcDoc::text("if")
                     .append(RcDoc::space())
+                    .append(RcDoc::text("("))
                     .append(condition.to_doc())
+                    .append(RcDoc::text(")"))
                     .append(RcDoc::space())
                     .append(if_branch.to_doc())
                     .append(RcDoc::space());

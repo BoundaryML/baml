@@ -68,7 +68,7 @@ fn Nothing() -> int {
 //   var s = 0;
 //   {
 //   var i = 0;
-//     while i <= 10 {
+//     while (i <= 10) {
 //     
 //     }
 //   }
@@ -77,7 +77,7 @@ fn Nothing() -> int {
 //
 // function OnlyCond() {
 //   var s = 0;
-//   while false {
+//   while (false) {
 //   
 //   }
 //   return s;

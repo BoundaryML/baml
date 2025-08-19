@@ -21,51 +21,79 @@ function GetTodoMissingTypeArg() -> Todo {
   })
 }
 
-// warning: Workflow functions are experimental, and will break in the future.
-//   -->  expr/builtin.baml:8
+// error: Error validating Function "GetTodoMissingTypeArg": This field declaration is invalid. It is either missing a name or a type.
+//   -->  expr/builtin.baml:17
 //    | 
-//  7 | 
-//  8 | function GetTodo() -> Todo {
+// 16 | function GetTodoMissingTypeArg() -> Todo {
+// 17 |   std::fetch_value(std::Request {
 //    | 
-// warning: Workflow functions are experimental, and will break in the future.
+// error: Error validating: This line is not a valid field or attribute definition. A valid property may look like: 'myProperty "some value"' for example, with no colons.
+//   -->  expr/builtin.baml:17
+//    | 
+// 16 | function GetTodoMissingTypeArg() -> Todo {
+// 17 |   std::fetch_value(std::Request {
+// 18 |     base_url: "https://dummyjson.com/todos/1",
+//    | 
+// error: Error validating: This line is not a valid field or attribute definition. A valid property may look like: 'myProperty "some value"' for example, with no colons.
+//   -->  expr/builtin.baml:18
+//    | 
+// 17 |   std::fetch_value(std::Request {
+// 18 |     base_url: "https://dummyjson.com/todos/1",
+// 19 |     headers: {},
+//    | 
+// error: Error validating: This line is not a valid field or attribute definition. A valid property may look like: 'myProperty "some value"' for example, with no colons.
+//   -->  expr/builtin.baml:19
+//    | 
+// 18 |     base_url: "https://dummyjson.com/todos/1",
+// 19 |     headers: {},
+// 20 |     query_params: {},
+//    | 
+// error: Error validating: This line is not a valid field or attribute definition. A valid property may look like: 'myProperty "some value"' for example, with no colons.
+//   -->  expr/builtin.baml:20
+//    | 
+// 19 |     headers: {},
+// 20 |     query_params: {},
+// 21 |   })
+//    | 
+// error: Error validating: This line is invalid. It does not start with any known Baml schema keyword.
+//   -->  expr/builtin.baml:21
+//    | 
+// 20 |     query_params: {},
+// 21 |   })
+// 22 | }
+//    | 
+// error: Error validating: This line is invalid. It does not start with any known Baml schema keyword.
+//   -->  expr/builtin.baml:22
+//    | 
+// 21 |   })
+// 22 | }
+// 23 | 
+//    | 
+// error: Error validating: Unknown field `base_url` in function
+//   -->  expr/builtin.baml:18
+//    | 
+// 17 |   std::fetch_value(std::Request {
+// 18 |     base_url: "https://dummyjson.com/todos/1",
+//    | 
+// error: Error validating: Unknown field `headers` in function
+//   -->  expr/builtin.baml:19
+//    | 
+// 18 |     base_url: "https://dummyjson.com/todos/1",
+// 19 |     headers: {},
+//    | 
+// error: Error validating: Unknown field `query_params` in function
+//   -->  expr/builtin.baml:20
+//    | 
+// 19 |     headers: {},
+// 20 |     query_params: {},
+//    | 
+// error: Error validating: Missing `prompt` and `client` fields in function. Add to the block:
+// ```
+// client GPT4
+// prompt #"..."#
+// ```
 //   -->  expr/builtin.baml:16
 //    | 
 // 15 | 
 // 16 | function GetTodoMissingTypeArg() -> Todo {
-//    | 
-// error: Generic function std::fetch_value must have a type argument. Try adding a type argument like this: std::fetch_value<Type>
-//   -->  expr/builtin.baml:17
-//    | 
-// 16 | function GetTodoMissingTypeArg() -> Todo {
-// 17 |   std::fetch_value(std::Request {
-// 18 |     base_url: "https://dummyjson.com/todos/1",
-// 19 |     headers: {},
-// 20 |     query_params: {},
-// 21 |   })
-//    | 
-// error: Expected a class value, but received string value `std::fetch_value<Todo>(std::Request { base_url: "https://dummyjson.com/todos/1", headers: {}, query_params: {} })`.
-//   -->  expr/builtin.baml:9
-//    | 
-//  8 | function GetTodo() -> Todo {
-//  9 |   std::fetch_value<Todo>(std::Request {
-// 10 |     base_url: "https://dummyjson.com/todos/1",
-// 11 |     headers: {},
-// 12 |     query_params: {},
-// 13 |   })
-//    | 
-// error: Error validating: Generic function std::fetch_value must have a type argument. Try adding a type argument like this: std::fetch_value<Type>
-//   -->  expr/builtin.baml:17
-//    | 
-// 16 | function GetTodoMissingTypeArg() -> Todo {
-// 17 |   std::fetch_value(std::Request {
-//    | 
-// error: Expected a class value, but received string value `std::fetch_value(std::Request { base_url: "https://dummyjson.com/todos/1", headers: {}, query_params: {} })`.
-//   -->  expr/builtin.baml:17
-//    | 
-// 16 | function GetTodoMissingTypeArg() -> Todo {
-// 17 |   std::fetch_value(std::Request {
-// 18 |     base_url: "https://dummyjson.com/todos/1",
-// 19 |     headers: {},
-// 20 |     query_params: {},
-// 21 |   })
 //    | 

@@ -1,5 +1,5 @@
 schema = {
-    SOI ~ (expr_fn | top_level_assignment | value_expression_block | type_expression_block | template_declaration | type_alias | comment_block | raw_string_literal | empty_lines | CATCH_ALL)* ~ EOI
+    SOI ~ (expr_fn | value_expression_block | type_expression_block | template_declaration | type_alias | top_level_assignment | comment_block | raw_string_literal | empty_lines | CATCH_ALL)* ~ EOI
 }
 
 // ######################################
@@ -88,10 +88,6 @@ identifier            =  { namespaced_identifier | single_word }
 single_word           = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_" | "-")* }
 namespaced_identifier = ${ single_word ~ ("::" ~ single_word)+ }
 
-// ######################################
-// Type Alias
-// ######################################
-type_alias = { identifier ~ identifier ~ assignment ~ field_type_with_attr }
 
 // ######################################
 // Arguments
@@ -347,10 +343,10 @@ BIT_XOR_ASSIGN = { "^=" }
 BIT_SHL_ASSIGN = { "<<=" }
 BIT_SHR_ASSIGN = { ">>=" }
 
-fn_args = { expression? ~ ("," ~ expression)* }
+fn_args = { WHITESPACE? ~ expression? ~ ("," ~ WHITESPACE? ~ expression)* ~ WHITESPACE? }
 
 // Function application.
-fn_app = { identifier ~ "(" ~ fn_args ~ ")" }
+fn_app = ${ identifier ~ "(" ~ fn_args ~ ")" }
 
 // If expression.
 if_expression = { "if" ~ if_predicate ~ expr_block ~ ( "else" ~ (expr_block | if_expression) )? }
@@ -361,7 +357,7 @@ if_predicate = { parenthesized_predicate | unparenthesized_predicate }
 parenthesized_predicate = { "(" ~ expression ~ ")" }
 unparenthesized_predicate = { expression }
 
-while_loop = { "while" ~  expression ~  expr_block  }
+while_loop = { "while" ~ if_predicate ~  expr_block  }
 
 
 // For loop, e.g.
@@ -404,6 +400,11 @@ generic_fn_app_identifier = ${ identifier ~ "<" }
 
 // But then allow whitespaces inside angle brackets and after:
 // func_call<    Type    >(a, b)
-generic_fn_app_args = { field_type_chain ~ ">" ~ "(" ~ fn_args ~ ")" }
+generic_fn_app_args = ${ field_type_chain ~ ">" ~ "(" ~ fn_args ~ ")" }
 
-generic_fn_app = { generic_fn_app_identifier ~ generic_fn_app_args }
+generic_fn_app = ${ generic_fn_app_identifier ~ generic_fn_app_args }
+
+// ######################################
+// Type Alias
+// ######################################
+type_alias = { "type" ~ identifier ~ assignment ~ field_type_with_attr }

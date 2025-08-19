@@ -19,6 +19,7 @@ type Four = int | string | b
 //    | 
 //  8 | // Unexpected keyword.
 //  9 | typpe Two = float
+// 10 | 
 //    | 
 // error: The class "One" cannot be re-defined because a type_alias with that name already exists.
 //   -->  class/invalid_type_aliases.baml:1

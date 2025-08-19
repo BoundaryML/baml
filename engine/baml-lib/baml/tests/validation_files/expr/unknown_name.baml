@@ -49,19 +49,7 @@ function Go3(x:int) -> int {
 // 12 | function Go3(x:int) -> int {
 // 13 |     Unknown(x)
 //    | 
-// error: Error validating: Unknown variable a
-//   -->  expr/unknown_name.baml:2
-//    | 
-//  1 | function Go(x: int) -> int {
-//  2 |     let y = a;
-//    | 
 // error: Error validating: Type mismatch in argument
-//   -->  expr/unknown_name.baml:9
-//    | 
-//  8 |     let a = z;
-//  9 |     Go(z,a,b)
-//    | 
-// error: Error validating: Unknown variable b
 //   -->  expr/unknown_name.baml:9
 //    | 
 //  8 |     let a = z;
@@ -74,6 +62,12 @@ function Go3(x:int) -> int {
 //  9 |     Go(z,a,b)
 //    | 
 // error: Error validating: Unknown function Unknown
+//   -->  expr/unknown_name.baml:13
+//    | 
+// 12 | function Go3(x:int) -> int {
+// 13 |     Unknown(x)
+//    | 
+// error: Expected a int value, but received null type value `Unknown(x)`.
 //   -->  expr/unknown_name.baml:13
 //    | 
 // 12 | function Go3(x:int) -> int {

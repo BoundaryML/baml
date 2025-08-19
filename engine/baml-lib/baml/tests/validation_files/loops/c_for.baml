@@ -104,27 +104,3 @@ fn BreakContinue() -> int {
 // 41 | 
 // 42 | for (let mut i = 0; i <= 10; i += x) {
 //    | 
-// error: Error validating: Unknown variable i
-//   -->  loops/c_for.baml:21
-//    | 
-// 20 | 
-// 21 | for (; i <= 10; i += 1) {
-//    | 
-// error: Error validating: Unknown variable i
-//   -->  loops/c_for.baml:21
-//    | 
-// 20 | 
-// 21 | for (; i <= 10; i += 1) {
-//    | 
-// error: Error validating: Unknown variable i
-//   -->  loops/c_for.baml:22
-//    | 
-// 21 | for (; i <= 10; i += 1) {
-// 22 | s += i;
-//    | 
-// error: Error validating: Unknown variable x
-//   -->  loops/c_for.baml:42
-//    | 
-// 41 | 
-// 42 | for (let mut i = 0; i <= 10; i += x) {
-//    | 

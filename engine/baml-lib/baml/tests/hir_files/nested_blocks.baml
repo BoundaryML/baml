@@ -26,6 +26,13 @@ function Foo() -> int {
 //  6 |     x
 //  7 | }
 //    | 
+// error: Error validating: This line is invalid. It does not start with any known Baml schema keyword.
+//   -->  test.baml:7
+//    | 
+//  6 |     x
+//  7 | }
+//  8 | 
+//    | 
 // error: Error validating: Unknown field `let` in function
 //   -->  test.baml:2
 //    | 

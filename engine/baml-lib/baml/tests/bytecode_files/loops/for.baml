@@ -12,7 +12,7 @@ fn ForWithBreak(xs: int[]) -> int {
 	let mut result = 0;
 
 	for x in xs {
-		if x > 10 {
+		if (x > 10) {
 			break;
 		}
 		result += x;
@@ -25,7 +25,7 @@ fn ForWithContinue(xs: int[]) -> int {
 	let mut result = 0;
 
 	for x in xs {
-		if x > 10 {
+		if (x > 10) {
 			continue;
 		}
 		result += x;

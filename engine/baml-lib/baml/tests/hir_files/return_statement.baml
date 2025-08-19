@@ -1,5 +1,5 @@
 fn EarlyReturn(x: int) -> int {
-   if x == 42 { return 1; }
+   if (x == 42) { return 1; }
    
    x + 5
 }
@@ -9,11 +9,11 @@ fn WithStack(x: int) -> int {
 
    // NOTE: currently there's no empty returns.
 
-   if a == 0 { return 0; }
+   if (a == 0) { return 0; }
    
    {
       let b = 1;
-      if a != b {
+      if (a != b) {
          return 0;
       }
    }
@@ -21,8 +21,8 @@ fn WithStack(x: int) -> int {
    {
       let c = 2;
       let b = 3;
-      while b != c {
-         if true {
+      while (b != c) {
+         if (true) {
 	          return 0;
 	     }
       }
@@ -32,7 +32,7 @@ fn WithStack(x: int) -> int {
 }
 
 // function EarlyReturn(x) {
-//   if x == 42 {
+//   if (x == 42) {
 //   return 1;
 //   } 
 //   return x + 5;
@@ -40,20 +40,20 @@ fn WithStack(x: int) -> int {
 //
 // function WithStack(x) {
 //   let a = 1;
-//   if a == 0 {
+//   if (a == 0) {
 //   return 0;
 //   } 
 //   {
 //   let b = 1;
-//     if a != b {
+//     if (a != b) {
 //     return 0;
 //     } 
 //   }
 //   {
 //   let c = 2;
 //     let b = 3;
-//     while b != c {
-//     if true {
+//     while (b != c) {
+//     if (true) {
 //       return 0;
 //       } 
 //     }

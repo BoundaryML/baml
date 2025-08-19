@@ -2,7 +2,7 @@
 //!
 //! This file contains the definitions for all HIR items.
 
-use baml_types::{type_meta::base::StreamingBehavior, Constraint};
+use baml_types::{type_meta::base::StreamingBehavior, BamlMediaType, Constraint};
 use internal_baml_diagnostics::Span;
 
 mod dump;
@@ -44,6 +44,7 @@ pub enum TypeM<M> {
     ClassName(String, M),
     EnumName(String, M),
     Union(Vec<TypeM<M>>, M),
+    Media(BamlMediaType, M),
     Arrow(Arrow<M>, M),
 }
 
@@ -60,6 +61,7 @@ impl<T> TypeM<T> {
             TypeM::String(_) => "string",
             TypeM::Float(_) => "float",
             TypeM::Bool(_) => "bool",
+            TypeM::Media(_, _) => "media",
             TypeM::Null(_) => "null type",
             TypeM::Array(_, _) => "array",
             TypeM::Map(_, _, _) => "map",
@@ -169,6 +171,8 @@ impl Type {
             (TypeM::String(_), _) => panic!("String type mismatch"),
             (TypeM::Bool(a), TypeM::Bool(b)) => assert!(a.eq_up_to_span(b)),
             (TypeM::Bool(_), _) => panic!("Bool type mismatch"),
+            (TypeM::Media(a, _), TypeM::Media(b, _)) => assert_eq!(a, b),
+            (TypeM::Media(_, _), _) => panic!("Media type mismatch"),
             (TypeM::Null(a), TypeM::Null(b)) => assert!(a.eq_up_to_span(b)),
             (TypeM::Null(_), _) => panic!("Null type mismatch"),
             (TypeM::Array(a, a_meta), TypeM::Array(b, b_meta)) => {
