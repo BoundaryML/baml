@@ -584,6 +584,18 @@ fn tracker_visit_expr(
                     }
                     t
                 }
+                Type::EnumValueRef(enum_value) => match expr.name {
+                    "value" => Type::String,
+                    _ => {
+                        state.errors.push(TypeError::new_enum_value_property_error(
+                            &pretty_print(&expr.expr),
+                            enum_value,
+                            expr.name,
+                            expr.span(),
+                        ));
+                        Type::Unknown
+                    }
+                },
                 Type::Unknown => Type::Unknown,
                 t => {
                     state.errors.push(TypeError::new_invalid_type(

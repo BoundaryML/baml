@@ -320,6 +320,20 @@ impl TypeError {
         }
     }
 
+    fn new_enum_value_property_error(
+        variable_name: &str,
+        enum_value: &str,
+        property: &str,
+        span: Span,
+    ) -> Self {
+        Self {
+            message: format!(
+                "enum value {enum_value} ({variable_name}) does not have a property '{property}'"
+            ),
+            span,
+        }
+    }
+
     fn new_invalid_type(expr: &Expr, got: &Type, expected: &str, span: Span) -> Self {
         Self {
             message: format!(
