@@ -2138,7 +2138,7 @@ Enum value should not equal the "ALIAS_B" string, but it does
                 output_format: OutputFormatContent::new_string(),
                 tags: HashMap::new(),
             },
-            &vec![],
+            &[],
             &ir,
             &HashMap::new(),
         )?;

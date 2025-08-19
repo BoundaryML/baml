@@ -207,8 +207,7 @@ impl TypeError {
         if enum_def.values.iter().any(|v| v.name == literal_value) {
             return Self {
                 message: format!(
-                    "Use `{}.{}` instead of \"{}\" - comparing enums with strings will soon be deprecated.",
-                    enum_name, literal_value, literal_value
+                    "Use `{enum_name}.{literal_value}` instead of \"{literal_value}\" - comparing enums with strings will soon be deprecated."
                 ),
                 span,
             };
@@ -278,7 +277,7 @@ impl TypeError {
                 .collect();
             let suggestions: Vec<_> = unique_values
                 .iter()
-                .map(|v| format!("{}.{}", enum_name, v))
+                .map(|v| format!("{enum_name}.{v}"))
                 .collect();
 
             return Self {
@@ -315,8 +314,7 @@ impl TypeError {
     fn new_enum_string_cmp_deprecated(_expr: &Expr, enum_name: &str, span: Span) -> Self {
         Self {
             message: format!(
-                "Comparing enum {} to string variable - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.",
-                enum_name
+                "Comparing enum {enum_name} to string variable - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339."
             ),
             span,
         }
