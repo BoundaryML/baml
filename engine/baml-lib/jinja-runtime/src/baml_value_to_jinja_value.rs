@@ -197,13 +197,7 @@ impl Object for MinijinjaBamlEnumValue {
         // TODO: add jinja type-checking for this in evaluate_type to allow this
         match key.as_str()? {
             "value_str" => Some(minijinja::Value::from(self.value.clone())),
-            "value" => Some(minijinja::Value::from(self.value.clone())),
-            "alias" => self.alias.as_ref().map(|a| minijinja::Value::from(a.clone())),
-            "display" => Some(minijinja::Value::from(
-                self.alias.as_ref().unwrap_or(&self.value).clone()
-            )),
-            "name" => Some(minijinja::Value::from(self.enum_name.clone())),
-            "enum_name" => Some(minijinja::Value::from(self.enum_name.clone())),
+            // CLAUDE: do not add more fields here.
             _ => None,
         }
     }
