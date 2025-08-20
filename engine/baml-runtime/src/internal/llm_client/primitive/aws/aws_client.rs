@@ -63,6 +63,11 @@ use crate::{
     JsonBodyInput, RenderCurlSettings, RuntimeContext,
 };
 
+// Strip the MIME type prefix ("type/subtype" -> "subtype").
+fn strip_mime_prefix(mime: &str) -> &str {
+    mime.split_once('/').map(|(_, s)| s).unwrap_or(mime)
+}
+
 // represents client that interacts with the Bedrock API
 pub struct AwsClient {
     pub name: String,
@@ -594,13 +599,18 @@ impl WithRenderRawCurl for AwsClient {
             match media.media_type {
                 BamlMediaType::Image => match &media.content {
                     BamlMediaContent::Base64(b64) => {
-                        let format = strip_mime_prefix(&media.mime_type_as_ok()?);
-                        Ok(json!({
-                            "image": {
-                                "format": format,
-                                "source": { "bytes": b64.base64 }
-                            }
-                        }))
+                        let mut image_obj = serde_json::Map::new();
+                        if let Some(mime) = media.mime_type.as_deref() {
+                            image_obj.insert(
+                                "format".into(),
+                                json!(strip_mime_prefix(mime)),
+                            );
+                        }
+                        image_obj.insert(
+                            "source".into(),
+                            json!({ "bytes": b64.base64 }),
+                        );
+                        Ok(json!({ "image": serde_json::Value::Object(image_obj) }))
                     }
                     BamlMediaContent::File(_) | BamlMediaContent::Url(_) => {
                         anyhow::bail!("BAML internal error (AWSBedrock): image inputs must be base64 for raw curl rendering")
@@ -608,14 +618,19 @@ impl WithRenderRawCurl for AwsClient {
                 },
                 BamlMediaType::Pdf => match &media.content {
                     BamlMediaContent::Base64(b64) => {
-                        let format = strip_mime_prefix(&media.mime_type_as_ok()?);
-                        Ok(json!({
-                            "document": {
-                                "format": format,
-                                "name": "document.pdf",
-                                "source": { "bytes": b64.base64 }
-                            }
-                        }))
+                        let mut doc_obj = serde_json::Map::new();
+                        if let Some(mime) = media.mime_type.as_deref() {
+                            doc_obj.insert(
+                                "format".into(),
+                                json!(strip_mime_prefix(mime)),
+                            );
+                        }
+                        doc_obj.insert("name".into(), json!("document.pdf"));
+                        doc_obj.insert(
+                            "source".into(),
+                            json!({ "bytes": b64.base64 }),
+                        );
+                        Ok(json!({ "document": serde_json::Value::Object(doc_obj) }))
                     }
                     BamlMediaContent::File(_) | BamlMediaContent::Url(_) => {
                         anyhow::bail!("BAML internal error (AWSBedrock): PDF inputs must be base64 for raw curl rendering")
@@ -623,14 +638,18 @@ impl WithRenderRawCurl for AwsClient {
                 },
                 BamlMediaType::Video => match &media.content {
                     BamlMediaContent::Base64(b64) => {
-                        let mime = media.mime_type_as_ok()?;
-                        let format = strip_mime_prefix(&mime);
-                        Ok(json!({
-                            "video": {
-                                "format": format,
-                                "source": { "bytes": b64.base64 }
-                            }
-                        }))
+                        let mut video_obj = serde_json::Map::new();
+                        if let Some(mime) = media.mime_type.as_deref() {
+                            video_obj.insert(
+                                "format".into(),
+                                json!(strip_mime_prefix(mime)),
+                            );
+                        }
+                        video_obj.insert(
+                            "source".into(),
+                            json!({ "bytes": b64.base64 }),
+                        );
+                        Ok(json!({ "video": serde_json::Value::Object(video_obj) }))
                     }
                     BamlMediaContent::File(_) | BamlMediaContent::Url(_) => {
                         anyhow::bail!("BAML internal error (AWSBedrock): video inputs must be base64 for raw curl rendering")
@@ -1031,16 +1050,9 @@ impl AwsClient {
                 }
                 BamlMediaContent::Base64(b64_media) => Ok(bedrock::types::ContentBlock::Image(
                     bedrock::types::ImageBlock::builder()
-                        .set_format(Some(bedrock::types::ImageFormat::from(
-                            {
-                                let mime_type = media.mime_type_as_ok()?;
-                                match mime_type.strip_prefix("image/") {
-                                    Some(s) => s.to_string(),
-                                    None => mime_type,
-                                }
-                            }
-                            .as_str(),
-                        )))
+                        .set_format(Some(bedrock::types::ImageFormat::from(strip_mime_prefix(
+                            &media.mime_type_as_ok()?,
+                        ))))
                         .set_source(Some(bedrock::types::ImageSource::Bytes(Blob::new(
                             aws_smithy_types::base64::decode(b64_media.base64.clone())?,
                         ))))
@@ -1056,10 +1068,12 @@ impl AwsClient {
                         )
                     }
                     BamlMediaContent::Url(url_media) => {
-                        // AWS Bedrock supports Pdf as document type via URL
+                        // Let AWS validate the format; we just pass the subtype.
                         Ok(bedrock::types::ContentBlock::Document(
                             bedrock::types::DocumentBlock::builder()
-                                .set_format(Some(bedrock::types::DocumentFormat::Pdf))
+                                .set_format(Some(bedrock::types::DocumentFormat::from(
+                                    strip_mime_prefix(&media.mime_type_as_ok()?),
+                                )))
                                 .set_name(Some("document.pdf".to_string())) // Default name for URL-based Pdfs
                                 .set_source(Some(bedrock::types::DocumentSource::Bytes(Blob::new(
                                     url_media.url.as_bytes().to_vec(),
@@ -1072,7 +1086,9 @@ impl AwsClient {
                         // AWS Bedrock supports Pdf as document type via Base64
                         Ok(bedrock::types::ContentBlock::Document(
                             bedrock::types::DocumentBlock::builder()
-                                .set_format(Some(bedrock::types::DocumentFormat::Pdf))
+                                .set_format(Some(bedrock::types::DocumentFormat::from(
+                                    strip_mime_prefix(&media.mime_type_as_ok()?),
+                                )))
                                 .set_name(Some("document.pdf".to_string())) // Default name for Base64 Pdfs
                                 .set_source(Some(bedrock::types::DocumentSource::Bytes(Blob::new(
                                     aws_smithy_types::base64::decode(b64_media.base64.clone())?,
@@ -1096,23 +1112,10 @@ impl AwsClient {
                         )
                     }
                     BamlMediaContent::Base64(b64_media) => {
-                        // AWS Bedrock supports video for Nova models with specific format
-                        let mime_type = media.mime_type_as_ok()?;
-                        let format = match mime_type.as_str() {
-                            "video/mp4" => bedrock::types::VideoFormat::Mp4,
-                            "video/mpeg" => bedrock::types::VideoFormat::Mpeg,
-                            "video/mov" => bedrock::types::VideoFormat::Mov,
-                            // "video/avi" => bedrock::types::VideoFormat::Avi,
-                            "video/x-flv" => bedrock::types::VideoFormat::Flv,
-                            "video/mkv" => bedrock::types::VideoFormat::Mkv,
-                            "video/webm" => bedrock::types::VideoFormat::Webm,
-                            _ => {
-                                anyhow::bail!(
-                                    "AWS Bedrock video format not supported: {}. Supported formats: mp4, mpeg, mov, flv, mkv, webm",
-                                    mime_type
-                                );
-                            }
-                        };
+                        // Always strip MIME prefix and let AWS validate/err.
+                        let format = bedrock::types::VideoFormat::from(strip_mime_prefix(
+                            &media.mime_type_as_ok()?,
+                        ));
 
                         Ok(bedrock::types::ContentBlock::Video(
                             bedrock::types::VideoBlock::builder()
