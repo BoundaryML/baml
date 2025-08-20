@@ -2789,7 +2789,8 @@ pub fn make_test_ir_and_diagnostics(
 
     let path: PathBuf = "fake_file.baml".into();
     let source_file: SourceFile = (path.clone(), source_code).into();
-    let validated_schema: ValidatedSchema = validate(&path, vec![source_file]);
+    let validated_schema: ValidatedSchema =
+        validate(&path, vec![source_file], crate::FeatureFlags::new());
     let diagnostics = validated_schema.diagnostics;
     let ir = IntermediateRepr::from_parser_database(
         &validated_schema.db,
@@ -2811,7 +2812,8 @@ fn make_test_ir_and_diagnostics_from_dir(
 
     use crate::{validate, ValidatedSchema};
 
-    let validated_schema: ValidatedSchema = validate(root_dir, source_code);
+    let validated_schema: ValidatedSchema =
+        validate(root_dir, source_code, crate::FeatureFlags::new());
     let diagnostics = validated_schema.diagnostics;
     let ir = IntermediateRepr::from_parser_database(
         &validated_schema.db,

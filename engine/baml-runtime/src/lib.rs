@@ -257,6 +257,7 @@ impl BamlRuntime {
     pub fn from_directory<T: AsRef<str>>(
         path: &std::path::Path,
         env_vars: HashMap<T, T>,
+        feature_flags: internal_baml_core::feature_flags::FeatureFlags,
     ) -> Result<Self> {
         // setup_crypto_provider();
         let path = Self::parse_baml_src_path(path)?;
@@ -267,13 +268,17 @@ impl BamlRuntime {
             .collect();
         baml_log::set_from_env(&copy)?;
 
-        Self::new_runtime(InternalBamlRuntime::from_directory(&path)?, &copy)
+        Self::new_runtime(
+            InternalBamlRuntime::from_directory(&path, feature_flags)?,
+            &copy,
+        )
     }
 
     pub fn from_file_content<T: AsRef<str> + std::fmt::Debug, U: AsRef<str>>(
         root_path: &str,
         files: &HashMap<T, T>,
         env_vars: HashMap<U, U>,
+        feature_flags: internal_baml_core::feature_flags::FeatureFlags,
     ) -> Result<Self> {
         // setup_crypto_provider();
         let copy = env_vars
@@ -283,7 +288,7 @@ impl BamlRuntime {
         baml_log::set_from_env(&copy)?;
 
         Self::new_runtime(
-            InternalBamlRuntime::from_file_content(root_path, files)?,
+            InternalBamlRuntime::from_file_content(root_path, files, feature_flags)?,
             &copy,
         )
     }
