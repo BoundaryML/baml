@@ -3,9 +3,9 @@
 use pretty::RcDoc;
 
 use crate::hir::{
-    Arrow, AssignOp, BinaryOperator, Block, Class, ClassConstructorField, Enum, EnumVariant,
-    ExprFunction, Expression, Field, Hir, LlmFunction, Parameter, Statement, TypeArg, TypeM,
-    TypeMeta, UnaryOperator,
+    AssignOp, BinaryOperator, Block, Class, ClassConstructorField, Enum, EnumVariant, ExprFunction,
+    Expression, Field, Function, Hir, LlmFunction, Parameter, Statement, TypeArg, TypeM, TypeMeta,
+    UnaryOperator,
 };
 
 impl Hir {
@@ -62,8 +62,8 @@ impl TypeM<TypeMeta> {
                 .append(RcDoc::text(", "))
                 .append(value.to_doc())
                 .append(RcDoc::text(">")),
-            TypeM::ClassName(name, _) => RcDoc::text(name.clone()),
-            TypeM::EnumName(name, _) => RcDoc::text(name.clone()),
+            TypeM::Class(name, _) => RcDoc::text(name.clone()),
+            TypeM::Enum(name, _) => RcDoc::text(name.clone()),
             TypeM::Union(types, _) => {
                 let mut docs = Vec::new();
                 for type_ in types {
@@ -74,13 +74,19 @@ impl TypeM<TypeMeta> {
                     .append(RcDoc::text(")"))
             }
             TypeM::Null(_) => RcDoc::text("null"),
-            TypeM::Arrow(Arrow { inputs, output }, _) => RcDoc::text("(")
+            TypeM::Function(
+                Function {
+                    params: inputs,
+                    return_type,
+                },
+                _,
+            ) => RcDoc::text("(")
                 .append(RcDoc::intersperse(
                     inputs.iter().map(|i| i.to_doc()),
                     RcDoc::text(", "),
                 ))
                 .append(RcDoc::text(") -> "))
-                .append(output.to_doc()),
+                .append(return_type.to_doc()),
         };
 
         let mut doc = base;

@@ -50,10 +50,10 @@ pub fn typecheck(hir: &Hir, diagnostics: &mut Diagnostics) -> THir<ExprMetadata>
 
     // Add expr functions to typing context
     for func in &hir.expr_functions {
-        let arrow_type = Type::Arrow(
-            hir::Arrow {
-                inputs: func.parameters.iter().map(|p| p.r#type.clone()).collect(),
-                output: Box::new(func.return_type.clone()),
+        let arrow_type = Type::Function(
+            hir::Function {
+                params: func.parameters.iter().map(|p| p.r#type.clone()).collect(),
+                return_type: Box::new(func.return_type.clone()),
             },
             hir::TypeMeta::default(),
         );
@@ -62,10 +62,10 @@ pub fn typecheck(hir: &Hir, diagnostics: &mut Diagnostics) -> THir<ExprMetadata>
 
     // Add LLM functions to typing context
     for func in &hir.llm_functions {
-        let arrow_type = Type::Arrow(
-            hir::Arrow {
-                inputs: func.parameters.iter().map(|p| p.r#type.clone()).collect(),
-                output: Box::new(func.return_type.clone()),
+        let arrow_type = Type::Function(
+            hir::Function {
+                params: func.parameters.iter().map(|p| p.r#type.clone()).collect(),
+                return_type: Box::new(func.return_type.clone()),
             },
             hir::TypeMeta::default(),
         );
@@ -94,7 +94,7 @@ pub fn typecheck(hir: &Hir, diagnostics: &mut Diagnostics) -> THir<ExprMetadata>
                 name.clone(),
                 VarInfo {
                     ty: inferred_type,
-                    if_mutable: None,
+                    mut_var_info: None,
                 },
             );
         }
@@ -111,7 +111,7 @@ pub fn typecheck(hir: &Hir, diagnostics: &mut Diagnostics) -> THir<ExprMetadata>
                 param.name.clone(),
                 VarInfo {
                     ty: param.r#type.clone(),
-                    if_mutable: param.is_mutable.then(|| MutableVarInfo {
+                    mut_var_info: param.is_mutable.then(|| MutableVarInfo {
                         ty_infer_span: Some(param.span.clone()),
                     }),
                 },
@@ -158,7 +158,7 @@ pub struct MutableVarInfo {
 #[derive(Clone, Debug)]
 pub struct VarInfo {
     pub ty: Type,
-    pub if_mutable: Option<MutableVarInfo>,
+    pub mut_var_info: Option<MutableVarInfo>,
 }
 
 #[derive(Clone, Debug)]
@@ -188,14 +188,14 @@ impl TypeContext<'_> {
             "true".to_string(),
             VarInfo {
                 ty: Type::Bool(hir::TypeMeta::default()),
-                if_mutable: None,
+                mut_var_info: None,
             },
         );
         vars.insert(
             "false".to_string(),
             VarInfo {
                 ty: Type::Bool(hir::TypeMeta::default()),
-                if_mutable: None,
+                mut_var_info: None,
             },
         );
         Self {
@@ -271,7 +271,7 @@ fn typecheck_block(
             hir::Statement::Return { expr, .. } => {
                 // For return statements that are the last statement, we already processed them above
                 // so we need to avoid calling typecheck_expression again to prevent duplicate errors.
-                if let Some(thir::Statement::FunctionReturn {
+                if let Some(thir::Statement::Return {
                     expr: typed_expr, ..
                 }) = statements.last()
                 {
@@ -284,7 +284,7 @@ fn typecheck_block(
             _ => {
                 // No explicit return, default to null
                 (
-                    thir::Expr::Atom(BamlValueWithMeta::Null((
+                    thir::Expr::Value(BamlValueWithMeta::Null((
                         internal_baml_diagnostics::Span::fake(),
                         None,
                     ))),
@@ -295,7 +295,7 @@ fn typecheck_block(
     } else {
         // Empty block, default to null
         (
-            thir::Expr::Atom(BamlValueWithMeta::Null((
+            thir::Expr::Value(BamlValueWithMeta::Null((
                 internal_baml_diagnostics::Span::fake(),
                 None,
             ))),
@@ -303,10 +303,10 @@ fn typecheck_block(
         )
     };
 
-    // Remove the last statement if it was converted to return value
-    if last_is_return && !statements.is_empty() {
-        statements.pop();
-    }
+    // // Remove the last statement if it was converted to return value
+    // if last_is_return && !statements.is_empty() {
+    //     statements.pop();
+    // }
 
     thir::Block {
         env,
@@ -333,7 +333,7 @@ fn typecheck_statement(
                     name.clone(),
                     VarInfo {
                         ty: inferred_type,
-                        if_mutable: None,
+                        mut_var_info: None,
                     },
                 );
             } else {
@@ -343,7 +343,7 @@ fn typecheck_statement(
                     name.clone(),
                     VarInfo {
                         ty: hir::TypeM::Int(hir::TypeMeta::default()),
-                        if_mutable: None,
+                        mut_var_info: None,
                     },
                 );
             }
@@ -354,10 +354,16 @@ fn typecheck_statement(
                 span: span.clone(),
             })
         }
-        hir::Statement::Expression { expr, span }
-        | hir::Statement::SemicolonExpression { expr, span } => {
+        hir::Statement::Expression { expr, span } => {
             let typed_expr = typecheck_expression(expr, context, diagnostics);
             Some(thir::Statement::Expression {
+                expr: typed_expr,
+                span: span.clone(),
+            })
+        }
+        hir::Statement::SemicolonExpression { expr, span } => {
+            let typed_expr = typecheck_expression(expr, context, diagnostics);
+            Some(thir::Statement::SemicolonExpression {
                 expr: typed_expr,
                 span: span.clone(),
             })
@@ -390,7 +396,7 @@ fn typecheck_statement(
                 }
             }
 
-            Some(thir::Statement::FunctionReturn {
+            Some(thir::Statement::Return {
                 expr: typed_expr,
                 span: span.clone(),
             })
@@ -401,7 +407,7 @@ fn typecheck_statement(
                 name.clone(),
                 VarInfo {
                     ty: hir::TypeM::Int(hir::TypeMeta::default()),
-                    if_mutable: Some(MutableVarInfo {
+                    mut_var_info: Some(MutableVarInfo {
                         ty_infer_span: None,
                     }),
                 },
@@ -413,15 +419,12 @@ fn typecheck_statement(
         }
         hir::Statement::Assign {
             name, value, span, ..
-        }
-        | hir::Statement::AssignOp {
-            name, value, span, ..
         } => {
             let typed_value = typecheck_expression(value, context, diagnostics);
 
             // validate/update type.
             match context.vars.get_mut(name) {
-                Some(info) => match info.if_mutable.as_mut() {
+                Some(info) => match info.mut_var_info.as_mut() {
                     Some(mut_info) => {
                         if let Some(inferred_type) = typed_value.meta().1.as_ref() {
                             if let Some(infer_span) = mut_info.ty_infer_span.as_ref() {
@@ -467,6 +470,66 @@ fn typecheck_statement(
                 value: typed_value,
             })
         }
+        hir::Statement::AssignOp {
+            name,
+            value,
+            span,
+            assign_op,
+            ..
+        } => {
+            let typed_value = typecheck_expression(value, context, diagnostics);
+
+            // TODO: Extract in funciton, repeated above.
+            // validate/update type.
+            match context.vars.get_mut(name) {
+                Some(info) => match info.mut_var_info.as_mut() {
+                    Some(mut_info) => {
+                        if let Some(inferred_type) = typed_value.meta().1.as_ref() {
+                            if let Some(infer_span) = mut_info.ty_infer_span.as_ref() {
+                                // known type - typecheck against it.
+                                if !info.ty.can_be_assigned(inferred_type) {
+                                    diagnostics.push_error(DatamodelError::new_validation_error(
+                                        &format!(
+                                            "Cannot assign {} to {}",
+                                            inferred_type.name_for_user(),
+                                            info.ty.name_for_user()
+                                        ),
+                                        value.span(),
+                                    ));
+
+                                    diagnostics.push_warning(DatamodelWarning::new(
+                                        format!("type for '{name}' was inferred here"),
+                                        infer_span.clone(),
+                                    ));
+                                }
+                            } else {
+                                // type is not known yet - use this assignment as the type.
+                                info.ty = inferred_type.clone();
+
+                                mut_info.ty_infer_span = Some(value.span().clone())
+                            }
+                        }
+                    }
+                    None => diagnostics.push_error(DatamodelError::new_validation_error(
+                        &format!("Cannot assign to immutable variable {name}"),
+                        value.span(),
+                    )),
+                },
+                None => {
+                    diagnostics.push_error(DatamodelError::new_validation_error(
+                        &format!("Unknown variable {name}"),
+                        span.clone(),
+                    ));
+                }
+            }
+
+            Some(thir::Statement::AssignOp {
+                name: name.clone(),
+                value: typed_value,
+                assign_op: *assign_op,
+                span: span.clone(),
+            })
+        }
         hir::Statement::DeclareAndAssign { name, value, span } => {
             let typed_value = typecheck_expression(value, context, diagnostics);
 
@@ -477,7 +540,7 @@ fn typecheck_statement(
                     name.clone(),
                     VarInfo {
                         ty: inferred_type,
-                        if_mutable: Some(MutableVarInfo {
+                        mut_var_info: Some(MutableVarInfo {
                             ty_infer_span: Some(typed_value.span().clone()),
                         }),
                     },
@@ -489,7 +552,7 @@ fn typecheck_statement(
                     name.clone(),
                     VarInfo {
                         ty: hir::TypeM::Int(hir::TypeMeta::default()),
-                        if_mutable: Some(MutableVarInfo {
+                        mut_var_info: Some(MutableVarInfo {
                             ty_infer_span: None,
                         }),
                     },
@@ -551,7 +614,7 @@ fn typecheck_statement(
                 identifier.clone(),
                 VarInfo {
                     ty: item_type,
-                    if_mutable: None,
+                    mut_var_info: None,
                 },
             );
 
@@ -659,7 +722,7 @@ fn typecheck_expression(
     diagnostics: &mut Diagnostics,
 ) -> thir::Expr<ExprMetadata> {
     match expr {
-        hir::Expression::BoolValue(value, span) => thir::Expr::Atom(BamlValueWithMeta::Bool(
+        hir::Expression::BoolValue(value, span) => thir::Expr::Value(BamlValueWithMeta::Bool(
             *value,
             (
                 span.clone(),
@@ -670,7 +733,7 @@ fn typecheck_expression(
             // Try to parse as integer first, then float
             if value.contains('.') {
                 match value.parse::<f64>() {
-                    Ok(f) => thir::Expr::Atom(BamlValueWithMeta::Float(
+                    Ok(f) => thir::Expr::Value(BamlValueWithMeta::Float(
                         f,
                         (
                             span.clone(),
@@ -682,12 +745,12 @@ fn typecheck_expression(
                             &format!("Invalid numeric value: {value}"),
                             span.clone(),
                         ));
-                        thir::Expr::Atom(BamlValueWithMeta::Null((span.clone(), None)))
+                        thir::Expr::Value(BamlValueWithMeta::Null((span.clone(), None)))
                     }
                 }
             } else {
                 match value.parse::<i64>() {
-                    Ok(i) => thir::Expr::Atom(BamlValueWithMeta::Int(
+                    Ok(i) => thir::Expr::Value(BamlValueWithMeta::Int(
                         i,
                         (
                             span.clone(),
@@ -699,12 +762,12 @@ fn typecheck_expression(
                             &format!("Invalid numeric value: {value}"),
                             span.clone(),
                         ));
-                        thir::Expr::Atom(BamlValueWithMeta::Null((span.clone(), None)))
+                        thir::Expr::Value(BamlValueWithMeta::Null((span.clone(), None)))
                     }
                 }
             }
         }
-        hir::Expression::StringValue(value, span) => thir::Expr::Atom(BamlValueWithMeta::String(
+        hir::Expression::StringValue(value, span) => thir::Expr::Value(BamlValueWithMeta::String(
             value.clone(),
             (
                 span.clone(),
@@ -712,7 +775,7 @@ fn typecheck_expression(
             ),
         )),
         hir::Expression::RawStringValue(value, span) => {
-            thir::Expr::Atom(BamlValueWithMeta::String(
+            thir::Expr::Value(BamlValueWithMeta::String(
                 value.clone(),
                 (
                     span.clone(),
@@ -729,7 +792,7 @@ fn typecheck_expression(
                     span.clone(),
                 ));
             }
-            thir::Expr::FreeVar(name.clone(), (span.clone(), var_type))
+            thir::Expr::Var(name.clone(), (span.clone(), var_type))
         }
         hir::Expression::Array(items, span) => {
             let typed_items: Vec<_> = items
@@ -808,8 +871,8 @@ fn typecheck_expression(
             }
 
             let (param_types, return_type, is_known_function) = match &func_type {
-                Some(hir::TypeM::Arrow(arrow, _)) => {
-                    (arrow.inputs.clone(), Some(*arrow.output.clone()), true)
+                Some(hir::TypeM::Function(arrow, _)) => {
+                    (arrow.params.clone(), Some(*arrow.return_type.clone()), true)
                 }
                 _ => {
                     diagnostics.push_error(DatamodelError::new_validation_error(
@@ -868,7 +931,7 @@ fn typecheck_expression(
             }
 
             thir::Expr::Call {
-                func: Arc::new(thir::Expr::FreeVar(
+                func: Arc::new(thir::Expr::Var(
                     func_name.clone(),
                     (span.clone(), func_type.clone()),
                 )),
@@ -881,7 +944,7 @@ fn typecheck_expression(
                                 &format!("Generic function calls with type names are not yet supported: {name}"),
                                 span.clone(),
                             ));
-                            hir::TypeM::ClassName(name.clone(), hir::TypeMeta::default())
+                            hir::TypeM::Class(name.clone(), hir::TypeMeta::default())
                         }
                     })
                     .collect(),
@@ -898,7 +961,7 @@ fn typecheck_expression(
             // TODO: Typecheck method call.
             thir::Expr::MethodCall {
                 receiver: Arc::new(typecheck_expression(receiver, context, diagnostics)),
-                method: Arc::new(thir::Expr::FreeVar(method.clone(), (span.clone(), None))),
+                method: Arc::new(thir::Expr::Var(method.clone(), (span.clone(), None))),
                 args: args
                     .iter()
                     .map(|arg| typecheck_expression(arg, context, diagnostics))
@@ -1032,7 +1095,7 @@ fn typecheck_expression(
                 spread,
                 meta: (
                     span.clone(),
-                    Some(hir::TypeM::ClassName(
+                    Some(hir::TypeM::Class(
                         constructor.class_name.clone(),
                         hir::TypeMeta::default(),
                     )),
@@ -1111,7 +1174,7 @@ fn typecheck_expression(
 
             // Look up field type from class definition
             let field_type = match typed_base.meta().1.as_ref() {
-                Some(hir::TypeM::ClassName(class_name, _)) => {
+                Some(hir::TypeM::Class(class_name, _)) => {
                     // Look up the class definition
                     if let Some(class_def) = context.classes.get(class_name) {
                         // Find the field in the class
@@ -1161,7 +1224,7 @@ fn typecheck_expression(
                 "Jinja expressions not yet supported in typechecker",
                 span.clone(),
             ));
-            thir::Expr::Atom(BamlValueWithMeta::Null((span.clone(), None)))
+            thir::Expr::Value(BamlValueWithMeta::Null((span.clone(), None)))
         }
         // TODO: Typecheck operations.
         hir::Expression::BinaryOperation {
@@ -1202,8 +1265,8 @@ fn types_compatible(actual: &Type, expected: &Type) -> bool {
         (hir::TypeM::Map(k1, v1, _), hir::TypeM::Map(k2, v2, _)) => {
             types_compatible(k1, k2) && types_compatible(v1, v2)
         }
-        (hir::TypeM::ClassName(a, _), hir::TypeM::ClassName(b, _)) => a == b,
-        (hir::TypeM::EnumName(a, _), hir::TypeM::EnumName(b, _)) => a == b,
+        (hir::TypeM::Class(a, _), hir::TypeM::Class(b, _)) => a == b,
+        (hir::TypeM::Enum(a, _), hir::TypeM::Enum(b, _)) => a == b,
         // TODO: Handle union types, subtyping, etc.
         _ => false,
     }
@@ -1243,23 +1306,23 @@ impl Type {
             }
 
             // Nominal types
-            (Type::ClassName(a, _), Type::ClassName(e, _)) => a == e,
-            (Type::EnumName(a, _), Type::EnumName(e, _)) => a == e,
+            (Type::Class(a, _), Type::Class(e, _)) => a == e,
+            (Type::Enum(a, _), Type::Enum(e, _)) => a == e,
 
             // Function types: conservative check (same arity; covariant inputs/outputs)
-            (Type::Arrow(a_arrow, _), Type::Arrow(e_arrow, _)) => {
-                if a_arrow.inputs.len() != e_arrow.inputs.len() {
+            (Type::Function(a_arrow, _), Type::Function(e_arrow, _)) => {
+                if a_arrow.params.len() != e_arrow.params.len() {
                     return false;
                 }
                 if !a_arrow
-                    .inputs
+                    .params
                     .iter()
-                    .zip(e_arrow.inputs.iter())
+                    .zip(e_arrow.params.iter())
                     .all(|(a_in, e_in)| a_in.is_subtype(e_in))
                 {
                     return false;
                 }
-                a_arrow.output.is_subtype(&e_arrow.output)
+                a_arrow.return_type.is_subtype(&e_arrow.return_type)
             }
 
             // If expected is a union, self must be subtype of some branch

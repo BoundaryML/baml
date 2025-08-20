@@ -2,13 +2,18 @@
 
 use std::collections::{HashMap, HashSet};
 
+use baml_types::BamlValueWithMeta;
 use baml_vm::{
     BamlVmProgram, BinOp, Bytecode, Class, CmpOp, Function, FunctionKind, GlobalIndex, GlobalPool,
     Instruction, Object, ObjectIndex, ObjectPool, UnaryOp, Value,
 };
+use internal_baml_diagnostics::{Diagnostics, Span};
 use internal_baml_parser_database::ParserDatabase;
 
-use crate::hir;
+use crate::{
+    hir::{self, Type},
+    thir,
+};
 
 /// Compile a Baml AST into bytecode.
 ///
@@ -20,29 +25,37 @@ pub fn compile(ast: &ParserDatabase) -> anyhow::Result<BamlVmProgram> {
     // eprintln!("AST:\n{:#?}", ast.ast);
     let hir = hir::Hir::from_ast(&ast.ast);
 
+    // TODO: THIR is built twice, once for validations, once for compilation.
+    // Fix this.
+    let thir = thir::typecheck::typecheck(&hir, &mut Diagnostics::new("dummy".into()));
+
+    // eprintln!("\nTHIR:\n{:#?}", thir);
+
     // eprintln!("\nHIR:\n{:#?}", hir);
 
     // Stage 2: HIR -> Bytecode
-    compile_hir_to_bytecode(&hir)
+    compile_thir_to_bytecode(&thir)
 }
 
 /// Compile HIR to bytecode.
 ///
 /// This function takes an HIR Program and generates the bytecode for the VM.
-fn compile_hir_to_bytecode(hir: &hir::Hir) -> anyhow::Result<BamlVmProgram> {
+fn compile_thir_to_bytecode(
+    thir: &thir::THir<(Span, Option<Type>)>,
+) -> anyhow::Result<BamlVmProgram> {
     let mut resolved_globals = HashMap::new();
     let mut resolved_classes = HashMap::new();
     let mut llm_functions = HashSet::new();
 
     // Resolve global functions from HIR
-    for func in &hir.expr_functions {
+    for func in &thir.expr_functions {
         resolved_globals.insert(
             func.name.clone(),
             GlobalIndex::from_raw(resolved_globals.len()),
         );
     }
 
-    for func in &hir.llm_functions {
+    for func in &thir.llm_functions {
         resolved_globals.insert(
             func.name.clone(),
             GlobalIndex::from_raw(resolved_globals.len()),
@@ -51,7 +64,7 @@ fn compile_hir_to_bytecode(hir: &hir::Hir) -> anyhow::Result<BamlVmProgram> {
     }
 
     // Resolve classes from HIR
-    for class in &hir.classes {
+    for class in thir.classes.values() {
         resolved_globals.insert(
             class.name.clone(),
             GlobalIndex::from_raw(resolved_globals.len()),
@@ -77,13 +90,13 @@ fn compile_hir_to_bytecode(hir: &hir::Hir) -> anyhow::Result<BamlVmProgram> {
 
     let mut loop_var_counter = ForLoopVarCounters::new();
 
-    let mut fn_class_patch_lists = Vec::with_capacity(hir.expr_functions.len());
+    let mut fn_class_patch_lists = Vec::with_capacity(thir.expr_functions.len());
 
     // Compile HIR functions to bytecode
-    for func in &hir.expr_functions {
+    for func in &thir.expr_functions {
         let mut class_alloc_patch_list = Vec::new();
 
-        let bytecode_function = compile_hir_function(
+        let bytecode_function = compile_thir_function(
             func,
             &resolved_globals,
             &resolved_classes,
@@ -99,7 +112,7 @@ fn compile_hir_to_bytecode(hir: &hir::Hir) -> anyhow::Result<BamlVmProgram> {
         globals.push(Value::Object(object_index));
     }
 
-    for func in &hir.llm_functions {
+    for func in &thir.llm_functions {
         let bytecode_llm_function = Object::Function(Function {
             name: func.name.clone(),
             arity: func.parameters.len(),
@@ -113,7 +126,7 @@ fn compile_hir_to_bytecode(hir: &hir::Hir) -> anyhow::Result<BamlVmProgram> {
     }
 
     // Add classes to objects
-    for class in &hir.classes {
+    for class in thir.classes.values() {
         let bytecode_class = Class {
             name: class.name.clone(),
             field_names: class.fields.iter().map(|f| f.name.clone()).collect(),
@@ -214,8 +227,8 @@ impl ForLoopVarCounters {
 }
 
 /// Compile an HIR function to bytecode.
-fn compile_hir_function(
-    func: &hir::ExprFunction,
+fn compile_thir_function(
+    func: &thir::ExprFunction<(Span, Option<Type>)>,
     globals: &HashMap<String, GlobalIndex>,
     classes: &HashMap<String, HashMap<String, usize>>,
     llm_functions: &HashSet<String>,
@@ -364,7 +377,10 @@ impl<'g> HirCompiler<'g> {
     /// Main entry point.
     ///
     /// Here we compile a source function into a [`Function`] VM struct.
-    fn compile_function(&mut self, func: &hir::ExprFunction) -> anyhow::Result<Function> {
+    fn compile_function(
+        &mut self,
+        func: &thir::ExprFunction<(Span, Option<Type>)>,
+    ) -> anyhow::Result<Function> {
         // Compile statements in the function body.
         self.compile_block_with_parameters(&func.body, &func.parameters);
 
@@ -397,7 +413,11 @@ impl<'g> HirCompiler<'g> {
     /// Entry for function or scope compilations.
     ///
     /// Functions have parameters so we need to track those as well.
-    fn compile_block_with_parameters(&mut self, block: &hir::Block, parameters: &[hir::Parameter]) {
+    fn compile_block_with_parameters(
+        &mut self,
+        block: &thir::Block<(Span, Option<Type>)>,
+        parameters: &[thir::Parameter],
+    ) {
         self.enter_scope();
 
         for param in parameters {
@@ -409,7 +429,7 @@ impl<'g> HirCompiler<'g> {
         }
 
         let scope_has_ending_expr = block.statements.last().is_some_and(|stmt| match stmt {
-            hir::Statement::Expression { expr, .. } => expr.produces_final_value(),
+            thir::Statement::Expression { expr, .. } => expr.produces_final_value(),
             _ => false,
         });
 
@@ -417,25 +437,25 @@ impl<'g> HirCompiler<'g> {
     }
 
     /// Used to compile nested blocks within functions.
-    fn compile_block(&mut self, block: &hir::Block) {
+    fn compile_block(&mut self, block: &thir::Block<(Span, Option<Type>)>) {
         self.compile_block_with_parameters(block, &[]);
     }
 
     /// A statement is anything that does not produce a value by itself.
-    fn compile_statement(&mut self, statement: &hir::Statement) {
+    fn compile_statement(&mut self, statement: &thir::Statement<(Span, Option<Type>)>) {
         match statement {
-            hir::Statement::Let { name, value, .. } => {
+            thir::Statement::Let { name, value, .. } => {
                 self.compile_expression(value);
                 self.track_local(name);
             }
-            hir::Statement::Declare { name, .. } => {
+            thir::Statement::Declare { name, .. } => {
                 self.declare_mut(name);
             }
-            hir::Statement::Assign { name, value, .. } => {
+            thir::Statement::Assign { name, value, .. } => {
                 self.compile_expression(value);
                 self.emit(Instruction::StoreVar(self.locals[name]));
             }
-            hir::Statement::AssignOp {
+            thir::Statement::AssignOp {
                 name,
                 value,
                 assign_op,
@@ -460,18 +480,18 @@ impl<'g> HirCompiler<'g> {
 
                 self.emit(Instruction::StoreVar(self.locals[name]));
             }
-            hir::Statement::DeclareAndAssign { name, value, .. } => {
+            thir::Statement::DeclareAndAssign { name, value, .. } => {
                 self.compile_expression(value);
                 self.track_local(name);
             }
-            hir::Statement::Return { expr, .. } => {
+            thir::Statement::Return { expr, .. } => {
                 self.compile_expression(expr);
                 self.emit(Instruction::Return);
             }
-            hir::Statement::Expression { expr, .. } => {
+            thir::Statement::Expression { expr, .. } => {
                 self.compile_expression(expr);
             }
-            hir::Statement::SemicolonExpression { expr, .. } => {
+            thir::Statement::SemicolonExpression { expr, .. } => {
                 self.compile_expression(expr);
                 // This could be a function call or any other random expression
                 // like:
@@ -482,7 +502,7 @@ impl<'g> HirCompiler<'g> {
                 // binding) then implicitly drop the value.
                 self.emit(Instruction::Pop(1));
             }
-            hir::Statement::ForLoop {
+            thir::Statement::ForLoop {
                 identifier,
                 iterator,
                 block,
@@ -573,7 +593,7 @@ impl<'g> HirCompiler<'g> {
 
                 self.exit_scope(false);
             }
-            hir::Statement::While {
+            thir::Statement::While {
                 condition, block, ..
             } => {
                 self.compile_while_loop(
@@ -582,7 +602,7 @@ impl<'g> HirCompiler<'g> {
                     |_| {},
                 );
             }
-            hir::Statement::Break(_) => {
+            thir::Statement::Break(_) => {
                 let cur_loop = self.assert_loop("break");
 
                 // since we are exiting the loop context, make sure we drop everything before
@@ -598,7 +618,7 @@ impl<'g> HirCompiler<'g> {
                 // will end up with a conditional jump and a regular jump together.
                 self.emit(Instruction::Jump(0));
             }
-            hir::Statement::Continue(_) => {
+            thir::Statement::Continue(_) => {
                 let cur_loop = self.assert_loop("continue");
 
                 let pop_until = cur_loop.scope_depth;
@@ -615,7 +635,7 @@ impl<'g> HirCompiler<'g> {
                 // unreachable.
                 self.emit(Instruction::Jump(0));
             }
-            hir::Statement::CForLoop {
+            thir::Statement::CForLoop {
                 condition,
                 after,
                 block,
@@ -647,7 +667,7 @@ impl<'g> HirCompiler<'g> {
                     }
                 }
             },
-            hir::Statement::Assert { condition, .. } => {
+            thir::Statement::Assert { condition, .. } => {
                 self.compile_expression(condition);
                 self.emit(Instruction::Assert);
             }
@@ -725,18 +745,50 @@ impl<'g> HirCompiler<'g> {
     }
 
     /// Generate bytecode for an expression.
-    fn compile_expression(&mut self, expr: &hir::Expression) {
+    fn compile_expression(&mut self, expr: &thir::Expr<(Span, Option<Type>)>) {
         // TODO: The implementation of line number is extremely slow. It always
         // reads the entire source string to find the line number.
         self.current_source_line = expr.span().line_number();
 
         match expr {
-            hir::Expression::BoolValue(val, _) => {
-                let index = self.add_constant(Value::Bool(*val));
-                self.emit(Instruction::LoadConst(index));
+            thir::Expr::Value(value) => match value {
+                BamlValueWithMeta::Null(_) => {
+                    let index = self.add_constant(Value::Null);
+                    self.emit(Instruction::LoadConst(index));
+                }
+
+                BamlValueWithMeta::Bool(v, _) => {
+                    let index = self.add_constant(Value::Bool(*v));
+                    self.emit(Instruction::LoadConst(index));
+                }
+
+                BamlValueWithMeta::Int(v, _) => {
+                    let index = self.add_constant(Value::Int(*v));
+                    self.emit(Instruction::LoadConst(index));
+                }
+
+                BamlValueWithMeta::Float(v, _) => {
+                    let index = self.add_constant(Value::Float(*v));
+                    self.emit(Instruction::LoadConst(index));
+                }
+
+                BamlValueWithMeta::String(v, _) => {
+                    // Allocate the string in the objects pool
+                    let object_index = self.objects.insert(Object::String(v.clone()));
+
+                    // Add a constant that points to the string object
+                    let const_index = self.add_constant(Value::Object(object_index));
+                    self.emit(Instruction::LoadConst(const_index));
+                }
+
+                _ => panic!("unsupported atom: {:#?}", value),
+            },
+
+            thir::Expr::Block(block, _) => {
+                self.compile_block(block);
             }
 
-            hir::Expression::ArrayAccess { base, index, .. } => {
+            thir::Expr::ArrayAccess { base, index, .. } => {
                 // Compile the base expression (the array)
                 self.compile_expression(base);
 
@@ -749,32 +801,11 @@ impl<'g> HirCompiler<'g> {
                 self.emit(Instruction::LoadArrayElement);
             }
 
-            hir::Expression::FieldAccess { .. } => {
+            thir::Expr::FieldAccess { .. } => {
                 unimplemented!("field access compilation")
             }
 
-            hir::Expression::NumericValue(num, _) => {
-                let value = num
-                    .parse::<i64>()
-                    .map(Value::Int)
-                    .or_else(|_| num.parse::<f64>().map(Value::Float))
-                    .unwrap_or_else(|_| panic!("failed to parse number: {num}"));
-
-                let index = self.add_constant(value);
-                self.emit(Instruction::LoadConst(index));
-            }
-
-            hir::Expression::StringValue(string, _)
-            | hir::Expression::RawStringValue(string, _) => {
-                // Allocate the string in the objects pool
-                let object_index = self.objects.insert(Object::String(string.clone()));
-
-                // Add a constant that points to the string object
-                let const_index = self.add_constant(Value::Object(object_index));
-                self.emit(Instruction::LoadConst(const_index));
-            }
-
-            hir::Expression::Identifier(name, _) => {
+            thir::Expr::Var(name, _) => {
                 if let Some(&index) = self.locals.get(name) {
                     self.emit(Instruction::LoadVar(index));
                 } else {
@@ -782,25 +813,21 @@ impl<'g> HirCompiler<'g> {
                 }
             }
 
-            hir::Expression::Array(elements, _) => {
+            thir::Expr::List(elements, _) => {
                 for element in elements {
                     self.compile_expression(element);
                 }
                 self.emit(Instruction::AllocArray(elements.len()));
             }
 
-            hir::Expression::Map(_pairs, _) => {
+            thir::Expr::Map(_pairs, _) => {
                 // Maps are not yet implemented in bytecode
                 todo!("map compilation")
             }
 
-            hir::Expression::JinjaExpressionValue(_, _) => {
-                todo!("jinja expression compilation")
-            }
-
-            hir::Expression::Call { function, args, .. } => {
-                let name = match function.as_ref() {
-                    hir::Expression::Identifier(name, _) => name,
+            thir::Expr::Call { func, args, .. } => {
+                let name = match func.as_ref() {
+                    thir::Expr::Var(name, _) => name,
                     _ => panic!("expressions that evaluate to functions are not supported yet"),
                 };
 
@@ -825,14 +852,18 @@ impl<'g> HirCompiler<'g> {
                 }
             }
 
-            hir::Expression::MethodCall {
+            thir::Expr::MethodCall {
                 receiver,
                 method,
                 args,
                 ..
             } => {
+                let thir::Expr::Var(method, _) = method.as_ref() else {
+                    panic!("method calls must be on variables");
+                };
+
                 // Push the function onto the stack
-                let Some(&index) = self.globals.get(method) else {
+                let Some(&index) = self.globals.get(method.as_str()) else {
                     panic!("undefined method: {method}");
                 };
 
@@ -848,9 +879,14 @@ impl<'g> HirCompiler<'g> {
                 self.emit(Instruction::Call(1 + args.len()));
             }
 
-            hir::Expression::ClassConstructor(constructor, _) => {
-                let Some(&class_index) = self.globals.get(&constructor.class_name) else {
-                    panic!("undefined class: {}", constructor.class_name);
+            thir::Expr::ClassConstructor {
+                name: class_name,
+                fields,
+                spread,
+                meta,
+            } => {
+                let Some(&class_index) = self.globals.get(class_name) else {
+                    panic!("undefined class: {}", class_name);
                 };
 
                 // Emit allocation with bogus index. It will be patched later.
@@ -865,52 +901,43 @@ impl<'g> HirCompiler<'g> {
                 let mut defined_named_fields = std::collections::HashSet::new();
 
                 // Process fields in order
-                for field in &constructor.fields {
-                    match field {
-                        hir::ClassConstructorField::Named { name, value } => {
-                            self.compile_expression(value);
+                for (field_name, value) in fields {
+                    self.compile_expression(value);
 
-                            let Some(classes) = self.classes.get(&constructor.class_name) else {
-                                panic!("undefined class: {}", constructor.class_name);
-                            };
+                    let Some(classes) = self.classes.get(class_name) else {
+                        panic!("undefined class: {}", class_name);
+                    };
 
-                            let Some(&field_index) = classes.get(name) else {
-                                panic!("undefined field: {}.{}", constructor.class_name, name);
-                            };
+                    let Some(&field_index) = classes.get(field_name) else {
+                        panic!("undefined field: {}.{}", class_name, field_name);
+                    };
 
+                    self.emit(Instruction::StoreField(field_index));
+                    defined_named_fields.insert(field_name.as_str());
+                }
+
+                if let Some(spread) = spread {
+                    self.compile_expression(spread);
+
+                    // Pseudo local, user didn't declare it.
+                    let spread_local = self.locals.len() + 2;
+                    self.emit(Instruction::LoadVar(spread_local - 1));
+
+                    let Some(classes) = self.classes.get(class_name) else {
+                        panic!("undefined class: {}", class_name);
+                    };
+
+                    for (field_name, &field_index) in classes {
+                        if !defined_named_fields.contains(field_name.as_str()) {
+                            self.emit(Instruction::LoadVar(spread_local));
+                            self.emit(Instruction::LoadField(field_index));
                             self.emit(Instruction::StoreField(field_index));
-                            defined_named_fields.insert(name.as_str());
-                        }
-                        hir::ClassConstructorField::Spread { value } => {
-                            // TODO: @antonio: Variable tracking here is wrong.
-                            self.compile_expression(value);
-
-                            // Pseudo local, user didn't declare it.
-                            let spread_local = self.locals.len() + 2;
-                            self.emit(Instruction::LoadVar(spread_local - 1));
-
-                            let Some(classes) = self.classes.get(&constructor.class_name) else {
-                                panic!("undefined class: {}", constructor.class_name);
-                            };
-
-                            for (field_name, &field_index) in classes {
-                                if !defined_named_fields.contains(field_name.as_str()) {
-                                    self.emit(Instruction::LoadVar(spread_local));
-                                    self.emit(Instruction::LoadField(field_index));
-                                    self.emit(Instruction::StoreField(field_index));
-                                }
-                            }
                         }
                     }
                 }
             }
 
-            hir::Expression::If {
-                condition,
-                if_branch,
-                else_branch,
-                ..
-            } => {
+            thir::Expr::If(condition, if_branch, else_branch, _) => {
                 // First, compile the condition. This will leave the end result
                 // of the condition on top of the stack.
                 self.compile_expression(condition);
@@ -955,11 +982,7 @@ impl<'g> HirCompiler<'g> {
                 self.patch_jump(skip_else);
             }
 
-            hir::Expression::ExpressionBlock(block, _) => {
-                self.compile_block(block);
-            }
-
-            hir::Expression::BinaryOperation {
+            thir::Expr::BinaryOperation {
                 left,
                 operator,
                 right,
@@ -1025,7 +1048,7 @@ impl<'g> HirCompiler<'g> {
                 }
             }
 
-            hir::Expression::UnaryOperation { operator, expr, .. } => {
+            thir::Expr::UnaryOperation { operator, expr, .. } => {
                 self.compile_expression(expr);
 
                 self.emit(match operator {
@@ -1034,8 +1057,12 @@ impl<'g> HirCompiler<'g> {
                 });
             }
 
-            hir::Expression::Paren(expr, _) => {
+            thir::Expr::Paren(expr, _) => {
                 self.compile_expression(expr);
+            }
+
+            thir::Expr::Function(_, _, _) | thir::Expr::Builtin(_, _) => {
+                todo!("unsupported expression: {:#?}", expr)
             }
         }
     }
@@ -1205,7 +1232,7 @@ impl<'g> HirCompiler<'g> {
     }
 }
 
-impl hir::Expression {
+impl thir::Expr<(Span, Option<Type>)> {
     /// Returns true if the block ends with an expression that has a final value.
     ///
     /// For example, it would return true for this block:
@@ -1239,8 +1266,8 @@ impl hir::Expression {
     fn produces_final_value(&self) -> bool {
         match self {
             // First call will happen on a block. Recurse on the final expression.
-            hir::Expression::ExpressionBlock(block, _) => match block.statements.last() {
-                Some(hir::Statement::Expression { expr, .. }) => expr.produces_final_value(),
+            thir::Expr::Block(block, _) => match block.statements.last() {
+                Some(thir::Statement::Expression { expr, .. }) => expr.produces_final_value(),
 
                 // Does not produce a value.
                 _ => false,
@@ -1251,27 +1278,26 @@ impl hir::Expression {
             // need to match, if one of them returns a value the other one must
             // return the same type. This is typechecker bug if it's wrong, so
             // I won't bother here.
-            hir::Expression::If { if_branch, .. } => if_branch.produces_final_value(),
+            thir::Expr::If(_, if_branch, ..) => if_branch.produces_final_value(),
 
             // This is an expression that produces a value, so true. We're
             // forcing non-exhaustive match here because other types of
             // expressions that we add in the future might need to be considered.
-            hir::Expression::Array(_, _)
-            | hir::Expression::Map(_, _)
-            | hir::Expression::JinjaExpressionValue(_, _)
-            | hir::Expression::ArrayAccess { .. }
-            | hir::Expression::FieldAccess { .. }
-            | hir::Expression::MethodCall { .. }
-            | hir::Expression::BoolValue(_, _)
-            | hir::Expression::NumericValue(_, _)
-            | hir::Expression::Identifier(_, _)
-            | hir::Expression::StringValue(_, _)
-            | hir::Expression::RawStringValue(_, _)
-            | hir::Expression::Call { .. }
-            | hir::Expression::ClassConstructor(_, _)
-            | hir::Expression::BinaryOperation { .. }
-            | hir::Expression::UnaryOperation { .. }
-            | hir::Expression::Paren(_, _) => true,
+            thir::Expr::List(_, _)
+            | thir::Expr::Map(_, _)
+            | thir::Expr::ArrayAccess { .. }
+            | thir::Expr::FieldAccess { .. }
+            | thir::Expr::MethodCall { .. }
+            | thir::Expr::Value(_)
+            | thir::Expr::Call { .. }
+            | thir::Expr::ClassConstructor { .. }
+            | thir::Expr::BinaryOperation { .. }
+            | thir::Expr::UnaryOperation { .. }
+            | thir::Expr::Var(_, _)
+            | thir::Expr::Builtin(_, _)
+            | thir::Expr::Paren(_, _) => true,
+
+            thir::Expr::Function(_, _, _) => todo!("function calls"),
         }
     }
 }
@@ -1783,7 +1809,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "HIR doesn't support spread operators yet"]
+    // #[ignore = "HIR doesn't support spread operators yet"]
     fn class_constructor_with_spread_operator() -> anyhow::Result<()> {
         assert_compiles(Program {
             source: r#"
@@ -1805,7 +1831,7 @@ mod tests {
             expected: vec![(
                 "main",
                 vec![
-                    Instruction::AllocInstance(ObjectIndex::from_raw(2)),
+                    Instruction::AllocInstance(ObjectIndex::from_raw(3)),
                     Instruction::LoadConst(0),
                     Instruction::StoreField(0),
                     Instruction::LoadConst(1),
@@ -2717,7 +2743,7 @@ mod tests {
                 source: "
                 fn EarlyReturn(x: int) -> int {
                   if x == 42 { return 1; }
-                  
+
                   x + 5
                 }
             ",
@@ -2752,14 +2778,14 @@ mod tests {
                   // NOTE: currently there's no empty returns.
 
                   if a == 0 { return 0; }
-                  
+
                   {
                      let b = 1;
                      if a != b {
                         return 0;
                      }
                   }
-                  
+
                   {
                      let c = 2;
                      let b = 3;
