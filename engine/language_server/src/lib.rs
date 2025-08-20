@@ -16,7 +16,6 @@ pub mod logging;
 #[cfg(feature = "playground-server")]
 pub mod playground;
 pub mod playground2;
-pub mod recording;
 pub mod server;
 pub mod session;
 #[cfg(test)]
