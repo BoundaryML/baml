@@ -78,11 +78,11 @@ import { baml } from 'baml_client';
 import { Book, AuthorInfo } from 'baml_client/types';
 import { traceSync, traceAsync } from 'baml_client/tracing';
 
-const preProcessText = traceSync(function(text: string): Promise<string> {
+const preProcessText = traceSync('preProcessText', function(text: string): Promise<string> {
     return text.replace(/\n/g, " ");
 });
 
-const fullAnalysis = traceAsync(async function(book: Book): Promise<any> {
+const fullAnalysis = traceAsync('fullAnalysis', async function(book: Book): Promise<any> {
     const sentiment = await baml.ClassifySentiment(
         preProcessText(book.content)
     );
@@ -90,7 +90,7 @@ const fullAnalysis = traceAsync(async function(book: Book): Promise<any> {
     return bookAnalysis;
 });
 
-const testBook1 = traceAsync(async function(): Promise<any> {
+const testBook1 = traceAsync('testBook1', async function(): Promise<any> {
     const content = `Before I could reply that he [Gatsby] was my neighbor...`;
     const processedContent = preProcessText(content);
     return await fullAnalysis(
