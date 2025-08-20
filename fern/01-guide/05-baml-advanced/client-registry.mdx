@@ -105,6 +105,58 @@ run
 ```
 </Tab>
 
+<Tab title="Go">
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "os"
+    
+    "github.com/boundaryml/baml"
+)
+
+func main() {
+    ctx := context.Background()
+    
+    // Create a client registry
+    cr := baml.NewClientRegistry()
+    
+    // Creates a new client
+    err := cr.AddLLMClient("MyAmazingClient", "openai", map[string]interface{}{
+        "model":       "gpt-4o",
+        "temperature": 0.7,
+        "api_key":     os.Getenv("OPENAI_API_KEY"),
+    })
+    if err != nil {
+        panic(fmt.Sprintf("Failed to add client: %v", err))
+    }
+    
+    // Creates a client using the OpenAI Responses API
+    err = cr.AddLLMClient("MyResponsesClient", "openai-responses", map[string]interface{}{
+        "model":   "gpt-4.1",
+        "api_key": os.Getenv("OPENAI_API_KEY"),
+    })
+    if err != nil {
+        panic(fmt.Sprintf("Failed to add responses client: %v", err))
+    }
+    
+    // Sets MyAmazingClient as the primary client
+    cr.SetPrimary("MyAmazingClient")
+    
+    // ExtractResume will now use MyAmazingClient as the calling client
+    res, err := baml.ExtractResume(ctx, "...", b.WithClientRegistry(cr))
+    if err != nil {
+        panic(fmt.Sprintf("Failed to extract resume: %v", err))
+    }
+    
+    fmt.Printf("Result: %+v\n", res)
+}
+```
+</Tab>
+
 <Tab title="OpenAPI">
 
 The API supports passing client registry as a field on `__baml_options__` in the request body.

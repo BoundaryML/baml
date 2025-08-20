@@ -118,6 +118,12 @@ class LlmResponseParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="ClassifyDynEnumTwo", llm_response=llm_response, mode="request")
         return typing.cast(typing.Union[types.DynEnumTwo, str], result)
 
+    def ClassifyDynamicStatus(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Union[types.DynEnumOne, str]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="ClassifyDynamicStatus", llm_response=llm_response, mode="request")
+        return typing.cast(typing.Union[types.DynEnumOne, str], result)
+
     def ClassifyMessage(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.Category:
@@ -231,6 +237,12 @@ class LlmResponseParser:
     ) -> types.ContactInfo:
         result = self.__options.merge_options(baml_options).parse_response(function_name="ExtractContactInfo", llm_response=llm_response, mode="request")
         return typing.cast(types.ContactInfo, result)
+
+    def ExtractDynamicCategories(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.List[typing.Union[types.DynEnumTwo, str]]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="ExtractDynamicCategories", llm_response=llm_response, mode="request")
+        return typing.cast(typing.List[typing.Union[types.DynEnumTwo, str]], result)
 
     def ExtractEntities(
         self, llm_response: str, baml_options: BamlCallOptions = {},
@@ -627,6 +639,18 @@ class LlmResponseParser:
     ) -> types.RecursiveUnion:
         result = self.__options.merge_options(baml_options).parse_response(function_name="RecursiveUnionTest", llm_response=llm_response, mode="request")
         return typing.cast(types.RecursiveUnion, result)
+
+    def RenderDynamicClass(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="RenderDynamicClass", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
+    def RenderDynamicEnum(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="RenderDynamicEnum", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
 
     def ReturnAliasWithMergedAttributes(
         self, llm_response: str, baml_options: BamlCallOptions = {},
@@ -1494,6 +1518,12 @@ class LlmStreamParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="ClassifyDynEnumTwo", llm_response=llm_response, mode="stream")
         return typing.cast(typing.Union[types.DynEnumTwo, str], result)
 
+    def ClassifyDynamicStatus(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Union[types.DynEnumOne, str]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="ClassifyDynamicStatus", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Union[types.DynEnumOne, str], result)
+
     def ClassifyMessage(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.Category:
@@ -1607,6 +1637,12 @@ class LlmStreamParser:
     ) -> stream_types.ContactInfo:
         result = self.__options.merge_options(baml_options).parse_response(function_name="ExtractContactInfo", llm_response=llm_response, mode="stream")
         return typing.cast(stream_types.ContactInfo, result)
+
+    def ExtractDynamicCategories(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.List[typing.Union[types.DynEnumTwo, str]]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="ExtractDynamicCategories", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.List[typing.Union[types.DynEnumTwo, str]], result)
 
     def ExtractEntities(
         self, llm_response: str, baml_options: BamlCallOptions = {},
@@ -2003,6 +2039,18 @@ class LlmStreamParser:
     ) -> stream_types.RecursiveUnion:
         result = self.__options.merge_options(baml_options).parse_response(function_name="RecursiveUnionTest", llm_response=llm_response, mode="stream")
         return typing.cast(stream_types.RecursiveUnion, result)
+
+    def RenderDynamicClass(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="RenderDynamicClass", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
+
+    def RenderDynamicEnum(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="RenderDynamicEnum", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
 
     def ReturnAliasWithMergedAttributes(
         self, llm_response: str, baml_options: BamlCallOptions = {},

@@ -203,6 +203,46 @@ fn extract_blobs_from_trace_data<'a>(
     }
 }
 
+impl<'a, T: HasType<type_meta::NonStreaming>> IntoRpcEvent<'a, baml_rpc::runtime_api::TraceData<'a>>
+    for baml_types::tracing::events::TraceData<'a, T>
+{
+    fn to_rpc_event(
+        &'a self,
+        lookup: &(impl IRRpcState + ?Sized),
+    ) -> baml_rpc::runtime_api::TraceData<'a> {
+        use baml_types::tracing::events::TraceData;
+
+        match self {
+            TraceData::FunctionStart(function_start) => function_start.to_rpc_event(lookup),
+            TraceData::FunctionEnd(function_end) => function_end.to_rpc_event(lookup),
+            TraceData::LLMRequest(logged_llmrequest) => {
+                baml_rpc::runtime_api::TraceData::Intermediate(
+                    logged_llmrequest.to_rpc_event(lookup),
+                )
+            }
+            TraceData::RawLLMRequest(httprequest) => {
+                baml_rpc::runtime_api::TraceData::Intermediate(httprequest.to_rpc_event(lookup))
+            }
+            TraceData::RawLLMResponse(httpresponse) => {
+                baml_rpc::runtime_api::TraceData::Intermediate(httpresponse.to_rpc_event(lookup))
+            }
+            TraceData::LLMResponse(logged_llmresponse) => {
+                baml_rpc::runtime_api::TraceData::Intermediate(
+                    logged_llmresponse.to_rpc_event(lookup),
+                )
+            }
+            TraceData::RawLLMResponseStream(httpresponse) => {
+                baml_rpc::runtime_api::TraceData::Intermediate(httpresponse.to_rpc_event(lookup))
+            }
+            TraceData::SetTags(tags) => baml_rpc::runtime_api::TraceData::Intermediate(
+                baml_rpc::runtime_api::IntermediateData::SetTags(
+                    tags.clone().into_iter().collect(),
+                ),
+            ),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::{borrow::Cow, collections::HashMap};
@@ -433,7 +473,7 @@ mod tests {
 
         // Test string content that contains the base64 of the stored blob
         let base64_content = "aGVsbG8gd29ybGQ="; // "hello world" in base64
-        let input_content = format!("Here is an image: {} in the prompt", base64_content);
+        let input_content = format!("Here is an image: {base64_content} in the prompt");
         let result =
             blob_storage::extract_blobs_from_string(&input_content, &cache, function_call_id);
 
@@ -474,15 +514,14 @@ mod tests {
             "messages": [
                 {{
                     "role": "user", 
-                    "content": "Analyze this image: {}"
+                    "content": "Analyze this image: {base64_1}"
                 }},
                 {{
                     "role": "user",
-                    "content": "And compare with: {}"
+                    "content": "And compare with: {base64_2}"
                 }}
             ]
-        }}"#,
-            base64_1, base64_2
+        }}"#
         );
 
         let result =
@@ -526,10 +565,7 @@ mod tests {
         // Test content with the stored base64 and some other base64 content
         let stored_base64 = "c3RvcmVkIGRhdGE="; // "stored data" in base64
         let other_base64 = "b3RoZXIgZGF0YQ=="; // "other data" in base64
-        let input_content = format!(
-            "Stored: {} Other: {} More text",
-            stored_base64, other_base64
-        );
+        let input_content = format!("Stored: {stored_base64} Other: {other_base64} More text");
 
         let result =
             blob_storage::extract_blobs_from_string(&input_content, &cache, function_call_id);
@@ -569,7 +605,7 @@ mod tests {
 
         // Test the actual trace data processing pipeline with base64 that matches our stored blob
         let base64_content = "aW50ZWdyYXRpb24gdGVzdA=="; // "integration test" in base64
-        let original_body = format!(r#"{{"image": "{}"}}"#, base64_content);
+        let original_body = format!(r#"{{"image": "{base64_content}"}}"#);
         let mut trace_data = TraceData::Intermediate(IntermediateData::RawLLMRequest {
             http_request_id: "req-123".to_string(),
             url: "https://api.example.com/chat".to_string(),
@@ -722,7 +758,7 @@ mod tests {
 
         // Create an LLMRequest with text that contains the base64 of our stored blob
         let base64_content = "ZW1iZWRkZWQgaW1hZ2U="; // "embedded image" in base64
-        let text_with_base64 = format!("Please analyze this data: {}", base64_content);
+        let text_with_base64 = format!("Please analyze this data: {base64_content}");
         let mut trace_data = TraceData::Intermediate(IntermediateData::LLMRequest {
             client_name: "test-client".to_string(),
             client_provider: "anthropic".to_string(),
@@ -761,45 +797,5 @@ mod tests {
             base64_content.as_bytes()
         );
         assert!(cache.blob_has_ref(&blob_hash, function_call_id));
-    }
-}
-
-impl<'a, T: HasType<type_meta::NonStreaming>> IntoRpcEvent<'a, baml_rpc::runtime_api::TraceData<'a>>
-    for baml_types::tracing::events::TraceData<'a, T>
-{
-    fn to_rpc_event(
-        &'a self,
-        lookup: &(impl IRRpcState + ?Sized),
-    ) -> baml_rpc::runtime_api::TraceData<'a> {
-        use baml_types::tracing::events::TraceData;
-
-        match self {
-            TraceData::FunctionStart(function_start) => function_start.to_rpc_event(lookup),
-            TraceData::FunctionEnd(function_end) => function_end.to_rpc_event(lookup),
-            TraceData::LLMRequest(logged_llmrequest) => {
-                baml_rpc::runtime_api::TraceData::Intermediate(
-                    logged_llmrequest.to_rpc_event(lookup),
-                )
-            }
-            TraceData::RawLLMRequest(httprequest) => {
-                baml_rpc::runtime_api::TraceData::Intermediate(httprequest.to_rpc_event(lookup))
-            }
-            TraceData::RawLLMResponse(httpresponse) => {
-                baml_rpc::runtime_api::TraceData::Intermediate(httpresponse.to_rpc_event(lookup))
-            }
-            TraceData::LLMResponse(logged_llmresponse) => {
-                baml_rpc::runtime_api::TraceData::Intermediate(
-                    logged_llmresponse.to_rpc_event(lookup),
-                )
-            }
-            TraceData::RawLLMResponseStream(httpresponse) => {
-                baml_rpc::runtime_api::TraceData::Intermediate(httpresponse.to_rpc_event(lookup))
-            }
-            TraceData::SetTags(tags) => baml_rpc::runtime_api::TraceData::Intermediate(
-                baml_rpc::runtime_api::IntermediateData::SetTags(
-                    tags.clone().into_iter().collect(),
-                ),
-            ),
-        }
     }
 }

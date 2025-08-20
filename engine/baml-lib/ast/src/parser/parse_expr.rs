@@ -61,69 +61,31 @@ pub fn parse_top_level_assignment(
     assert_correct_parser!(token, Rule::top_level_assignment);
     let mut tokens = token.into_inner();
 
+    let only_let_stmt = |name, span, diagnostics: &mut Diagnostics| {
+        diagnostics.push_error(DatamodelError::new_validation_error(
+            &format!("{name} are not allowed at top level, only let statements are allowed"),
+            span,
+        ));
+
+        None
+    };
+
     match parse_statement(tokens.next()?, diagnostics)? {
         Stmt::Let(stmt) => Some(TopLevelAssignment { stmt }),
-        Stmt::Assign(stmt) => {
-            // NOTE: (Jesus) top-level is generally regarded as order-independent,
-            // and assignments need an order of execution.
-
-            diagnostics.push_error(DatamodelError::new_static(
-                "assignments are not allowed at top level, only let statements are allowed",
-                stmt.span.clone(),
-            ));
-
-            None
+        Stmt::Assign(stmt) => only_let_stmt("assignments", stmt.span, diagnostics),
+        Stmt::AssignOp(stmt) => only_let_stmt("assignments", stmt.span, diagnostics),
+        Stmt::ForLoop(ForLoopStmt { span, .. }) | Stmt::CForLoop(CForLoopStmt { span, .. }) => {
+            only_let_stmt("for loops", span, diagnostics)
         }
-        Stmt::AssignOp(stmt) => {
-            diagnostics.push_error(DatamodelError::new_static(
-                "assign operations are not allowed at top level, only let statements are allowed",
-                stmt.span.clone(),
-            ));
-
-            None
+        Stmt::Expression(expr) => only_let_stmt("expressions", expr.span().clone(), diagnostics),
+        Stmt::WhileLoop(stmt) => only_let_stmt("while loops", stmt.span, diagnostics),
+        Stmt::Break(span) => only_let_stmt("break statements", span, diagnostics),
+        Stmt::Continue(span) => only_let_stmt("continue statements", span, diagnostics),
+        Stmt::Return(ReturnStmt { span, .. }) => {
+            only_let_stmt("return statements", span, diagnostics)
         }
-
-        s @ (Stmt::ForLoop(_) | Stmt::CForLoop(_)) => {
-            diagnostics.push_error(DatamodelError::new_static(
-                "for loops are not allowed at top level, only let statements are allowed",
-                s.span().clone(),
-            ));
-
-            None
-        }
-
-        Stmt::Expression(expr) => {
-            diagnostics.push_error(DatamodelError::new_static(
-                "expressions are not allowed at top level, only let statements are allowed",
-                expr.span().clone(),
-            ));
-
-            None
-        }
-
-        Stmt::WhileLoop(stmt) => {
-            diagnostics.push_error(DatamodelError::new_static(
-                "while loops are not allowed at top level, only let statements are allowed",
-                stmt.span.clone(),
-            ));
-
-            None
-        }
-        Stmt::Break(span) => {
-            diagnostics.push_error(DatamodelError::new_static(
-                "break statements are not allowed at top level, only let statements are allowed",
-                span.clone(),
-            ));
-
-            None
-        }
-        Stmt::Continue(span) => {
-            diagnostics.push_error(DatamodelError::new_static(
-                "continue statements are not allowed at top level, only let statements are allowed",
-                span.clone(),
-            ));
-
-            None
+        Stmt::Assert(AssertStmt { span, .. }) => {
+            only_let_stmt("assert statements", span, diagnostics)
         }
     }
 }
@@ -263,6 +225,19 @@ fn parse_statement_inner_rule(
     diagnostics: &mut Diagnostics,
 ) -> Option<Stmt> {
     match stmt_token.as_rule() {
+        Rule::assert_stmt => {
+            let assert_value = stmt_token.into_inner().next()?;
+            let value = parse_expression(assert_value, diagnostics)?;
+
+            Some(Stmt::Assert(AssertStmt { value, span }))
+        }
+
+        Rule::return_stmt => {
+            let return_value = stmt_token.into_inner().next()?;
+            let value = parse_expression(return_value, diagnostics)?;
+
+            Some(Stmt::Return(ReturnStmt { value, span }))
+        }
         Rule::assign_stmt => {
             let mut assignment_tokens = stmt_token.into_inner();
 

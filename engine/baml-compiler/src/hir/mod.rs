@@ -381,6 +381,11 @@ pub enum Statement {
     },
     Break(Span),
     Continue(Span),
+
+    Assert {
+        condition: Expression,
+        span: Span,
+    },
 }
 
 #[derive(Debug, Clone, Copy)]

@@ -650,7 +650,7 @@ pub enum Statement<T> {
         block: Block<T>,
         span: Span,
     },
-    /// like [`crate::hir::Statement::CForLoop`]
+    /// see [`crate::hir::Statement::CForLoop`]
     CForLoop {
         condition: Option<Expr<T>>,
         after: Option<Box<Statement<T>>>,
@@ -658,6 +658,11 @@ pub enum Statement<T> {
     },
     Break(Span),
     Continue(Span),
+
+    Assert {
+        condition: Expr<T>,
+        span: Span,
+    },
 }
 
 impl<T: Clone> Statement<T> {
@@ -726,6 +731,9 @@ impl<T: Clone> Statement<T> {
 
                 format!("for (;{condition};{after}) {{ {block} }}")
             }
+            Statement::Assert { condition, .. } => {
+                format!("assert {cond}", cond = condition.dump_str())
+            }
         }
     }
 
@@ -737,15 +745,12 @@ impl<T: Clone> Statement<T> {
             Statement::Declare { .. } | Statement::Break(_) | Statement::Continue(_) => {
                 HashSet::new()
             }
-
             Statement::Let { value, .. }
             | Statement::Assign { value, .. }
             | Statement::DeclareAndAssign { value, .. } => value.free_vars(),
-
             Statement::FunctionReturn { expr, .. } | Statement::Expression { expr, .. } => {
                 expr.free_vars()
             }
-
             Statement::While {
                 condition: expr,
                 block,
@@ -760,7 +765,6 @@ impl<T: Clone> Statement<T> {
                 free_vars.extend(block.free_vars());
                 free_vars
             }
-
             Statement::CForLoop {
                 condition,
                 after,
@@ -783,6 +787,7 @@ impl<T: Clone> Statement<T> {
 
                 block_vars
             }
+            Statement::Assert { condition, .. } => condition.free_vars(),
         }
     }
 }

@@ -26,5 +26,12 @@ RUN npx baml-cli generate --from path-to-baml_src
 RUN bundle add baml
 RUN bundle exec baml-cli generate --from path/to/baml_src
 ```
+
+```dockerfile Go Dockerfile
+# Install Go and BAML CLI
+RUN go install github.com/boundaryml/baml/go/baml-cli@latest
+# Generate BAML client
+RUN baml-cli generate --from path-to-baml_src
+```
 </CodeBlocks>
 

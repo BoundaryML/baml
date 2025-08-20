@@ -10,6 +10,12 @@ enum DynEnumTwo {
   @@dynamic
 }
 
+enum DynEnumThree {
+  TRICYCLE @alias("bike with three wheels")
+  TRIANGLE
+  @@dynamic
+}
+
 class SomeClassNestedDynamic {
   hi string
   @@dynamic
@@ -91,3 +97,26 @@ function ClassifyDynEnumTwo(input: string) -> DynEnumTwo {
     {{ ctx.output_format }}
   "#
 }
+
+function ClassifyDynamicStatus(input: string) -> DynEnumOne {
+  client GPT35
+  prompt #"
+    Classify the status from the input text:
+
+    {{ input }}
+
+    {{ ctx.output_format }}
+  "#
+}
+
+function ExtractDynamicCategories(input: string) -> DynEnumTwo[] {
+  client GPT35
+  prompt #"
+    Extract all relevant categories from the input text:
+
+    {{ input }}
+
+    {{ ctx.output_format }}
+  "#
+}
+

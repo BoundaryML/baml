@@ -3,7 +3,7 @@
 //! This files contains the convertions between Baml AST nodes to HIR nodes.
 
 use baml_types::{type_meta::base::StreamingBehavior, Constraint, ConstraintLevel, TypeValue};
-use internal_baml_ast::ast::{self, App, Attribute, WithName, WithSpan};
+use internal_baml_ast::ast::{self, App, AssertStmt, Attribute, ReturnStmt, WithName, WithSpan};
 use internal_baml_diagnostics::Span;
 
 use crate::hir::{
@@ -362,7 +362,6 @@ fn lower_stmt(stmt: &ast::Stmt) -> Statement {
                 None => inner_loop,
             }
         }
-
         ast::Stmt::Break(span) => Statement::Break(span.clone()),
         ast::Stmt::Continue(span) => Statement::Continue(span.clone()),
         ast::Stmt::WhileLoop(ast::WhileStmt {
@@ -474,6 +473,14 @@ fn lower_stmt(stmt: &ast::Stmt) -> Statement {
                 }
             }
         }
+        ast::Stmt::Return(ReturnStmt { value, span }) => Statement::Return {
+            expr: Expression::from_ast(value),
+            span: span.clone(),
+        },
+        ast::Stmt::Assert(AssertStmt { value, span }) => Statement::Assert {
+            condition: Expression::from_ast(value),
+            span: span.clone(),
+        },
     };
     hir_stmt
 }

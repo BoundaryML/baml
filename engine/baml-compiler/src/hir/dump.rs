@@ -146,6 +146,10 @@ impl Statement {
                 .append(RcDoc::space())
                 .append(expr.to_doc())
                 .append(RcDoc::text(";")),
+            Statement::Assert { condition, .. } => RcDoc::text("assert")
+                .append(RcDoc::space())
+                .append(condition.to_doc())
+                .append(RcDoc::text(";")),
             Statement::Expression { expr, .. } => expr.to_doc(),
             Statement::SemicolonExpression { expr, .. } => expr.to_doc(),
             Statement::While {

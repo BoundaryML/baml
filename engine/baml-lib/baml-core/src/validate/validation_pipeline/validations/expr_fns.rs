@@ -1,7 +1,7 @@
 use std::{collections::HashSet, mem::MaybeUninit};
 
 use internal_baml_ast::ast::{
-    ClassConstructorField, Expression, LetStmt, Stmt, WithName, WithSpan,
+    AssertStmt, ClassConstructorField, Expression, LetStmt, ReturnStmt, Stmt, WithName, WithSpan,
 };
 use internal_baml_diagnostics::{DatamodelError, DatamodelWarning};
 use itertools::Itertools;
@@ -162,6 +162,9 @@ fn validate_stmt(ctx: &mut Context<'_>, stmt: &Stmt, scope: &HashSet<String>) {
             }
 
             validate_expr_block(ctx, &stmt.body, loop_scope);
+        }
+        Stmt::Return(ReturnStmt { value, .. }) | Stmt::Assert(AssertStmt { value, .. }) => {
+            validate_expression(ctx, value, scope);
         }
     }
 }

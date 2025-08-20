@@ -1150,6 +1150,56 @@ export function useClassifyDynEnumTwo(
   }
 }
 /**
+ * A specialized hook for the ClassifyDynamicStatus BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - input: string
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** (string | types.DynEnumOne)
+ * - **Streaming Partial:** (string | types.DynEnumOne)
+ * - **Streaming Final:** (string | types.DynEnumOne)
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useClassifyDynamicStatus({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useClassifyDynamicStatus({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useClassifyDynamicStatus(props: HookInput<'ClassifyDynamicStatus', { stream: false }>): HookOutput<'ClassifyDynamicStatus', { stream: false }>
+export function useClassifyDynamicStatus(props?: HookInput<'ClassifyDynamicStatus', { stream?: true }>): HookOutput<'ClassifyDynamicStatus', { stream: true }>
+export function useClassifyDynamicStatus(
+  props: HookInput<'ClassifyDynamicStatus', { stream?: boolean }> = {},
+): HookOutput<'ClassifyDynamicStatus', { stream: true }> | HookOutput<'ClassifyDynamicStatus', { stream: false }> {
+  let action: ServerAction = Actions.ClassifyDynamicStatus;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.ClassifyDynamicStatus;
+    return useBamlAction(action, props)
+  } else {
+    return useBamlAction(action, props as HookInput<'ClassifyDynamicStatus', { stream: false }>)
+  }
+}
+/**
  * A specialized hook for the ClassifyMessage BAML function that supports both streaming and non‑streaming responses.
  *
  * **Input Types:**
@@ -2107,6 +2157,56 @@ export function useExtractContactInfo(
     return useBamlAction(action, props)
   } else {
     return useBamlAction(action, props as HookInput<'ExtractContactInfo', { stream: false }>)
+  }
+}
+/**
+ * A specialized hook for the ExtractDynamicCategories BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - input: string
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** (string | types.DynEnumTwo)[]
+ * - **Streaming Partial:** (string | types.DynEnumTwo)[]
+ * - **Streaming Final:** (string | types.DynEnumTwo)[]
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useExtractDynamicCategories({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useExtractDynamicCategories({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useExtractDynamicCategories(props: HookInput<'ExtractDynamicCategories', { stream: false }>): HookOutput<'ExtractDynamicCategories', { stream: false }>
+export function useExtractDynamicCategories(props?: HookInput<'ExtractDynamicCategories', { stream?: true }>): HookOutput<'ExtractDynamicCategories', { stream: true }>
+export function useExtractDynamicCategories(
+  props: HookInput<'ExtractDynamicCategories', { stream?: boolean }> = {},
+): HookOutput<'ExtractDynamicCategories', { stream: true }> | HookOutput<'ExtractDynamicCategories', { stream: false }> {
+  let action: ServerAction = Actions.ExtractDynamicCategories;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.ExtractDynamicCategories;
+    return useBamlAction(action, props)
+  } else {
+    return useBamlAction(action, props as HookInput<'ExtractDynamicCategories', { stream: false }>)
   }
 }
 /**
@@ -5407,6 +5507,108 @@ export function useRecursiveUnionTest(
     return useBamlAction(action, props)
   } else {
     return useBamlAction(action, props as HookInput<'RecursiveUnionTest', { stream: false }>)
+  }
+}
+/**
+ * A specialized hook for the RenderDynamicClass BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - input: types.RenderTestClass
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** string
+ * - **Streaming Partial:** string
+ * - **Streaming Final:** string
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useRenderDynamicClass({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useRenderDynamicClass({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useRenderDynamicClass(props: HookInput<'RenderDynamicClass', { stream: false }>): HookOutput<'RenderDynamicClass', { stream: false }>
+export function useRenderDynamicClass(props?: HookInput<'RenderDynamicClass', { stream?: true }>): HookOutput<'RenderDynamicClass', { stream: true }>
+export function useRenderDynamicClass(
+  props: HookInput<'RenderDynamicClass', { stream?: boolean }> = {},
+): HookOutput<'RenderDynamicClass', { stream: true }> | HookOutput<'RenderDynamicClass', { stream: false }> {
+  let action: ServerAction = Actions.RenderDynamicClass;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.RenderDynamicClass;
+    return useBamlAction(action, props)
+  } else {
+    return useBamlAction(action, props as HookInput<'RenderDynamicClass', { stream: false }>)
+  }
+}
+/**
+ * A specialized hook for the RenderDynamicEnum BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - bike: (string | types.RenderTestEnum)
+ *
+ * - other: (string | types.RenderTestEnum)
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** string
+ * - **Streaming Partial:** string
+ * - **Streaming Final:** string
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useRenderDynamicEnum({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useRenderDynamicEnum({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useRenderDynamicEnum(props: HookInput<'RenderDynamicEnum', { stream: false }>): HookOutput<'RenderDynamicEnum', { stream: false }>
+export function useRenderDynamicEnum(props?: HookInput<'RenderDynamicEnum', { stream?: true }>): HookOutput<'RenderDynamicEnum', { stream: true }>
+export function useRenderDynamicEnum(
+  props: HookInput<'RenderDynamicEnum', { stream?: boolean }> = {},
+): HookOutput<'RenderDynamicEnum', { stream: true }> | HookOutput<'RenderDynamicEnum', { stream: false }> {
+  let action: ServerAction = Actions.RenderDynamicEnum;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.RenderDynamicEnum;
+    return useBamlAction(action, props)
+  } else {
+    return useBamlAction(action, props as HookInput<'RenderDynamicEnum', { stream: false }>)
   }
 }
 /**

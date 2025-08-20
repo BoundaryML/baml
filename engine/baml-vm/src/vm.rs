@@ -325,7 +325,7 @@ impl Type {
 /// Bug in the VM or somehow invalid source code got compiled and executed.
 ///
 /// If the VM throws this it's either a bug in the compiler or in the VM itself.
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum InternalError {
     /// The number of arguments passed to a function doesn't match the function
     /// arity.
@@ -370,17 +370,20 @@ pub enum InternalError {
 ///
 /// Either logic errors in the user's source code or bugs in our compiler/VM
 /// stack.
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum RuntimeError {
     /// Ah yes, classic stack overflow.
     StackOverflow,
+
+    /// User code triggered an assertion failure via the [`Instruction::Assert`] opcode.
+    AssertionError,
 
     /// VM internal error.
     InternalError(InternalError),
 }
 
 /// Any kind of virtual machine error.
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum VmError {
     RuntimeError(RuntimeError),
 }
@@ -1000,7 +1003,6 @@ impl Vm {
 
                     self.stack.push(result);
                 }
-
                 Instruction::AllocArray(size) => {
                     // Pop all the elements from the stack and create an array.
                     let drain_range = StackIndex(self.stack.len() - size)..;
@@ -1017,7 +1019,6 @@ impl Vm {
                     // borrow checker complains. Restore the reference.
                     function = self.objects[frame.function].as_function()?;
                 }
-
                 Instruction::LoadArrayElement => {
                     // Stack should contain [array, index]
                     // Pop the index first, then the array
@@ -1297,6 +1298,21 @@ impl Vm {
                     // implementation of `Instruction::Call` above this one for
                     // more information about this piece.
                     function = self.objects[frame.function].as_function()?;
+                }
+                Instruction::Assert => {
+                    let value = self.stack.pop().ok_or(RuntimeError::AssertionError)?;
+
+                    let Value::Bool(condition_result) = value else {
+                        return Err(InternalError::TypeError {
+                            expected: Type::Bool,
+                            got: self.objects.type_of(&value),
+                        }
+                        .into());
+                    };
+
+                    if !condition_result {
+                        return Err(RuntimeError::AssertionError.into());
+                    }
                 }
             }
         }

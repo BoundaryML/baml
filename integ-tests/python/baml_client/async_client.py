@@ -185,6 +185,13 @@ class BamlAsyncClient:
             "input": input,
         })
         return typing.cast(typing.Union[types.DynEnumTwo, str], result.cast_to(types, types, stream_types, False, __runtime__))
+    async def ClassifyDynamicStatus(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> typing.Union[types.DynEnumOne, str]:
+        result = await self.__options.merge_options(baml_options).call_function_async(function_name="ClassifyDynamicStatus", args={
+            "input": input,
+        })
+        return typing.cast(typing.Union[types.DynEnumOne, str], result.cast_to(types, types, stream_types, False, __runtime__))
     async def ClassifyMessage(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.Category:
@@ -318,6 +325,13 @@ class BamlAsyncClient:
             "document": document,
         })
         return typing.cast(types.ContactInfo, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def ExtractDynamicCategories(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> typing.List[typing.Union[types.DynEnumTwo, str]]:
+        result = await self.__options.merge_options(baml_options).call_function_async(function_name="ExtractDynamicCategories", args={
+            "input": input,
+        })
+        return typing.cast(typing.List[typing.Union[types.DynEnumTwo, str]], result.cast_to(types, types, stream_types, False, __runtime__))
     async def ExtractEntities(self, text: str,
         baml_options: BamlCallOptions = {},
     ) -> types.DynamicSchema:
@@ -780,6 +794,20 @@ class BamlAsyncClient:
             "input": input,
         })
         return typing.cast(types.RecursiveUnion, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def RenderDynamicClass(self, input: types.RenderTestClass,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = await self.__options.merge_options(baml_options).call_function_async(function_name="RenderDynamicClass", args={
+            "input": input,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def RenderDynamicEnum(self, bike: typing.Union[types.RenderTestEnum, str],other: typing.Union[types.RenderTestEnum, str],
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = await self.__options.merge_options(baml_options).call_function_async(function_name="RenderDynamicEnum", args={
+            "bike": bike,"other": other,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     async def ReturnAliasWithMergedAttributes(self, money: int,
         baml_options: BamlCallOptions = {},
     ) -> types.Checked[int, typing_extensions.Literal['gt_ten']]:
@@ -1870,6 +1898,18 @@ class BamlStreamClient:
           lambda x: typing.cast(typing.Union[types.DynEnumTwo, str], x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
+    def ClassifyDynamicStatus(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.Union[types.DynEnumOne, str], typing.Union[types.DynEnumOne, str]]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="ClassifyDynamicStatus", args={
+            "input": input,
+        })
+        return baml_py.BamlStream[typing.Union[types.DynEnumOne, str], typing.Union[types.DynEnumOne, str]](
+          result,
+          lambda x: typing.cast(typing.Union[types.DynEnumOne, str], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing.Union[types.DynEnumOne, str], x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
     def ClassifyMessage(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[types.Category, types.Category]:
@@ -2096,6 +2136,18 @@ class BamlStreamClient:
           result,
           lambda x: typing.cast(stream_types.ContactInfo, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.ContactInfo, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def ExtractDynamicCategories(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.List[typing.Union[types.DynEnumTwo, str]], typing.List[typing.Union[types.DynEnumTwo, str]]]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="ExtractDynamicCategories", args={
+            "input": input,
+        })
+        return baml_py.BamlStream[typing.List[typing.Union[types.DynEnumTwo, str]], typing.List[typing.Union[types.DynEnumTwo, str]]](
+          result,
+          lambda x: typing.cast(typing.List[typing.Union[types.DynEnumTwo, str]], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing.List[typing.Union[types.DynEnumTwo, str]], x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def ExtractEntities(self, text: str,
@@ -2888,6 +2940,30 @@ class BamlStreamClient:
           result,
           lambda x: typing.cast(stream_types.RecursiveUnion, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.RecursiveUnion, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def RenderDynamicClass(self, input: types.RenderTestClass,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="RenderDynamicClass", args={
+            "input": input,
+        })
+        return baml_py.BamlStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def RenderDynamicEnum(self, bike: typing.Union[types.RenderTestEnum, str],other: typing.Union[types.RenderTestEnum, str],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="RenderDynamicEnum", args={
+            "bike": bike,"other": other,
+        })
+        return baml_py.BamlStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def ReturnAliasWithMergedAttributes(self, money: int,
@@ -4534,6 +4610,13 @@ class BamlHttpRequestClient:
             "input": input,
         }, mode="request")
         return result
+    async def ClassifyDynamicStatus(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ClassifyDynamicStatus", args={
+            "input": input,
+        }, mode="request")
+        return result
     async def ClassifyMessage(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -4665,6 +4748,13 @@ class BamlHttpRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ExtractContactInfo", args={
             "document": document,
+        }, mode="request")
+        return result
+    async def ExtractDynamicCategories(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ExtractDynamicCategories", args={
+            "input": input,
         }, mode="request")
         return result
     async def ExtractEntities(self, text: str,
@@ -5127,6 +5217,20 @@ class BamlHttpRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="RecursiveUnionTest", args={
             "input": input,
+        }, mode="request")
+        return result
+    async def RenderDynamicClass(self, input: types.RenderTestClass,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="RenderDynamicClass", args={
+            "input": input,
+        }, mode="request")
+        return result
+    async def RenderDynamicEnum(self, bike: typing.Union[types.RenderTestEnum, str],other: typing.Union[types.RenderTestEnum, str],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="RenderDynamicEnum", args={
+            "bike": bike,"other": other,
         }, mode="request")
         return result
     async def ReturnAliasWithMergedAttributes(self, money: int,
@@ -6138,6 +6242,13 @@ class BamlHttpStreamRequestClient:
             "input": input,
         }, mode="stream")
         return result
+    async def ClassifyDynamicStatus(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ClassifyDynamicStatus", args={
+            "input": input,
+        }, mode="stream")
+        return result
     async def ClassifyMessage(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -6269,6 +6380,13 @@ class BamlHttpStreamRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ExtractContactInfo", args={
             "document": document,
+        }, mode="stream")
+        return result
+    async def ExtractDynamicCategories(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ExtractDynamicCategories", args={
+            "input": input,
         }, mode="stream")
         return result
     async def ExtractEntities(self, text: str,
@@ -6731,6 +6849,20 @@ class BamlHttpStreamRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="RecursiveUnionTest", args={
             "input": input,
+        }, mode="stream")
+        return result
+    async def RenderDynamicClass(self, input: types.RenderTestClass,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="RenderDynamicClass", args={
+            "input": input,
+        }, mode="stream")
+        return result
+    async def RenderDynamicEnum(self, bike: typing.Union[types.RenderTestEnum, str],other: typing.Union[types.RenderTestEnum, str],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="RenderDynamicEnum", args={
+            "bike": bike,"other": other,
         }, mode="stream")
         return result
     async def ReturnAliasWithMergedAttributes(self, money: int,
