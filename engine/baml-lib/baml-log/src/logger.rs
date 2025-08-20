@@ -174,11 +174,6 @@ pub trait ConfigValue: Sized {
     /// Get value from environment or return default
     fn from_env() -> Self {
         let env_value = env::var(Self::env_name()).ok();
-        println!(
-            "Getting value from env for {} = {:?}",
-            Self::env_name(),
-            env_value
-        );
         env_value
             .and_then(|v| Self::parse_value(&v))
             .unwrap_or_else(|| Self::default_value())
