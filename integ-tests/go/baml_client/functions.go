@@ -1015,6 +1015,68 @@ func ClassifyDynEnumTwo(ctx context.Context, input string, opts ...CallOptionFun
 	}
 }
 
+func ClassifyDynamicStatus(ctx context.Context, input string, opts ...CallOptionFunc) (types.DynEnumOne, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	encoded, err := args.Encode()
+	if err != nil {
+		panic(err)
+	}
+
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "ClassifyDynamicStatus", encoded, callOpts.onTick)
+		if err != nil {
+			return types.DynEnumOne(""), err
+		}
+
+		if result.Error != nil {
+			return types.DynEnumOne(""), result.Error
+		}
+
+		casted := (result.Data).(types.DynEnumOne)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "ClassifyDynamicStatus", encoded, callOpts.onTick)
+		if err != nil {
+			return types.DynEnumOne(""), err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.DynEnumOne(""), result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.DynEnumOne), nil
+			}
+		}
+
+		return types.DynEnumOne(""), fmt.Errorf("No data returned from stream")
+	}
+}
+
 func ClassifyMessage(ctx context.Context, input string, opts ...CallOptionFunc) (types.Category, error) {
 
 	var callOpts callOption
@@ -2190,6 +2252,68 @@ func ExtractContactInfo(ctx context.Context, document string, opts ...CallOption
 		}
 
 		return types.ContactInfo{}, fmt.Errorf("No data returned from stream")
+	}
+}
+
+func ExtractDynamicCategories(ctx context.Context, input string, opts ...CallOptionFunc) ([]types.DynEnumTwo, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	encoded, err := args.Encode()
+	if err != nil {
+		panic(err)
+	}
+
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "ExtractDynamicCategories", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
+
+		if result.Error != nil {
+			return nil, result.Error
+		}
+
+		casted := (result.Data).([]types.DynEnumTwo)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "ExtractDynamicCategories", encoded, callOpts.onTick)
+		if err != nil {
+			return nil, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return nil, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.([]types.DynEnumTwo), nil
+			}
+		}
+
+		return nil, fmt.Errorf("No data returned from stream")
 	}
 }
 
@@ -6286,6 +6410,130 @@ func RecursiveUnionTest(ctx context.Context, input types.RecursiveUnion, opts ..
 		}
 
 		return types.Union2MapStringKeyRecursiveUnionValueOrString{}, fmt.Errorf("No data returned from stream")
+	}
+}
+
+func RenderDynamicClass(ctx context.Context, input types.RenderTestClass, opts ...CallOptionFunc) (string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	encoded, err := args.Encode()
+	if err != nil {
+		panic(err)
+	}
+
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "RenderDynamicClass", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "RenderDynamicClass", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
+	}
+}
+
+func RenderDynamicEnum(ctx context.Context, bike types.RenderTestEnum, other types.RenderTestEnum, opts ...CallOptionFunc) (string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"bike": bike, "other": other},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	encoded, err := args.Encode()
+	if err != nil {
+		panic(err)
+	}
+
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "RenderDynamicEnum", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "RenderDynamicEnum", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
 	}
 }
 

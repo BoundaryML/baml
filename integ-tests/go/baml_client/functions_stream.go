@@ -1358,6 +1358,88 @@ func (*stream) ClassifyDynEnumTwo(ctx context.Context, input string, opts ...Cal
 	return channel, nil
 }
 
+// / Streaming version of ClassifyDynamicStatus
+func (*stream) ClassifyDynamicStatus(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[types.DynEnumOne, types.DynEnumOne], error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	encoded, err := args.Encode()
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: ClassifyDynamicStatus: %w", err)
+		panic(wrapped_err)
+	}
+
+	internal_ctx := context.Background()
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "ClassifyDynamicStatus", encoded, callOpts.onTick)
+	if err != nil {
+		return nil, err
+	}
+
+	channel := make(chan StreamValue[types.DynEnumOne, types.DynEnumOne])
+	go func() {
+		defer func() {
+			internal_ctx.Done()
+		}()
+		for {
+			select {
+			case <-ctx.Done():
+				close(channel)
+				return
+			case result, ok := <-internal_channel:
+				if !ok {
+					// channel closed for some reason
+					close(channel)
+					return
+				}
+				if result.Error != nil {
+					channel <- StreamValue[types.DynEnumOne, types.DynEnumOne]{
+						IsError: true,
+						Error:   result.Error,
+					}
+					close(channel)
+					return
+				}
+				if result.HasData {
+					data := (result.Data).(types.DynEnumOne)
+					channel <- StreamValue[types.DynEnumOne, types.DynEnumOne]{
+						IsFinal:  true,
+						as_final: &data,
+					}
+				} else {
+					data := (result.StreamData).(types.DynEnumOne)
+					channel <- StreamValue[types.DynEnumOne, types.DynEnumOne]{
+						IsFinal:   false,
+						as_stream: &data,
+					}
+				}
+			}
+		}
+	}()
+	return channel, nil
+}
+
 // / Streaming version of ClassifyMessage
 func (*stream) ClassifyMessage(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[types.Category, types.Category], error) {
 
@@ -2906,6 +2988,88 @@ func (*stream) ExtractContactInfo(ctx context.Context, document string, opts ...
 				} else {
 					data := (result.StreamData).(stream_types.ContactInfo)
 					channel <- StreamValue[stream_types.ContactInfo, types.ContactInfo]{
+						IsFinal:   false,
+						as_stream: &data,
+					}
+				}
+			}
+		}
+	}()
+	return channel, nil
+}
+
+// / Streaming version of ExtractDynamicCategories
+func (*stream) ExtractDynamicCategories(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[[]types.DynEnumTwo, []types.DynEnumTwo], error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	encoded, err := args.Encode()
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: ExtractDynamicCategories: %w", err)
+		panic(wrapped_err)
+	}
+
+	internal_ctx := context.Background()
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "ExtractDynamicCategories", encoded, callOpts.onTick)
+	if err != nil {
+		return nil, err
+	}
+
+	channel := make(chan StreamValue[[]types.DynEnumTwo, []types.DynEnumTwo])
+	go func() {
+		defer func() {
+			internal_ctx.Done()
+		}()
+		for {
+			select {
+			case <-ctx.Done():
+				close(channel)
+				return
+			case result, ok := <-internal_channel:
+				if !ok {
+					// channel closed for some reason
+					close(channel)
+					return
+				}
+				if result.Error != nil {
+					channel <- StreamValue[[]types.DynEnumTwo, []types.DynEnumTwo]{
+						IsError: true,
+						Error:   result.Error,
+					}
+					close(channel)
+					return
+				}
+				if result.HasData {
+					data := (result.Data).([]types.DynEnumTwo)
+					channel <- StreamValue[[]types.DynEnumTwo, []types.DynEnumTwo]{
+						IsFinal:  true,
+						as_final: &data,
+					}
+				} else {
+					data := (result.StreamData).([]types.DynEnumTwo)
+					channel <- StreamValue[[]types.DynEnumTwo, []types.DynEnumTwo]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -8326,6 +8490,170 @@ func (*stream) RecursiveUnionTest(ctx context.Context, input types.RecursiveUnio
 				} else {
 					data := (result.StreamData).(stream_types.RecursiveUnion)
 					channel <- StreamValue[stream_types.RecursiveUnion, types.RecursiveUnion]{
+						IsFinal:   false,
+						as_stream: &data,
+					}
+				}
+			}
+		}
+	}()
+	return channel, nil
+}
+
+// / Streaming version of RenderDynamicClass
+func (*stream) RenderDynamicClass(ctx context.Context, input types.RenderTestClass, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	encoded, err := args.Encode()
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: RenderDynamicClass: %w", err)
+		panic(wrapped_err)
+	}
+
+	internal_ctx := context.Background()
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "RenderDynamicClass", encoded, callOpts.onTick)
+	if err != nil {
+		return nil, err
+	}
+
+	channel := make(chan StreamValue[string, string])
+	go func() {
+		defer func() {
+			internal_ctx.Done()
+		}()
+		for {
+			select {
+			case <-ctx.Done():
+				close(channel)
+				return
+			case result, ok := <-internal_channel:
+				if !ok {
+					// channel closed for some reason
+					close(channel)
+					return
+				}
+				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
+					close(channel)
+					return
+				}
+				if result.HasData {
+					data := (result.Data).(string)
+					channel <- StreamValue[string, string]{
+						IsFinal:  true,
+						as_final: &data,
+					}
+				} else {
+					data := (result.StreamData).(string)
+					channel <- StreamValue[string, string]{
+						IsFinal:   false,
+						as_stream: &data,
+					}
+				}
+			}
+		}
+	}()
+	return channel, nil
+}
+
+// / Streaming version of RenderDynamicEnum
+func (*stream) RenderDynamicEnum(ctx context.Context, bike types.RenderTestEnum, other types.RenderTestEnum, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"bike": bike, "other": other},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	encoded, err := args.Encode()
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: RenderDynamicEnum: %w", err)
+		panic(wrapped_err)
+	}
+
+	internal_ctx := context.Background()
+	internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "RenderDynamicEnum", encoded, callOpts.onTick)
+	if err != nil {
+		return nil, err
+	}
+
+	channel := make(chan StreamValue[string, string])
+	go func() {
+		defer func() {
+			internal_ctx.Done()
+		}()
+		for {
+			select {
+			case <-ctx.Done():
+				close(channel)
+				return
+			case result, ok := <-internal_channel:
+				if !ok {
+					// channel closed for some reason
+					close(channel)
+					return
+				}
+				if result.Error != nil {
+					channel <- StreamValue[string, string]{
+						IsError: true,
+						Error:   result.Error,
+					}
+					close(channel)
+					return
+				}
+				if result.HasData {
+					data := (result.Data).(string)
+					channel <- StreamValue[string, string]{
+						IsFinal:  true,
+						as_final: &data,
+					}
+				} else {
+					data := (result.StreamData).(string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}

@@ -56,7 +56,7 @@ impl BlobRefCache {
 
     /// Format a blob hash as a blob reference with the <baml_blob>{hash}</baml_blob> format
     pub fn format_blob_ref(blob_hash: &str) -> String {
-        format!("<baml_blob>{}</baml_blob>", blob_hash)
+        format!("<baml_blob>{blob_hash}</baml_blob>")
     }
 
     /// Extract the hash from a blob reference (removes the <baml_blob></baml_blob> tags)
@@ -97,7 +97,7 @@ impl BlobRefCache {
         base64_content: &str,
         media_type: Option<String>,
     ) -> String {
-        log::info!("Storing blob: {}", function_call_id);
+        log::info!("Storing blob: {function_call_id}");
         let blob_hash = Self::hash_blob(base64_content.as_bytes());
 
         let mut blobs = self.blobs.lock().unwrap();
@@ -124,10 +124,10 @@ impl BlobRefCache {
                 // Create the message using a different approach to avoid circular imports
                 match upload_tx.send(BlobUploaderMessage::QueueBlob(blob_with_content)) {
                     Ok(_) => {
-                        log::info!("Queued blob {} for immediate upload", blob_hash);
+                        log::info!("Queued blob {blob_hash} for immediate upload");
                     }
                     Err(e) => {
-                        log::warn!("Failed to queue blob for upload: {}", e);
+                        log::warn!("Failed to queue blob for upload: {e}");
                     }
                 }
             }
@@ -167,7 +167,7 @@ impl BlobRefCache {
 
         // Actually perform the removals
         for hash in to_remove {
-            log::info!("Removing blob {} from cache (no active references)", hash);
+            log::info!("Removing blob {hash} from cache (no active references)");
             blobs.remove(&hash);
         }
     }
@@ -450,7 +450,7 @@ mod tests {
         let blob_hash = cache.store_blob(function_call_id, base64_content, None);
 
         // Test string that contains the base64 of our stored blob
-        let input = format!("Here's an image: {} and some text", base64_content);
+        let input = format!("Here's an image: {base64_content} and some text");
         let result = extract_blobs_from_string(&input, &cache, function_call_id);
 
         // Should replace base64 with blob hash
