@@ -593,13 +593,13 @@ pub struct Vm {
 #[derive(Debug, PartialEq)]
 pub enum VmExecState {
     /// VM cannot proceed. It is awaiting a pending future to complete.
-    Await(usize),
+    Await(ObjectIndex),
 
     /// VM notifies caller about a future that needs to be scheduled.
     ///
     /// Bytecode execution continues when control flow is handled back to the
     /// VM.
-    ScheduleFuture(usize),
+    ScheduleFuture(ObjectIndex),
 
     /// VM has completed the execution of all available bytecode.
     Complete(Value),
@@ -1135,15 +1135,15 @@ impl Vm {
                     };
 
                     // Allocate the future.
-                    self.objects
-                        .push(Object::Future(Future::Pending(llm_future)));
+                    let object_index = self
+                        .objects
+                        .insert(Object::Future(Future::Pending(llm_future)));
 
                     // Now leave the future on top of the stack.
-                    self.stack
-                        .push(Value::Object(ObjectIndex(self.objects.len() - 1)));
+                    self.stack.push(Value::Object(object_index));
 
                     // Yield control flow back to the embedder.
-                    return Ok(VmExecState::ScheduleFuture(self.objects.len() - 1));
+                    return Ok(VmExecState::ScheduleFuture(object_index));
                 }
                 Instruction::Await => {
                     let value = self.stack.ensure_stack_top()?;
@@ -1164,7 +1164,7 @@ impl Vm {
                     match awaiting {
                         // Can't do nothing, handle control flow back to embedder.
                         Future::Pending(_) => {
-                            return Ok(VmExecState::Await(index.0));
+                            return Ok(VmExecState::Await(index));
                         }
 
                         // Replace the future on the eval stack with the ready
