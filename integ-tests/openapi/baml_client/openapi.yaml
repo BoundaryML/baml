@@ -244,6 +244,20 @@ paths:
                 enum: []
                 $ref: '#/components/schemas/DynEnumTwo'
       operationId: ClassifyDynEnumTwo
+  /call/ClassifyDynamicStatus:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/ClassifyDynamicStatus'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: ClassifyDynamicStatusResponse
+                enum: []
+                $ref: '#/components/schemas/DynEnumOne'
+      operationId: ClassifyDynamicStatus
   /call/ClassifyMessage:
     post:
       requestBody:
@@ -516,6 +530,22 @@ paths:
                 title: ExtractContactInfoResponse
                 $ref: '#/components/schemas/ContactInfo'
       operationId: ExtractContactInfo
+  /call/ExtractDynamicCategories:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/ExtractDynamicCategories'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: ExtractDynamicCategoriesResponse
+                type: array
+                items:
+                  enum: []
+                  $ref: '#/components/schemas/DynEnumTwo'
+      operationId: ExtractDynamicCategories
   /call/ExtractEntities:
     post:
       requestBody:
@@ -1477,6 +1507,32 @@ paths:
                 type: object
                 additionalProperties: true
       operationId: RecursiveUnionTest
+  /call/RenderDynamicClass:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/RenderDynamicClass'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: RenderDynamicClassResponse
+                type: string
+      operationId: RenderDynamicClass
+  /call/RenderDynamicEnum:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/RenderDynamicEnum'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: RenderDynamicEnumResponse
+                type: string
+      operationId: RenderDynamicEnum
   /call/ReturnAliasWithMergedAttributes:
     post:
       requestBody:
@@ -3214,6 +3270,22 @@ components:
             required:
             - input
             additionalProperties: false
+    ClassifyDynamicStatus:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: ClassifyDynamicStatusRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
     ClassifyMessage:
       required: true
       content:
@@ -3534,6 +3606,22 @@ components:
                 $ref: '#/components/schemas/BamlOptions'
             required:
             - document
+            additionalProperties: false
+    ExtractDynamicCategories:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: ExtractDynamicCategoriesRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
             additionalProperties: false
     ExtractEntities:
       required: true
@@ -4635,6 +4723,47 @@ components:
                 $ref: '#/components/schemas/BamlOptions'
             required:
             - input
+            additionalProperties: false
+    RenderDynamicClass:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: RenderDynamicClassRequest
+            type: object
+            properties:
+              input:
+                $ref: '#/components/schemas/RenderTestClass'
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    RenderDynamicEnum:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: RenderDynamicEnumRequest
+            type: object
+            properties:
+              bike:
+                enum:
+                - BIKE
+                - SCOOTER
+                $ref: '#/components/schemas/RenderTestEnum'
+              other:
+                enum:
+                - BIKE
+                - SCOOTER
+                $ref: '#/components/schemas/RenderTestEnum'
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - bike
+            - other
             additionalProperties: false
     ReturnAliasWithMergedAttributes:
       required: true
@@ -6876,6 +7005,11 @@ components:
     DynEnumOne:
       enum: []
       type: string
+    DynEnumThree:
+      enum:
+      - TRICYCLE
+      - TRIANGLE
+      type: string
     DynEnumTwo:
       enum: []
       type: string
@@ -7696,6 +7830,38 @@ components:
       required:
       - value
       additionalProperties: false
+    RenderEnumInput:
+      type: object
+      properties:
+        testKey:
+          type: string
+      required:
+      - testKey
+      additionalProperties: false
+    RenderStatusEnum:
+      enum:
+      - ACTIVE
+      - INACTIVE
+      type: string
+    RenderTestClass:
+      type: object
+      properties:
+        name:
+          type: string
+        status:
+          enum:
+          - ACTIVE
+          - INACTIVE
+          $ref: '#/components/schemas/RenderStatusEnum'
+      required:
+      - name
+      - status
+      additionalProperties: false
+    RenderTestEnum:
+      enum:
+      - BIKE
+      - SCOOTER
+      type: string
     Resume:
       type: object
       properties:

@@ -4,8 +4,8 @@ use std::collections::{HashMap, HashSet};
 
 use baml_types::BamlValueWithMeta;
 use baml_vm::{
-    BamlVmProgram, BinOp, Bytecode, Class, CmpOp, Function, FunctionKind, Instruction, Object,
-    UnaryOp, Value,
+    BamlVmProgram, BinOp, Bytecode, Class, CmpOp, Function, FunctionKind, GlobalIndex, GlobalPool,
+    Instruction, Object, ObjectIndex, ObjectPool, UnaryOp, Value,
 };
 use internal_baml_diagnostics::{Diagnostics, Span};
 use internal_baml_parser_database::ParserDatabase;
@@ -49,17 +49,26 @@ fn compile_thir_to_bytecode(
 
     // Resolve global functions from HIR
     for func in &thir.expr_functions {
-        resolved_globals.insert(func.name.clone(), resolved_globals.len());
+        resolved_globals.insert(
+            func.name.clone(),
+            GlobalIndex::from_raw(resolved_globals.len()),
+        );
     }
 
     for func in &thir.llm_functions {
-        resolved_globals.insert(func.name.clone(), resolved_globals.len());
+        resolved_globals.insert(
+            func.name.clone(),
+            GlobalIndex::from_raw(resolved_globals.len()),
+        );
         llm_functions.insert(func.name.clone());
     }
 
     // Resolve classes from HIR
     for class in thir.classes.values() {
-        resolved_globals.insert(class.name.clone(), resolved_globals.len());
+        resolved_globals.insert(
+            class.name.clone(),
+            GlobalIndex::from_raw(resolved_globals.len()),
+        );
 
         // Resolve class fields.
         let mut class_fields = HashMap::new();
@@ -73,28 +82,34 @@ fn compile_thir_to_bytecode(
     let native_fns = baml_vm::native::functions();
 
     for name in native_fns.keys() {
-        resolved_globals.insert(name.clone(), resolved_globals.len());
+        resolved_globals.insert(name.clone(), GlobalIndex::from_raw(resolved_globals.len()));
     }
 
-    let mut objects = Vec::with_capacity(resolved_globals.len());
-    let mut globals = Vec::with_capacity(resolved_globals.len());
+    let mut objects = ObjectPool::from_vec(Vec::with_capacity(resolved_globals.len()));
+    let mut globals = GlobalPool::from_vec(Vec::with_capacity(resolved_globals.len()));
 
-    let mut loop_vars_counter = ForLoopVarCounters::new();
+    let mut loop_var_counter = ForLoopVarCounters::new();
+
+    let mut fn_class_patch_lists = Vec::with_capacity(thir.expr_functions.len());
 
     // Compile HIR functions to bytecode
     for func in &thir.expr_functions {
+        let mut class_alloc_patch_list = Vec::new();
+
         let bytecode_function = compile_thir_function(
             func,
             &resolved_globals,
             &resolved_classes,
             &llm_functions,
-            &mut loop_vars_counter,
+            &mut loop_var_counter,
             &mut objects,
+            &mut class_alloc_patch_list,
         )?;
 
         // Add the function to the globals and objects pools.
-        globals.push(Value::Object(objects.len()));
-        objects.push(Object::Function(bytecode_function));
+        let object_index = objects.insert(Object::Function(bytecode_function));
+        fn_class_patch_lists.push((object_index, class_alloc_patch_list));
+        globals.push(Value::Object(object_index));
     }
 
     for func in &thir.llm_functions {
@@ -106,8 +121,8 @@ fn compile_thir_to_bytecode(
             locals_in_scope: vec![func.parameters.iter().map(|p| p.name.clone()).collect()],
         });
 
-        globals.push(Value::Object(objects.len()));
-        objects.push(bytecode_llm_function);
+        let object_index = objects.insert(bytecode_llm_function);
+        globals.push(Value::Object(object_index));
     }
 
     // Add classes to objects
@@ -117,8 +132,30 @@ fn compile_thir_to_bytecode(
             field_names: class.fields.iter().map(|f| f.name.clone()).collect(),
         };
 
-        globals.push(Value::Object(objects.len()));
-        objects.push(Object::Class(bytecode_class));
+        let object_index = objects.insert(Object::Class(bytecode_class));
+        globals.push(Value::Object(object_index));
+    }
+
+    // resolve classes into their instance creation insns now that we've got their locations.
+    // NOTE: memory locality is not great, review if it gets annoying.
+    // Right now we're grouping by function & effectively random-accessing globals. Since
+    // locations are pushed in compilation order, they are monotonically increasing.
+    for (func_index, patch_list) in fn_class_patch_lists {
+        let Object::Function(Function { bytecode, .. }) = &mut objects[func_index] else {
+            panic!("should have a compiled function here!");
+        };
+
+        for AllocInstancePatch { location, global } in patch_list {
+            let Value::Object(object_index) = globals[global] else {
+                panic!("must have a class global here! The expected class may not be in the place resolved by `globals`");
+            };
+
+            let Instruction::AllocInstance(index) = &mut bytecode.instructions[location] else {
+                panic!("alloc instance patch list must contain locations to AllocInstance!");
+            };
+
+            *index = object_index;
+        }
     }
 
     for (name, (func, arity)) in native_fns {
@@ -130,15 +167,15 @@ fn compile_thir_to_bytecode(
             locals_in_scope: vec![], // TODO.
         });
 
-        globals.push(Value::Object(objects.len()));
-        objects.push(native_function);
+        let object_index = objects.insert(native_function);
+        globals.push(Value::Object(object_index));
     }
 
     let resolved_function_names = objects
         .iter()
         .enumerate()
         .filter_map(|(i, obj)| match obj {
-            Object::Function(f) => Some((f.name.clone(), (i, f.kind))),
+            Object::Function(f) => Some((f.name.clone(), (ObjectIndex::from_raw(i), f.kind))),
             _ => None,
         })
         .collect();
@@ -192,13 +229,21 @@ impl ForLoopVarCounters {
 /// Compile an HIR function to bytecode.
 fn compile_thir_function(
     func: &thir::ExprFunction<(Span, Option<Type>)>,
-    globals: &HashMap<String, usize>,
+    globals: &HashMap<String, GlobalIndex>,
     classes: &HashMap<String, HashMap<String, usize>>,
     llm_functions: &HashSet<String>,
     loop_var_counter: &mut ForLoopVarCounters,
-    objects: &mut Vec<Object>,
+    objects: &mut ObjectPool,
+    class_alloc_patch_list: &mut Vec<AllocInstancePatch>,
 ) -> anyhow::Result<Function> {
-    let mut compiler = HirCompiler::new(globals, classes, llm_functions, loop_var_counter, objects);
+    let mut compiler = HirCompiler::new(
+        globals,
+        classes,
+        llm_functions,
+        loop_var_counter,
+        objects,
+        class_alloc_patch_list,
+    );
     compiler.compile_function(func)
 }
 
@@ -238,12 +283,18 @@ struct Scope {
     id: usize,
 }
 
+#[derive(Clone, Copy, Debug)]
+struct AllocInstancePatch {
+    location: usize,
+    global: GlobalIndex,
+}
+
 /// HIR to bytecode compiler.
 struct HirCompiler<'g> {
     /// Resolved global variables.
     ///
     /// Maps the name of the global variable to its index in the globals pool.
-    globals: &'g HashMap<String, usize>,
+    globals: &'g HashMap<String, GlobalIndex>,
 
     /// Resolved class fields.
     ///
@@ -278,7 +329,11 @@ struct HirCompiler<'g> {
     bytecode: Bytecode,
 
     /// Objects pool.
-    objects: &'g mut Vec<Object>,
+    objects: &'g mut ObjectPool,
+
+    /// `AllocInstance` instructions that have a placeholder, which must be resolved when location
+    /// of the class object is resolved.
+    class_alloc_patch_list: &'g mut Vec<AllocInstancePatch>,
 }
 
 #[derive(Debug)]
@@ -296,17 +351,19 @@ struct LoopInfo {
 
 impl<'g> HirCompiler<'g> {
     fn new(
-        globals: &'g HashMap<String, usize>,
+        globals: &'g HashMap<String, GlobalIndex>,
         classes: &'g HashMap<String, HashMap<String, usize>>,
         llm_functions: &'g HashSet<String>,
         var_counters: &'g mut ForLoopVarCounters,
-        objects: &'g mut Vec<Object>,
+        objects: &'g mut ObjectPool,
+        class_alloc_patch_list: &'g mut Vec<AllocInstancePatch>,
     ) -> Self {
         Self {
             globals,
             classes,
             llm_functions,
             objects,
+            class_alloc_patch_list,
             locals: HashMap::new(),
             var_counters,
             current_loop: None,
@@ -717,8 +774,7 @@ impl<'g> HirCompiler<'g> {
 
                 BamlValueWithMeta::String(v, _) => {
                     // Allocate the string in the objects pool
-                    self.objects.push(Object::String(v.clone()));
-                    let object_index = self.objects.len() - 1;
+                    let object_index = self.objects.insert(Object::String(v.clone()));
 
                     // Add a constant that points to the string object
                     let const_index = self.add_constant(Value::Object(object_index));
@@ -833,8 +889,14 @@ impl<'g> HirCompiler<'g> {
                     panic!("undefined class: {}", class_name);
                 };
 
-                // Allocate instance
-                self.emit(Instruction::AllocInstance(class_index));
+                // Emit allocation with bogus index. It will be patched later.
+                let allocation_loc = self.emit(Instruction::AllocInstance(ObjectIndex::from_raw(
+                    usize::MAX,
+                )));
+                self.class_alloc_patch_list.push(AllocInstancePatch {
+                    location: allocation_loc,
+                    global: class_index,
+                });
 
                 let mut defined_named_fields = std::collections::HashSet::new();
 
@@ -1242,6 +1304,8 @@ impl thir::Expr<(Span, Option<Type>)> {
 
 #[cfg(test)]
 mod tests {
+    use baml_vm::EvalStack;
+
     use super::*;
     use crate::test::ast;
 
@@ -1277,7 +1341,13 @@ mod tests {
 
             eprintln!(
                 "---- fn {function_name}() ----\n{}",
-                baml_vm::debug::display_bytecode(function, &[], &objects, &globals, true)
+                baml_vm::debug::display_bytecode(
+                    function,
+                    &EvalStack::default(),
+                    &objects,
+                    &globals,
+                    true
+                )
             );
 
             assert_eq!(
@@ -1306,7 +1376,7 @@ mod tests {
                 (
                     "main",
                     vec![
-                        Instruction::LoadGlobal(0),
+                        Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
                         Instruction::Call(0),
                         Instruction::Return,
                     ],
@@ -1333,7 +1403,7 @@ mod tests {
                 (
                     "main",
                     vec![
-                        Instruction::LoadGlobal(0),
+                        Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
                         Instruction::Call(0),
                         Instruction::LoadVar(1),
                         Instruction::Return,
@@ -1497,7 +1567,7 @@ mod tests {
                     Instruction::Pop(1),
                     Instruction::LoadConst(1),
                     Instruction::LoadConst(2),
-                    Instruction::LoadGlobal(0),
+                    Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
                     Instruction::LoadVar(3),
                     Instruction::Call(1),
                     Instruction::Pop(1),
@@ -1506,7 +1576,7 @@ mod tests {
                     Instruction::Pop(1),
                     Instruction::LoadConst(3),
                     Instruction::LoadConst(4),
-                    Instruction::LoadGlobal(0),
+                    Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
                     Instruction::LoadVar(4),
                     Instruction::Call(1),
                     Instruction::Pop(1),
@@ -1726,7 +1796,7 @@ mod tests {
             expected: vec![(
                 "main",
                 vec![
-                    Instruction::AllocInstance(2),
+                    Instruction::AllocInstance(ObjectIndex::from_raw(2)),
                     Instruction::LoadConst(0),
                     Instruction::StoreField(0),
                     Instruction::LoadConst(1),
@@ -1761,12 +1831,12 @@ mod tests {
             expected: vec![(
                 "main",
                 vec![
-                    Instruction::AllocInstance(3),
+                    Instruction::AllocInstance(ObjectIndex::from_raw(3)),
                     Instruction::LoadConst(0),
                     Instruction::StoreField(0),
                     Instruction::LoadConst(1),
                     Instruction::StoreField(1),
-                    Instruction::LoadGlobal(0),
+                    Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
                     Instruction::Call(0),
                     Instruction::LoadVar(1),
                     Instruction::LoadVar(2),
@@ -1864,7 +1934,7 @@ mod tests {
         } = compile(&ast)?;
 
         let main = objects[resolved_function_names["main"].0].as_function()?;
-        baml_vm::debug::disassemble(main, &[], &objects, &globals);
+        baml_vm::debug::disassemble(main, &EvalStack::default(), &objects, &globals);
 
         let expected_locals_in_scope = [
             vec!["<fn main>", "x", "a", "h"],
@@ -1946,7 +2016,7 @@ mod tests {
                     Instruction::LoadConst(0),
                     Instruction::JumpIfFalse(4),
                     Instruction::Pop(1),
-                    Instruction::LoadGlobal(0),
+                    Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
                     Instruction::Call(0),
                     Instruction::Return,
                 ],
@@ -1973,7 +2043,7 @@ mod tests {
                     Instruction::JumpIfFalse(2),
                     Instruction::Jump(4),
                     Instruction::Pop(1),
-                    Instruction::LoadGlobal(0),
+                    Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
                     Instruction::Call(0),
                     Instruction::Return,
                 ],
@@ -2404,7 +2474,7 @@ mod tests {
                     Instruction::LoadConst(1),
                     Instruction::LoadConst(2),
                     Instruction::AllocArray(3),
-                    Instruction::LoadGlobal(2),
+                    Instruction::LoadGlobal(GlobalIndex::from_raw(2)),
                     Instruction::LoadVar(1),
                     // call with one argument (self)
                     Instruction::Call(1),
@@ -2433,7 +2503,7 @@ mod tests {
                 vec![
                     Instruction::LoadConst(0),
                     Instruction::LoadVar(1),
-                    Instruction::LoadGlobal(2),
+                    Instruction::LoadGlobal(GlobalIndex::from_raw(2)),
                     Instruction::LoadVar(3),
                     Instruction::Call(1),
                     Instruction::LoadConst(0),
@@ -2486,7 +2556,7 @@ mod tests {
                 vec![
                     Instruction::LoadConst(0),
                     Instruction::LoadVar(1),
-                    Instruction::LoadGlobal(2),
+                    Instruction::LoadGlobal(GlobalIndex::from_raw(2)),
                     Instruction::LoadVar(3),
                     Instruction::Call(1),
                     Instruction::LoadConst(0),
@@ -2548,7 +2618,7 @@ mod tests {
                 vec![
                     Instruction::LoadConst(0),
                     Instruction::LoadVar(1),
-                    Instruction::LoadGlobal(2),
+                    Instruction::LoadGlobal(GlobalIndex::from_raw(2)),
                     Instruction::LoadVar(3),
                     Instruction::Call(1),
                     Instruction::LoadConst(0),
@@ -2610,7 +2680,7 @@ mod tests {
                 vec![
                     Instruction::LoadConst(0),
                     Instruction::LoadVar(1),
-                    Instruction::LoadGlobal(2),
+                    Instruction::LoadGlobal(GlobalIndex::from_raw(2)),
                     Instruction::LoadVar(4),
                     Instruction::Call(1),
                     Instruction::LoadConst(0),
@@ -2627,7 +2697,7 @@ mod tests {
                     Instruction::BinOp(BinOp::Add),
                     Instruction::StoreVar(6),
                     Instruction::LoadVar(2),
-                    Instruction::LoadGlobal(2),
+                    Instruction::LoadGlobal(GlobalIndex::from_raw(2)),
                     Instruction::LoadVar(8),
                     Instruction::Call(1),
                     Instruction::LoadConst(0),
