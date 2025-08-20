@@ -607,13 +607,16 @@ impl WithRenderRawCurl for AwsClient {
                     }
                 },
                 BamlMediaType::Pdf => match &media.content {
-                    BamlMediaContent::Base64(b64) => Ok(json!({
-                        "document": {
-                            "format": "pdf",
-                            "name": "document.pdf",
-                            "source": { "bytes": b64.base64 }
-                        }
-                    })),
+                    BamlMediaContent::Base64(b64) => {
+                        let format = strip_mime_prefix(&media.mime_type_as_ok()?);
+                        Ok(json!({
+                            "document": {
+                                "format": format,
+                                "name": "document.pdf",
+                                "source": { "bytes": b64.base64 }
+                            }
+                        }))
+                    }
                     BamlMediaContent::File(_) | BamlMediaContent::Url(_) => {
                         anyhow::bail!("BAML internal error (AWSBedrock): PDF inputs must be base64 for raw curl rendering")
                     }
