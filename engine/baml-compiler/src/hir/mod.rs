@@ -41,10 +41,10 @@ pub enum TypeM<M> {
     Null(M),
     Array(Box<TypeM<M>>, M),
     Map(Box<TypeM<M>>, Box<TypeM<M>>, M),
-    ClassName(String, M),
-    EnumName(String, M),
+    Class(String, M),
+    Enum(String, M),
     Union(Vec<TypeM<M>>, M),
-    Arrow(Arrow<M>, M),
+    Function(Function<M>, M),
 }
 
 impl<T: Default> TypeM<T> {
@@ -63,10 +63,10 @@ impl<T> TypeM<T> {
             TypeM::Null(_) => "null type",
             TypeM::Array(_, _) => "array",
             TypeM::Map(_, _, _) => "map",
-            TypeM::ClassName(_, _) => "class",
-            TypeM::EnumName(_, _) => "enum",
+            TypeM::Class(_, _) => "class",
+            TypeM::Enum(_, _) => "enum",
             TypeM::Union(_, _) => "union",
-            TypeM::Arrow(_, _) => "function",
+            TypeM::Function(_, _) => "function",
         }
     }
 }
@@ -91,11 +91,11 @@ impl Type {
                     && a_meta.eq_up_to_span(b_meta)
             }
 
-            (TypeM::ClassName(a, a_meta), TypeM::ClassName(b, b_meta)) => {
+            (TypeM::Class(a, a_meta), TypeM::Class(b, b_meta)) => {
                 a == b && a_meta.eq_up_to_span(b_meta)
             }
 
-            (TypeM::EnumName(a, a_meta), TypeM::EnumName(b, b_meta)) => {
+            (TypeM::Enum(a, a_meta), TypeM::Enum(b, b_meta)) => {
                 a == b && a_meta.eq_up_to_span(b_meta)
             }
 
@@ -108,14 +108,14 @@ impl Type {
                     && a_meta.eq_up_to_span(b_meta)
             }
 
-            (TypeM::Arrow(a_fn, a_meta), TypeM::Arrow(b_fn, b_meta)) => {
-                a_fn.inputs.len() == b_fn.inputs.len()
+            (TypeM::Function(a_fn, a_meta), TypeM::Function(b_fn, b_meta)) => {
+                a_fn.params.len() == b_fn.params.len()
                     && a_fn
-                        .inputs
+                        .params
                         .iter()
-                        .zip(b_fn.inputs.iter())
+                        .zip(b_fn.params.iter())
                         .all(|(a, b)| a.eq_up_to_span(b))
-                    && a_fn.output.eq_up_to_span(&b_fn.output)
+                    && a_fn.return_type.eq_up_to_span(&b_fn.return_type)
                     && a_meta.eq_up_to_span(b_meta)
             }
 
@@ -139,8 +139,9 @@ impl Type {
                 key_a.can_be_assigned(key_b) && val_a.can_be_assigned(val_b)
             }
 
-            (TypeM::EnumName(a, _), TypeM::EnumName(b, _))
-            | (TypeM::ClassName(a, _), TypeM::ClassName(b, _)) => a == b,
+            (TypeM::Enum(a, _), TypeM::Enum(b, _)) | (TypeM::Class(a, _), TypeM::Class(b, _)) => {
+                a == b
+            }
 
             (TypeM::Union(a, _), TypeM::Union(b, _)) => {
                 // there can't be any type in b that is not assignable to a.
@@ -153,7 +154,7 @@ impl Type {
 
             // for functions we only want the same inputs & same outputs, otherwise an
             // auto-cast mechanism would need to be in place.
-            (a @ TypeM::Arrow(_, _), b @ TypeM::Arrow(_, _)) => a.eq_up_to_span(b),
+            (a @ TypeM::Function(_, _), b @ TypeM::Function(_, _)) => a.eq_up_to_span(b),
 
             (_, _) => false,
         }
@@ -182,16 +183,16 @@ impl Type {
                 assert!(a_meta.eq_up_to_span(b_meta));
             }
             (TypeM::Map(_, _, _), _) => panic!("Map type mismatch"),
-            (TypeM::ClassName(a, a_meta), TypeM::ClassName(b, b_meta)) => {
+            (TypeM::Class(a, a_meta), TypeM::Class(b, b_meta)) => {
                 assert!(a == b);
                 assert!(a_meta.eq_up_to_span(b_meta));
             }
-            (TypeM::ClassName(_, _), _) => panic!("Class name type mismatch"),
-            (TypeM::EnumName(a, a_meta), TypeM::EnumName(b, b_meta)) => {
+            (TypeM::Class(_, _), _) => panic!("Class name type mismatch"),
+            (TypeM::Enum(a, a_meta), TypeM::Enum(b, b_meta)) => {
                 assert!(a == b);
                 assert!(a_meta.eq_up_to_span(b_meta));
             }
-            (TypeM::EnumName(_, _), _) => panic!("Enum name type mismatch"),
+            (TypeM::Enum(_, _), _) => panic!("Enum name type mismatch"),
             (TypeM::Union(a, a_meta), TypeM::Union(b, b_meta)) => {
                 assert!(a.len() == b.len());
                 a.iter()
@@ -200,24 +201,24 @@ impl Type {
                 assert!(a_meta.eq_up_to_span(b_meta));
             }
             (TypeM::Union(_, _), _) => panic!("Union type mismatch"),
-            (TypeM::Arrow(a, a_meta), TypeM::Arrow(b, b_meta)) => {
-                assert!(a.inputs.len() == b.inputs.len());
-                a.inputs
+            (TypeM::Function(a, a_meta), TypeM::Function(b, b_meta)) => {
+                assert!(a.params.len() == b.params.len());
+                a.params
                     .iter()
-                    .zip(b.inputs.iter())
+                    .zip(b.params.iter())
                     .for_each(|(a, b)| a.assert_eq_up_to_span(b));
-                a.output.assert_eq_up_to_span(&b.output);
+                a.return_type.assert_eq_up_to_span(&b.return_type);
                 assert!(a_meta.eq_up_to_span(b_meta));
             }
-            (TypeM::Arrow(_, _), _) => panic!("Arrow type mismatch"),
+            (TypeM::Function(_, _), _) => panic!("Arrow type mismatch"),
         }
     }
 }
 
 #[derive(Clone, Debug)]
-pub struct Arrow<M> {
-    pub inputs: Vec<TypeM<M>>,
-    pub output: Box<TypeM<M>>,
+pub struct Function<M> {
+    pub params: Vec<TypeM<M>>,
+    pub return_type: Box<TypeM<M>>,
 }
 
 #[derive(Clone, Debug)]

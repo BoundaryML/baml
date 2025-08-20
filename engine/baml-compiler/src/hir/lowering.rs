@@ -131,9 +131,9 @@ impl TypeM<TypeMeta> {
         match type_ {
             ast::FieldType::Symbol(_, name, _) => {
                 if name.name().starts_with("Enum") {
-                    TypeM::EnumName(name.name().to_string(), meta)
+                    TypeM::Enum(name.name().to_string(), meta)
                 } else {
-                    TypeM::ClassName(name.name().to_string(), meta)
+                    TypeM::Class(name.name().to_string(), meta)
                 }
             }
             ast::FieldType::Primitive(_, prim, _, _) => match prim {
@@ -172,10 +172,10 @@ impl TypeM<TypeMeta> {
             TypeM::Null(meta) => meta,
             TypeM::Array(_, meta) => meta,
             TypeM::Map(_, _, meta) => meta,
-            TypeM::ClassName(_, meta) => meta,
-            TypeM::EnumName(_, meta) => meta,
+            TypeM::Class(_, meta) => meta,
+            TypeM::Enum(_, meta) => meta,
             TypeM::Union(_, meta) => meta,
-            TypeM::Arrow(_, meta) => meta,
+            TypeM::Function(_, meta) => meta,
         }
     }
 
@@ -197,10 +197,10 @@ impl TypeM<TypeMeta> {
             TypeM::Bool(_) => false,
             TypeM::Array(_, _) => false,
             TypeM::Map(_, _, _) => false,
-            TypeM::ClassName(_, _) => false,
-            TypeM::EnumName(_, _) => false,
+            TypeM::Class(_, _) => false,
+            TypeM::Enum(_, _) => false,
             TypeM::Null(_) => false,
-            TypeM::Arrow(_, _) => true,
+            TypeM::Function(_, _) => true,
         }
     }
 }

@@ -29,6 +29,8 @@ pub fn compile(ast: &ParserDatabase) -> anyhow::Result<BamlVmProgram> {
     // Fix this.
     let thir = thir::typecheck::typecheck(&hir, &mut Diagnostics::new("dummy".into()));
 
+    // eprintln!("\nTHIR:\n{:#?}", thir);
+
     // eprintln!("\nHIR:\n{:#?}", hir);
 
     // Stage 2: HIR -> Bytecode
@@ -692,7 +694,7 @@ impl<'g> HirCompiler<'g> {
         self.current_source_line = expr.span().line_number();
 
         match expr {
-            thir::Expr::Atom(value) => match value {
+            thir::Expr::Value(value) => match value {
                 BamlValueWithMeta::Null(_) => {
                     let index = self.add_constant(Value::Null);
                     self.emit(Instruction::LoadConst(index));
@@ -726,6 +728,10 @@ impl<'g> HirCompiler<'g> {
                 _ => panic!("unsupported atom: {:#?}", value),
             },
 
+            thir::Expr::Block(block, _) => {
+                self.compile_block(block);
+            }
+
             thir::Expr::ArrayAccess { base, index, .. } => {
                 // Compile the base expression (the array)
                 self.compile_expression(base);
@@ -743,7 +749,7 @@ impl<'g> HirCompiler<'g> {
                 unimplemented!("field access compilation")
             }
 
-            thir::Expr::FreeVar(name, _) => {
+            thir::Expr::Var(name, _) => {
                 if let Some(&index) = self.locals.get(name) {
                     self.emit(Instruction::LoadVar(index));
                 } else {
@@ -763,9 +769,9 @@ impl<'g> HirCompiler<'g> {
                 todo!("map compilation")
             }
 
-            thir::Expr::Call { function, args, .. } => {
-                let name = match function.as_ref() {
-                    thir::Expr::Identifier(name, _) => name,
+            thir::Expr::Call { func, args, .. } => {
+                let name = match func.as_ref() {
+                    thir::Expr::Var(name, _) => name,
                     _ => panic!("expressions that evaluate to functions are not supported yet"),
                 };
 
@@ -796,8 +802,12 @@ impl<'g> HirCompiler<'g> {
                 args,
                 ..
             } => {
+                let thir::Expr::Var(method, _) = method.as_ref() else {
+                    panic!("method calls must be on variables");
+                };
+
                 // Push the function onto the stack
-                let Some(&index) = self.globals.get(method) else {
+                let Some(&index) = self.globals.get(method.as_str()) else {
                     panic!("undefined method: {method}");
                 };
 
@@ -813,9 +823,14 @@ impl<'g> HirCompiler<'g> {
                 self.emit(Instruction::Call(1 + args.len()));
             }
 
-            thir::Expr::ClassConstructor(constructor, _) => {
-                let Some(&class_index) = self.globals.get(&constructor.class_name) else {
-                    panic!("undefined class: {}", constructor.class_name);
+            thir::Expr::ClassConstructor {
+                name: class_name,
+                fields,
+                spread,
+                meta,
+            } => {
+                let Some(&class_index) = self.globals.get(class_name) else {
+                    panic!("undefined class: {}", class_name);
                 };
 
                 // Allocate instance
@@ -824,52 +839,43 @@ impl<'g> HirCompiler<'g> {
                 let mut defined_named_fields = std::collections::HashSet::new();
 
                 // Process fields in order
-                for field in &constructor.fields {
-                    match field {
-                        thir::Expr::ClassConstructorField::Named { name, value } => {
-                            self.compile_expression(value);
+                for (field_name, value) in fields {
+                    self.compile_expression(value);
 
-                            let Some(classes) = self.classes.get(&constructor.class_name) else {
-                                panic!("undefined class: {}", constructor.class_name);
-                            };
+                    let Some(classes) = self.classes.get(class_name) else {
+                        panic!("undefined class: {}", class_name);
+                    };
 
-                            let Some(&field_index) = classes.get(name) else {
-                                panic!("undefined field: {}.{}", constructor.class_name, name);
-                            };
+                    let Some(&field_index) = classes.get(field_name) else {
+                        panic!("undefined field: {}.{}", class_name, field_name);
+                    };
 
+                    self.emit(Instruction::StoreField(field_index));
+                    defined_named_fields.insert(field_name.as_str());
+                }
+
+                if let Some(spread) = spread {
+                    self.compile_expression(spread);
+
+                    // Pseudo local, user didn't declare it.
+                    let spread_local = self.locals.len() + 2;
+                    self.emit(Instruction::LoadVar(spread_local - 1));
+
+                    let Some(classes) = self.classes.get(class_name) else {
+                        panic!("undefined class: {}", class_name);
+                    };
+
+                    for (field_name, &field_index) in classes {
+                        if !defined_named_fields.contains(field_name.as_str()) {
+                            self.emit(Instruction::LoadVar(spread_local));
+                            self.emit(Instruction::LoadField(field_index));
                             self.emit(Instruction::StoreField(field_index));
-                            defined_named_fields.insert(name.as_str());
-                        }
-                        thir::Expr::ClassConstructorField::Spread { value } => {
-                            // TODO: @antonio: Variable tracking here is wrong.
-                            self.compile_expression(value);
-
-                            // Pseudo local, user didn't declare it.
-                            let spread_local = self.locals.len() + 2;
-                            self.emit(Instruction::LoadVar(spread_local - 1));
-
-                            let Some(classes) = self.classes.get(&constructor.class_name) else {
-                                panic!("undefined class: {}", constructor.class_name);
-                            };
-
-                            for (field_name, &field_index) in classes {
-                                if !defined_named_fields.contains(field_name.as_str()) {
-                                    self.emit(Instruction::LoadVar(spread_local));
-                                    self.emit(Instruction::LoadField(field_index));
-                                    self.emit(Instruction::StoreField(field_index));
-                                }
-                            }
                         }
                     }
                 }
             }
 
-            thir::Expr::If {
-                condition,
-                if_branch,
-                else_branch,
-                ..
-            } => {
+            thir::Expr::If(condition, if_branch, else_branch, _) => {
                 // First, compile the condition. This will leave the end result
                 // of the condition on top of the stack.
                 self.compile_expression(condition);
@@ -912,10 +918,6 @@ impl<'g> HirCompiler<'g> {
                 // POP_JUMP instruction like Python does, but for now I want
                 // the simplest possible VM (very limited instructions).
                 self.patch_jump(skip_else);
-            }
-
-            thir::Expr::Block(block, _) => {
-                self.compile_block(block);
             }
 
             thir::Expr::BinaryOperation {
@@ -995,6 +997,10 @@ impl<'g> HirCompiler<'g> {
 
             thir::Expr::Paren(expr, _) => {
                 self.compile_expression(expr);
+            }
+
+            thir::Expr::Function(_, _, _) | thir::Expr::Builtin(_, _) => {
+                todo!("unsupported expression: {:#?}", expr)
             }
         }
     }
@@ -1164,7 +1170,7 @@ impl<'g> HirCompiler<'g> {
     }
 }
 
-impl hir::Expression {
+impl thir::Expr<(Span, Option<Type>)> {
     /// Returns true if the block ends with an expression that has a final value.
     ///
     /// For example, it would return true for this block:
@@ -1198,8 +1204,8 @@ impl hir::Expression {
     fn produces_final_value(&self) -> bool {
         match self {
             // First call will happen on a block. Recurse on the final expression.
-            hir::Expression::ExpressionBlock(block, _) => match block.statements.last() {
-                Some(hir::Statement::Expression { expr, .. }) => expr.produces_final_value(),
+            thir::Expr::Block(block, _) => match block.statements.last() {
+                Some(thir::Statement::Expression { expr, .. }) => expr.produces_final_value(),
 
                 // Does not produce a value.
                 _ => false,
@@ -1210,27 +1216,26 @@ impl hir::Expression {
             // need to match, if one of them returns a value the other one must
             // return the same type. This is typechecker bug if it's wrong, so
             // I won't bother here.
-            hir::Expression::If { if_branch, .. } => if_branch.produces_final_value(),
+            thir::Expr::If(_, if_branch, ..) => if_branch.produces_final_value(),
 
             // This is an expression that produces a value, so true. We're
             // forcing non-exhaustive match here because other types of
             // expressions that we add in the future might need to be considered.
-            hir::Expression::Array(_, _)
-            | hir::Expression::Map(_, _)
-            | hir::Expression::JinjaExpressionValue(_, _)
-            | hir::Expression::ArrayAccess { .. }
-            | hir::Expression::FieldAccess { .. }
-            | hir::Expression::MethodCall { .. }
-            | hir::Expression::BoolValue(_, _)
-            | hir::Expression::NumericValue(_, _)
-            | hir::Expression::Identifier(_, _)
-            | hir::Expression::StringValue(_, _)
-            | hir::Expression::RawStringValue(_, _)
-            | hir::Expression::Call { .. }
-            | hir::Expression::ClassConstructor(_, _)
-            | hir::Expression::BinaryOperation { .. }
-            | hir::Expression::UnaryOperation { .. }
-            | hir::Expression::Paren(_, _) => true,
+            thir::Expr::List(_, _)
+            | thir::Expr::Map(_, _)
+            | thir::Expr::ArrayAccess { .. }
+            | thir::Expr::FieldAccess { .. }
+            | thir::Expr::MethodCall { .. }
+            | thir::Expr::Value(_)
+            | thir::Expr::Call { .. }
+            | thir::Expr::ClassConstructor { .. }
+            | thir::Expr::BinaryOperation { .. }
+            | thir::Expr::UnaryOperation { .. }
+            | thir::Expr::Var(_, _)
+            | thir::Expr::Builtin(_, _)
+            | thir::Expr::Paren(_, _) => true,
+
+            thir::Expr::Function(_, _, _) => todo!("function calls"),
         }
     }
 }
@@ -1734,7 +1739,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "HIR doesn't support spread operators yet"]
+    // #[ignore = "HIR doesn't support spread operators yet"]
     fn class_constructor_with_spread_operator() -> anyhow::Result<()> {
         assert_compiles(Program {
             source: r#"
@@ -1756,7 +1761,7 @@ mod tests {
             expected: vec![(
                 "main",
                 vec![
-                    Instruction::AllocInstance(2),
+                    Instruction::AllocInstance(3),
                     Instruction::LoadConst(0),
                     Instruction::StoreField(0),
                     Instruction::LoadConst(1),
