@@ -150,14 +150,6 @@ pub enum Future {
 }
 
 impl Object {
-    #[inline]
-    pub fn as_array(&self) -> Option<&[Value]> {
-        let Object::Array(array) = self else {
-            return None;
-        };
-        Some(array)
-    }
-
     /// Helper to unwrap an [`Object::Function`].
     ///
     /// Used to deal with some borrow checker issues in the [`Vm::exec`]
@@ -755,10 +747,12 @@ impl Vm {
             // Current instruction pointer.
             let instruction_ptr = frame.instruction_ptr;
 
-            // `core::intrinsics::unlikely` is only available on nightly.
+            // NOTE: `core::intrinsics::unlikely` is only available on nightly.
+            // This branch is a big annoyance for small functions (like pushing the frame)
+            // and gets smaller the bigger the function due to branch (mis)prediction.
             if instruction_ptr < 0 {
                 return Err(InternalError::NegativeInstructionPtr(instruction_ptr).into());
-            };
+            }
 
             // Move the frame's IP to the next instruction. We'll deal with
             // jump offsets later.
