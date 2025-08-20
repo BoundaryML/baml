@@ -56,7 +56,7 @@ runs:
     - name: Install protoc-gen-go
       if: inputs.install-protoc-gen-go == 'true'
       # locked to match the version in mise.toml
-      run: go install github.com/golang/protobuf/protoc-gen-go@v1.36.6
+      run: go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.6
       shell: bash
 
     - name: Install goimports
