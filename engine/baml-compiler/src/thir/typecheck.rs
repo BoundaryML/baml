@@ -19,11 +19,11 @@
 /// in several places. Bidirectional typing is the target.
 use std::sync::Arc;
 
-use baml_types::{BamlMap, BamlValueWithMeta};
+use baml_types::{type_meta::base::StreamingBehavior, BamlMap, BamlValueWithMeta};
 use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Diagnostics, Span};
 
 use crate::{
-    hir::{self, Hir, Type},
+    hir::{self, Hir, Type, TypeM, TypeMeta},
     thir::{self as thir, ExprMetadata, THir},
 };
 
@@ -118,6 +118,8 @@ pub fn typecheck(hir: &Hir, diagnostics: &mut Diagnostics) -> THir<ExprMetadata>
             );
         }
 
+        func_context.function_return_type = Some(&func.return_type);
+
         // Convert HIR block to THIR block with type inference
         let typed_body = typecheck_block(&func.body, &mut func_context, diagnostics);
 
@@ -160,7 +162,7 @@ pub struct VarInfo {
 }
 
 #[derive(Clone, Debug)]
-pub struct TypeContext {
+pub struct TypeContext<'func> {
     // Function names and other non-variable symbols
     pub symbols: BamlMap<String, Type>,
     // Variables in scope with mutability info
@@ -168,15 +170,17 @@ pub struct TypeContext {
     pub classes: BamlMap<String, hir::Class>,
     // Used for knowing whether `break` and `continue` are inside a loop or not.
     pub is_inside_loop: bool,
+
+    pub function_return_type: Option<&'func TypeM<TypeMeta>>,
 }
 
-impl Default for TypeContext {
+impl Default for TypeContext<'_> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl TypeContext {
+impl TypeContext<'_> {
     pub fn new() -> Self {
         let mut vars = BamlMap::new();
 
@@ -199,8 +203,10 @@ impl TypeContext {
             vars,
             classes: BamlMap::new(),
             is_inside_loop: false,
+            function_return_type: None,
         }
     }
+
     pub fn get_type(&self, name: &str) -> Option<&Type> {
         self.vars
             .get(name)
@@ -208,7 +214,7 @@ impl TypeContext {
             .or_else(|| self.symbols.get(name))
     }
 
-    pub fn infer_type(&mut self, expr: &hir::Expression) -> Option<Type> {
+    pub fn infer_type(&mut self, _expr: &hir::Expression) -> Option<Type> {
         todo!()
     }
 
@@ -357,7 +363,33 @@ fn typecheck_statement(
             })
         }
         hir::Statement::Return { expr, span } => {
-            let typed_expr = typecheck_expression(expr, context, diagnostics);
+            let mut typed_expr = typecheck_expression(expr, context, diagnostics);
+
+            let return_type = context
+                .function_return_type
+                .expect("must have return type when typechecking inside function");
+
+            let cur_type = &mut typed_expr.meta_mut().1;
+
+            match cur_type {
+                Some(has) => {
+                    if !has.eq_up_to_span(return_type) {
+                        let src = render_doc_to_string(expr.to_doc());
+
+                        diagnostics.push_error(DatamodelError::new_type_mismatch_error(
+                            return_type.name_for_user(),
+                            has.name_for_user(),
+                            &src,
+                            span.clone(),
+                        ));
+                    }
+                }
+                None => {
+                    // infer type from function return.
+                    *cur_type = Some(return_type.clone());
+                }
+            }
+
             Some(thir::Statement::FunctionReturn {
                 expr: typed_expr,
                 span: span.clone(),
@@ -379,9 +411,12 @@ fn typecheck_statement(
                 span: span.clone(),
             })
         }
-        // TODO: assign op needs more type checking?
-        hir::Statement::Assign { name, value, .. }
-        | hir::Statement::AssignOp { name, value, .. } => {
+        hir::Statement::Assign {
+            name, value, span, ..
+        }
+        | hir::Statement::AssignOp {
+            name, value, span, ..
+        } => {
             let typed_value = typecheck_expression(value, context, diagnostics);
 
             // validate/update type.
@@ -422,7 +457,7 @@ fn typecheck_statement(
                 None => {
                     diagnostics.push_error(DatamodelError::new_validation_error(
                         &format!("Unknown variable {name}"),
-                        value.span(),
+                        span.clone(),
                     ));
                 }
             }
@@ -530,7 +565,6 @@ fn typecheck_statement(
                 span: span.clone(),
             })
         }
-
         hir::Statement::Break(span) | hir::Statement::Continue(span) => {
             if !context.is_inside_loop {
                 let name = if let hir::Statement::Continue(_) = stmt {
@@ -552,7 +586,70 @@ fn typecheck_statement(
                 _ => panic!("just matched break & continue"),
             })
         }
+        hir::Statement::CForLoop {
+            condition,
+            after,
+            block,
+        } => {
+            // make sure that we typecheck with the correct context (condition before block)
+
+            let condition = condition
+                .as_ref()
+                .map(|cond| typecheck_expression(cond, context, diagnostics));
+
+            let after = match after.as_ref() {
+                Some(after) => Some(Box::new(typecheck_statement(after, context, diagnostics)?)),
+                None => None,
+            };
+
+            let block = context.inside_loop(|context| typecheck_block(block, context, diagnostics));
+
+            Some(thir::Statement::CForLoop {
+                condition,
+                after,
+                block,
+            })
+        }
+        hir::Statement::Assert {
+            condition: hir_cond,
+            span,
+        } => {
+            let mut condition = typecheck_expression(hir_cond, context, diagnostics);
+
+            let bool = TypeM::Bool(TypeMeta {
+                span: condition.span().clone(),
+                constraints: vec![],
+                streaming_behavior: StreamingBehavior::default(),
+            });
+
+            match &mut condition.meta_mut().1 {
+                Some(cur_type) => {
+                    if !cur_type.eq_up_to_span(&bool) {
+                        diagnostics.push_error(DatamodelError::new_type_mismatch_error(
+                            bool.name_for_user(),
+                            cur_type.name_for_user(),
+                            &render_doc_to_string(hir_cond.to_doc()),
+                            span.clone(),
+                        ));
+                    }
+                }
+                cond @ None => {
+                    *cond = Some(bool);
+                }
+            }
+
+            Some(thir::Statement::Assert {
+                condition,
+                span: span.clone(),
+            })
+        }
     }
+}
+
+fn render_doc_to_string(doc: pretty::RcDoc<'static>) -> String {
+    let mut s = String::new();
+    _ = doc.render_fmt(10, &mut s);
+    s
 }
 
 /// Typecheck an expression and infer its type
@@ -1090,7 +1187,7 @@ fn typecheck_expression(
         // Don't care about parens here, order is defined by Pratt Parser.
         // TODO: Still if we need to print errors we need the entire span of the
         // expr? Also print the expr?
-        hir::Expression::Paren(expr, span) => typecheck_expression(expr, context, diagnostics),
+        hir::Expression::Paren(expr, _) => typecheck_expression(expr, context, diagnostics),
     }
 }
 

@@ -48,4 +48,3 @@ function Foo() -> int {
 //    | 
 //  1 | function Foo() -> int {
 //    | 
-//

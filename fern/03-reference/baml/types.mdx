@@ -129,6 +129,47 @@ def test_image_input
   )
 end
 ```
+
+```go Go
+package main
+
+import (
+	"context"
+	"log"
+
+	b "example.com/myproject/baml_client"
+)
+
+func main() {
+	ctx := context.Background()
+	
+	// From URL
+	img, err := b.NewImageFromUrl("https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png", nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	
+	res, err := b.TestImageInput(ctx, img)
+	if err != nil {
+		log.Fatal(err)
+	}
+	
+	// Base64 image  
+	imageB64 := "iVBORw0K...."
+	img2, err := b.NewImageFromBase64(imageB64, stringPtr("image/png"))
+	if err != nil {
+		log.Fatal(err)
+	}
+	
+	res2, err := b.TestImageInput(ctx, img2)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+// Helper function for creating string pointers
+func stringPtr(s string) *string { return &s }
+```
 </CodeBlocks>
 
 <Accordion title="Pydantic compatibility">
@@ -235,6 +276,47 @@ def test_audio_input
   )
 end
 ```
+
+```go Go
+package main
+
+import (
+	"context"
+	"log"
+
+	b "example.com/myproject/baml_client"
+)
+
+func main() {
+	ctx := context.Background()
+	
+	// From URL
+	aud, err := b.NewAudioFromUrl("https://actions.google.com/sounds/v1/emergency/beeper_emergency_call.ogg", nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	
+	res, err := b.TestAudioInput(ctx, aud)
+	if err != nil {
+		log.Fatal(err)
+	}
+	
+	// Base64 audio
+	audioB64 := "iVBORw0K...."
+	aud2, err := b.NewAudioFromBase64(audioB64, stringPtr("audio/mp3"))
+	if err != nil {
+		log.Fatal(err)
+	}
+	
+	res2, err := b.TestAudioInput(ctx, aud2)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+// Helper function for creating string pointers
+func stringPtr(s string) *string { return &s }
+```
 </CodeBlocks>
 
 ### `pdf`
@@ -292,6 +374,36 @@ def test_pdf_input
     pdf: Pdf.from_base64("application/pdf", pdf_b64)
   )
 end
+```
+
+```go Go
+package main
+
+import (
+	"context"
+	"log"
+
+	b "example.com/myproject/baml_client"
+)
+
+func main() {
+	ctx := context.Background()
+	
+	// Base64 PDF (URL support is not currently available)
+	pdfB64 := "JVBERi0K...."
+	pdf, err := b.NewPDFFromBase64(pdfB64, stringPtr("application/pdf"))
+	if err != nil {
+		log.Fatal(err)
+	}
+	
+	res, err := b.TestPdfInput(ctx, pdf)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+// Helper function for creating string pointers
+func stringPtr(s string) *string { return &s }
 ```
 </CodeBlocks>
 
@@ -370,6 +482,47 @@ def test_video_input
     video: Video.from_base64("video/mp4", video_b64)
   )
 end
+```
+
+```go Go
+package main
+
+import (
+	"context"
+	"log"
+
+	b "example.com/myproject/baml_client"
+)
+
+func main() {
+	ctx := context.Background()
+	
+	// From URL
+	vid, err := b.NewVideoFromUrl("https://example.com/sample.mp4", nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	
+	res, err := b.TestVideoInput(ctx, vid)
+	if err != nil {
+		log.Fatal(err)
+	}
+	
+	// Base64 video
+	videoB64 := "AAAAGGZ0eXBpc29t...."
+	vid2, err := b.NewVideoFromBase64(videoB64, stringPtr("video/mp4"))
+	if err != nil {
+		log.Fatal(err)
+	}
+	
+	res2, err := b.TestVideoInput(ctx, vid2)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+// Helper function for creating string pointers
+func stringPtr(s string) *string { return &s }
 ```
 </CodeBlocks>
 
@@ -553,6 +706,10 @@ Union[Optional[int], List[str], MyClass]
 (number | null) | string[] | MyClass
 ```
 
+```go Go Equivalent
+Union3IntOrStringArrayOrMyClass // Generated union type
+```
+
 </CodeBlocks>
 
 ### Example 2
@@ -570,6 +727,10 @@ List[str]
 string[]
 ```
 
+```go Go Equivalent
+[]string
+```
+
 </CodeBlocks>
 
 ### Example 3
@@ -584,6 +745,10 @@ List[Union[int, float]]
 
 ```typescript TypeScript Equivalent
 number[]
+```
+
+```go Go Equivalent
+[]Union2IntOrFloat // Generated union type slice
 ```
 
 </CodeBlocks>
@@ -603,6 +768,10 @@ Optional[List[Union[Optional[int], List[str], MyClass]]]
 ((number | null) | string[] | MyClass)[]
 ```
 
+```go Go Equivalent
+[]Union3IntOrStringArrayOrMyClass // Generated union type slice
+```
+
 </CodeBlocks>
 
 ### Example 5
@@ -618,6 +787,10 @@ Union[Literal["str"], Literal[1], Literal[False]]
 
 ```typescript TypeScript Equivalent
 "str" | 1 | false
+```
+
+```go Go Equivalent
+Union3StringOrIntOrBool // Generated union type with literal validation
 ```
 
 </CodeBlocks>

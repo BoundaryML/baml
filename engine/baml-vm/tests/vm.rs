@@ -5,16 +5,19 @@
 
 use baml_compiler::test::ast;
 use baml_vm::{
-    BamlVmProgram, Bytecode, Frame, Function, FunctionKind, Instruction, Object, Value, Vm,
-    VmExecState,
+    BamlVmProgram, Bytecode, Frame, Function, FunctionKind, Instruction, Object, RuntimeError,
+    Value, Vm, VmError, VmExecState,
 };
 
 /// Helper struct for testing VM execution.
-struct Program {
+struct ProgramInput<Expect> {
     source: &'static str,
     function: &'static str,
-    expected: VmExecState,
+    expected: Expect,
 }
+
+type Program = ProgramInput<VmExecState>;
+type FailingProgram = ProgramInput<VmError>;
 
 /// Unified helper function for VM execution with optional inspection.
 fn assert_vm_executes(input: Program) -> anyhow::Result<()> {
@@ -26,36 +29,8 @@ fn assert_vm_executes_with_inspection(
     input: Program,
     inspect: impl FnOnce(&Vm) -> anyhow::Result<()>,
 ) -> anyhow::Result<()> {
-    let ast = ast(input.source)?;
-    let BamlVmProgram {
-        objects,
-        globals,
-        resolved_function_names,
-    } = baml_compiler::compile(&ast)?;
-
-    // eprintln!("objects: {objects:#?}");
-    // eprintln!("globals: {globals:#?}");
-    // eprintln!("resolved_function_names: {resolved_function_names:#?}");
-
-    // Find the target function index by name
-    let (target_function_index, _) = resolved_function_names[input.function];
-
-    // Create and run the VM.
-    // TODO: The VM needs to boostrap itself. Add some function in the VM
-    // that does that.
-    let mut vm = Vm {
-        frames: vec![Frame {
-            function: target_function_index,
-            instruction_ptr: 0,
-            locals_offset: 0,
-        }],
-        stack: vec![Value::Object(target_function_index)],
-        runtime_allocs_offset: objects.len(),
-        objects,
-        globals,
-    };
-
-    let result = vm.exec()?;
+    let (vm, result) = setup_and_exec_program(input.source, input.function)?;
+    let result = result?;
 
     assert_eq!(
         result, input.expected,
@@ -67,6 +42,45 @@ fn assert_vm_executes_with_inspection(
     inspect(&vm)?;
 
     Ok(())
+}
+
+fn assert_vm_fails(input: FailingProgram) -> anyhow::Result<()> {
+    let (vm, result) = setup_and_exec_program(input.source, input.function)?;
+
+    assert_eq!(
+        result,
+        Err(input.expected),
+        "VM execution result mismatch for function '{}'",
+        input.function
+    );
+
+    Ok(())
+}
+
+fn setup_and_exec_program(
+    source: &'static str,
+    function: &str,
+) -> Result<(Vm, Result<VmExecState, VmError>), anyhow::Error> {
+    let ast = ast(source)?;
+    let BamlVmProgram {
+        objects,
+        globals,
+        resolved_function_names,
+    } = baml_compiler::compile(&ast)?;
+    let (target_function_index, _) = resolved_function_names[function];
+    let mut vm = Vm {
+        frames: vec![Frame {
+            function: target_function_index,
+            instruction_ptr: 0,
+            locals_offset: 0,
+        }],
+        stack: vec![Value::Object(target_function_index)],
+        runtime_allocs_offset: objects.len(),
+        objects,
+        globals,
+    };
+    let result = vm.exec();
+    Ok((vm, result))
 }
 
 /// Helper struct for testing VM execution with direct bytecode.
@@ -1133,4 +1147,184 @@ fn for_loop_nested() -> anyhow::Result<()> {
         function: "main",
         expected: VmExecState::Complete(Value::Int(21)),
     })
+}
+
+#[cfg(test)]
+mod c_for_loops {
+
+    use super::*;
+
+    #[test]
+    fn sum_to_ten() -> anyhow::Result<()> {
+        assert_vm_executes(Program {
+            source: r#"
+                fn SumToTen() -> int {
+                    let mut s = 0;
+
+                    for (let mut i = 1; i <= 10; i += 1) {
+                        s += i;
+                    }
+
+                    s
+                }
+                "#,
+            function: "SumToTen",
+            expected: VmExecState::Complete(Value::Int(55)),
+        })
+    }
+
+    #[test]
+    fn after_with_break_continue() -> anyhow::Result<()> {
+        assert_vm_executes(Program {
+            source: r#"
+                fn SumToTen() -> int {
+                    let mut s = 0;
+
+                    for (let mut i = 0; ; s += i) {
+                        i += 1;
+                        if i > 10 {
+                            let x = 0; // this tests that popping is correct.
+                            break;
+                        }
+                        if i == 5 {
+                            // since `s += i` is in the for loop's after, this 'continue' is
+                            // actually irrelevant and the function does the same as SumToTen.
+                            // That's the behavior we're looking for.
+                            continue;
+                        }
+                    }
+
+                    s
+                }"#,
+            function: "SumToTen",
+            expected: VmExecState::Complete(Value::Int(55)),
+        })
+    }
+
+    #[test]
+    fn only_cond() -> anyhow::Result<()> {
+        assert_vm_executes(Program {
+            source: r#"
+                fn OnlyCond() -> int {
+                    let mut s = 0;
+
+                    for (; false;) {
+                    }
+
+                    s
+                }"#,
+            function: "OnlyCond",
+            expected: VmExecState::Complete(Value::Int(0)),
+        })
+    }
+
+    #[test]
+    fn endless() -> anyhow::Result<()> {
+        assert_vm_executes(Program {
+            source: r#"
+                fn Nothing() -> int {
+                    let mut s = 0;
+
+                    for (;;) {
+                        break;
+                    }
+
+                    s
+                }"#,
+            function: "Nothing",
+            expected: VmExecState::Complete(Value::Int(0)),
+        })
+    }
+}
+
+#[cfg(test)]
+mod return_stmt {
+
+    use super::*;
+
+    #[test]
+    fn early_return() -> anyhow::Result<()> {
+        assert_vm_executes(Program {
+            source: r#"
+                fn EarlyReturn(x: int) -> int {
+                   if x == 42 { return 1; }
+                   
+                   x + 5
+                }
+
+                fn main() -> int {
+                    EarlyReturn(42)
+                }
+                "#,
+            function: "main",
+            expected: VmExecState::Complete(Value::Int(1)),
+        })
+    }
+
+    #[test]
+    fn with_stack() -> anyhow::Result<()> {
+        assert_vm_executes(Program {
+            source: r#"
+                fn WithStack() -> int {
+                   let a = 1;
+
+                   if a == 0 { return 0; }
+                   
+                   {
+                      let b = 1;
+                      if a != b {
+                         return 0;
+                      }
+                   }
+                   
+                   {
+                      let c = 2;
+                      let b = 3;
+                      while b != c {
+                         if true {
+                              return 0;
+                         }
+                      }
+                    }
+
+                    7
+                }"#,
+            function: "WithStack",
+            expected: VmExecState::Complete(Value::Int(0)),
+        })
+    }
+}
+
+mod assert_stmt {
+
+    use super::*;
+
+    #[test]
+    fn assert_ok() -> anyhow::Result<()> {
+        assert_vm_executes(Program {
+            source: r#"
+                fn assertOk() -> int {
+
+                    assert 2 + 2 == 4;
+
+                    3
+                }"#,
+            function: "assertOk",
+            expected: VmExecState::Complete(Value::Int(3)),
+        })
+    }
+
+    #[test]
+    fn assert_not_ok() -> anyhow::Result<()> {
+        assert_vm_fails(FailingProgram {
+            source: r#"
+                fn assertNotOk() -> int {
+                    assert 3 == 1;
+
+                    2
+                } "#,
+            function: "assertNotOk",
+            expected: RuntimeError::AssertionError.into(),
+        })
+    }
 }

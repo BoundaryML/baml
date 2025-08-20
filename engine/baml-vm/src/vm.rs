@@ -218,7 +218,7 @@ impl std::fmt::Display for Value {
 ///
 /// Used for checking type errors at runtime. We can probably use some lib
 /// that creates this automatically based on the [`Value`] enum.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Type {
     Int,
     Float,
@@ -243,7 +243,7 @@ impl Type {
 /// Bug in the VM or somehow invalid source code got compiled and executed.
 ///
 /// If the VM throws this it's either a bug in the compiler or in the VM itself.
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum InternalError {
     /// The number of arguments passed to a function doesn't match the function
     /// arity.
@@ -278,17 +278,20 @@ pub enum InternalError {
 ///
 /// Either logic errors in the user's source code or bugs in our compiler/VM
 /// stack.
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum RuntimeError {
     /// Ah yes, classic stack overflow.
     StackOverflow,
+
+    /// User code triggered an assertion failure via the [`Instruction::Assert`] opcode.
+    AssertionError,
 
     /// VM internal error.
     InternalError(InternalError),
 }
 
 /// Any kind of virtual machine error.
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum VmError {
     RuntimeError(RuntimeError),
 }
@@ -540,10 +543,10 @@ impl Vm {
             self.objects[function]
         );
 
-        debug_assert!(
-            self.objects.len() == self.runtime_allocs_offset,
-            "garbage collection did not run before setting a new entry point"
-        );
+        // TODO: Run collect_garbage in codegen after each function call.
+        if self.objects.len() != self.runtime_allocs_offset {
+            eprintln!("WARNING: garbage collection did not run before setting a new entry point");
+        }
 
         self.stack.push(Value::Object(function));
         self.stack.extend(args.iter().copied());
@@ -606,6 +609,13 @@ impl Vm {
     /// Everything allocated while the program run is dropped.
     pub fn collect_garbage(&mut self) {
         self.objects.drain(self.runtime_allocs_offset..);
+    }
+
+    /// Allocates an array on the heap and returns it to the caller.
+    pub fn alloc_array(&mut self, values: Vec<Value>) -> Value {
+        let object = self.objects.len();
+        self.objects.push(Object::Array(values));
+        Value::Object(object)
     }
 
     /// Main VM execution loop.
@@ -894,7 +904,6 @@ impl Vm {
 
                     self.stack.push(result);
                 }
-
                 Instruction::AllocArray(size) => {
                     // Pop all the elements from the stack and create an array.
                     let array = self.stack.drain(self.stack.len() - size..).collect();
@@ -909,7 +918,6 @@ impl Vm {
                     // borrow checker complains. Restore the reference.
                     function = self.objects[frame.function].as_function()?;
                 }
-
                 Instruction::LoadArrayElement => {
                     // Stack should contain [array, index]
                     // Pop the index first, then the array
@@ -1181,6 +1189,21 @@ impl Vm {
                     // implementation of `Instruction::Call` above this one for
                     // more information about this piece.
                     function = self.objects[frame.function].as_function()?;
+                }
+                Instruction::Assert => {
+                    let value = self.stack.pop().ok_or(RuntimeError::AssertionError)?;
+
+                    let Value::Bool(condition_result) = value else {
+                        return Err(InternalError::TypeError {
+                            expected: Type::Bool,
+                            got: Type::of(&value),
+                        }
+                        .into());
+                    };
+
+                    if !condition_result {
+                        return Err(RuntimeError::AssertionError.into());
+                    }
                 }
             }
         }

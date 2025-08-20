@@ -1,0 +1,177 @@
+---
+title: Go
+---
+
+To set up BAML with Go do the following:
+
+<Steps>
+  ### Install BAML VSCode/Cursor Extension
+      https://marketplace.visualstudio.com/items?itemName=boundary.baml-extension
+
+      - syntax highlighting
+      - testing playground
+      - prompt previews
+
+  ### Install BAML CLI and Initialize Project
+      ```bash go
+      go install github.com/boundaryml/baml/go/baml-cli@latest && baml-cli init
+      ```
+
+      This command will:
+      1. Install the BAML CLI tool globally
+      2. Create starter BAML code in a `baml_src` directory
+      3. Set up the basic project structure
+
+  ### Install BAML Go Runtime
+      After initializing your project, install the Go runtime library:
+
+      ```bash go
+      go get github.com/boundaryml/baml
+      ```
+
+  ### Install Required Go Tools
+      The BAML generator uses `gofmt` and `goimports` to format the generated Go code. Install these tools:
+
+      ```bash go
+      # gofmt comes with Go by default, but install goimports
+      go install golang.org/x/tools/cmd/goimports@latest
+      ```
+
+      These tools are required by the `on_generate` command in your generator configuration and ensure the generated code is properly formatted.
+
+  ### Generate the `baml_client` Go package from `.baml` files
+
+    One of the files in your `baml_src` directory will have a [generator block](/ref/baml/generator). This tells BAML how to generate the `baml_client` directory, which will have auto-generated Go code to call your BAML functions.
+
+    Any types defined in .baml files will be converted into Go structs in the `baml_client` directory.
+
+    ```bash
+    baml-cli generate
+    ```
+
+    You can modify your build process to always call baml-cli generate before building.
+
+    ```makefile Makefile
+    .PHONY: generate build
+
+    generate:
+    	baml-cli generate
+
+    build: generate
+    	go build ./...
+
+    test: generate
+    	go test ./...
+    ```
+
+    See [What is baml_client](/guide/introduction/baml_client) to learn more about how this works.
+
+    <Tip>
+      If you set up the [VSCode extension](https://marketplace.visualstudio.com/items?itemName=Boundary.baml-extension), it will automatically run `baml-cli generate` on saving a BAML file.
+    </Tip>
+
+  ### Use a BAML function in Go!
+    <Error>If `baml_client` doesn't exist, make sure to run the previous step! </Error>
+
+    ```go main.go
+    package main
+
+    import (
+        "context"
+        "fmt"
+        "log"
+
+        b "example.com/myproject/baml_client"
+        "example.com/myproject/baml_client/types"
+    )
+
+    func main() {
+        ctx := context.Background()
+
+        // BAML's internal parser guarantees ExtractResume
+        // to always return a Resume type or an error
+        resume, err := b.ExtractResume(ctx, rawResume)
+        if err != nil {
+            log.Fatal(err)
+        }
+
+        fmt.Printf("Extracted resume: %+v\n", resume)
+    }
+
+    func exampleStream(rawResume string) (*types.Resume, error) {
+        ctx := context.Background()
+        
+        stream, err := b.Stream.ExtractResume(ctx, rawResume)
+        if err != nil {
+            return nil, err
+        }
+
+        for value := range stream {
+            if value.IsError {
+                return nil, value.Error
+            }
+            
+            if !value.IsFinal && value.Stream() != nil {
+                partial := *value.Stream()
+                fmt.Printf("Partial: %+v\n", partial) // This will be a partial Resume type
+            }
+            
+            if value.IsFinal && value.Final() != nil {
+                final := *value.Final()
+                return &final, nil // This will be a complete Resume type
+            }
+        }
+        
+        return nil, fmt.Errorf("stream ended without final response")
+    }
+    ```
+</Steps>
+
+## Working with Go Modules
+
+BAML integrates seamlessly with Go modules. Make sure your `go.mod` file includes the BAML dependency:
+
+```go go.mod
+module example.com/myproject
+
+go 1.21
+
+require (
+    github.com/boundaryml/baml v0.203.1
+)
+```
+
+The generated `baml_client` package will use your module path, so you can import it as:
+
+```go
+import (
+    b "example.com/myproject/baml_client"
+    "example.com/myproject/baml_client/types"
+)
+```
+
+## Context and Cancellation
+
+All BAML Go functions require a `context.Context` as the first parameter, allowing you to:
+
+```go
+// Set timeouts
+ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+defer cancel()
+
+result, err := b.ExtractResume(ctx, resume)
+
+// Handle cancellation
+ctx, cancel := context.WithCancel(context.Background())
+go func() {
+    time.Sleep(5 * time.Second)
+    cancel() // Cancel the request after 5 seconds
+}()
+
+result, err := b.ExtractResume(ctx, resume)
+if errors.Is(err, context.Canceled) {
+    fmt.Println("Request was canceled")
+}
+```
+
+You're all set! Continue on to the [Deployment Guides](/guide/development/deploying/docker) for your language to learn how to deploy your BAML code or check out the [Interactive Examples](https://baml-examples.vercel.app/) to see more examples.

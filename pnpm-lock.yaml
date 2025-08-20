@@ -403,16 +403,16 @@ importers:
         version: 15.5.13
       css-loader:
         specifier: ^7.1.2
-        version: 7.1.2(webpack@5.99.9(@swc/core@1.12.7)(esbuild@0.25.2)(webpack-cli@5.1.4))
+        version: 7.1.2(webpack@5.99.9)
       jotai-devtools:
         specifier: 0.12.0
         version: 0.12.0(@types/react@19.1.9)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(redux@5.0.1)(storybook@8.6.14)
       style-loader:
         specifier: ^4.0.0
-        version: 4.0.0(webpack@5.99.9(@swc/core@1.12.7)(esbuild@0.25.2)(webpack-cli@5.1.4))
+        version: 4.0.0(webpack@5.99.9)
       ts-loader:
         specifier: ^9.4.0
-        version: 9.5.2(typescript@5.8.3)(webpack@5.99.9(@swc/core@1.12.7)(esbuild@0.25.2)(webpack-cli@5.1.4))
+        version: 9.5.2(typescript@5.8.3)(webpack@5.99.9)
       typescript:
         specifier: ^5.0.0
         version: 5.8.3
@@ -1242,13 +1242,13 @@ importers:
         version: 5.1.5
       next:
         specifier: 15.3.3
-        version: 15.3.3(@babel/core@7.27.7)(@opentelemetry/api@1.9.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+        version: 15.3.3(@babel/core@7.28.0)(@opentelemetry/api@1.9.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       next-themes:
         specifier: 0.4.6
         version: 0.4.6(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       nuqs:
         specifier: 2.4.3
-        version: 2.4.3(next@15.3.3(@babel/core@7.27.7)(@opentelemetry/api@1.9.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(react@19.1.0)
+        version: 2.4.3(next@15.3.3(@babel/core@7.28.0)(@opentelemetry/api@1.9.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(react@19.1.0)
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -1272,10 +1272,10 @@ importers:
         version: 3.0.3(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       react-scan:
         specifier: 0.3.4
-        version: 0.3.4(@types/react@19.1.8)(next@15.3.3(@babel/core@7.27.7)(@opentelemetry/api@1.9.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(rollup@4.43.0)
+        version: 0.3.4(@types/react@19.1.8)(next@15.3.3(@babel/core@7.28.0)(@opentelemetry/api@1.9.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(rollup@4.43.0)
       react-spring:
         specifier: 10.0.1
-        version: 10.0.1(@react-three/fiber@9.1.2(@types/react@19.1.8)(react-dom@19.1.0(react@19.1.0))(react-native@0.80.0(@babel/core@7.27.7)(@types/react@19.1.8)(react@19.1.0))(react@19.1.0)(three@0.177.0))(konva@9.3.20)(react-dom@19.1.0(react@19.1.0))(react-konva@19.0.6(@types/react@19.1.8)(konva@9.3.20)(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(react-native@0.80.0(@babel/core@7.27.7)(@types/react@19.1.8)(react@19.1.0))(react-zdog@1.2.2)(react@19.1.0)(three@0.177.0)(zdog@1.1.3)
+        version: 10.0.1(@react-three/fiber@9.1.2(@types/react@19.1.8)(react-dom@19.1.0(react@19.1.0))(react-native@0.80.0(@babel/core@7.28.0)(@types/react@19.1.8)(react@19.1.0))(react@19.1.0)(three@0.177.0))(konva@9.3.20)(react-dom@19.1.0(react@19.1.0))(react-konva@19.0.6(@types/react@19.1.8)(konva@9.3.20)(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(react-native@0.80.0(@babel/core@7.28.0)(@types/react@19.1.8)(react@19.1.0))(react-zdog@1.2.2)(react@19.1.0)(three@0.177.0)(zdog@1.1.3)
       react-twc:
         specifier: 1.4.2
         version: 1.4.2(@types/react@19.1.8)(react@19.1.0)
@@ -8590,6 +8590,7 @@ packages:
     resolution: {integrity: sha512-Quz3MvAwHxVYNXsOByL7xI5EB2WYOeFswqaHIA3qOK3isRWTxiplBEocmmru6XmxDB2L7jDNYtYA4FyimoAFEw==}
     engines: {node: '>=8.17.0'}
     hasBin: true
+    bundledDependencies: []
 
   jsonfile@6.1.0:
     resolution: {integrity: sha512-5dgndWOriYSm5cnYaJNhalLNDKOqFwyDB/rr1E9ZsGciGvKPs8R2xYGCacuf3z6K1YKDz182fd+fY3cn3pMqXQ==}
@@ -13309,7 +13310,6 @@ snapshots:
     dependencies:
       '@babel/core': 7.28.0
       '@babel/helper-plugin-utils': 7.27.1
-    optional: true
 
   '@babel/plugin-syntax-bigint@7.8.3(@babel/core@7.27.7)':
     dependencies:
@@ -13320,7 +13320,6 @@ snapshots:
     dependencies:
       '@babel/core': 7.28.0
       '@babel/helper-plugin-utils': 7.27.1
-    optional: true
 
   '@babel/plugin-syntax-class-properties@7.12.13(@babel/core@7.27.7)':
     dependencies:
@@ -13331,7 +13330,6 @@ snapshots:
     dependencies:
       '@babel/core': 7.28.0
       '@babel/helper-plugin-utils': 7.27.1
-    optional: true
 
   '@babel/plugin-syntax-class-static-block@7.14.5(@babel/core@7.27.7)':
     dependencies:
@@ -13342,7 +13340,6 @@ snapshots:
     dependencies:
       '@babel/core': 7.28.0
       '@babel/helper-plugin-utils': 7.27.1
-    optional: true
 
   '@babel/plugin-syntax-import-attributes@7.27.1(@babel/core@7.27.7)':
     dependencies:
@@ -13353,7 +13350,6 @@ snapshots:
     dependencies:
       '@babel/core': 7.28.0
       '@babel/helper-plugin-utils': 7.27.1
-    optional: true
 
   '@babel/plugin-syntax-import-meta@7.10.4(@babel/core@7.27.7)':
     dependencies:
@@ -13364,7 +13360,6 @@ snapshots:
     dependencies:
       '@babel/core': 7.28.0
       '@babel/helper-plugin-utils': 7.27.1
-    optional: true
 
   '@babel/plugin-syntax-json-strings@7.8.3(@babel/core@7.27.7)':
     dependencies:
@@ -13375,7 +13370,6 @@ snapshots:
     dependencies:
       '@babel/core': 7.28.0
       '@babel/helper-plugin-utils': 7.27.1
-    optional: true
 
   '@babel/plugin-syntax-jsx@7.27.1(@babel/core@7.27.7)':
     dependencies:
@@ -13391,7 +13385,6 @@ snapshots:
     dependencies:
       '@babel/core': 7.28.0
       '@babel/helper-plugin-utils': 7.27.1
-    optional: true
 
   '@babel/plugin-syntax-nullish-coalescing-operator@7.8.3(@babel/core@7.27.7)':
     dependencies:
@@ -13402,7 +13395,6 @@ snapshots:
     dependencies:
       '@babel/core': 7.28.0
       '@babel/helper-plugin-utils': 7.27.1
-    optional: true
 
   '@babel/plugin-syntax-numeric-separator@7.10.4(@babel/core@7.27.7)':
     dependencies:
@@ -13413,7 +13405,6 @@ snapshots:
     dependencies:
       '@babel/core': 7.28.0
       '@babel/helper-plugin-utils': 7.27.1
-    optional: true
 
   '@babel/plugin-syntax-object-rest-spread@7.8.3(@babel/core@7.27.7)':
     dependencies:
@@ -13424,7 +13415,6 @@ snapshots:
     dependencies:
       '@babel/core': 7.28.0
       '@babel/helper-plugin-utils': 7.27.1
-    optional: true
 
   '@babel/plugin-syntax-optional-catch-binding@7.8.3(@babel/core@7.27.7)':
     dependencies:
@@ -13435,7 +13425,6 @@ snapshots:
     dependencies:
       '@babel/core': 7.28.0
       '@babel/helper-plugin-utils': 7.27.1
-    optional: true
 
   '@babel/plugin-syntax-optional-chaining@7.8.3(@babel/core@7.27.7)':
     dependencies:
@@ -13446,7 +13435,6 @@ snapshots:
     dependencies:
       '@babel/core': 7.28.0
       '@babel/helper-plugin-utils': 7.27.1
-    optional: true
 
   '@babel/plugin-syntax-private-property-in-object@7.14.5(@babel/core@7.27.7)':
     dependencies:
@@ -13457,7 +13445,6 @@ snapshots:
     dependencies:
       '@babel/core': 7.28.0
       '@babel/helper-plugin-utils': 7.27.1
-    optional: true
 
   '@babel/plugin-syntax-top-level-await@7.14.5(@babel/core@7.27.7)':
     dependencies:
@@ -13468,7 +13455,6 @@ snapshots:
     dependencies:
       '@babel/core': 7.28.0
       '@babel/helper-plugin-utils': 7.27.1
-    optional: true
 
   '@babel/plugin-syntax-typescript@7.27.1(@babel/core@7.27.7)':
     dependencies:
@@ -16157,9 +16143,9 @@ snapshots:
 
   '@react-native/assets-registry@0.80.0': {}
 
-  '@react-native/codegen@0.80.0(@babel/core@7.27.7)':
+  '@react-native/codegen@0.80.0(@babel/core@7.28.0)':
     dependencies:
-      '@babel/core': 7.27.7
+      '@babel/core': 7.28.0
       glob: 7.2.3
       hermes-parser: 0.28.1
       invariant: 2.2.4
@@ -16207,12 +16193,12 @@ snapshots:
 
   '@react-native/normalize-colors@0.80.0': {}
 
-  '@react-native/virtualized-lists@0.80.0(@types/react@19.1.8)(react-native@0.80.0(@babel/core@7.27.7)(@types/react@19.1.8)(react@19.1.0))(react@19.1.0)':
+  '@react-native/virtualized-lists@0.80.0(@types/react@19.1.8)(react-native@0.80.0(@babel/core@7.28.0)(@types/react@19.1.8)(react@19.1.0))(react@19.1.0)':
     dependencies:
       invariant: 2.2.4
       nullthrows: 1.1.1
       react: 19.1.0
-      react-native: 0.80.0(@babel/core@7.27.7)(@types/react@19.1.8)(react@19.1.0)
+      react-native: 0.80.0(@babel/core@7.28.0)(@types/react@19.1.8)(react@19.1.0)
     optionalDependencies:
       '@types/react': 19.1.8
 
@@ -16239,14 +16225,14 @@ snapshots:
       react: 19.1.0
       react-konva: 19.0.6(@types/react@19.1.8)(konva@9.3.20)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
 
-  '@react-spring/native@10.0.1(react-native@0.80.0(@babel/core@7.27.7)(@types/react@19.1.8)(react@19.1.0))(react@19.1.0)':
+  '@react-spring/native@10.0.1(react-native@0.80.0(@babel/core@7.28.0)(@types/react@19.1.8)(react@19.1.0))(react@19.1.0)':
     dependencies:
       '@react-spring/animated': 10.0.1(react@19.1.0)
       '@react-spring/core': 10.0.1(react@19.1.0)
       '@react-spring/shared': 10.0.1(react@19.1.0)
       '@react-spring/types': 10.0.1
       react: 19.1.0
-      react-native: 0.80.0(@babel/core@7.27.7)(@types/react@19.1.8)(react@19.1.0)
+      react-native: 0.80.0(@babel/core@7.28.0)(@types/react@19.1.8)(react@19.1.0)
 
   '@react-spring/rafz@10.0.1': {}
 
@@ -16256,13 +16242,13 @@ snapshots:
       '@react-spring/types': 10.0.1
       react: 19.1.0
 
-  '@react-spring/three@10.0.1(@react-three/fiber@9.1.2(@types/react@19.1.8)(react-dom@19.1.0(react@19.1.0))(react-native@0.80.0(@babel/core@7.27.7)(@types/react@19.1.8)(react@19.1.0))(react@19.1.0)(three@0.177.0))(react@19.1.0)(three@0.177.0)':
+  '@react-spring/three@10.0.1(@react-three/fiber@9.1.2(@types/react@19.1.8)(react-dom@19.1.0(react@19.1.0))(react-native@0.80.0(@babel/core@7.28.0)(@types/react@19.1.8)(react@19.1.0))(react@19.1.0)(three@0.177.0))(react@19.1.0)(three@0.177.0)':
     dependencies:
       '@react-spring/animated': 10.0.1(react@19.1.0)
       '@react-spring/core': 10.0.1(react@19.1.0)
       '@react-spring/shared': 10.0.1(react@19.1.0)
       '@react-spring/types': 10.0.1
-      '@react-three/fiber': 9.1.2(@types/react@19.1.8)(react-dom@19.1.0(react@19.1.0))(react-native@0.80.0(@babel/core@7.27.7)(@types/react@19.1.8)(react@19.1.0))(react@19.1.0)(three@0.177.0)
+      '@react-three/fiber': 9.1.2(@types/react@19.1.8)(react-dom@19.1.0(react@19.1.0))(react-native@0.80.0(@babel/core@7.28.0)(@types/react@19.1.8)(react@19.1.0))(react@19.1.0)(three@0.177.0)
       react: 19.1.0
       three: 0.177.0
 
@@ -16288,7 +16274,7 @@ snapshots:
       react-zdog: 1.2.2
       zdog: 1.1.3
 
-  '@react-three/fiber@9.1.2(@types/react@19.1.8)(react-dom@19.1.0(react@19.1.0))(react-native@0.80.0(@babel/core@7.27.7)(@types/react@19.1.8)(react@19.1.0))(react@19.1.0)(three@0.177.0)':
+  '@react-three/fiber@9.1.2(@types/react@19.1.8)(react-dom@19.1.0(react@19.1.0))(react-native@0.80.0(@babel/core@7.28.0)(@types/react@19.1.8)(react@19.1.0))(react@19.1.0)(three@0.177.0)':
     dependencies:
       '@babel/runtime': 7.28.2
       '@types/react-reconciler': 0.28.9(@types/react@19.1.8)
@@ -16306,7 +16292,7 @@ snapshots:
       zustand: 5.0.7(@types/react@19.1.8)(react@19.1.0)(use-sync-external-store@1.5.0(react@19.1.0))
     optionalDependencies:
       react-dom: 19.1.0(react@19.1.0)
-      react-native: 0.80.0(@babel/core@7.27.7)(@types/react@19.1.8)(react@19.1.0)
+      react-native: 0.80.0(@babel/core@7.28.0)(@types/react@19.1.8)(react@19.1.0)
     transitivePeerDependencies:
       - '@types/react'
       - immer
@@ -18374,17 +18360,17 @@ snapshots:
       '@webassemblyjs/ast': 1.14.1
       '@xtuc/long': 4.2.2
 
-  '@webpack-cli/configtest@2.1.1(webpack-cli@5.1.4(webpack@5.99.9))(webpack@5.99.9(@swc/core@1.12.7)(esbuild@0.25.2)(webpack-cli@5.1.4))':
+  '@webpack-cli/configtest@2.1.1(webpack-cli@5.1.4)(webpack@5.99.9)':
     dependencies:
       webpack: 5.99.9(@swc/core@1.12.7)(esbuild@0.25.2)(webpack-cli@5.1.4)
       webpack-cli: 5.1.4(webpack@5.99.9)
 
-  '@webpack-cli/info@2.0.2(webpack-cli@5.1.4(webpack@5.99.9))(webpack@5.99.9(@swc/core@1.12.7)(esbuild@0.25.2)(webpack-cli@5.1.4))':
+  '@webpack-cli/info@2.0.2(webpack-cli@5.1.4)(webpack@5.99.9)':
     dependencies:
       webpack: 5.99.9(@swc/core@1.12.7)(esbuild@0.25.2)(webpack-cli@5.1.4)
       webpack-cli: 5.1.4(webpack@5.99.9)
 
-  '@webpack-cli/serve@2.0.5(webpack-cli@5.1.4(webpack@5.99.9))(webpack@5.99.9(@swc/core@1.12.7)(esbuild@0.25.2)(webpack-cli@5.1.4))':
+  '@webpack-cli/serve@2.0.5(webpack-cli@5.1.4)(webpack@5.99.9)':
     dependencies:
       webpack: 5.99.9(@swc/core@1.12.7)(esbuild@0.25.2)(webpack-cli@5.1.4)
       webpack-cli: 5.1.4(webpack@5.99.9)
@@ -18673,7 +18659,6 @@ snapshots:
       slash: 3.0.0
     transitivePeerDependencies:
       - supports-color
-    optional: true
 
   babel-plugin-istanbul@6.1.1:
     dependencies:
@@ -18743,7 +18728,6 @@ snapshots:
       '@babel/plugin-syntax-optional-chaining': 7.8.3(@babel/core@7.28.0)
       '@babel/plugin-syntax-private-property-in-object': 7.14.5(@babel/core@7.28.0)
       '@babel/plugin-syntax-top-level-await': 7.14.5(@babel/core@7.28.0)
-    optional: true
 
   babel-preset-jest@29.6.3(@babel/core@7.27.7):
     dependencies:
@@ -18756,7 +18740,6 @@ snapshots:
       '@babel/core': 7.28.0
       babel-plugin-jest-hoist: 29.6.3
       babel-preset-current-node-syntax: 1.1.0(@babel/core@7.28.0)
-    optional: true
 
   bail@2.0.2: {}
 
@@ -19324,7 +19307,7 @@ snapshots:
       shebang-command: 2.0.0
       which: 2.0.2
 
-  css-loader@7.1.2(webpack@5.99.9(@swc/core@1.12.7)(esbuild@0.25.2)(webpack-cli@5.1.4)):
+  css-loader@7.1.2(webpack@5.99.9):
     dependencies:
       icss-utils: 5.1.0(postcss@8.5.6)
       postcss: 8.5.6
@@ -22744,7 +22727,7 @@ snapshots:
       - '@babel/core'
       - babel-plugin-macros
 
-  next@15.3.3(@babel/core@7.27.7)(@opentelemetry/api@1.9.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0):
+  next@15.3.3(@babel/core@7.28.0)(@opentelemetry/api@1.9.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0):
     dependencies:
       '@next/env': 15.3.3
       '@swc/counter': 0.1.3
@@ -22754,7 +22737,7 @@ snapshots:
       postcss: 8.4.31
       react: 19.1.0
       react-dom: 19.1.0(react@19.1.0)
-      styled-jsx: 5.1.6(@babel/core@7.27.7)(react@19.1.0)
+      styled-jsx: 5.1.6(@babel/core@7.28.0)(react@19.1.0)
     optionalDependencies:
       '@next/swc-darwin-arm64': 15.3.3
       '@next/swc-darwin-x64': 15.3.3
@@ -22925,12 +22908,12 @@ snapshots:
     optionalDependencies:
       next: 15.2.3(@babel/core@7.28.0)(@opentelemetry/api@1.9.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
 
-  nuqs@2.4.3(next@15.3.3(@babel/core@7.27.7)(@opentelemetry/api@1.9.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(react@19.1.0):
+  nuqs@2.4.3(next@15.3.3(@babel/core@7.28.0)(@opentelemetry/api@1.9.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(react@19.1.0):
     dependencies:
       mitt: 3.0.1
       react: 19.1.0
     optionalDependencies:
-      next: 15.3.3(@babel/core@7.27.7)(@opentelemetry/api@1.9.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      next: 15.3.3(@babel/core@7.28.0)(@opentelemetry/api@1.9.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
 
   nwsapi@2.2.20: {}
 
@@ -23726,20 +23709,20 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  react-native@0.80.0(@babel/core@7.27.7)(@types/react@19.1.8)(react@19.1.0):
+  react-native@0.80.0(@babel/core@7.28.0)(@types/react@19.1.8)(react@19.1.0):
     dependencies:
       '@jest/create-cache-key-function': 29.7.0
       '@react-native/assets-registry': 0.80.0
-      '@react-native/codegen': 0.80.0(@babel/core@7.27.7)
+      '@react-native/codegen': 0.80.0(@babel/core@7.28.0)
       '@react-native/community-cli-plugin': 0.80.0
       '@react-native/gradle-plugin': 0.80.0
       '@react-native/js-polyfills': 0.80.0
       '@react-native/normalize-colors': 0.80.0
-      '@react-native/virtualized-lists': 0.80.0(@types/react@19.1.8)(react-native@0.80.0(@babel/core@7.27.7)(@types/react@19.1.8)(react@19.1.0))(react@19.1.0)
+      '@react-native/virtualized-lists': 0.80.0(@types/react@19.1.8)(react-native@0.80.0(@babel/core@7.28.0)(@types/react@19.1.8)(react@19.1.0))(react@19.1.0)
       abort-controller: 3.0.0
       anser: 1.4.10
       ansi-regex: 5.0.1
-      babel-jest: 29.7.0(@babel/core@7.27.7)
+      babel-jest: 29.7.0(@babel/core@7.28.0)
       babel-plugin-syntax-hermes-parser: 0.28.1
       base64-js: 1.5.1
       chalk: 4.1.2
@@ -23868,7 +23851,7 @@ snapshots:
       react: 19.1.0
       react-dom: 19.1.0(react@19.1.0)
 
-  react-scan@0.3.4(@types/react@19.1.8)(next@15.3.3(@babel/core@7.27.7)(@opentelemetry/api@1.9.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(rollup@4.43.0):
+  react-scan@0.3.4(@types/react@19.1.8)(next@15.3.3(@babel/core@7.28.0)(@opentelemetry/api@1.9.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(rollup@4.43.0):
     dependencies:
       '@babel/core': 7.27.7
       '@babel/generator': 7.27.5
@@ -23890,7 +23873,7 @@ snapshots:
       react-dom: 19.1.0(react@19.1.0)
       tsx: 4.20.3
     optionalDependencies:
-      next: 15.3.3(@babel/core@7.27.7)(@opentelemetry/api@1.9.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      next: 15.3.3(@babel/core@7.28.0)(@opentelemetry/api@1.9.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       unplugin: 2.1.0
     transitivePeerDependencies:
       - '@types/react'
@@ -23905,12 +23888,12 @@ snapshots:
       react-dom: 19.1.0(react@19.1.0)
       react-transition-group: 4.4.5(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
 
-  react-spring@10.0.1(@react-three/fiber@9.1.2(@types/react@19.1.8)(react-dom@19.1.0(react@19.1.0))(react-native@0.80.0(@babel/core@7.27.7)(@types/react@19.1.8)(react@19.1.0))(react@19.1.0)(three@0.177.0))(konva@9.3.20)(react-dom@19.1.0(react@19.1.0))(react-konva@19.0.6(@types/react@19.1.8)(konva@9.3.20)(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(react-native@0.80.0(@babel/core@7.27.7)(@types/react@19.1.8)(react@19.1.0))(react-zdog@1.2.2)(react@19.1.0)(three@0.177.0)(zdog@1.1.3):
+  react-spring@10.0.1(@react-three/fiber@9.1.2(@types/react@19.1.8)(react-dom@19.1.0(react@19.1.0))(react-native@0.80.0(@babel/core@7.28.0)(@types/react@19.1.8)(react@19.1.0))(react@19.1.0)(three@0.177.0))(konva@9.3.20)(react-dom@19.1.0(react@19.1.0))(react-konva@19.0.6(@types/react@19.1.8)(konva@9.3.20)(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(react-native@0.80.0(@babel/core@7.28.0)(@types/react@19.1.8)(react@19.1.0))(react-zdog@1.2.2)(react@19.1.0)(three@0.177.0)(zdog@1.1.3):
     dependencies:
       '@react-spring/core': 10.0.1(react@19.1.0)
       '@react-spring/konva': 10.0.1(konva@9.3.20)(react-konva@19.0.6(@types/react@19.1.8)(konva@9.3.20)(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(react@19.1.0)
-      '@react-spring/native': 10.0.1(react-native@0.80.0(@babel/core@7.27.7)(@types/react@19.1.8)(react@19.1.0))(react@19.1.0)
-      '@react-spring/three': 10.0.1(@react-three/fiber@9.1.2(@types/react@19.1.8)(react-dom@19.1.0(react@19.1.0))(react-native@0.80.0(@babel/core@7.27.7)(@types/react@19.1.8)(react@19.1.0))(react@19.1.0)(three@0.177.0))(react@19.1.0)(three@0.177.0)
+      '@react-spring/native': 10.0.1(react-native@0.80.0(@babel/core@7.28.0)(@types/react@19.1.8)(react@19.1.0))(react@19.1.0)
+      '@react-spring/three': 10.0.1(@react-three/fiber@9.1.2(@types/react@19.1.8)(react-dom@19.1.0(react@19.1.0))(react-native@0.80.0(@babel/core@7.28.0)(@types/react@19.1.8)(react@19.1.0))(react@19.1.0)(three@0.177.0))(react@19.1.0)(three@0.177.0)
       '@react-spring/web': 10.0.1(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       '@react-spring/zdog': 10.0.1(react-dom@19.1.0(react@19.1.0))(react-zdog@1.2.2)(react@19.1.0)(zdog@1.1.3)
       react: 19.1.0
@@ -24804,7 +24787,7 @@ snapshots:
     dependencies:
       boundary: 2.0.0
 
-  style-loader@4.0.0(webpack@5.99.9(@swc/core@1.12.7)(esbuild@0.25.2)(webpack-cli@5.1.4)):
+  style-loader@4.0.0(webpack@5.99.9):
     dependencies:
       webpack: 5.99.9(@swc/core@1.12.7)(esbuild@0.25.2)(webpack-cli@5.1.4)
 
@@ -24817,13 +24800,6 @@ snapshots:
   style-to-object@1.0.9:
     dependencies:
       inline-style-parser: 0.2.4
-
-  styled-jsx@5.1.6(@babel/core@7.27.7)(react@19.1.0):
-    dependencies:
-      client-only: 0.0.1
-      react: 19.1.0
-    optionalDependencies:
-      '@babel/core': 7.27.7
 
   styled-jsx@5.1.6(@babel/core@7.28.0)(react@19.1.0):
     dependencies:
@@ -24969,7 +24945,7 @@ snapshots:
       ansi-escapes: 4.3.2
       supports-hyperlinks: 2.3.0
 
-  terser-webpack-plugin@5.3.14(@swc/core@1.12.7)(esbuild@0.25.2)(webpack@5.99.9(@swc/core@1.12.7)(esbuild@0.25.2)(webpack-cli@5.1.4)):
+  terser-webpack-plugin@5.3.14(@swc/core@1.12.7)(esbuild@0.25.2)(webpack@5.99.9):
     dependencies:
       '@jridgewell/trace-mapping': 0.3.29
       jest-worker: 27.5.1
@@ -25165,7 +25141,7 @@ snapshots:
       babel-jest: 29.7.0(@babel/core@7.28.0)
       jest-util: 30.0.2
 
-  ts-loader@9.5.2(typescript@5.8.3)(webpack@5.99.9(@swc/core@1.12.7)(esbuild@0.25.2)(webpack-cli@5.1.4)):
+  ts-loader@9.5.2(typescript@5.8.3)(webpack@5.99.9):
     dependencies:
       chalk: 4.1.2
       enhanced-resolve: 5.18.2
@@ -26055,9 +26031,9 @@ snapshots:
   webpack-cli@5.1.4(webpack@5.99.9):
     dependencies:
       '@discoveryjs/json-ext': 0.5.7
-      '@webpack-cli/configtest': 2.1.1(webpack-cli@5.1.4(webpack@5.99.9))(webpack@5.99.9(@swc/core@1.12.7)(esbuild@0.25.2)(webpack-cli@5.1.4))
-      '@webpack-cli/info': 2.0.2(webpack-cli@5.1.4(webpack@5.99.9))(webpack@5.99.9(@swc/core@1.12.7)(esbuild@0.25.2)(webpack-cli@5.1.4))
-      '@webpack-cli/serve': 2.0.5(webpack-cli@5.1.4(webpack@5.99.9))(webpack@5.99.9(@swc/core@1.12.7)(esbuild@0.25.2)(webpack-cli@5.1.4))
+      '@webpack-cli/configtest': 2.1.1(webpack-cli@5.1.4)(webpack@5.99.9)
+      '@webpack-cli/info': 2.0.2(webpack-cli@5.1.4)(webpack@5.99.9)
+      '@webpack-cli/serve': 2.0.5(webpack-cli@5.1.4)(webpack@5.99.9)
       colorette: 2.0.20
       commander: 10.0.1
       cross-spawn: 7.0.6
@@ -26134,7 +26110,7 @@ snapshots:
       neo-async: 2.6.2
       schema-utils: 4.3.2
       tapable: 2.2.2
-      terser-webpack-plugin: 5.3.14(@swc/core@1.12.7)(esbuild@0.25.2)(webpack@5.99.9(@swc/core@1.12.7)(esbuild@0.25.2)(webpack-cli@5.1.4))
+      terser-webpack-plugin: 5.3.14(@swc/core@1.12.7)(esbuild@0.25.2)(webpack@5.99.9)
       watchpack: 2.4.4
       webpack-sources: 3.3.3
     optionalDependencies:

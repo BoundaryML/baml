@@ -319,6 +319,46 @@ func (t *DynEnumOneEnumBuilder) Type() (baml.Type, error) {
 	return t.inner.Type()
 }
 
+type DynEnumThreeEnumBuilder struct {
+	inner baml.EnumBuilder
+}
+
+func (t *DynEnumThreeEnumBuilder) ListValues() ([]EnumValueBuilder, error) {
+	result, err := t.inner.ListValues()
+	if err != nil {
+		return nil, err
+	}
+	builders := make([]EnumValueBuilder, len(result))
+	for i, p := range result {
+		builders[i] = p
+	}
+	return builders, nil
+}
+
+func (t *DynEnumThreeEnumBuilder) AddValue(value string) (EnumValueBuilder, error) {
+	return t.inner.AddValue(value)
+}
+
+func (t *DynEnumThreeEnumBuilder) ValueTRICYCLE() (EnumValueBuilder, error) {
+	return t.inner.Value("TRICYCLE")
+}
+
+func (t *DynEnumThreeEnumBuilder) ValueTRIANGLE() (EnumValueBuilder, error) {
+	return t.inner.Value("TRIANGLE")
+}
+
+func (t *TypeBuilder) DynEnumThree() (*DynEnumThreeEnumBuilder, error) {
+	bld, err := t.inner.Enum("DynEnumThree")
+	if err != nil {
+		return nil, err
+	}
+	return &DynEnumThreeEnumBuilder{inner: bld}, nil
+}
+
+func (t *DynEnumThreeEnumBuilder) Type() (baml.Type, error) {
+	return t.inner.Type()
+}
+
 type DynEnumTwoEnumBuilder struct {
 	inner baml.EnumBuilder
 }
@@ -664,6 +704,86 @@ func (t *TypeBuilder) OrderStatus() (*OrderStatusEnumView, error) {
 }
 
 func (t *OrderStatusEnumView) Type() (baml.Type, error) {
+	return t.inner.Type()
+}
+
+type RenderStatusEnumEnumBuilder struct {
+	inner baml.EnumBuilder
+}
+
+func (t *RenderStatusEnumEnumBuilder) ListValues() ([]EnumValueBuilder, error) {
+	result, err := t.inner.ListValues()
+	if err != nil {
+		return nil, err
+	}
+	builders := make([]EnumValueBuilder, len(result))
+	for i, p := range result {
+		builders[i] = p
+	}
+	return builders, nil
+}
+
+func (t *RenderStatusEnumEnumBuilder) AddValue(value string) (EnumValueBuilder, error) {
+	return t.inner.AddValue(value)
+}
+
+func (t *RenderStatusEnumEnumBuilder) ValueACTIVE() (EnumValueBuilder, error) {
+	return t.inner.Value("ACTIVE")
+}
+
+func (t *RenderStatusEnumEnumBuilder) ValueINACTIVE() (EnumValueBuilder, error) {
+	return t.inner.Value("INACTIVE")
+}
+
+func (t *TypeBuilder) RenderStatusEnum() (*RenderStatusEnumEnumBuilder, error) {
+	bld, err := t.inner.Enum("RenderStatusEnum")
+	if err != nil {
+		return nil, err
+	}
+	return &RenderStatusEnumEnumBuilder{inner: bld}, nil
+}
+
+func (t *RenderStatusEnumEnumBuilder) Type() (baml.Type, error) {
+	return t.inner.Type()
+}
+
+type RenderTestEnumEnumBuilder struct {
+	inner baml.EnumBuilder
+}
+
+func (t *RenderTestEnumEnumBuilder) ListValues() ([]EnumValueBuilder, error) {
+	result, err := t.inner.ListValues()
+	if err != nil {
+		return nil, err
+	}
+	builders := make([]EnumValueBuilder, len(result))
+	for i, p := range result {
+		builders[i] = p
+	}
+	return builders, nil
+}
+
+func (t *RenderTestEnumEnumBuilder) AddValue(value string) (EnumValueBuilder, error) {
+	return t.inner.AddValue(value)
+}
+
+func (t *RenderTestEnumEnumBuilder) ValueBIKE() (EnumValueBuilder, error) {
+	return t.inner.Value("BIKE")
+}
+
+func (t *RenderTestEnumEnumBuilder) ValueSCOOTER() (EnumValueBuilder, error) {
+	return t.inner.Value("SCOOTER")
+}
+
+func (t *TypeBuilder) RenderTestEnum() (*RenderTestEnumEnumBuilder, error) {
+	bld, err := t.inner.Enum("RenderTestEnum")
+	if err != nil {
+		return nil, err
+	}
+	return &RenderTestEnumEnumBuilder{inner: bld}, nil
+}
+
+func (t *RenderTestEnumEnumBuilder) Type() (baml.Type, error) {
 	return t.inner.Type()
 }
 

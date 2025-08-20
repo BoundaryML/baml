@@ -183,6 +183,12 @@ pub enum Instruction {
     /// No arguments needed, result is stored in the eval stack and the VM
     /// simply has to clean up the call stack and continue execution.
     Return,
+
+    /// Pops a `Bool` value from the stack. If the value is `false`, raises
+    /// an assertion error.
+    ///
+    /// Format: `ASSERT`
+    Assert,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -278,6 +284,7 @@ impl std::fmt::Display for Instruction {
             Instruction::Await => f.write_str("AWAIT"),
             Instruction::Call(n) => write!(f, "CALL {n}"),
             Instruction::Return => f.write_str("RETURN"),
+            Instruction::Assert => f.write_str("ASSERT"),
         }
     }
 }

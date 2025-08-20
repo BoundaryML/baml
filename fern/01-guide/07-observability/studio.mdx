@@ -104,6 +104,46 @@ const testBook1 = traceAsync(async function(): Promise<any> {
 });
 ```
 
+```go Go
+package main
+
+import (
+    "context"
+    "fmt"
+    
+    b "example.com/baml_client"
+)
+
+type AuthorInfo struct {
+    FirstName string
+    LastName  string
+}
+
+func main() {
+    ctx := context.Background()
+    
+    // BAML functions are automatically traced when using Boundary Studio
+    bookSummary, err := b.GenerateBookSummary(
+        ctx,
+        "The Great Gatsby",
+        AuthorInfo{
+            FirstName: "F. Scott", 
+            LastName:  "Fitzgerald",
+        },
+        "A classic American novel...",
+    )
+    if err != nil {
+        panic(fmt.Sprintf("Failed to generate book summary: %v", err))
+    }
+    
+    fmt.Printf("Book Summary: %s\n", bookSummary)
+    
+    // Note: Tracing non-BAML functions is not yet supported in Go.
+    // Custom function tracing will be available in a future release.
+    // Please contact us if this feature is needed for your use case.
+}
+```
+
 ```text Ruby
 Tracing non-baml functions is not yet supported in Ruby.
 ```

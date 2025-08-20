@@ -7,7 +7,7 @@ class PdfWrapper(pydantic.BaseModel):
 
 
 def test_model_accepts_pdf_instance():
-    pdf = baml_py.Pdf.from_base64("CCC")
+    pdf = baml_py.Pdf.from_base64("application/pdf", "CCC")
     obj = PdfWrapper(content=pdf)
     assert isinstance(obj.content, baml_py.Pdf)
 
@@ -25,5 +25,3 @@ def test_model_dump_pdf_url():
             "media_type": "application/pdf",
         }
     }
-
-

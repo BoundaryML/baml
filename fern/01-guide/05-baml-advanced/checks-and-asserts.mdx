@@ -198,6 +198,37 @@ const main = () => {
 };
 ```
 </Tab>
+
+<Tab title="Go" language="go">
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    
+    "github.com/boundaryml/baml"
+)
+
+func main() {
+    ctx := context.Background()
+    
+    citation, err := baml.GetCitation(ctx, "SpaceX, is an American spacecraft manufacturer, launch service provider...", nil)
+    if err != nil {
+        // Handle validation errors
+        if validationErr, ok := err.(*baml.ValidationError); ok {
+            fmt.Printf("Validation error: %v\n", validationErr)
+            return
+        }
+        fmt.Printf("An unexpected error occurred: %v\n", err)
+        return
+    }
+    
+    // Access the citation fields
+    fmt.Printf("Quote: %s from %s\n", citation.Quote, citation.WebsiteLink)
+}
+```
+</Tab>
 </Tabs>
 
 
@@ -209,19 +240,27 @@ runtime.
 
 
 ```baml BAML
-( bar int @check(less_than_zero, {{ this < 0 }}) )[]
+type Bar = ( bar int @check(less_than_zero, {{ this < 0 }}) )[]
 ```
 
 <Tabs>
 <Tab title="Python" language="python">
 ```python
-List[Checked[int, Dict[Literal["less_than_zero"]]]]
+Bar = List[Checked[int, Dict[Literal["less_than_zero"]]]]
 ```
 </Tab>
 
 <Tab title="TypeScript" language="typescript">
 ```typescript
-Checked<int,"less_than_zero">[]
+type Bar = Checked<int,"less_than_zero">[]
+```
+</Tab>
+
+<Tab title="Go" language="go">
+```go
+// Go type signature for checked fields:
+type Bar = []baml.Checked[int, map[string]baml.CheckResult]
+// where the map contains "less_than_zero" as a key
 ```
 </Tab>
 </Tabs>
@@ -299,6 +338,41 @@ const main = () => {
     // Access each check and its status.
     for (const check of get_checks(citation.quote.checks)) {
         console.log(`Check: ${check.name}, Status: ${check.status}`)
+    }
+}
+```
+</Tab>
+
+<Tab title="Go" language="go">
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    
+    "github.com/boundaryml/baml"
+)
+
+func main() {
+    ctx := context.Background()
+    
+    citation, err := baml.GetCitation(ctx, "SpaceX, is an American spacecraft manufacturer, launch service provider...", nil)
+    if err != nil {
+        panic(fmt.Sprintf("Failed to get citation: %v", err))
+    }
+    
+    // Access the value of the quote field
+    quote := citation.Quote.Value
+    fmt.Printf("Quote: %s\n", quote)
+    
+    // Access a particular check
+    exactCitationMatch := citation.Quote.Checks["exact_citation_match"].Status
+    fmt.Printf("Citation match status: %s\n", exactCitationMatch)
+    
+    // Access each check and its status
+    for name, check := range citation.Quote.Checks {
+        fmt.Printf("Check %s: %s\n", name, check.Status)
     }
 }
 ```

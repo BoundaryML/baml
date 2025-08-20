@@ -4350,8 +4350,7 @@ dependencies = [
 [[package]]
 name = "minijinja"
 version = "2.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e60ac08614cc09062820e51d5d94c2fce16b94ea4e5003bb81b99a95f84e876"
+source = "git+https://github.com/boundaryml/minijinja.git?branch=main#ee25c021c8bb78d7ca11fa99972918eea4585330"
 dependencies = [
  "aho-corasick",
  "indexmap 2.10.0",

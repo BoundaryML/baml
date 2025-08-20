@@ -8,8 +8,8 @@ use super::{
 use crate::{
     assert_correct_parser,
     ast::{
-        self, expr::ExprFn, App, ArgumentsList, AssignOp, AssignOpStmt, AssignStmt, Expression,
-        ExpressionBlock, ForLoopStmt, LetStmt, Stmt, TopLevelAssignment, *,
+        self, expr::ExprFn, App, ArgumentsList, AssignOp, AssignOpStmt, AssignStmt, CForLoopStmt,
+        Expression, ExpressionBlock, ForLoopStmt, LetStmt, Stmt, TopLevelAssignment, *,
     },
     parser::{
         parse_arguments::parse_arguments_list, parse_expression::parse_expression,
@@ -61,69 +61,31 @@ pub fn parse_top_level_assignment(
     assert_correct_parser!(token, Rule::top_level_assignment);
     let mut tokens = token.into_inner();
 
+    let only_let_stmt = |name, span, diagnostics: &mut Diagnostics| {
+        diagnostics.push_error(DatamodelError::new_validation_error(
+            &format!("{name} are not allowed at top level, only let statements are allowed"),
+            span,
+        ));
+
+        None
+    };
+
     match parse_statement(tokens.next()?, diagnostics)? {
         Stmt::Let(stmt) => Some(TopLevelAssignment { stmt }),
-        Stmt::Assign(stmt) => {
-            // NOTE: (Jesus) top-level is generally regarded as order-independent,
-            // and assignments need an order of execution.
-
-            diagnostics.push_error(DatamodelError::new_static(
-                "assignments are not allowed at top level, only let statements are allowed",
-                stmt.span.clone(),
-            ));
-
-            None
+        Stmt::Assign(stmt) => only_let_stmt("assignments", stmt.span, diagnostics),
+        Stmt::AssignOp(stmt) => only_let_stmt("assignments", stmt.span, diagnostics),
+        Stmt::ForLoop(ForLoopStmt { span, .. }) | Stmt::CForLoop(CForLoopStmt { span, .. }) => {
+            only_let_stmt("for loops", span, diagnostics)
         }
-        Stmt::AssignOp(stmt) => {
-            diagnostics.push_error(DatamodelError::new_static(
-                "assign operations are not allowed at top level, only let statements are allowed",
-                stmt.span.clone(),
-            ));
-
-            None
+        Stmt::Expression(expr) => only_let_stmt("expressions", expr.span().clone(), diagnostics),
+        Stmt::WhileLoop(stmt) => only_let_stmt("while loops", stmt.span, diagnostics),
+        Stmt::Break(span) => only_let_stmt("break statements", span, diagnostics),
+        Stmt::Continue(span) => only_let_stmt("continue statements", span, diagnostics),
+        Stmt::Return(ReturnStmt { span, .. }) => {
+            only_let_stmt("return statements", span, diagnostics)
         }
-
-        Stmt::ForLoop(stmt) => {
-            diagnostics.push_error(DatamodelError::new_static(
-                "for loops are not allowed at top level, only let statements are allowed",
-                stmt.span.clone(),
-            ));
-
-            None
-        }
-
-        Stmt::Expression(expr) => {
-            diagnostics.push_error(DatamodelError::new_static(
-                "expressions are not allowed at top level, only let statements are allowed",
-                expr.span().clone(),
-            ));
-
-            None
-        }
-
-        Stmt::WhileLoop(stmt) => {
-            diagnostics.push_error(DatamodelError::new_static(
-                "while loops are not allowed at top level, only let statements are allowed",
-                stmt.span.clone(),
-            ));
-
-            None
-        }
-        Stmt::Break(span) => {
-            diagnostics.push_error(DatamodelError::new_static(
-                "break statements are not allowed at top level, only let statements are allowed",
-                span.clone(),
-            ));
-
-            None
-        }
-        Stmt::Continue(span) => {
-            diagnostics.push_error(DatamodelError::new_static(
-                "continue statements are not allowed at top level, only let statements are allowed",
-                span.clone(),
-            ));
-
-            None
+        Stmt::Assert(AssertStmt { span, .. }) => {
+            only_let_stmt("assert statements", span, diagnostics)
         }
     }
 }
@@ -145,13 +107,17 @@ fn parse_while_loop(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Stm
     }))
 }
 
-pub fn parse_for_loop(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Stmt> {
-    assert_correct_parser!(token, Rule::for_loop);
-    let span = diagnostics.span(token.as_span());
-    let mut tokens = token.into_inner();
+fn parse_iterator_for_loop(
+    rule: Pair<'_>,
+    span: Span,
+    body: ExpressionBlock,
+    diagnostics: &mut Diagnostics,
+) -> Option<Stmt> {
+    assert_correct_parser!(rule, Rule::iterator_for_loop);
+    let mut tokens = rule.into_inner();
     let identifier = parse_identifier(tokens.next()?, diagnostics);
     let iterator = parse_expression(tokens.next()?, diagnostics)?;
-    let body = parse_expr_block(tokens.next()?, diagnostics)?;
+
     Some(Stmt::ForLoop(ForLoopStmt {
         identifier,
         iterator,
@@ -160,13 +126,118 @@ pub fn parse_for_loop(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<
     }))
 }
 
+fn parse_c_for_loop(
+    rule: Pair<'_>,
+    span: Span,
+    body: ExpressionBlock,
+    diagnostics: &mut Diagnostics,
+) -> Option<Stmt> {
+    assert_correct_parser!(rule, Rule::c_for_loop);
+
+    let mut tokens = rule.into_inner();
+
+    let init_stmt = if tokens
+        .peek()
+        .is_some_and(|p| matches!(p.as_rule(), Rule::c_for_init_stmt))
+    {
+        let inner = tokens.next().unwrap().into_inner().next()?;
+
+        let span = diagnostics.span(inner.as_span());
+
+        parse_statement_inner_rule(inner, span, diagnostics).map(Box::new)
+    } else {
+        None
+    };
+
+    let condition = if tokens
+        .peek()
+        .is_some_and(|p| matches!(p.as_rule(), Rule::expression))
+    {
+        parse_expression(tokens.next().unwrap(), diagnostics)
+    } else {
+        None
+    };
+
+    let after_stmt = if let Some(rule) = tokens.next() {
+        assert_correct_parser!(rule, Rule::c_for_after_stmt);
+        let inner = rule.into_inner().next()?;
+        let span = diagnostics.span(inner.as_span());
+
+        parse_statement_inner_rule(inner, span, diagnostics).map(Box::new)
+    } else {
+        None
+    };
+
+    Some(Stmt::CForLoop(CForLoopStmt {
+        init_stmt,
+        condition,
+        after_stmt,
+        body,
+        span,
+    }))
+}
+
+fn parse_for_loop(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Stmt> {
+    assert_correct_parser!(token, Rule::for_loop);
+    let span = diagnostics.span(token.as_span());
+    let mut tokens = token.into_inner();
+
+    let in_between_rule = tokens.next()?;
+
+    let body = parse_expr_block(tokens.next()?, diagnostics)?;
+
+    match in_between_rule.as_rule() {
+        Rule::iterator_for_loop => {
+            parse_iterator_for_loop(in_between_rule, span, body, diagnostics)
+        }
+        Rule::c_for_loop => parse_c_for_loop(in_between_rule, span, body, diagnostics),
+        _ => panic!("unexpected in-between rule in for-loop."),
+    }
+}
+
 pub fn parse_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Stmt> {
     assert_correct_parser!(token, Rule::stmt);
     let span = diagnostics.span(token.as_span());
     let mut tokens = token.into_inner();
 
     let stmt_token = tokens.next()?;
-    let stmt = match stmt_token.as_rule() {
+    let stmt = parse_statement_inner_rule(stmt_token, span.clone(), diagnostics);
+
+    let maybe_semicolon = tokens.next();
+    match maybe_semicolon {
+        Some(p) if p.as_str() == ";" => {}
+        _ => {
+            if matches!(stmt, Some(Stmt::Let(_))) {
+                diagnostics.push_error(DatamodelError::new_static(
+                    "Statement must end with a semicolon.",
+                    span,
+                ));
+            }
+        }
+    }
+
+    stmt
+}
+
+fn parse_statement_inner_rule(
+    stmt_token: Pair<'_>,
+    span: Span,
+    diagnostics: &mut Diagnostics,
+) -> Option<Stmt> {
+    match stmt_token.as_rule() {
+        Rule::assert_stmt => {
+            let assert_value = stmt_token.into_inner().next()?;
+            let value = parse_expression(assert_value, diagnostics)?;
+
+            Some(Stmt::Assert(AssertStmt { value, span }))
+        }
+
+        Rule::return_stmt => {
+            let return_value = stmt_token.into_inner().next()?;
+            let value = parse_expression(return_value, diagnostics)?;
+
+            Some(Stmt::Return(ReturnStmt { value, span }))
+        }
         Rule::assign_stmt => {
             let mut assignment_tokens = stmt_token.into_inner();
 
@@ -179,7 +250,7 @@ pub fn parse_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
                 Stmt::Assign(AssignStmt {
                     identifier,
                     expr: body,
-                    span: span.clone(),
+                    span,
                 })
             })
         }
@@ -214,7 +285,7 @@ pub fn parse_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
                     identifier,
                     assign_op,
                     expr: body,
-                    span: span.clone(),
+                    span,
                 })
             })
         }
@@ -238,7 +309,7 @@ pub fn parse_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
                     identifier,
                     is_mutable,
                     expr: body,
-                    span: span.clone(),
+                    span,
                 })
             })
         }
@@ -252,28 +323,10 @@ pub fn parse_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
         Rule::expr_block => parse_expr_block(stmt_token, diagnostics)
             .map(|expr_block| Stmt::Expression(Expression::ExprBlock(expr_block, span.clone()))),
         _ => {
-            diagnostics.push_error(DatamodelError::new_static(
-                "Expected statement",
-                span.clone(),
-            ));
+            diagnostics.push_error(DatamodelError::new_static("Expected statement", span));
             None
         }
-    };
-
-    let maybe_semicolon = tokens.next();
-    match maybe_semicolon {
-        Some(p) if p.as_str() == ";" => {}
-        _ => {
-            if matches!(stmt, Some(Stmt::Let(_))) {
-                diagnostics.push_error(DatamodelError::new_static(
-                    "Statement must end with a semicolon.",
-                    span.clone(),
-                ));
-            }
-        }
     }
-
-    stmt
 }
 
 fn parse_assignment_expr(

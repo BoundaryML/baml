@@ -83,7 +83,8 @@ itertools = "0.14.0"
 jsonish = { path = "baml-lib/jsonish" }
 log = "0.4.20"
 # TODO: disable imports, etc
-minijinja = { version = "2.10.2", default-features = false, features = [
+# minijinja = { path = "../third_party/minijinja/minijinja", default-features = false, features = [
+minijinja = { git = "https://github.com/boundaryml/minijinja.git", branch = "main", default-features = false, features = [
   "macros",
   "builtins",
   "debug",

@@ -771,7 +771,7 @@ impl BlobUploader {
         let blobs_to_upload = std::mem::take(&mut self.queued_blobs);
         let result = self.upload_blob_batch(blobs_to_upload).await;
         if let Err(e) = result {
-            log::error!("Failed to upload queued blob batch: {}", e);
+            log::error!("Failed to upload queued blob batch: {e}");
         }
     }
 
@@ -807,11 +807,11 @@ impl BlobUploader {
         {
             Ok(response) => response,
             Err(e) => {
-                log::error!("Failed to get blob upload URL: {}", e);
+                log::error!("Failed to get blob upload URL: {e}");
                 return Err(e.into());
             }
         };
-        log::debug!("upload_response={:?}", upload_response);
+        log::debug!("upload_response={upload_response:?}");
 
         // Filter out blobs that already exist
         let blobs_to_upload: Vec<_> = blobs
@@ -868,7 +868,7 @@ impl BlobUploader {
                 log::debug!("Successfully uploaded {} blobs", blobs_to_upload.len());
             }
             Err(e) => {
-                log::error!("Failed to upload blob batch to S3: {}", e);
+                log::error!("Failed to upload blob batch to S3: {e}");
                 return Err(e.into());
             }
         }

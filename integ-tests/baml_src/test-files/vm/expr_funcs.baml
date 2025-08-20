@@ -67,6 +67,46 @@ function NormalElseIfStmt(a: bool, b: bool) -> int {
     v
 }
 
+function IterativeFibonacci(n: int) -> int {
+    let mut a = 0;
+    let mut b = 1;
+
+    if n == 0 {
+        b
+    } else {
+        let mut i = 1;
+        while i <= n {
+            let c = a + b;
+            a = b;
+            b = c;
+            i += 1;
+        }
+        a
+    }
+}
+
+function LengthOfArray(arr: int[]) -> int {
+    arr.len()
+}
+
+function SumArray(arr: int[]) -> int {
+    let mut sum = 0;
+    for a in arr {
+        sum += a;
+    }
+    sum
+}
+
+function SumFromTo(x: int, y: int) -> int {
+    let mut s = 0;
+
+    for (let mut i = x; i <= y; i += 1) {
+        s += i;
+    }
+
+    s
+}
+
 // --------------------------------
 // Expression Functions with LLM calls.
 // --------------------------------

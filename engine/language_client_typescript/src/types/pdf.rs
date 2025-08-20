@@ -21,12 +21,12 @@ impl BamlPdf {
     }
 
     #[napi(ts_return_type = "BamlPdf")]
-    pub fn from_base64(base64: String) -> External<BamlPdf> {
+    pub fn from_base64(media_type: String, base64: String) -> External<BamlPdf> {
         let pdf = BamlPdf {
             inner: baml_types::BamlMedia::base64(
                 baml_types::BamlMediaType::Pdf,
                 base64,
-                Some("application/pdf".to_string()),
+                Some(media_type),
             ),
         };
         External::new(pdf)
