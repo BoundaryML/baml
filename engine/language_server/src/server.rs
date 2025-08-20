@@ -53,13 +53,20 @@ use crate::message::try_show_message;
 
 pub type Result<T> = std::result::Result<T, api::Error>;
 
+pub(crate) struct ServerArgs {
+    pub tokio_handle: tokio::runtime::Handle,
+    pub broadcast_tx: broadcast::Sender<LangServerToWasmMessage>,
+    pub playground_rx: broadcast::Receiver<PreSendToWasmMessage>,
+    pub playground_port: u16,
+    pub proxy_port: u16,
+}
+
 pub(crate) struct Server {
     pub connection: Connection,
     pub client_capabilities: ClientCapabilities,
-    pub worker_threads: NonZeroUsize,
     pub session: Session,
-    pub tokio_runtime: tokio::runtime::Runtime,
-    pub broadcast_tx: broadcast::Sender<LangServerToWasmMessage>,
+    pub worker_threads: NonZeroUsize,
+    pub args: ServerArgs,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -68,7 +75,7 @@ struct PortNotificationParams {
 }
 
 impl Server {
-    pub fn new(worker_threads: NonZeroUsize) -> anyhow::Result<Self> {
+    pub fn new(worker_threads: NonZeroUsize, args: ServerArgs) -> anyhow::Result<Self> {
         let connection = ConnectionInitializer::stdio();
         let (id, init_params) = connection.initialize_start()?;
 
@@ -82,13 +89,14 @@ impl Server {
             crate::SERVER_NAME,
             crate::version(),
         )?;
-        Self::new_with_connection(worker_threads, connection, init_params)
+        Self::new_with_connection(worker_threads, connection, init_params, args)
     }
 
     pub fn new_with_connection(
         worker_threads: NonZeroUsize,
         connection: Connection,
         init_params: InitializeParams,
+        args: ServerArgs,
     ) -> anyhow::Result<Self> {
         crate::message::init_messenger(connection.make_sender());
 
@@ -105,15 +113,15 @@ impl Server {
                 .unwrap_or_else(|| serde_json::Value::Object(serde_json::Map::default())),
         );
 
-        // crate::logging::init_logging(
-        //     global_settings.tracing.log_level.unwrap_or_default(),
-        //     global_settings.tracing.log_file.as_deref(),
-        // );
-        // if let Err(e) = tracing_log::LogTracer::init() {
-        //     eprintln!("Failed to initialize log tracer: {e}");
-        //     // Decide how to handle this error - maybe log it via tracing if possible,
-        //     // or exit if logging is critical.
-        // }
+        crate::logging::init_logging(
+            global_settings.tracing.log_level.unwrap_or_default(),
+            global_settings.tracing.log_file.as_deref(),
+        );
+        if let Err(e) = tracing_log::LogTracer::init() {
+            eprintln!("Failed to initialize log tracer: {e}");
+            // Decide how to handle this error - maybe log it via tracing if possible,
+            // or exit if logging is critical.
+        }
 
         let mut workspace_for_url = |url: Url| {
             let Some(workspace_settings) = workspace_settings.as_mut() else {
@@ -183,15 +191,12 @@ impl Server {
         // }
         session.reload(Some(notifier))?;
 
-        let (broadcast_tx, broadcast_rx) = broadcast::channel(1000);
-
         let mut server = Self {
             connection,
             worker_threads,
             session,
             client_capabilities,
-            tokio_runtime: tokio::runtime::Runtime::new()?,
-            broadcast_tx,
+            args,
         };
         // #[cfg(feature = "playground-server")]
         // server.start_playground_server();
@@ -199,43 +204,24 @@ impl Server {
         {
             let lsp_sender = server.connection.make_sender();
             let playground_tx = server.session.playground_tx.clone();
-            server.tokio_runtime.spawn(async move {
-                let port_picks = match playground2::port_picker::pick().await {
-                    Ok(port_picker) => port_picker,
-                    Err(e) => {
-                        tracing::error!("Failed to pick ports: {}", e);
-                        return;
-                    }
-                };
-                let http_services = futures::future::join(
-                    playground2::Playground2Server {
-                        app_state: playground2::server::AppState {
-                            broadcast_rx,
-                            playground_tx,
-                            playground_port: port_picks.playground_port,
-                            proxy_port: port_picks.proxy_port,
-                        },
-                    }
-                    .run(port_picks.playground_listener),
-                    playground2::ProxyServer {}.run(port_picks.proxy_listener),
-                );
+            server.args.tokio_handle.spawn(async move {
+               
                 lsp_sender
                     .send(Message::Notification(lsp_server::Notification::new(
                         "baml/port".to_string(),
                         serde_json::to_value(PortNotificationParams {
-                            port: port_picks.playground_port,
+                            port: server.args.playground_port,
                         })
                         .unwrap(),
                     )))
                     .unwrap();
-                let _ = http_services.await;
             });
         }
         {
             let mut playground_rx = playground_rx.resubscribe();
-            let broadcast_tx = server.broadcast_tx.clone();
+            let broadcast_tx = server.args.broadcast_tx.clone();
             let session = server.session.clone();
-            server.tokio_runtime.spawn(async move {
+            server.args.tokio_handle.spawn(async move {
                 while let Ok(msg) = playground_rx.recv().await {
                     match msg {
                         PreSendToWasmMessage::Initialized => {
@@ -356,7 +342,7 @@ impl Server {
                 &self.client_capabilities,
                 self.session,
                 self.worker_threads,
-                self.broadcast_tx,
+                self.args.broadcast_tx,
             )?;
             self.connection.close()?;
             Ok(())
