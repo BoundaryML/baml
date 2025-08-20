@@ -45,5 +45,6 @@
   },
   "[baml]": {
     "editor.defaultFormatter": "Boundary.baml-extension"
-  }
+  },
+  "python.analysis.typeCheckingMode": "basic"
 }
