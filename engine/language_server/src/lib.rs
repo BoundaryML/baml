@@ -33,18 +33,36 @@ pub(crate) fn version() -> &'static str {
     env!("CARGO_PKG_VERSION")
 }
 
+pub struct ServerRegistry {
+    tokio_runtime: tokio::runtime::Runtime,
+}
+
+impl ServerRegistry {
+    pub fn new() -> anyhow::Result<Self> {
+        let tokio_runtime = tokio::runtime::Runtime::new()?;
+        Ok(Self { tokio_runtime })
+    }
+
+    pub fn start_servers(&self) -> anyhow::Result<()> {
+        let four = NonZeroUsize::new(4).unwrap();
+
+        // by default, we set the number of worker threads to `num_cpus`, with a maximum of 4.
+        let worker_threads = std::thread::available_parallelism()
+            .unwrap_or(four)
+            .max(four);
+
+        Server::new(worker_threads)
+            .context("Failed to start server")?
+            .run()
+            .context("Failed to run server")?;
+
+        Ok(())
+    }
+}
+
 pub fn run_server() -> anyhow::Result<()> {
-    let four = NonZeroUsize::new(4).unwrap();
-
-    // by default, we set the number of worker threads to `num_cpus`, with a maximum of 4.
-    let worker_threads = std::thread::available_parallelism()
-        .unwrap_or(four)
-        .max(four);
-
-    Server::new(worker_threads)
-        .context("Failed to start server")?
-        .run()
-        .context("Failed to run server")?;
-
+    ServerRegistry::new()?
+        .start_servers()
+        .context("Failed to start servers")?;
     Ok(())
 }

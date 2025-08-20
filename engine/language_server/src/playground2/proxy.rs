@@ -135,9 +135,7 @@ async fn handle_preflight() -> impl IntoResponse {
 }
 
 /// Serve static files from the current working directory
-async fn serve_static_file(
-    Path(path): Path<String>,
-) -> Result<AxumResponse, ProxyError> {
+async fn serve_static_file(Path(path): Path<String>) -> Result<AxumResponse, ProxyError> {
     let file_path = path.strip_prefix("static/").unwrap_or(&path);
     let current_dir = std::env::current_dir()
         .map_err(|e| ProxyError::internal_error(format!("Failed to get current dir: {e}")))?;
@@ -158,7 +156,7 @@ async fn serve_static_file(
         Ok(contents) => {
             let mime_type = from_path(file_path).first_or_octet_stream();
             let content_type = mime_type.as_ref().to_string();
-            
+
             Ok((
                 StatusCode::OK,
                 [
@@ -166,21 +164,20 @@ async fn serve_static_file(
                     ("access-control-allow-origin", "*"),
                 ],
                 contents,
-            ).into_response())
+            )
+                .into_response())
         }
         Err(err) => {
             tracing::warn!("Failed to read static file {}: {}", file_path, err);
-            
+
             match err.kind() {
-                std::io::ErrorKind::NotFound => {
-                    Err(ProxyError::not_found(format!("File not found: {file_path}")))
-                }
-                std::io::ErrorKind::PermissionDenied => {
-                    Err(ProxyError::new(
-                        format!("Permission denied: {file_path}"),
-                        StatusCode::FORBIDDEN,
-                    ))
-                }
+                std::io::ErrorKind::NotFound => Err(ProxyError::not_found(format!(
+                    "File not found: {file_path}"
+                ))),
+                std::io::ErrorKind::PermissionDenied => Err(ProxyError::new(
+                    format!("Permission denied: {file_path}"),
+                    StatusCode::FORBIDDEN,
+                )),
                 _ => Err(ProxyError::internal_error(format!(
                     "Error reading file: {file_path}"
                 ))),
@@ -244,19 +241,18 @@ fn extract_original_url(headers: &HeaderMap) -> Result<String, ProxyError> {
 fn clean_headers(headers: &HeaderMap) -> HeaderMap {
     let mut clean_headers = headers.clone();
     let headers_to_remove = ["baml-original-url", "origin", "authorization", "host"];
-    
+
     for header_name in &headers_to_remove {
         clean_headers.remove(*header_name);
     }
-    
+
     clean_headers
 }
 
 /// Parse and validate the target URL
 fn parse_target_url(url_str: &str) -> Result<url::Url, ProxyError> {
     let clean_url = url_str.trim_end_matches('/');
-    url::Url::parse(clean_url)
-        .map_err(|e| ProxyError::bad_request(format!("Invalid URL: {e}")))
+    url::Url::parse(clean_url).map_err(|e| ProxyError::bad_request(format!("Invalid URL: {e}")))
 }
 
 /// Check if this is a simple GET request that doesn't need proxying
@@ -266,11 +262,7 @@ fn is_simple_get_request(method: &Method, path: &str) -> bool {
 
 /// Create an empty successful response
 fn create_empty_response() -> impl IntoResponse {
-    (
-        StatusCode::OK,
-        [("access-control-allow-origin", "*")],
-        "",
-    )
+    (StatusCode::OK, [("access-control-allow-origin", "*")], "")
 }
 
 /// Construct the final path for the target URL
@@ -293,11 +285,7 @@ fn construct_final_path(url: &url::Url, path_str: &str) -> String {
 }
 
 /// Inject appropriate API key based on the target URL
-fn inject_api_key(
-    headers: &mut HeaderMap,
-    target_url: &url::Url,
-    original_headers: &HeaderMap,
-) {
+fn inject_api_key(headers: &mut HeaderMap, target_url: &url::Url, original_headers: &HeaderMap) {
     let origin = get_origin_string(target_url);
 
     for (allowed_origin, header_name, env_var, baml_header) in API_PROVIDERS {
@@ -402,13 +390,13 @@ async fn execute_request(
     );
 
     // Convert reqwest status to axum status
-    let axum_status = StatusCode::from_u16(status.as_u16())
-        .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+    let axum_status =
+        StatusCode::from_u16(status.as_u16()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
 
     // Build response headers, ensuring CORS headers are present
     let mut response_header_map = HeaderMap::new();
     response_header_map.insert("access-control-allow-origin", "*".parse().unwrap());
-    
+
     // Copy response headers from the upstream response
     for (name, value) in response_headers.iter() {
         response_header_map.insert(name, value.clone());
@@ -419,8 +407,7 @@ async fn execute_request(
 
 /// Standalone proxy server
 #[derive(Debug)]
-pub struct ProxyServer {
-}
+pub struct ProxyServer {}
 
 impl ProxyServer {
     /// Create a new proxy server instance
@@ -429,12 +416,22 @@ impl ProxyServer {
     }
 
     pub async fn run(self, listener: TcpListener) -> Result<(), Box<dyn std::error::Error + Send>> {
-        let config = ProxyConfig { port: listener.local_addr().expect("Listener should always have a port").port() }; // Port is determined by the listener
-        
+        let config = ProxyConfig {
+            port: listener
+                .local_addr()
+                .expect("Listener should always have a port")
+                .port(),
+        }; // Port is determined by the listener
+
         let app = create_proxy_router().with_state(config);
 
-        tracing::info!("Starting Proxy server on {}", listener.local_addr().unwrap());
-        axum::serve(listener, app).await.map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)
+        tracing::info!(
+            "Starting Proxy server on {}",
+            listener.local_addr().unwrap()
+        );
+        axum::serve(listener, app)
+            .await
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)
     }
 }
 
@@ -451,24 +448,33 @@ mod tests {
     #[test]
     fn test_construct_final_path() {
         let url = url::Url::parse("https://api.example.com/v1").unwrap();
-        assert_eq!(construct_final_path(&url, "/chat/completions"), "/v1/chat/completions");
-        
+        assert_eq!(
+            construct_final_path(&url, "/chat/completions"),
+            "/v1/chat/completions"
+        );
+
         let url = url::Url::parse("https://api.example.com").unwrap();
-        assert_eq!(construct_final_path(&url, "/chat/completions"), "/chat/completions");
+        assert_eq!(
+            construct_final_path(&url, "/chat/completions"),
+            "/chat/completions"
+        );
     }
 
     #[test]
     fn test_get_origin_string() {
         let url = url::Url::parse("https://api.example.com/v1/chat").unwrap();
         assert_eq!(get_origin_string(&url), "https://api.example.com");
-        
+
         let url = url::Url::parse("http://localhost:8080/api").unwrap();
         assert_eq!(get_origin_string(&url), "http://localhost:8080");
     }
 
     #[test]
     fn test_format_api_key_header() {
-        assert_eq!(format_api_key_header("Authorization", "sk-123"), "Bearer sk-123");
+        assert_eq!(
+            format_api_key_header("Authorization", "sk-123"),
+            "Bearer sk-123"
+        );
         assert_eq!(format_api_key_header("x-api-key", "key123"), "key123");
     }
 
@@ -476,7 +482,7 @@ mod tests {
     fn test_proxy_server_creation() {
         let server = ProxyServer::new();
         assert!(matches!(server, ProxyServer {}));
-        
+
         let default_server = ProxyServer::default();
         assert!(matches!(default_server, ProxyServer {}));
     }

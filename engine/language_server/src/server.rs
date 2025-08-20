@@ -28,7 +28,11 @@ use self::{
     schedule::event_loop_thread,
 };
 use crate::{
-    baml_project::file_utils::{find_baml_src, find_top_level_parent}, playground::FrontendMessage, playground2::{self, server::LangServerToWasmMessage}, session::{AllSettings, ClientSettings, PreSendToWasmMessage, Session}, PositionEncoding
+    baml_project::file_utils::{find_baml_src, find_top_level_parent},
+    playground::FrontendMessage,
+    playground2::{self, server::LangServerToWasmMessage},
+    session::{AllSettings, ClientSettings, PreSendToWasmMessage, Session},
+    PositionEncoding,
 };
 
 pub mod api;
@@ -101,15 +105,15 @@ impl Server {
                 .unwrap_or_else(|| serde_json::Value::Object(serde_json::Map::default())),
         );
 
-        crate::logging::init_logging(
-            global_settings.tracing.log_level.unwrap_or_default(),
-            global_settings.tracing.log_file.as_deref(),
-        );
-        if let Err(e) = tracing_log::LogTracer::init() {
-            eprintln!("Failed to initialize log tracer: {e}");
-            // Decide how to handle this error - maybe log it via tracing if possible,
-            // or exit if logging is critical.
-        }
+        // crate::logging::init_logging(
+        //     global_settings.tracing.log_level.unwrap_or_default(),
+        //     global_settings.tracing.log_file.as_deref(),
+        // );
+        // if let Err(e) = tracing_log::LogTracer::init() {
+        //     eprintln!("Failed to initialize log tracer: {e}");
+        //     // Decide how to handle this error - maybe log it via tracing if possible,
+        //     // or exit if logging is critical.
+        // }
 
         let mut workspace_for_url = |url: Url| {
             let Some(workspace_settings) = workspace_settings.as_mut() else {
@@ -211,15 +215,19 @@ impl Server {
                             playground_port: port_picks.playground_port,
                             proxy_port: port_picks.proxy_port,
                         },
-                    }.run(port_picks.playground_listener),
-                    playground2::ProxyServer{}.run(port_picks.proxy_listener)
+                    }
+                    .run(port_picks.playground_listener),
+                    playground2::ProxyServer {}.run(port_picks.proxy_listener),
                 );
-                lsp_sender.send(Message::Notification(lsp_server::Notification::new(
-                    "baml/port".to_string(),
-                    serde_json::to_value(PortNotificationParams {
-                        port: port_picks.playground_port,
-                    }).unwrap(),
-                ))).unwrap();
+                lsp_sender
+                    .send(Message::Notification(lsp_server::Notification::new(
+                        "baml/port".to_string(),
+                        serde_json::to_value(PortNotificationParams {
+                            port: port_picks.playground_port,
+                        })
+                        .unwrap(),
+                    )))
+                    .unwrap();
                 let _ = http_services.await;
             });
         }
@@ -233,31 +241,40 @@ impl Server {
                         PreSendToWasmMessage::Initialized => {
                             let projects = session.baml_src_projects.lock();
                             for (_, project) in projects.iter() {
-            let project = project.lock();
-            let files_map: std::collections::HashMap<String, String> = project
-                .baml_project
-                .files
-                .iter()
-                .map(|(path, doc)| {
-                    let key = path.path().to_string_lossy().to_string();
-                    // If there's an unsaved version, use it
-                    let contents = project
-                        .baml_project
-                        .unsaved_files
-                        .get(path)
-                        .map(|unsaved| unsaved.contents.clone())
-                        .unwrap_or_else(|| doc.contents.clone());
-                    (key, contents)
-                })
-                .collect();
-                            broadcast_tx.send(LangServerToWasmMessage::PlaygroundMessage(FrontendMessage::add_project {
-                                root_path: project.root_path().to_string_lossy().to_string(),
-                                files: files_map,
-                            })).unwrap();
+                                let project = project.lock();
+                                let files_map: std::collections::HashMap<String, String> = project
+                                    .baml_project
+                                    .files
+                                    .iter()
+                                    .map(|(path, doc)| {
+                                        let key = path.path().to_string_lossy().to_string();
+                                        // If there's an unsaved version, use it
+                                        let contents = project
+                                            .baml_project
+                                            .unsaved_files
+                                            .get(path)
+                                            .map(|unsaved| unsaved.contents.clone())
+                                            .unwrap_or_else(|| doc.contents.clone());
+                                        (key, contents)
+                                    })
+                                    .collect();
+                                broadcast_tx
+                                    .send(LangServerToWasmMessage::PlaygroundMessage(
+                                        FrontendMessage::add_project {
+                                            root_path: project
+                                                .root_path()
+                                                .to_string_lossy()
+                                                .to_string(),
+                                            files: files_map,
+                                        },
+                                    ))
+                                    .unwrap();
                             }
                         }
                         PreSendToWasmMessage::FrontendMessage(msg) => {
-                            broadcast_tx.send(LangServerToWasmMessage::PlaygroundMessage(msg)).unwrap();
+                            broadcast_tx
+                                .send(LangServerToWasmMessage::PlaygroundMessage(msg))
+                                .unwrap();
                         }
                     }
                 }
@@ -313,14 +330,15 @@ impl Server {
             .ok();
         }));
 
-        
         std::thread::spawn(|| {
             tracing::info!("Starting deadlock watchdog");
             loop {
                 std::thread::sleep(Duration::from_secs(10));
                 // NB: this shows deadlocks detected since the _last_ check, not all current deadlocks.
                 let cycles = parking_lot::deadlock::check_deadlock();
-                if cycles.is_empty() { continue; }
+                if cycles.is_empty() {
+                    continue;
+                }
                 tracing::error!("Detected {} deadlocks since the last check:", cycles.len());
                 for (i, threads) in cycles.iter().enumerate() {
                     tracing::error!("Deadlock {} of {}:", i + 1, cycles.len());
@@ -396,7 +414,10 @@ impl Server {
             .and_then(|workspace| workspace.did_change_watched_files)
             .and_then(|watched_files| watched_files.dynamic_registration)
             .unwrap_or_default();
-        tracing::info!("dynamic_registration ATTEMPT START HELLO AGAIN: {}", dynamic_registration);
+        tracing::info!(
+            "dynamic_registration ATTEMPT START HELLO AGAIN: {}",
+            dynamic_registration
+        );
         if dynamic_registration {
             // Register all dynamic capabilities here
 

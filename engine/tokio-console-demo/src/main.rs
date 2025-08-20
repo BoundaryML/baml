@@ -1,9 +1,4 @@
-use axum::{
-    extract::Query,
-    response::Html,
-    routing::get,
-    Json, Router,
-};
+use axum::{extract::Query, response::Html, routing::get, Json, Router};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -101,7 +96,7 @@ async fn slow_endpoint(Query(params): Query<HashMap<String, String>>) -> String 
         .unwrap_or(2000);
 
     info!("Starting slow work for {}ms", delay_ms);
-    
+
     // Simulate some CPU-intensive work
     tokio::spawn(async move {
         for i in 0..10 {
@@ -117,7 +112,7 @@ async fn slow_endpoint(Query(params): Query<HashMap<String, String>>) -> String 
 
 async fn trigger_deadlock(axum::extract::State(state): axum::extract::State<AppState>) -> String {
     warn!("⚠️  Triggering intentional deadlock for tokio-console demo!");
-    
+
     // Create two tasks that will deadlock by acquiring locks in different orders
     let state1 = state.clone();
     let state2 = state.clone();
@@ -125,28 +120,28 @@ async fn trigger_deadlock(axum::extract::State(state): axum::extract::State<AppS
     let task1 = tokio::spawn(async move {
         info!("Task 1: Acquiring counter lock...");
         let _counter_lock = state1.counter.lock().unwrap();
-        
+
         info!("Task 1: Sleeping while holding counter lock...");
         // Use std::thread::sleep instead of tokio::time::sleep to avoid Send issues
         std::thread::sleep(Duration::from_millis(100));
-        
+
         info!("Task 1: Now trying to acquire users lock...");
         let _users_lock = state1.users.lock().unwrap();
-        
+
         info!("Task 1: Got both locks!");
     });
 
     let task2 = tokio::spawn(async move {
         info!("Task 2: Acquiring users lock...");
         let _users_lock = state2.users.lock().unwrap();
-        
+
         info!("Task 2: Sleeping while holding users lock...");
         // Use std::thread::sleep instead of tokio::time::sleep to avoid Send issues
         std::thread::sleep(Duration::from_millis(100));
-        
+
         info!("Task 2: Now trying to acquire counter lock...");
         let _counter_lock = state2.counter.lock().unwrap();
-        
+
         info!("Task 2: Got both locks!");
     });
 

@@ -1,6 +1,8 @@
 use anyhow::Result;
 use notify_debouncer_full::notify::Watcher;
-use notify_debouncer_full::{new_debouncer, notify::RecursiveMode, DebounceEventResult, Debouncer, FileIdMap};
+use notify_debouncer_full::{
+    new_debouncer, notify::RecursiveMode, DebounceEventResult, Debouncer, FileIdMap,
+};
 use std::collections::VecDeque;
 use std::io::{self, Write};
 use std::path::Path;
@@ -39,28 +41,28 @@ impl HotReloader {
             stdin_buffer: Arc::new(Mutex::new(VecDeque::new())),
         }
     }
-    
+
     fn record_stdin(&self, data: Vec<u8>) {
         let mut buffer = self.stdin_buffer.lock().unwrap();
         let message = StdinMessage {
             timestamp: SystemTime::now(),
             data,
         };
-        
+
         buffer.push_back(message);
-        
+
         // Keep buffer size under control
         while buffer.len() > MAX_STDIN_BUFFER_SIZE {
             buffer.pop_front();
         }
     }
-    
+
     async fn replay_stdin(&self, process: &mut TokioChild) -> Result<()> {
         if let Some(stdin) = process.stdin.as_mut() {
             let buffer = self.stdin_buffer.lock().unwrap();
-            
+
             info!("Replaying {} stdin messages", buffer.len());
-            
+
             for message in buffer.iter() {
                 if let Err(e) = stdin.write_all(&message.data).await {
                     warn!("Failed to replay stdin message: {}", e);
@@ -84,32 +86,32 @@ impl HotReloader {
             .stderr(Stdio::inherit());
 
         let mut child = cmd.spawn()?;
-        
+
         // Replay recorded stdin messages
         self.replay_stdin(&mut child).await?;
-        
+
         // Start stdin forwarding task
         self.start_stdin_forwarding(&mut child).await?;
-        
+
         self.current_process = Some(child);
         Ok(())
     }
-    
+
     async fn start_stdin_forwarding(&self, child: &mut TokioChild) -> Result<()> {
         if let Some(child_stdin) = child.stdin.take() {
             let stdin_buffer = Arc::clone(&self.stdin_buffer);
-            
+
             tokio::spawn(async move {
                 let mut stdin = tokio::io::stdin();
                 let mut child_stdin = child_stdin;
                 let mut buffer = [0u8; 8192];
-                
+
                 loop {
                     match stdin.read(&mut buffer).await {
                         Ok(0) => break, // EOF
                         Ok(n) => {
                             let data = buffer[0..n].to_vec();
-                            
+
                             // Record the input
                             {
                                 let stdin_buffer_clone = Arc::clone(&stdin_buffer);
@@ -119,18 +121,18 @@ impl HotReloader {
                                     data: data.clone(),
                                 };
                                 buf.push_back(message);
-                                
+
                                 while buf.len() > MAX_STDIN_BUFFER_SIZE {
                                     buf.pop_front();
                                 }
                             }
-                            
+
                             // Forward to child
                             if let Err(e) = child_stdin.write_all(&data).await {
                                 warn!("Failed to write to child stdin: {}", e);
                                 break;
                             }
-                            
+
                             if let Err(e) = child_stdin.flush().await {
                                 warn!("Failed to flush child stdin: {}", e);
                                 break;
@@ -144,7 +146,7 @@ impl HotReloader {
                 }
             });
         }
-        
+
         Ok(())
     }
 
@@ -158,7 +160,7 @@ impl HotReloader {
 
     async fn run(&mut self, args: Vec<String>) -> Result<()> {
         let (tx, rx) = mpsc::channel();
-        
+
         let mut debouncer = new_debouncer(
             Duration::from_millis(250),
             None,
@@ -166,15 +168,17 @@ impl HotReloader {
                 if let Err(e) = tx.send(result) {
                     warn!("Failed to send watch event: {}", e);
                 }
-            }
+            },
         )?;
 
         let binary_path = Path::new(&self.binary_path);
         let parent_dir = binary_path.parent().ok_or_else(|| {
             anyhow::anyhow!("Binary path {} has no parent directory", self.binary_path)
         })?;
-        
-        debouncer.watcher().watch(parent_dir, RecursiveMode::NonRecursive)?;
+
+        debouncer
+            .watcher()
+            .watch(parent_dir, RecursiveMode::NonRecursive)?;
 
         info!("Starting hot-reload for {}", self.binary_path);
         self.start_process(args.clone()).await?;
@@ -227,15 +231,17 @@ impl HotReloader {
 #[tokio::main]
 async fn main() -> Result<()> {
     let subscriber = FmtSubscriber::builder()
-        .with_env_filter(EnvFilter::from_default_env().add_directive("baml_hot_reload=info".parse()?))
+        .with_env_filter(
+            EnvFilter::from_default_env().add_directive("baml_hot_reload=info".parse()?),
+        )
         .finish();
 
     tracing::subscriber::set_global_default(subscriber)?;
 
     let args: Vec<String> = std::env::args().skip(1).collect();
-    
+
     let mut reloader = HotReloader::new();
     reloader.run(args).await?;
-    
+
     Ok(())
 }

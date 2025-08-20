@@ -1,30 +1,29 @@
 use std::sync::Arc;
 
-use axum::{extract::{ws::Message, State, WebSocketUpgrade}, response::IntoResponse};
+use axum::{
+    extract::{ws::Message, State, WebSocketUpgrade},
+    response::IntoResponse,
+};
 use futures::{SinkExt, StreamExt};
 use tokio::sync::RwLock;
 
-use crate::{session::PreSendToWasmMessage, Session};
 use crate::playground2::server::AppState;
+use crate::{session::PreSendToWasmMessage, Session};
 
 use base64::{engine::general_purpose, Engine as _};
 use mime_guess::from_path;
 use serde_json::Value;
 use webbrowser;
 
-
 pub async fn ws_rpc_handler(
-  ws: WebSocketUpgrade,
-  State(state): State<AppState>,
+    ws: WebSocketUpgrade,
+    State(state): State<AppState>,
 ) -> impl IntoResponse {
-  ws.on_upgrade(|ws| async move { handle_rpc_websocket(ws, state).await })
+    ws.on_upgrade(|ws| async move { handle_rpc_websocket(ws, state).await })
 }
 
 /// Handles all playground RPC commands over the WebSocket connection.
-pub async fn handle_rpc_websocket(
-    ws: axum::extract::ws::WebSocket,
-    state: AppState,
-) {
+pub async fn handle_rpc_websocket(ws: axum::extract::ws::WebSocket, state: AppState) {
     let (mut ws_tx, mut ws_rx) = ws.split();
     while let Some(Ok(msg)) = ws_rx.next().await {
         if let Ok(msg) = msg.to_text() {
@@ -41,7 +40,10 @@ pub async fn handle_rpc_websocket(
                             "data": { "ok": true }
                         });
                         let _ = ws_tx.send(Message::text(response.to_string())).await;
-                        state.playground_tx.send(PreSendToWasmMessage::Initialized).unwrap();
+                        state
+                            .playground_tx
+                            .send(PreSendToWasmMessage::Initialized)
+                            .unwrap();
                     }
                     // "GET_WEBVIEW_URI" => {
                     //     let path = data["path"].as_str().unwrap_or("");

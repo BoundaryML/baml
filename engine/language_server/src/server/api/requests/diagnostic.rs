@@ -1,7 +1,4 @@
-use std::{
-    borrow::Cow,
-    sync::Arc,
-};
+use std::{borrow::Cow, sync::Arc};
 
 use parking_lot::Mutex;
 

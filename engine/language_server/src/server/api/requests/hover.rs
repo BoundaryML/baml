@@ -42,12 +42,7 @@ impl SyncRequestHandler for Hover {
         let document_key =
             DocumentKey::from_url(project.lock().root_path(), url).internal_error()?;
 
-        let text_document_item = match project
-            .lock()
-            .baml_project
-            .files
-            .get(&document_key)
-        {
+        let text_document_item = match project.lock().baml_project.files.get(&document_key) {
             None => {
                 tracing::warn!("*** HOVER: Failed to find doc {:?}", url);
                 Err(anyhow::anyhow!(
@@ -65,17 +60,17 @@ impl SyncRequestHandler for Hover {
         .internal_error()?;
         let position = params.text_document_position_params.position;
         // Just swallow the error here, we dont want hover failures to show error notifs for a user.
-        let hover = match project.lock().handle_hover_request(
-            &text_document_item,
-            &position,
-            notifier,
-        ) {
-            Ok(hover) => hover,
-            Err(e) => {
-                tracing::error!("Error handling hover request: {}", e);
-                None
-            }
-        };
+        let hover =
+            match project
+                .lock()
+                .handle_hover_request(&text_document_item, &position, notifier)
+            {
+                Ok(hover) => hover,
+                Err(e) => {
+                    tracing::error!("Error handling hover request: {}", e);
+                    None
+                }
+            };
 
         Ok(hover)
     }

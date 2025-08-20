@@ -43,11 +43,9 @@ impl SyncNotificationHandler for DidCloseTextDocumentHandler {
         match session.get_or_create_project(&path) {
             None => {}
             Some(project) => {
-                let document_key = DocumentKey::from_url(
-                    &PathBuf::from(project.lock().root_path()),
-                    &url,
-                )
-                .internal_error()?;
+                let document_key =
+                    DocumentKey::from_url(&PathBuf::from(project.lock().root_path()), &url)
+                        .internal_error()?;
                 session
                     .close_document(&document_key)
                     .with_failure_code(ErrorCode::InternalError)?;

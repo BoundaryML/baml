@@ -1,24 +1,20 @@
 use std::sync::Arc;
 
-use axum::{extract::{ws::Message, State, WebSocketUpgrade}, response::IntoResponse};
+use axum::{
+    extract::{ws::Message, State, WebSocketUpgrade},
+    response::IntoResponse,
+};
 use futures::{SinkExt, StreamExt};
 use tokio::sync::RwLock;
 
-use crate::{ Session};
 use crate::playground2::server::AppState;
+use crate::Session;
 
-
-pub async fn ws_handler(
-  ws: WebSocketUpgrade,
-  State(state): State<AppState>,
-) -> impl IntoResponse {
-  ws.on_upgrade(|ws| async move { start_client_connection(ws, state).await })
+pub async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> impl IntoResponse {
+    ws.on_upgrade(|ws| async move { start_client_connection(ws, state).await })
 }
 
-pub async fn start_client_connection(
-    ws: axum::extract::ws::WebSocket,
-    state: AppState,
-) {
+pub async fn start_client_connection(ws: axum::extract::ws::WebSocket, state: AppState) {
     tracing::info!("axum listening on /ws");
     let (mut ws_tx, mut ws_rx) = ws.split();
     let mut rx = state.broadcast_rx;

@@ -1,25 +1,21 @@
-use anyhow::Context;
-use serde::Serialize;
-use tokio::sync::broadcast;
-use std::io::Cursor;
-use flate2::read::GzDecoder;
-use tar::Archive;
-use sha2::{Digest, Sha256};
-use axum::{
-    response::Html,
-    routing::get,
-    Router,
-};
-use std::net::SocketAddr;
-use std::path::PathBuf;
-use std::time::Duration;
-use tokio::net::TcpListener;
-use tower_http::services::ServeDir;
 use crate::playground::FrontendMessage;
 use crate::playground2::ping_handler::ping_handler;
 use crate::playground2::websocket_rpc_handler::ws_rpc_handler;
 use crate::playground2::websocket_ws_handler::ws_handler;
 use crate::session::PreSendToWasmMessage;
+use anyhow::Context;
+use axum::{response::Html, routing::get, Router};
+use flate2::read::GzDecoder;
+use serde::Serialize;
+use sha2::{Digest, Sha256};
+use std::io::Cursor;
+use std::net::SocketAddr;
+use std::path::PathBuf;
+use std::time::Duration;
+use tar::Archive;
+use tokio::net::TcpListener;
+use tokio::sync::broadcast;
+use tower_http::services::ServeDir;
 
 #[derive(Serialize, Debug, Clone)]
 #[serde(untagged)]
@@ -65,8 +61,13 @@ impl Playground2Server {
             .fallback_service(ServeDir::new(dist_dir))
             .with_state(self.app_state);
 
-        tracing::info!("Starting Playground2 server on {}", listener.local_addr().unwrap());
-        axum::serve(listener, app).await.map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)
+        tracing::info!(
+            "Starting Playground2 server on {}",
+            listener.local_addr().unwrap()
+        );
+        axum::serve(listener, app)
+            .await
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)
     }
 }
 
@@ -109,7 +110,6 @@ async fn playground_static_assets() -> anyhow::Result<PathBuf> {
         }
     }
 }
-
 
 /// Downloads and extracts the playground frontend from the baml GitHub release.
 /// Uses the provided version for both asset name construction and release tag lookup.
@@ -193,7 +193,8 @@ pub async fn get_playground_dist(github_repo: &str, version: &str) -> anyhow::Re
     );
 
     // Compute extraction directory using the provided version
-    let home = dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?;
+    let home =
+        dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?;
     let extract_root: PathBuf = home
         .join(".baml/playground")
         .join(format!("web-panel-dist-{version}"));

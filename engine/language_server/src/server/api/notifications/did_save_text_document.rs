@@ -55,11 +55,7 @@ impl super::SyncNotificationHandler for DidSaveTextDocument {
                     "baml_src_generator_version".to_string(),
                     BamlSrcVersionPayload {
                         version,
-                        root_path: project
-                            .lock()
-                            .root_path()
-                            .to_string_lossy()
-                            .to_string(),
+                        root_path: project.lock().root_path().to_string_lossy().to_string(),
                     },
                 ),
             ));
