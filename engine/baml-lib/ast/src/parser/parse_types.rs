@@ -15,7 +15,7 @@ use crate::{
 };
 
 pub fn parse_field_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldType> {
-    assert_correct_parser!(pair, Rule::field_type, Rule::openParan, Rule::closeParan);
+    assert_correct_parser!(pair, Rule::field_type, Rule::openParen, Rule::closeParen);
 
     let mut arity = FieldArity::Required;
     let mut ftype = None;
@@ -204,7 +204,7 @@ fn parse_parenthesized_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Op
 
     for current in pair.into_inner() {
         match current.as_rule() {
-            Rule::openParan | Rule::closeParan => continue,
+            Rule::openParen | Rule::closeParen => continue,
             Rule::field_type_with_attr => {
                 return parse_field_type_with_attr(current, true, diagnostics);
             }
@@ -377,7 +377,7 @@ fn parse_group(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldTyp
 
     for current in pair.into_inner() {
         match current.as_rule() {
-            Rule::openParan | Rule::closeParan => continue,
+            Rule::openParen | Rule::closeParen => continue,
             Rule::field_type => {
                 field_type = parse_field_type(current, diagnostics);
             }
@@ -405,7 +405,7 @@ fn parse_tuple(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldTyp
 
     for current in pair.into_inner() {
         match current.as_rule() {
-            Rule::openParan | Rule::closeParan => continue,
+            Rule::openParen | Rule::closeParen => continue,
 
             Rule::field_type_with_attr => {
                 if let Some(f) = parse_field_type_with_attr(current, false, diagnostics) {

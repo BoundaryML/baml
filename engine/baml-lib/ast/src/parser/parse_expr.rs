@@ -96,16 +96,135 @@ fn parse_while_loop(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Stm
     let span = diagnostics.span(pair.as_span());
     let mut while_loop = pair.into_inner();
 
-    let condition_rule = check_parentheses_around_rule(&mut while_loop, diagnostics, "while loop condition")?;
-    let condition = parse_expression(condition_rule, diagnostics)?;
+    let condition_rule = while_loop.next()?;
 
-    let body = parse_expr_block(while_loop.next()?, diagnostics)?;
+    let (condition, body) = parse_condition_with_block(condition_rule, diagnostics, "while loop")?;
+
+    let body = body.map_or_else(
+        || {
+            Some(ExpressionBlock {
+                stmts: Vec::new(),
+                expr: None,
+            })
+        },
+        |rule| parse_expr_block(rule, diagnostics),
+    )?;
 
     Some(Stmt::WhileLoop(WhileStmt {
         condition,
         body,
         span,
     }))
+}
+
+/// Parses `condition_with_block` rule, which is a construct specialized to match
+/// wrong parentheses, like `if (true { }`. See more in `datamodel.pest`.
+/// Emits diagnostics for bad parentheses and the above case.
+/// Gives out the parsed condition & the block rule to parse, if available.
+/// See [`parse_if_expression`] for details on why returning a block rule and not parsing it directly.
+fn parse_condition_with_block<'src>(
+    pair: Pair<'src>,
+    diagnostics: &mut Diagnostics,
+    construct_name: &'static str,
+) -> Option<(Expression, Option<Pair<'src>>)> {
+    assert_correct_parser!(pair, Rule::condition_and_block);
+
+    let full_span = pair.as_span();
+
+    let mut tokens = pair.into_inner();
+    let lparen_span = consume_span_if_rule(&mut tokens, diagnostics, Rule::openParen);
+
+    // we'll interpret condition rule after we know whether we have an expression block or not.
+    let condition_rule = tokens.next()?;
+    let in_between_span = diagnostics.span(condition_rule.as_span());
+
+    let rparen_span = consume_span_if_rule(&mut tokens, diagnostics, Rule::closeParen);
+
+    let expr_block = tokens.next();
+
+    let condition = match (&expr_block, rparen_span) {
+        (None, None) => 'class_ctor_confusion: {
+            // no rparen, no expr block -> may have condition
+            if let Rule::expression = condition_rule.as_rule() {
+                if let Some(condition_rule) = condition_rule
+                    .into_inner()
+                    .next()
+                    .filter(|r| r.as_rule() == Rule::primary_expression)
+                {
+                    if let Some(condition_rule) = condition_rule
+                        .into_inner()
+                        .next()
+                        .filter(|r| r.as_rule() == Rule::class_constructor)
+                    {
+                        let mut inner = condition_rule.into_inner();
+
+                        let identifier =
+                            inner.next().expect("class_constructor rule has identifier");
+
+                        let in_between_span = diagnostics.span(identifier.as_span());
+
+                        check_parentheses_around(
+                            diagnostics,
+                            construct_name,
+                            lparen_span,
+                            None,
+                            in_between_span,
+                        );
+
+                        // parser took `if (<ident> {}` to be `if (<ident> {})`,
+                        // but there is no block afterwards. We'll say that `if (<ident>) {}` is
+                        // what the user wanted.
+                        // There is no block that we can make use of, since otherwise the parser would have taken `if (<ident> <block>` and we wouldn't be here. We'll discard the inner
+                        // contents.
+
+                        let condition =
+                            Expression::Identifier(parse_identifier(identifier, diagnostics));
+
+                        break 'class_ctor_confusion condition;
+                    }
+                }
+            }
+
+            // no idea what this can be.
+            diagnostics.push_error(DatamodelError::new_validation_error(
+                &format!("cannot understand syntax for {construct_name}"),
+                diagnostics.span(full_span),
+            ));
+
+            return None;
+        }
+        (None, Some(span)) => {
+            // rparen, but no expr block -> fishy!
+            check_parentheses_around(
+                diagnostics,
+                construct_name,
+                lparen_span,
+                Some(span.clone()),
+                in_between_span,
+            );
+
+            diagnostics.push_error(DatamodelError::new_validation_error(
+                &format!("missing expression block for {construct_name}"),
+                span,
+            ));
+
+            parse_expression(condition_rule, diagnostics)?
+        }
+        // TODO: merge this with above ?.
+        // there is an expr block, so the condition is safe from `{` ambiguities.
+        (Some(block_rule), rparen_span) => {
+            check_parentheses_around(
+                diagnostics,
+                construct_name,
+                lparen_span,
+                rparen_span,
+                in_between_span,
+            );
+            parse_expression(condition_rule, diagnostics)?
+        }
+    };
+
+    Some((condition, expr_block))
 }
 
 fn parse_iterator_for_loop(
@@ -202,23 +321,37 @@ fn check_parentheses_around_rule<'src>(
     diagnostics: &mut Diagnostics,
     construct_name: &'static str,
 ) -> Option<pest::iterators::Pair<'src, Rule>> {
-    let lparen_span = if let Some(Rule::LPAREN_TOKEN) = tokens.peek().map(|x| x.as_rule()) {
-        Some(diagnostics.span(tokens.next().unwrap().as_span()))
-    } else {
-        None
-    };
+    let lparen_span = consume_span_if_rule(tokens, diagnostics, Rule::openParen);
 
     let in_between_rule = tokens.next()?;
 
-    let rparen_span = if let Some(Rule::RPAREN_TOKEN) = tokens.peek().map(|x| x.as_rule()) {
-        Some(diagnostics.span(tokens.next().unwrap().as_span()))
-    } else {
-        None
-    };
+    let rparen_span = consume_span_if_rule(tokens, diagnostics, Rule::closeParen);
+
+    let in_between_span = diagnostics.span(in_between_rule.as_span());
+
+    check_parentheses_around(
+        diagnostics,
+        construct_name,
+        lparen_span,
+        rparen_span,
+        in_between_span,
+    );
+
+    Some(in_between_rule)
+}
+
+/// Emits diagnostics depending on what parentheses spans are `None`.
+fn check_parentheses_around(
+    diagnostics: &mut Diagnostics,
+    construct_name: &'static str,
+    lparen_span: Option<Span>,
+    rparen_span: Option<Span>,
+    in_between_span: Span,
+) {
     match (lparen_span, rparen_span) {
         (None, None) => diagnostics.push_error(DatamodelError::new_validation_error(
             &format!("expected parentheses around {construct_name}"),
-            diagnostics.span(in_between_rule.as_span()),
+            in_between_span,
         )),
         (None, Some(r)) => diagnostics.push_error(DatamodelError::new_validation_error(
             "expected opening parentheses for this closing parentheses",
@@ -231,7 +364,19 @@ fn check_parentheses_around_rule<'src>(
         // both present. Nothing to check.
         (Some(_), Some(_)) => {}
     }
-    Some(in_between_rule)
+}
+
+fn consume_span_if_rule(
+    tokens: &mut pest::iterators::Pairs<'_, Rule>,
+    diagnostics: &mut Diagnostics,
+    rule: Rule,
+) -> Option<Span> {
+    dbg!(&tokens);
+    if tokens.peek().is_some_and(|x| x.as_rule() == rule) {
+        Some(diagnostics.span(tokens.next().unwrap().as_span()))
+    } else {
+        None
+    }
 }
 
 pub fn parse_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Stmt> {
@@ -546,14 +691,35 @@ pub fn parse_if_expression(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Op
     let span = diagnostics.span(token.as_span());
     let mut tokens = token.into_inner();
 
-    let condition_rule = check_parentheses_around_rule(&mut tokens, diagnostics, "if expression condition")?;
+    let condition_and_block = tokens.next()?;
 
-    let condition = parse_expression(condition_rule, diagnostics)?;
+    let cond_and_block_span = condition_and_block.as_span();
+    let (condition, then_branch_rule) =
+        parse_condition_with_block(condition_and_block, diagnostics, "if expression")?;
 
-    // TODO: Some weird parsing going on here, figure out rules and spans.
-    let then_branch_expr_block = tokens.next()?;
-    let then_branch_span = diagnostics.span(then_branch_expr_block.as_span());
-    let then_branch = parse_expr_block(then_branch_expr_block, diagnostics)?;
+    let (then_branch, then_branch_span) = match then_branch_rule {
+        Some(rule) => {
+            let span = diagnostics.span(rule.as_span());
+
+            let block = parse_expr_block(rule, diagnostics)?;
+
+            (block, span)
+        }
+        None => {
+            (
+                ExpressionBlock {
+                    stmts: Vec::new(),
+                    expr: None,
+                },
+                // emit a span at the end of `cond_and_block` because there is no block.
+                Span {
+                    file: diagnostics.span(cond_and_block_span).file,
+                    start: cond_and_block_span.end(),
+                    end: cond_and_block_span.end(),
+                },
+            )
+        }
+    };
 
     let else_branch = tokens.next().and_then(|else_branch_expr| {
         let else_branch_span = diagnostics.span(else_branch_expr.as_span());

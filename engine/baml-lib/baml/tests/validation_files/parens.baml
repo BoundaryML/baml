@@ -63,8 +63,10 @@ fn If() -> int {
     }
 
     if true {
-        let i = 0;// TODO: for some reason empty if without both parens does not parse with PEST
     }
+
+	if true {} {}
+	if (true {} {}
 }
 
 fn FnCall() -> int {
@@ -83,7 +85,7 @@ fn FnCall() -> int {
 //  7 | 
 //  8 |     while true) {
 //    | 
-// error: Error validating: expected parentheses around while loop condition
+// error: Error validating: expected parentheses around while loop
 //   -->  parens.baml:12
 //    | 
 // 11 | 
@@ -137,7 +139,7 @@ fn FnCall() -> int {
 // 60 | 
 // 61 |     if (true {
 //    | 
-// error: Error validating: expected parentheses around if expression condition
+// error: Error validating: expected parentheses around if expression
 //   -->  parens.baml:65
 //    | 
 // 64 | 
