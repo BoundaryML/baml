@@ -38,7 +38,7 @@ runs:
       uses: actions/setup-go@v5
       with:
         go-version: ${{ inputs.go-version }}
-        cache: ${{ inputs.cache }}
+        cache: v2-${{ inputs.cache }}
         architecture: ${{ inputs.architecture }}
 
     - name: Set cross-compilation targets
