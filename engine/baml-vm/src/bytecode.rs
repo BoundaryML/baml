@@ -1,6 +1,6 @@
 //! Instruction set and bytecode representation.
 
-use crate::vm::Value;
+use crate::{vm::Value, ObjectIndex};
 
 /// Individual bytecode instruction.
 ///
@@ -146,7 +146,7 @@ pub enum Instruction {
     ///
     /// Format: `ALLOC_INSTANCE i` where `i` is the index of the class in the
     /// [`crate::Vm::objects`] array.
-    AllocInstance(usize),
+    AllocInstance(ObjectIndex),
 
     /// Creates a pending future, pushes it on the stack and notifies embedder.
     ///

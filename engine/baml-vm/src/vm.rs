@@ -1071,9 +1071,6 @@ impl Vm {
                     self.stack.push(array[index]);
                 }
                 Instruction::AllocInstance(index) => {
-                    // TODO: validate index at compile time.
-                    let index = self.objects.validate_object_ref(index)?;
-
                     let Object::Class(class) = &self.objects[index] else {
                         return Err(InternalError::TypeError {
                             expected: ObjectType::Class.into(),

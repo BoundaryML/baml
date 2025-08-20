@@ -125,10 +125,7 @@ fn compile_hir_to_bytecode(hir: &hir::Hir) -> anyhow::Result<BamlVmProgram> {
         .iter()
         .enumerate()
         .filter_map(|(i, obj)| match obj {
-            Object::Function(f) => Some((
-                f.name.clone(),
-                (unsafe { ObjectIndex::from_raw(i) }, f.kind),
-            )),
+            Object::Function(f) => Some((f.name.clone(), (ObjectIndex::from_raw(i), f.kind))),
             _ => None,
         })
         .collect();
@@ -797,7 +794,9 @@ impl<'g> HirCompiler<'g> {
                 };
 
                 // Allocate instance
-                self.emit(Instruction::AllocInstance(class_index));
+                self.emit(Instruction::AllocInstance(ObjectIndex::from_raw(
+                    class_index,
+                )));
 
                 let mut defined_named_fields = std::collections::HashSet::new();
 
@@ -1707,7 +1706,7 @@ mod tests {
             expected: vec![(
                 "main",
                 vec![
-                    Instruction::AllocInstance(2),
+                    Instruction::AllocInstance(ObjectIndex::from_raw(2)),
                     Instruction::LoadConst(0),
                     Instruction::StoreField(0),
                     Instruction::LoadConst(1),
@@ -1742,7 +1741,7 @@ mod tests {
             expected: vec![(
                 "main",
                 vec![
-                    Instruction::AllocInstance(2),
+                    Instruction::AllocInstance(ObjectIndex::from_raw(2)),
                     Instruction::LoadConst(0),
                     Instruction::StoreField(0),
                     Instruction::LoadConst(1),

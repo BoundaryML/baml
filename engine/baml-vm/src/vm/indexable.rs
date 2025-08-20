@@ -41,7 +41,7 @@ macro_rules! impl_indexable_wrapper {
 
         impl $index_name {
             /// Pinky promise that the given index is safe to interpret.
-            pub unsafe fn from_raw(raw: usize) -> Self {
+            pub fn from_raw(raw: usize) -> Self {
                 Self(raw)
             }
         }
@@ -184,14 +184,6 @@ impl_indexable_wrapper!(EvalStack, Value, StackIndex);
 impl_indexable_wrapper!(ObjectPool, Object, ObjectIndex);
 
 impl ObjectPool {
-    pub fn validate_object_ref(&self, index: usize) -> Result<ObjectIndex, InternalError> {
-        if index >= self.len() {
-            return Err(InternalError::InvalidObjectRef(index));
-        }
-
-        Ok(ObjectIndex(index))
-    }
-
     /// If `value` is an object, returns a reference to the object.
     /// - If `value` is not an object, throws [`InternalError::TypeError`].
     /// - If `value` is an object but reference is not accessible, throws
@@ -219,7 +211,7 @@ impl ObjectPool {
 
     pub fn insert(&mut self, value: Object) -> ObjectIndex {
         self.push(value);
-        unsafe { ObjectIndex::from_raw(self.0.len() - 1) }
+        ObjectIndex::from_raw(self.0.len() - 1)
     }
 }
 

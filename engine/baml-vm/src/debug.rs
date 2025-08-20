@@ -86,7 +86,7 @@ pub fn display_instruction(
 
             // TODO: prevent panic here
 
-            let Value::Object(reference) = stack[unsafe { StackIndex::from_raw(stack.len() - 2) }] else {
+            let Value::Object(reference) = stack[StackIndex::from_raw(stack.len() - 2)] else {
                 break 'field String::from("(ERROR: value not an object)");
             };
 
@@ -104,7 +104,7 @@ pub fn display_instruction(
             format!("(to {})", instruction_ptr + offset)
         }
         Instruction::AllocInstance(index) => {
-            format!("({})", display_value(&globals[*index], objects))
+            format!("({})", display_value(&globals[index.0], objects))
         }
         Instruction::Pop(_)
         | Instruction::PopReplace(_)
