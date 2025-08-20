@@ -38,8 +38,9 @@ runs:
       uses: actions/setup-go@v5
       with:
         go-version: ${{ inputs.go-version }}
-        cache: v2-${{ inputs.cache }}
+        cache: ${{ inputs.cache }}
         architecture: ${{ inputs.architecture }}
+        cache-dependency-path: "**/*.sum"
 
     - name: Set cross-compilation targets
       if: inputs.target-os != '' || inputs.target-arch != ''
