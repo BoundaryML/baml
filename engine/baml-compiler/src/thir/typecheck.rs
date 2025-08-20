@@ -482,7 +482,7 @@ fn typecheck_statement(
             Some(thir::Statement::AssignOp {
                 name: name.clone(),
                 value: typed_value,
-                assign_op: assign_op.clone(),
+                assign_op: *assign_op,
                 span: span.clone(),
             })
         }
