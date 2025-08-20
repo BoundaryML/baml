@@ -590,6 +590,7 @@ pub struct LLMUsage {
     pub input_tokens: Option<u64>,
     pub output_tokens: Option<u64>,
     pub total_tokens: Option<u64>,
+    pub cached_input_tokens: Option<u64>,
 }
 
 #[cfg(test)]

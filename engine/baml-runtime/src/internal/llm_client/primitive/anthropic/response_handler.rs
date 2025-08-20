@@ -90,6 +90,7 @@ pub fn parse_anthropic_response<C: WithClient + RequestBuilder>(
             prompt_tokens: Some(response.usage.input_tokens),
             output_tokens: Some(response.usage.output_tokens),
             total_tokens: Some(response.usage.input_tokens + response.usage.output_tokens),
+            cached_input_tokens: Some(response.usage.cache_read_input_tokens),
         },
     })
 }
@@ -218,6 +219,7 @@ mod tests {
                 prompt_tokens: Some(321),
                 output_tokens: Some(158),
                 total_tokens: Some(479),
+                cached_input_tokens: Some(0),
             },
         };
 

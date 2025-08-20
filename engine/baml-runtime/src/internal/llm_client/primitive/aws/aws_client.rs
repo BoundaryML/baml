@@ -898,6 +898,7 @@ impl WithStreamChat for AwsClient {
                         prompt_tokens: None,
                         output_tokens: None,
                         total_tokens: None,
+                        cached_input_tokens: None,
                     },
                 }),
                 response,
@@ -961,6 +962,8 @@ impl WithStreamChat for AwsClient {
                                             Some(usage.output_tokens() as u64);
                                         new_state.metadata.total_tokens =
                                             Some((usage.total_tokens()) as u64);
+                                        // AWS Bedrock does not currently support cached tokens
+                                        new_state.metadata.cached_input_tokens = None;
                                     }
                                 }
                                 _ => {
@@ -1302,6 +1305,7 @@ impl WithChat for AwsClient {
                         .usage
                         .as_ref()
                         .and_then(|i| i.total_tokens.try_into().ok()),
+                    cached_input_tokens: None, // AWS Bedrock does not currently support cached tokens
                 },
             }),
             Err(e) => LLMResponse::LLMFailure(LLMErrorResponse {

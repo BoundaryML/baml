@@ -92,6 +92,13 @@ pub fn parse_openai_response<C: WithClient + RequestBuilder>(
             prompt_tokens: usage.map(|u| u.prompt_tokens),
             output_tokens: usage.map(|u| u.completion_tokens),
             total_tokens: usage.map(|u| u.total_tokens),
+            cached_input_tokens: usage.and_then(|u| {
+                // Extract cached tokens from input_tokens_details if available
+                u.input_tokens_details
+                    .as_ref()
+                    .and_then(|details| details.get("cached_tokens"))
+                    .and_then(|cached| cached.as_u64())
+            }),
         },
     })
 }
@@ -226,6 +233,7 @@ mod tests {
                 prompt_tokens: Some(128),
                 output_tokens: Some(71),
                 total_tokens: Some(199),
+                cached_input_tokens: None,
             },
         };
 
@@ -322,6 +330,13 @@ pub fn parse_openai_responses_response<C: WithClient + RequestBuilder>(
             prompt_tokens: usage.map(|u| u.prompt_tokens),
             output_tokens: usage.map(|u| u.completion_tokens),
             total_tokens: usage.map(|u| u.total_tokens),
+            cached_input_tokens: usage.and_then(|u| {
+                // Extract cached tokens from input_tokens_details if available
+                u.input_tokens_details
+                    .as_ref()
+                    .and_then(|details| details.get("cached_tokens"))
+                    .and_then(|cached| cached.as_u64())
+            }),
         },
     })
 }
@@ -507,6 +522,7 @@ mod responses_tests {
                 prompt_tokens: Some(36),
                 output_tokens: Some(87),
                 total_tokens: Some(123),
+                cached_input_tokens: Some(0),
             },
         };
 

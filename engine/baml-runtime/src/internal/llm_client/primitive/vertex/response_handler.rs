@@ -99,6 +99,7 @@ pub fn parse_vertex_response<C: WithClient + RequestBuilder>(
             prompt_tokens: usage_metadata.prompt_token_count,
             output_tokens: usage_metadata.candidates_token_count,
             total_tokens: usage_metadata.total_token_count,
+            cached_input_tokens: usage_metadata.cached_content_token_count,
         },
     })
 }
@@ -257,6 +258,7 @@ mod tests {
                 prompt_tokens: Some(79),
                 output_tokens: Some(35),
                 total_tokens: Some(114),
+                cached_input_tokens: None,
             },
         };
 

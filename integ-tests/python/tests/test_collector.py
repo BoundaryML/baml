@@ -57,6 +57,7 @@ async def test_collector_async_no_stream_success():
     # Verify usage fields
     assert log.usage.input_tokens is not None and log.usage.input_tokens > 0
     assert log.usage.output_tokens is not None and log.usage.output_tokens > 0
+    assert log.usage.cached_input_tokens is not None
 
     # Verify calls
     calls = log.calls
@@ -102,15 +103,18 @@ async def test_collector_async_no_stream_success():
     call_usage = call.usage
     assert call_usage.input_tokens is not None and call_usage.input_tokens > 0
     assert call_usage.output_tokens is not None and call_usage.output_tokens > 0
+    assert call_usage.cached_input_tokens is not None
     # it matches the log usage
     assert call_usage.input_tokens == log.usage.input_tokens
     assert call_usage.output_tokens == log.usage.output_tokens
+    assert call_usage.cached_input_tokens == log.usage.cached_input_tokens
 
     # Verify raw response exists
     assert log.raw_llm_response is not None
 
     assert collector.usage.input_tokens == log.usage.input_tokens
     assert collector.usage.output_tokens == log.usage.output_tokens
+    assert collector.usage.cached_input_tokens == log.usage.cached_input_tokens
 
     # Verify metadata
     assert isinstance(log.metadata, dict)
@@ -181,6 +185,7 @@ async def test_collector_async_stream_success():
     # Verify usage fields
     assert log.usage.input_tokens is not None and log.usage.input_tokens > 0
     assert log.usage.output_tokens is not None and log.usage.output_tokens > 0
+    assert log.usage.cached_input_tokens is not None
 
     # Verify calls
     calls = log.calls
@@ -319,6 +324,7 @@ async def test_collector_async_multiple_calls_usage():
     first_call_usage = function_logs[0].usage
     assert collector.usage.input_tokens == first_call_usage.input_tokens
     assert collector.usage.output_tokens == first_call_usage.output_tokens
+    assert collector.usage.cached_input_tokens == first_call_usage.cached_input_tokens
 
     # Second call
     await b.TestOpenAIGPT4oMini("Second call", baml_options={"collector": collector})
@@ -333,8 +339,12 @@ async def test_collector_async_multiple_calls_usage():
     total_output = (first_call_usage.output_tokens or 0) + (
         second_call_usage.output_tokens or 0
     )
+    total_cached_input = (first_call_usage.cached_input_tokens or 0) + (
+        second_call_usage.cached_input_tokens or 0
+    )
     assert collector.usage.input_tokens == total_input
     assert collector.usage.output_tokens == total_output
+    assert collector.usage.cached_input_tokens == total_cached_input
 
 
 @pytest.mark.asyncio
@@ -1104,3 +1114,217 @@ async def test_collector_openai_stream_usage_accumulation():
     # Last call should not be streaming
     last_request_body = logs[2].calls[0].http_request.body.json()
     assert last_request_body.get("stream") is not True
+
+
+@pytest.mark.asyncio
+async def test_collector_anthropic_caching():
+    """Test cached input tokens tracking for Anthropic caching with substantial content"""
+    collector = Collector(name="caching-collector")
+
+    # Create substantial content (2048+ tokens) to ensure caching triggers
+    # Each repetition is ~100 tokens, so 25 repetitions = ~2500 tokens
+    large_content = """
+    In the ancient kingdom of Eldoria, there lived a brave knight named Sir Galahad who was known throughout the land for his unwavering courage, exceptional wisdom, and boundless compassion for all living creatures. His story began in the small village of Millbrook, where he was born to humble farmers who taught him the values of hard work, honesty, and kindness from a very young age.
+
+    As a child, Galahad showed remarkable intelligence and an innate sense of justice. He would often help settle disputes between the village children and was always the first to defend those who were weaker or being bullied. His parents noticed these qualities and, though they were not wealthy, they saved every copper coin they could to provide him with the best education possible.
+
+    When Galahad turned sixteen, a traveling knight named Sir Roderick visited their village. He immediately recognized the young man's potential and offered to take him as a squire. This was the opportunity of a lifetime, and though it broke their hearts to see him leave, Galahad's parents knew it was his destiny to serve a greater purpose.
+
+    Under Sir Roderick's tutelage, Galahad learned not only the arts of combat and horsemanship but also the deeper principles of chivalry, honor, and service to others. He spent years training in various castles and courts, always demonstrating exceptional skill and character that earned him the respect of nobles and commoners alike.
+    """ * 25
+    
+    # First call - establishes cache (using cache_control in the BAML template)
+    await b.TestCaching(large_content, "What are the key virtues of Sir Galahad?", baml_options={"collector": collector})
+    
+    first_log = collector.logs[0]
+    assert first_log is not None
+    assert first_log.function_name == "TestCaching"
+    
+    # Verify cached tokens field exists
+    assert first_log.usage.cached_input_tokens is not None
+    assert first_log.calls[0].usage.cached_input_tokens is not None
+    
+    # First call establishes cache, might have some cached tokens from cache creation
+    first_cached_tokens = first_log.usage.cached_input_tokens or 0
+    
+    # Second call with same large content - should use cache and show cached tokens > 0
+    await b.TestCaching(large_content, "What is Sir Galahad's background and origin?", baml_options={"collector": collector})
+    
+    second_log = collector.logs[1]
+    assert second_log is not None
+    assert second_log.function_name == "TestCaching"
+    
+    # Verify cached tokens are tracked and should be > 0 for the second call
+    assert second_log.usage.cached_input_tokens is not None
+    assert second_log.calls[0].usage.cached_input_tokens is not None
+    
+    # Third call to really ensure caching is working
+    await b.TestCaching(large_content, "How did Sir Galahad become a knight?", baml_options={"collector": collector})
+    
+    third_log = collector.logs[2]
+    assert third_log is not None
+    
+    # At least one of the later calls should have cached tokens > 0
+    has_cached_tokens = (
+        (second_log.usage.cached_input_tokens or 0) > 0 or 
+        (third_log.usage.cached_input_tokens or 0) > 0
+    )
+    
+    assert has_cached_tokens, "Expected at least one call to have cached tokens > 0"
+    
+    # Verify collector aggregates cached tokens correctly
+    total_cached_tokens = (
+        (collector.logs[0].usage.cached_input_tokens or 0) +
+        (collector.logs[1].usage.cached_input_tokens or 0) +
+        (collector.logs[2].usage.cached_input_tokens or 0)
+    )
+    assert collector.usage.cached_input_tokens == total_cached_tokens
+    
+    print(f"Cached tokens - First call: {first_log.usage.cached_input_tokens}")
+    print(f"Cached tokens - Second call: {second_log.usage.cached_input_tokens}")
+    print(f"Cached tokens - Third call: {third_log.usage.cached_input_tokens}")
+    print(f"Total cached tokens: {collector.usage.cached_input_tokens}")
+    print(f"Large content length: {len(large_content)} characters")
+
+
+@pytest.mark.asyncio
+async def test_collector_aws_cached_tokens_null():
+    """Test that AWS provider returns None for cached tokens since it doesn't support caching"""
+    collector = Collector(name="aws-collector")
+    await b.TestAws("hi there", baml_options={"collector": collector})
+    logs = collector.logs
+    assert len(logs) == 1
+    
+    log = logs[0]
+    assert log.function_name == "TestAws"
+    
+    # AWS should return None for cached tokens since it doesn't support caching
+    assert log.usage.cached_input_tokens is None
+    assert log.calls[0].usage.cached_input_tokens is None
+    assert collector.usage.cached_input_tokens is None or collector.usage.cached_input_tokens == 0
+
+
+@pytest.mark.asyncio
+async def test_collector_openai_large_content_caching():
+    """Test OpenAI caching with repeated large content to verify cached tokens > 0"""
+    collector = Collector(name="openai-large-content-caching")
+
+    # Create substantial content (2048+ tokens) to ensure caching has opportunity to trigger
+    large_content = """
+    The comprehensive analysis of artificial intelligence systems requires deep understanding of multiple domains including machine learning algorithms, neural network architectures, data preprocessing techniques, model optimization strategies, performance evaluation metrics, ethical considerations, and deployment challenges. Modern AI applications span across various industries from healthcare and finance to autonomous vehicles and natural language processing systems.
+
+    In healthcare, AI technologies are revolutionizing medical diagnosis through computer vision systems that can analyze medical imagery with unprecedented accuracy. These systems utilize convolutional neural networks trained on massive datasets of X-rays, CT scans, MRIs, and other medical images to detect patterns that might be missed by human practitioners. The integration of electronic health records with predictive analytics enables early intervention strategies and personalized treatment recommendations.
+
+    The financial sector has embraced AI for fraud detection, algorithmic trading, credit risk assessment, and customer service automation. Machine learning models analyze transaction patterns in real-time to identify suspicious activities, while natural language processing systems handle customer inquiries through chatbots and virtual assistants. Robo-advisors use sophisticated algorithms to provide investment recommendations based on individual risk profiles and market conditions.
+
+    Autonomous vehicles represent one of the most complex AI applications, requiring the integration of computer vision, sensor fusion, path planning algorithms, and real-time decision-making systems. These vehicles must navigate dynamic environments while ensuring passenger safety and complying with traffic regulations. The development of self-driving cars involves extensive simulation testing and validation in controlled environments before deployment on public roads.
+    """ * 10
+
+    # Make multiple calls with identical large content
+    await b.TestOpenAIGPT4oMini(large_content, baml_options={"collector": collector})
+    await b.TestOpenAIGPT4oMini(large_content, baml_options={"collector": collector})
+    await b.TestOpenAIGPT4oMini(large_content, baml_options={"collector": collector})
+
+    logs = collector.logs
+    assert len(logs) == 3
+
+    # Verify all calls have cached tokens fields defined
+    for i, log in enumerate(logs):
+        assert log.usage.cached_input_tokens is not None
+        assert log.calls[0].usage.cached_input_tokens is not None
+        print(f"OpenAI large content call {i + 1} cached tokens: {log.usage.cached_input_tokens}")
+
+    # Calculate total cached tokens
+    total_cached_tokens = sum(log.usage.cached_input_tokens or 0 for log in logs)
+    assert collector.usage.cached_input_tokens == total_cached_tokens
+
+    print(f"Large content length: {len(large_content)} characters")
+    print(f"Total OpenAI cached tokens from repeated calls: {collector.usage.cached_input_tokens}")
+
+
+@pytest.mark.asyncio
+async def test_collector_gemini_large_content_caching():
+    """Test Gemini caching with repeated large content to verify cached tokens > 0"""
+    collector = Collector(name="gemini-large-content-caching")
+
+    # Create substantial content (2048+ tokens) for Gemini caching
+    large_content = """
+    Quantum computing represents a paradigm shift in computational power, leveraging the principles of quantum mechanics to process information in ways that classical computers cannot. Unlike traditional bits that exist in definite states of 0 or 1, quantum bits (qubits) can exist in superposition, allowing them to represent multiple states simultaneously. This property, combined with quantum entanglement and interference, enables quantum computers to solve certain types of problems exponentially faster than classical computers.
+
+    The development of quantum algorithms has opened new possibilities in cryptography, optimization, machine learning, and simulation of quantum systems. Shor's algorithm, for instance, can factor large integers efficiently, potentially breaking current RSA encryption methods. Grover's algorithm provides a quadratic speedup for searching unsorted databases, while quantum machine learning algorithms promise to accelerate pattern recognition and data analysis tasks.
+
+    Current quantum computers face significant challenges including quantum decoherence, where quantum states are destroyed by environmental interference, and the need for extremely low temperatures to maintain quantum coherence. Error correction in quantum systems requires sophisticated techniques due to the no-cloning theorem, which prevents the direct copying of quantum states for redundancy.
+
+    Major technology companies and research institutions are investing heavily in quantum computing research, developing different approaches including superconducting circuits, trapped ions, topological qubits, and photonic systems. Each approach has its own advantages and challenges in terms of scalability, error rates, and operational requirements.
+    """ * 8
+
+    # Make multiple calls with identical large content
+    await b.TestGemini(large_content, baml_options={"collector": collector})
+    await b.TestGemini(large_content, baml_options={"collector": collector})
+    await b.TestGemini(large_content, baml_options={"collector": collector})
+
+    logs = collector.logs
+    assert len(logs) == 3
+
+    # Verify all calls have cached tokens fields defined
+    for i, log in enumerate(logs):
+        assert log.usage.cached_input_tokens is not None
+        assert log.calls[0].usage.cached_input_tokens is not None
+        print(f"Gemini large content call {i + 1} cached tokens: {log.usage.cached_input_tokens}")
+
+    # Calculate total cached tokens
+    total_cached_tokens = sum(log.usage.cached_input_tokens or 0 for log in logs)
+    assert collector.usage.cached_input_tokens == total_cached_tokens
+
+    print(f"Large content length: {len(large_content)} characters")
+    print(f"Total Gemini cached tokens from repeated calls: {collector.usage.cached_input_tokens}")
+
+
+@pytest.mark.asyncio
+async def test_collector_cross_provider_large_content_caching():
+    """Test cached token tracking across multiple providers with large content"""
+    collector = Collector(name="cross-provider-caching")
+
+    # Create different large content for each provider
+    openai_content = "Artificial Intelligence and Machine Learning systems analysis" * 200
+    gemini_content = "Quantum computing and computational paradigms overview" * 200
+    aws_content = "Cloud computing infrastructure and distributed systems" * 200
+
+    # Test OpenAI with repeated content
+    await b.TestOpenAIGPT4oMini(openai_content, baml_options={"collector": collector})
+    await b.TestOpenAIGPT4oMini(openai_content, baml_options={"collector": collector})
+
+    # Test Gemini with repeated content  
+    await b.TestGemini(gemini_content, baml_options={"collector": collector})
+    await b.TestGemini(gemini_content, baml_options={"collector": collector})
+
+    # Test AWS (should have no cached tokens)
+    await b.TestAws(aws_content, baml_options={"collector": collector})
+
+    logs = collector.logs
+    assert len(logs) == 5
+
+    # Verify OpenAI calls have cached tokens fields
+    assert logs[0].usage.cached_input_tokens is not None
+    assert logs[1].usage.cached_input_tokens is not None
+
+    # Verify Gemini calls have cached tokens fields
+    assert logs[2].usage.cached_input_tokens is not None
+    assert logs[3].usage.cached_input_tokens is not None
+
+    # Verify AWS call has null cached tokens
+    assert logs[4].usage.cached_input_tokens is None
+
+    # Calculate expected total (excluding AWS)
+    expected_total = sum(
+        log.usage.cached_input_tokens or 0 
+        for log in logs[:4]  # First 4 logs (OpenAI + Gemini)
+    )
+    
+    assert collector.usage.cached_input_tokens == expected_total
+
+    print("Cross-provider caching results:")
+    for i, log in enumerate(logs):
+        provider = log.calls[0].provider
+        print(f"  Call {i + 1} ({provider}): {log.usage.cached_input_tokens} cached tokens")
+    print(f"  Total aggregated: {collector.usage.cached_input_tokens} cached tokens")

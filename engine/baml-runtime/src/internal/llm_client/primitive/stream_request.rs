@@ -108,6 +108,7 @@ pub async fn make_stream_request(
                         prompt_tokens: None,
                         output_tokens: None,
                         total_tokens: None,
+                        cached_input_tokens: None,
                     },
                 }),
                 move |accumulated: &mut Result<LLMCompleteResponse>, event| {

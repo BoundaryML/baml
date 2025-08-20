@@ -47,6 +47,7 @@ describe("Collector Tests", () => {
     // Verify usage fields
     expect(log?.usage.inputTokens).toBeGreaterThan(0);
     expect(log?.usage.outputTokens).toBeGreaterThan(0);
+    expect(log?.usage.cachedInputTokens).toBeDefined();
 
     // Verify calls
     const calls = log?.calls || [];
@@ -88,10 +89,12 @@ describe("Collector Tests", () => {
     const callUsage = call.usage;
     expect(callUsage?.inputTokens).toBeGreaterThan(0);
     expect(callUsage?.outputTokens).toBeGreaterThan(0);
+    expect(callUsage?.cachedInputTokens).toBeDefined();
 
     // Usage matches log usage
     expect(callUsage?.inputTokens).toBe(log?.usage.inputTokens);
     expect(callUsage?.outputTokens).toBe(log?.usage.outputTokens);
+    expect(callUsage?.cachedInputTokens).toBe(log?.usage.cachedInputTokens);
 
     // Verify raw response exists
     expect(log?.rawLlmResponse).not.toBeNull();
@@ -99,6 +102,7 @@ describe("Collector Tests", () => {
     // Collector usage should match log usage
     expect(collector.usage.inputTokens).toBe(log?.usage.inputTokens);
     expect(collector.usage.outputTokens).toBe(log?.usage.outputTokens);
+    expect(collector.usage.cachedInputTokens).toBe(log?.usage.cachedInputTokens);
 
     // Verify metadata
     // expect(typeof log?.metadata).toBe('object');
@@ -141,6 +145,7 @@ describe("Collector Tests", () => {
     // Verify usage fields
     expect(log?.usage.inputTokens).toBeGreaterThan(0);
     expect(log?.usage.outputTokens).toBeGreaterThan(0);
+    expect(log?.usage.cachedInputTokens).toBeDefined();
 
     // Verify calls
     const calls = log?.calls || [];
@@ -170,6 +175,7 @@ describe("Collector Tests", () => {
     const callUsage = call.usage;
     expect(callUsage?.inputTokens).toBeGreaterThan(0);
     expect(callUsage?.outputTokens).toBeGreaterThan(0);
+    expect(callUsage?.cachedInputTokens).toBeDefined();
 
     // Verify raw response exists
     expect(log?.rawLlmResponse).not.toBeNull();
@@ -216,6 +222,7 @@ describe("Collector Tests", () => {
     // Verify usage is captured for streaming
     expect(log.usage.inputTokens).toBeGreaterThan(0);
     expect(log.usage.outputTokens).toBeGreaterThan(0);
+    expect(log.usage.cachedInputTokens).toBeDefined();
 
     // Verify call details
     const call = log.calls[0];
@@ -256,6 +263,7 @@ describe("Collector Tests", () => {
     const firstCallUsage = functionLogs[0].usage;
     expect(collector.usage.inputTokens).toBe(firstCallUsage.inputTokens);
     expect(collector.usage.outputTokens).toBe(firstCallUsage.outputTokens);
+    expect(collector.usage.cachedInputTokens).toBe(firstCallUsage.cachedInputTokens);
 
     // Second call
     await b.TestOpenAIGPT4oMini("Second call", { collector });
@@ -269,8 +277,11 @@ describe("Collector Tests", () => {
     const totalOutput =
       (firstCallUsage?.outputTokens ?? 0) +
       (secondCallUsage?.outputTokens ?? 0);
+    const totalCachedInput =
+      (firstCallUsage?.cachedInputTokens ?? 0) + (secondCallUsage?.cachedInputTokens ?? 0);
     expect(collector.usage.inputTokens).toBe(totalInput);
     expect(collector.usage.outputTokens).toBe(totalOutput);
+    expect(collector.usage.cachedInputTokens).toBe(totalCachedInput);
   });
 
   it("should support multiple collectors", async () => {
@@ -296,12 +307,17 @@ describe("Collector Tests", () => {
     expect(usageFirstCallColl1.outputTokens).toBe(
       usageFirstCallColl2.outputTokens,
     );
+    expect(usageFirstCallColl1.cachedInputTokens).toBe(
+      usageFirstCallColl2.cachedInputTokens,
+    );
 
     // Also check that the collector-level usage matches the single call usage for each collector
     expect(coll1.usage.inputTokens).toBe(usageFirstCallColl1.inputTokens);
     expect(coll1.usage.outputTokens).toBe(usageFirstCallColl1.outputTokens);
+    expect(coll1.usage.cachedInputTokens).toBe(usageFirstCallColl1.cachedInputTokens);
     expect(coll2.usage.inputTokens).toBe(usageFirstCallColl2.inputTokens);
     expect(coll2.usage.outputTokens).toBe(usageFirstCallColl2.outputTokens);
+    expect(coll2.usage.cachedInputTokens).toBe(usageFirstCallColl2.cachedInputTokens);
 
     // Second call uses only coll1
     await b.TestOpenAIGPT4oMini("Second call", { collector: coll1 });
@@ -320,12 +336,17 @@ describe("Collector Tests", () => {
     const totalOutput =
       (usageFirstCallColl1?.outputTokens ?? 0) +
       (usageSecondCallColl1?.outputTokens ?? 0);
+    const totalCachedInput =
+      (usageFirstCallColl1?.cachedInputTokens ?? 0) +
+      (usageSecondCallColl1?.cachedInputTokens ?? 0);
     expect(coll1.usage.inputTokens).toBe(totalInput);
     expect(coll1.usage.outputTokens).toBe(totalOutput);
+    expect(coll1.usage.cachedInputTokens).toBe(totalCachedInput);
 
     // Verify coll2 usage remains unchanged (it did not participate in the second call)
     expect(coll2.usage.inputTokens).toBe(usageFirstCallColl2.inputTokens);
     expect(coll2.usage.outputTokens).toBe(usageFirstCallColl2.outputTokens);
+    expect(coll2.usage.cachedInputTokens).toBe(usageFirstCallColl2.cachedInputTokens);
   });
 
   it("should handle parallel async calls correctly", async () => {
@@ -360,8 +381,11 @@ describe("Collector Tests", () => {
       (usageCall1?.inputTokens ?? 0) + (usageCall2?.inputTokens ?? 0);
     const totalOutput =
       (usageCall1?.outputTokens ?? 0) + (usageCall2?.outputTokens ?? 0);
+    const totalCachedInput =
+      (usageCall1?.cachedInputTokens ?? 0) + (usageCall2?.cachedInputTokens ?? 0);
     expect(collector.usage.inputTokens).toBe(totalInput);
     expect(collector.usage.outputTokens).toBe(totalOutput);
+    expect(collector.usage.cachedInputTokens).toBe(totalCachedInput);
   });
 
   it("should handle sync calls correctly", async () => {
@@ -393,5 +417,72 @@ describe("Collector Tests", () => {
 
     // expect(collector.usage.inputTokens).toBeGreaterThan(0);
     // expect(collector.usage.outputTokens).toBeGreaterThan(0);
+  });
+
+  it("should track cached input tokens for Anthropic caching", async () => {
+    const collector = new Collector("caching-collector");
+
+    // Create substantial content (2048+ tokens) to ensure caching triggers
+    // Each repetition is ~100 tokens, so 25 repetitions = ~2500 tokens
+    const largeContent = `
+    In the ancient kingdom of Eldoria, there lived a brave knight named Sir Galahad who was known throughout the land for his unwavering courage, exceptional wisdom, and boundless compassion for all living creatures. His story began in the small village of Millbrook, where he was born to humble farmers who taught him the values of hard work, honesty, and kindness from a very young age.
+
+    As a child, Galahad showed remarkable intelligence and an innate sense of justice. He would often help settle disputes between the village children and was always the first to defend those who were weaker or being bullied. His parents noticed these qualities and, though they were not wealthy, they saved every copper coin they could to provide him with the best education possible.
+
+    When Galahad turned sixteen, a traveling knight named Sir Roderick visited their village. He immediately recognized the young man's potential and offered to take him as a squire. This was the opportunity of a lifetime, and though it broke their hearts to see him leave, Galahad's parents knew it was his destiny to serve a greater purpose.
+
+    Under Sir Roderick's tutelage, Galahad learned not only the arts of combat and horsemanship but also the deeper principles of chivalry, honor, and service to others. He spent years training in various castles and courts, always demonstrating exceptional skill and character that earned him the respect of nobles and commoners alike.
+    `.repeat(25);
+    
+    // First call - establishes cache (using cache_control in the BAML template)
+    await b.TestCaching(largeContent, "What are the key virtues of Sir Galahad?", { collector });
+    
+    const firstLog = collector.logs[0];
+    expect(firstLog).not.toBeNull();
+    expect(firstLog.functionName).toBe("TestCaching");
+    
+    // Verify cached tokens field exists
+    expect(firstLog.usage.cachedInputTokens).toBeDefined();
+    expect(firstLog.calls[0].usage?.cachedInputTokens).toBeDefined();
+    
+    // First call establishes cache, might have some cached tokens from cache creation
+    const firstCachedTokens = firstLog.usage.cachedInputTokens || 0;
+    
+    // Second call with same large content - should use cache and show cached tokens > 0
+    await b.TestCaching(largeContent, "What is Sir Galahad's background and origin?", { collector });
+    
+    const secondLog = collector.logs[1];
+    expect(secondLog).not.toBeNull();
+    expect(secondLog.functionName).toBe("TestCaching");
+    
+    // Verify cached tokens are tracked and should be > 0 for the second call
+    expect(secondLog.usage.cachedInputTokens).toBeDefined();
+    expect(secondLog.calls[0].usage?.cachedInputTokens).toBeDefined();
+    
+    // Third call to really ensure caching is working
+    await b.TestCaching(largeContent, "How did Sir Galahad become a knight?", { collector });
+    
+    const thirdLog = collector.logs[2];
+    expect(thirdLog).not.toBeNull();
+    
+    // At least one of the later calls should have cached tokens > 0
+    const hasCachedTokens = 
+      (secondLog.usage.cachedInputTokens || 0) > 0 || 
+      (thirdLog.usage.cachedInputTokens || 0) > 0;
+    
+    expect(hasCachedTokens).toBe(true);
+    
+    // Verify collector aggregates cached tokens correctly
+    const totalCachedTokens = 
+      (collector.logs[0].usage.cachedInputTokens || 0) +
+      (collector.logs[1].usage.cachedInputTokens || 0) +
+      (collector.logs[2].usage.cachedInputTokens || 0);
+    expect(collector.usage.cachedInputTokens).toBe(totalCachedTokens);
+    
+    console.log("Cached tokens - First call:", firstLog.usage.cachedInputTokens);
+    console.log("Cached tokens - Second call:", secondLog.usage.cachedInputTokens);
+    console.log("Cached tokens - Third call:", thirdLog.usage.cachedInputTokens);
+    console.log("Total cached tokens:", collector.usage.cachedInputTokens);
+    console.log("Large content length:", largeContent.length, "characters");
   });
 });

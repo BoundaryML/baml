@@ -34,6 +34,8 @@ pub enum AnthropicMessageContent {
 pub struct AnthropicUsage {
     pub input_tokens: u64,
     pub output_tokens: u64,
+    pub cache_creation_input_tokens: u64,
+    pub cache_read_input_tokens: u64,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
