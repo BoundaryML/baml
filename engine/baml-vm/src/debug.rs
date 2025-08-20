@@ -27,8 +27,8 @@ use std::io::IsTerminal;
 use colored::{Color, Colorize};
 
 use crate::{
-    vm::{EvalStack, ObjectPool, StackIndex},
-    Function, Instruction, Object, Value,
+    vm::indexable::GlobalPool, EvalStack, Function, Instruction, Object, ObjectIndex, ObjectPool,
+    StackIndex, Value,
 };
 
 /// Context aware instruction display.
@@ -50,7 +50,7 @@ pub fn display_instruction(
     function: &Function,
     stack: &EvalStack,
     objects: &ObjectPool,
-    globals: &[Value],
+    globals: &GlobalPool,
 ) -> (String, String) {
     let instruction = &function.bytecode.instructions[instruction_ptr as usize];
 
@@ -104,7 +104,7 @@ pub fn display_instruction(
             format!("(to {})", instruction_ptr + offset)
         }
         Instruction::AllocInstance(index) => {
-            format!("({})", display_value(&globals[index.0], objects))
+            format!("({})", display_object(objects, *index))
         }
         Instruction::Pop(_)
         | Instruction::PopReplace(_)
@@ -129,16 +129,20 @@ pub fn display_instruction(
 /// `to_string` implementation.
 pub fn display_value(value: &Value, objects: &ObjectPool) -> String {
     match value {
-        Value::Object(index) => match &objects[*index] {
-            // This one's a bit tricky to print.
-            Object::Instance(instance) => match &objects[instance.class] {
-                Object::Class(class) => format!("<{} instance>", class.name),
-                // This will most likely never happen, but we're trying not
-                // to panic.
-                other => format!("<{other} instance>"),
-            },
+        Value::Object(index) => display_object(objects, *index),
 
-            other => other.to_string(),
+        other => other.to_string(),
+    }
+}
+
+fn display_object(objects: &ObjectPool, index: ObjectIndex) -> String {
+    match &objects[index] {
+        // This one's a bit tricky to print.
+        Object::Instance(instance) => match &objects[instance.class] {
+            Object::Class(class) => format!("<{} instance>", class.name),
+            // This will most likely never happen, but we're trying not
+            // to panic.
+            other => format!("<{other} instance>"),
         },
 
         other => other.to_string(),
@@ -222,7 +226,7 @@ pub fn display_bytecode(
     function: &Function,
     stack: &EvalStack,
     objects: &ObjectPool,
-    globals: &[Value],
+    globals: &GlobalPool,
     use_colors: bool,
 ) -> String {
     if function.bytecode.instructions.is_empty() {
@@ -328,7 +332,7 @@ pub fn disassemble(
     function: &Function,
     stack: &EvalStack,
     objects: &ObjectPool,
-    globals: &[Value],
+    globals: &GlobalPool,
 ) {
     let use_colors = std::io::stdout().is_terminal();
 

@@ -5,8 +5,8 @@
 
 use baml_compiler::test::ast;
 use baml_vm::{
-    BamlVmProgram, Bytecode, EvalStack, Frame, Function, FunctionKind, Instruction, Object,
-    ObjectIndex, ObjectPool, StackIndex, Value, Vm, VmExecState,
+    BamlVmProgram, Bytecode, EvalStack, Frame, Function, FunctionKind, GlobalPool, Instruction,
+    Object, ObjectIndex, ObjectPool, StackIndex, Value, Vm, VmExecState,
 };
 
 /// Helper struct for testing VM execution.
@@ -119,7 +119,7 @@ fn assert_vm_executes_bytecode_with_inspection(
         stack: EvalStack::from_vec(vec![Value::Object(ObjectIndex::from_raw(0))]),
         runtime_allocs_offset: ObjectIndex::from_raw(objects.len()),
         objects: ObjectPool::from_vec(objects),
-        globals,
+        globals: GlobalPool::from_vec(globals),
     };
 
     let result = vm.exec()?;

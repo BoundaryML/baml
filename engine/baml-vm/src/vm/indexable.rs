@@ -181,6 +181,7 @@ macro_rules! impl_indexable_wrapper {
 }
 
 impl_indexable_wrapper!(EvalStack, Value, StackIndex);
+impl_indexable_wrapper!(GlobalPool, Value, GlobalIndex);
 impl_indexable_wrapper!(ObjectPool, Object, ObjectIndex);
 
 impl ObjectPool {

@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
-mod indexable;
+pub(super) mod indexable;
 
-pub use indexable::{EvalStack, ObjectIndex, ObjectPool, StackIndex};
+use indexable::{EvalStack, GlobalPool, ObjectIndex, ObjectPool, StackIndex};
 
 use crate::{
     bytecode::{BinOp, Bytecode, CmpOp, Instruction},
@@ -575,7 +575,7 @@ pub struct Vm {
     /// Global variables.
     ///
     /// This stores the functions and globally declared variables.
-    pub globals: Vec<Value>,
+    pub globals: GlobalPool,
 
     /// Offset of the first runtime allocated object.
     ///
@@ -613,7 +613,7 @@ pub enum VmExecState {
 #[derive(Clone, Debug)]
 pub struct BamlVmProgram {
     pub objects: ObjectPool,
-    pub globals: Vec<Value>,
+    pub globals: GlobalPool,
     pub resolved_function_names: HashMap<String, (ObjectIndex, FunctionKind)>,
 }
 

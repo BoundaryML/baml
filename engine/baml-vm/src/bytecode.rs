@@ -1,6 +1,9 @@
 //! Instruction set and bytecode representation.
 
-use crate::{vm::Value, ObjectIndex};
+use crate::{
+    vm::{indexable::GlobalIndex, Value},
+    ObjectIndex,
+};
 
 /// Individual bytecode instruction.
 ///
@@ -58,13 +61,13 @@ pub enum Instruction {
     /// Note that functions are also globals and can be passed around and stored
     /// in local variables, so we need to load their name in the stack before we
     /// call the function.
-    LoadGlobal(usize),
+    LoadGlobal(GlobalIndex),
 
     /// Store a value in a global variable.
     ///
     /// Format: `STORE_GLOBAL i` where `i` is the index of the global variable
     /// in the [`crate::Vm::globals`] array.
-    StoreGlobal(usize),
+    StoreGlobal(GlobalIndex),
 
     /// Load a field of an object.
     ///
