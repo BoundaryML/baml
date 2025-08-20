@@ -188,7 +188,7 @@ impl ObjectPool {
     /// If `value` is an object, returns a reference to the object.
     /// - If `value` is not an object, throws [`InternalError::TypeError`].
     /// - If `value` is an object but reference is not accessible, throws
-    /// [`InternalError::InvalidObjectRef`]
+    ///   [`InternalError::InvalidObjectRef`].
     pub fn as_object(
         &self,
         value: &Value,
@@ -207,7 +207,7 @@ impl ObjectPool {
     /// Inspects the type of a value, including the [`ObjectType`] if the object reference is
     /// valid.
     pub fn type_of(&self, value: &Value) -> Type {
-        Type::of(value, |index| ObjectType::of(&self[index]).into())
+        Type::of(value, |index| ObjectType::of(&self[index]))
     }
 
     pub fn insert(&mut self, value: Object) -> ObjectIndex {

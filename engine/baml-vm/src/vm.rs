@@ -680,8 +680,7 @@ impl Vm {
             return Err(InternalError::TypeError {
                 expected: FutureType::Any.into(),
                 got: ObjectType::of(&self.objects[future_index]).into(),
-            }
-            .into());
+            });
         };
 
         *future = Future::Ready(value);
