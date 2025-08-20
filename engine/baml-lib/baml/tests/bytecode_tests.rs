@@ -182,11 +182,11 @@ fn update_expected(test_name: &str, content: &str, actual: &str) {
         let comment_lines: Vec<String> = actual
             .lines()
             .map(|line| {
-                if line.is_empty() {
+                strip_ansi_escapes::strip_str(if line.is_empty() {
                     "//".to_string()
                 } else {
                     format!("// {line}")
-                }
+                })
             })
             .collect();
 
