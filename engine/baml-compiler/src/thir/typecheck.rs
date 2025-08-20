@@ -479,6 +479,50 @@ fn typecheck_statement(
         } => {
             let typed_value = typecheck_expression(value, context, diagnostics);
 
+            // TODO: Extract in funciton, repeated above.
+            // validate/update type.
+            match context.vars.get_mut(name) {
+                Some(info) => match info.mut_var_info.as_mut() {
+                    Some(mut_info) => {
+                        if let Some(inferred_type) = typed_value.meta().1.as_ref() {
+                            if let Some(infer_span) = mut_info.ty_infer_span.as_ref() {
+                                // known type - typecheck against it.
+                                if !info.ty.can_be_assigned(inferred_type) {
+                                    diagnostics.push_error(DatamodelError::new_validation_error(
+                                        &format!(
+                                            "Cannot assign {} to {}",
+                                            inferred_type.name_for_user(),
+                                            info.ty.name_for_user()
+                                        ),
+                                        value.span(),
+                                    ));
+
+                                    diagnostics.push_warning(DatamodelWarning::new(
+                                        format!("type for '{name}' was inferred here"),
+                                        infer_span.clone(),
+                                    ));
+                                }
+                            } else {
+                                // type is not known yet - use this assignment as the type.
+                                info.ty = inferred_type.clone();
+
+                                mut_info.ty_infer_span = Some(value.span().clone())
+                            }
+                        }
+                    }
+                    None => diagnostics.push_error(DatamodelError::new_validation_error(
+                        &format!("Cannot assign to immutable variable {name}"),
+                        value.span(),
+                    )),
+                },
+                None => {
+                    diagnostics.push_error(DatamodelError::new_validation_error(
+                        &format!("Unknown variable {name}"),
+                        span.clone(),
+                    ));
+                }
+            }
+
             Some(thir::Statement::AssignOp {
                 name: name.clone(),
                 value: typed_value,
