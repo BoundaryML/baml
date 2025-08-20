@@ -96,7 +96,8 @@ fn parse_while_loop(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Stm
     let span = diagnostics.span(pair.as_span());
     let mut while_loop = pair.into_inner();
 
-    let condition = parse_expression(while_loop.next()?, diagnostics)?;
+    let condition_rule = check_parentheses_around_rule(&mut while_loop, diagnostics, "while loop condition")?;
+    let condition = parse_expression(condition_rule, diagnostics)?;
 
     let body = parse_expr_block(while_loop.next()?, diagnostics)?;
 
@@ -182,7 +183,8 @@ fn parse_for_loop(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Stmt
     let span = diagnostics.span(token.as_span());
     let mut tokens = token.into_inner();
 
-    let in_between_rule = check_parentheses_around_rule(diagnostics, &mut tokens)?;
+    let in_between_rule =
+        check_parentheses_around_rule(&mut tokens, diagnostics, "for loop header")?;
 
     let body = parse_expr_block(tokens.next()?, diagnostics)?;
 
@@ -195,27 +197,28 @@ fn parse_for_loop(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Stmt
     }
 }
 
-fn check_parentheses_around_rule(
+fn check_parentheses_around_rule<'src>(
+    tokens: &mut pest::iterators::Pairs<'src, Rule>,
     diagnostics: &mut Diagnostics,
-    tokens: &mut pest::iterators::Pairs<'_, Rule>,
-) -> Option<pest::iterators::Pair<'_, Rule>> {
-    let lparen_span = if let Rule::LPAREN_TOKEN = tokens.peek().map(|x| x.as_rule()) {
+    construct_name: &'static str,
+) -> Option<pest::iterators::Pair<'src, Rule>> {
+    let lparen_span = if let Some(Rule::LPAREN_TOKEN) = tokens.peek().map(|x| x.as_rule()) {
         Some(diagnostics.span(tokens.next().unwrap().as_span()))
     } else {
         None
     };
 
-    let in_between_rule = tokens.next();
+    let in_between_rule = tokens.next()?;
 
-    let rparen_span = if let Rule::RPAREN_TOKEN = tokens.peek().map(|x| x.as_rule()) {
+    let rparen_span = if let Some(Rule::RPAREN_TOKEN) = tokens.peek().map(|x| x.as_rule()) {
         Some(diagnostics.span(tokens.next().unwrap().as_span()))
     } else {
         None
     };
     match (lparen_span, rparen_span) {
         (None, None) => diagnostics.push_error(DatamodelError::new_validation_error(
-            "expected parentheses around for loop header",
-            diagnosntics.span(in_between_rule.as_span()),
+            &format!("expected parentheses around {construct_name}"),
+            diagnostics.span(in_between_rule.as_span()),
         )),
         (None, Some(r)) => diagnostics.push_error(DatamodelError::new_validation_error(
             "expected opening parentheses for this closing parentheses",
@@ -228,7 +231,7 @@ fn check_parentheses_around_rule(
         // both present. Nothing to check.
         (Some(_), Some(_)) => {}
     }
-    in_between_rule
+    Some(in_between_rule)
 }
 
 pub fn parse_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Stmt> {
@@ -542,7 +545,10 @@ pub fn parse_if_expression(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Op
     assert_correct_parser!(token, Rule::if_expression);
     let span = diagnostics.span(token.as_span());
     let mut tokens = token.into_inner();
-    let condition = parse_expression(tokens.next()?, diagnostics)?;
+
+    let condition_rule = check_parentheses_around_rule(&mut tokens, diagnostics, "if expression condition")?;
+
+    let condition = parse_expression(condition_rule, diagnostics)?;
 
     // TODO: Some weird parsing going on here, figure out rules and spans.
     let then_branch_expr_block = tokens.next()?;

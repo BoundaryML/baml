@@ -128,9 +128,9 @@ field_accessor = { "." ~ identifier }
 method_call    = { "." ~ fn_app }
 
 primary_expression = {
+    if_expression |
     generic_fn_app |
     fn_app |
-    if_expression |
     lambda |
     jinja_expression |
     map_expression |
