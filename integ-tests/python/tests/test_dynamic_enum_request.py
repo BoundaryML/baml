@@ -86,11 +86,28 @@ Multiple value tests:
         #     "task priority level": "high"
         # }
         # """
-        assert (
-            message_content
-            == """Input class data: {
+
+        # currently the order of the properties is not stable, so we need to check the order of the properties
+        options = [
+            """Input class data: {
+    "status": PENDING,
+    "priority": "high",
+    "name": "test-item",
+}""",
+            """Input class data: {
+    "priority": "high",
     "status": PENDING,
     "name": "test-item",
+}""",
+            """Input class data: {
+    "name": "test-item",
     "priority": "high",
-}"""
-        )
+    "status": PENDING,
+}""",
+            """Input class data: {
+    "name": "test-item",
+    "status": PENDING,
+    "priority": "high",
+}""",
+        ]
+        assert message_content in options
