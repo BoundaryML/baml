@@ -837,7 +837,6 @@ impl Vm {
                     self.stack.push(instance.fields[index]);
                 }
                 Instruction::StoreField(index) => {
-                    // TODO: type for stack index too.
                     let value_stack_index = self.stack.ensure_stack_top()?;
 
                     let reference = self.objects.as_object(
@@ -1035,7 +1034,6 @@ impl Vm {
                     let array_index = self.objects.as_object(&array_value, ObjectType::Array)?;
 
                     let Object::Array(array) = &self.objects[array_index] else {
-                        // TODO: mesh these calls with a `.as_array` in Object
                         return Err(VmError::from(InternalError::TypeError {
                             expected: ObjectType::Array.into(),
                             got: ObjectType::of(&self.objects[array_index]).into(),
