@@ -1,3 +1,4 @@
+import itertools
 import pytest
 from ..baml_client import b
 from ..baml_client.type_builder import TypeBuilder
@@ -86,11 +87,20 @@ Multiple value tests:
         #     "task priority level": "high"
         # }
         # """
-        assert (
-            message_content
-            == """Input class data: {
-    "status": PENDING,
-    "name": "test-item",
-    "priority": "high",
-}"""
-        )
+
+        # currently the order of the properties is not stable, so we need to check the order of the properties
+        prop = [
+            '"status": PENDING,',
+            '"priority": "high",',
+            '"name": "test-item",',
+        ]
+        # make all permutations of the properties
+        permutations = list(itertools.permutations(prop))
+        options = []
+        for p in permutations:
+            str_p = "\n    ".join(p)
+            options.append(f"""Input class data: {{
+    {str_p}
+}}""")
+
+        assert message_content in options

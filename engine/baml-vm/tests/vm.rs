@@ -5,8 +5,8 @@
 
 use baml_compiler::test::ast;
 use baml_vm::{
-    BamlVmProgram, Bytecode, Frame, Function, FunctionKind, Instruction, Object, RuntimeError,
-    Value, Vm, VmError, VmExecState,
+    BamlVmProgram, Bytecode, EvalStack, Frame, Function, FunctionKind, GlobalPool, Instruction,
+    Object, ObjectIndex, ObjectPool, StackIndex, Value, Vm, VmError, VmExecState,
 };
 
 /// Helper struct for testing VM execution.
@@ -45,7 +45,7 @@ fn assert_vm_executes_with_inspection(
 }
 
 fn assert_vm_fails(input: FailingProgram) -> anyhow::Result<()> {
-    let (vm, result) = setup_and_exec_program(input.source, input.function)?;
+    let (_, result) = setup_and_exec_program(input.source, input.function)?;
 
     assert_eq!(
         result,
@@ -72,10 +72,10 @@ fn setup_and_exec_program(
         frames: vec![Frame {
             function: target_function_index,
             instruction_ptr: 0,
-            locals_offset: 0,
+            locals_offset: StackIndex::from_raw(0),
         }],
-        stack: vec![Value::Object(target_function_index)],
-        runtime_allocs_offset: objects.len(),
+        stack: EvalStack::from_vec(vec![Value::Object(target_function_index)]),
+        runtime_allocs_offset: ObjectIndex::from_raw(objects.len()),
         objects,
         globals,
     };
@@ -121,19 +121,19 @@ fn assert_vm_executes_bytecode_with_inspection(
     };
 
     let objects = vec![Object::Function(function)];
-    let globals = vec![Value::Object(0)];
+    let globals = vec![Value::Object(ObjectIndex::from_raw(0))];
 
     // Create and run the VM
     let mut vm = Vm {
         frames: vec![Frame {
-            function: 0,
+            function: ObjectIndex::from_raw(0),
             instruction_ptr: 0,
-            locals_offset: 0,
+            locals_offset: StackIndex::from_raw(0),
         }],
-        stack: vec![Value::Object(0)],
-        runtime_allocs_offset: objects.len(),
-        objects,
-        globals,
+        stack: EvalStack::from_vec(vec![Value::Object(ObjectIndex::from_raw(0))]),
+        runtime_allocs_offset: ObjectIndex::from_raw(objects.len()),
+        objects: ObjectPool::from_vec(objects),
+        globals: GlobalPool::from_vec(globals),
     };
 
     let result = vm.exec()?;
@@ -280,13 +280,16 @@ fn array_constructor() -> anyhow::Result<()> {
                 }
             ",
             function: "main",
-            expected: VmExecState::Complete(Value::Object(3)),
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(3))),
         },
         |vm| {
             dbg!(&vm.objects);
 
-            let Object::Array(array) = &vm.objects[3] else {
-                panic!("expected Array, got {:?}", vm.objects[3]);
+            let Object::Array(array) = &vm.objects[ObjectIndex::from_raw(3)] else {
+                panic!(
+                    "expected Array, got {:?}",
+                    &vm.objects[ObjectIndex::from_raw(3)]
+                );
             };
 
             assert_eq!(array, &[Value::Int(1), Value::Int(2), Value::Int(3)]);
@@ -313,11 +316,14 @@ fn class_constructor() -> anyhow::Result<()> {
                 }
             ",
             function: "main",
-            expected: VmExecState::Complete(Value::Object(4)),
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(4))),
         },
         |vm| {
-            let Object::Instance(instance) = &vm.objects[4] else {
-                panic!("expected Instance, got {:?}", vm.objects[4]);
+            let Object::Instance(instance) = &vm.objects[ObjectIndex::from_raw(4)] else {
+                panic!(
+                    "expected Instance, got {:?}",
+                    &vm.objects[ObjectIndex::from_raw(4)]
+                );
             };
 
             assert_eq!(instance.fields, &[Value::Int(1), Value::Int(2)]);
@@ -349,11 +355,14 @@ fn class_constructor_with_spread_operator() -> anyhow::Result<()> {
                 }
             ",
             function: "main",
-            expected: VmExecState::Complete(Value::Object(5)),
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(5))),
         },
         |vm| {
-            let Object::Instance(instance) = &vm.objects[5] else {
-                panic!("expected Instance, got {:?}", vm.objects[5]);
+            let Object::Instance(instance) = &vm.objects[ObjectIndex::from_raw(5)] else {
+                panic!(
+                    "expected Instance, got {:?}",
+                    &vm.objects[ObjectIndex::from_raw(5)]
+                );
             };
 
             assert_eq!(
@@ -376,11 +385,14 @@ fn function_returning_string() -> anyhow::Result<()> {
                 }
             "#,
             function: "main",
-            expected: VmExecState::Complete(Value::Object(0)),
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(0))),
         },
         |vm| {
-            let Object::String(string) = &vm.objects[0] else {
-                panic!("expected String, got {:?}", vm.objects[0]);
+            let Object::String(string) = &vm.objects[ObjectIndex::from_raw(0)] else {
+                panic!(
+                    "expected String, got {:?}",
+                    &vm.objects[ObjectIndex::from_raw(0)]
+                );
             };
 
             assert_eq!(string, "hello");
@@ -406,7 +418,7 @@ fn multiple_strings() -> anyhow::Result<()> {
                 }
             "#,
             function: "main",
-            expected: VmExecState::Complete(Value::Object(0)), // "Hello" should be the first string object
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(0))), // "Hello" should be the first string object
         },
         |vm| {
             // Check that we have the expected strings in the objects pool
@@ -1296,6 +1308,8 @@ mod return_stmt {
 }
 
 mod assert_stmt {
+
+    use baml_vm::RuntimeError;
 
     use super::*;
 

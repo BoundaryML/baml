@@ -236,7 +236,7 @@ jobs:
           # Build baml_cffi shared library
           cargo build --package baml_cffi
           # Run tests
-          cargo test --lib
+          cargo test --features skip-integ-tests
         working-directory: engine
 
       - name: Run Python integration tests

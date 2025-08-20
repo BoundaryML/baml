@@ -26,7 +26,10 @@ use std::io::IsTerminal;
 
 use colored::{Color, Colorize};
 
-use crate::{Function, Instruction, Object, Value};
+use crate::{
+    vm::indexable::GlobalPool, EvalStack, Function, Instruction, Object, ObjectIndex, ObjectPool,
+    StackIndex, Value,
+};
 
 /// Context aware instruction display.
 ///
@@ -45,9 +48,9 @@ use crate::{Function, Instruction, Object, Value};
 pub fn display_instruction(
     instruction_ptr: isize,
     function: &Function,
-    stack: &[Value],
-    objects: &[Object],
-    globals: &[Value],
+    stack: &EvalStack,
+    objects: &ObjectPool,
+    globals: &GlobalPool,
 ) -> (String, String) {
     let instruction = &function.bytecode.instructions[instruction_ptr as usize];
 
@@ -81,7 +84,9 @@ pub fn display_instruction(
                 break 'field String::new();
             }
 
-            let Value::Object(reference) = stack[stack.len() - 2] else {
+            // TODO: prevent panic here
+
+            let Value::Object(reference) = stack[StackIndex::from_raw(stack.len() - 2)] else {
                 break 'field String::from("(ERROR: value not an object)");
             };
 
@@ -99,7 +104,7 @@ pub fn display_instruction(
             format!("(to {})", instruction_ptr + offset)
         }
         Instruction::AllocInstance(index) => {
-            format!("({})", display_value(&globals[*index], objects))
+            format!("({})", display_object(objects, *index))
         }
         Instruction::Pop(_)
         | Instruction::PopReplace(_)
@@ -123,18 +128,22 @@ pub fn display_instruction(
 /// The default display for objects is just a reference number. If we want
 /// all the information, we have to dereference the object and call it's
 /// `to_string` implementation.
-pub fn display_value(value: &Value, objects: &[Object]) -> String {
+pub fn display_value(value: &Value, objects: &ObjectPool) -> String {
     match value {
-        Value::Object(index) => match &objects[*index] {
-            // This one's a bit tricky to print.
-            Object::Instance(instance) => match &objects[instance.class] {
-                Object::Class(class) => format!("<{} instance>", class.name),
-                // This will most likely never happen, but we're trying not
-                // to panic.
-                other => format!("<{other} instance>"),
-            },
+        Value::Object(index) => display_object(objects, *index),
 
-            other => other.to_string(),
+        other => other.to_string(),
+    }
+}
+
+fn display_object(objects: &ObjectPool, index: ObjectIndex) -> String {
+    match &objects[index] {
+        // This one's a bit tricky to print.
+        Object::Instance(instance) => match &objects[instance.class] {
+            Object::Class(class) => format!("<{} instance>", class.name),
+            // This will most likely never happen, but we're trying not
+            // to panic.
+            other => format!("<{other} instance>"),
         },
 
         other => other.to_string(),
@@ -219,9 +228,9 @@ impl Col {
 /// symmetric and returns the entire table.
 pub fn display_bytecode(
     function: &Function,
-    stack: &[Value],
-    objects: &[Object],
-    globals: &[Value],
+    stack: &EvalStack,
+    objects: &ObjectPool,
+    globals: &GlobalPool,
     use_colors: bool,
 ) -> String {
     if function.bytecode.instructions.is_empty() {
@@ -323,7 +332,12 @@ pub fn display_bytecode(
 }
 
 /// Prints the dissassembly of a function.
-pub fn disassemble(function: &Function, stack: &[Value], objects: &[Object], globals: &[Value]) {
+pub fn disassemble(
+    function: &Function,
+    stack: &EvalStack,
+    objects: &ObjectPool,
+    globals: &GlobalPool,
+) {
     let use_colors = std::io::stdout().is_terminal();
 
     let disassembly = display_bytecode(function, stack, objects, globals, use_colors);

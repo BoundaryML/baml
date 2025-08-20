@@ -15,8 +15,8 @@ node = "lts"     # For pnpm
 "cargo:wasm-pack" = "0.13.1"
 
 # Go tools
-# "go:google.golang.org/protobuf/cmd/protoc-gen-go" = "v1.36.6"
-"aqua:protocolbuffers/protobuf-go/protoc-gen-go" = "v1.36.6"
+# locked to match the version in .github/actions/setup-go/action.yml
+"go:google.golang.org/protobuf/cmd/protoc-gen-go" = "v1.36.6"
 "go:golang.org/x/tools/cmd/goimports" = "latest"
 "go:github.com/chrishrb/go-grip" = "latest"
 

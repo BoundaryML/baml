@@ -116,6 +116,7 @@ reqwest = { version = "0.12.12", features = [
 ] }
 scopeguard = "1.2.0"
 secrecy = { version = "0.10.3", features = ["serde"] }
+serial_test = "3.1"
 serde_json = { version = "1", features = ["float_roundtrip", "preserve_order"] }
 serde = { version = "1", features = ["alloc", "derive", "rc"] }
 serde_yaml = "0.9.34"

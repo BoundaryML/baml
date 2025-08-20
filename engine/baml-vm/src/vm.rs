@@ -1,5 +1,9 @@
 use std::collections::HashMap;
 
+pub(super) mod indexable;
+
+use indexable::{EvalStack, GlobalPool, ObjectIndex, ObjectPool, StackIndex};
+
 use crate::{
     bytecode::{BinOp, Bytecode, CmpOp, Instruction},
     UnaryOp,
@@ -81,7 +85,7 @@ impl std::fmt::Display for Class {
 #[derive(Clone, Debug)]
 pub struct Instance {
     /// Class index in the [`Vm::objects`] pool.
-    pub class: usize,
+    pub class: ObjectIndex,
 
     /// Fields are accessed by index. No string lookups.
     pub fields: Vec<Value>,
@@ -125,12 +129,6 @@ pub enum Object {
     /// List of values.
     Array(Vec<Value>),
 
-    /// Iterator over an array (array for now).
-    Iterator {
-        iterable: usize,
-        index: usize,
-    },
-
     Future(Future),
 }
 
@@ -160,7 +158,11 @@ impl Object {
     pub fn as_function(&self) -> Result<&Function, VmError> {
         match self {
             Object::Function(function) => Ok(function),
-            _ => Err(InternalError::InvalidFunctionRef.into()),
+            _ => Err(InternalError::TypeError {
+                expected: FunctionType::Any.into(),
+                got: ObjectType::of(self).into(),
+            }
+            .into()),
         }
     }
 }
@@ -173,9 +175,6 @@ impl std::fmt::Display for Object {
             Object::Instance(instance) => instance.fmt(f),
             Object::String(string) => string.fmt(f),
             Object::Array(array) => std::fmt::Debug::fmt(array, f),
-            Object::Iterator { iterable, index } => {
-                write!(f, "<iterator iterable={iterable} index={index}>")
-            }
             Object::Future(future) => match future {
                 Future::Pending(llm_future) => write!(f, "<pending: {}>", llm_future.llm_function),
                 Future::Ready(value) => write!(f, "<ready: {value}>"),
@@ -199,7 +198,7 @@ pub enum Value {
     /// Index into the [`Vm::objects`] vec.
     ///
     /// Strings are also objects, don't add `Value::String`.
-    Object(usize),
+    Object(ObjectIndex),
 }
 
 impl std::fmt::Display for Value {
@@ -218,24 +217,107 @@ impl std::fmt::Display for Value {
 ///
 /// Used for checking type errors at runtime. We can probably use some lib
 /// that creates this automatically based on the [`Value`] enum.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Type {
     Int,
     Float,
     Bool,
-    Object,
+    Object(ObjectType),
+}
+
+/// Object type lattice.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ObjectType {
+    /// Top type of the lattice. It is castable to any of the other
+    /// types.
+    Any,
+    Instance,
+    Array,
+    Function(FunctionType),
+    Class,
+    String,
+    Future(FutureType),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FunctionType {
+    /// Top of function type lattice: represents all function types.
+    Any,
+    Callable,
+    Llm,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FutureType {
+    /// Top of future type lattice: represents all future types.
+    Any,
+    Pending,
+    Ready,
+}
+
+impl From<&Future> for FutureType {
+    fn from(value: &Future) -> Self {
+        match value {
+            Future::Pending(_) => Self::Pending,
+            Future::Ready(_) => Self::Ready,
+        }
+    }
+}
+
+impl From<FutureType> for ObjectType {
+    fn from(value: FutureType) -> Self {
+        ObjectType::Future(value)
+    }
+}
+
+impl ObjectType {
+    pub fn of(ob: &Object) -> Self {
+        match ob {
+            Object::Function(func) => Self::Function(func.kind.into()),
+            Object::Class(_) => Self::Class,
+            Object::Instance(_) => Self::Instance,
+            Object::String(_) => Self::String,
+            Object::Array(_) => Self::Array,
+            Object::Future(fut) => Self::Future(fut.into()),
+        }
+    }
+}
+
+impl From<FunctionKind> for FunctionType {
+    fn from(value: FunctionKind) -> Self {
+        if matches!(value, FunctionKind::Llm) {
+            FunctionType::Llm
+        } else {
+            FunctionType::Callable
+        }
+    }
+}
+
+impl From<FunctionType> for ObjectType {
+    fn from(value: FunctionType) -> Self {
+        ObjectType::Function(value)
+    }
+}
+
+impl<Ob> From<Ob> for Type
+where
+    Ob: Into<ObjectType>,
+{
+    fn from(value: Ob) -> Self {
+        Type::Object(value.into())
+    }
 }
 
 impl Type {
     /// Get the type of a value.
-    pub fn of(value: &Value) -> Self {
+    pub fn of(value: &Value, when_object: impl FnOnce(ObjectIndex) -> ObjectType) -> Self {
         match value {
             Value::Int(_) => Type::Int,
             Value::Float(_) => Type::Float,
             Value::Bool(_) => Type::Bool,
-            Value::Object(_) => Type::Object,
+            Value::Object(index) => Type::Object(when_object(*index)),
             // TODO: Actually?
-            Value::Null => Type::Object,
+            Value::Null => Type::Object(ObjectType::Any),
         }
     }
 }
@@ -249,16 +331,20 @@ pub enum InternalError {
     /// arity.
     InvalidArgumentCount { expected: usize, got: usize },
 
-    /// Attempt to access a function but object is not of type [`Object::Function`].
-    ///
-    /// TODO: Probably can be turned into [`InternalError::TypeError`] (expected
-    /// function, got something else).
-    InvalidFunctionRef,
-
     /// Attempt to access the top of the stack but it's empty.
     UnexpectedEmptyStack,
 
-    /// Attempt to access the top of the stack but it's not the expected type.
+    /// Attempt to access a stack slot from the top of the stack,
+    /// and stack doesn't have enough items.
+    /// Argument is the amount of slots from the top of the stack (inclusive - 0 is top itself)
+    /// that were queried.
+    NotEnoughItemsOnStack(usize),
+
+    /// Reference an object that does not exist in the object pool.
+    /// Argument is the reference index.
+    InvalidObjectRef(usize),
+
+    /// Attempt to use a value but it's not the expected type.
     TypeError { expected: Type, got: Type },
 
     /// Attempt to apply a binary operation to two values of different types.
@@ -272,6 +358,12 @@ pub enum InternalError {
 
     /// Array index out of bounds.
     ArrayIndexOutOfBounds { index: usize, length: usize },
+
+    /// Array index is negative.
+    ArrayIndexIsNegative(i64),
+
+    /// Instruction pointer is negative.
+    NegativeInstructionPtr(isize),
 }
 
 /// Errors that can happen at runtime.
@@ -329,7 +421,7 @@ impl std::error::Error for VmError {}
 #[derive(Clone, Copy, Debug)]
 pub struct Frame {
     /// The running function.
-    pub function: usize,
+    pub function: ObjectIndex,
 
     /// Instruction pointer (IP) or program counter (PC).
     ///
@@ -338,11 +430,11 @@ pub struct Frame {
     /// and it's easier to operate on an [`isize`] and cast it to [`usize`]
     /// only once (when we index into [`Bytecode::instructions`]). However,
     /// this number should never be negative, otherwise indexing into the
-    /// instruction vec will panic.
+    /// instruction vec will throw [`InternalError::NegativeInstructionPtr`].
     pub instruction_ptr: isize,
 
     /// Local variables offset in the eval stack.
-    pub locals_offset: usize,
+    pub locals_offset: StackIndex,
 }
 
 /// The beast.
@@ -463,7 +555,7 @@ pub struct Vm {
     /// Evaluation stack.
     ///
     /// This stack only stores values.
-    pub stack: Vec<Value>,
+    pub stack: EvalStack,
 
     /// Object pool.
     ///
@@ -473,19 +565,19 @@ pub struct Vm {
     /// elsewhere since that will make adding a garbage collector harder.
     /// Only allocate objects here and use indices to reference them, don't
     /// bother with Rust references because they will introduce lifetime issues.
-    pub objects: Vec<Object>,
+    pub objects: ObjectPool,
 
     /// Global variables.
     ///
     /// This stores the functions and globally declared variables.
-    pub globals: Vec<Value>,
+    pub globals: GlobalPool,
 
     /// Offset of the first runtime allocated object.
     ///
     /// This is used to track the index of the first runtime allocated object.
     /// When the embedder calls [`Vm::collect_garbage`] it will drop all values
     /// after this offset.
-    pub runtime_allocs_offset: usize,
+    pub runtime_allocs_offset: ObjectIndex,
 }
 
 /// VM execution state.
@@ -501,13 +593,13 @@ pub struct Vm {
 #[derive(Debug, PartialEq)]
 pub enum VmExecState {
     /// VM cannot proceed. It is awaiting a pending future to complete.
-    Await(usize),
+    Await(ObjectIndex),
 
     /// VM notifies caller about a future that needs to be scheduled.
     ///
     /// Bytecode execution continues when control flow is handled back to the
     /// VM.
-    ScheduleFuture(usize),
+    ScheduleFuture(ObjectIndex),
 
     /// VM has completed the execution of all available bytecode.
     Complete(Value),
@@ -515,9 +607,9 @@ pub enum VmExecState {
 
 #[derive(Clone, Debug)]
 pub struct BamlVmProgram {
-    pub objects: Vec<Object>,
-    pub globals: Vec<Value>,
-    pub resolved_function_names: HashMap<String, (usize, FunctionKind)>,
+    pub objects: ObjectPool,
+    pub globals: GlobalPool,
+    pub resolved_function_names: HashMap<String, (ObjectIndex, FunctionKind)>,
 }
 
 impl Vm {
@@ -528,15 +620,15 @@ impl Vm {
     ) -> Self {
         Self {
             frames: Vec::new(),
-            stack: Vec::new(),
-            runtime_allocs_offset: objects.len(),
+            stack: EvalStack(Vec::new()),
+            runtime_allocs_offset: ObjectIndex(objects.len()),
             objects,
             globals,
         }
     }
 
     /// Bootstraps the VM preparing the given function to run.
-    pub fn set_entry_point(&mut self, function: usize, args: &[Value]) {
+    pub fn set_entry_point(&mut self, function: ObjectIndex, args: &[Value]) {
         debug_assert!(
             matches!(self.objects[function], Object::Function(_)),
             "expect function as entry point, got {:?}",
@@ -544,7 +636,7 @@ impl Vm {
         );
 
         // TODO: Run collect_garbage in codegen after each function call.
-        if self.objects.len() != self.runtime_allocs_offset {
+        if self.objects.len() != self.runtime_allocs_offset.0 {
             eprintln!("WARNING: garbage collection did not run before setting a new entry point");
         }
 
@@ -554,7 +646,7 @@ impl Vm {
         self.frames.push(Frame {
             function,
             instruction_ptr: 0,
-            locals_offset: 0,
+            locals_offset: StackIndex(0),
         });
     }
 
@@ -571,17 +663,27 @@ impl Vm {
 
     /// Returns a reference to the pending future.
     ///
-    /// Panics if the future is not pending.
-    pub fn pending_future(&self, future: usize) -> &LlmFuture {
+    /// Returns [`InternalError::TypeError`] if the future is not pending, or not a future.
+    pub fn pending_future(&self, future: ObjectIndex) -> Result<&LlmFuture, InternalError> {
         match &self.objects[future] {
-            Object::Future(Future::Pending(llm_future)) => llm_future,
-            _ => panic!("expect pending future, got {:?}", self.objects[future]),
+            Object::Future(Future::Pending(llm_future)) => Ok(llm_future),
+            other => Err(InternalError::TypeError {
+                expected: FutureType::Pending.into(),
+                got: ObjectType::of(other).into(),
+            }),
         }
     }
 
-    pub fn fulfil_future(&mut self, future_index: usize, value: Value) {
+    pub fn fulfil_future(
+        &mut self,
+        future_index: ObjectIndex,
+        value: Value,
+    ) -> Result<(), InternalError> {
         let Object::Future(future) = &mut self.objects[future_index] else {
-            panic!("expect future, got {:?}", self.objects[future_index]);
+            return Err(InternalError::TypeError {
+                expected: FutureType::Any.into(),
+                got: ObjectType::of(&self.objects[future_index]).into(),
+            });
         };
 
         *future = Future::Ready(value);
@@ -598,10 +700,8 @@ impl Vm {
                 self.stack.push(value);
             }
         }
-    }
 
-    pub fn object(&self, index: usize) -> &Object {
-        &self.objects[index]
+        Ok(())
     }
 
     /// Keeps only compile time necessary objects.
@@ -615,7 +715,7 @@ impl Vm {
     pub fn alloc_array(&mut self, values: Vec<Value>) -> Value {
         let object = self.objects.len();
         self.objects.push(Object::Array(values));
-        Value::Object(object)
+        Value::Object(ObjectIndex(object))
     }
 
     /// Main VM execution loop.
@@ -649,6 +749,13 @@ impl Vm {
             // Current instruction pointer.
             let instruction_ptr = frame.instruction_ptr;
 
+            // NOTE: `core::intrinsics::unlikely` is only available on nightly.
+            // This branch is a big annoyance for small functions (like pushing the frame)
+            // and gets smaller the bigger the function due to branch (mis)prediction.
+            if instruction_ptr < 0 {
+                return Err(InternalError::NegativeInstructionPtr(instruction_ptr).into());
+            }
+
             // Move the frame's IP to the next instruction. We'll deal with
             // jump offsets later.
             frame.instruction_ptr += 1;
@@ -675,14 +782,15 @@ impl Vm {
 
                 eprintln!("{instruction} {metadata}");
             }
+
             match function.bytecode.instructions[instruction_ptr as usize] {
                 Instruction::LoadConst(index) => {
                     let value = &function.bytecode.constants[index];
                     self.stack.push(*value);
                 }
                 Instruction::LoadVar(index) => {
-                    let value = &self.stack[frame.locals_offset + index];
-                    self.stack.push(*value);
+                    let value = self.stack[frame.locals_offset + index];
+                    self.stack.push(value);
                 }
                 Instruction::StoreVar(index) => {
                     // Consume the value. There are some intricacies when it
@@ -694,9 +802,7 @@ impl Vm {
                     //
                     // If yes, then we should not consume the value and emit
                     // a pop instruction after each semicolon.
-                    let Some(value) = self.stack.pop() else {
-                        return Err(InternalError::UnexpectedEmptyStack.into());
-                    };
+                    let value = self.stack.ensure_pop()?;
 
                     self.stack[frame.locals_offset + index] = value;
                 }
@@ -706,39 +812,44 @@ impl Vm {
                 }
                 Instruction::StoreGlobal(index) => {
                     // Consume the value. Read impl of Instruction::StoreVar.
-                    let Some(value) = self.stack.pop() else {
-                        return Err(InternalError::UnexpectedEmptyStack.into());
-                    };
+                    let value = self.stack.ensure_pop()?;
 
                     self.globals[index] = value;
                 }
                 Instruction::LoadField(index) => {
-                    let Some(Value::Object(reference)) = self.stack.pop() else {
-                        panic!("expect object, got {:?}", self.stack[self.stack.len() - 1]);
-                    };
+                    let top = self.stack.ensure_pop()?;
+
+                    let reference = self.objects.as_object(&top, ObjectType::Instance)?;
 
                     let Object::Instance(instance) = &self.objects[reference] else {
-                        panic!("expect instance, got {:?}", self.objects[reference]);
+                        return Err(InternalError::TypeError {
+                            expected: ObjectType::Instance.into(),
+                            got: ObjectType::of(&self.objects[reference]).into(),
+                        }
+                        .into());
                     };
 
                     // Push the value on top of the stack.
                     self.stack.push(instance.fields[index]);
                 }
                 Instruction::StoreField(index) => {
-                    let Some(value) = self.stack.last() else {
-                        return Err(InternalError::UnexpectedEmptyStack.into());
-                    };
+                    let value_stack_index = self.stack.ensure_stack_top()?;
 
-                    let Value::Object(reference) = self.stack[self.stack.len() - 2] else {
-                        panic!("expect object, got {:?}", self.stack[self.stack.len() - 2]);
-                    };
+                    let reference = self.objects.as_object(
+                        &self.stack[self.stack.ensure_slot_from_top(1)?],
+                        ObjectType::Instance,
+                    )?;
 
                     let Object::Instance(instance) = &mut self.objects[reference] else {
-                        panic!("expect instance, got {:?}", self.objects[reference]);
+                        return Err(InternalError::TypeError {
+                            expected: ObjectType::Instance.into(),
+                            got: ObjectType::of(&self.objects[reference]).into(),
+                        }
+                        .into());
                     };
 
                     // Set the value.
-                    instance.fields[index] = *value;
+                    instance.fields[index] = self.stack[value_stack_index];
 
                     // Consume the value.
                     self.stack.pop();
@@ -747,15 +858,15 @@ impl Vm {
                     function = self.objects[frame.function].as_function()?;
                 }
                 Instruction::Pop(n) => {
-                    self.stack.drain(self.stack.len() - n..);
+                    let drain_range = StackIndex(self.stack.len() - n)..;
+                    self.stack.drain(drain_range);
                 }
                 Instruction::PopReplace(n) => {
-                    let Some(value) = self.stack.pop() else {
-                        return Err(InternalError::UnexpectedEmptyStack.into());
-                    };
+                    let value = self.stack.ensure_pop()?;
 
                     // Pop the last `n` locals from the stack.
-                    self.stack.drain(self.stack.len() - n..);
+                    let drain_range = StackIndex(self.stack.len() - n)..;
+                    self.stack.drain(drain_range);
 
                     // Push the value back on top of the stack.
                     self.stack.push(value);
@@ -766,34 +877,29 @@ impl Vm {
                     // we're adding it can still jump backwards.
                     frame.instruction_ptr = instruction_ptr + offset;
                 }
-                Instruction::JumpIfFalse(offset) => match self.stack.last() {
-                    // Reassign only if the top of the stack is false.
-                    Some(Value::Bool(value)) => {
-                        if !value {
-                            frame.instruction_ptr = instruction_ptr + offset;
+                Instruction::JumpIfFalse(offset) => {
+                    match &self.stack[self.stack.ensure_stack_top()?] {
+                        // Reassign only if the top of the stack is false.
+                        Value::Bool(value) => {
+                            if !value {
+                                frame.instruction_ptr = instruction_ptr + offset;
+                            }
+                        }
+
+                        // Type error, we don't have "falsey" values in the language
+                        // so we should always check booleans.
+                        other => {
+                            return Err(VmError::from(InternalError::TypeError {
+                                expected: Type::Bool,
+                                got: self.objects.type_of(other),
+                            }))
                         }
                     }
-
-                    // Type error, we don't have "falsey" values in the language
-                    // so we should always check booleans.
-                    Some(other) => {
-                        return Err(VmError::from(InternalError::TypeError {
-                            expected: Type::Bool,
-                            got: Type::of(other),
-                        }))
-                    }
-
-                    // Empty stack, can't execute instruction.
-                    None => return Err(InternalError::UnexpectedEmptyStack.into()),
-                },
+                }
                 Instruction::BinOp(op) => {
-                    let Some(right) = self.stack.pop() else {
-                        return Err(InternalError::UnexpectedEmptyStack.into());
-                    };
+                    let right = self.stack.ensure_pop()?;
 
-                    let Some(left) = self.stack.pop() else {
-                        return Err(InternalError::UnexpectedEmptyStack.into());
-                    };
+                    let left = self.stack.ensure_pop()?;
 
                     let result = match (left, right) {
                         (Value::Int(left), Value::Int(right)) => Value::Int(match op {
@@ -833,8 +939,8 @@ impl Vm {
 
                         _ => {
                             return Err(VmError::from(InternalError::CannotApplyBinOp {
-                                left: Type::of(&left),
-                                right: Type::of(&right),
+                                left: self.objects.type_of(&left),
+                                right: self.objects.type_of(&right),
                                 op,
                             }));
                         }
@@ -843,13 +949,8 @@ impl Vm {
                     self.stack.push(result);
                 }
                 Instruction::CmpOp(op) => {
-                    let Some(right) = self.stack.pop() else {
-                        return Err(InternalError::UnexpectedEmptyStack.into());
-                    };
-
-                    let Some(left) = self.stack.pop() else {
-                        return Err(InternalError::UnexpectedEmptyStack.into());
-                    };
+                    let right = self.stack.ensure_pop()?;
+                    let left = self.stack.ensure_pop()?;
 
                     let result = match (left, right) {
                         (Value::Int(left), Value::Int(right)) => Value::Bool(match op {
@@ -875,8 +976,8 @@ impl Vm {
                             CmpOp::NotEq => left != right,
                             _ => {
                                 return Err(VmError::from(InternalError::CannotApplyCmpOp {
-                                    left: Type::of(&left),
-                                    right: Type::of(&right),
+                                    left: self.objects.type_of(&left),
+                                    right: self.objects.type_of(&right),
                                     op,
                                 }))
                             }
@@ -886,9 +987,7 @@ impl Vm {
                     self.stack.push(result);
                 }
                 Instruction::UnaryOp(op) => {
-                    let Some(value) = self.stack.pop() else {
-                        return Err(InternalError::UnexpectedEmptyStack.into());
-                    };
+                    let value = self.stack.ensure_pop()?;
 
                     let result = match (op, value) {
                         (UnaryOp::Not, Value::Bool(value)) => Value::Bool(!value),
@@ -897,7 +996,7 @@ impl Vm {
                         _ => {
                             return Err(VmError::from(InternalError::CannotApplyUnaryOp {
                                 op,
-                                value: Type::of(&value),
+                                value: self.objects.type_of(&value),
                             }));
                         }
                     };
@@ -906,13 +1005,15 @@ impl Vm {
                 }
                 Instruction::AllocArray(size) => {
                     // Pop all the elements from the stack and create an array.
-                    let array = self.stack.drain(self.stack.len() - size..).collect();
+                    let drain_range = StackIndex(self.stack.len() - size)..;
+                    let array = self.stack.drain(drain_range).collect();
 
                     // Allocate it on the heap.
                     self.objects.push(Object::Array(array));
 
                     // Push the array object on top of the stack.
-                    self.stack.push(Value::Object(self.objects.len() - 1));
+                    self.stack
+                        .push(Value::Object(ObjectIndex(self.objects.len() - 1)));
 
                     // objects.push() above might've reallocated the vector so
                     // borrow checker complains. Restore the reference.
@@ -921,27 +1022,15 @@ impl Vm {
                 Instruction::LoadArrayElement => {
                     // Stack should contain [array, index]
                     // Pop the index first, then the array
-                    let index_value = self
-                        .stack
-                        .pop()
-                        .ok_or(InternalError::UnexpectedEmptyStack)?;
-                    let array_value = self
-                        .stack
-                        .pop()
-                        .ok_or(InternalError::UnexpectedEmptyStack)?;
+                    let index_value = self.stack.ensure_pop()?;
+                    let array_value = self.stack.ensure_pop()?;
 
-                    // Get the array object
-                    let Value::Object(array_index) = array_value else {
-                        return Err(VmError::from(InternalError::TypeError {
-                            expected: Type::Object,
-                            got: Type::of(&array_value),
-                        }));
-                    };
+                    let array_index = self.objects.as_object(&array_value, ObjectType::Array)?;
 
                     let Object::Array(array) = &self.objects[array_index] else {
                         return Err(VmError::from(InternalError::TypeError {
-                            expected: Type::Object,
-                            got: Type::Object,
+                            expected: ObjectType::Array.into(),
+                            got: ObjectType::of(&self.objects[array_index]).into(),
                         }));
                     };
 
@@ -949,18 +1038,16 @@ impl Vm {
                     let index = match index_value {
                         Value::Int(i) => {
                             if i < 0 {
-                                return Err(VmError::from(InternalError::TypeError {
-                                    expected: Type::Int,
-                                    got: Type::Int,
-                                }));
+                                return Err(InternalError::ArrayIndexIsNegative(i).into());
                             }
                             i as usize
                         }
                         _ => {
-                            return Err(VmError::from(InternalError::TypeError {
+                            return Err(InternalError::TypeError {
                                 expected: Type::Int,
-                                got: Type::of(&index_value),
-                            }));
+                                got: self.objects.type_of(&index_value),
+                            }
+                            .into());
                         }
                     };
 
@@ -977,7 +1064,11 @@ impl Vm {
                 }
                 Instruction::AllocInstance(index) => {
                     let Object::Class(class) = &self.objects[index] else {
-                        panic!("expect class, got {:?}", self.objects[index]);
+                        return Err(InternalError::TypeError {
+                            expected: ObjectType::Class.into(),
+                            got: ObjectType::of(&self.objects[index]).into(),
+                        }
+                        .into());
                     };
 
                     // Allocate the fields.
@@ -991,25 +1082,29 @@ impl Vm {
                     }));
 
                     // Push the instance object on top of the stack.
-                    self.stack.push(Value::Object(self.objects.len() - 1));
+                    self.stack
+                        .push(Value::Object(ObjectIndex(self.objects.len() - 1)));
 
                     // Same as in the instruction above.
+                    // TODO: make `frame.function` a valid object index
                     function = self.objects[frame.function].as_function()?;
                 }
                 Instruction::DispatchFuture(arg_count) => {
-                    let args_offset = self.stack.len().saturating_sub(arg_count).saturating_sub(1);
+                    let args_offset = self.stack.ensure_slot_from_top(arg_count)?;
 
-                    // Get the function object from the stack.
-                    let Value::Object(index) = &self.stack[args_offset] else {
-                        return Err(VmError::from(InternalError::TypeError {
-                            expected: Type::Object,
-                            got: Type::of(&self.stack[args_offset]),
-                        }));
-                    };
+                    let expected_type = FunctionType::Llm;
+
+                    let index = self
+                        .objects
+                        .as_object(&self.stack[args_offset], expected_type.into())?;
 
                     // Can't call a function if it's not a function ¯\_(ツ)_/¯
-                    let Object::Function(llm_function) = &self.objects[*index] else {
-                        return Err(InternalError::InvalidFunctionRef.into());
+                    let Object::Function(llm_function) = &self.objects[index] else {
+                        return Err(InternalError::TypeError {
+                            expected: expected_type.into(),
+                            got: ObjectType::of(&self.objects[index]).into(),
+                        }
+                        .into());
                     };
 
                     // Compiler should have already checked this so we could
@@ -1024,8 +1119,8 @@ impl Vm {
                     // Not a future.
                     if !matches!(llm_function.kind, FunctionKind::Llm) {
                         return Err(VmError::from(InternalError::TypeError {
-                            expected: Type::Object,
-                            got: Type::Object,
+                            expected: FunctionType::Llm.into(),
+                            got: FunctionType::from(llm_function.kind).into(),
                         }));
                     }
 
@@ -1040,31 +1135,36 @@ impl Vm {
                     };
 
                     // Allocate the future.
-                    self.objects
-                        .push(Object::Future(Future::Pending(llm_future)));
+                    let object_index = self
+                        .objects
+                        .insert(Object::Future(Future::Pending(llm_future)));
 
                     // Now leave the future on top of the stack.
-                    self.stack.push(Value::Object(self.objects.len() - 1));
+                    self.stack.push(Value::Object(object_index));
 
                     // Yield control flow back to the embedder.
-                    return Ok(VmExecState::ScheduleFuture(self.objects.len() - 1));
+                    return Ok(VmExecState::ScheduleFuture(object_index));
                 }
                 Instruction::Await => {
-                    let Some(Value::Object(index)) = self.stack.last() else {
-                        return Err(InternalError::UnexpectedEmptyStack.into());
-                    };
+                    let value = self.stack.ensure_stack_top()?;
 
-                    let Object::Future(awaiting) = &self.objects[*index] else {
+                    let wanted_type = FutureType::Any;
+
+                    let index = self
+                        .objects
+                        .as_object(&self.stack[value], wanted_type.into())?;
+
+                    let Object::Future(awaiting) = &self.objects[index] else {
                         return Err(VmError::from(InternalError::TypeError {
-                            expected: Type::Object,
-                            got: Type::Object,
+                            expected: wanted_type.into(),
+                            got: ObjectType::of(&self.objects[index]).into(),
                         }));
                     };
 
                     match awaiting {
                         // Can't do nothing, handle control flow back to embedder.
                         Future::Pending(_) => {
-                            return Ok(VmExecState::Await(*index));
+                            return Ok(VmExecState::Await(index));
                         }
 
                         // Replace the future on the eval stack with the ready
@@ -1086,20 +1186,22 @@ impl Vm {
                     //
                     // That's how we compute the relative offset of the callee
                     // and it's local args in the stack.
-                    let locals_offset =
-                        self.stack.len().saturating_sub(arg_count).saturating_sub(1);
+                    let locals_offset = self.stack.ensure_slot_from_top(arg_count)?;
 
                     // Get the function object from the stack.
-                    let Value::Object(index) = &self.stack[locals_offset] else {
-                        return Err(VmError::from(InternalError::TypeError {
-                            expected: Type::Object,
-                            got: Type::of(&self.stack[locals_offset]),
-                        }));
-                    };
+                    let local = &self.stack[locals_offset];
+
+                    let function_type = FunctionType::Callable;
+
+                    let index = self.objects.as_object(local, function_type.into())?;
 
                     // Can't call a function if it's not a function ¯\_(ツ)_/¯
-                    let Object::Function(callee) = &self.objects[*index] else {
-                        return Err(InternalError::InvalidFunctionRef.into());
+                    let Object::Function(callee) = &self.objects[index] else {
+                        return Err(InternalError::TypeError {
+                            expected: function_type.into(),
+                            got: ObjectType::of(&self.objects[index]).into(),
+                        }
+                        .into());
                     };
 
                     // Compiler should have already checked this so we could
@@ -1118,7 +1220,9 @@ impl Vm {
 
                     match callee.kind {
                         FunctionKind::Native(func) => {
-                            let args = self.stack[locals_offset + 1..].to_owned();
+                            // NOTE: (perf) could use drain(..) instead, or even maintain the arguments
+                            // reference in the stack, using `swap` to insert the result.
+                            let args = self.stack[StackIndex(locals_offset.0 + 1)..].to_owned();
 
                             // Run Rust native function.
                             let result = func(self, &args)?;
@@ -1132,6 +1236,9 @@ impl Vm {
                             // invalidated. Frame is Copy so we can maintain a
                             // local owned copy to avoid this but then we'd need
                             // to presist changes when moving to a new frame.
+                            //
+                            // We use `ObjectIndex` constructor directly because we know it's a
+                            // valid reference (we are executing instructions inside of it).
                             frame = self.frames.last_mut().expect("last_mut() was pushed above");
                             function = self.objects[frame.function].as_function()?;
                         }
@@ -1139,7 +1246,7 @@ impl Vm {
                         FunctionKind::Exec => {
                             // Otherwise push the new frame.
                             self.frames.push(Frame {
-                                function: *index,
+                                function: index,
                                 instruction_ptr: 0,
                                 locals_offset,
                             });
@@ -1155,15 +1262,17 @@ impl Vm {
                         }
 
                         FunctionKind::Llm => {
-                            return Err(VmError::from(InternalError::InvalidFunctionRef));
+                            return Err(InternalError::TypeError {
+                                expected: FunctionType::Callable.into(),
+                                got: FunctionType::from(callee.kind).into(),
+                            }
+                            .into());
                         }
                     }
                 }
                 Instruction::Return => {
                     // Pop the result from the eval stack.
-                    let Some(result) = self.stack.pop() else {
-                        return Err(InternalError::UnexpectedEmptyStack.into());
-                    };
+                    let result = self.stack.ensure_pop()?;
 
                     // Restore the eval stack to the state before the function
                     // was called and leave the result on top.
@@ -1177,9 +1286,9 @@ impl Vm {
                     let Some(previous_frame) = self.frames.last_mut() else {
                         return self
                             .stack
-                            .pop()
+                            .ensure_pop()
                             .map(VmExecState::Complete)
-                            .ok_or(InternalError::UnexpectedEmptyStack.into());
+                            .map_err(Into::into);
                     };
 
                     // Resume previous frame execution.
@@ -1196,7 +1305,7 @@ impl Vm {
                     let Value::Bool(condition_result) = value else {
                         return Err(InternalError::TypeError {
                             expected: Type::Bool,
-                            got: Type::of(&value),
+                            got: self.objects.type_of(&value),
                         }
                         .into());
                     };

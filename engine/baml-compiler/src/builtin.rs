@@ -59,15 +59,15 @@ pub fn builtin_enums() -> Vec<Enum> {
 
 /// Create a type for the std::Request class
 pub fn std_request_type() -> Type {
-    TypeM::ClassName(String::from(classes::REQUEST), TypeMeta::default())
+    TypeM::Class(String::from(classes::REQUEST), TypeMeta::default())
 }
 
 /// Create a function signature for std::fetch_value<T>
 pub fn std_fetch_value_signature(return_type: Type) -> Type {
-    TypeM::Arrow(
-        crate::hir::Arrow {
-            inputs: vec![std_request_type()],
-            output: Box::new(return_type),
+    TypeM::Function(
+        crate::hir::Function {
+            params: vec![std_request_type()],
+            return_type: Box::new(return_type),
         },
         TypeMeta::default(),
     )

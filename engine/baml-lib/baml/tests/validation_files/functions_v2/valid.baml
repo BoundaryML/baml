@@ -122,27 +122,81 @@ function TestEnumInExpressions(color: Color) -> string {
   "#
 }
 
-// warning: Type mismatch: '(color == RED)' compares values of different types (enum Color and literal["RED"]). Starting in baml 0.206.0, strings are not implicitly converted to enum values (e.g. you should use `MyEnum.VALUE_A` instead of `"VALUE_A"`).
+// warning: Use `Color.RED` instead of "RED" - comparing enums with strings will soon be deprecated.
+//   -->  functions_v2/valid.baml:71
+//    | 
+// 70 |     
+// 71 |     {% if color == "RED" %}
+//    | 
+// warning: Use `Color.BLUE` instead of "BLUE" - comparing enums with strings will soon be deprecated.
+//   -->  functions_v2/valid.baml:75
+//    | 
+// 74 |     
+// 75 |     {% if "BLUE" == color %}
+//    | 
+// warning: Use `Color.GREEN` instead of "GREEN" - comparing enums with strings will soon be deprecated.
+//   -->  functions_v2/valid.baml:79
+//    | 
+// 78 |     
+// 79 |     {% if color != "GREEN" %}
+//    | 
+// warning: Use one of: Color.RED, Color.BLUE, Color.GREEN - comparing enums with strings will soon be deprecated.
+//   -->  functions_v2/valid.baml:84
+//    | 
+// 83 |     // Test ordering
+// 84 |     {% if color < "YELLOW" %}
+//    | 
+// warning: Use `Color.BLUE` instead of "BLUE" - comparing enums with strings will soon be deprecated.
+//   -->  functions_v2/valid.baml:88
+//    | 
+// 87 |     
+// 88 |     {% if color >= "BLUE" %}
+//    | 
+// warning: Use `Color.RED` instead of "RED" - comparing enums with strings will soon be deprecated.
 //   -->  functions_v2/valid.baml:101
 //    | 
 // 100 |   prompt #"
 // 101 |     {% set is_primary = color == "RED" or color == "BLUE" %}
 //    | 
-// warning: Type mismatch: '(color == BLUE)' compares values of different types (enum Color and literal["BLUE"]). Starting in baml 0.206.0, strings are not implicitly converted to enum values (e.g. you should use `MyEnum.VALUE_A` instead of `"VALUE_A"`).
+// warning: Use `Color.BLUE` instead of "BLUE" - comparing enums with strings will soon be deprecated.
 //   -->  functions_v2/valid.baml:101
 //    | 
 // 100 |   prompt #"
 // 101 |     {% set is_primary = color == "RED" or color == "BLUE" %}
 //    | 
-// warning: Type mismatch: '(color == RED)' compares values of different types (enum Color and literal["RED"]). Starting in baml 0.206.0, strings are not implicitly converted to enum values (e.g. you should use `MyEnum.VALUE_A` instead of `"VALUE_A"`).
+// warning: Use `Color.RED` instead of "RED" - comparing enums with strings will soon be deprecated.
 //   -->  functions_v2/valid.baml:107
 //    | 
 // 106 |     // Ternary with enum comparison
 // 107 |     Result: {{ "Primary" if color == "RED" or color == "BLUE" else "Secondary" }}
 //    | 
-// warning: Type mismatch: '(color == BLUE)' compares values of different types (enum Color and literal["BLUE"]). Starting in baml 0.206.0, strings are not implicitly converted to enum values (e.g. you should use `MyEnum.VALUE_A` instead of `"VALUE_A"`).
+// warning: Use `Color.BLUE` instead of "BLUE" - comparing enums with strings will soon be deprecated.
 //   -->  functions_v2/valid.baml:107
 //    | 
 // 106 |     // Ternary with enum comparison
 // 107 |     Result: {{ "Primary" if color == "RED" or color == "BLUE" else "Secondary" }}
+//    | 
+// warning: Use `Color.RED` instead of "RED" - comparing enums with strings will soon be deprecated.
+//   -->  functions_v2/valid.baml:110
+//    | 
+// 109 |     // Multiple comparisons
+// 110 |     {% if color == "RED" and true %}
+//    | 
+// warning: Use `Color.GREEN` instead of "GREEN" - comparing enums with strings will soon be deprecated.
+//   -->  functions_v2/valid.baml:115
+//    | 
+// 114 |     // Nested conditions
+// 115 |     {% if color != "GREEN" %}
+//    | 
+// warning: Use `Color.RED` instead of "RED" - comparing enums with strings will soon be deprecated.
+//   -->  functions_v2/valid.baml:116
+//    | 
+// 115 |     {% if color != "GREEN" %}
+// 116 |       {% if color == "RED" %}
+//    | 
+// warning: Use `Color.BLUE` instead of "BLUE" - comparing enums with strings will soon be deprecated.
+//   -->  functions_v2/valid.baml:118
+//    | 
+// 117 |         It's RED
+// 118 |       {% elif color == "BLUE" %}
 //    | 

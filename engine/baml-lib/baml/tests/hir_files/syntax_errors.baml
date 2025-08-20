@@ -3,7 +3,7 @@ function Test() -> int {
   x
 }
 
-// error: error: Error validating Function "Test": This field declaration is invalid. It is either missing a name or a type.
+// error: Error validating Function "Test": This field declaration is invalid. It is either missing a name or a type.
 //   -->  test.baml:3
 //    | 
 //  2 |   let x = 1
