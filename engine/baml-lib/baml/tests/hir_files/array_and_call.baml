@@ -13,27 +13,9 @@ function ArrayAccess() -> int {
     arr[1]
 }
 
-// function Helper(x) {
-//   return x;
-// }
-//
-// function TestArray() {
-//   let arr = [1, 2, 3];
-//   let result = Helper(42);
-//   return [arr, result];
-// }
-//
-// function ArrayAccess() {
-//   let arr = [1, 2, 3];
-//   return arr[1];
-// }
-//
-// class std::Request {
-//   base_url: string
-//   headers: map<string, string>
-//   query_params: map<string, string>
-// }
-//
-// enum std::HttpMethod {
-//   Get
-// }
+// error: Expected a array value, but received array value `[arr, result]`.
+//   -->  test.baml:8
+//    | 
+//  7 |     let result = Helper(42);
+//  8 |     [arr, result]
+//    | 

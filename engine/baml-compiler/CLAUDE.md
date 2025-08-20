@@ -39,7 +39,7 @@ From the repository root (`/home/greghale/code/baml/`):
 cd engine && cargo build
 
 # Run all Rust tests
-cd engine && cargo test --lib
+cd engine && cargo test --features skip-integ-tests
 
 # Build and test specific component
 ./tools/build engine/baml-compiler --test
