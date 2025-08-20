@@ -601,15 +601,9 @@ impl WithRenderRawCurl for AwsClient {
                     BamlMediaContent::Base64(b64) => {
                         let mut image_obj = serde_json::Map::new();
                         if let Some(mime) = media.mime_type.as_deref() {
-                            image_obj.insert(
-                                "format".into(),
-                                json!(strip_mime_prefix(mime)),
-                            );
+                            image_obj.insert("format".into(), json!(strip_mime_prefix(mime)));
                         }
-                        image_obj.insert(
-                            "source".into(),
-                            json!({ "bytes": b64.base64 }),
-                        );
+                        image_obj.insert("source".into(), json!({ "bytes": b64.base64 }));
                         Ok(json!({ "image": serde_json::Value::Object(image_obj) }))
                     }
                     BamlMediaContent::File(_) | BamlMediaContent::Url(_) => {
@@ -620,16 +614,10 @@ impl WithRenderRawCurl for AwsClient {
                     BamlMediaContent::Base64(b64) => {
                         let mut doc_obj = serde_json::Map::new();
                         if let Some(mime) = media.mime_type.as_deref() {
-                            doc_obj.insert(
-                                "format".into(),
-                                json!(strip_mime_prefix(mime)),
-                            );
+                            doc_obj.insert("format".into(), json!(strip_mime_prefix(mime)));
                         }
                         doc_obj.insert("name".into(), json!("document.pdf"));
-                        doc_obj.insert(
-                            "source".into(),
-                            json!({ "bytes": b64.base64 }),
-                        );
+                        doc_obj.insert("source".into(), json!({ "bytes": b64.base64 }));
                         Ok(json!({ "document": serde_json::Value::Object(doc_obj) }))
                     }
                     BamlMediaContent::File(_) | BamlMediaContent::Url(_) => {
@@ -640,15 +628,9 @@ impl WithRenderRawCurl for AwsClient {
                     BamlMediaContent::Base64(b64) => {
                         let mut video_obj = serde_json::Map::new();
                         if let Some(mime) = media.mime_type.as_deref() {
-                            video_obj.insert(
-                                "format".into(),
-                                json!(strip_mime_prefix(mime)),
-                            );
+                            video_obj.insert("format".into(), json!(strip_mime_prefix(mime)));
                         }
-                        video_obj.insert(
-                            "source".into(),
-                            json!({ "bytes": b64.base64 }),
-                        );
+                        video_obj.insert("source".into(), json!({ "bytes": b64.base64 }));
                         Ok(json!({ "video": serde_json::Value::Object(video_obj) }))
                     }
                     BamlMediaContent::File(_) | BamlMediaContent::Url(_) => {
