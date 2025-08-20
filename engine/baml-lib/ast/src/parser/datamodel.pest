@@ -239,6 +239,8 @@ SPACER_TEXT = { (comment_block | empty_lines)* }
 // the any part is to not crash on comments next to an open block, see test `parse_comments_without_crasing_or_loosing_info`
 BLOCK_OPEN  = { "{" }
 BLOCK_CLOSE = { "}" }
+LPAREN_TOKEN = { "(" }
+RPAREN_TOKEN = { ")" }
 
 BLOCK_LEVEL_CATCH_ALL = { !BLOCK_CLOSE ~ CATCH_ALL }
 CATCH_ALL             = { (!NEWLINE ~ ANY)+ ~ NEWLINE? }
@@ -353,18 +355,18 @@ fn_args = { expression? ~ ("," ~ expression)* }
 fn_app = { identifier ~ "(" ~ fn_args ~ ")" }
 
 // If expression.
-if_expression = { "if" ~ expression ~ expr_block ~ ( "else" ~ (expr_block | if_expression) )? }
+if_expression = { "if" ~ LPAREN_TOKEN? ~ expression ~ RPAREN_TOKEN? ~ expr_block ~ ( "else" ~ (expr_block | if_expression) )? }
 
-while_loop = { "while" ~  expression ~  expr_block  }
+while_loop = { "while" ~ LPAREN_TOKEN? ~  expression ~ RPAREN_TOKEN? ~ expr_block  }
 
 
 // For loop, e.g.
 // for r in resumes {
 //   ExtractResume(x)
 // }
-for_loop = { "for" ~ (iterator_for_loop | c_for_loop) ~ expr_block }
+for_loop = { "for" ~ LPAREN_TOKEN? ~ (iterator_for_loop | c_for_loop) ~ RPAREN_TOKEN? ~ expr_block }
 iterator_for_loop = { identifier ~ "in" ~ expression }
-c_for_loop = {  "(" ~ c_for_init_stmt? ~ ";" ~ expression? ~ ";" ~ c_for_after_stmt? ~ ")" }
+c_for_loop = { c_for_init_stmt? ~ ";" ~ expression? ~ ";" ~ c_for_after_stmt?  }
 // NOTE: let_expr ... list copied from `stmt` rule, discarding nonsensical stmts
 c_for_init_stmt = { let_expr | assign_op_stmt | assign_stmt | fn_app | generic_fn_app }
 // same as above but without `let`.

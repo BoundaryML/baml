@@ -182,7 +182,7 @@ fn parse_for_loop(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Stmt
     let span = diagnostics.span(token.as_span());
     let mut tokens = token.into_inner();
 
-    let in_between_rule = tokens.next()?;
+    let in_between_rule = check_parentheses_around_rule(diagnostics, &mut tokens)?;
 
     let body = parse_expr_block(tokens.next()?, diagnostics)?;
 
@@ -193,6 +193,42 @@ fn parse_for_loop(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Stmt
         Rule::c_for_loop => parse_c_for_loop(in_between_rule, span, body, diagnostics),
         _ => panic!("unexpected in-between rule in for-loop."),
     }
+}
+
+fn check_parentheses_around_rule(
+    diagnostics: &mut Diagnostics,
+    tokens: &mut pest::iterators::Pairs<'_, Rule>,
+) -> Option<pest::iterators::Pair<'_, Rule>> {
+    let lparen_span = if let Rule::LPAREN_TOKEN = tokens.peek().map(|x| x.as_rule()) {
+        Some(diagnostics.span(tokens.next().unwrap().as_span()))
+    } else {
+        None
+    };
+
+    let in_between_rule = tokens.next();
+
+    let rparen_span = if let Rule::RPAREN_TOKEN = tokens.peek().map(|x| x.as_rule()) {
+        Some(diagnostics.span(tokens.next().unwrap().as_span()))
+    } else {
+        None
+    };
+    match (lparen_span, rparen_span) {
+        (None, None) => diagnostics.push_error(DatamodelError::new_validation_error(
+            "expected parentheses around for loop header",
+            diagnosntics.span(in_between_rule.as_span()),
+        )),
+        (None, Some(r)) => diagnostics.push_error(DatamodelError::new_validation_error(
+            "expected opening parentheses for this closing parentheses",
+            r,
+        )),
+        (Some(l), None) => diagnostics.push_error(DatamodelError::new_validation_error(
+            "expected closing parentheses for this opening parentheses",
+            l,
+        )),
+        // both present. Nothing to check.
+        (Some(_), Some(_)) => {}
+    }
+    in_between_rule
 }
 
 pub fn parse_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Stmt> {
