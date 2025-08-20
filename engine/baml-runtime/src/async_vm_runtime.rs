@@ -216,7 +216,7 @@ impl BamlAsyncVmRuntime {
                         let vm_value = vm_value_from_function_result(&mut vm, result);
 
                         if let Err(e) = vm.fulfil_future(ready_idx, vm_value) {
-                            break 'mainloop Err(e);
+                            break 'mainloop Err(e.into());
                         }
 
                         if ready_idx == idx {
@@ -236,7 +236,7 @@ impl BamlAsyncVmRuntime {
                         let vm_value = vm_value_from_function_result(&mut vm, result);
 
                         if let Err(e) = vm.fulfil_future(ready_idx, vm_value) {
-                            break 'mainloop Err(e);
+                            break 'mainloop Err(e.into());
                         }
 
                         // After this one we don't have to wait for more futures
