@@ -135,7 +135,6 @@ jobs:
           # see https://github.com/PyO3/maturin/issues/2110
           XWIN_VERSION: "16"
         with:
-          maturin-version: "1.9.1"
           target: ${{ matrix._.target }}
           command: build
           # building in engine/ ensures that we pick up .cargo/config.toml
