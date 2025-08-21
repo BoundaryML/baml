@@ -498,7 +498,7 @@ impl<'g> HirCompiler<'g> {
                 // TODO: Hanlde field & array accessors.
                 let name = match &left {
                     thir::Expr::Var(name, _) => name,
-                    _ => panic!("left side of assignment is not an identifier: {:?}", left),
+                    _ => panic!("left side of assignment is not an identifier: {left:?}"),
                 };
 
                 self.emit(Instruction::StoreVar(self.locals[name]));
@@ -512,7 +512,7 @@ impl<'g> HirCompiler<'g> {
                 // TODO: Handle field & array accessors.
                 let name = match &left {
                     thir::Expr::Var(name, _) => name,
-                    _ => panic!("left side of assignment is not an identifier: {:?}", left),
+                    _ => panic!("left side of assignment is not an identifier: {left:?}"),
                 };
 
                 self.emit(Instruction::LoadVar(self.locals[name]));
@@ -536,7 +536,7 @@ impl<'g> HirCompiler<'g> {
             }
             thir::Statement::DeclareAndAssign { name, value, .. } => {
                 self.compile_expression(value);
-                self.track_local(&name);
+                self.track_local(name);
             }
             thir::Statement::Return { expr, .. } => {
                 self.compile_expression(expr);
@@ -835,7 +835,7 @@ impl<'g> HirCompiler<'g> {
                     self.emit(Instruction::LoadConst(const_index));
                 }
 
-                _ => panic!("unsupported atom: {:#?}", value),
+                _ => panic!("unsupported atom: {value:#?}"),
             },
 
             thir::Expr::Block(block, _) => {
@@ -858,21 +858,21 @@ impl<'g> HirCompiler<'g> {
             thir::Expr::FieldAccess { base, field, .. } => match base.meta().1.as_ref() {
                 Some(hir::Type::Class(class_name, _)) => {
                     let Some(class_index) = self.globals.get(class_name) else {
-                        panic!("undefined class: {}", class_name);
+                        panic!("undefined class: {class_name}");
                     };
 
                     let Some(resolved_fields) = self.classes.get(class_name) else {
-                        panic!("undefined class: {}", class_name);
+                        panic!("undefined class: {class_name}");
                     };
 
                     let Some(&field_index) = resolved_fields.get(field) else {
-                        panic!("undefined field: {}.{}", class_name, field);
+                        panic!("undefined field: {class_name}.{field}");
                     };
 
                     self.emit(Instruction::LoadField(field_index));
                 }
 
-                other => panic!("field access must be on classes, got: {:#?}", other),
+                other => panic!("field access must be on classes, got: {other:#?}"),
             },
 
             thir::Expr::Var(name, _) => {
@@ -935,19 +935,19 @@ impl<'g> HirCompiler<'g> {
                 let func_name = match receiver.meta().1.as_ref() {
                     Some(hir::Type::Class(class_name, _)) => {
                         let Some(class_index) = self.globals.get(class_name) else {
-                            panic!("undefined class: {}", class_name);
+                            panic!("undefined class: {class_name}");
                         };
 
-                        format!("{}.{}", class_name, method)
+                        format!("{class_name}.{method}")
                     }
 
-                    other => panic!("method calls must be on classes, got: {:#?}", other),
+                    other => panic!("method calls must be on classes, got: {other:#?}"),
                 };
 
                 // Push the function onto the stack
                 eprintln!("globals: {:?}", self.globals);
                 let Some(&index) = self.globals.get(&func_name) else {
-                    panic!("undefined method: {}", func_name);
+                    panic!("undefined method: {func_name}");
                 };
 
                 self.emit(Instruction::LoadGlobal(index));
@@ -969,7 +969,7 @@ impl<'g> HirCompiler<'g> {
                 meta,
             } => {
                 let Some(&class_index) = self.globals.get(class_name) else {
-                    panic!("undefined class: {}", class_name);
+                    panic!("undefined class: {class_name}");
                 };
 
                 // Emit allocation with bogus index. It will be patched later.
@@ -988,11 +988,11 @@ impl<'g> HirCompiler<'g> {
                 // Process fields in order
                 for (field_name, value) in fields {
                     let Some(resolved_fields) = self.classes.get(class_name) else {
-                        panic!("undefined class: {}", class_name);
+                        panic!("undefined class: {class_name}");
                     };
 
                     let Some(&field_index) = resolved_fields.get(field_name) else {
-                        panic!("undefined field: {}.{}", class_name, field_name);
+                        panic!("undefined field: {class_name}.{field_name}");
                     };
 
                     self.emit(Instruction::LoadVar(instance_local_index));
@@ -1004,7 +1004,7 @@ impl<'g> HirCompiler<'g> {
 
                 if let Some(spread) = spread {
                     let Some(resolved_fields) = self.classes.get(class_name) else {
-                        panic!("undefined class: {}", class_name);
+                        panic!("undefined class: {class_name}");
                     };
 
                     self.compile_expression(spread);

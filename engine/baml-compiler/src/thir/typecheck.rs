@@ -454,7 +454,7 @@ fn typecheck_statement(
             // TODO: Handle field & array accessors.
             let name = match &left {
                 hir::Expression::Identifier(name, _) => name,
-                _ => panic!("left side of assignment is not an identifier: {:?}", left),
+                _ => panic!("left side of assignment is not an identifier: {left:?}"),
             };
 
             // validate/update type.
@@ -518,7 +518,7 @@ fn typecheck_statement(
             // TODO: Handle field & array accessors.
             let name = match &left {
                 hir::Expression::Identifier(name, _) => name,
-                _ => panic!("left side of assignment is not an identifier: {:?}", left),
+                _ => panic!("left side of assignment is not an identifier: {left:?}"),
             };
 
             // TODO: Extract in funciton, repeated above.
