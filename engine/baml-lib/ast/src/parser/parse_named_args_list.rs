@@ -23,7 +23,7 @@ pub(crate) fn parse_named_argument_list(
     );
     let span = diagnostics.span(pair.as_span());
     let mut args: Vec<(Identifier, BlockArg)> = Vec::new();
-    for named_arg in pair.into_inner() {
+    for (index, named_arg) in pair.into_inner().enumerate() {
         if matches!(named_arg.as_rule(), Rule::SPACER_TEXT) {
             continue;
         }
@@ -66,6 +66,15 @@ pub(crate) fn parse_named_argument_list(
         }
 
         if is_self {
+            if index != 0 {
+                diagnostics.push_error(DatamodelError::new_validation_error(
+                    "self must be the first parameter",
+                    name.as_ref()
+                        .map(|ident| ident.span().to_owned())
+                        .unwrap_or(Span::fake()),
+                ));
+            }
+
             r#type = Some(BlockArg {
                 is_mutable,
                 is_self,
