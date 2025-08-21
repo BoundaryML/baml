@@ -1,6 +1,6 @@
 /// Type-checked HIR.
 ///
-use crate::hir::{AssignOp, BinaryOperator, Class, Enum, LlmFunction, Type, UnaryOperator};
+use crate::hir::{self, AssignOp, BinaryOperator, Enum, LlmFunction, Type, UnaryOperator};
 
 pub mod typecheck;
 
@@ -22,7 +22,7 @@ pub struct THir<T> {
     pub expr_functions: Vec<ExprFunction<T>>,
     pub llm_functions: Vec<LlmFunction>,
     pub global_assignments: BamlMap<String, Expr<ExprMetadata>>,
-    pub classes: BamlMap<String, Class>,
+    pub classes: BamlMap<String, Class<T>>,
     pub enums: BamlMap<String, Enum>,
 }
 
@@ -39,6 +39,15 @@ pub struct ExprFunction<T> {
 pub struct Parameter {
     pub name: String,
     pub r#type: Type,
+    pub span: Span,
+}
+
+#[derive(Clone, Debug)]
+pub struct Class<T> {
+    pub name: String,
+    pub fields: Vec<hir::Field>,
+    // TODO: Allow LLM functions here.
+    pub methods: Vec<ExprFunction<T>>,
     pub span: Span,
 }
 

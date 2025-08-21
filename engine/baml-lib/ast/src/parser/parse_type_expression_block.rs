@@ -144,6 +144,16 @@ pub(crate) fn parse_type_expression_block(
     let sub_type = sub_type.unwrap_or((SubType::Other("Subtype not found".to_string()), pair_span));
     let is_dynamic_type_def = matches!(sub_type.0, SubType::Dynamic(_));
 
+    // Some nasty type inference is required here.
+    for m in &mut methods {
+        if let Some(self_param) = m.args.args.get_mut(0) {
+            if self_param.0.name() == "self" {
+                self_param.1.field_type =
+                    FieldType::Symbol(FieldArity::Required, name.clone().unwrap(), None);
+            }
+        }
+    }
+
     match name {
         Some(name) => TypeExpressionBlock {
             name,

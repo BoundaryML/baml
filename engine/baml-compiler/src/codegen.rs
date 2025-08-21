@@ -92,6 +92,13 @@ fn compile_thir_to_bytecode(
         resolved_globals.insert(name.clone(), GlobalIndex::from_raw(resolved_globals.len()));
     }
 
+    for class in thir.classes.values() {
+        for method in &class.methods {
+            let func_name = format!("{}.{}", class.name, method.name);
+            resolved_globals.insert(func_name, GlobalIndex::from_raw(resolved_globals.len()));
+        }
+    }
+
     let mut objects = ObjectPool::from_vec(Vec::with_capacity(resolved_globals.len()));
     let mut globals = GlobalPool::from_vec(Vec::with_capacity(resolved_globals.len()));
 
@@ -141,6 +148,29 @@ fn compile_thir_to_bytecode(
 
         let object_index = objects.insert(Object::Class(bytecode_class));
         globals.push(Value::Object(object_index));
+    }
+
+    for class in thir.classes.values() {
+        for method in &class.methods {
+            let mut class_alloc_patch_list = Vec::new();
+
+            let mut bytecode_function = compile_thir_function(
+                method,
+                &resolved_globals,
+                &resolved_classes,
+                &llm_functions,
+                &mut loop_var_counter,
+                &mut objects,
+                &mut class_alloc_patch_list,
+            )?;
+
+            bytecode_function.name = format!("{}.{}", class.name, method.name);
+
+            // Add the function to the globals and objects pools.
+            let object_index = objects.insert(Object::Function(bytecode_function));
+            fn_class_patch_lists.push((object_index, class_alloc_patch_list));
+            globals.push(Value::Object(object_index));
+        }
     }
 
     // resolve classes into their instance creation insns now that we've got their locations.
@@ -825,9 +855,25 @@ impl<'g> HirCompiler<'g> {
                 self.emit(Instruction::LoadArrayElement);
             }
 
-            thir::Expr::FieldAccess { .. } => {
-                unimplemented!("field access compilation")
-            }
+            thir::Expr::FieldAccess { base, field, .. } => match base.meta().1.as_ref() {
+                Some(hir::Type::Class(class_name, _)) => {
+                    let Some(class_index) = self.globals.get(class_name) else {
+                        panic!("undefined class: {}", class_name);
+                    };
+
+                    let Some(resolved_fields) = self.classes.get(class_name) else {
+                        panic!("undefined class: {}", class_name);
+                    };
+
+                    let Some(&field_index) = resolved_fields.get(field) else {
+                        panic!("undefined field: {}.{}", class_name, field);
+                    };
+
+                    self.emit(Instruction::LoadField(field_index));
+                }
+
+                other => panic!("field access must be on classes, got: {:#?}", other),
+            },
 
             thir::Expr::Var(name, _) => {
                 if let Some(&index) = self.locals.get(name) {
@@ -883,12 +929,25 @@ impl<'g> HirCompiler<'g> {
                 ..
             } => {
                 let thir::Expr::Var(method, _) = method.as_ref() else {
-                    panic!("method calls must be on variables");
+                    panic!("method calls must be identifiers");
+                };
+
+                let func_name = match receiver.meta().1.as_ref() {
+                    Some(hir::Type::Class(class_name, _)) => {
+                        let Some(class_index) = self.globals.get(class_name) else {
+                            panic!("undefined class: {}", class_name);
+                        };
+
+                        format!("{}.{}", class_name, method)
+                    }
+
+                    _ => panic!("method calls must be on classes"),
                 };
 
                 // Push the function onto the stack
-                let Some(&index) = self.globals.get(method.as_str()) else {
-                    panic!("undefined method: {method}");
+                eprintln!("globals: {:?}", self.globals);
+                let Some(&index) = self.globals.get(&func_name) else {
+                    panic!("undefined method: {}", func_name);
                 };
 
                 self.emit(Instruction::LoadGlobal(index));

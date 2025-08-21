@@ -1211,17 +1211,16 @@ fn basic_method_decl() -> anyhow::Result<()> {
             class Number {
                 value int
 
-                function add(mut self, other: Number) -> null {
-                    self.value += other.value;
-                    null
+                function add(mut self, other: Number) -> Number {
+                    Number { value: self.value + other.value }
                 }
             }
 
             function main() -> int {
                 let mut a = Number { value: 1 };
                 let mut b = Number { value: 2 };
-                a.add(b);
-                a.value
+                let n = a.add(b);
+                n.value
             }
         "#,
         function: "main",

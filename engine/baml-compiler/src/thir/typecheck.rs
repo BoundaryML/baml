@@ -140,9 +140,61 @@ pub fn typecheck(hir: &Hir, diagnostics: &mut Diagnostics) -> THir<ExprMetadata>
         });
     }
 
+    let mut thir_classes = BamlMap::new();
+
+    for (name, class) in &classes {
+        let mut methods = vec![];
+        for method in &class.methods {
+            let mut func_context = typing_context.clone();
+
+            // Add parameters to context
+            for param in &method.parameters {
+                func_context.vars.insert(
+                    param.name.clone(),
+                    VarInfo {
+                        ty: param.r#type.clone(),
+                        mut_var_info: param.is_mutable.then(|| MutableVarInfo {
+                            ty_infer_span: Some(param.span.clone()),
+                        }),
+                    },
+                );
+            }
+
+            func_context.function_return_type = Some(&method.return_type);
+
+            // Convert HIR block to THIR block with type inference
+            let typed_body = typecheck_block(&method.body, &mut func_context, diagnostics);
+
+            methods.push(thir::ExprFunction {
+                name: method.name.clone(),
+                parameters: method
+                    .parameters
+                    .iter()
+                    .map(|p| thir::Parameter {
+                        name: p.name.clone(),
+                        r#type: p.r#type.clone(),
+                        span: p.span.clone(),
+                    })
+                    .collect(),
+                return_type: method.return_type.clone(),
+                body: typed_body,
+                span: method.span.clone(),
+            });
+        }
+        thir_classes.insert(
+            name.clone(),
+            thir::Class {
+                name: name.clone(),
+                fields: class.fields.clone(),
+                methods,
+                span: class.span.clone(),
+            },
+        );
+    }
+
     THir {
         llm_functions,
-        classes,
+        classes: thir_classes,
         enums,
         expr_functions,
         global_assignments: BamlMap::new(),
