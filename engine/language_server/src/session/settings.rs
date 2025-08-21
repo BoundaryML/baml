@@ -16,6 +16,8 @@ pub struct BamlSettings {
     #[serde(default = "default_enable_playground")]
     pub enable_playground: bool,
     pub playground_port: Option<u16>,
+    #[serde(default)]
+    pub(crate) feature_flags: Option<Vec<String>>,
 }
 
 fn default_enable_playground() -> bool {

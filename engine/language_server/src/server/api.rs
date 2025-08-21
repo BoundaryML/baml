@@ -137,10 +137,16 @@ pub(super) fn request<'a>(req: lsp_server::Request) -> Task<'a> {
                     let project = session
                         .get_or_create_project(url.to_file_path().unwrap())
                         .expect("Already checked for project's existence");
-                    project.lock().unwrap().update_runtime(Some(notifier))?;
+                    project
+                        .lock()
+                        .unwrap()
+                        .update_runtime_with_feature_flags(
+                            Some(notifier),
+                            session.baml_settings.feature_flags.as_ref(),
+                        )?;
 
                     // TODO: I think we need to send ALL diagnostics for the project. Not sure how this report is different vs sending a signle diagnostic param message
-                    let diagnostics = file_diagnostics(project.clone(), &url);
+                    let diagnostics = file_diagnostics(project.clone(), &url, session.baml_settings.feature_flags.as_ref());
                     // tracing::info!("---- diagnostics Returned: ");
                     let report = Ok(DocumentDiagnosticReportResult::Report(
                         DocumentDiagnosticReport::Full(RelatedFullDocumentDiagnosticReport {

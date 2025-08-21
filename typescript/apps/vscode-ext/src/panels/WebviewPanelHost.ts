@@ -15,6 +15,7 @@ import { getUri } from '../utils/getUri';
 import {
   type EchoResponse,
   type GetPlaygroundPortResponse,
+  type GetVSCodeSettingsResponse,
   type GetWebviewUriResponse,
   type WebviewToVscodeRpc,
   encodeBuffer,
@@ -24,6 +25,7 @@ import { exec } from 'child_process';
 import * as fs from 'fs';
 import { promisify } from 'util';
 import { GoogleAuth } from 'google-auth-library';
+import { BAML_CONFIG_SINGLETON } from '../plugins/language-server-client/bamlConfig';
 import {
   type Config,
   adjectives,
@@ -535,6 +537,19 @@ export class WebviewPanelHost {
               vscode.ConfigurationTarget.Workspace,
             );
             return;
+          case 'GET_VSCODE_SETTINGS': {
+            const config = BAML_CONFIG_SINGLETON.config;
+            const response: GetVSCodeSettingsResponse = {
+              enablePlaygroundProxy: config?.enablePlaygroundProxy ?? true,
+              featureFlags: config?.featureFlags ?? [],
+            };
+            this._panel.webview.postMessage({
+              rpcId: message.rpcId,
+              rpcMethod: vscodeCommand,
+              data: response,
+            });
+            return;
+          }
           case 'GET_WEBVIEW_URI':
             console.log('GET_WEBVIEW_URI', vscodeMessage);
             // This is 1:1 with the contents of `image.file` in a test file, e.g. given `image { file baml_src://path/to-image.png }`,

@@ -17,6 +17,7 @@ export const bamlConfigSchema = z
     syncExtensionToGeneratorVersion: z
       .enum(['auto', 'never', 'always'])
       .default('auto'),
+    featureFlags: z.array(z.enum(['beta', 'display_all_warnings'])).default([]),
   })
   .partial();
 type BamlConfig = z.infer<typeof bamlConfigSchema>;

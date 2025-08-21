@@ -1,6 +1,8 @@
 import {
   type GetPlaygroundPortRequest,
   type GetPlaygroundPortResponse,
+  type GetVSCodeSettingsRequest,
+  type GetVSCodeSettingsResponse,
   type GetWebviewUriRequest,
   type GetWebviewUriResponse,
   type InitializedRequest,
@@ -201,6 +203,16 @@ class VSCodeAPIWrapper {
       vscodeCommand: 'GET_PLAYGROUND_PORT',
     });
     return resp.port;
+  }
+
+  public async getVSCodeSettings() {
+    const resp = await this.rpc<
+      GetVSCodeSettingsRequest,
+      GetVSCodeSettingsResponse
+    >({
+      vscodeCommand: 'GET_VSCODE_SETTINGS',
+    });
+    return resp;
   }
 
   public async setProxySettings(proxyEnabled: boolean) {

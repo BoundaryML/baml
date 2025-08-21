@@ -74,7 +74,7 @@ impl SyncRequestHandler for DocumentDiagnosticRequestHandler {
             .get_or_create_project(&path)
             .expect("Project should exist");
 
-        let diagnostics = file_diagnostics(project, &url);
+        let diagnostics = file_diagnostics(project, &url, session.baml_settings.feature_flags.as_ref());
         // diagnostics
 
         Ok(DocumentDiagnosticReportResult::Report(
@@ -93,7 +93,7 @@ fn diagnostics_report(
     project: Arc<Mutex<Project>>,
     url: &Url,
 ) -> Result<DocumentDiagnosticReportResult> {
-    let diagnostics = file_diagnostics(project, url);
+    let diagnostics = file_diagnostics(project, url, None);
     Ok(DocumentDiagnosticReportResult::Report(
         DocumentDiagnosticReport::Full(RelatedFullDocumentDiagnosticReport {
             related_documents: None,

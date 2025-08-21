@@ -51,7 +51,10 @@ impl SyncRequestHandler for GotoDefinition {
         project
             .lock()
             .unwrap()
-            .update_runtime(Some(notifier))
+            .update_runtime_with_feature_flags(
+                Some(notifier),
+                session.baml_settings.feature_flags.as_ref(),
+            )
             .internal_error()?;
 
         let document_key = DocumentKey::from_url(

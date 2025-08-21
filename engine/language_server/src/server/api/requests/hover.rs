@@ -66,10 +66,11 @@ impl SyncRequestHandler for Hover {
         .internal_error()?;
         let position = params.text_document_position_params.position;
         // Just swallow the error here, we dont want hover failures to show error notifs for a user.
-        let hover = match project.lock().unwrap().handle_hover_request(
+        let hover = match project.lock().unwrap().handle_hover_request_with_feature_flags(
             &text_document_item,
             &position,
             notifier,
+            session.baml_settings.feature_flags.as_ref(),
         ) {
             Ok(hover) => hover,
             Err(e) => {

@@ -109,6 +109,7 @@ export interface GetVSCodeSettingsRequest {
 
 export interface GetVSCodeSettingsResponse {
   enablePlaygroundProxy: boolean;
+  featureFlags: string[];
 }
 
 export interface GetPlaygroundPortRequest {

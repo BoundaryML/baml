@@ -12,6 +12,7 @@ import { orchIndexAtom } from './playground-panel/atoms-orch-graph';
 import type { ICodeBlock } from './types';
 import { vscode } from './vscode';
 import { apiKeysAtom } from '../../components/api-keys-dialog/atoms';
+import { effectiveFeatureFlagsAtom } from './feature-flags';
 
 const wasmAtomAsync = atom(async () => {
   const wasm = await import('@gloo-ai/baml-schema-wasm-web/baml_schema_build');
@@ -80,7 +81,8 @@ export const runtimeAtom = atom<{
     const selectedEnvVars = Object.fromEntries(
       Object.entries(apiKeys).filter(([key, value]) => value !== undefined),
     );
-    const rt = project.runtime(selectedEnvVars);
+    const featureFlags = get(effectiveFeatureFlagsAtom);
+    const rt = project.runtime(selectedEnvVars, featureFlags);
     const diags = project.diagnostics(rt);
     return { rt, diags, lastValidRt: rt };
   } catch (e) {
@@ -162,12 +164,27 @@ export const generatedFilesByLangAtom = atomFamily(
 
 export const isPanelVisibleAtom = atom(false);
 
-const vscodeSettingsAtom = atom<{ enablePlaygroundProxy: boolean }>((get) => {
-  const config = get(bamlConfig);
-  return {
-    enablePlaygroundProxy: config.config?.enablePlaygroundProxy ?? true,
-  };
-});
+export const vscodeSettingsAtom = unwrap(
+  atom(async (get) => {
+    try {
+      const settings = await vscode.getVSCodeSettings();
+      return {
+        enablePlaygroundProxy: settings.enablePlaygroundProxy,
+        featureFlags: settings.featureFlags,
+      };
+    } catch (e) {
+      console.error(
+        `Error occurred while getting VSCode settings:\n${JSON.stringify(e)}`,
+      );
+      // Fallback to config if RPC fails
+      const config = get(bamlConfig);
+      return {
+        enablePlaygroundProxy: config.config?.enablePlaygroundProxy ?? true,
+        featureFlags: config.config?.featureFlags ?? [],
+      };
+    }
+  }),
+);
 
 const playgroundPortAtom = unwrap(
   atom(async () => {

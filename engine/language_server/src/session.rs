@@ -260,7 +260,10 @@ impl Session {
                 project
                     .lock()
                     .unwrap()
-                    .update_runtime(notifier.clone())
+                    .update_runtime_with_feature_flags(
+                        notifier.clone(),
+                        self.baml_settings.feature_flags.as_ref(),
+                    )
                     .map_err(|e| {
                         tracing::error!("Failed to update runtime after reloading files: {e}");
                         anyhow::anyhow!("Failed to update runtime after reloading files: {e}")
@@ -416,7 +419,10 @@ impl Session {
                     project
                         .lock()
                         .unwrap()
-                        .update_runtime(notifier.clone())
+                        .update_runtime_with_feature_flags(
+                            notifier.clone(),
+                            self.baml_settings.feature_flags.as_ref(),
+                        )
                         .map_err(|e| anyhow::anyhow!("Could not update runtime: {e}"))?;
                     let _elapsed = start_time.elapsed();
                 }
