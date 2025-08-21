@@ -1,147 +1,172 @@
-fn While() -> int {
-    while (true) {}
+fn foo() -> int {
 
-    while (true {
-       let i = 0; // TODO: for some reason empty loop without both parens does not parse with PEST
-    }
+   // if
 
-    while true) {
+   if (true) { }
 
-    }
+   if true {}
 
-    while true {
-       let i = 0; // TODO: for some reason empty loop without both parens does not parse with PEST
-    }
+   if true) { }
+
+   if (true { }
+
+   // while
+
+   while true {}
+
+   while (true {}
+
+   while true) {}
+
+   while (true) {}
+
+   // c-for, empty
+
+   for ;; { }
+
+   for (;; {}
+
+   for ;;) {}
+
+   for (;;) {}
+
+   // c-for, trailing identifier, assign_op
+
+   for (;;i += x) {}
+
+   for (;;i += x {}
+
+   for ;;i += x) {}
+
+   for ;;i += x {}
+
+	// c-for, trailing identifier, assign
+
+   for (;;i = x) {}
+
+   for (;;i = x {}
+
+   for ;;i = x) {}
+
+   for ;;i = x {}
+
+   // iter-for, trailing identifier
+
+   for a in as {}
+
+   for (a in as {}
+
+   for a in as) {}
+
+   for (a in as) {}
+
 }
 
-
-fn ForIterator(xs: int[]) -> int {
-
-    for (x in xs) {}
-
-    for (x in xs {
-        let i = 0;// TODO: for some reason empty loop without both parens does not parse with PEST
-    }
-
-    for x in xs) {
-
-    }
-
-    for x in xs {
-        let i = 0;// TODO: for some reason empty loop without both parens does not parse with PEST
-    }
-}
-
-fn ForRegular() -> int {
-    for (let mut i = 0; i < 3; i += 1) {}
-
-    for let mut i = 0; i < 3; i += 1) {
-
-    }
-
-    for (let mut i = 0; i < 3; i += 1 {
-
-    }
-
-    for let mut i = 0; i < 3; i += 1 {
-
-    }
-}
-
-fn If() -> int {
-
-    if (true) {
-
-    }
-
-    if true) {
-
-    }
-
-    if (true {
-        let i = 0;// TODO: for some reason empty if without both parens does not parse with PEST
-    }
-
-    if true {
-    }
-
-	if true {} {}
-	if (true {} {}
-}
-
-fn FnCall() -> int {
-    If()
-}
-
-// error: Error validating: expected closing parentheses for this opening parentheses
-//   -->  parens.baml:4
+// error: Error validating: expected parentheses around if expression condition
+//   -->  parens.baml:7
 //    | 
-//  3 | 
-//  4 |     while (true {
+//  6 | 
+//  7 |    if true {}
 //    | 
 // error: Error validating: expected opening parentheses for this closing parentheses
-//   -->  parens.baml:8
+//   -->  parens.baml:9
 //    | 
-//  7 | 
-//  8 |     while true) {
-//    | 
-// error: Error validating: expected parentheses around while loop
-//   -->  parens.baml:12
-//    | 
-// 11 | 
-// 12 |     while true {
+//  8 | 
+//  9 |    if true) { }
 //    | 
 // error: Error validating: expected closing parentheses for this opening parentheses
-//   -->  parens.baml:22
+//   -->  parens.baml:11
 //    | 
-// 21 | 
-// 22 |     for (x in xs {
+// 10 | 
+// 11 |    if (true { }
+//    | 
+// error: Error validating: expected parentheses around while loop condition
+//   -->  parens.baml:15
+//    | 
+// 14 | 
+// 15 |    while true {}
+//    | 
+// error: Error validating: expected closing parentheses for this opening parentheses
+//   -->  parens.baml:17
+//    | 
+// 16 | 
+// 17 |    while (true {}
 //    | 
 // error: Error validating: expected opening parentheses for this closing parentheses
-//   -->  parens.baml:26
+//   -->  parens.baml:19
 //    | 
-// 25 | 
-// 26 |     for x in xs) {
+// 18 | 
+// 19 |    while true) {}
 //    | 
 // error: Error validating: expected parentheses around for loop header
-//   -->  parens.baml:30
+//   -->  parens.baml:25
 //    | 
-// 29 | 
-// 30 |     for x in xs {
-//    | 
-// error: Error validating: expected opening parentheses for this closing parentheses
-//   -->  parens.baml:38
-//    | 
-// 37 | 
-// 38 |     for let mut i = 0; i < 3; i += 1) {
+// 24 | 
+// 25 |    for ;; { }
 //    | 
 // error: Error validating: expected closing parentheses for this opening parentheses
-//   -->  parens.baml:42
+//   -->  parens.baml:27
 //    | 
-// 41 | 
-// 42 |     for (let mut i = 0; i < 3; i += 1 {
-//    | 
-// error: Error validating: expected parentheses around for loop header
-//   -->  parens.baml:46
-//    | 
-// 45 | 
-// 46 |     for let mut i = 0; i < 3; i += 1 {
+// 26 | 
+// 27 |    for (;; {}
 //    | 
 // error: Error validating: expected opening parentheses for this closing parentheses
+//   -->  parens.baml:29
+//    | 
+// 28 | 
+// 29 |    for ;;) {}
+//    | 
+// error: Error validating: expected closing parentheses for this opening parentheses
+//   -->  parens.baml:37
+//    | 
+// 36 | 
+// 37 |    for (;;i += x {}
+//    | 
+// error: Error validating: expected opening parentheses for this closing parentheses
+//   -->  parens.baml:39
+//    | 
+// 38 | 
+// 39 |    for ;;i += x) {}
+//    | 
+// error: Error validating: expected parentheses around for loop header
+//   -->  parens.baml:41
+//    | 
+// 40 | 
+// 41 |    for ;;i += x {}
+//    | 
+// error: Error validating: expected closing parentheses for this opening parentheses
+//   -->  parens.baml:47
+//    | 
+// 46 | 
+// 47 |    for (;;i = x {}
+//    | 
+// error: Error validating: expected opening parentheses for this closing parentheses
+//   -->  parens.baml:49
+//    | 
+// 48 | 
+// 49 |    for ;;i = x) {}
+//    | 
+// error: Error validating: expected parentheses around for loop header
+//   -->  parens.baml:51
+//    | 
+// 50 | 
+// 51 |    for ;;i = x {}
+//    | 
+// error: Error validating: expected parentheses around for loop header
+//   -->  parens.baml:55
+//    | 
+// 54 | 
+// 55 |    for a in as {}
+//    | 
+// error: Error validating: expected closing parentheses for this opening parentheses
 //   -->  parens.baml:57
 //    | 
 // 56 | 
-// 57 |     if true) {
+// 57 |    for (a in as {}
 //    | 
-// error: Error validating: expected closing parentheses for this opening parentheses
-//   -->  parens.baml:61
+// error: Error validating: expected opening parentheses for this closing parentheses
+//   -->  parens.baml:59
 //    | 
-// 60 | 
-// 61 |     if (true {
-//    | 
-// error: Error validating: expected parentheses around if expression
-//   -->  parens.baml:65
-//    | 
-// 64 | 
-// 65 |     if true {
+// 58 | 
+// 59 |    for a in as) {}
 //    | 

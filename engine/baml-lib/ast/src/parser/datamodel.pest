@@ -355,11 +355,15 @@ fn_app = { identifier ~ "(" ~ fn_args ~ ")" }
 // If expression.
 if_expression = { "if" ~ condition_and_block ~ ( "else" ~ (expr_block | if_expression) )? }
 
-// essentially, matches "("? <expr> ")"? { block }.
-// `expr_block` is optional in case <expr> matches the rule `class_constructor`, which is `<ident> { ... }`,
-// and there is no ")". In that case, the parser may not parse an `expr_block` afterwards, so making it optional
-// will unblock the parser and it will yield control to our Rust code which has the power to select between the rules.
-condition_and_block = { openParen? ~ expression ~ closeParen? ~ expr_block? }
+// like <expression>, but will avoid consuming `{` in a class_constructor if there are no more blocks.
+// the lookahead match these cases:
+// - `ident { } { ...` -> `class_constructor` (as expression)
+// - `ident { ...`     -> consume only `identifier` (will have to be manually converted to expression)
+// ` otherwise, not a problematic class_constructor ->  we can have expression.
+// This allows the parser to continue even in the case of missing a right parentheses
+block_aware_tail_expression = { (&class_constructor ~ (&"{" ~ expression | identifier)) | expression }
+
+condition_and_block = _{ openParen? ~  block_aware_tail_expression ~ closeParen? ~ expr_block }
 
 while_loop = { "while" ~ condition_and_block }
 
@@ -369,12 +373,16 @@ while_loop = { "while" ~ condition_and_block }
 //   ExtractResume(x)
 // }
 for_loop = { "for" ~ openParen? ~ (iterator_for_loop | c_for_loop) ~ closeParen? ~ expr_block }
-iterator_for_loop = { identifier ~ "in" ~ expression }
+iterator_for_loop = { identifier ~ "in" ~ block_aware_tail_expression }
 c_for_loop = { c_for_init_stmt? ~ ";" ~ expression? ~ ";" ~ c_for_after_stmt?  }
 // NOTE: let_expr ... list copied from `stmt` rule, discarding nonsensical stmts
 c_for_init_stmt = { let_expr | assign_op_stmt | assign_stmt | fn_app | generic_fn_app }
 // same as above but without `let`.
-c_for_after_stmt = {  assign_op_stmt | assign_stmt | fn_app | generic_fn_app }
+c_for_after_stmt = {  block_aware_assign_op_stmt | block_aware_assign_stmt | fn_app | generic_fn_app }
+
+// statements with a block-aware tail expression. Read `block_aware_tail_expression` for more info.
+block_aware_assign_op_stmt = { identifier ~ assign_op ~ block_aware_tail_expression }
+block_aware_assign_stmt = { identifier ~ "=" ~ block_aware_tail_expression }
 
 return_stmt = { "return" ~ expression? }
 

@@ -96,19 +96,12 @@ fn parse_while_loop(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Stm
     let span = diagnostics.span(pair.as_span());
     let mut while_loop = pair.into_inner();
 
-    let condition_rule = while_loop.next()?;
+    let condition_rule =
+        check_parentheses_around_rule(&mut while_loop, diagnostics, "while loop condition")?;
 
-    let (condition, body) = parse_condition_with_block(condition_rule, diagnostics, "while loop")?;
+    let condition = parse_block_aware_tail_expression(condition_rule, diagnostics)?;
 
-    let body = body.map_or_else(
-        || {
-            Some(ExpressionBlock {
-                stmts: Vec::new(),
-                expr: None,
-            })
-        },
-        |rule| parse_expr_block(rule, diagnostics),
-    )?;
+    let body = parse_expr_block(while_loop.next()?, diagnostics)?;
 
     Some(Stmt::WhileLoop(WhileStmt {
         condition,
@@ -117,189 +110,11 @@ fn parse_while_loop(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Stm
     }))
 }
 
-/// Parses `condition_with_block` rule, which is a construct specialized to match
-/// wrong parentheses, like `if (true { }`. See more in `datamodel.pest`.
-/// Emits diagnostics for bad parentheses and the above case.
-/// Gives out the parsed condition & the block rule to parse, if available.
-/// See [`parse_if_expression`] for details on why returning a block rule and not parsing it directly.
-fn parse_condition_with_block<'src>(
-    pair: Pair<'src>,
-    diagnostics: &mut Diagnostics,
-    construct_name: &'static str,
-) -> Option<(Expression, Option<Pair<'src>>)> {
-    assert_correct_parser!(pair, Rule::condition_and_block);
-
-    let full_span = pair.as_span();
-
-    let mut tokens = pair.into_inner();
-    let lparen_span = consume_span_if_rule(&mut tokens, diagnostics, Rule::openParen);
-
-    // we'll interpret condition rule after we know whether we have an expression block or not.
-    let condition_rule = tokens.next()?;
-    let in_between_span = diagnostics.span(condition_rule.as_span());
-
-    let rparen_span = consume_span_if_rule(&mut tokens, diagnostics, Rule::closeParen);
-
-    let expr_block = tokens.next();
-
-    let condition = match (&expr_block, rparen_span) {
-        (None, None) => 'class_ctor_confusion: {
-            // no rparen, no expr block -> may have condition
-            if let Rule::expression = condition_rule.as_rule() {
-                if let Some(condition_rule) = condition_rule
-                    .into_inner()
-                    .next()
-                    .filter(|r| r.as_rule() == Rule::primary_expression)
-                {
-                    if let Some(condition_rule) = condition_rule
-                        .into_inner()
-                        .next()
-                        .filter(|r| r.as_rule() == Rule::class_constructor)
-                    {
-                        let mut inner = condition_rule.into_inner();
-
-                        let identifier =
-                            inner.next().expect("class_constructor rule has identifier");
-
-                        let in_between_span = diagnostics.span(identifier.as_span());
-
-                        check_parentheses_around(
-                            diagnostics,
-                            construct_name,
-                            lparen_span,
-                            None,
-                            in_between_span,
-                        );
-
-                        // parser took `if (<ident> {}` to be `if (<ident> {})`,
-                        // but there is no block afterwards. We'll say that `if (<ident>) {}` is
-                        // what the user wanted.
-                        // There is no block that we can make use of, since otherwise the parser would have taken `if (<ident> <block>` and we wouldn't be here. We'll discard the inner
-                        // contents.
-
-                        let condition =
-                            Expression::Identifier(parse_identifier(identifier, diagnostics));
-
-                        break 'class_ctor_confusion condition;
-                    }
-                }
-            }
-
-            // no idea what this can be.
-            diagnostics.push_error(DatamodelError::new_validation_error(
-                &format!("cannot understand syntax for {construct_name}"),
-                diagnostics.span(full_span),
-            ));
-
-            return None;
-        }
-        (None, Some(span)) => {
-            // rparen, but no expr block -> fishy!
-            check_parentheses_around(
-                diagnostics,
-                construct_name,
-                lparen_span,
-                Some(span.clone()),
-                in_between_span,
-            );
-
-            diagnostics.push_error(DatamodelError::new_validation_error(
-                &format!("missing expression block for {construct_name}"),
-                span,
-            ));
-
-            parse_expression(condition_rule, diagnostics)?
-        }
-        // TODO: merge this with above ?.
-        // there is an expr block, so the condition is safe from `{` ambiguities.
-        (Some(block_rule), rparen_span) => {
-            check_parentheses_around(
-                diagnostics,
-                construct_name,
-                lparen_span,
-                rparen_span,
-                in_between_span,
-            );
-            parse_expression(condition_rule, diagnostics)?
-        }
-    };
-
-    Some((condition, expr_block))
-}
-
-fn parse_iterator_for_loop(
-    rule: Pair<'_>,
-    span: Span,
-    body: ExpressionBlock,
-    diagnostics: &mut Diagnostics,
-) -> Option<Stmt> {
-    assert_correct_parser!(rule, Rule::iterator_for_loop);
-    let mut tokens = rule.into_inner();
-    let identifier = parse_identifier(tokens.next()?, diagnostics);
-    let iterator = parse_expression(tokens.next()?, diagnostics)?;
-
-    Some(Stmt::ForLoop(ForLoopStmt {
-        identifier,
-        iterator,
-        body,
-        span,
-    }))
-}
-
-fn parse_c_for_loop(
-    rule: Pair<'_>,
-    span: Span,
-    body: ExpressionBlock,
-    diagnostics: &mut Diagnostics,
-) -> Option<Stmt> {
-    assert_correct_parser!(rule, Rule::c_for_loop);
-
-    let mut tokens = rule.into_inner();
-
-    let init_stmt = if tokens
-        .peek()
-        .is_some_and(|p| matches!(p.as_rule(), Rule::c_for_init_stmt))
-    {
-        let inner = tokens.next().unwrap().into_inner().next()?;
-
-        let span = diagnostics.span(inner.as_span());
-
-        parse_statement_inner_rule(inner, span, diagnostics).map(Box::new)
-    } else {
-        None
-    };
-
-    let condition = if tokens
-        .peek()
-        .is_some_and(|p| matches!(p.as_rule(), Rule::expression))
-    {
-        parse_expression(tokens.next().unwrap(), diagnostics)
-    } else {
-        None
-    };
-
-    let after_stmt = if let Some(rule) = tokens.next() {
-        assert_correct_parser!(rule, Rule::c_for_after_stmt);
-        let inner = rule.into_inner().next()?;
-        let span = diagnostics.span(inner.as_span());
-
-        parse_statement_inner_rule(inner, span, diagnostics).map(Box::new)
-    } else {
-        None
-    };
-
-    Some(Stmt::CForLoop(CForLoopStmt {
-        init_stmt,
-        condition,
-        after_stmt,
-        body,
-        span,
-    }))
-}
-
 fn parse_for_loop(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Stmt> {
     assert_correct_parser!(token, Rule::for_loop);
+
     let span = diagnostics.span(token.as_span());
+
     let mut tokens = token.into_inner();
 
     let in_between_rule =
@@ -308,12 +123,132 @@ fn parse_for_loop(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Stmt
     let body = parse_expr_block(tokens.next()?, diagnostics)?;
 
     match in_between_rule.as_rule() {
-        Rule::iterator_for_loop => {
-            parse_iterator_for_loop(in_between_rule, span, body, diagnostics)
+        Rule::c_for_loop => {
+            parse_c_for_loop(in_between_rule, body, span, diagnostics).map(Stmt::CForLoop)
         }
-        Rule::c_for_loop => parse_c_for_loop(in_between_rule, span, body, diagnostics),
-        _ => panic!("unexpected in-between rule in for-loop."),
+        Rule::iterator_for_loop => {
+            parse_iterator_for_loop(in_between_rule, body, span, diagnostics).map(Stmt::ForLoop)
+        }
+        _ => unreachable_rule!(in_between_rule, Rule::for_loop),
     }
+}
+
+fn parse_c_for_loop(
+    token: Pair<'_>,
+    body: ExpressionBlock,
+    span: Span,
+    diagnostics: &mut Diagnostics,
+) -> Option<CForLoopStmt> {
+    assert_correct_parser!(token, Rule::c_for_loop);
+
+    let mut header = token.into_inner();
+
+    let init_stmt = consume_if_rule(&mut header, Rule::c_for_init_stmt).map(|rule| {
+        rule.into_inner()
+            .next()
+            .expect("c_for_init_stmt cannot accept empty input")
+    });
+    let condition = consume_if_rule(&mut header, Rule::expression);
+    let after_stmt = consume_if_rule(&mut header, Rule::c_for_after_stmt).map(|rule| {
+        rule.into_inner()
+            .next()
+            .expect("c_for_after_stmt cannot accept empty input")
+    });
+
+    let init_stmt = parse_optional_rule(init_stmt, |rule| {
+        let span = diagnostics.span(rule.as_span());
+        parse_statement_inner_rule(rule, span, diagnostics)
+    })?
+    .map(Box::new);
+
+    let condition = parse_optional_rule(condition, |rule| parse_expression(rule, diagnostics))?;
+
+    let after_stmt = parse_optional_rule(after_stmt, |rule| {
+        let span = diagnostics.span(rule.as_span());
+
+        match rule.as_rule() {
+            Rule::block_aware_assign_stmt => {
+                let mut tokens = rule.into_inner();
+
+                let identifier = parse_identifier(tokens.next()?, diagnostics);
+
+                let expr = parse_block_aware_tail_expression(tokens.next()?, diagnostics)?;
+
+                Some(Stmt::Assign(AssignStmt {
+                    identifier,
+                    expr,
+                    span,
+                }))
+            }
+            Rule::block_aware_assign_op_stmt => {
+                let mut tokens = rule.into_inner();
+
+                let ident = tokens.next()?;
+                let op = tokens.next()?;
+                let expr = parse_block_aware_tail_expression(tokens.next()?, diagnostics);
+
+                finish_assign_op_stmt(span, diagnostics, ident, op, expr).map(Stmt::AssignOp)
+            }
+            _ => parse_statement_inner_rule(rule, span, diagnostics),
+        }
+    })?
+    .map(Box::new);
+
+    Some(CForLoopStmt {
+        init_stmt,
+        condition,
+        after_stmt,
+        body,
+        span,
+    })
+}
+
+fn parse_iterator_for_loop(
+    token: Pair<'_>,
+    body: ExpressionBlock,
+    span: Span,
+    diagnostics: &mut Diagnostics,
+) -> Option<ForLoopStmt> {
+    assert_correct_parser!(token, Rule::iterator_for_loop);
+
+    let mut header = token.into_inner();
+
+    let identifier = parse_identifier(header.next()?, diagnostics);
+    let iterator = parse_block_aware_tail_expression(header.next()?, diagnostics)?;
+
+    Some(ForLoopStmt {
+        identifier,
+        iterator,
+        body,
+        span,
+    })
+}
+
+fn parse_block_aware_tail_expression(
+    pair: Pair<'_>,
+    diagnostics: &mut Diagnostics,
+) -> Option<Expression> {
+    assert_correct_parser!(pair, Rule::block_aware_tail_expression);
+
+    let inner = pair
+        .into_inner()
+        .next()
+        .expect("block aware tail expression is not empty");
+
+    match inner.as_rule() {
+        Rule::expression => parse_expression(inner, diagnostics),
+        Rule::identifier => Some(Expression::Identifier(parse_identifier(inner, diagnostics))),
+        _ => unreachable_rule!(inner, Rule::block_aware_tail_expression),
+    }
+}
+
+/// Lifts the error from `parse` into the top-level optional. The second level optional will
+/// reflect whether there was a rule in the first place.
+fn parse_optional_rule<T>(
+    rule: Option<Pair<'_>>,
+    parse: impl FnOnce(Pair<'_>) -> Option<T>,
+) -> Option<Option<T>> {
+    rule.map_or(Some(None), |rule| parse(rule).map(Some))
 }
 
 fn check_parentheses_around_rule<'src>(
@@ -366,17 +301,23 @@ fn check_parentheses_around(
     }
 }
 
-fn consume_span_if_rule(
-    tokens: &mut pest::iterators::Pairs<'_, Rule>,
-    diagnostics: &mut Diagnostics,
+fn consume_if_rule<'src>(
+    tokens: &mut pest::iterators::Pairs<'src, Rule>,
     rule: Rule,
-) -> Option<Span> {
-    dbg!(&tokens);
+) -> Option<Pair<'src>> {
     if tokens.peek().is_some_and(|x| x.as_rule() == rule) {
-        Some(diagnostics.span(tokens.next().unwrap().as_span()))
+        Some(tokens.next().unwrap())
     } else {
         None
     }
+}
+
+fn consume_span_if_rule(
+    tokens: &mut pest::iterators::Pairs<'_, Rule>,
+    diagnostics: &Diagnostics,
+    rule: Rule,
+) -> Option<Span> {
+    consume_if_rule(tokens, rule).map(|rule| diagnostics.span(rule.as_span()))
 }
 
 pub fn parse_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Stmt> {
@@ -441,37 +382,15 @@ fn parse_statement_inner_rule(
         Rule::assign_op_stmt => {
             let mut assignment_tokens = stmt_token.into_inner();
 
-            let identifier = parse_identifier(assignment_tokens.next()?, diagnostics);
-
+            let ident_rule = assignment_tokens.next()?;
             let op_token = assignment_tokens.next()?;
-
-            let assign_op = match op_token.as_rule() {
-                Rule::ADD_ASSIGN => AssignOp::AddAssign,
-                Rule::SUB_ASSIGN => AssignOp::SubAssign,
-                Rule::MUL_ASSIGN => AssignOp::MulAssign,
-                Rule::DIV_ASSIGN => AssignOp::DivAssign,
-                Rule::MOD_ASSIGN => AssignOp::ModAssign,
-                Rule::BIT_AND_ASSIGN => AssignOp::BitAndAssign,
-                Rule::BIT_OR_ASSIGN => AssignOp::BitOrAssign,
-                Rule::BIT_XOR_ASSIGN => AssignOp::BitXorAssign,
-                Rule::BIT_SHL_ASSIGN => AssignOp::ShlAssign,
-                Rule::BIT_SHR_ASSIGN => AssignOp::ShrAssign,
-                other => unreachable_rule!(op_token, other),
-            };
-
             let rhs = assignment_tokens.next()?;
-            let rhs_span = diagnostics.span(rhs.as_span());
 
+            let rhs_span = diagnostics.span(rhs.as_span());
             let maybe_body = parse_assignment_expr(diagnostics, rhs, rhs_span);
 
-            maybe_body.map(|body| {
-                Stmt::AssignOp(AssignOpStmt {
-                    identifier,
-                    assign_op,
-                    expr: body,
-                    span,
-                })
-            })
+            finish_assign_op_stmt(span, diagnostics, ident_rule, op_token, maybe_body)
+                .map(Stmt::AssignOp)
         }
         Rule::let_expr => {
             let mut let_binding_tokens = stmt_token.into_inner();
@@ -511,6 +430,39 @@ fn parse_statement_inner_rule(
             None
         }
     }
+}
+
+/// Given identifier & operator rules, allows different parse strategies for the
+/// rvalue expression.
+fn finish_assign_op_stmt(
+    span: Span,
+    diagnostics: &mut Diagnostics,
+    ident_rule: Pair<'_>,
+    op_token: Pair<'_>,
+    maybe_body: Option<Expression>,
+) -> Option<AssignOpStmt> {
+    let identifier = parse_identifier(ident_rule, diagnostics);
+
+    let assign_op = match op_token.as_rule() {
+        Rule::ADD_ASSIGN => AssignOp::AddAssign,
+        Rule::SUB_ASSIGN => AssignOp::SubAssign,
+        Rule::MUL_ASSIGN => AssignOp::MulAssign,
+        Rule::DIV_ASSIGN => AssignOp::DivAssign,
+        Rule::MOD_ASSIGN => AssignOp::ModAssign,
+        Rule::BIT_AND_ASSIGN => AssignOp::BitAndAssign,
+        Rule::BIT_OR_ASSIGN => AssignOp::BitOrAssign,
+        Rule::BIT_XOR_ASSIGN => AssignOp::BitXorAssign,
+        Rule::BIT_SHL_ASSIGN => AssignOp::ShlAssign,
+        Rule::BIT_SHR_ASSIGN => AssignOp::ShrAssign,
+        other => unreachable_rule!(op_token, other),
+    };
+
+    maybe_body.map(|body| AssignOpStmt {
+        identifier,
+        assign_op,
+        expr: body,
+        span,
+    })
 }
 
 fn parse_assignment_expr(
@@ -691,35 +643,14 @@ pub fn parse_if_expression(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Op
     let span = diagnostics.span(token.as_span());
     let mut tokens = token.into_inner();
 
-    let condition_and_block = tokens.next()?;
+    let condition_rule =
+        check_parentheses_around_rule(&mut tokens, diagnostics, "if expression condition")?;
 
-    let cond_and_block_span = condition_and_block.as_span();
-    let (condition, then_branch_rule) =
-        parse_condition_with_block(condition_and_block, diagnostics, "if expression")?;
+    let condition = parse_block_aware_tail_expression(condition_rule, diagnostics)?;
 
-    let (then_branch, then_branch_span) = match then_branch_rule {
-        Some(rule) => {
-            let span = diagnostics.span(rule.as_span());
-
-            let block = parse_expr_block(rule, diagnostics)?;
-
-            (block, span)
-        }
-        None => {
-            (
-                ExpressionBlock {
-                    stmts: Vec::new(),
-                    expr: None,
-                },
-                // emit a span at the end of `cond_and_block` because there is no block.
-                Span {
-                    file: diagnostics.span(cond_and_block_span).file,
-                    start: cond_and_block_span.end(),
-                    end: cond_and_block_span.end(),
-                },
-            )
-        }
-    };
+    let then_branch_rule = tokens.next()?;
+    let then_branch_span = diagnostics.span(then_branch_rule.as_span());
+    let then_branch = parse_expr_block(then_branch_rule, diagnostics)?;
 
     let else_branch = tokens.next().and_then(|else_branch_expr| {
         let else_branch_span = diagnostics.span(else_branch_expr.as_span());
