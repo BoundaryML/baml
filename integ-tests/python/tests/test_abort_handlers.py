@@ -51,7 +51,7 @@ async def test_streaming_cancellation():
             # If we've collected some values and controller is aborted, should stop soon
             if abort_controller.aborted and len(values) > 5:
                 break
-    except Exception as e:
+    except Exception:
         cancelled = True
         # Expected to be cancelled
     
@@ -74,7 +74,7 @@ def test_sync_cancellation():
     # Since the function might complete quickly, we'll check if it was aborted
     # or if an exception was raised
     try:
-        result = sync_b.FnFailRetryConstantDelay(
+        sync_b.FnFailRetryConstantDelay(
             retries=5,
             delay_ms=100,
             baml_options={"abort_controller": abort_controller}

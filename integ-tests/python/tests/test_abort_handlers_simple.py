@@ -1,29 +1,28 @@
 import pytest
 import asyncio
-import time
 from baml_py import AbortController
 
 def test_abort_controller_creation():
     """Test that AbortController can be created"""
     controller = AbortController()
     assert controller is not None
-    assert controller.aborted == False
+    assert controller.aborted is False
 
 def test_abort_controller_abort():
     """Test that AbortController can be aborted"""
     controller = AbortController()
     controller.abort()
-    assert controller.aborted == True
+    assert controller.aborted is True
 
 def test_abort_controller_multiple_aborts():
     """Test that AbortController can be aborted multiple times"""
     controller = AbortController()
-    assert controller.aborted == False
+    assert controller.aborted is False
     controller.abort()
-    assert controller.aborted == True
+    assert controller.aborted is True
     # Should be idempotent
     controller.abort()
-    assert controller.aborted == True
+    assert controller.aborted is True
 
 @pytest.mark.asyncio
 async def test_abort_controller_async():
@@ -37,13 +36,13 @@ async def test_abort_controller_async():
     task = asyncio.create_task(abort_after_delay())
     
     # Check status before abort
-    assert controller.aborted == False
+    assert controller.aborted is False
     
     # Wait for abort
     await task
     
     # Check status after abort
-    assert controller.aborted == True
+    assert controller.aborted is True
 
 def test_multiple_controllers():
     """Test that multiple controllers are independent"""
@@ -52,13 +51,13 @@ def test_multiple_controllers():
     
     controller1.abort()
     
-    assert controller1.aborted == True
-    assert controller2.aborted == False
+    assert controller1.aborted is True
+    assert controller2.aborted is False
     
     controller2.abort()
     
-    assert controller1.aborted == True
-    assert controller2.aborted == True
+    assert controller1.aborted is True
+    assert controller2.aborted is True
 
 # Test with actual BAML client if available
 try:
