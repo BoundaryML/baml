@@ -1,7 +1,7 @@
 fn GCD(mut a: int, mut b: int) -> int {
 
-	while a != b {
-	   if a > b {
+	while (a != b) {
+	   if (a > b) {
 	   	a = a - b;
 	   } else {
 	   	b = b - a;
@@ -13,7 +13,7 @@ fn GCD(mut a: int, mut b: int) -> int {
 
 fn WhileWithScopes() -> int {
 	
-	while true {
+	while (true) {
 		let mut a = 0;
 
 		// NOTE: seems like nested blocks are not properly parsed?
@@ -34,11 +34,11 @@ fn WhileWithScopes() -> int {
 
 
 
-		if a > 0 { 
+		if (a > 0) { 
 			let x = 0; // bogus variable to have different stack lengths @ continue/break
 			continue; 
 		}
-		if a < 0 { 
+		if (a < 0) { 
 			let y = 0;
 			let x = 0;
 			break;

@@ -3,8 +3,8 @@ fn Factorial(mut limit: int) -> int {
 	let mut result = 1;
 
 
-	while true {
-		if limit == 0 {
+	while (true) {
+		if (limit == 0) {
 			break;
 		}
 		result = result * limit;
@@ -23,8 +23,8 @@ fn OutsideLoop() -> int {
 
 fn Nested() -> int {
     let mut a = 5;
-    while true {
-        while true {
+    while (true) {
+        while (true) {
             a = a + 1;
             break;
         }

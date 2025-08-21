@@ -4,6 +4,7 @@ use baml_runtime::BamlRuntime;
 use baml_types::BamlValue;
 use function_result::FunctionResult;
 use function_result_stream::FunctionResultStream;
+use internal_baml_core::feature_flags::FeatureFlags;
 use magnus::{class, function, method, prelude::*, Error, RArray, RHash, RModule, Ruby};
 use types::{
     log_collector::Collector, request::HTTPRequest, runtime_ctx_manager::RuntimeContextManager,
@@ -53,15 +54,16 @@ impl BamlRuntimeFfi {
         directory: PathBuf,
         env_vars: HashMap<String, String>,
     ) -> Result<BamlRuntimeFfi> {
-        let baml_runtime = match BamlRuntime::from_directory(&directory, env_vars) {
-            Ok(br) => br,
-            Err(e) => {
-                return Err(Error::new(
-                    ruby.exception_runtime_error(),
-                    format!("{:?}", e.context("Failed to initialize BAML runtime")),
-                ))
-            }
-        };
+        let baml_runtime =
+            match BamlRuntime::from_directory(&directory, env_vars, FeatureFlags::new()) {
+                Ok(br) => br,
+                Err(e) => {
+                    return Err(Error::new(
+                        ruby.exception_runtime_error(),
+                        format!("{:?}", e.context("Failed to initialize BAML runtime")),
+                    ))
+                }
+            };
 
         let rt = BamlRuntimeFfi {
             inner: Arc::new(baml_runtime),
@@ -77,15 +79,17 @@ impl BamlRuntimeFfi {
         files: HashMap<String, String>,
         env_vars: HashMap<String, String>,
     ) -> Result<Self> {
-        let baml_runtime = match BamlRuntime::from_file_content(&root_path, &files, env_vars) {
-            Ok(br) => br,
-            Err(e) => {
-                return Err(Error::new(
-                    ruby.exception_runtime_error(),
-                    format!("{:?}", e.context("Failed to initialize BAML runtime")),
-                ))
-            }
-        };
+        let baml_runtime =
+            match BamlRuntime::from_file_content(&root_path, &files, env_vars, FeatureFlags::new())
+            {
+                Ok(br) => br,
+                Err(e) => {
+                    return Err(Error::new(
+                        ruby.exception_runtime_error(),
+                        format!("{:?}", e.context("Failed to initialize BAML runtime")),
+                    ))
+                }
+            };
 
         let rt = BamlRuntimeFfi {
             inner: Arc::new(baml_runtime),

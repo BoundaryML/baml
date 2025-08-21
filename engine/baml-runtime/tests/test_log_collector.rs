@@ -70,6 +70,7 @@ mod internal_tests {
             "baml_src",
             &files,
             [("OPENAI_API_KEY", "OPENAI_API_KEY")].into(),
+            FeatureFlags::new(),
         )?;
         log::info!("Runtime:");
 
