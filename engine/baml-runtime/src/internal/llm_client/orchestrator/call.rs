@@ -66,7 +66,7 @@ pub async fn orchestrate(
     let cancel_future = match cancel_tripwire {
         Some(tripwire) => Box::pin(async move {
             tripwire.await;
-            ()
+            
         })
             as std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>,
         None => Box::pin(futures::future::pending()),

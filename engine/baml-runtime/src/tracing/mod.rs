@@ -887,7 +887,7 @@ fn error_from_result(result: &FunctionResult) -> Option<api_wrapper::core_types:
             }),
             LLMResponse::Cancelled(s) => Some(api_wrapper::core_types::Error {
                 code: 2,
-                message: format!("Cancelled: {}", s),
+                message: format!("Cancelled: {s}"),
                 traceback: None,
                 r#override: None,
             }),
@@ -1116,7 +1116,7 @@ impl From<&LLMResponse> for LLMEventSchema {
                     request_options: Default::default(),
                 },
                 output: None,
-                error: Some(format!("Cancelled: {}", s)),
+                error: Some(format!("Cancelled: {s}")),
             },
         }
     }

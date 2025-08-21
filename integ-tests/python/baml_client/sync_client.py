@@ -197,6 +197,13 @@ class BamlSyncClient:
             "input": input,
         })
         return typing.cast(typing.Union[types.DynEnumTwo, str], result.cast_to(types, types, stream_types, False, __runtime__))
+    def ClassifyDynamicStatus(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> typing.Union[types.DynEnumOne, str]:
+        result = self.__options.merge_options(baml_options).call_function_sync(function_name="ClassifyDynamicStatus", args={
+            "input": input,
+        })
+        return typing.cast(typing.Union[types.DynEnumOne, str], result.cast_to(types, types, stream_types, False, __runtime__))
     def ClassifyMessage(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.Category:
@@ -330,6 +337,13 @@ class BamlSyncClient:
             "document": document,
         })
         return typing.cast(types.ContactInfo, result.cast_to(types, types, stream_types, False, __runtime__))
+    def ExtractDynamicCategories(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> typing.List[typing.Union[types.DynEnumTwo, str]]:
+        result = self.__options.merge_options(baml_options).call_function_sync(function_name="ExtractDynamicCategories", args={
+            "input": input,
+        })
+        return typing.cast(typing.List[typing.Union[types.DynEnumTwo, str]], result.cast_to(types, types, stream_types, False, __runtime__))
     def ExtractEntities(self, text: str,
         baml_options: BamlCallOptions = {},
     ) -> types.DynamicSchema:
@@ -813,6 +827,20 @@ class BamlSyncClient:
             "input": input,
         })
         return typing.cast(types.RecursiveUnion, result.cast_to(types, types, stream_types, False, __runtime__))
+    def RenderDynamicClass(self, input: types.RenderTestClass,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).call_function_sync(function_name="RenderDynamicClass", args={
+            "input": input,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    def RenderDynamicEnum(self, bike: typing.Union[types.RenderTestEnum, str],other: typing.Union[types.RenderTestEnum, str],
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).call_function_sync(function_name="RenderDynamicEnum", args={
+            "bike": bike,"other": other,
+        })
+        return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     def ReturnAliasWithMergedAttributes(self, money: int,
         baml_options: BamlCallOptions = {},
     ) -> types.Checked[int, typing_extensions.Literal['gt_ten']]:
@@ -1394,7 +1422,7 @@ class BamlSyncClient:
             "query": query,
         })
         return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
-    def TestOpenAIResponsesImageInput(self, image: typing.Union[baml_py.Image, str],
+    def TestOpenAIResponsesImageInput(self, image: typing.Union[baml_py.Image, str, baml_py.Pdf, baml_py.Audio],
         baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestOpenAIResponsesImageInput", args={
@@ -1632,6 +1660,20 @@ class BamlSyncClient:
             
         })
         return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    def IterativeFibonacci(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = self.__options.merge_options(baml_options).call_function_sync(function_name="IterativeFibonacci", args={
+            "n": n,
+        })
+        return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
+    def LengthOfArray(self, arr: typing.List[int],
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = self.__options.merge_options(baml_options).call_function_sync(function_name="LengthOfArray", args={
+            "arr": arr,
+        })
+        return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
     def NormalElseIfStmt(self, a: bool,b: bool,
         baml_options: BamlCallOptions = {},
     ) -> int:
@@ -1679,6 +1721,20 @@ class BamlSyncClient:
     ) -> int:
         result = self.__options.merge_options(baml_options).call_function_sync(function_name="StoreLlmCallInLocalVar", args={
             "n": n,
+        })
+        return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
+    def SumArray(self, arr: typing.List[int],
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = self.__options.merge_options(baml_options).call_function_sync(function_name="SumArray", args={
+            "arr": arr,
+        })
+        return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
+    def SumFromTo(self, x: int,y: int,
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = self.__options.merge_options(baml_options).call_function_sync(function_name="SumFromTo", args={
+            "x": x,"y": y,
         })
         return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
     
@@ -1880,6 +1936,18 @@ class BamlStreamClient:
           result,
           lambda x: typing.cast(typing.Union[types.DynEnumTwo, str], x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(typing.Union[types.DynEnumTwo, str], x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def ClassifyDynamicStatus(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[typing.Union[types.DynEnumOne, str], typing.Union[types.DynEnumOne, str]]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="ClassifyDynamicStatus", args={
+            "input": input,
+        })
+        return baml_py.BamlSyncStream[typing.Union[types.DynEnumOne, str], typing.Union[types.DynEnumOne, str]](
+          result,
+          lambda x: typing.cast(typing.Union[types.DynEnumOne, str], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing.Union[types.DynEnumOne, str], x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def ClassifyMessage(self, input: str,
@@ -2108,6 +2176,18 @@ class BamlStreamClient:
           result,
           lambda x: typing.cast(stream_types.ContactInfo, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.ContactInfo, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def ExtractDynamicCategories(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[typing.List[typing.Union[types.DynEnumTwo, str]], typing.List[typing.Union[types.DynEnumTwo, str]]]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="ExtractDynamicCategories", args={
+            "input": input,
+        })
+        return baml_py.BamlSyncStream[typing.List[typing.Union[types.DynEnumTwo, str]], typing.List[typing.Union[types.DynEnumTwo, str]]](
+          result,
+          lambda x: typing.cast(typing.List[typing.Union[types.DynEnumTwo, str]], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing.List[typing.Union[types.DynEnumTwo, str]], x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def ExtractEntities(self, text: str,
@@ -2936,6 +3016,30 @@ class BamlStreamClient:
           result,
           lambda x: typing.cast(stream_types.RecursiveUnion, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.RecursiveUnion, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def RenderDynamicClass(self, input: types.RenderTestClass,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="RenderDynamicClass", args={
+            "input": input,
+        })
+        return baml_py.BamlSyncStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def RenderDynamicEnum(self, bike: typing.Union[types.RenderTestEnum, str],other: typing.Union[types.RenderTestEnum, str],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="RenderDynamicEnum", args={
+            "bike": bike,"other": other,
+        })
+        return baml_py.BamlSyncStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def ReturnAliasWithMergedAttributes(self, money: int,
@@ -3934,7 +4038,7 @@ class BamlStreamClient:
           lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
-    def TestOpenAIResponsesImageInput(self, image: typing.Union[baml_py.Image, str],
+    def TestOpenAIResponsesImageInput(self, image: typing.Union[baml_py.Image, str, baml_py.Pdf, baml_py.Audio],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[str, str]:
         ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestOpenAIResponsesImageInput", args={
@@ -4342,6 +4446,30 @@ class BamlStreamClient:
           lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
+    def IterativeFibonacci(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[typing.Optional[int], int]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="IterativeFibonacci", args={
+            "n": n,
+        })
+        return baml_py.BamlSyncStream[typing.Optional[int], int](
+          result,
+          lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def LengthOfArray(self, arr: typing.List[int],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[typing.Optional[int], int]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="LengthOfArray", args={
+            "arr": arr,
+        })
+        return baml_py.BamlSyncStream[typing.Optional[int], int](
+          result,
+          lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
     def NormalElseIfStmt(self, a: bool,b: bool,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[typing.Optional[int], int]:
@@ -4419,6 +4547,30 @@ class BamlStreamClient:
     ) -> baml_py.BamlSyncStream[typing.Optional[int], int]:
         ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="StoreLlmCallInLocalVar", args={
             "n": n,
+        })
+        return baml_py.BamlSyncStream[typing.Optional[int], int](
+          result,
+          lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def SumArray(self, arr: typing.List[int],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[typing.Optional[int], int]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="SumArray", args={
+            "arr": arr,
+        })
+        return baml_py.BamlSyncStream[typing.Optional[int], int](
+          result,
+          lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def SumFromTo(self, x: int,y: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[typing.Optional[int], int]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="SumFromTo", args={
+            "x": x,"y": y,
         })
         return baml_py.BamlSyncStream[typing.Optional[int], int](
           result,
@@ -4546,6 +4698,13 @@ class BamlHttpRequestClient:
             "input": input,
         }, mode="request")
         return result
+    def ClassifyDynamicStatus(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="ClassifyDynamicStatus", args={
+            "input": input,
+        }, mode="request")
+        return result
     def ClassifyMessage(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -4677,6 +4836,13 @@ class BamlHttpRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="ExtractContactInfo", args={
             "document": document,
+        }, mode="request")
+        return result
+    def ExtractDynamicCategories(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="ExtractDynamicCategories", args={
+            "input": input,
         }, mode="request")
         return result
     def ExtractEntities(self, text: str,
@@ -5160,6 +5326,20 @@ class BamlHttpRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="RecursiveUnionTest", args={
             "input": input,
+        }, mode="request")
+        return result
+    def RenderDynamicClass(self, input: types.RenderTestClass,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="RenderDynamicClass", args={
+            "input": input,
+        }, mode="request")
+        return result
+    def RenderDynamicEnum(self, bike: typing.Union[types.RenderTestEnum, str],other: typing.Union[types.RenderTestEnum, str],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="RenderDynamicEnum", args={
+            "bike": bike,"other": other,
         }, mode="request")
         return result
     def ReturnAliasWithMergedAttributes(self, money: int,
@@ -5743,7 +5923,7 @@ class BamlHttpRequestClient:
             "query": query,
         }, mode="request")
         return result
-    def TestOpenAIResponsesImageInput(self, image: typing.Union[baml_py.Image, str],
+    def TestOpenAIResponsesImageInput(self, image: typing.Union[baml_py.Image, str, baml_py.Pdf, baml_py.Audio],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestOpenAIResponsesImageInput", args={
@@ -5981,6 +6161,20 @@ class BamlHttpRequestClient:
             
         }, mode="request")
         return result
+    def IterativeFibonacci(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="IterativeFibonacci", args={
+            "n": n,
+        }, mode="request")
+        return result
+    def LengthOfArray(self, arr: typing.List[int],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="LengthOfArray", args={
+            "arr": arr,
+        }, mode="request")
+        return result
     def NormalElseIfStmt(self, a: bool,b: bool,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -6028,6 +6222,20 @@ class BamlHttpRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="StoreLlmCallInLocalVar", args={
             "n": n,
+        }, mode="request")
+        return result
+    def SumArray(self, arr: typing.List[int],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="SumArray", args={
+            "arr": arr,
+        }, mode="request")
+        return result
+    def SumFromTo(self, x: int,y: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="SumFromTo", args={
+            "x": x,"y": y,
         }, mode="request")
         return result
     
@@ -6150,6 +6358,13 @@ class BamlHttpStreamRequestClient:
             "input": input,
         }, mode="stream")
         return result
+    def ClassifyDynamicStatus(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="ClassifyDynamicStatus", args={
+            "input": input,
+        }, mode="stream")
+        return result
     def ClassifyMessage(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -6281,6 +6496,13 @@ class BamlHttpStreamRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="ExtractContactInfo", args={
             "document": document,
+        }, mode="stream")
+        return result
+    def ExtractDynamicCategories(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="ExtractDynamicCategories", args={
+            "input": input,
         }, mode="stream")
         return result
     def ExtractEntities(self, text: str,
@@ -6764,6 +6986,20 @@ class BamlHttpStreamRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="RecursiveUnionTest", args={
             "input": input,
+        }, mode="stream")
+        return result
+    def RenderDynamicClass(self, input: types.RenderTestClass,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="RenderDynamicClass", args={
+            "input": input,
+        }, mode="stream")
+        return result
+    def RenderDynamicEnum(self, bike: typing.Union[types.RenderTestEnum, str],other: typing.Union[types.RenderTestEnum, str],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="RenderDynamicEnum", args={
+            "bike": bike,"other": other,
         }, mode="stream")
         return result
     def ReturnAliasWithMergedAttributes(self, money: int,
@@ -7347,7 +7583,7 @@ class BamlHttpStreamRequestClient:
             "query": query,
         }, mode="stream")
         return result
-    def TestOpenAIResponsesImageInput(self, image: typing.Union[baml_py.Image, str],
+    def TestOpenAIResponsesImageInput(self, image: typing.Union[baml_py.Image, str, baml_py.Pdf, baml_py.Audio],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestOpenAIResponsesImageInput", args={
@@ -7585,6 +7821,20 @@ class BamlHttpStreamRequestClient:
             
         }, mode="stream")
         return result
+    def IterativeFibonacci(self, n: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="IterativeFibonacci", args={
+            "n": n,
+        }, mode="stream")
+        return result
+    def LengthOfArray(self, arr: typing.List[int],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="LengthOfArray", args={
+            "arr": arr,
+        }, mode="stream")
+        return result
     def NormalElseIfStmt(self, a: bool,b: bool,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -7632,6 +7882,20 @@ class BamlHttpStreamRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="StoreLlmCallInLocalVar", args={
             "n": n,
+        }, mode="stream")
+        return result
+    def SumArray(self, arr: typing.List[int],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="SumArray", args={
+            "arr": arr,
+        }, mode="stream")
+        return result
+    def SumFromTo(self, x: int,y: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="SumFromTo", args={
+            "x": x,"y": y,
         }, mode="stream")
         return result
     

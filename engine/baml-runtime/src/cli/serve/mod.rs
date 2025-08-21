@@ -392,7 +392,7 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
                 }
                 .into_response(),
                 LLMResponse::Cancelled(message) => BamlError::InternalError {
-                    message: format!("Cancelled: {}", message),
+                    message: format!("Cancelled: {message}"),
                 }
                 .into_response(),
             },
@@ -519,7 +519,7 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
                             }
                             .into_response(),
                             LLMResponse::Cancelled(message) => BamlError::InternalError {
-                                message: format!("Cancelled: {}", message),
+                                message: format!("Cancelled: {message}"),
                             }
                             .into_response(),
                         },

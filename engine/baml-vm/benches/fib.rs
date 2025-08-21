@@ -1,4 +1,4 @@
-use baml_vm::{BamlVmProgram, Frame, Value, Vm};
+use baml_vm::{BamlVmProgram, Frame, ObjectIndex, Value, Vm};
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 
 struct Program {
@@ -27,7 +27,7 @@ fn bootstrap_vm(input: Program) -> Vm {
         stack: std::iter::once(Value::Object(target_function_index))
             .chain(input.args)
             .collect(),
-        runtime_allocs_offset: objects.len(),
+        runtime_allocs_offset: ObjectIndex::from_raw(objects.len()),
         objects,
         globals,
     }
