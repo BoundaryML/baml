@@ -1,0 +1,122 @@
+[package]
+edition = "2021"
+name = "repro"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+license-file.workspace = true
+
+[lints.rust]
+dead_code = "allow"
+elided_named_lifetimes = "deny"
+unused_imports = "allow"
+unused_variables = "allow"
+
+[dependencies]
+
+anyhow = { workspace = true }
+baml-types = { path = "../baml-lib/baml-types" }
+baml-runtime = { path = "../baml-runtime", features = [
+    "internal",
+], default-features = false }
+baml-lsp-types = { path = "../baml-lsp-types" }
+internal-baml-core = { path = "../baml-lib/baml-core" }
+internal-baml-diagnostics = { path = "../baml-lib/diagnostics" }
+internal-baml-codegen = { workspace = true }
+crossbeam = { version = "0.8.4", features = ["crossbeam-channel"] }
+ignore = { version = "0.4.22" }
+parking_lot = { version = "0.12", features = ["deadlock_detection"] }
+indexmap = { workspace = true }
+jod-thread = { version = "0.1.2" }
+lsp-server = "0.7.6"
+lsp-types = "0.95.0"
+regex = { version = "1.10.2" }
+rustc-hash = { version = "2.0.0" }
+serde = { version = "1.0.197", features = ["derive"] }
+serde_json = { version = "1.0.113" }
+tracing-log = "0.2.0"
+shellexpand = { version = "3.0.0" }
+semver = "1.0.20"
+
+thiserror = { version = "2.0.0" }
+baml-log = { path = "../baml-lib/baml-log" }
+
+tracing = { version = "0.1.40" }
+
+tracing-subscriber = { version = "0.3.18", default-features = false, features = [
+    "env-filter",
+    "fmt",
+] }
+
+## other package dependencies that we can move out of this package (baml_*)
+
+schemars = { version = "0.8.16" }
+memchr = { version = "2.7.1" }
+log.workspace = true
+is-macro = { version = "0.3.5" }
+
+# baml_linter
+similar = { version = "2.4.0", features = ["inline"] }
+colored = "3.0.0"
+path-absolutize = { version = "3.1.1", features = [
+    "once_cell_cache",
+    "use_unix_paths_on_wasm",
+] }
+pathdiff = { version = "0.2.1" }
+
+# baml project dependency
+serde-wasm-bindgen = "0.4"
+crossbeam-channel = "0.5.14"
+filetime = "0.2.25"
+simple-logging = "2.0.2"
+itertools = "0.14.0"
+url.workspace = true
+
+tokio = { version = "1.36", features = ["full", "tracing"] }
+
+# Playground server dependencies
+warp = { version = "0.3", optional = true }
+futures-util = { version = "0.3", optional = true }
+include_dir = { version = "0.7", optional = true }
+mime_guess = { version = "2.0.4", optional = true }
+webbrowser = { version = "0.8", optional = true }
+reqwest = { version = "0.12", features = ["blocking", "json"], optional = true }
+tar = { version = "0.4", optional = true }
+flate2 = { version = "1.0", optional = true }
+dirs = { version = "5.0", optional = true }
+sha2 = { version = "0.10", optional = true }
+base64 = { version = "0.21", optional = true }
+bytes = { version = "1.0", optional = true }
+console-subscriber = { version = "0.4.1", features = ["grpc-web"] }
+axum = { version = "0.8.4", features = ["ws"] }
+futures.workspace = true
+tokio-stream = "0.1.17"
+tower-http = { version = "0.6.6", features = ["fs", "cors"] }
+tower = "0.5"
+
+[dev-dependencies]
+insta = { version = "1.42.1" }
+
+[target.'cfg(target_vendor = "apple")'.dependencies]
+libc = { version = "0.2.169" }
+
+# [lints]
+# workspace = true
+
+[features]
+# Enables the playground server functionality and its dependencies
+default = ["playground-server"]
+playground-server = [
+    "warp",
+    "futures-util",
+    "include_dir",
+    "mime_guess",
+    "webbrowser",
+    "reqwest",
+    "tar",
+    "flate2",
+    "dirs",
+    "sha2",
+    "base64",
+    "bytes",
+]

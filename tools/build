@@ -66,6 +66,23 @@ echo "Building in REPO${_path} (cwd: $(pwd))"
 
 case "$_path" in
 
+  /engine/repro | /engine/repro/* )
+    command="RUSTFLAGS='--cfg tokio_unstable' cargo run --bin repro"
+
+    if [ "$_watch_mode" -eq 1 ]; then
+      npx nodemon \
+        --ext rs,ts,json,j2,hb,hbs,toml,baml,rb \
+        --watch "${_repo_root}/engine" \
+        --ignore 'target' \
+        --ignore 'index.d.ts' \
+        --ignore 'index.js' \
+        --ignore 'dist' \
+        --ignore 'tmp' \
+        --exec "${command}"
+    else
+      eval "${command}"
+    fi
+    ;;
 
   /engine | /engine/* )
     command="RUSTFLAGS='--cfg tokio_unstable' cargo build --package baml-cli --package baml-hot-reload"
@@ -84,6 +101,7 @@ case "$_path" in
       eval "${command}"
     fi
     ;;
+
 
   /engine/language_client_typescript | /engine/language_client_typescript/* )
     command="pnpm build:debug; date"
