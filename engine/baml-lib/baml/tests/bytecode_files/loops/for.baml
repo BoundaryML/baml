@@ -1,7 +1,7 @@
 fn Sum(xs: int[]) -> int {
 	let mut result = 0;
 
-	for x in xs {
+	for (x in xs) {
 		result += x;
 	}
 
@@ -11,8 +11,8 @@ fn Sum(xs: int[]) -> int {
 fn ForWithBreak(xs: int[]) -> int {
 	let mut result = 0;
 
-	for x in xs {
-		if x > 10 {
+	for (x in xs) {
+		if (x > 10) {
 			break;
 		}
 		result += x;
@@ -24,8 +24,8 @@ fn ForWithBreak(xs: int[]) -> int {
 fn ForWithContinue(xs: int[]) -> int {
 	let mut result = 0;
 
-	for x in xs {
-		if x > 10 {
+	for (x in xs) {
+		if (x > 10) {
 			continue;
 		}
 		result += x;
@@ -38,8 +38,8 @@ fn NestedFor(as: int[], bs: int[]) -> int {
 
 	let mut result = 0;
 
-	for a in as {
-		for b in bs {
+	for (a in as) {
+		for (b in bs) {
 			result += a * b;
 		}
 	}
