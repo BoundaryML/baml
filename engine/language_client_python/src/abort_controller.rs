@@ -6,7 +6,7 @@ use std::sync::Arc;
 use stream_cancel::{Trigger, Tripwire};
 
 // Track active operations with their triggers
-static OPERATION_TRIGGERS: Lazy<DashMap<u32, Trigger>> = Lazy::new(|| DashMap::new());
+static OPERATION_TRIGGERS: Lazy<DashMap<u32, Trigger>> = Lazy::new(DashMap::new);
 static NEXT_ID: AtomicU32 = AtomicU32::new(1);
 
 #[pyclass(module = "baml_py.baml_py")]

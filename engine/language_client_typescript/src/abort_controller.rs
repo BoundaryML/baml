@@ -5,7 +5,7 @@ use std::sync::Arc;
 use stream_cancel::{Trigger, Tripwire};
 
 // Track active operations with their cancellation triggers
-static OPERATION_TRIGGERS: Lazy<DashMap<u32, Trigger>> = Lazy::new(|| DashMap::new());
+static OPERATION_TRIGGERS: Lazy<DashMap<u32, Trigger>> = Lazy::new(DashMap::new);
 
 // Counter for unique operation IDs
 static OPERATION_ID_COUNTER: Lazy<std::sync::atomic::AtomicU32> =
