@@ -68,6 +68,93 @@ fn strip_mime_prefix(mime: &str) -> &str {
     mime.split_once('/').map(|(_, s)| s).unwrap_or(mime)
 }
 
+// Manual MIME validators for better error messages when converting to AWS SDK enums.
+// For conversions that stay as strings (e.g., CLI JSON), we intentionally do not validate.
+fn normalize_image_subtype(subtype: &str) -> String {
+    let lower = subtype.to_ascii_lowercase();
+    match lower.as_str() {
+        // common alias
+        "jpg" => "jpeg".to_string(),
+        other => other.to_string(),
+    }
+}
+
+fn ensure_image_mime_allowed(full_mime: &str) -> Result<String> {
+    let subtype = strip_mime_prefix(full_mime);
+    let normalized = normalize_image_subtype(subtype);
+    // Keep the allowlist tight to provide clear guidance
+    const ALLOWED: &[&str] = &["jpeg", "png", "webp", "gif"];
+    if ALLOWED.iter().any(|s| *s == normalized) {
+        Ok(normalized)
+    } else {
+        anyhow::bail!(
+            "{} is not a valid type, need image/jpeg or image/png or image/webp or image/gif",
+            full_mime
+        )
+    }
+}
+
+fn ensure_document_mime_allowed(full_mime: &str) -> Result<String> {
+    let subtype = strip_mime_prefix(full_mime).to_ascii_lowercase();
+    const ALLOWED: &[&str] = &["pdf"];
+    if ALLOWED.iter().any(|s| *s == subtype) {
+        Ok(subtype)
+    } else {
+        anyhow::bail!("{} is not a valid type, need application/pdf", full_mime)
+    }
+}
+
+fn ensure_video_mime_allowed(full_mime: &str) -> Result<String> {
+    let subtype = strip_mime_prefix(full_mime).to_ascii_lowercase();
+    // Conservative allowlist. Expand as Bedrock adds support.
+    const ALLOWED: &[&str] = &["mp4", "webm"];
+    if ALLOWED.iter().any(|s| *s == subtype) {
+        Ok(subtype)
+    } else {
+        anyhow::bail!(
+            "{} is not a valid type, need video/mp4 or video/webm",
+            full_mime
+        )
+    }
+}
+
+fn image_format_from_mime(full_mime: &str) -> Result<bedrock::types::ImageFormat> {
+    let subtype = ensure_image_mime_allowed(full_mime)?;
+    let fmt = match subtype.as_str() {
+        "jpeg" => bedrock::types::ImageFormat::Jpeg,
+        "png" => bedrock::types::ImageFormat::Png,
+        "webp" => bedrock::types::ImageFormat::Webp,
+        "gif" => bedrock::types::ImageFormat::Gif,
+        _ => anyhow::bail!(
+            "{} is not a valid type, need image/jpeg or image/png or image/webp or image/gif",
+            full_mime
+        ),
+    };
+    Ok(fmt)
+}
+
+fn document_format_from_mime(full_mime: &str) -> Result<bedrock::types::DocumentFormat> {
+    let subtype = ensure_document_mime_allowed(full_mime)?;
+    let fmt = match subtype.as_str() {
+        "pdf" => bedrock::types::DocumentFormat::Pdf,
+        _ => anyhow::bail!("{} is not a valid type, need application/pdf", full_mime),
+    };
+    Ok(fmt)
+}
+
+fn video_format_from_mime(full_mime: &str) -> Result<bedrock::types::VideoFormat> {
+    let subtype = ensure_video_mime_allowed(full_mime)?;
+    let fmt = match subtype.as_str() {
+        "mp4" => bedrock::types::VideoFormat::Mp4,
+        "webm" => bedrock::types::VideoFormat::Webm,
+        _ => anyhow::bail!(
+            "{} is not a valid type, need video/mp4 or video/webm",
+            full_mime
+        ),
+    };
+    Ok(fmt)
+}
+
 // represents client that interacts with the Bedrock API
 pub struct AwsClient {
     pub name: String,
@@ -1032,9 +1119,7 @@ impl AwsClient {
                 }
                 BamlMediaContent::Base64(b64_media) => Ok(bedrock::types::ContentBlock::Image(
                     bedrock::types::ImageBlock::builder()
-                        .set_format(Some(bedrock::types::ImageFormat::from(strip_mime_prefix(
-                            &media.mime_type_as_ok()?,
-                        ))))
+                        .set_format(Some(image_format_from_mime(&media.mime_type_as_ok()?)?))
                         .set_source(Some(bedrock::types::ImageSource::Bytes(Blob::new(
                             aws_smithy_types::base64::decode(b64_media.base64.clone())?,
                         ))))
@@ -1050,12 +1135,11 @@ impl AwsClient {
                         )
                     }
                     BamlMediaContent::Url(url_media) => {
-                        // Let AWS validate the format; we just pass the subtype.
                         Ok(bedrock::types::ContentBlock::Document(
                             bedrock::types::DocumentBlock::builder()
-                                .set_format(Some(bedrock::types::DocumentFormat::from(
-                                    strip_mime_prefix(&media.mime_type_as_ok()?),
-                                )))
+                                .set_format(Some(document_format_from_mime(
+                                    &media.mime_type_as_ok()?,
+                                )?))
                                 .set_name(Some("document.pdf".to_string())) // Default name for URL-based Pdfs
                                 .set_source(Some(bedrock::types::DocumentSource::Bytes(Blob::new(
                                     url_media.url.as_bytes().to_vec(),
@@ -1068,9 +1152,9 @@ impl AwsClient {
                         // AWS Bedrock supports Pdf as document type via Base64
                         Ok(bedrock::types::ContentBlock::Document(
                             bedrock::types::DocumentBlock::builder()
-                                .set_format(Some(bedrock::types::DocumentFormat::from(
-                                    strip_mime_prefix(&media.mime_type_as_ok()?),
-                                )))
+                                .set_format(Some(document_format_from_mime(
+                                    &media.mime_type_as_ok()?,
+                                )?))
                                 .set_name(Some("document.pdf".to_string())) // Default name for Base64 Pdfs
                                 .set_source(Some(bedrock::types::DocumentSource::Bytes(Blob::new(
                                     aws_smithy_types::base64::decode(b64_media.base64.clone())?,
@@ -1081,36 +1165,30 @@ impl AwsClient {
                     }
                 }
             }
-            BamlMediaType::Video => {
-                match &media.content {
-                    BamlMediaContent::File(_) => {
-                        anyhow::bail!(
+            BamlMediaType::Video => match &media.content {
+                BamlMediaContent::File(_) => {
+                    anyhow::bail!(
                             "BAML internal error (AWSBedrock): video file should have been resolved to base64"
                         )
-                    }
-                    BamlMediaContent::Url(_) => {
-                        anyhow::bail!(
+                }
+                BamlMediaContent::Url(_) => {
+                    anyhow::bail!(
                             "BAML internal error (AWSBedrock): video URL should have been resolved to base64"
                         )
-                    }
-                    BamlMediaContent::Base64(b64_media) => {
-                        // Always strip MIME prefix and let AWS validate/err.
-                        let format = bedrock::types::VideoFormat::from(strip_mime_prefix(
-                            &media.mime_type_as_ok()?,
-                        ));
-
-                        Ok(bedrock::types::ContentBlock::Video(
-                            bedrock::types::VideoBlock::builder()
-                                .set_format(Some(format))
-                                .set_source(Some(bedrock::types::VideoSource::Bytes(Blob::new(
-                                    aws_smithy_types::base64::decode(b64_media.base64.clone())?,
-                                ))))
-                                .build()
-                                .context("Failed to build video block")?,
-                        ))
-                    }
                 }
-            }
+                BamlMediaContent::Base64(b64_media) => {
+                    let format = video_format_from_mime(&media.mime_type_as_ok()?)?;
+                    Ok(bedrock::types::ContentBlock::Video(
+                        bedrock::types::VideoBlock::builder()
+                            .set_format(Some(format))
+                            .set_source(Some(bedrock::types::VideoSource::Bytes(Blob::new(
+                                aws_smithy_types::base64::decode(b64_media.base64.clone())?,
+                            ))))
+                            .build()
+                            .context("Failed to build video block")?,
+                    ))
+                }
+            },
             BamlMediaType::Audio => {
                 anyhow::bail!(
                     "AWS Bedrock does not support audio media type: {:#?}",
