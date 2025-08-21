@@ -87,6 +87,11 @@
       "cache": false,
       "persistent": true
     },
+    "@baml/fern#dev": {
+      "dependsOn": ["fern-sage-chatbot#build"],
+      "cache": false,
+      "persistent": true
+    },
     "typecheck": {
       "dependsOn": ["^typecheck"],
       "inputs": [

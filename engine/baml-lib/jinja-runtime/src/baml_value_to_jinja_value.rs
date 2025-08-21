@@ -41,22 +41,21 @@ impl IntoMiniJinjaValue for BamlValue {
             }
             BamlValue::Media(i) => i.to_minijinja_value(ir, eval_ctx),
             // For enums and classes we compute the aliases from the IR, and generate custom jinja structs that print out the alias if stringified.
-            BamlValue::Enum(_name, value) => {
-                minijinja::Value::from(value.clone())
-                // Until we can fix the broken test, just return the normal value. For now we wont suppport enum alias rendering.
-                // let mut alias: Option<String> = None;
-                // if let Ok(e) = ir.find_enum(name) {
-                //     if let Some(enum_value) = e
-                //         .walk_values()
-                //         .find(|ir_enum_value| ir_enum_value.item.elem.0 == *value)
-                //     {
-                //         alias = enum_value.alias(env_vars).ok().and_then(|a| a);
-                //     }
-                // }
-                // minijinja::Value::from_object(MinijinjaBamlEnum {
-                //     value: value.clone(),
-                //     alias,
-                // })
+            BamlValue::Enum(name, value) => {
+                let mut alias: Option<String> = None;
+                if let Ok(e) = ir.find_enum(name) {
+                    if let Some(enum_value) = e
+                        .walk_values()
+                        .find(|ir_enum_value| ir_enum_value.item.elem.0 == *value)
+                    {
+                        alias = enum_value.alias(eval_ctx).ok().and_then(|a| a);
+                    }
+                }
+                minijinja::Value::from_object(MinijinjaBamlEnumValue {
+                    value: value.clone(),
+                    alias,
+                    enum_name: name.clone(),
+                })
             }
             BamlValue::Class(name, m) => {
                 let map = m
@@ -142,50 +141,103 @@ impl minijinja::value::Object for MinijinjaBamlMedia {
     }
 }
 
-// Enums
-
-struct MinijinjaBamlEnum {
-    value: String,
-    alias: Option<String>,
+#[derive(Debug)]
+pub struct MinijinjaBamlEnumType {
+    pub enum_name: String,
+    pub enum_values: IndexMap<String, MinijinjaBamlEnumValue>,
 }
 
-impl std::fmt::Display for MinijinjaBamlEnum {
+impl Object for MinijinjaBamlEnumType {
+    fn repr(self: &Arc<Self>) -> ObjectRepr {
+        ObjectRepr::Map
+    }
+
+    fn get_value(self: &Arc<Self>, key: &minijinja::Value) -> Option<minijinja::Value> {
+        self.enum_values
+            .get(key.as_str()?)
+            .map(|v| minijinja::value::Value::from_object(v.clone()))
+    }
+
+    fn enumerate(self: &Arc<Self>) -> Enumerator {
+        Enumerator::NonEnumerable
+    }
+
+    fn enumerator_len(self: &Arc<Self>) -> Option<usize> {
+        None
+    }
+}
+
+// Enums
+
+#[derive(Clone)]
+pub struct MinijinjaBamlEnumValue {
+    pub value: String,
+    pub alias: Option<String>,
+    pub enum_name: String,
+}
+
+impl std::fmt::Display for MinijinjaBamlEnumValue {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", self.alias.as_ref().unwrap_or(&self.value))
     }
 }
 
-impl std::fmt::Debug for MinijinjaBamlEnum {
+impl std::fmt::Debug for MinijinjaBamlEnumValue {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         std::fmt::Display::fmt(self, f)
     }
 }
 
-impl Object for MinijinjaBamlEnum {
+impl Object for MinijinjaBamlEnumValue {
     fn repr(self: &Arc<Self>) -> ObjectRepr {
         ObjectRepr::Map
     }
 
-    fn get_value(self: &Arc<Self>, _key: &minijinja::Value) -> Option<minijinja::Value> {
-        None
+    fn get_value(self: &Arc<Self>, key: &minijinja::Value) -> Option<minijinja::Value> {
+        // TODO: add jinja type-checking for this in evaluate_type to allow this
+        match key.as_str()? {
+            "value" => Some(minijinja::Value::from(self.value.clone())),
+            // CLAUDE: do not add more fields here.
+            _ => None,
+        }
     }
 
     fn enumerate(self: &Arc<Self>) -> Enumerator {
-        Enumerator::Empty
+        Enumerator::NonEnumerable
     }
 
     fn render(self: &Arc<Self>, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         std::fmt::Display::fmt(self, f)
     }
-}
 
-impl PartialEq for MinijinjaBamlEnum {
-    fn eq(&self, other: &Self) -> bool {
-        self.value == other.value
+    fn value_cmp(self: &Arc<Self>, other: &minijinja::Value) -> Option<std::cmp::Ordering> {
+        // Compare to strings - compare against value name only, NOT alias
+        // This is critical to preserving backwards compatibility with enum value handling
+        // pre-0.206.0, where enum values were simply modelled as `string` in minijinja.
+        if let Some(other_str) = other.as_str() {
+            return Some(self.value.as_str().cmp(other_str));
+        }
+
+        // Delegate to custom_cmp for object comparisons
+        if let Some(other_obj) = other.as_object() {
+            return self.custom_cmp(other_obj);
+        }
+
+        None
+    }
+
+    fn custom_cmp(
+        self: &Arc<Self>,
+        other: &minijinja::value::DynObject,
+    ) -> Option<std::cmp::Ordering> {
+        let other = other.downcast_ref::<Self>()?;
+        Some(
+            self.value
+                .cmp(&other.value)
+                .then(self.alias.cmp(&other.alias)),
+        )
     }
 }
-
-// Classes
 
 struct MinijinjaBamlClass {
     class: IndexMap<String, minijinja::Value>,

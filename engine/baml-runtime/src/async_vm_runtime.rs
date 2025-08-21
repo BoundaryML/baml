@@ -15,7 +15,7 @@ use std::{
 use baml_compiler::{self};
 use baml_ids::FunctionCallId;
 use baml_types::{tracing::events::HTTPRequest, BamlMap, BamlValue, BamlValueWithMeta, Completion};
-use baml_vm::{BamlVmProgram, FunctionKind, Vm, VmExecState};
+use baml_vm::{BamlVmProgram, EvalStack, FunctionKind, ObjectIndex, Vm, VmExecState};
 use internal_baml_core::ir::IRHelper;
 use jsonish::{ResponseBamlValue, ResponseValueMeta};
 
@@ -89,11 +89,16 @@ impl BamlAsyncVmRuntime {
             return println!("function not found: {function_name}");
         };
 
-        let Some(baml_vm::Object::Function(function)) = self.program.objects.get(index) else {
+        let baml_vm::Object::Function(function) = &self.program.objects[index] else {
             return println!("not a function: {function_name}");
         };
 
-        baml_vm::debug::disassemble(function, &[], &self.program.objects, &self.program.globals);
+        baml_vm::debug::disassemble(
+            function,
+            &EvalStack::default(),
+            &self.program.objects,
+            &self.program.globals,
+        );
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -187,7 +192,7 @@ impl BamlAsyncVmRuntime {
                 panic!("missing parameter: {name}");
             };
 
-            let vm_value = try_vm_value_from_baml_value(&vm, param)
+            let vm_value = try_vm_value_from_baml_value(&mut vm, param)
                 .unwrap_or_else(|e| panic!("failed to convert baml arg to vm value: {e}"));
 
             vm_value
@@ -196,11 +201,11 @@ impl BamlAsyncVmRuntime {
         vm.set_entry_point(*function_index, &args);
 
         let (futures_tx, mut futures_rx) = tokio::sync::mpsc::unbounded_channel::<(
-            usize,
+            ObjectIndex,
             (anyhow::Result<FunctionResult>, FunctionCallId),
         )>();
 
-        let result = loop {
+        let result = 'mainloop: loop {
             match vm.exec() {
                 Ok(VmExecState::Await(idx)) => {
                     let mut fulfilled = false;
@@ -208,9 +213,11 @@ impl BamlAsyncVmRuntime {
                     // Fulfil completed futures without blocking, if any.
                     // TODO: Handle errors.
                     while let Ok((ready_idx, (result, call_id))) = futures_rx.try_recv() {
-                        let vm_value = vm_value_from_function_result(&vm, result);
+                        let vm_value = vm_value_from_function_result(&mut vm, result);
 
-                        vm.fulfil_future(ready_idx, vm_value);
+                        if let Err(e) = vm.fulfil_future(ready_idx, vm_value) {
+                            break 'mainloop Err(e.into());
+                        }
 
                         if ready_idx == idx {
                             fulfilled = true;
@@ -226,9 +233,11 @@ impl BamlAsyncVmRuntime {
                             .await
                             .expect("failed to receive result from channel");
 
-                        let vm_value = vm_value_from_function_result(&vm, result);
+                        let vm_value = vm_value_from_function_result(&mut vm, result);
 
-                        vm.fulfil_future(ready_idx, vm_value);
+                        if let Err(e) = vm.fulfil_future(ready_idx, vm_value) {
+                            break 'mainloop Err(e.into());
+                        }
 
                         // After this one we don't have to wait for more futures
                         // even if they are running in the background, because
@@ -240,7 +249,10 @@ impl BamlAsyncVmRuntime {
                 }
 
                 Ok(VmExecState::ScheduleFuture(idx)) => {
-                    let pending_future = vm.pending_future(idx);
+                    let pending_future = match vm.pending_future(idx) {
+                        Ok(f) => f,
+                        Err(e) => break Err(e.into()),
+                    };
 
                     let llm_fn = self
                         .llm_runtime
@@ -542,7 +554,7 @@ fn try_baml_value_from_vm_value(vm: &Vm, value: &baml_vm::Value) -> anyhow::Resu
         baml_vm::Value::Int(n) => Ok(BamlValue::Int(*n)),
         baml_vm::Value::Float(f) => Ok(BamlValue::Float(*f)),
 
-        baml_vm::Value::Object(o) => match vm.object(*o) {
+        baml_vm::Value::Object(o) => match &vm.objects[*o] {
             baml_vm::Object::String(s) => Ok(BamlValue::String(s.clone())),
             baml_vm::Object::Array(a) => Ok(BamlValue::List(
                 a.iter()
@@ -554,18 +566,27 @@ fn try_baml_value_from_vm_value(vm: &Vm, value: &baml_vm::Value) -> anyhow::Resu
     }
 }
 
-fn try_vm_value_from_baml_value(vm: &Vm, value: &BamlValue) -> anyhow::Result<baml_vm::Value> {
+fn try_vm_value_from_baml_value(vm: &mut Vm, value: &BamlValue) -> anyhow::Result<baml_vm::Value> {
     match value {
         BamlValue::Null => Ok(baml_vm::Value::Null),
         BamlValue::Bool(b) => Ok(baml_vm::Value::Bool(*b)),
         BamlValue::Int(n) => Ok(baml_vm::Value::Int(*n)),
         BamlValue::Float(f) => Ok(baml_vm::Value::Float(*f)),
+        BamlValue::List(l) => {
+            let mut array = Vec::with_capacity(l.len());
+
+            for v in l {
+                array.push(try_vm_value_from_baml_value(vm, v)?);
+            }
+
+            Ok(vm.alloc_array(array))
+        }
         _ => todo!("handle strings and objects"),
     }
 }
 
 fn vm_value_from_function_result(
-    vm: &Vm,
+    vm: &mut Vm,
     result: anyhow::Result<FunctionResult>,
 ) -> baml_vm::Value {
     let fn_result = result.unwrap_or_else(|e| panic!("failed to get function result: {e}"));

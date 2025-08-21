@@ -26,7 +26,7 @@ module BamlClient
       const :state, Symbol
   end
   # #########################################################################
-  # Generated classes (99)
+  # Generated classes (101)
   # #########################################################################
 
 
@@ -599,6 +599,19 @@ module BamlClient
   class RecursiveAliasDependency < T::Struct
       include Baml::Sorbet::Struct
       const :value, T.nilable(JsonValue)
+  end
+
+
+  class RenderEnumInput < T::Struct
+      include Baml::Sorbet::Struct
+      const :testKey, T.nilable(String)
+  end
+
+
+  class RenderTestClass < T::Struct
+      include Baml::Sorbet::Struct
+      const :name, T.nilable(String)
+      const :status, T.nilable(T.any(BamlClient::Types::RenderStatusEnum, String))
   end
 
 

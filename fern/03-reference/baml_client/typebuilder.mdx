@@ -63,6 +63,54 @@ const result = await b.Categorize("The sun is bright", { tb })
 ```
 </Tab>
 
+<Tab title="Go" language="go">
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    
+    b "example.com/myproject/baml_client"
+)
+
+func main() {
+    ctx := context.Background()
+    
+    // Create a TypeBuilder instance
+    tb, err := b.NewTypeBuilder()
+    if err != nil {
+        panic(err)
+    }
+    
+    // Get the Category enum and add new values
+    category, err := tb.Category()
+    if err != nil {
+        panic(err)
+    }
+    
+    _, err = category.AddValue("GREEN")
+    if err != nil {
+        panic(err)
+    }
+    
+    _, err = category.AddValue("YELLOW")
+    if err != nil {
+        panic(err)
+    }
+    
+    // Pass the typebuilder when calling the function
+    result, err := b.Categorize(ctx, "The sun is bright", b.WithTypeBuilder(tb))
+    if err != nil {
+        panic(err)
+    }
+    
+    // result can now be RED, BLUE, GREEN, or YELLOW
+    fmt.Printf("Result: %+v\n", result)
+}
+```
+</Tab>
+
 <Tab title="Ruby" language="ruby">
 ```ruby
 require_relative 'baml_client/client'
@@ -105,44 +153,16 @@ class User {
 <Tab title="Python" language="python">
 ```python
 tb = TypeBuilder()
-
-# Add properties to an existing class.
 tb.User.add_property('email', tb.string())
 tb.User.add_property('address', tb.string())
-
-# Remove a property from an existing class.
-tb.User.remove_property('address')
-
-# List the properties of the class as [(name, field_type)]
-for prop_name, prop_builder in tb.User.list_properties():
-    if prop_builder.get_type() == tb.string(): # Check type of the property
-        prop_builder.type(tb.int())            # Modify the property type
-
-# Remove all properties of the class.
-tb.User.reset()
 ```
 </Tab>
 
 <Tab title="TypeScript" language="typescript">
 ```typescript
 const tb = new TypeBuilder()
-
-// Add properties to an existing class.
 tb.User.addProperty('email', tb.string())
 tb.User.addProperty('address', tb.string())
-
-// Remove a property from the existing class.
-tb.User.removeProperty('address')
-
-// List the properties of the class as Array<[name, field_type]>
-for (const [prop_name, prop_builder] of tb.User.listProperties()) {
-    if (prop_builder.getType().equals(tb.string())) { // Check type of the property
-        prop_builder.setType(tb.int())                // Modify the property type
-    }
-}
-
-// Remove all properties of the class.
-tb.User.reset()
 ```
 </Tab>
 
@@ -212,18 +232,6 @@ address = tb.add_class("Address")
 address.add_property("street", tb.string())
 address.add_property("city", tb.string())
 
-# Remove a property from the new class.
-address.remove_property("city")
-
-# List the properties of the class as [(name, field_type)]
-for prop_name, prop_builder in address.list_properties():
-    if prop_builder.get_type() == tb.string(): # Check type of the property
-        prop_builder.type(tb.int())            # Modify the property type
-
-
-# Remove all properties of the class.
-address.reset()
-
 # Attach new types to existing BAML type
 tb.User.add_property("hobbies", hobbies.type().list())
 tb.User.add_property("address", address.type())
@@ -243,19 +251,6 @@ hobbies.addValue("Reading")
 const address = tb.addClass("Address")
 address.addProperty("street", tb.string())
 address.addProperty("city", tb.string())
-
-// Remove a property from the new class.
-address.removeProperty("city")
-
-// List the properties of the class as Array<[name, field_type]>
-for (const [prop_name, prop_builder] of address.listProperties()) {
-    if (prop_builder.getType().equals(tb.string())) { // Check type of the property
-        prop_builder.setType(tb.int())                // Modify the property type
-    }
-}
-
-// Remove all properties of the class.
-address.reset()
 
 // Attach new types to existing BAML type
 tb.User.addProperty("hobbies", hobbies.type().list())

@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    vm::{InternalError, Object, Type, Vm, VmError},
+    vm::{InternalError, Object, ObjectType, Vm, VmError},
     Value,
 };
 
@@ -19,18 +19,15 @@ impl Vm {
             }));
         }
 
-        let Value::Object(array) = args[0] else {
-            return Err(VmError::from(InternalError::TypeError {
-                expected: Type::Object,
-                got: Type::of(&args[0]),
-            }));
-        };
+        let expected = ObjectType::Array;
+        let ob_index = self.objects.as_object(&args[0], expected)?;
 
-        let Object::Array(array) = &self.objects[array] else {
-            return Err(VmError::from(InternalError::TypeError {
-                expected: Type::Object,
-                got: Type::Object,
-            }));
+        let Object::Array(array) = &self.objects[ob_index] else {
+            return Err(InternalError::TypeError {
+                expected: expected.into(),
+                got: ObjectType::of(&self.objects[ob_index]).into(),
+            }
+            .into());
         };
 
         Ok(Value::Int(array.len() as i64))

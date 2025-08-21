@@ -2,13 +2,18 @@
 
 use std::collections::{HashMap, HashSet};
 
+use baml_types::BamlValueWithMeta;
 use baml_vm::{
-    BamlVmProgram, BinOp, Bytecode, Class, CmpOp, Function, FunctionKind, Instruction, Object,
-    UnaryOp, Value,
+    BamlVmProgram, BinOp, Bytecode, Class, CmpOp, Function, FunctionKind, GlobalIndex, GlobalPool,
+    Instruction, Object, ObjectIndex, ObjectPool, UnaryOp, Value,
 };
+use internal_baml_diagnostics::{Diagnostics, Span};
 use internal_baml_parser_database::ParserDatabase;
 
-use crate::hir;
+use crate::{
+    hir::{self, Type},
+    thir,
+};
 
 /// Compile a Baml AST into bytecode.
 ///
@@ -20,33 +25,50 @@ pub fn compile(ast: &ParserDatabase) -> anyhow::Result<BamlVmProgram> {
     // eprintln!("AST:\n{:#?}", ast.ast);
     let hir = hir::Hir::from_ast(&ast.ast);
 
+    // TODO: THIR is built twice, once for validations, once for compilation.
+    // Fix this.
+    let thir = thir::typecheck::typecheck(&hir, &mut Diagnostics::new("dummy".into()));
+
+    // eprintln!("\nTHIR:\n{:#?}", thir);
+
     // eprintln!("\nHIR:\n{:#?}", hir);
 
     // Stage 2: HIR -> Bytecode
-    compile_hir_to_bytecode(&hir)
+    compile_thir_to_bytecode(&thir)
 }
 
 /// Compile HIR to bytecode.
 ///
 /// This function takes an HIR Program and generates the bytecode for the VM.
-fn compile_hir_to_bytecode(hir: &hir::Hir) -> anyhow::Result<BamlVmProgram> {
+fn compile_thir_to_bytecode(
+    thir: &thir::THir<(Span, Option<Type>)>,
+) -> anyhow::Result<BamlVmProgram> {
     let mut resolved_globals = HashMap::new();
     let mut resolved_classes = HashMap::new();
     let mut llm_functions = HashSet::new();
 
     // Resolve global functions from HIR
-    for func in &hir.expr_functions {
-        resolved_globals.insert(func.name.clone(), resolved_globals.len());
+    for func in &thir.expr_functions {
+        resolved_globals.insert(
+            func.name.clone(),
+            GlobalIndex::from_raw(resolved_globals.len()),
+        );
     }
 
-    for func in &hir.llm_functions {
-        resolved_globals.insert(func.name.clone(), resolved_globals.len());
+    for func in &thir.llm_functions {
+        resolved_globals.insert(
+            func.name.clone(),
+            GlobalIndex::from_raw(resolved_globals.len()),
+        );
         llm_functions.insert(func.name.clone());
     }
 
     // Resolve classes from HIR
-    for class in &hir.classes {
-        resolved_globals.insert(class.name.clone(), resolved_globals.len());
+    for class in thir.classes.values() {
+        resolved_globals.insert(
+            class.name.clone(),
+            GlobalIndex::from_raw(resolved_globals.len()),
+        );
 
         // Resolve class fields.
         let mut class_fields = HashMap::new();
@@ -60,31 +82,37 @@ fn compile_hir_to_bytecode(hir: &hir::Hir) -> anyhow::Result<BamlVmProgram> {
     let native_fns = baml_vm::native::functions();
 
     for name in native_fns.keys() {
-        resolved_globals.insert(name.clone(), resolved_globals.len());
+        resolved_globals.insert(name.clone(), GlobalIndex::from_raw(resolved_globals.len()));
     }
 
-    let mut objects = Vec::with_capacity(resolved_globals.len());
-    let mut globals = Vec::with_capacity(resolved_globals.len());
+    let mut objects = ObjectPool::from_vec(Vec::with_capacity(resolved_globals.len()));
+    let mut globals = GlobalPool::from_vec(Vec::with_capacity(resolved_globals.len()));
 
-    let mut loop_vars_counter = ForLoopVarCounters::new();
+    let mut loop_var_counter = ForLoopVarCounters::new();
+
+    let mut fn_class_patch_lists = Vec::with_capacity(thir.expr_functions.len());
 
     // Compile HIR functions to bytecode
-    for func in &hir.expr_functions {
-        let bytecode_function = compile_hir_function(
+    for func in &thir.expr_functions {
+        let mut class_alloc_patch_list = Vec::new();
+
+        let bytecode_function = compile_thir_function(
             func,
             &resolved_globals,
             &resolved_classes,
             &llm_functions,
-            &mut loop_vars_counter,
+            &mut loop_var_counter,
             &mut objects,
+            &mut class_alloc_patch_list,
         )?;
 
         // Add the function to the globals and objects pools.
-        globals.push(Value::Object(objects.len()));
-        objects.push(Object::Function(bytecode_function));
+        let object_index = objects.insert(Object::Function(bytecode_function));
+        fn_class_patch_lists.push((object_index, class_alloc_patch_list));
+        globals.push(Value::Object(object_index));
     }
 
-    for func in &hir.llm_functions {
+    for func in &thir.llm_functions {
         let bytecode_llm_function = Object::Function(Function {
             name: func.name.clone(),
             arity: func.parameters.len(),
@@ -93,19 +121,41 @@ fn compile_hir_to_bytecode(hir: &hir::Hir) -> anyhow::Result<BamlVmProgram> {
             locals_in_scope: vec![func.parameters.iter().map(|p| p.name.clone()).collect()],
         });
 
-        globals.push(Value::Object(objects.len()));
-        objects.push(bytecode_llm_function);
+        let object_index = objects.insert(bytecode_llm_function);
+        globals.push(Value::Object(object_index));
     }
 
     // Add classes to objects
-    for class in &hir.classes {
+    for class in thir.classes.values() {
         let bytecode_class = Class {
             name: class.name.clone(),
             field_names: class.fields.iter().map(|f| f.name.clone()).collect(),
         };
 
-        globals.push(Value::Object(objects.len()));
-        objects.push(Object::Class(bytecode_class));
+        let object_index = objects.insert(Object::Class(bytecode_class));
+        globals.push(Value::Object(object_index));
+    }
+
+    // resolve classes into their instance creation insns now that we've got their locations.
+    // NOTE: memory locality is not great, review if it gets annoying.
+    // Right now we're grouping by function & effectively random-accessing globals. Since
+    // locations are pushed in compilation order, they are monotonically increasing.
+    for (func_index, patch_list) in fn_class_patch_lists {
+        let Object::Function(Function { bytecode, .. }) = &mut objects[func_index] else {
+            panic!("should have a compiled function here!");
+        };
+
+        for AllocInstancePatch { location, global } in patch_list {
+            let Value::Object(object_index) = globals[global] else {
+                panic!("must have a class global here! The expected class may not be in the place resolved by `globals`");
+            };
+
+            let Instruction::AllocInstance(index) = &mut bytecode.instructions[location] else {
+                panic!("alloc instance patch list must contain locations to AllocInstance!");
+            };
+
+            *index = object_index;
+        }
     }
 
     for (name, (func, arity)) in native_fns {
@@ -117,15 +167,15 @@ fn compile_hir_to_bytecode(hir: &hir::Hir) -> anyhow::Result<BamlVmProgram> {
             locals_in_scope: vec![], // TODO.
         });
 
-        globals.push(Value::Object(objects.len()));
-        objects.push(native_function);
+        let object_index = objects.insert(native_function);
+        globals.push(Value::Object(object_index));
     }
 
     let resolved_function_names = objects
         .iter()
         .enumerate()
         .filter_map(|(i, obj)| match obj {
-            Object::Function(f) => Some((f.name.clone(), (i, f.kind))),
+            Object::Function(f) => Some((f.name.clone(), (ObjectIndex::from_raw(i), f.kind))),
             _ => None,
         })
         .collect();
@@ -177,15 +227,23 @@ impl ForLoopVarCounters {
 }
 
 /// Compile an HIR function to bytecode.
-fn compile_hir_function(
-    func: &hir::ExprFunction,
-    globals: &HashMap<String, usize>,
+fn compile_thir_function(
+    func: &thir::ExprFunction<(Span, Option<Type>)>,
+    globals: &HashMap<String, GlobalIndex>,
     classes: &HashMap<String, HashMap<String, usize>>,
     llm_functions: &HashSet<String>,
     loop_var_counter: &mut ForLoopVarCounters,
-    objects: &mut Vec<Object>,
+    objects: &mut ObjectPool,
+    class_alloc_patch_list: &mut Vec<AllocInstancePatch>,
 ) -> anyhow::Result<Function> {
-    let mut compiler = HirCompiler::new(globals, classes, llm_functions, loop_var_counter, objects);
+    let mut compiler = HirCompiler::new(
+        globals,
+        classes,
+        llm_functions,
+        loop_var_counter,
+        objects,
+        class_alloc_patch_list,
+    );
     compiler.compile_function(func)
 }
 
@@ -225,12 +283,18 @@ struct Scope {
     id: usize,
 }
 
+#[derive(Clone, Copy, Debug)]
+struct AllocInstancePatch {
+    location: usize,
+    global: GlobalIndex,
+}
+
 /// HIR to bytecode compiler.
 struct HirCompiler<'g> {
     /// Resolved global variables.
     ///
     /// Maps the name of the global variable to its index in the globals pool.
-    globals: &'g HashMap<String, usize>,
+    globals: &'g HashMap<String, GlobalIndex>,
 
     /// Resolved class fields.
     ///
@@ -265,11 +329,18 @@ struct HirCompiler<'g> {
     bytecode: Bytecode,
 
     /// Objects pool.
-    objects: &'g mut Vec<Object>,
+    objects: &'g mut ObjectPool,
+
+    /// `AllocInstance` instructions that have a placeholder, which must be resolved when location
+    /// of the class object is resolved.
+    class_alloc_patch_list: &'g mut Vec<AllocInstancePatch>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct LoopInfo {
+    /// Length of [`HirCompiler::scopes`] before entering the loop body. This helps `break` and
+    /// `continue` know how many scopes they have to pop.
+    pub scope_depth: usize,
     /// List of jump instruction locations to be patched when loop construction is done.
     /// They will point to the loop exit. Used for admitting arbitrary `break`s.
     pub break_patch_list: Vec<usize>,
@@ -280,17 +351,19 @@ struct LoopInfo {
 
 impl<'g> HirCompiler<'g> {
     fn new(
-        globals: &'g HashMap<String, usize>,
+        globals: &'g HashMap<String, GlobalIndex>,
         classes: &'g HashMap<String, HashMap<String, usize>>,
         llm_functions: &'g HashSet<String>,
         var_counters: &'g mut ForLoopVarCounters,
-        objects: &'g mut Vec<Object>,
+        objects: &'g mut ObjectPool,
+        class_alloc_patch_list: &'g mut Vec<AllocInstancePatch>,
     ) -> Self {
         Self {
             globals,
             classes,
             llm_functions,
             objects,
+            class_alloc_patch_list,
             locals: HashMap::new(),
             var_counters,
             current_loop: None,
@@ -304,7 +377,10 @@ impl<'g> HirCompiler<'g> {
     /// Main entry point.
     ///
     /// Here we compile a source function into a [`Function`] VM struct.
-    fn compile_function(&mut self, func: &hir::ExprFunction) -> anyhow::Result<Function> {
+    fn compile_function(
+        &mut self,
+        func: &thir::ExprFunction<(Span, Option<Type>)>,
+    ) -> anyhow::Result<Function> {
         // Compile statements in the function body.
         self.compile_block_with_parameters(&func.body, &func.parameters);
 
@@ -337,7 +413,11 @@ impl<'g> HirCompiler<'g> {
     /// Entry for function or scope compilations.
     ///
     /// Functions have parameters so we need to track those as well.
-    fn compile_block_with_parameters(&mut self, block: &hir::Block, parameters: &[hir::Parameter]) {
+    fn compile_block_with_parameters(
+        &mut self,
+        block: &thir::Block<(Span, Option<Type>)>,
+        parameters: &[thir::Parameter],
+    ) {
         self.enter_scope();
 
         for param in parameters {
@@ -349,7 +429,7 @@ impl<'g> HirCompiler<'g> {
         }
 
         let scope_has_ending_expr = block.statements.last().is_some_and(|stmt| match stmt {
-            hir::Statement::Expression { expr, .. } => expr.produces_final_value(),
+            thir::Statement::Expression { expr, .. } => expr.produces_final_value(),
             _ => false,
         });
 
@@ -357,27 +437,25 @@ impl<'g> HirCompiler<'g> {
     }
 
     /// Used to compile nested blocks within functions.
-    fn compile_block(&mut self, block: &hir::Block) {
+    fn compile_block(&mut self, block: &thir::Block<(Span, Option<Type>)>) {
         self.compile_block_with_parameters(block, &[]);
     }
 
     /// A statement is anything that does not produce a value by itself.
-    fn compile_statement(&mut self, statement: &hir::Statement) {
+    fn compile_statement(&mut self, statement: &thir::Statement<(Span, Option<Type>)>) {
         match statement {
-            hir::Statement::Let { name, value, .. } => {
+            thir::Statement::Let { name, value, .. } => {
                 self.compile_expression(value);
                 self.track_local(name);
             }
-            hir::Statement::Declare { name, .. } => {
+            thir::Statement::Declare { name, .. } => {
                 self.declare_mut(name);
             }
-
-            hir::Statement::Assign { name, value, .. } => {
+            thir::Statement::Assign { name, value, .. } => {
                 self.compile_expression(value);
                 self.emit(Instruction::StoreVar(self.locals[name]));
             }
-
-            hir::Statement::AssignOp {
+            thir::Statement::AssignOp {
                 name,
                 value,
                 assign_op,
@@ -402,18 +480,18 @@ impl<'g> HirCompiler<'g> {
 
                 self.emit(Instruction::StoreVar(self.locals[name]));
             }
-            hir::Statement::DeclareAndAssign { name, value, .. } => {
+            thir::Statement::DeclareAndAssign { name, value, .. } => {
                 self.compile_expression(value);
                 self.track_local(name);
             }
-            hir::Statement::Return { expr, .. } => {
+            thir::Statement::Return { expr, .. } => {
                 self.compile_expression(expr);
                 self.emit(Instruction::Return);
             }
-            hir::Statement::Expression { expr, .. } => {
+            thir::Statement::Expression { expr, .. } => {
                 self.compile_expression(expr);
             }
-            hir::Statement::SemicolonExpression { expr, .. } => {
+            thir::Statement::SemicolonExpression { expr, .. } => {
                 self.compile_expression(expr);
                 // This could be a function call or any other random expression
                 // like:
@@ -424,11 +502,11 @@ impl<'g> HirCompiler<'g> {
                 // binding) then implicitly drop the value.
                 self.emit(Instruction::Pop(1));
             }
-            hir::Statement::ForLoop {
+            thir::Statement::ForLoop {
                 identifier,
                 iterator,
                 block,
-                span,
+                ..
             } => {
                 // store array, array length & index in stack.
                 // compile as:
@@ -489,8 +567,7 @@ impl<'g> HirCompiler<'g> {
                     |ctx| {
                         ctx.enter_scope();
 
-                        // NOTE: would be nice to have newtype'd indices for these.
-                        let iterator_location = ctx.track_local(identifier.as_str());
+                        ctx.track_local(identifier.as_str());
 
                         // let <iterator name> = array[i];
 
@@ -511,42 +588,96 @@ impl<'g> HirCompiler<'g> {
 
                         ctx.exit_scope(false);
                     },
+                    |_| {},
                 );
 
                 self.exit_scope(false);
             }
-            hir::Statement::While {
+            thir::Statement::While {
                 condition, block, ..
             } => {
-                // Remember where the loop starts
-                let loop_start = self.bytecode.instructions.len() as isize;
-
                 self.compile_while_loop(
                     |ctx| ctx.compile_expression(condition),
                     |ctx| ctx.compile_block(block),
+                    |_| {},
                 );
             }
-            hir::Statement::Break(span) => {
+            thir::Statement::Break(_) => {
+                let cur_loop = self.assert_loop("break");
+
+                // since we are exiting the loop context, make sure we drop everything before
+                // breaking!
+                let pop_until = cur_loop.scope_depth;
+                self.emit_scope_drops(pop_until);
+
+                let exit_jump = self.next_insn_index() as usize;
+                self.assert_loop("break").break_patch_list.push(exit_jump);
+
                 // NOTE: right now this will generate redundant code when using
                 // `if condition { break }`, since `if` will generate its own jump location and we
                 // will end up with a conditional jump and a regular jump together.
-                let exit_jump = self.emit(Instruction::Jump(0));
-
-                let cur_loop = self.current_loop.as_mut().expect("`break` must have a loop wrapping it, and this should have been checked by validation");
-
-                cur_loop.break_patch_list.push(exit_jump);
+                self.emit(Instruction::Jump(0));
             }
-            hir::Statement::Continue(span) => {
+            thir::Statement::Continue(_) => {
+                let cur_loop = self.assert_loop("continue");
+
+                let pop_until = cur_loop.scope_depth;
+                self.emit_scope_drops(pop_until);
+
+                let exit_jump = self.next_insn_index() as usize;
+                self.assert_loop("continue")
+                    .continue_patch_list
+                    .push(exit_jump);
+
                 // NOTE: right now this will generate redundant code when using
                 // `if condition { continue }`, since `if` will generate its own jump location and we
-                // will end up with a conditional jump and a regular jump together.
+                // will end up with a conditional jump and a regular jump together, making the jump
                 // unreachable.
-                let exit_jump = self.emit(Instruction::Jump(0));
-
-                let cur_loop = self.current_loop.as_mut().expect("`continue` must have a loop wrapping it, and this should have been checked by validation");
-
-                cur_loop.continue_patch_list.push(exit_jump);
+                self.emit(Instruction::Jump(0));
             }
+            thir::Statement::CForLoop {
+                condition,
+                after,
+                block,
+            } => match condition {
+                Some(cond) => self.compile_while_loop(
+                    |ctx| ctx.compile_expression(cond),
+                    |ctx| ctx.compile_block(block),
+                    |ctx| {
+                        if let Some(after) = &after {
+                            ctx.compile_statement(after);
+                        }
+                    },
+                ),
+                None => {
+                    // infinite loop.
+
+                    let loop_start = self.next_insn_index();
+
+                    let break_locs = self.wrap_loop_body(|ctx| ctx.compile_block(block));
+
+                    if let Some(after) = &after {
+                        self.compile_statement(after);
+                    }
+
+                    self.emit(Instruction::Jump(loop_start - self.next_insn_index()));
+
+                    for loc in break_locs {
+                        self.patch_jump(loc);
+                    }
+                }
+            },
+            thir::Statement::Assert { condition, .. } => {
+                self.compile_expression(condition);
+                self.emit(Instruction::Assert);
+            }
+        }
+    }
+
+    fn assert_loop(&mut self, name: &'static str) -> &mut LoopInfo {
+        match self.current_loop.as_mut() {
+            None => panic!("`{name}` must have a loop wrapping it, and this should have been checked by validation"),
+            Some(x) => x,
         }
     }
 
@@ -586,98 +717,78 @@ impl<'g> HirCompiler<'g> {
         &mut self,
         compile_condition: impl FnOnce(&mut Self),
         compile_block: impl FnOnce(&mut Self),
+        // statements that occur between exiting the loop body & beginning the next iteration.
+        compile_after: impl FnOnce(&mut Self),
     ) {
         let loop_start = self.next_insn_index();
+
         compile_condition(self);
-        // Jump out of loop if false
-        let exit_jump = self.emit(Instruction::JumpIfFalse(0));
-        // Pop condition
+
+        // this jump needs cleaning up, so it's not the same as `break`.
+        let bail_jump = self.emit(Instruction::JumpIfFalse(0));
         self.emit(Instruction::Pop(1));
 
-        let block_start = self.next_insn_index() as usize;
+        let break_locs = self.wrap_loop_body(compile_block);
 
-        // compile block with continue/break context.
-        let (loop_info, _) = self.with_loop_info(compile_block);
+        compile_after(self);
 
-        // find the first of many sequential pops for sequential scope exits, and add them up
-        // so that we can pop all on `break`.
-        // TODO: when scope exit uses
-        let (first_pop, total_pop_count) = {
-            let block_insns = &self.bytecode.instructions[block_start..];
-
-            let last_pops =
-                block_insns
-                    .iter()
-                    .enumerate()
-                    .rev()
-                    .map_while(|(i, insn)| match insn {
-                        Instruction::Pop(count) | Instruction::PopReplace(count) => {
-                            Some((i + block_start, count))
-                        }
-                        _ => None,
-                    });
-
-            let (first_pop, pop_count) =
-                last_pops.fold((None, 0), |(_, acc), (i, count)| (Some(i), acc + count));
-
-            (first_pop, pop_count)
-        };
-
-        // jump back to the start of the loop.
+        // emit jump to start
         self.emit(Instruction::Jump(loop_start - self.next_insn_index()));
 
-        // NOTE: not using tuple because it's very easy to accidentally swap places.
-        // Use a struct with names & destructure it with a pattern if you find it better.
-        let continue_location;
-        let break_location;
+        let pop_if_condition = self.emit(Instruction::Pop(1));
+        self.patch_jump_to(bail_jump, pop_if_condition);
 
-        if let Some(block_end_location) = first_pop {
-            // scope has a destructor. We'll patch `continue` to go to the pop instruction. We'll then add a pop that accounts for the full inside block in `break`.
-
-            continue_location = block_end_location;
-
-            // `break` should go here (after the jump) and pop the locals, but not the condition
-            // result.
-            break_location = self.emit(Instruction::Pop(total_pop_count));
-        } else {
-            // scope has no destructor, so we can wire `continue` directly to loop start
-            continue_location = loop_start as usize;
-
-            // and `break` will just go past the end.
-            break_location = self.next_insn_index() as usize;
-        };
-
-        // jump over itself & the next instruction, since `break` should not pop anything.
-        self.emit(Instruction::Jump(2));
-
-        // finally, exit jump (where the condition hasn't been popped) should go here, so that
-        // it can pop the condition.
-        self.patch_jump(exit_jump);
-        self.emit(Instruction::Pop(1));
-
-        // patch the set continue/break locations.
-        for break_jmp in loop_info.break_patch_list {
-            self.patch_jump_to(break_jmp, break_location);
-        }
-
-        for continue_jmp in loop_info.continue_patch_list {
-            self.patch_jump_to(continue_jmp, continue_location);
+        // make `break` jump here, since `true` branch of if already popped.
+        for loc in break_locs {
+            self.patch_jump(loc);
         }
     }
 
     /// Generate bytecode for an expression.
-    fn compile_expression(&mut self, expr: &hir::Expression) {
+    fn compile_expression(&mut self, expr: &thir::Expr<(Span, Option<Type>)>) {
         // TODO: The implementation of line number is extremely slow. It always
         // reads the entire source string to find the line number.
         self.current_source_line = expr.span().line_number();
 
         match expr {
-            hir::Expression::BoolValue(val, _) => {
-                let index = self.add_constant(Value::Bool(*val));
-                self.emit(Instruction::LoadConst(index));
+            thir::Expr::Value(value) => match value {
+                BamlValueWithMeta::Null(_) => {
+                    let index = self.add_constant(Value::Null);
+                    self.emit(Instruction::LoadConst(index));
+                }
+
+                BamlValueWithMeta::Bool(v, _) => {
+                    let index = self.add_constant(Value::Bool(*v));
+                    self.emit(Instruction::LoadConst(index));
+                }
+
+                BamlValueWithMeta::Int(v, _) => {
+                    let index = self.add_constant(Value::Int(*v));
+                    self.emit(Instruction::LoadConst(index));
+                }
+
+                BamlValueWithMeta::Float(v, _) => {
+                    let index = self.add_constant(Value::Float(*v));
+                    self.emit(Instruction::LoadConst(index));
+                }
+
+                BamlValueWithMeta::String(v, _) => {
+                    // Allocate the string in the objects pool
+                    let object_index = self.objects.insert(Object::String(v.clone()));
+
+                    // Add a constant that points to the string object
+                    let const_index = self.add_constant(Value::Object(object_index));
+                    self.emit(Instruction::LoadConst(const_index));
+                }
+
+                _ => panic!("unsupported atom: {:#?}", value),
+            },
+
+            thir::Expr::Block(block, _) => {
+                self.compile_block(block);
             }
 
-            hir::Expression::ArrayAccess { base, index, .. } => {
+            thir::Expr::ArrayAccess { base, index, .. } => {
                 // Compile the base expression (the array)
                 self.compile_expression(base);
 
@@ -690,33 +801,11 @@ impl<'g> HirCompiler<'g> {
                 self.emit(Instruction::LoadArrayElement);
             }
 
-            hir::Expression::FieldAccess { .. } => {
+            thir::Expr::FieldAccess { .. } => {
                 unimplemented!("field access compilation")
             }
 
-            hir::Expression::NumericValue(num, _) => {
-                let value = num
-                    .parse::<i64>()
-                    .map(Value::Int)
-                    .or_else(|_| num.parse::<f64>().map(Value::Float))
-                    .unwrap_or_else(|_| panic!("failed to parse number: {num}"));
-
-                let index = self.add_constant(value);
-                self.emit(Instruction::LoadConst(index));
-            }
-
-            hir::Expression::StringValue(string, _)
-            | hir::Expression::RawStringValue(string, _) => {
-                // Allocate the string in the objects pool
-                self.objects.push(Object::String(string.clone()));
-                let object_index = self.objects.len() - 1;
-
-                // Add a constant that points to the string object
-                let const_index = self.add_constant(Value::Object(object_index));
-                self.emit(Instruction::LoadConst(const_index));
-            }
-
-            hir::Expression::Identifier(name, _) => {
+            thir::Expr::Var(name, _) => {
                 if let Some(&index) = self.locals.get(name) {
                     self.emit(Instruction::LoadVar(index));
                 } else {
@@ -724,25 +813,21 @@ impl<'g> HirCompiler<'g> {
                 }
             }
 
-            hir::Expression::Array(elements, _) => {
+            thir::Expr::List(elements, _) => {
                 for element in elements {
                     self.compile_expression(element);
                 }
                 self.emit(Instruction::AllocArray(elements.len()));
             }
 
-            hir::Expression::Map(_pairs, _) => {
+            thir::Expr::Map(_pairs, _) => {
                 // Maps are not yet implemented in bytecode
                 todo!("map compilation")
             }
 
-            hir::Expression::JinjaExpressionValue(_, _) => {
-                todo!("jinja expression compilation")
-            }
-
-            hir::Expression::Call { function, args, .. } => {
-                let name = match function.as_ref() {
-                    hir::Expression::Identifier(name, _) => name,
+            thir::Expr::Call { func, args, .. } => {
+                let name = match func.as_ref() {
+                    thir::Expr::Var(name, _) => name,
                     _ => panic!("expressions that evaluate to functions are not supported yet"),
                 };
 
@@ -767,14 +852,18 @@ impl<'g> HirCompiler<'g> {
                 }
             }
 
-            hir::Expression::MethodCall {
+            thir::Expr::MethodCall {
                 receiver,
                 method,
                 args,
-                span,
+                ..
             } => {
+                let thir::Expr::Var(method, _) = method.as_ref() else {
+                    panic!("method calls must be on variables");
+                };
+
                 // Push the function onto the stack
-                let Some(&index) = self.globals.get(method) else {
+                let Some(&index) = self.globals.get(method.as_str()) else {
                     panic!("undefined method: {method}");
                 };
 
@@ -790,63 +879,65 @@ impl<'g> HirCompiler<'g> {
                 self.emit(Instruction::Call(1 + args.len()));
             }
 
-            hir::Expression::ClassConstructor(constructor, _) => {
-                let Some(&class_index) = self.globals.get(&constructor.class_name) else {
-                    panic!("undefined class: {}", constructor.class_name);
+            thir::Expr::ClassConstructor {
+                name: class_name,
+                fields,
+                spread,
+                meta,
+            } => {
+                let Some(&class_index) = self.globals.get(class_name) else {
+                    panic!("undefined class: {}", class_name);
                 };
 
-                // Allocate instance
-                self.emit(Instruction::AllocInstance(class_index));
+                // Emit allocation with bogus index. It will be patched later.
+                let allocation_loc = self.emit(Instruction::AllocInstance(ObjectIndex::from_raw(
+                    usize::MAX,
+                )));
+                self.class_alloc_patch_list.push(AllocInstancePatch {
+                    location: allocation_loc,
+                    global: class_index,
+                });
 
                 let mut defined_named_fields = std::collections::HashSet::new();
 
                 // Process fields in order
-                for field in &constructor.fields {
-                    match field {
-                        hir::ClassConstructorField::Named { name, value } => {
-                            self.compile_expression(value);
+                for (field_name, value) in fields {
+                    self.compile_expression(value);
 
-                            let Some(classes) = self.classes.get(&constructor.class_name) else {
-                                panic!("undefined class: {}", constructor.class_name);
-                            };
+                    let Some(classes) = self.classes.get(class_name) else {
+                        panic!("undefined class: {}", class_name);
+                    };
 
-                            let Some(&field_index) = classes.get(name) else {
-                                panic!("undefined field: {}.{}", constructor.class_name, name);
-                            };
+                    let Some(&field_index) = classes.get(field_name) else {
+                        panic!("undefined field: {}.{}", class_name, field_name);
+                    };
 
+                    self.emit(Instruction::StoreField(field_index));
+                    defined_named_fields.insert(field_name.as_str());
+                }
+
+                if let Some(spread) = spread {
+                    self.compile_expression(spread);
+
+                    // Pseudo local, user didn't declare it.
+                    let spread_local = self.locals.len() + 2;
+                    self.emit(Instruction::LoadVar(spread_local - 1));
+
+                    let Some(classes) = self.classes.get(class_name) else {
+                        panic!("undefined class: {}", class_name);
+                    };
+
+                    for (field_name, &field_index) in classes {
+                        if !defined_named_fields.contains(field_name.as_str()) {
+                            self.emit(Instruction::LoadVar(spread_local));
+                            self.emit(Instruction::LoadField(field_index));
                             self.emit(Instruction::StoreField(field_index));
-                            defined_named_fields.insert(name.as_str());
-                        }
-                        hir::ClassConstructorField::Spread { value } => {
-                            // TODO: @antonio: Variable tracking here is wrong.
-                            self.compile_expression(value);
-
-                            // Pseudo local, user didn't declare it.
-                            let spread_local = self.locals.len() + 2;
-                            self.emit(Instruction::LoadVar(spread_local - 1));
-
-                            let Some(classes) = self.classes.get(&constructor.class_name) else {
-                                panic!("undefined class: {}", constructor.class_name);
-                            };
-
-                            for (field_name, &field_index) in classes {
-                                if !defined_named_fields.contains(field_name.as_str()) {
-                                    self.emit(Instruction::LoadVar(spread_local));
-                                    self.emit(Instruction::LoadField(field_index));
-                                    self.emit(Instruction::StoreField(field_index));
-                                }
-                            }
                         }
                     }
                 }
             }
 
-            hir::Expression::If {
-                condition,
-                if_branch,
-                else_branch,
-                ..
-            } => {
+            thir::Expr::If(condition, if_branch, else_branch, _) => {
                 // First, compile the condition. This will leave the end result
                 // of the condition on top of the stack.
                 self.compile_expression(condition);
@@ -891,11 +982,7 @@ impl<'g> HirCompiler<'g> {
                 self.patch_jump(skip_else);
             }
 
-            hir::Expression::ExpressionBlock(block, _) => {
-                self.compile_block(block);
-            }
-
-            hir::Expression::BinaryOperation {
+            thir::Expr::BinaryOperation {
                 left,
                 operator,
                 right,
@@ -961,7 +1048,7 @@ impl<'g> HirCompiler<'g> {
                 }
             }
 
-            hir::Expression::UnaryOperation { operator, expr, .. } => {
+            thir::Expr::UnaryOperation { operator, expr, .. } => {
                 self.compile_expression(expr);
 
                 self.emit(match operator {
@@ -970,8 +1057,12 @@ impl<'g> HirCompiler<'g> {
                 });
             }
 
-            hir::Expression::Paren(expr, _) => {
+            thir::Expr::Paren(expr, _) => {
                 self.compile_expression(expr);
+            }
+
+            thir::Expr::Function(_, _, _) | thir::Expr::Builtin(_, _) => {
+                todo!("unsupported expression: {:#?}", expr)
             }
         }
     }
@@ -1063,6 +1154,29 @@ impl<'g> HirCompiler<'g> {
         self.locals_in_scope.push(HashMap::new());
     }
 
+    /// Emits instructions to drop scopes up-to and including `pop_until` index, but does not affect information for
+    /// locals.
+    /// Used in `break` & `continue` to emit appropriate popping instructions.
+    fn emit_scope_drops(&mut self, pop_until: usize) {
+        let scopes = &self.scopes[pop_until..];
+
+        let local_count = scopes
+            .iter()
+            .map(|s| {
+                // see `exit_scope`: depth 0 is function body block, and thus has `return`.
+                if s.depth == 0 {
+                    0
+                } else {
+                    s.locals.len()
+                }
+            })
+            .sum();
+
+        if local_count > 0 {
+            self.emit(Instruction::Pop(local_count));
+        }
+    }
+
     /// Drops the current block scope we're in.
     fn exit_scope(&mut self, scope_has_ending_expr: bool) {
         let scope = self
@@ -1088,25 +1202,37 @@ impl<'g> HirCompiler<'g> {
         }
     }
 
-    /// Wraps `inner` in a context with loop information. Any `break`s that are submitted by
-    /// `inner` to this loop are patched to the next instruction after `inner` returns.
-    /// The parameter to `inner` is the same as `self` and can be ignored, it's used to
-    /// obtain the borrow inside `inner`'s body.
+    /// Wraps loop inside a scope that is fully popped on both `continue` & `break`.
+    /// Returns a patch list of instruction locations for jumps to bail out of the loop, from
+    /// `break`s. Note that there is no cleanup from inside the loop to perform.
     ///
-    /// See [`Self::compile_while_loop`] for a usage example.
-    fn with_loop_info<T>(&mut self, inner: impl FnOnce(&mut Self) -> T) -> (LoopInfo, T) {
-        let old_loop_status = self.current_loop.replace(LoopInfo::default());
+    /// Does **NOT** emit the jump instruction to jump back to the beginning of the loop. This is
+    /// inteded, since it allows adding arbitrary instructions to `continue`
+    fn wrap_loop_body(&mut self, codegen_body: impl FnOnce(&mut Self)) -> Vec<usize> {
+        self.enter_scope();
 
-        let result = inner(self);
+        let old_loop_status = self.current_loop.replace(LoopInfo {
+            scope_depth: self.scopes.len(),
+            break_patch_list: Vec::new(),
+            continue_patch_list: Vec::new(),
+        });
+
+        codegen_body(self);
 
         let loop_info = std::mem::replace(&mut self.current_loop, old_loop_status)
             .expect("should have been pushed before when grabbing old_status");
 
-        (loop_info, result)
+        self.exit_scope(false);
+
+        for continue_jmp in loop_info.continue_patch_list {
+            self.patch_jump(continue_jmp);
+        }
+
+        loop_info.break_patch_list
     }
 }
 
-impl hir::Expression {
+impl thir::Expr<(Span, Option<Type>)> {
     /// Returns true if the block ends with an expression that has a final value.
     ///
     /// For example, it would return true for this block:
@@ -1140,8 +1266,8 @@ impl hir::Expression {
     fn produces_final_value(&self) -> bool {
         match self {
             // First call will happen on a block. Recurse on the final expression.
-            hir::Expression::ExpressionBlock(block, _) => match block.statements.last() {
-                Some(hir::Statement::Expression { expr, .. }) => expr.produces_final_value(),
+            thir::Expr::Block(block, _) => match block.statements.last() {
+                Some(thir::Statement::Expression { expr, .. }) => expr.produces_final_value(),
 
                 // Does not produce a value.
                 _ => false,
@@ -1152,33 +1278,34 @@ impl hir::Expression {
             // need to match, if one of them returns a value the other one must
             // return the same type. This is typechecker bug if it's wrong, so
             // I won't bother here.
-            hir::Expression::If { if_branch, .. } => if_branch.produces_final_value(),
+            thir::Expr::If(_, if_branch, ..) => if_branch.produces_final_value(),
 
             // This is an expression that produces a value, so true. We're
             // forcing non-exhaustive match here because other types of
             // expressions that we add in the future might need to be considered.
-            hir::Expression::Array(_, _)
-            | hir::Expression::Map(_, _)
-            | hir::Expression::JinjaExpressionValue(_, _)
-            | hir::Expression::ArrayAccess { .. }
-            | hir::Expression::FieldAccess { .. }
-            | hir::Expression::MethodCall { .. }
-            | hir::Expression::BoolValue(_, _)
-            | hir::Expression::NumericValue(_, _)
-            | hir::Expression::Identifier(_, _)
-            | hir::Expression::StringValue(_, _)
-            | hir::Expression::RawStringValue(_, _)
-            | hir::Expression::Call { .. }
-            | hir::Expression::ClassConstructor(_, _)
-            | hir::Expression::BinaryOperation { .. }
-            | hir::Expression::UnaryOperation { .. }
-            | hir::Expression::Paren(_, _) => true,
+            thir::Expr::List(_, _)
+            | thir::Expr::Map(_, _)
+            | thir::Expr::ArrayAccess { .. }
+            | thir::Expr::FieldAccess { .. }
+            | thir::Expr::MethodCall { .. }
+            | thir::Expr::Value(_)
+            | thir::Expr::Call { .. }
+            | thir::Expr::ClassConstructor { .. }
+            | thir::Expr::BinaryOperation { .. }
+            | thir::Expr::UnaryOperation { .. }
+            | thir::Expr::Var(_, _)
+            | thir::Expr::Builtin(_, _)
+            | thir::Expr::Paren(_, _) => true,
+
+            thir::Expr::Function(_, _, _) => todo!("function calls"),
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use baml_vm::EvalStack;
+
     use super::*;
     use crate::test::ast;
 
@@ -1214,7 +1341,13 @@ mod tests {
 
             eprintln!(
                 "---- fn {function_name}() ----\n{}",
-                baml_vm::debug::display_bytecode(function, &[], &objects, &globals, true)
+                baml_vm::debug::display_bytecode(
+                    function,
+                    &EvalStack::default(),
+                    &objects,
+                    &globals,
+                    true
+                )
             );
 
             assert_eq!(
@@ -1243,7 +1376,7 @@ mod tests {
                 (
                     "main",
                     vec![
-                        Instruction::LoadGlobal(0),
+                        Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
                         Instruction::Call(0),
                         Instruction::Return,
                     ],
@@ -1270,7 +1403,7 @@ mod tests {
                 (
                     "main",
                     vec![
-                        Instruction::LoadGlobal(0),
+                        Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
                         Instruction::Call(0),
                         Instruction::LoadVar(1),
                         Instruction::Return,
@@ -1285,7 +1418,7 @@ mod tests {
         assert_compiles(Program {
             source: "
                 fn main(b: bool) -> int {
-                    if b { 1 } else { 2 }
+                    if (b) { 1 } else { 2 }
                 }
             ",
             expected: vec![(
@@ -1309,7 +1442,7 @@ mod tests {
         assert_compiles(Program {
             source: "
                 fn main(b: bool) -> int {
-                    if b {
+                    if (b) {
                         let a = 1;
                         a
                     } else {
@@ -1343,7 +1476,7 @@ mod tests {
         assert_compiles(Program {
             source: "
                 fn main(b: bool) -> int {
-                    let i = if b { 1 } else { 2 };
+                    let i = if (b) { 1 } else { 2 };
                     i
                 }
             ",
@@ -1369,7 +1502,7 @@ mod tests {
         assert_compiles(Program {
             source: "
                 fn main(b: bool) -> int {
-                    let i = if b {
+                    let i = if (b) {
                         let a = 1;
                         a
                     } else {
@@ -1412,7 +1545,7 @@ mod tests {
                 fn main(b: bool) -> int {
                     let a = 1;
 
-                    if b {
+                    if (b) {
                         let x = 1;
                         let y = 2;
                         identity(x);
@@ -1434,7 +1567,7 @@ mod tests {
                     Instruction::Pop(1),
                     Instruction::LoadConst(1),
                     Instruction::LoadConst(2),
-                    Instruction::LoadGlobal(0),
+                    Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
                     Instruction::LoadVar(3),
                     Instruction::Call(1),
                     Instruction::Pop(1),
@@ -1443,7 +1576,7 @@ mod tests {
                     Instruction::Pop(1),
                     Instruction::LoadConst(3),
                     Instruction::LoadConst(4),
-                    Instruction::LoadGlobal(0),
+                    Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
                     Instruction::LoadVar(4),
                     Instruction::Call(1),
                     Instruction::Pop(1),
@@ -1460,9 +1593,9 @@ mod tests {
         assert_compiles(Program {
             source: "
                 fn main(a: bool, b: bool) -> int {
-                    if a {
+                    if (a) {
                         1
-                    } else if b {
+                    } else if (b) {
                         2
                     } else {
                         3
@@ -1496,10 +1629,10 @@ mod tests {
         assert_compiles(Program {
             source: "
                 fn main(a: bool, b: bool) -> int {
-                    if a {
+                    if (a) {
                         let x = 1;
                         x
-                    } else if b {
+                    } else if (b) {
                         let y = 2;
                         y
                     } else {
@@ -1541,9 +1674,9 @@ mod tests {
         assert_compiles(Program {
             source: "
                 fn main(a: bool, b: bool) -> int {
-                    let result = if a {
+                    let result = if (a) {
                         1
-                    } else if b {
+                    } else if (b) {
                         2
                     } else {
                         3
@@ -1580,10 +1713,10 @@ mod tests {
         assert_compiles(Program {
             source: "
                 fn main(a: bool, b: bool) -> int {
-                    let result = if a {
+                    let result = if (a) {
                         let x = 1;
                         x
-                    } else if b {
+                    } else if (b) {
                         let y = 2;
                         y
                     } else {
@@ -1663,7 +1796,7 @@ mod tests {
             expected: vec![(
                 "main",
                 vec![
-                    Instruction::AllocInstance(2),
+                    Instruction::AllocInstance(ObjectIndex::from_raw(2)),
                     Instruction::LoadConst(0),
                     Instruction::StoreField(0),
                     Instruction::LoadConst(1),
@@ -1676,7 +1809,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "HIR doesn't support spread operators yet"]
+    // #[ignore = "HIR doesn't support spread operators yet"]
     fn class_constructor_with_spread_operator() -> anyhow::Result<()> {
         assert_compiles(Program {
             source: r#"
@@ -1698,12 +1831,12 @@ mod tests {
             expected: vec![(
                 "main",
                 vec![
-                    Instruction::AllocInstance(2),
+                    Instruction::AllocInstance(ObjectIndex::from_raw(3)),
                     Instruction::LoadConst(0),
                     Instruction::StoreField(0),
                     Instruction::LoadConst(1),
                     Instruction::StoreField(1),
-                    Instruction::LoadGlobal(0),
+                    Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
                     Instruction::Call(0),
                     Instruction::LoadVar(1),
                     Instruction::LoadVar(2),
@@ -1801,7 +1934,7 @@ mod tests {
         } = compile(&ast)?;
 
         let main = objects[resolved_function_names["main"].0].as_function()?;
-        baml_vm::debug::disassemble(main, &[], &objects, &globals);
+        baml_vm::debug::disassemble(main, &EvalStack::default(), &objects, &globals);
 
         let expected_locals_in_scope = [
             vec!["<fn main>", "x", "a", "h"],
@@ -1883,7 +2016,7 @@ mod tests {
                     Instruction::LoadConst(0),
                     Instruction::JumpIfFalse(4),
                     Instruction::Pop(1),
-                    Instruction::LoadGlobal(0),
+                    Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
                     Instruction::Call(0),
                     Instruction::Return,
                 ],
@@ -1910,7 +2043,7 @@ mod tests {
                     Instruction::JumpIfFalse(2),
                     Instruction::Jump(4),
                     Instruction::Pop(1),
-                    Instruction::LoadGlobal(0),
+                    Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
                     Instruction::Call(0),
                     Instruction::Return,
                 ],
@@ -1971,7 +2104,7 @@ mod tests {
             source: r#"
                 fn GCD(mut a: int, mut b: int) -> int {
                     while (a != b) {
-                        if a > b {
+                        if (a > b) {
                             a = a - b;
                         } else {
                             b = b - a;
@@ -1984,13 +2117,11 @@ mod tests {
             expected: vec![(
                 "GCD",
                 vec![
-                    // while (a != b)
                     Instruction::LoadVar(1),
                     Instruction::LoadVar(2),
                     Instruction::CmpOp(CmpOp::NotEq),
-                    Instruction::JumpIfFalse(19),
+                    Instruction::JumpIfFalse(18),
                     Instruction::Pop(1),
-                    // if a > b { a = a - b; } else { b = b - a; }
                     Instruction::LoadVar(1),
                     Instruction::LoadVar(2),
                     Instruction::CmpOp(CmpOp::Gt),
@@ -2006,10 +2137,7 @@ mod tests {
                     Instruction::LoadVar(1),
                     Instruction::BinOp(BinOp::Sub),
                     Instruction::StoreVar(2),
-                    // jump back to loop start
                     Instruction::Jump(-20),
-                    Instruction::Jump(2),
-                    // exit loop: pop condition and return a
                     Instruction::Pop(1),
                     Instruction::LoadVar(1),
                     Instruction::Return,
@@ -2032,7 +2160,7 @@ mod tests {
                         let c = 3;
                         a = b + c;
 
-                        if a == 5 {
+                        if (a == 5) {
                             a = 10;
                         }
                     }
@@ -2076,10 +2204,10 @@ mod tests {
                 fn main() -> int {
                     let mut a = 1;
 
-                    while a < 5 {
+                    while (a < 5) {
                         a += 1;
 
-                        if a == 2 {
+                        if (a == 2) {
                             break;
                         }
                     }
@@ -2094,7 +2222,7 @@ mod tests {
                     Instruction::LoadVar(1),
                     Instruction::LoadConst(1),
                     Instruction::CmpOp(CmpOp::Lt),
-                    Instruction::JumpIfFalse(17),
+                    Instruction::JumpIfFalse(15),
                     Instruction::Pop(1),
                     Instruction::LoadVar(1),
                     Instruction::LoadConst(2),
@@ -2105,12 +2233,10 @@ mod tests {
                     Instruction::CmpOp(CmpOp::Eq),
                     Instruction::JumpIfFalse(4),
                     Instruction::Pop(1),
-                    Instruction::Jump(4),
+                    Instruction::Jump(5),
                     Instruction::Jump(2),
                     Instruction::Pop(1),
                     Instruction::Jump(-17),
-                    Instruction::Pop(1),
-                    Instruction::Jump(2),
                     Instruction::Pop(1),
                     Instruction::LoadVar(1),
                     Instruction::Return,
@@ -2126,8 +2252,8 @@ mod tests {
                 fn Factorial(mut limit: int) -> int {
                     let mut result = 1;
 
-                    while true {
-                        if limit == 0 {
+                    while (true) {
+                        if (limit == 0) {
                             break;
                         }
                         result = result * limit;
@@ -2144,7 +2270,7 @@ mod tests {
                     Instruction::LoadConst(0),
                     // while true { ... }
                     Instruction::LoadConst(1),
-                    Instruction::JumpIfFalse(20),
+                    Instruction::JumpIfFalse(19),
                     Instruction::Pop(1),
                     // if limit == 0 { break; }
                     Instruction::LoadVar(1),
@@ -2152,7 +2278,7 @@ mod tests {
                     Instruction::CmpOp(CmpOp::Eq),
                     Instruction::JumpIfFalse(4),
                     Instruction::Pop(1),
-                    Instruction::Jump(12),
+                    Instruction::Jump(13),
                     Instruction::Jump(2),
                     Instruction::Pop(1),
                     // result = result * limit;
@@ -2167,7 +2293,6 @@ mod tests {
                     Instruction::StoreVar(1),
                     // loop back and exit
                     Instruction::Jump(-19),
-                    Instruction::Jump(2),
                     Instruction::Pop(1),
                     // return result
                     Instruction::LoadVar(2),
@@ -2186,11 +2311,11 @@ mod tests {
 
                     // used to make the loop break without relying on `break` implementation.
                     let mut should_continue = true;
-                    while should_continue {
+                    while (should_continue) {
                         result = result * limit;
                         limit = limit - 1;
 
-                        if limit != 0 {
+                        if (limit != 0) {
                             continue;
                         } else {
                             should_continue = false;
@@ -2209,7 +2334,7 @@ mod tests {
                     Instruction::LoadConst(1),
                     // while should_continue { ... }
                     Instruction::LoadVar(3),
-                    Instruction::JumpIfFalse(22),
+                    Instruction::JumpIfFalse(21),
                     Instruction::Pop(1),
                     // result = result * limit;
                     Instruction::LoadVar(2),
@@ -2227,13 +2352,12 @@ mod tests {
                     Instruction::CmpOp(CmpOp::NotEq),
                     Instruction::JumpIfFalse(4),
                     Instruction::Pop(1),
-                    Instruction::Jump(-16),
+                    Instruction::Jump(5),
                     Instruction::Jump(4),
                     Instruction::Pop(1),
                     Instruction::LoadConst(4),
                     Instruction::StoreVar(3),
                     Instruction::Jump(-21),
-                    Instruction::Jump(2),
                     Instruction::Pop(1),
                     // return result
                     Instruction::LoadVar(2),
@@ -2248,11 +2372,11 @@ mod tests {
         assert_compiles(Program {
             source: r#"
                 fn Nested() -> int {
-                    while true {
-                        while false {
+                    while (true) {
+                        while (false) {
                             continue;
                         }
-                        if false {
+                        if (false) {
                             continue;
                         }
                     }
@@ -2263,24 +2387,21 @@ mod tests {
                 "Nested",
                 vec![
                     Instruction::LoadConst(0),
-                    Instruction::JumpIfFalse(18),
+                    Instruction::JumpIfFalse(15),
                     Instruction::Pop(1),
                     Instruction::LoadConst(1),
-                    Instruction::JumpIfFalse(5),
+                    Instruction::JumpIfFalse(4),
                     Instruction::Pop(1),
-                    Instruction::Jump(-3),
+                    Instruction::Jump(1),
                     Instruction::Jump(-4),
-                    Instruction::Jump(2),
                     Instruction::Pop(1),
                     Instruction::LoadConst(2),
                     Instruction::JumpIfFalse(4),
                     Instruction::Pop(1),
-                    Instruction::Jump(2),
+                    Instruction::Jump(3),
                     Instruction::Jump(2),
                     Instruction::Pop(1),
-                    Instruction::Jump(-16),
-                    Instruction::Pop(1),
-                    Instruction::Jump(2),
+                    Instruction::Jump(-15),
                     Instruction::Pop(1),
                     Instruction::LoadConst(3),
                     Instruction::Return,
@@ -2295,8 +2416,8 @@ mod tests {
             source: r#"
                 fn Nested() -> int {
                     let mut a = 5;
-                    while true {
-                        while true {
+                    while (true) {
+                        while (true) {
                             a = a + 1;
                             break;
                         }
@@ -2311,26 +2432,24 @@ mod tests {
                 vec![
                     Instruction::LoadConst(0),
                     Instruction::LoadConst(1),
-                    Instruction::JumpIfFalse(20),
+                    Instruction::JumpIfFalse(18),
                     Instruction::Pop(1),
                     Instruction::LoadConst(2),
-                    Instruction::JumpIfFalse(9),
+                    Instruction::JumpIfFalse(8),
                     Instruction::Pop(1),
                     Instruction::LoadVar(1),
                     Instruction::LoadConst(3),
                     Instruction::BinOp(BinOp::Add),
                     Instruction::StoreVar(1),
-                    Instruction::Jump(2),
+                    Instruction::Jump(3),
                     Instruction::Jump(-8),
-                    Instruction::Jump(2),
                     Instruction::Pop(1),
                     Instruction::LoadVar(1),
                     Instruction::LoadConst(4),
                     Instruction::BinOp(BinOp::Add),
                     Instruction::StoreVar(1),
-                    Instruction::Jump(2),
-                    Instruction::Jump(-19),
-                    Instruction::Jump(2),
+                    Instruction::Jump(3),
+                    Instruction::Jump(-18),
                     Instruction::Pop(1),
                     Instruction::LoadVar(1),
                     Instruction::Return,
@@ -2355,7 +2474,7 @@ mod tests {
                     Instruction::LoadConst(1),
                     Instruction::LoadConst(2),
                     Instruction::AllocArray(3),
-                    Instruction::LoadGlobal(2),
+                    Instruction::LoadGlobal(GlobalIndex::from_raw(2)),
                     Instruction::LoadVar(1),
                     // call with one argument (self)
                     Instruction::Call(1),
@@ -2372,7 +2491,7 @@ mod tests {
                 fn Sum(xs: int[]) -> int {
                     let mut result = 0;
 
-                    for x in xs {
+                    for (x in xs) {
                         result += x;
                     }
 
@@ -2384,14 +2503,14 @@ mod tests {
                 vec![
                     Instruction::LoadConst(0),
                     Instruction::LoadVar(1),
-                    Instruction::LoadGlobal(2),
+                    Instruction::LoadGlobal(GlobalIndex::from_raw(2)),
                     Instruction::LoadVar(3),
                     Instruction::Call(1),
                     Instruction::LoadConst(0),
                     Instruction::LoadVar(5),
                     Instruction::LoadVar(4),
                     Instruction::CmpOp(CmpOp::Lt),
-                    Instruction::JumpIfFalse(17),
+                    Instruction::JumpIfFalse(15),
                     Instruction::Pop(1),
                     Instruction::LoadVar(3),
                     Instruction::LoadVar(5),
@@ -2406,8 +2525,6 @@ mod tests {
                     Instruction::StoreVar(2),
                     Instruction::Pop(1),
                     Instruction::Jump(-17),
-                    Instruction::Pop(1),
-                    Instruction::Jump(2),
                     Instruction::Pop(1),
                     Instruction::Pop(3),
                     Instruction::LoadVar(2),
@@ -2424,8 +2541,8 @@ mod tests {
                 fn ForWithBreak(xs: int[]) -> int {
                     let mut result = 0;
 
-                    for x in xs {
-                        if x > 10 {
+                    for (x in xs) {
+                        if (x > 10) {
                             break;
                         }
                         result += x;
@@ -2439,14 +2556,14 @@ mod tests {
                 vec![
                     Instruction::LoadConst(0),
                     Instruction::LoadVar(1),
-                    Instruction::LoadGlobal(2),
+                    Instruction::LoadGlobal(GlobalIndex::from_raw(2)),
                     Instruction::LoadVar(3),
                     Instruction::Call(1),
                     Instruction::LoadConst(0),
                     Instruction::LoadVar(5),
                     Instruction::LoadVar(4),
                     Instruction::CmpOp(CmpOp::Lt),
-                    Instruction::JumpIfFalse(25),
+                    Instruction::JumpIfFalse(24),
                     Instruction::Pop(1),
                     Instruction::LoadVar(3),
                     Instruction::LoadVar(5),
@@ -2458,9 +2575,10 @@ mod tests {
                     Instruction::LoadVar(6),
                     Instruction::LoadConst(2),
                     Instruction::CmpOp(CmpOp::Gt),
-                    Instruction::JumpIfFalse(4),
+                    Instruction::JumpIfFalse(5),
                     Instruction::Pop(1),
-                    Instruction::Jump(9),
+                    Instruction::Pop(1),
+                    Instruction::Jump(10),
                     Instruction::Jump(2),
                     Instruction::Pop(1),
                     Instruction::LoadVar(2),
@@ -2468,9 +2586,7 @@ mod tests {
                     Instruction::BinOp(BinOp::Add),
                     Instruction::StoreVar(2),
                     Instruction::Pop(1),
-                    Instruction::Jump(-25),
-                    Instruction::Pop(1),
-                    Instruction::Jump(2),
+                    Instruction::Jump(-26),
                     Instruction::Pop(1),
                     Instruction::Pop(3),
                     Instruction::LoadVar(2),
@@ -2487,8 +2603,8 @@ mod tests {
                 fn ForWithContinue(xs: int[]) -> int {
                     let mut result = 0;
 
-                    for x in xs {
-                        if x > 10 {
+                    for (x in xs) {
+                        if (x > 10) {
                             continue;
                         }
                         result += x;
@@ -2502,14 +2618,14 @@ mod tests {
                 vec![
                     Instruction::LoadConst(0),
                     Instruction::LoadVar(1),
-                    Instruction::LoadGlobal(2),
+                    Instruction::LoadGlobal(GlobalIndex::from_raw(2)),
                     Instruction::LoadVar(3),
                     Instruction::Call(1),
                     Instruction::LoadConst(0),
                     Instruction::LoadVar(5),
                     Instruction::LoadVar(4),
                     Instruction::CmpOp(CmpOp::Lt),
-                    Instruction::JumpIfFalse(25),
+                    Instruction::JumpIfFalse(24),
                     Instruction::Pop(1),
                     Instruction::LoadVar(3),
                     Instruction::LoadVar(5),
@@ -2521,9 +2637,10 @@ mod tests {
                     Instruction::LoadVar(6),
                     Instruction::LoadConst(2),
                     Instruction::CmpOp(CmpOp::Gt),
-                    Instruction::JumpIfFalse(4),
+                    Instruction::JumpIfFalse(5),
                     Instruction::Pop(1),
-                    Instruction::Jump(7),
+                    Instruction::Pop(1),
+                    Instruction::Jump(8),
                     Instruction::Jump(2),
                     Instruction::Pop(1),
                     Instruction::LoadVar(2),
@@ -2531,9 +2648,7 @@ mod tests {
                     Instruction::BinOp(BinOp::Add),
                     Instruction::StoreVar(2),
                     Instruction::Pop(1),
-                    Instruction::Jump(-25),
-                    Instruction::Pop(1),
-                    Instruction::Jump(2),
+                    Instruction::Jump(-26),
                     Instruction::Pop(1),
                     Instruction::Pop(3),
                     Instruction::LoadVar(2),
@@ -2551,8 +2666,8 @@ mod tests {
 
                     let mut result = 0;
 
-                    for a in as {
-                        for b in bs {
+                    for (a in as) {
+                        for (b in bs) {
                             result += a * b;
                         }
                     }
@@ -2565,14 +2680,14 @@ mod tests {
                 vec![
                     Instruction::LoadConst(0),
                     Instruction::LoadVar(1),
-                    Instruction::LoadGlobal(2),
+                    Instruction::LoadGlobal(GlobalIndex::from_raw(2)),
                     Instruction::LoadVar(4),
                     Instruction::Call(1),
                     Instruction::LoadConst(0),
                     Instruction::LoadVar(6),
                     Instruction::LoadVar(5),
                     Instruction::CmpOp(CmpOp::Lt),
-                    Instruction::JumpIfFalse(42),
+                    Instruction::JumpIfFalse(38),
                     Instruction::Pop(1),
                     Instruction::LoadVar(4),
                     Instruction::LoadVar(6),
@@ -2582,14 +2697,14 @@ mod tests {
                     Instruction::BinOp(BinOp::Add),
                     Instruction::StoreVar(6),
                     Instruction::LoadVar(2),
-                    Instruction::LoadGlobal(2),
+                    Instruction::LoadGlobal(GlobalIndex::from_raw(2)),
                     Instruction::LoadVar(8),
                     Instruction::Call(1),
                     Instruction::LoadConst(0),
                     Instruction::LoadVar(10),
                     Instruction::LoadVar(9),
                     Instruction::CmpOp(CmpOp::Lt),
-                    Instruction::JumpIfFalse(19),
+                    Instruction::JumpIfFalse(17),
                     Instruction::Pop(1),
                     Instruction::LoadVar(8),
                     Instruction::LoadVar(10),
@@ -2607,16 +2722,174 @@ mod tests {
                     Instruction::Pop(1),
                     Instruction::Jump(-19),
                     Instruction::Pop(1),
-                    Instruction::Jump(2),
-                    Instruction::Pop(1),
                     Instruction::Pop(3),
                     Instruction::Pop(1),
-                    Instruction::Jump(-42),
-                    Instruction::Pop(5),
-                    Instruction::Jump(2),
+                    Instruction::Jump(-40),
                     Instruction::Pop(1),
                     Instruction::Pop(3),
                     Instruction::LoadVar(3),
+                    Instruction::Return,
+                ],
+            )],
+        })
+    }
+
+    mod return_stmt {
+        use super::*;
+
+        #[test]
+        fn early_return() -> anyhow::Result<()> {
+            assert_compiles(Program {
+                source: "
+                fn EarlyReturn(x: int) -> int {
+                  if (x == 42) { return 1; }
+                  
+                  x + 5
+                }
+            ",
+                expected: vec![(
+                    "EarlyReturn",
+                    vec![
+                        Instruction::LoadVar(1),   // x
+                        Instruction::LoadConst(0), // 42
+                        Instruction::CmpOp(CmpOp::Eq),
+                        Instruction::JumpIfFalse(5), // to 8
+                        Instruction::Pop(1),
+                        Instruction::LoadConst(1), // 1
+                        Instruction::Return,
+                        Instruction::Jump(2), // to 9
+                        Instruction::Pop(1),
+                        Instruction::LoadVar(1),   // x
+                        Instruction::LoadConst(2), // 5
+                        Instruction::BinOp(BinOp::Add),
+                        Instruction::Return,
+                    ],
+                )],
+            })
+        }
+
+        #[test]
+        fn with_stack() -> anyhow::Result<()> {
+            assert_compiles(Program {
+                source: "
+                fn WithStack(x: int) -> int {
+                  let a = 1;
+
+                  // NOTE: currently there's no empty returns.
+
+                  if (a == 0) { return 0; }
+                  
+                  {
+                     let b = 1;
+                     if (a != b) {
+                        return 0;
+                     }
+                  }
+
+                  {
+                     let c = 2;
+                     let b = 3;
+                     while (b != c) {
+                        if (true) {
+                           return 0;
+                        }
+                     }
+                  }
+
+                   7
+                }
+            ",
+                expected: vec![(
+                    "WithStack",
+                    vec![
+                        Instruction::LoadConst(0), // 1
+                        Instruction::LoadVar(2),   // a
+                        Instruction::LoadConst(1), // 0
+                        Instruction::CmpOp(CmpOp::Eq),
+                        Instruction::JumpIfFalse(5), // to 9
+                        Instruction::Pop(1),
+                        Instruction::LoadConst(2), // 0
+                        Instruction::Return,
+                        Instruction::Jump(2), // to 10
+                        Instruction::Pop(1),
+                        Instruction::LoadConst(3), // 1
+                        Instruction::LoadVar(2),   // a
+                        Instruction::LoadVar(3),   // b
+                        Instruction::CmpOp(CmpOp::NotEq),
+                        Instruction::JumpIfFalse(5), // to 19
+                        Instruction::Pop(1),
+                        Instruction::LoadConst(4), // 0
+                        Instruction::Return,
+                        Instruction::Jump(2), // to 20
+                        Instruction::Pop(1),
+                        Instruction::Pop(1),
+                        Instruction::LoadConst(5), // 2
+                        Instruction::LoadConst(6), // 3
+                        Instruction::LoadVar(4),   // b
+                        Instruction::LoadVar(3),   // c
+                        Instruction::CmpOp(CmpOp::NotEq),
+                        Instruction::JumpIfFalse(10), // to 36
+                        Instruction::Pop(1),
+                        Instruction::LoadConst(7),   // true
+                        Instruction::JumpIfFalse(5), // to 34
+                        Instruction::Pop(1),
+                        Instruction::LoadConst(8), // 0
+                        Instruction::Return,
+                        Instruction::Jump(2), // to 35
+                        Instruction::Pop(1),
+                        Instruction::Jump(-12), // to 23
+                        Instruction::Pop(1),
+                        Instruction::Pop(2),
+                        Instruction::LoadConst(9), // 7
+                        Instruction::Return,
+                    ],
+                )],
+            })
+        }
+    }
+
+    #[test]
+    fn assert_statement_ok() -> anyhow::Result<()> {
+        assert_compiles(Program {
+            source: "
+                fn assertOk() -> int {
+                    assert 2 + 2 == 4;
+                    3
+                }
+            ",
+            expected: vec![(
+                "assertOk",
+                vec![
+                    Instruction::LoadConst(0), // 2
+                    Instruction::LoadConst(1), // 2
+                    Instruction::BinOp(BinOp::Add),
+                    Instruction::LoadConst(2), // 4
+                    Instruction::CmpOp(CmpOp::Eq),
+                    Instruction::Assert,
+                    Instruction::LoadConst(3), // 3
+                    Instruction::Return,
+                ],
+            )],
+        })
+    }
+
+    #[test]
+    fn assert_statement_not_ok() -> anyhow::Result<()> {
+        assert_compiles(Program {
+            source: "
+                fn assertNotOk() -> int {
+                    assert 3 == 1;
+                    2
+                }
+            ",
+            expected: vec![(
+                "assertNotOk",
+                vec![
+                    Instruction::LoadConst(0), // 3
+                    Instruction::LoadConst(1), // 1
+                    Instruction::CmpOp(CmpOp::Eq),
+                    Instruction::Assert,
+                    Instruction::LoadConst(2), // 2
                     Instruction::Return,
                 ],
             )],

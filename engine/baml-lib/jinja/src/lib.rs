@@ -1,7 +1,9 @@
 mod evaluate_type;
 
 use evaluate_type::get_variable_types;
-pub use evaluate_type::{JinjaContext, PredefinedTypes, Type, TypeError};
+pub use evaluate_type::{
+    EnumDefinition, EnumValueDefinition, JinjaContext, PredefinedTypes, Type, TypeError,
+};
 
 #[derive(Debug)]
 pub struct ValidationError {

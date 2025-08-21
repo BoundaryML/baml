@@ -17,5 +17,7 @@ pub(crate) mod vm;
 
 pub use bytecode::{BinOp, Bytecode, CmpOp, Instruction, UnaryOp};
 pub use vm::{
-    BamlVmProgram, Class, Frame, Function, FunctionKind, Instance, Object, Value, Vm, VmExecState,
+    indexable::{EvalStack, GlobalIndex, GlobalPool, ObjectIndex, ObjectPool, StackIndex},
+    BamlVmProgram, Class, Frame, Function, FunctionKind, Instance, Object, RuntimeError, Value, Vm,
+    VmError, VmExecState,
 };

@@ -4,8 +4,7 @@ use internal_baml_diagnostics::{DatamodelError, Diagnostics};
 use super::{
     helpers::{parsing_catch_all, Pair},
     parse_expr::{
-        parse_expr_block, parse_fn_app, parse_for_loop, parse_generic_fn_app, parse_if_expression,
-        parse_lambda,
+        parse_expr_block, parse_fn_app, parse_generic_fn_app, parse_if_expression, parse_lambda,
     },
     parse_identifier::parse_identifier,
     Rule,

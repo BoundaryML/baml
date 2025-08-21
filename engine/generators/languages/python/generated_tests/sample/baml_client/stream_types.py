@@ -28,7 +28,7 @@ class StreamState(BaseModel, typing.Generic[StreamStateValueT]):
 
 class Example(BaseModel):
     type: str
-    a: typing.Optional[int] = None
+    a: typing.Optional[types.Checked[int, typing_extensions.Literal['a_is_positive']]] = None
     b: typing.Optional[str] = None
 
 class Example2(BaseModel):

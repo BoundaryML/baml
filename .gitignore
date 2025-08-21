@@ -167,3 +167,4 @@ jj-workflow.mdc
 # mise
 .mise.local.toml
 .mise.*.local.toml
+third_party

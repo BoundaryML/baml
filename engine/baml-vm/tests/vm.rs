@@ -5,16 +5,19 @@
 
 use baml_compiler::test::ast;
 use baml_vm::{
-    BamlVmProgram, Bytecode, Frame, Function, FunctionKind, Instruction, Object, Value, Vm,
-    VmExecState,
+    BamlVmProgram, Bytecode, EvalStack, Frame, Function, FunctionKind, GlobalPool, Instruction,
+    Object, ObjectIndex, ObjectPool, StackIndex, Value, Vm, VmError, VmExecState,
 };
 
 /// Helper struct for testing VM execution.
-struct Program {
+struct ProgramInput<Expect> {
     source: &'static str,
     function: &'static str,
-    expected: VmExecState,
+    expected: Expect,
 }
+
+type Program = ProgramInput<VmExecState>;
+type FailingProgram = ProgramInput<VmError>;
 
 /// Unified helper function for VM execution with optional inspection.
 fn assert_vm_executes(input: Program) -> anyhow::Result<()> {
@@ -26,36 +29,8 @@ fn assert_vm_executes_with_inspection(
     input: Program,
     inspect: impl FnOnce(&Vm) -> anyhow::Result<()>,
 ) -> anyhow::Result<()> {
-    let ast = ast(input.source)?;
-    let BamlVmProgram {
-        objects,
-        globals,
-        resolved_function_names,
-    } = baml_compiler::compile(&ast)?;
-
-    // eprintln!("objects: {objects:#?}");
-    // eprintln!("globals: {globals:#?}");
-    // eprintln!("resolved_function_names: {resolved_function_names:#?}");
-
-    // Find the target function index by name
-    let (target_function_index, _) = resolved_function_names[input.function];
-
-    // Create and run the VM.
-    // TODO: The VM needs to boostrap itself. Add some function in the VM
-    // that does that.
-    let mut vm = Vm {
-        frames: vec![Frame {
-            function: target_function_index,
-            instruction_ptr: 0,
-            locals_offset: 0,
-        }],
-        stack: vec![Value::Object(target_function_index)],
-        runtime_allocs_offset: objects.len(),
-        objects,
-        globals,
-    };
-
-    let result = vm.exec()?;
+    let (vm, result) = setup_and_exec_program(input.source, input.function)?;
+    let result = result?;
 
     assert_eq!(
         result, input.expected,
@@ -67,6 +42,45 @@ fn assert_vm_executes_with_inspection(
     inspect(&vm)?;
 
     Ok(())
+}
+
+fn assert_vm_fails(input: FailingProgram) -> anyhow::Result<()> {
+    let (_, result) = setup_and_exec_program(input.source, input.function)?;
+
+    assert_eq!(
+        result,
+        Err(input.expected),
+        "VM execution result mismatch for function '{}'",
+        input.function
+    );
+
+    Ok(())
+}
+
+fn setup_and_exec_program(
+    source: &'static str,
+    function: &str,
+) -> Result<(Vm, Result<VmExecState, VmError>), anyhow::Error> {
+    let ast = ast(source)?;
+    let BamlVmProgram {
+        objects,
+        globals,
+        resolved_function_names,
+    } = baml_compiler::compile(&ast)?;
+    let (target_function_index, _) = resolved_function_names[function];
+    let mut vm = Vm {
+        frames: vec![Frame {
+            function: target_function_index,
+            instruction_ptr: 0,
+            locals_offset: StackIndex::from_raw(0),
+        }],
+        stack: EvalStack::from_vec(vec![Value::Object(target_function_index)]),
+        runtime_allocs_offset: ObjectIndex::from_raw(objects.len()),
+        objects,
+        globals,
+    };
+    let result = vm.exec();
+    Ok((vm, result))
 }
 
 /// Helper struct for testing VM execution with direct bytecode.
@@ -107,19 +121,19 @@ fn assert_vm_executes_bytecode_with_inspection(
     };
 
     let objects = vec![Object::Function(function)];
-    let globals = vec![Value::Object(0)];
+    let globals = vec![Value::Object(ObjectIndex::from_raw(0))];
 
     // Create and run the VM
     let mut vm = Vm {
         frames: vec![Frame {
-            function: 0,
+            function: ObjectIndex::from_raw(0),
             instruction_ptr: 0,
-            locals_offset: 0,
+            locals_offset: StackIndex::from_raw(0),
         }],
-        stack: vec![Value::Object(0)],
-        runtime_allocs_offset: objects.len(),
-        objects,
-        globals,
+        stack: EvalStack::from_vec(vec![Value::Object(ObjectIndex::from_raw(0))]),
+        runtime_allocs_offset: ObjectIndex::from_raw(objects.len()),
+        objects: ObjectPool::from_vec(objects),
+        globals: GlobalPool::from_vec(globals),
     };
 
     let result = vm.exec()?;
@@ -195,7 +209,7 @@ fn exec_if_branch() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: "
             fn run_if(b: bool) -> int {
-                if b { 1 } else { 2 }
+                if (b) { 1 } else { 2 }
             }
 
             fn main() -> int {
@@ -213,7 +227,7 @@ fn exec_else_branch() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: "
             fn run_if(b: bool) -> int {
-                if b { 1 } else { 2 }
+                if (b) { 1 } else { 2 }
             }
 
             fn main() -> int {
@@ -231,9 +245,9 @@ fn exec_else_if_branch() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: "
             fn run_if(a: bool, b: bool) -> int {
-                if a {
+                if (a) {
                     1
-                } else if b {
+                } else if (b) {
                     2
                 } else {
                     3
@@ -266,13 +280,16 @@ fn array_constructor() -> anyhow::Result<()> {
                 }
             ",
             function: "main",
-            expected: VmExecState::Complete(Value::Object(3)),
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(3))),
         },
         |vm| {
             dbg!(&vm.objects);
 
-            let Object::Array(array) = &vm.objects[3] else {
-                panic!("expected Array, got {:?}", vm.objects[3]);
+            let Object::Array(array) = &vm.objects[ObjectIndex::from_raw(3)] else {
+                panic!(
+                    "expected Array, got {:?}",
+                    &vm.objects[ObjectIndex::from_raw(3)]
+                );
             };
 
             assert_eq!(array, &[Value::Int(1), Value::Int(2), Value::Int(3)]);
@@ -299,11 +316,14 @@ fn class_constructor() -> anyhow::Result<()> {
                 }
             ",
             function: "main",
-            expected: VmExecState::Complete(Value::Object(4)),
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(4))),
         },
         |vm| {
-            let Object::Instance(instance) = &vm.objects[4] else {
-                panic!("expected Instance, got {:?}", vm.objects[4]);
+            let Object::Instance(instance) = &vm.objects[ObjectIndex::from_raw(4)] else {
+                panic!(
+                    "expected Instance, got {:?}",
+                    &vm.objects[ObjectIndex::from_raw(4)]
+                );
             };
 
             assert_eq!(instance.fields, &[Value::Int(1), Value::Int(2)]);
@@ -335,11 +355,14 @@ fn class_constructor_with_spread_operator() -> anyhow::Result<()> {
                 }
             ",
             function: "main",
-            expected: VmExecState::Complete(Value::Object(5)),
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(5))),
         },
         |vm| {
-            let Object::Instance(instance) = &vm.objects[5] else {
-                panic!("expected Instance, got {:?}", vm.objects[5]);
+            let Object::Instance(instance) = &vm.objects[ObjectIndex::from_raw(5)] else {
+                panic!(
+                    "expected Instance, got {:?}",
+                    &vm.objects[ObjectIndex::from_raw(5)]
+                );
             };
 
             assert_eq!(
@@ -362,11 +385,14 @@ fn function_returning_string() -> anyhow::Result<()> {
                 }
             "#,
             function: "main",
-            expected: VmExecState::Complete(Value::Object(0)),
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(0))),
         },
         |vm| {
-            let Object::String(string) = &vm.objects[0] else {
-                panic!("expected String, got {:?}", vm.objects[0]);
+            let Object::String(string) = &vm.objects[ObjectIndex::from_raw(0)] else {
+                panic!(
+                    "expected String, got {:?}",
+                    &vm.objects[ObjectIndex::from_raw(0)]
+                );
             };
 
             assert_eq!(string, "hello");
@@ -392,7 +418,7 @@ fn multiple_strings() -> anyhow::Result<()> {
                 }
             "#,
             function: "main",
-            expected: VmExecState::Complete(Value::Object(0)), // "Hello" should be the first string object
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(0))), // "Hello" should be the first string object
         },
         |vm| {
             // Check that we have the expected strings in the objects pool
@@ -867,9 +893,9 @@ fn while_loop() -> anyhow::Result<()> {
     const SOURCE: &str = r#"
         fn GCD(mut a: int, mut b: int) -> int {
 
-            while a != b {
+            while (a != b) {
 
-               if a > b {
+               if (a > b) {
                    a = a - b;
                } else {
                    b = b - a;
@@ -899,8 +925,8 @@ fn break_factorial() -> anyhow::Result<()> {
             fn Factorial(mut limit: int) -> int {
                 let mut result = 1;
 
-                while true {
-                    if limit == 0 {
+                while (true) {
+                    if (limit == 0) {
                         break;
                     }
                     result = result * limit;
@@ -925,8 +951,8 @@ fn break_nested_loops() -> anyhow::Result<()> {
         source: r#"
             fn Nested() -> int {
                 let mut a = 5;
-                while true {
-                    while true {
+                while (true) {
+                    while (true) {
                         a = a + 1;
                         break;
                     }
@@ -954,11 +980,11 @@ fn continue_factorial() -> anyhow::Result<()> {
 
                 // used to make the loop break without relying on `break` implementation.
                 let mut should_continue = true;
-                while should_continue {
+                while (should_continue) {
                     result = result * limit;
                     limit = limit - 1;
 
-                    if limit != 0 {
+                    if (limit != 0) {
                         continue;
                     } else {
                         should_continue = false;
@@ -983,11 +1009,11 @@ fn continue_nested() -> anyhow::Result<()> {
         source: r#"
             fn ContinueNested() -> int {
                 let mut execute = true;
-                while execute {
-                    while false {
+                while (execute) {
+                    while (false) {
                         continue;
                     }
-                    if false {
+                    if (false) {
                         continue;
                     }
                     execute = false;
@@ -1012,7 +1038,7 @@ fn while_with_scope() -> anyhow::Result<()> {
             let mut a = 0;
             let mut b = 1;
 
-            while n > 0 {
+            while (n > 0) {
                 n -= 1;
                 let t = a + b;
                 b = a;
@@ -1041,7 +1067,7 @@ fn for_loop_sum() -> anyhow::Result<()> {
             fn Sum(xs: int[]) -> int {
                 let mut result = 0;
 
-                for x in xs {
+                for (x in xs) {
                     result += x;
                 }
 
@@ -1064,8 +1090,8 @@ fn for_loop_with_break() -> anyhow::Result<()> {
             fn ForWithBreak(xs: int[]) -> int {
                 let mut result = 0;
 
-                for x in xs {
-                    if x > 10 {
+                for (x in xs) {
+                    if (x > 10) {
                         break;
                     }
                     result += x;
@@ -1090,8 +1116,8 @@ fn for_loop_with_continue() -> anyhow::Result<()> {
             fn ForWithContinue(xs: int[]) -> int {
                 let mut result = 0;
 
-                for x in xs {
-                    if x > 10 {
+                for (x in xs) {
+                    if (x > 10) {
                         continue;
                     }
                     result += x;
@@ -1117,8 +1143,8 @@ fn for_loop_nested() -> anyhow::Result<()> {
 
                 let mut result =  0;
 
-                for a in arr_a {
-                    for b in arr_b {
+                for (a in arr_a) {
+                    for (b in arr_b) {
                         result += a * b;
                     }
                 }
@@ -1133,4 +1159,186 @@ fn for_loop_nested() -> anyhow::Result<()> {
         function: "main",
         expected: VmExecState::Complete(Value::Int(21)),
     })
+}
+
+#[cfg(test)]
+mod c_for_loops {
+
+    use super::*;
+
+    #[test]
+    fn sum_to_ten() -> anyhow::Result<()> {
+        assert_vm_executes(Program {
+            source: r#"
+                fn SumToTen() -> int {
+                    let mut s = 0;
+
+                    for (let mut i = 1; i <= 10; i += 1) {
+                        s += i;
+                    }
+
+                    s
+                }
+                "#,
+            function: "SumToTen",
+            expected: VmExecState::Complete(Value::Int(55)),
+        })
+    }
+
+    #[test]
+    fn after_with_break_continue() -> anyhow::Result<()> {
+        assert_vm_executes(Program {
+            source: r#"
+                fn SumToTen() -> int {
+                    let mut s = 0;
+
+                    for (let mut i = 0; ; s += i) {
+                        i += 1;
+                        if (i > 10) {
+                            let x = 0; // this tests that popping is correct.
+                            break;
+                        }
+                        if (i == 5) {
+                            // since `s += i` is in the for loop's after, this 'continue' is
+                            // actually irrelevant and the function does the same as SumToTen.
+                            // That's the behavior we're looking for.
+                            continue;
+                        }
+                    }
+
+                    s
+                }"#,
+            function: "SumToTen",
+            expected: VmExecState::Complete(Value::Int(55)),
+        })
+    }
+
+    #[test]
+    fn only_cond() -> anyhow::Result<()> {
+        assert_vm_executes(Program {
+            source: r#"
+                fn OnlyCond() -> int {
+                    let mut s = 0;
+
+                    for (; false;) {
+                    }
+
+                    s
+                }"#,
+            function: "OnlyCond",
+            expected: VmExecState::Complete(Value::Int(0)),
+        })
+    }
+
+    #[test]
+    fn endless() -> anyhow::Result<()> {
+        assert_vm_executes(Program {
+            source: r#"
+                fn Nothing() -> int {
+                    let mut s = 0;
+
+                    for (;;) {
+                        break;
+                    }
+
+                    s
+                }"#,
+            function: "Nothing",
+            expected: VmExecState::Complete(Value::Int(0)),
+        })
+    }
+}
+
+#[cfg(test)]
+mod return_stmt {
+
+    use super::*;
+
+    #[test]
+    fn early_return() -> anyhow::Result<()> {
+        assert_vm_executes(Program {
+            source: r#"
+                fn EarlyReturn(x: int) -> int {
+                   if (x == 42) { return 1; }
+                   
+                   x + 5
+                }
+
+                fn main() -> int {
+                    EarlyReturn(42)
+                }
+                "#,
+            function: "main",
+            expected: VmExecState::Complete(Value::Int(1)),
+        })
+    }
+
+    #[test]
+    fn with_stack() -> anyhow::Result<()> {
+        assert_vm_executes(Program {
+            source: r#"
+                fn WithStack() -> int {
+                   let a = 1;
+
+                   if (a == 0) { return 0; }
+                   
+                   {
+                      let b = 1;
+                      if (a != b) {
+                         return 0;
+                      }
+                   }
+                   
+                   {
+                      let c = 2;
+                      let b = 3;
+                      while (b != c) {
+                         if (true) {
+                              return 0;
+                         }
+                      }
+                    }
+
+                    7
+                }"#,
+            function: "WithStack",
+            expected: VmExecState::Complete(Value::Int(0)),
+        })
+    }
+}
+
+mod assert_stmt {
+
+    use baml_vm::RuntimeError;
+
+    use super::*;
+
+    #[test]
+    fn assert_ok() -> anyhow::Result<()> {
+        assert_vm_executes(Program {
+            source: r#"
+                fn assertOk() -> int {
+
+                    assert 2 + 2 == 4;
+
+                    3
+                }"#,
+            function: "assertOk",
+            expected: VmExecState::Complete(Value::Int(3)),
+        })
+    }
+
+    #[test]
+    fn assert_not_ok() -> anyhow::Result<()> {
+        assert_vm_fails(FailingProgram {
+            source: r#"
+                fn assertNotOk() -> int {
+                    assert 3 == 1;
+
+                    2
+                } "#,
+            function: "assertNotOk",
+            expected: RuntimeError::AssertionError.into(),
+        })
+    }
 }
