@@ -98,6 +98,8 @@ importers:
 
   engine/language_server: {}
 
+  engine/repro: {}
+
   fern:
     devDependencies:
       fern-api:

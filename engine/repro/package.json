@@ -1,5 +1,5 @@
 {
-  "name": "@baml/language-server",
+  "name": "@baml/repro",
   "version": "0.1.0",
   "private": true,
   "scripts": {
