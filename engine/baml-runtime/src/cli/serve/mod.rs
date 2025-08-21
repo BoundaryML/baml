@@ -80,10 +80,14 @@ impl BamlOptions {
 }
 
 impl ServeArgs {
-    pub fn run(&self) -> Result<()> {
+    pub fn run(
+        &self,
+        feature_flags: internal_baml_core::feature_flags::FeatureFlags,
+    ) -> Result<()> {
         let t: Arc<tokio::runtime::Runtime> = BamlRuntime::get_tokio_singleton()?;
 
-        let (server, tcp_listener) = t.block_on(Server::new(self.from.clone(), self.port))?;
+        let (server, tcp_listener) =
+            t.block_on(Server::new(self.from.clone(), self.port, feature_flags))?;
 
         t.block_on(server.serve(tcp_listener))?;
 
@@ -173,13 +177,18 @@ enum AuthEnforcementMode {
 }
 
 impl Server {
-    pub async fn new(src_dir: PathBuf, port: u16) -> Result<(Arc<Self>, TcpListener)> {
+    pub async fn new(
+        src_dir: PathBuf,
+        port: u16,
+        feature_flags: internal_baml_core::feature_flags::FeatureFlags,
+    ) -> Result<(Arc<Self>, TcpListener)> {
         let tcp_listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{port}"))
             .await
             .context(format!(
                 "Failed to bind to port {port}; try using --port PORT to specify a different port."
             ))?;
-        let baml_runtime = BamlRuntime::from_directory(&src_dir, std::env::vars().collect())?;
+        let baml_runtime =
+            BamlRuntime::from_directory(&src_dir, std::env::vars().collect(), feature_flags)?;
         Ok((
             Arc::new(Self {
                 src_dir: src_dir.clone(),

@@ -956,7 +956,10 @@ pub async fn eval_to_value<'a>(
 mod tests {
     use baml_types::{BamlMap, BamlValue};
     use futures::channel::mpsc;
-    use internal_baml_core::ir::{repr::make_test_ir, IRHelper};
+    use internal_baml_core::{
+        ir::{repr::make_test_ir, IRHelper},
+        FeatureFlags,
+    };
 
     use super::*;
     use crate::{internal_baml_diagnostics::Span, BamlRuntime};
@@ -969,6 +972,7 @@ mod tests {
             ".",
             &HashMap::from([("main.baml", content)]),
             HashMap::from([("OPENAI_API_KEY", openai_api_key.as_str())]),
+            FeatureFlags::new(),
         )
         .unwrap()
     }

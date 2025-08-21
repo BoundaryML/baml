@@ -349,6 +349,7 @@ impl BamlProject {
             &self.root_dir_name.to_string_lossy(),
             &files_for_runtime,
             env_vars,
+            internal_baml_core::FeatureFlags::new(),
         )
         .map_err(|e| match e.downcast::<DiagnosticsError>() {
             Ok(e) => e,

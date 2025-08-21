@@ -30,6 +30,7 @@ baml-runtime = { path = "../baml-runtime", default-features = false, features = 
 ] }
 baml-types.workspace = true
 internal-baml-codegen.workspace = true
+internal-baml-core.workspace = true
 env_logger.workspace = true
 futures.workspace = true
 indexmap.workspace = true
