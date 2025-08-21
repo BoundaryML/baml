@@ -113,7 +113,6 @@ impl BamlRuntime {
         Ok((cls.getattr("_create_from_state")?.into(), args))
     }
 
-
     /// Static method to recreate BamlRuntime from pickle state
     #[staticmethod]
     fn _create_from_state(
@@ -270,7 +269,9 @@ impl BamlRuntime {
         // Check if already aborted
         if let Some(ac) = abort_controller {
             if ac.aborted() {
-                return Err(BamlError::from_anyhow(anyhow::anyhow!("Operation was aborted")));
+                return Err(BamlError::from_anyhow(anyhow::anyhow!(
+                    "Operation was aborted"
+                )));
             }
         }
 

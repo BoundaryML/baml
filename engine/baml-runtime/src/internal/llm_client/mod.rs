@@ -189,9 +189,7 @@ impl LLMResponse {
             Self::InternalFailure(message) => {
                 Err(anyhow::anyhow!("Failed before LLM call: {message}"))
             }
-            Self::Cancelled(message) => {
-                Err(anyhow::anyhow!("Operation cancelled: {message}"))
-            }
+            Self::Cancelled(message) => Err(anyhow::anyhow!("Operation cancelled: {message}")),
         }
     }
 }

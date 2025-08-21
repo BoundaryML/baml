@@ -673,7 +673,7 @@ impl BamlRuntime {
         .await;
         res
     }
-    
+
     pub async fn call_function_with_tripwire(
         &self,
         function_name: String,
@@ -752,7 +752,10 @@ impl BamlRuntime {
                             };
 
                         // Call (CANNOT RETURN HERE until trace event is finished)
-                        let result = self.inner.call_function_impl_with_tripwire(prepared_func, rctx, cancel_tripwire).await;
+                        let result = self
+                            .inner
+                            .call_function_impl_with_tripwire(prepared_func, rctx, cancel_tripwire)
+                            .await;
                         // eprintln!("result: {:?}", result);
                         // Trace event
                         let trace_event = TraceEvent::new_function_end(
@@ -772,23 +775,25 @@ impl BamlRuntime {
                         result
                     } else {
                         // Expr functions don't support cancellation yet, so just call the regular version
-                        return self.call_function_with_expr_events(
-                            function_name,
-                            params,
-                            ctx,
-                            tb,
-                            cb,
-                            collectors,
-                            env_vars,
-                            expr_tx,
-                        )
-                        .await;
+                        return self
+                            .call_function_with_expr_events(
+                                function_name,
+                                params,
+                                ctx,
+                                tb,
+                                cb,
+                                collectors,
+                                env_vars,
+                                expr_tx,
+                            )
+                            .await;
                     }
                 }
                 Err(e) => Err(e),
             };
 
-        let span = self.tracer_wrapper
+        let span = self
+            .tracer_wrapper
             .get_or_create_tracer(&env_vars)
             .finish_call(call, ctx, None);
         (response, curr_call_id)

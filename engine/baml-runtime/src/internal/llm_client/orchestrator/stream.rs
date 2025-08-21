@@ -53,10 +53,11 @@ where
 
     // Create a future that either waits for cancellation or never completes
     let cancel_future = match cancel_tripwire {
-        Some(tripwire) => Box::pin(async move { 
+        Some(tripwire) => Box::pin(async move {
             tripwire.await;
             ()
-        }) as std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>,
+        })
+            as std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>,
         None => Box::pin(futures::future::pending()),
     };
     tokio::pin!(cancel_future);
@@ -67,7 +68,7 @@ where
         let cancel_scope = node.scope.clone();
         tokio::select! {
             biased;
-            
+
             _ = &mut cancel_future => {
                 results.push((
                     cancel_scope,
@@ -207,13 +208,13 @@ where
                 if matches!(result.1, LLMResponse::Success(_)) {
                     return Some(result); // Will break after pushing
                 }
-                
+
                 // Sleep if needed
                 if let Some(duration) = sleep_duration {
                     total_sleep_duration += duration;
                     async_std::task::sleep(duration).await;
                 }
-                
+
                 Some(result)
             } => {
                 if let Some(result) = result {

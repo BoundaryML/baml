@@ -25,18 +25,18 @@ impl AbortController {
             aborted: Arc::new(AtomicBool::new(false)),
         }
     }
-    
+
     fn abort(&self) -> PyResult<()> {
         self.aborted.store(true, Ordering::Relaxed);
-        
+
         // Find and trigger all operations associated with this controller
         if let Some((_, trigger)) = OPERATION_TRIGGERS.remove(&self.id) {
             trigger.cancel();
         }
-        
+
         Ok(())
     }
-    
+
     #[getter]
     pub fn aborted(&self) -> bool {
         self.aborted.load(Ordering::Relaxed)
@@ -49,14 +49,13 @@ impl AbortController {
             // Already aborted, return None to signal immediate cancellation
             return None;
         }
-        
+
         let (trigger, tripwire) = Tripwire::new();
         OPERATION_TRIGGERS.insert(self.id, trigger);
         Some(tripwire)
     }
-    
+
     pub fn get_id(&self) -> u32 {
         self.id
     }
 }
-

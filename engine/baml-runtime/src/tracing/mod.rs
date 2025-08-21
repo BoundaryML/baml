@@ -307,25 +307,25 @@ impl BamlEventLoggable<'_> {
                         parsed_response: None,
                         error: None,
                     },
-                    LLMResponse::UserFailure(msg) | LLMResponse::InternalFailure(msg) | LLMResponse::Cancelled(msg) => {
-                        BamlEventJson {
-                            function_name: self.function_name.to_string(),
-                            start_time,
-                            num_tries,
-                            total_tries,
-                            client: "unknown".to_string(),
-                            model: "unknown".to_string(),
-                            latency_ms: 0,
-                            stop_reason: None,
-                            prompt: None,
-                            llm_reply: None,
-                            request_options_json: None,
-                            tokens: None,
-                            parsed_response_type: None,
-                            parsed_response: None,
-                            error: Some(msg.clone()),
-                        }
-                    }
+                    LLMResponse::UserFailure(msg)
+                    | LLMResponse::InternalFailure(msg)
+                    | LLMResponse::Cancelled(msg) => BamlEventJson {
+                        function_name: self.function_name.to_string(),
+                        start_time,
+                        num_tries,
+                        total_tries,
+                        client: "unknown".to_string(),
+                        model: "unknown".to_string(),
+                        latency_ms: 0,
+                        stop_reason: None,
+                        prompt: None,
+                        llm_reply: None,
+                        request_options_json: None,
+                        tokens: None,
+                        parsed_response_type: None,
+                        parsed_response: None,
+                        error: Some(msg.clone()),
+                    },
                 }
             }
             Err(error) => BamlEventJson {

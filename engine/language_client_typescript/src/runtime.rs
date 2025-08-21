@@ -14,7 +14,7 @@ use napi_derive::napi;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    abort_controller::{js_abort_signal_to_rust_tripwire, cleanup_operation},
+    abort_controller::{cleanup_operation, js_abort_signal_to_rust_tripwire},
     errors::{from_anyhow_error, invalid_argument_error},
     parse_ts_types,
     types::{
@@ -121,7 +121,7 @@ impl BamlRuntime {
             )));
         }
         let args_map = args.as_map_owned().unwrap();
-        
+
         // Convert AbortSignal to Tripwire
         let (operation_id, tripwire) = js_abort_signal_to_rust_tripwire(env, signal)?;
 
@@ -162,7 +162,7 @@ impl BamlRuntime {
                     )
                     .await
             };
-            
+
             // Clean up the operation trigger
             cleanup_operation(operation_id);
 
@@ -285,7 +285,7 @@ impl BamlRuntime {
         client_registry: Option<&ClientRegistry>,
         collectors: Vec<&Collector>,
         env_vars: HashMap<String, String>,
-        signal: Option<JsObject>, // NEW: AbortSignal parameter  
+        signal: Option<JsObject>, // NEW: AbortSignal parameter
     ) -> napi::Result<FunctionResultStream> {
         let args: BamlValue = parse_ts_types::js_object_to_baml_value(env, args)?;
         if !args.is_map() {

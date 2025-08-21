@@ -49,9 +49,10 @@ impl InternalBamlRuntime {
         prepared_func_call: PreparedFunction<'ir>,
         ctx: RuntimeContext,
     ) -> Result<crate::FunctionResult> {
-        self.call_function_impl_with_tripwire(prepared_func_call, ctx, None).await
+        self.call_function_impl_with_tripwire(prepared_func_call, ctx, None)
+            .await
     }
-    
+
     pub(crate) async fn call_function_impl_with_tripwire<'ir>(
         &'ir self,
         prepared_func_call: PreparedFunction<'ir>,
@@ -66,11 +67,16 @@ impl InternalBamlRuntime {
             let baml_args = BamlValue::Map(prepared_func_call.baml_args.value);
 
             // Now actually execute the code.
-            let (history, _) =
-                orchestrate_call(orchestrator, self.ir(), &ctx, &renderer, &baml_args, |s| {
-                    renderer.parse(self.ir(), &ctx, s, false)
-                }, cancel_tripwire)
-                .await;
+            let (history, _) = orchestrate_call(
+                orchestrator,
+                self.ir(),
+                &ctx,
+                &renderer,
+                &baml_args,
+                |s| renderer.parse(self.ir(), &ctx, s, false),
+                cancel_tripwire,
+            )
+            .await;
 
             FunctionResult::new_chain(history)
         };

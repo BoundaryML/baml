@@ -23,20 +23,20 @@ pub fn js_abort_signal_to_rust_tripwire(
 
     // Generate a unique operation ID
     let operation_id = OPERATION_ID_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-    
+
     // Create the trigger and tripwire
     let (trigger, tripwire) = Tripwire::new();
-    
+
     // Check if already aborted
     let aborted: bool = signal.get_named_property("aborted")?;
     if aborted {
         trigger.cancel();
         return Ok((Some(operation_id), Some(tripwire)));
     }
-    
+
     // Store the trigger for potential cancellation
     OPERATION_TRIGGERS.insert(operation_id, trigger);
-    
+
     // Listen to 'abort' event
     let callback = env.create_function_from_closure("abort_handler", move |_| {
         // Cancel the operation when abort is triggered
@@ -45,7 +45,7 @@ pub fn js_abort_signal_to_rust_tripwire(
         }
         Ok(())
     })?;
-    
+
     // signal.addEventListener('abort', callback)
     let add_event_listener: JsFunction = signal.get_named_property("addEventListener")?;
     add_event_listener.call(
@@ -55,7 +55,7 @@ pub fn js_abort_signal_to_rust_tripwire(
             callback.into_unknown(),
         ],
     )?;
-    
+
     Ok((Some(operation_id), Some(tripwire)))
 }
 

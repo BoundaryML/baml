@@ -781,7 +781,7 @@ impl<'g> HirCompiler<'g> {
                     self.emit(Instruction::LoadConst(const_index));
                 }
 
-                _ => panic!("unsupported atom: {:#?}", value),
+                _ => panic!("unsupported atom: {value:#?}"),
             },
 
             thir::Expr::Block(block, _) => {
@@ -886,7 +886,7 @@ impl<'g> HirCompiler<'g> {
                 meta,
             } => {
                 let Some(&class_index) = self.globals.get(class_name) else {
-                    panic!("undefined class: {}", class_name);
+                    panic!("undefined class: {class_name}");
                 };
 
                 // Emit allocation with bogus index. It will be patched later.
@@ -905,11 +905,11 @@ impl<'g> HirCompiler<'g> {
                     self.compile_expression(value);
 
                     let Some(classes) = self.classes.get(class_name) else {
-                        panic!("undefined class: {}", class_name);
+                        panic!("undefined class: {class_name}");
                     };
 
                     let Some(&field_index) = classes.get(field_name) else {
-                        panic!("undefined field: {}.{}", class_name, field_name);
+                        panic!("undefined field: {class_name}.{field_name}");
                     };
 
                     self.emit(Instruction::StoreField(field_index));
@@ -924,7 +924,7 @@ impl<'g> HirCompiler<'g> {
                     self.emit(Instruction::LoadVar(spread_local - 1));
 
                     let Some(classes) = self.classes.get(class_name) else {
-                        panic!("undefined class: {}", class_name);
+                        panic!("undefined class: {class_name}");
                     };
 
                     for (field_name, &field_index) in classes {
