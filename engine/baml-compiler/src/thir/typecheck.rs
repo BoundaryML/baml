@@ -394,9 +394,16 @@ fn typecheck_statement(
             })
         }
         hir::Statement::Assign {
-            name, value, span, ..
+            left, value, span, ..
         } => {
             let typed_value = typecheck_expression(value, context, diagnostics);
+            let typed_left = typecheck_expression(left, context, diagnostics);
+
+            // TODO: Handle field & array accessors.
+            let name = match &left {
+                hir::Expression::Identifier(name, _) => name,
+                _ => panic!("left side of assignment is not an identifier: {:?}", left),
+            };
 
             // validate/update type.
             match context.vars.get_mut(name) {
@@ -442,18 +449,25 @@ fn typecheck_statement(
             }
 
             Some(thir::Statement::Assign {
-                name: name.clone(),
+                left: typed_left,
                 value: typed_value,
             })
         }
         hir::Statement::AssignOp {
-            name,
+            left,
             value,
             span,
             assign_op,
             ..
         } => {
+            let typed_left = typecheck_expression(left, context, diagnostics);
             let typed_value = typecheck_expression(value, context, diagnostics);
+
+            // TODO: Handle field & array accessors.
+            let name = match &left {
+                hir::Expression::Identifier(name, _) => name,
+                _ => panic!("left side of assignment is not an identifier: {:?}", left),
+            };
 
             // TODO: Extract in funciton, repeated above.
             // validate/update type.
@@ -500,7 +514,7 @@ fn typecheck_statement(
             }
 
             Some(thir::Statement::AssignOp {
-                name: name.clone(),
+                left: typed_left,
                 value: typed_value,
                 assign_op: *assign_op,
                 span: span.clone(),

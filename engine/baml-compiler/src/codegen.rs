@@ -456,16 +456,29 @@ impl<'g> HirCompiler<'g> {
             thir::Statement::Declare { name, .. } => {
                 self.declare_mut(name);
             }
-            thir::Statement::Assign { name, value, .. } => {
+            thir::Statement::Assign { left, value, .. } => {
                 self.compile_expression(value);
+
+                // TODO: Hanlde field & array accessors.
+                let name = match &left {
+                    thir::Expr::Var(name, _) => name,
+                    _ => panic!("left side of assignment is not an identifier: {:?}", left),
+                };
+
                 self.emit(Instruction::StoreVar(self.locals[name]));
             }
             thir::Statement::AssignOp {
-                name,
+                left,
                 value,
                 assign_op,
                 ..
             } => {
+                // TODO: Handle field & array accessors.
+                let name = match &left {
+                    thir::Expr::Var(name, _) => name,
+                    _ => panic!("left side of assignment is not an identifier: {:?}", left),
+                };
+
                 self.emit(Instruction::LoadVar(self.locals[name]));
                 self.compile_expression(value);
 
@@ -487,7 +500,7 @@ impl<'g> HirCompiler<'g> {
             }
             thir::Statement::DeclareAndAssign { name, value, .. } => {
                 self.compile_expression(value);
-                self.track_local(name);
+                self.track_local(&name);
             }
             thir::Statement::Return { expr, .. } => {
                 self.compile_expression(expr);

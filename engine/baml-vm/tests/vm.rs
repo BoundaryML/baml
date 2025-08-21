@@ -886,6 +886,22 @@ fn builtin_method_call() -> anyhow::Result<()> {
 }
 
 #[test]
+fn bind_method_call() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            fn main() -> int {
+                let arr = [1, 2, 3];
+                let v = arr.len();
+
+                v
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(3)),
+    })
+}
+
+#[test]
 fn while_loop() -> anyhow::Result<()> {
     // NOTE: there's no way to make a safeguard since there's no "return", and we shouldn't rely on
     // "break" to keep the test as isolated as possible.
@@ -1158,6 +1174,31 @@ fn for_loop_nested() -> anyhow::Result<()> {
         "#,
         function: "main",
         expected: VmExecState::Complete(Value::Int(21)),
+    })
+}
+
+#[test]
+fn basic_method_decl() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            class Number {
+                value int
+
+                function add(mut self, other: Number) -> null {
+                    self.value += other.value;
+                    null
+                }
+            }
+
+            function main() -> int {
+                let mut a = Number { value: 1 };
+                let mut b = Number { value: 2 };
+                a.add(b);
+                a.value
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(3)),
     })
 }
 

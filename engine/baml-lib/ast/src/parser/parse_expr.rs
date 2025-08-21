@@ -249,14 +249,14 @@ fn parse_statement_inner_rule(
         Rule::assign_stmt => {
             let mut assignment_tokens = stmt_token.into_inner();
 
-            let identifier = parse_identifier(assignment_tokens.next()?, diagnostics);
+            let lhs = parse_expression(assignment_tokens.next()?, diagnostics)?;
 
             let rhs = assignment_tokens.next()?;
             let rhs_span = diagnostics.span(rhs.as_span());
             let maybe_body = parse_assignment_expr(diagnostics, rhs, rhs_span);
             maybe_body.map(|body| {
                 Stmt::Assign(AssignStmt {
-                    identifier,
+                    left: lhs,
                     expr: body,
                     span,
                 })
@@ -265,7 +265,7 @@ fn parse_statement_inner_rule(
         Rule::assign_op_stmt => {
             let mut assignment_tokens = stmt_token.into_inner();
 
-            let identifier = parse_identifier(assignment_tokens.next()?, diagnostics);
+            let lhs = parse_expression(assignment_tokens.next()?, diagnostics)?;
 
             let op_token = assignment_tokens.next()?;
 
@@ -290,7 +290,7 @@ fn parse_statement_inner_rule(
 
             maybe_body.map(|body| {
                 Stmt::AssignOp(AssignOpStmt {
-                    identifier,
+                    left: lhs,
                     assign_op,
                     expr: body,
                     span,
@@ -326,8 +326,7 @@ fn parse_statement_inner_rule(
         Rule::while_loop => parse_while_loop(stmt_token, diagnostics),
         Rule::for_loop => parse_for_loop(stmt_token, diagnostics),
         Rule::if_expression => parse_if_expression(stmt_token, diagnostics).map(Stmt::Expression),
-        Rule::fn_app => parse_fn_app(stmt_token, diagnostics).map(Stmt::Expression),
-        Rule::generic_fn_app => parse_generic_fn_app(stmt_token, diagnostics).map(Stmt::Expression),
+        Rule::expression => parse_expression(stmt_token, diagnostics).map(Stmt::Expression),
         Rule::expr_block => parse_expr_block(stmt_token, diagnostics)
             .map(|expr_block| Stmt::Expression(Expression::ExprBlock(expr_block, span.clone()))),
         _ => {

@@ -600,11 +600,11 @@ pub enum Statement<T> {
     },
     /// Assign a mutable variable.
     Assign {
-        name: String,
+        left: Expr<T>,
         value: Expr<T>,
     },
     AssignOp {
-        name: String,
+        left: Expr<T>,
         value: Expr<T>,
         assign_op: AssignOp,
         span: Span,
@@ -669,13 +669,15 @@ impl<T: Clone> Statement<T> {
                 format!("Let {} = {}", name, value.dump_str())
             }
             Statement::Declare { name, span: _ } => format!("var {name}"),
-            Statement::Assign { name, value } => format!("{} <- {}", name, value.dump_str()),
+            Statement::Assign { left, value } => {
+                format!("{} <- {}", left.dump_str(), value.dump_str())
+            }
             Statement::AssignOp {
-                name,
+                left,
                 value,
                 assign_op,
                 span: _,
-            } => format!("{} {} {}", name, assign_op, value.dump_str()),
+            } => format!("{} {} {}", left.dump_str(), assign_op, value.dump_str()),
             Statement::DeclareAndAssign {
                 name,
                 value,
