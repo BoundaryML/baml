@@ -39,11 +39,12 @@ pub async fn handle_rpc_websocket(ws: axum::extract::ws::WebSocket, state: AppSt
                             "rpcId": rpc_id,
                             "data": { "ok": true }
                         });
+                        if let Err(e) = state.playground_tx.send(PreSendToWasmMessage::Initialized)
+                        {
+                            tracing::error!("Failed to send INITIALIZED message to language-server: {e}");
+                        }
+                        tracing::info!("Sent INITIALIZED message to language-server");
                         let _ = ws_tx.send(Message::text(response.to_string())).await;
-                        state
-                            .playground_tx
-                            .send(PreSendToWasmMessage::Initialized)
-                            .unwrap();
                     }
                     // "GET_WEBVIEW_URI" => {
                     //     let path = data["path"].as_str().unwrap_or("");
@@ -155,6 +156,7 @@ pub async fn handle_rpc_websocket(ws: axum::extract::ws::WebSocket, state: AppSt
                         tracing::warn!("Unknown RPC method: {}", rpc_method);
                     }
                 }
+                tracing::info!("Handled RPC request: {:?}", rpc_method);
             }
         }
     }

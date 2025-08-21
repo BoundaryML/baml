@@ -41,8 +41,8 @@ pub(crate) fn version() -> &'static str {
 pub fn run_server() -> anyhow::Result<()> {
     let tokio_runtime = tokio::runtime::Runtime::new()?;
 
-    let (broadcast_tx, broadcast_rx) = broadcast::channel(100);
-    let (playground_tx, playground_rx) = broadcast::channel(100);
+    let (broadcast_tx, broadcast_rx) = broadcast::channel(1000);
+    let (playground_tx, playground_rx) = broadcast::channel(1000);
 
     let port_picks = tokio_runtime.block_on(playground2::port_picker::pick())?;
 
@@ -50,7 +50,7 @@ pub fn run_server() -> anyhow::Result<()> {
         playground2::Playground2Server {
             app_state: playground2::server::AppState {
                 broadcast_rx,
-                playground_tx,
+                playground_tx: playground_tx.clone(),
                 playground_port: port_picks.playground_port,
                 proxy_port: port_picks.proxy_port,
             },
@@ -81,6 +81,7 @@ pub fn run_server() -> anyhow::Result<()> {
             tokio_handle: tokio_runtime.handle().clone(),
             broadcast_tx,
             playground_rx,
+            playground_tx: playground_tx.clone(),
             playground_port: port_picks.playground_port,
             proxy_port: port_picks.proxy_port,
         },

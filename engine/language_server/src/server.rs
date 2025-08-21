@@ -57,6 +57,7 @@ pub(crate) struct ServerArgs {
     pub tokio_handle: tokio::runtime::Handle,
     pub broadcast_tx: broadcast::Sender<LangServerToWasmMessage>,
     pub playground_rx: broadcast::Receiver<PreSendToWasmMessage>,
+    pub playground_tx: broadcast::Sender<PreSendToWasmMessage>,
     pub playground_port: u16,
     pub proxy_port: u16,
 }
@@ -167,15 +168,13 @@ impl Server {
 
         let rt = tokio::runtime::Runtime::new()?;
 
-        let (playground_tx, playground_rx) = broadcast::channel(1000);
-
         let mut session = Session::new(
             &client_capabilities,
             position_encoding,
             global_settings,
             &workspaces,
             rt.handle().clone(),
-            playground_tx,
+            args.playground_tx.clone(),
         )?;
 
         let client = client::Client::new(connection.make_sender());
@@ -218,13 +217,16 @@ impl Server {
             });
         }
         {
-            let mut playground_rx = playground_rx.resubscribe();
+            let mut playground_rx = server.args.playground_rx.resubscribe();
             let broadcast_tx = server.args.broadcast_tx.clone();
             let session = server.session.clone();
             server.args.tokio_handle.spawn(async move {
+                tracing::info!("Starting playground rx loop");
                 while let Ok(msg) = playground_rx.recv().await {
+                    tracing::info!("playground rx loop: {:?}", msg);
                     match msg {
                         PreSendToWasmMessage::Initialized => {
+                            tracing::info!("Received playground INITIALIZED request");
                             let projects = session.baml_src_projects.lock();
                             for (_, project) in projects.iter() {
                                 let project = project.lock();
