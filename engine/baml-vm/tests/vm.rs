@@ -343,10 +343,11 @@ fn class_constructor_with_spread_operator() -> anyhow::Result<()> {
                     x int
                     y int
                     z int
+                    w int
                 }
 
                 fn default_point() -> Point {
-                    Point { x: 0, y: 0, z: 0 }
+                    Point { x: 0, y: 0, z: 0, w: 0 }
                 }
 
                 fn main() -> Point {
@@ -367,12 +368,38 @@ fn class_constructor_with_spread_operator() -> anyhow::Result<()> {
 
             assert_eq!(
                 instance.fields,
-                &[Value::Int(1), Value::Int(2), Value::Int(0)]
+                &[Value::Int(1), Value::Int(2), Value::Int(0), Value::Int(0)],
             );
 
             Ok(())
         },
     )
+}
+
+#[test]
+fn class_constructor_with_spread_operator_does_not_break_locals() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: "
+                class Point {
+                    x int
+                    y int
+                    z int
+                    w int
+                }
+
+                fn default_point() -> Point {
+                    Point { x: 0, y: 0, z: 0, w: 0 }
+                }
+
+                fn main() -> int {
+                    let p = Point { x: 1, y: 2, ..default_point() };
+                    let x = 0;
+                    x
+                }
+            ",
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(0)),
+    })
 }
 
 #[test]
@@ -1301,7 +1328,7 @@ mod return_stmt {
             source: r#"
                 fn EarlyReturn(x: int) -> int {
                    if x == 42 { return 1; }
-                   
+
                    x + 5
                 }
 
@@ -1322,14 +1349,14 @@ mod return_stmt {
                    let a = 1;
 
                    if a == 0 { return 0; }
-                   
+
                    {
                       let b = 1;
                       if a != b {
                          return 0;
                       }
                    }
-                   
+
                    {
                       let c = 2;
                       let b = 3;

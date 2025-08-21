@@ -833,8 +833,6 @@ impl Vm {
                     self.stack.push(instance.fields[index]);
                 }
                 Instruction::StoreField(index) => {
-                    let value_stack_index = self.stack.ensure_stack_top()?;
-
                     let reference = self.objects.as_object(
                         &self.stack[self.stack.ensure_slot_from_top(1)?],
                         ObjectType::Instance,
@@ -848,11 +846,11 @@ impl Vm {
                         .into());
                     };
 
-                    // Set the value.
-                    instance.fields[index] = self.stack[value_stack_index];
+                    // Consume and set the value.
+                    instance.fields[index] = self.stack.ensure_pop()?;
 
-                    // Consume the value.
-                    self.stack.pop();
+                    // Consume the intance.
+                    self.stack.ensure_pop()?;
 
                     // TODO: Borrow checker stuff.
                     function = self.objects[frame.function].as_function()?;

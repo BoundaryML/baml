@@ -922,41 +922,80 @@ impl<'g> HirCompiler<'g> {
                     global: class_index,
                 });
 
+                let instance_local_index = self.locals.len() + 1;
+
                 let mut defined_named_fields = std::collections::HashSet::new();
 
                 // Process fields in order
                 for (field_name, value) in fields {
-                    self.compile_expression(value);
-
-                    let Some(classes) = self.classes.get(class_name) else {
+                    let Some(resolved_fields) = self.classes.get(class_name) else {
                         panic!("undefined class: {}", class_name);
                     };
 
-                    let Some(&field_index) = classes.get(field_name) else {
+                    let Some(&field_index) = resolved_fields.get(field_name) else {
                         panic!("undefined field: {}.{}", class_name, field_name);
                     };
 
+                    self.emit(Instruction::LoadVar(instance_local_index));
+                    self.compile_expression(value);
                     self.emit(Instruction::StoreField(field_index));
+
                     defined_named_fields.insert(field_name.as_str());
                 }
 
                 if let Some(spread) = spread {
-                    self.compile_expression(spread);
-
-                    // Pseudo local, user didn't declare it.
-                    let spread_local = self.locals.len() + 2;
-                    self.emit(Instruction::LoadVar(spread_local - 1));
-
-                    let Some(classes) = self.classes.get(class_name) else {
+                    let Some(resolved_fields) = self.classes.get(class_name) else {
                         panic!("undefined class: {}", class_name);
                     };
 
-                    for (field_name, &field_index) in classes {
+                    self.compile_expression(spread);
+
+                    // Pseudo local, user didn't declare it. + 2 because stack is:
+                    //
+                    // [a, b, c, allocated_instance, spread_local]
+                    //  ^  ^  ^         ^                    ^
+                    //  |  |  |         |                    |
+                    //  |  |  |         |                    +-- spread (+2)
+                    //  |  |  |         |
+                    //  +--+--+         +-- Not yet tracked (+1)
+                    //     |
+                    //     |
+                    //     +-- These are tracked locals.
+                    let spread_local_index = instance_local_index + 1;
+
+                    let mut pop_spread_local = false;
+
+                    // Not sorted cause of hashmap, tried using sorted map and
+                    // it didn't work either, figure out what's going on.
+                    let mut sorted_fields = resolved_fields
+                        .iter()
+                        .map(|(name, index)| (name, *index))
+                        .collect::<Vec<_>>();
+                    sorted_fields.sort_by_key(|(_, index)| *index);
+
+                    for (field_name, field_index) in sorted_fields {
                         if !defined_named_fields.contains(field_name.as_str()) {
-                            self.emit(Instruction::LoadVar(spread_local));
+                            // Now load allocated instance again:
+                            // [a, b, c, allocated_instance, spread_local, allocated_instance]
+                            self.emit(Instruction::LoadVar(instance_local_index));
+
+                            // Load spread again:
+                            // [a, b, c, allocated_instance, spread_local, allocated_instance, spread_local]
+                            self.emit(Instruction::LoadVar(spread_local_index));
+                            // Load field:
+                            // [a, b, c, allocated_instance, spread_local, allocated_instance, field_value]
                             self.emit(Instruction::LoadField(field_index));
+                            // Store field:
+                            // [a, b, c, allocated_instance, spread_local]
                             self.emit(Instruction::StoreField(field_index));
+
+                            pop_spread_local = true;
                         }
+                    }
+
+                    // Get rid of spread local, won't be used anymore.
+                    if pop_spread_local {
+                        self.emit(Instruction::Pop(1));
                     }
                 }
             }
@@ -1760,8 +1799,10 @@ mod tests {
                 "main",
                 vec![
                     Instruction::AllocInstance(ObjectIndex::from_raw(2)),
+                    Instruction::LoadVar(1),
                     Instruction::LoadConst(0),
                     Instruction::StoreField(0),
+                    Instruction::LoadVar(1),
                     Instruction::LoadConst(1),
                     Instruction::StoreField(1),
                     Instruction::LoadVar(1),
@@ -1772,7 +1813,6 @@ mod tests {
     }
 
     #[test]
-    // #[ignore = "HIR doesn't support spread operators yet"]
     fn class_constructor_with_spread_operator() -> anyhow::Result<()> {
         assert_compiles(Program {
             source: r#"
@@ -1780,10 +1820,11 @@ mod tests {
                     x int
                     y int
                     z int
+                    w int
                 }
 
                 fn default_point() -> Point {
-                    Point { x: 0, y: 0, z: 0 }
+                    Point { x: 0, y: 0, z: 0, w: 0 }
                 }
 
                 fn main() -> Point {
@@ -1795,8 +1836,10 @@ mod tests {
                 "main",
                 vec![
                     Instruction::AllocInstance(ObjectIndex::from_raw(3)),
+                    Instruction::LoadVar(1),
                     Instruction::LoadConst(0),
                     Instruction::StoreField(0),
+                    Instruction::LoadVar(1),
                     Instruction::LoadConst(1),
                     Instruction::StoreField(1),
                     Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
@@ -1806,6 +1849,61 @@ mod tests {
                     Instruction::LoadField(2),
                     Instruction::StoreField(2),
                     Instruction::LoadVar(1),
+                    Instruction::LoadVar(2),
+                    Instruction::LoadField(3),
+                    Instruction::StoreField(3),
+                    Instruction::Pop(1),
+                    Instruction::LoadVar(1),
+                    Instruction::Return,
+                ],
+            )],
+        })
+    }
+
+    #[test]
+    fn class_constructor_with_spread_operator_does_not_break_locals() -> anyhow::Result<()> {
+        assert_compiles(Program {
+            source: r#"
+                class Point {
+                    x int
+                    y int
+                    z int
+                    w int
+                }
+
+                fn default_point() -> Point {
+                    Point { x: 0, y: 0, z: 0, w: 0 }
+                }
+
+                fn main() -> int {
+                    let p = Point { x: 1, y: 2, ..default_point() };
+                    let x = 0;
+                    x
+                }
+            "#,
+            expected: vec![(
+                "main",
+                vec![
+                    Instruction::AllocInstance(ObjectIndex::from_raw(3)),
+                    Instruction::LoadVar(1),
+                    Instruction::LoadConst(0),
+                    Instruction::StoreField(0),
+                    Instruction::LoadVar(1),
+                    Instruction::LoadConst(1),
+                    Instruction::StoreField(1),
+                    Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
+                    Instruction::Call(0),
+                    Instruction::LoadVar(1),
+                    Instruction::LoadVar(2),
+                    Instruction::LoadField(2),
+                    Instruction::StoreField(2),
+                    Instruction::LoadVar(1),
+                    Instruction::LoadVar(2),
+                    Instruction::LoadField(3),
+                    Instruction::StoreField(3),
+                    Instruction::Pop(1),
+                    Instruction::LoadConst(2),
+                    Instruction::LoadVar(2),
                     Instruction::Return,
                 ],
             )],
