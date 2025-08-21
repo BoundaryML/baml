@@ -1,8 +1,10 @@
 import ctypes
 import threading
 import asyncio
-from typing import Dict, Optional, Callable
-from dataclasses import dataclass
+from typing import Dict, Optional, Callable, Any
+from dataclasses import dataclass, field
+
+from ._result_types import ResultCallback, BamlError
 
 # Define callback function types
 CALLBACK_FN = ctypes.CFUNCTYPE(None, ctypes.c_uint32, ctypes.c_int32, 
@@ -11,11 +13,11 @@ ON_TICK_CALLBACK_FN = ctypes.CFUNCTYPE(None, ctypes.c_uint32)
 
 @dataclass
 class CallbackState:
-    """State for an active async call"""
-    future: asyncio.Future
-    queue: Optional[asyncio.Queue] = None
+    """State for an active async call - uses queue-only approach"""
+    queue: asyncio.Queue[ResultCallback]
     on_tick: Optional[Callable] = None
     loop: Optional[asyncio.AbstractEventLoop] = None
+    type_map: Dict[str, Any] = field(default_factory=dict)
 
 # Global callback registry (thread-safe)
 _callback_lock = threading.RLock()
@@ -24,37 +26,37 @@ _active_callbacks: Dict[int, CallbackState] = {}
 # Callback implementations
 @CALLBACK_FN
 def _trigger_callback(call_id: int, is_done: int, content_ptr, length: int):
-    """Handle successful results"""
+    """Handle successful results using queue-based approach"""
     with _callback_lock:
         state = _active_callbacks.get(call_id)
         if not state:
             return
     
-    # Copy data from C pointer
-    if content_ptr and length > 0:
-        data = ctypes.string_at(content_ptr, length)
-        # TODO: Parse protobuf in next phase
-        result = data
-    else:
-        result = None
+    # Create result callback
+    result_cb = ResultCallback()
     
-    # Handle streaming vs single result
-    if state.queue and state.loop is not None:  # Streaming
-        # Always send the result if there is one
-        if result is not None:
-            state.loop.call_soon_threadsafe(
-                lambda: state.queue.put_nowait(result)
-            )
-        # Send sentinel after the last result
-        if is_done:
-            state.loop.call_soon_threadsafe(
-                lambda: state.queue.put_nowait(None)
-            )
-    else:  # Single result
-        if state.loop and not state.future.done():
-            state.loop.call_soon_threadsafe(
-                lambda: state.future.set_result(result)
-            )
+    # Decode callback data (will use serde module in later phases)
+    if content_ptr and length > 0:
+        try:
+            data = ctypes.string_at(content_ptr, length)
+            # TODO: Replace with actual serde decoder in Phase 4
+            # decoded_value = decode_callback_data(data, state.type_map)
+            decoded_value = data  # Temporary - just pass raw data
+            
+            if is_done:
+                result_cb.has_data = True
+                result_cb.data = decoded_value
+            else:
+                result_cb.has_stream_data = True
+                result_cb.stream_data = decoded_value
+        except Exception as e:
+            result_cb.error = BamlError(f"Failed to decode callback data: {e}")
+    
+    # Always use queue - simpler logic
+    if state.loop:
+        state.loop.call_soon_threadsafe(
+            lambda: state.queue.put_nowait(result_cb)
+        )
     
     # Cleanup if done
     if is_done:
@@ -63,20 +65,22 @@ def _trigger_callback(call_id: int, is_done: int, content_ptr, length: int):
 
 @CALLBACK_FN  
 def _error_callback(call_id: int, is_done: int, content_ptr, length: int):
-    """Handle errors"""
+    """Handle errors using queue-based approach"""
     with _callback_lock:
         state = _active_callbacks.get(call_id)
         if not state:
             return
     
-    # Extract error message
+    # Extract error message and create error callback
     error_msg = ctypes.string_at(content_ptr, length).decode('utf-8')
-    error = RuntimeError(f"BAML Error: {error_msg}")
+    error = BamlError(error_msg)
     
-    # Schedule error on the event loop
+    result_cb = ResultCallback(error=error)
+    
+    # Send error through queue
     if state.loop:
         state.loop.call_soon_threadsafe(
-            lambda: state.future.set_exception(error) if not state.future.done() else None
+            lambda: state.queue.put_nowait(result_cb)
         )
     
     # Cleanup
