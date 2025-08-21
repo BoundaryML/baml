@@ -7,7 +7,7 @@ use std::{
     sync::{Arc, Once},
 };
 
-use baml_lib::{SourceFile, FeatureFlags};
+use baml_lib::{FeatureFlags, SourceFile};
 use internal_baml_core::ir::repr::IntermediateRepr;
 use strip_ansi_escapes::strip_str;
 

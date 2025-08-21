@@ -79,8 +79,11 @@ pub fn validate(
         };
     }
 
-    let (configuration, diag) = validate_config_impl(root_path, db.ast());
+    let (mut configuration, diag) = validate_config_impl(root_path, db.ast());
     diagnostics.push(diag);
+
+    // Set the feature flags on the configuration
+    configuration.feature_flags = feature_flags;
 
     if diagnostics.has_errors() {
         return ValidatedSchema {
@@ -91,12 +94,7 @@ pub fn validate(
     }
 
     // actually run the validation pipeline
-    validate::validate(
-        &db,
-        configuration.preview_features(),
-        feature_flags.clone(),
-        &mut diagnostics,
-    );
+    validate::validate(&db, &configuration, &mut diagnostics);
 
     if diagnostics.has_errors() {
         return ValidatedSchema {
@@ -110,7 +108,7 @@ pub fn validate(
     db.finalize(&mut diagnostics);
 
     // TODO: #1343 Temporary solution until we implement scoping in the AST.
-    validate_test_type_builders(&mut diagnostics, &mut db, &configuration, feature_flags);
+    validate_test_type_builders(&mut diagnostics, &mut db, &configuration);
 
     ValidatedSchema {
         db,
@@ -148,7 +146,6 @@ fn validate_test_type_builders(
     diagnostics: &mut Diagnostics,
     db: &mut internal_baml_parser_database::ParserDatabase,
     configuration: &Configuration,
-    feature_flags: FeatureFlags,
 ) {
     let mut test_case_scoped_dbs = Vec::new();
     for test in db.walk_test_cases() {
@@ -167,12 +164,7 @@ fn validate_test_type_builders(
             diagnostics.push(d);
             continue;
         }
-        validate::validate(
-            &scoped_db,
-            configuration.preview_features(),
-            feature_flags.clone(),
-            diagnostics,
-        );
+        validate::validate(&scoped_db, configuration, diagnostics);
         if diagnostics.has_errors() {
             continue;
         }
@@ -189,12 +181,8 @@ pub fn run_validation_pipeline_on_db(
     db: &mut internal_baml_parser_database::ParserDatabase,
     diagnostics: &mut Diagnostics,
 ) {
-    validate::validate(
-        db,
-        BitFlags::<PreviewFeature>::default(),
-        FeatureFlags::new(),
-        diagnostics,
-    );
+    let configuration = Configuration::new(); // Use default configuration with no feature flags
+    validate::validate(db, &configuration, diagnostics);
     if diagnostics.has_errors() {
         return;
     }
@@ -395,5 +383,11 @@ fn validate_config_impl(
     //     )
     //     .collect();
 
-    (Configuration { generators }, diagnostics)
+    (
+        Configuration {
+            generators,
+            feature_flags: FeatureFlags::new(), // Default empty, will be set by main validate function
+        },
+        diagnostics,
+    )
 }
