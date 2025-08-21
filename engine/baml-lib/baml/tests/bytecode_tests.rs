@@ -40,7 +40,7 @@ fn run_bytecode_test(test_name: &str, content: &str) {
     let result = get_bytecode_output(content);
     let (without_expected, expected) = parse_expected_from_comments(content);
 
-    let actual = result.unwrap_or_else(|e| format!("error: {e}"));
+    let actual = result.unwrap_or_else(|e| e);
 
     if std::env::var("UPDATE_EXPECT").is_ok() {
         update_expected(
@@ -84,8 +84,8 @@ fn get_bytecode_output(content: &str) -> Result<String, String> {
                     baml_vm::Object::Function(func) => {
                         output.push_str(&format!("Function: {}\n", func.name));
                         output.push_str(&baml_vm::debug::display_bytecode(
-                            func,
-                            &[], // empty stack
+                            &func,
+                            &baml_vm::EvalStack::default(),
                             &objects,
                             &globals,
                             false, // no colors for golden tests
@@ -109,9 +109,7 @@ fn get_bytecode_output(content: &str) -> Result<String, String> {
                     baml_vm::Object::Array(arr) => {
                         output.push_str(&format!("Array with {} elements\n", arr.len()));
                     }
-                    baml_vm::Object::Iterator { iterable, index } => {
-                        output.push_str(&format!("Iterator: iterable={iterable}, index={index}\n"));
-                    }
+
                     baml_vm::Object::Future(_) => {
                         output.push_str("Future\n");
                     }
@@ -182,15 +180,15 @@ fn update_expected(test_name: &str, content: &str, actual: &str) {
         let comment_lines: Vec<String> = actual
             .lines()
             .map(|line| {
-                if line.is_empty() {
+                strip_ansi_escapes::strip_str(if line.is_empty() {
                     "//".to_string()
                 } else {
                     format!("// {line}")
-                }
+                })
             })
             .collect();
 
-        format!("{}\n\n{}", content.trim_end(), comment_lines.join("\n"))
+        format!("{}\n\n{}\n", content.trim_end(), comment_lines.join("\n"))
     };
 
     fs::write(&test_path, new_content).unwrap_or_else(|e| {
@@ -201,8 +199,17 @@ fn update_expected(test_name: &str, content: &str, actual: &str) {
 }
 
 fn compare_output(expected: &str, actual: &str, test_name: &str) {
-    let expected = strip_str(expected);
-    let actual = strip_str(actual);
+    // Strip ANSI codes and normalize trailing whitespace
+    let expected = strip_str(expected)
+        .lines()
+        .map(|line| line.trim_end())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let actual = strip_str(actual)
+        .lines()
+        .map(|line| line.trim_end())
+        .collect::<Vec<_>>()
+        .join("\n");
 
     if expected != actual {
         panic_with_diff(&expected, &actual);

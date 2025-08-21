@@ -6,7 +6,7 @@ function Foo() -> int {
     x
 }
 
-// error: error: Error validating: This line is not a valid field or attribute definition. A valid property may look like: 'myProperty "some value"' for example, with no colons.
+// error: Error validating: This line is not a valid field or attribute definition. A valid property may look like: 'myProperty "some value"' for example, with no colons.
 //   -->  test.baml:2
 //    | 
 //  1 | function Foo() -> int {
@@ -48,4 +48,3 @@ function Foo() -> int {
 //    | 
 //  1 | function Foo() -> int {
 //    | 
-//

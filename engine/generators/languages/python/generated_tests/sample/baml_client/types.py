@@ -46,7 +46,7 @@ def all_succeeded(checks: typing.Dict[CheckName, Check]) -> bool:
 
 class Example(BaseModel):
     type: typing_extensions.Literal['example_1']
-    a: int
+    a: Checked[int, typing_extensions.Literal['a_is_positive']]
     b: str
 
 class Example2(BaseModel):

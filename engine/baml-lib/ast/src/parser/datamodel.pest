@@ -315,7 +315,29 @@ expr_fn = { ("function" | "fn") ~ identifier ~ named_argument_list ~ ARROW? ~ fi
 expr_block = { BLOCK_OPEN ~ NEWLINE? ~ (stmt | comment_block | empty_lines)* ~ expression? ~ NEWLINE? ~ BLOCK_CLOSE }
 
 // Statement.
-stmt = { (((BREAK_KEYWORD | CONTINUE_KEYWORD | let_expr | assign_op_stmt | assign_stmt | expression) ~ SEMICOLON) | for_loop | if_expression | while_loop | expr_block) ~ trailing_comment? ~ NEWLINE? }
+stmt = {
+    (
+        (
+            (
+                BREAK_KEYWORD
+                | CONTINUE_KEYWORD
+                | let_expr
+                | return_stmt
+                | assert_stmt
+                | assign_op_stmt
+                | assign_stmt
+                | expression
+            )
+            ~ SEMICOLON
+        )
+        | for_loop
+        | if_expression
+        | while_loop
+        | expr_block
+    )
+    ~ trailing_comment?
+    ~ NEWLINE?
+}
 
 // Let-binding statement.
 let_expr = { "let" ~ MUT_KEYWORD? ~ identifier ~ "=" ~ expression }
@@ -358,7 +380,6 @@ if_expression = { "if" ~ expression ~ expr_block ~ ( "else" ~ (expr_block | if_e
 while_loop = { "while" ~  expression ~  expr_block  }
 
 
-
 // For loop, e.g.
 // for r in resumes {
 //   ExtractResume(x)
@@ -370,6 +391,10 @@ c_for_loop = {  "(" ~ c_for_init_stmt? ~ ";" ~ expression? ~ ";" ~ c_for_after_s
 c_for_init_stmt = { let_expr | assign_op_stmt | assign_stmt | fn_app | generic_fn_app }
 // same as above but without `let`.
 c_for_after_stmt = {  assign_op_stmt | assign_stmt | fn_app | generic_fn_app }
+
+return_stmt = { "return" ~ expression? }
+
+assert_stmt = { "assert" ~ expression }
 
 // Anonymous function.
 lambda = { named_argument_list ~ "=>" ~ expression }

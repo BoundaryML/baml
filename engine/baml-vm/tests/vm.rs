@@ -5,16 +5,19 @@
 
 use baml_compiler::test::ast;
 use baml_vm::{
-    BamlVmProgram, Bytecode, Frame, Function, FunctionKind, Instruction, Object, Value, Vm,
-    VmExecState,
+    BamlVmProgram, Bytecode, EvalStack, Frame, Function, FunctionKind, GlobalPool, Instruction,
+    Object, ObjectIndex, ObjectPool, StackIndex, Value, Vm, VmError, VmExecState,
 };
 
 /// Helper struct for testing VM execution.
-struct Program {
+struct ProgramInput<Expect> {
     source: &'static str,
     function: &'static str,
-    expected: VmExecState,
+    expected: Expect,
 }
+
+type Program = ProgramInput<VmExecState>;
+type FailingProgram = ProgramInput<VmError>;
 
 /// Unified helper function for VM execution with optional inspection.
 fn assert_vm_executes(input: Program) -> anyhow::Result<()> {
@@ -26,36 +29,8 @@ fn assert_vm_executes_with_inspection(
     input: Program,
     inspect: impl FnOnce(&Vm) -> anyhow::Result<()>,
 ) -> anyhow::Result<()> {
-    let ast = ast(input.source)?;
-    let BamlVmProgram {
-        objects,
-        globals,
-        resolved_function_names,
-    } = baml_compiler::compile(&ast)?;
-
-    // eprintln!("objects: {objects:#?}");
-    // eprintln!("globals: {globals:#?}");
-    // eprintln!("resolved_function_names: {resolved_function_names:#?}");
-
-    // Find the target function index by name
-    let (target_function_index, _) = resolved_function_names[input.function];
-
-    // Create and run the VM.
-    // TODO: The VM needs to boostrap itself. Add some function in the VM
-    // that does that.
-    let mut vm = Vm {
-        frames: vec![Frame {
-            function: target_function_index,
-            instruction_ptr: 0,
-            locals_offset: 0,
-        }],
-        stack: vec![Value::Object(target_function_index)],
-        runtime_allocs_offset: objects.len(),
-        objects,
-        globals,
-    };
-
-    let result = vm.exec()?;
+    let (vm, result) = setup_and_exec_program(input.source, input.function)?;
+    let result = result?;
 
     assert_eq!(
         result, input.expected,
@@ -67,6 +42,45 @@ fn assert_vm_executes_with_inspection(
     inspect(&vm)?;
 
     Ok(())
+}
+
+fn assert_vm_fails(input: FailingProgram) -> anyhow::Result<()> {
+    let (_, result) = setup_and_exec_program(input.source, input.function)?;
+
+    assert_eq!(
+        result,
+        Err(input.expected),
+        "VM execution result mismatch for function '{}'",
+        input.function
+    );
+
+    Ok(())
+}
+
+fn setup_and_exec_program(
+    source: &'static str,
+    function: &str,
+) -> Result<(Vm, Result<VmExecState, VmError>), anyhow::Error> {
+    let ast = ast(source)?;
+    let BamlVmProgram {
+        objects,
+        globals,
+        resolved_function_names,
+    } = baml_compiler::compile(&ast)?;
+    let (target_function_index, _) = resolved_function_names[function];
+    let mut vm = Vm {
+        frames: vec![Frame {
+            function: target_function_index,
+            instruction_ptr: 0,
+            locals_offset: StackIndex::from_raw(0),
+        }],
+        stack: EvalStack::from_vec(vec![Value::Object(target_function_index)]),
+        runtime_allocs_offset: ObjectIndex::from_raw(objects.len()),
+        objects,
+        globals,
+    };
+    let result = vm.exec();
+    Ok((vm, result))
 }
 
 /// Helper struct for testing VM execution with direct bytecode.
@@ -107,19 +121,19 @@ fn assert_vm_executes_bytecode_with_inspection(
     };
 
     let objects = vec![Object::Function(function)];
-    let globals = vec![Value::Object(0)];
+    let globals = vec![Value::Object(ObjectIndex::from_raw(0))];
 
     // Create and run the VM
     let mut vm = Vm {
         frames: vec![Frame {
-            function: 0,
+            function: ObjectIndex::from_raw(0),
             instruction_ptr: 0,
-            locals_offset: 0,
+            locals_offset: StackIndex::from_raw(0),
         }],
-        stack: vec![Value::Object(0)],
-        runtime_allocs_offset: objects.len(),
-        objects,
-        globals,
+        stack: EvalStack::from_vec(vec![Value::Object(ObjectIndex::from_raw(0))]),
+        runtime_allocs_offset: ObjectIndex::from_raw(objects.len()),
+        objects: ObjectPool::from_vec(objects),
+        globals: GlobalPool::from_vec(globals),
     };
 
     let result = vm.exec()?;
@@ -266,13 +280,16 @@ fn array_constructor() -> anyhow::Result<()> {
                 }
             ",
             function: "main",
-            expected: VmExecState::Complete(Value::Object(3)),
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(3))),
         },
         |vm| {
             dbg!(&vm.objects);
 
-            let Object::Array(array) = &vm.objects[3] else {
-                panic!("expected Array, got {:?}", vm.objects[3]);
+            let Object::Array(array) = &vm.objects[ObjectIndex::from_raw(3)] else {
+                panic!(
+                    "expected Array, got {:?}",
+                    &vm.objects[ObjectIndex::from_raw(3)]
+                );
             };
 
             assert_eq!(array, &[Value::Int(1), Value::Int(2), Value::Int(3)]);
@@ -299,11 +316,14 @@ fn class_constructor() -> anyhow::Result<()> {
                 }
             ",
             function: "main",
-            expected: VmExecState::Complete(Value::Object(4)),
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(4))),
         },
         |vm| {
-            let Object::Instance(instance) = &vm.objects[4] else {
-                panic!("expected Instance, got {:?}", vm.objects[4]);
+            let Object::Instance(instance) = &vm.objects[ObjectIndex::from_raw(4)] else {
+                panic!(
+                    "expected Instance, got {:?}",
+                    &vm.objects[ObjectIndex::from_raw(4)]
+                );
             };
 
             assert_eq!(instance.fields, &[Value::Int(1), Value::Int(2)]);
@@ -335,11 +355,14 @@ fn class_constructor_with_spread_operator() -> anyhow::Result<()> {
                 }
             ",
             function: "main",
-            expected: VmExecState::Complete(Value::Object(5)),
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(5))),
         },
         |vm| {
-            let Object::Instance(instance) = &vm.objects[5] else {
-                panic!("expected Instance, got {:?}", vm.objects[5]);
+            let Object::Instance(instance) = &vm.objects[ObjectIndex::from_raw(5)] else {
+                panic!(
+                    "expected Instance, got {:?}",
+                    &vm.objects[ObjectIndex::from_raw(5)]
+                );
             };
 
             assert_eq!(
@@ -362,11 +385,14 @@ fn function_returning_string() -> anyhow::Result<()> {
                 }
             "#,
             function: "main",
-            expected: VmExecState::Complete(Value::Object(0)),
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(0))),
         },
         |vm| {
-            let Object::String(string) = &vm.objects[0] else {
-                panic!("expected String, got {:?}", vm.objects[0]);
+            let Object::String(string) = &vm.objects[ObjectIndex::from_raw(0)] else {
+                panic!(
+                    "expected String, got {:?}",
+                    &vm.objects[ObjectIndex::from_raw(0)]
+                );
             };
 
             assert_eq!(string, "hello");
@@ -392,7 +418,7 @@ fn multiple_strings() -> anyhow::Result<()> {
                 }
             "#,
             function: "main",
-            expected: VmExecState::Complete(Value::Object(0)), // "Hello" should be the first string object
+            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(0))), // "Hello" should be the first string object
         },
         |vm| {
             // Check that we have the expected strings in the objects pool
@@ -1260,6 +1286,100 @@ mod c_for_loops {
                 }"#,
             function: "Nothing",
             expected: VmExecState::Complete(Value::Int(0)),
+        })
+    }
+}
+
+#[cfg(test)]
+mod return_stmt {
+
+    use super::*;
+
+    #[test]
+    fn early_return() -> anyhow::Result<()> {
+        assert_vm_executes(Program {
+            source: r#"
+                fn EarlyReturn(x: int) -> int {
+                   if x == 42 { return 1; }
+                   
+                   x + 5
+                }
+
+                fn main() -> int {
+                    EarlyReturn(42)
+                }
+                "#,
+            function: "main",
+            expected: VmExecState::Complete(Value::Int(1)),
+        })
+    }
+
+    #[test]
+    fn with_stack() -> anyhow::Result<()> {
+        assert_vm_executes(Program {
+            source: r#"
+                fn WithStack() -> int {
+                   let a = 1;
+
+                   if a == 0 { return 0; }
+                   
+                   {
+                      let b = 1;
+                      if a != b {
+                         return 0;
+                      }
+                   }
+                   
+                   {
+                      let c = 2;
+                      let b = 3;
+                      while b != c {
+                         if true {
+                              return 0;
+                         }
+                      }
+                    }
+
+                    7
+                }"#,
+            function: "WithStack",
+            expected: VmExecState::Complete(Value::Int(0)),
+        })
+    }
+}
+
+mod assert_stmt {
+
+    use baml_vm::RuntimeError;
+
+    use super::*;
+
+    #[test]
+    fn assert_ok() -> anyhow::Result<()> {
+        assert_vm_executes(Program {
+            source: r#"
+                fn assertOk() -> int {
+
+                    assert 2 + 2 == 4;
+
+                    3
+                }"#,
+            function: "assertOk",
+            expected: VmExecState::Complete(Value::Int(3)),
+        })
+    }
+
+    #[test]
+    fn assert_not_ok() -> anyhow::Result<()> {
+        assert_vm_fails(FailingProgram {
+            source: r#"
+                fn assertNotOk() -> int {
+                    assert 3 == 1;
+
+                    2
+                } "#,
+            function: "assertNotOk",
+            expected: RuntimeError::AssertionError.into(),
         })
     }
 }

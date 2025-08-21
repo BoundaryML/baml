@@ -2947,6 +2947,82 @@ func (t *RecursiveAliasDependencyClassView) Type() (baml.Type, error) {
 	return t.inner.Type()
 }
 
+type RenderEnumInputClassBuilder struct {
+	inner baml.ClassBuilder
+}
+
+func (t *RenderEnumInputClassBuilder) ListProperties() ([]ClassPropertyBuilder, error) {
+	result, err := t.inner.ListProperties()
+	if err != nil {
+		return nil, err
+	}
+	builders := make([]ClassPropertyBuilder, len(result))
+	for i, p := range result {
+		builders[i] = p
+	}
+	return builders, nil
+}
+
+func (t *RenderEnumInputClassBuilder) AddProperty(name string, propertyType Type) (ClassPropertyBuilder, error) {
+	return t.inner.AddProperty(name, propertyType)
+}
+
+func (t *RenderEnumInputClassBuilder) PropertyTestKey() (ClassPropertyBuilder, error) {
+	return t.inner.Property("testKey")
+}
+
+func (t *TypeBuilder) RenderEnumInput() (*RenderEnumInputClassBuilder, error) {
+	bld, err := t.inner.Class("RenderEnumInput")
+	if err != nil {
+		return nil, err
+	}
+	return &RenderEnumInputClassBuilder{inner: bld}, nil
+}
+
+func (t *RenderEnumInputClassBuilder) Type() (baml.Type, error) {
+	return t.inner.Type()
+}
+
+type RenderTestClassClassBuilder struct {
+	inner baml.ClassBuilder
+}
+
+func (t *RenderTestClassClassBuilder) ListProperties() ([]ClassPropertyBuilder, error) {
+	result, err := t.inner.ListProperties()
+	if err != nil {
+		return nil, err
+	}
+	builders := make([]ClassPropertyBuilder, len(result))
+	for i, p := range result {
+		builders[i] = p
+	}
+	return builders, nil
+}
+
+func (t *RenderTestClassClassBuilder) AddProperty(name string, propertyType Type) (ClassPropertyBuilder, error) {
+	return t.inner.AddProperty(name, propertyType)
+}
+
+func (t *RenderTestClassClassBuilder) PropertyName() (ClassPropertyBuilder, error) {
+	return t.inner.Property("name")
+}
+
+func (t *RenderTestClassClassBuilder) PropertyStatus() (ClassPropertyBuilder, error) {
+	return t.inner.Property("status")
+}
+
+func (t *TypeBuilder) RenderTestClass() (*RenderTestClassClassBuilder, error) {
+	bld, err := t.inner.Class("RenderTestClass")
+	if err != nil {
+		return nil, err
+	}
+	return &RenderTestClassClassBuilder{inner: bld}, nil
+}
+
+func (t *RenderTestClassClassBuilder) Type() (baml.Type, error) {
+	return t.inner.Type()
+}
+
 type ResumeClassView struct {
 	inner baml.ClassBuilder
 }

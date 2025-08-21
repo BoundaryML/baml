@@ -93,6 +93,11 @@ export enum DataType {
 export enum DynEnumOne {
 }
 
+export enum DynEnumThree {
+  TRICYCLE = "TRICYCLE",
+  TRIANGLE = "TRIANGLE",
+}
+
 export enum DynEnumTwo {
 }
 
@@ -150,6 +155,16 @@ export enum OrderStatus {
   SHIPPED = "SHIPPED",
   DELIVERED = "DELIVERED",
   CANCELLED = "CANCELLED",
+}
+
+export enum RenderStatusEnum {
+  ACTIVE = "ACTIVE",
+  INACTIVE = "INACTIVE",
+}
+
+export enum RenderTestEnum {
+  BIKE = "BIKE",
+  SCOOTER = "SCOOTER",
 }
 
 export enum Tag {
@@ -670,6 +685,19 @@ export interface Recipe {
 export interface RecursiveAliasDependency {
   value: JsonValue
   
+}
+
+export interface RenderEnumInput {
+  testKey: string
+  
+  [key: string]: any;
+}
+
+export interface RenderTestClass {
+  name: string
+  status: (string | RenderStatusEnum)
+  
+  [key: string]: any;
 }
 
 export interface Resume {

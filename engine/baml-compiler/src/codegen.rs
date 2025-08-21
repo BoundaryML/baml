@@ -2,13 +2,18 @@
 
 use std::collections::{HashMap, HashSet};
 
+use baml_types::BamlValueWithMeta;
 use baml_vm::{
-    BamlVmProgram, BinOp, Bytecode, Class, CmpOp, Function, FunctionKind, Instruction, Object,
-    UnaryOp, Value,
+    BamlVmProgram, BinOp, Bytecode, Class, CmpOp, Function, FunctionKind, GlobalIndex, GlobalPool,
+    Instruction, Object, ObjectIndex, ObjectPool, UnaryOp, Value,
 };
+use internal_baml_diagnostics::{Diagnostics, Span};
 use internal_baml_parser_database::ParserDatabase;
 
-use crate::hir;
+use crate::{
+    hir::{self, Type},
+    thir,
+};
 
 /// Compile a Baml AST into bytecode.
 ///
@@ -18,35 +23,53 @@ use crate::hir;
 pub fn compile(ast: &ParserDatabase) -> anyhow::Result<BamlVmProgram> {
     // Stage 1: AST -> HIR
     // eprintln!("AST:\n{:#?}", ast.ast);
+
     let hir = hir::Hir::from_ast(&ast.ast);
 
     // eprintln!("\nHIR:\n{:#?}", hir);
 
+    // TODO: THIR is built twice, once for validations, once for compilation.
+    // Fix this.
+    let thir = thir::typecheck::typecheck(&hir, &mut Diagnostics::new("dummy".into()));
+
+    // eprintln!("\nTHIR:\n{:#?}", thir);
+
     // Stage 2: HIR -> Bytecode
-    compile_hir_to_bytecode(&hir)
+    compile_thir_to_bytecode(&thir)
 }
 
 /// Compile HIR to bytecode.
 ///
 /// This function takes an HIR Program and generates the bytecode for the VM.
-fn compile_hir_to_bytecode(hir: &hir::Hir) -> anyhow::Result<BamlVmProgram> {
+fn compile_thir_to_bytecode(
+    thir: &thir::THir<(Span, Option<Type>)>,
+) -> anyhow::Result<BamlVmProgram> {
     let mut resolved_globals = HashMap::new();
     let mut resolved_classes = HashMap::new();
     let mut llm_functions = HashSet::new();
 
     // Resolve global functions from HIR
-    for func in &hir.expr_functions {
-        resolved_globals.insert(func.name.clone(), resolved_globals.len());
+    for func in &thir.expr_functions {
+        resolved_globals.insert(
+            func.name.clone(),
+            GlobalIndex::from_raw(resolved_globals.len()),
+        );
     }
 
-    for func in &hir.llm_functions {
-        resolved_globals.insert(func.name.clone(), resolved_globals.len());
+    for func in &thir.llm_functions {
+        resolved_globals.insert(
+            func.name.clone(),
+            GlobalIndex::from_raw(resolved_globals.len()),
+        );
         llm_functions.insert(func.name.clone());
     }
 
     // Resolve classes from HIR
-    for class in &hir.classes {
-        resolved_globals.insert(class.name.clone(), resolved_globals.len());
+    for class in thir.classes.values() {
+        resolved_globals.insert(
+            class.name.clone(),
+            GlobalIndex::from_raw(resolved_globals.len()),
+        );
 
         // Resolve class fields.
         let mut class_fields = HashMap::new();
@@ -60,31 +83,37 @@ fn compile_hir_to_bytecode(hir: &hir::Hir) -> anyhow::Result<BamlVmProgram> {
     let native_fns = baml_vm::native::functions();
 
     for name in native_fns.keys() {
-        resolved_globals.insert(name.clone(), resolved_globals.len());
+        resolved_globals.insert(name.clone(), GlobalIndex::from_raw(resolved_globals.len()));
     }
 
-    let mut objects = Vec::with_capacity(resolved_globals.len());
-    let mut globals = Vec::with_capacity(resolved_globals.len());
+    let mut objects = ObjectPool::from_vec(Vec::with_capacity(resolved_globals.len()));
+    let mut globals = GlobalPool::from_vec(Vec::with_capacity(resolved_globals.len()));
 
-    let mut loop_vars_counter = ForLoopVarCounters::new();
+    let mut loop_var_counter = ForLoopVarCounters::new();
+
+    let mut fn_class_patch_lists = Vec::with_capacity(thir.expr_functions.len());
 
     // Compile HIR functions to bytecode
-    for func in &hir.expr_functions {
-        let bytecode_function = compile_hir_function(
+    for func in &thir.expr_functions {
+        let mut class_alloc_patch_list = Vec::new();
+
+        let bytecode_function = compile_thir_function(
             func,
             &resolved_globals,
             &resolved_classes,
             &llm_functions,
-            &mut loop_vars_counter,
+            &mut loop_var_counter,
             &mut objects,
+            &mut class_alloc_patch_list,
         )?;
 
         // Add the function to the globals and objects pools.
-        globals.push(Value::Object(objects.len()));
-        objects.push(Object::Function(bytecode_function));
+        let object_index = objects.insert(Object::Function(bytecode_function));
+        fn_class_patch_lists.push((object_index, class_alloc_patch_list));
+        globals.push(Value::Object(object_index));
     }
 
-    for func in &hir.llm_functions {
+    for func in &thir.llm_functions {
         let bytecode_llm_function = Object::Function(Function {
             name: func.name.clone(),
             arity: func.parameters.len(),
@@ -93,19 +122,41 @@ fn compile_hir_to_bytecode(hir: &hir::Hir) -> anyhow::Result<BamlVmProgram> {
             locals_in_scope: vec![func.parameters.iter().map(|p| p.name.clone()).collect()],
         });
 
-        globals.push(Value::Object(objects.len()));
-        objects.push(bytecode_llm_function);
+        let object_index = objects.insert(bytecode_llm_function);
+        globals.push(Value::Object(object_index));
     }
 
     // Add classes to objects
-    for class in &hir.classes {
+    for class in thir.classes.values() {
         let bytecode_class = Class {
             name: class.name.clone(),
             field_names: class.fields.iter().map(|f| f.name.clone()).collect(),
         };
 
-        globals.push(Value::Object(objects.len()));
-        objects.push(Object::Class(bytecode_class));
+        let object_index = objects.insert(Object::Class(bytecode_class));
+        globals.push(Value::Object(object_index));
+    }
+
+    // resolve classes into their instance creation insns now that we've got their locations.
+    // NOTE: memory locality is not great, review if it gets annoying.
+    // Right now we're grouping by function & effectively random-accessing globals. Since
+    // locations are pushed in compilation order, they are monotonically increasing.
+    for (func_index, patch_list) in fn_class_patch_lists {
+        let Object::Function(Function { bytecode, .. }) = &mut objects[func_index] else {
+            panic!("should have a compiled function here!");
+        };
+
+        for AllocInstancePatch { location, global } in patch_list {
+            let Value::Object(object_index) = globals[global] else {
+                panic!("must have a class global here! The expected class may not be in the place resolved by `globals`");
+            };
+
+            let Instruction::AllocInstance(index) = &mut bytecode.instructions[location] else {
+                panic!("alloc instance patch list must contain locations to AllocInstance!");
+            };
+
+            *index = object_index;
+        }
     }
 
     for (name, (func, arity)) in native_fns {
@@ -117,15 +168,15 @@ fn compile_hir_to_bytecode(hir: &hir::Hir) -> anyhow::Result<BamlVmProgram> {
             locals_in_scope: vec![], // TODO.
         });
 
-        globals.push(Value::Object(objects.len()));
-        objects.push(native_function);
+        let object_index = objects.insert(native_function);
+        globals.push(Value::Object(object_index));
     }
 
     let resolved_function_names = objects
         .iter()
         .enumerate()
         .filter_map(|(i, obj)| match obj {
-            Object::Function(f) => Some((f.name.clone(), (i, f.kind))),
+            Object::Function(f) => Some((f.name.clone(), (ObjectIndex::from_raw(i), f.kind))),
             _ => None,
         })
         .collect();
@@ -177,15 +228,23 @@ impl ForLoopVarCounters {
 }
 
 /// Compile an HIR function to bytecode.
-fn compile_hir_function(
-    func: &hir::ExprFunction,
-    globals: &HashMap<String, usize>,
+fn compile_thir_function(
+    func: &thir::ExprFunction<(Span, Option<Type>)>,
+    globals: &HashMap<String, GlobalIndex>,
     classes: &HashMap<String, HashMap<String, usize>>,
     llm_functions: &HashSet<String>,
     loop_var_counter: &mut ForLoopVarCounters,
-    objects: &mut Vec<Object>,
+    objects: &mut ObjectPool,
+    class_alloc_patch_list: &mut Vec<AllocInstancePatch>,
 ) -> anyhow::Result<Function> {
-    let mut compiler = HirCompiler::new(globals, classes, llm_functions, loop_var_counter, objects);
+    let mut compiler = HirCompiler::new(
+        globals,
+        classes,
+        llm_functions,
+        loop_var_counter,
+        objects,
+        class_alloc_patch_list,
+    );
     compiler.compile_function(func)
 }
 
@@ -225,12 +284,18 @@ struct Scope {
     id: usize,
 }
 
+#[derive(Clone, Copy, Debug)]
+struct AllocInstancePatch {
+    location: usize,
+    global: GlobalIndex,
+}
+
 /// HIR to bytecode compiler.
 struct HirCompiler<'g> {
     /// Resolved global variables.
     ///
     /// Maps the name of the global variable to its index in the globals pool.
-    globals: &'g HashMap<String, usize>,
+    globals: &'g HashMap<String, GlobalIndex>,
 
     /// Resolved class fields.
     ///
@@ -265,7 +330,11 @@ struct HirCompiler<'g> {
     bytecode: Bytecode,
 
     /// Objects pool.
-    objects: &'g mut Vec<Object>,
+    objects: &'g mut ObjectPool,
+
+    /// `AllocInstance` instructions that have a placeholder, which must be resolved when location
+    /// of the class object is resolved.
+    class_alloc_patch_list: &'g mut Vec<AllocInstancePatch>,
 }
 
 #[derive(Debug)]
@@ -283,17 +352,19 @@ struct LoopInfo {
 
 impl<'g> HirCompiler<'g> {
     fn new(
-        globals: &'g HashMap<String, usize>,
+        globals: &'g HashMap<String, GlobalIndex>,
         classes: &'g HashMap<String, HashMap<String, usize>>,
         llm_functions: &'g HashSet<String>,
         var_counters: &'g mut ForLoopVarCounters,
-        objects: &'g mut Vec<Object>,
+        objects: &'g mut ObjectPool,
+        class_alloc_patch_list: &'g mut Vec<AllocInstancePatch>,
     ) -> Self {
         Self {
             globals,
             classes,
             llm_functions,
             objects,
+            class_alloc_patch_list,
             locals: HashMap::new(),
             var_counters,
             current_loop: None,
@@ -307,7 +378,10 @@ impl<'g> HirCompiler<'g> {
     /// Main entry point.
     ///
     /// Here we compile a source function into a [`Function`] VM struct.
-    fn compile_function(&mut self, func: &hir::ExprFunction) -> anyhow::Result<Function> {
+    fn compile_function(
+        &mut self,
+        func: &thir::ExprFunction<(Span, Option<Type>)>,
+    ) -> anyhow::Result<Function> {
         // Compile statements in the function body.
         self.compile_block_with_parameters(&func.body, &func.parameters);
 
@@ -340,7 +414,11 @@ impl<'g> HirCompiler<'g> {
     /// Entry for function or scope compilations.
     ///
     /// Functions have parameters so we need to track those as well.
-    fn compile_block_with_parameters(&mut self, block: &hir::Block, parameters: &[hir::Parameter]) {
+    fn compile_block_with_parameters(
+        &mut self,
+        block: &thir::Block<(Span, Option<Type>)>,
+        parameters: &[thir::Parameter],
+    ) {
         self.enter_scope();
 
         for param in parameters {
@@ -351,49 +429,53 @@ impl<'g> HirCompiler<'g> {
             self.compile_statement(statement);
         }
 
-        let scope_has_ending_expr = block.statements.last().is_some_and(|stmt| match stmt {
-            hir::Statement::Expression { expr, .. } => expr.produces_final_value(),
-            _ => false,
-        });
+        let scope_has_trailing_expr = match &block.trailing_expr {
+            None => false,
 
-        self.exit_scope(scope_has_ending_expr);
+            Some(trailing_expr) => {
+                self.compile_expression(trailing_expr);
+                true
+            }
+        };
+
+        self.exit_scope(scope_has_trailing_expr);
     }
 
     /// Used to compile nested blocks within functions.
-    fn compile_block(&mut self, block: &hir::Block) {
+    fn compile_block(&mut self, block: &thir::Block<(Span, Option<Type>)>) {
         self.compile_block_with_parameters(block, &[]);
     }
 
     /// A statement is anything that does not produce a value by itself.
-    fn compile_statement(&mut self, statement: &hir::Statement) {
+    fn compile_statement(&mut self, statement: &thir::Statement<(Span, Option<Type>)>) {
         match statement {
-            hir::Statement::Let { name, value, .. } => {
+            thir::Statement::Let { name, value, .. } => {
                 self.compile_expression(value);
                 self.track_local(name);
             }
-            hir::Statement::Declare { name, .. } => {
+            thir::Statement::Declare { name, .. } => {
                 self.declare_mut(name);
             }
-            hir::Statement::Assign { left, value, .. } => {
+            thir::Statement::Assign { left, value, .. } => {
                 self.compile_expression(value);
 
                 // TODO: Hanlde field & array accessors.
-                let name = match left {
-                    hir::Expression::Identifier(name, _) => name,
+                let name = match &left {
+                    thir::Expr::Var(name, _) => name,
                     _ => panic!("left side of assignment is not an identifier: {:?}", left),
                 };
 
                 self.emit(Instruction::StoreVar(self.locals[name]));
             }
-            hir::Statement::AssignOp {
+            thir::Statement::AssignOp {
                 left,
                 value,
                 assign_op,
                 ..
             } => {
                 // TODO: Handle field & array accessors.
-                let name = match left {
-                    hir::Expression::Identifier(name, _) => name,
+                let name = match &left {
+                    thir::Expr::Var(name, _) => name,
                     _ => panic!("left side of assignment is not an identifier: {:?}", left),
                 };
 
@@ -416,18 +498,18 @@ impl<'g> HirCompiler<'g> {
 
                 self.emit(Instruction::StoreVar(self.locals[name]));
             }
-            hir::Statement::DeclareAndAssign { name, value, .. } => {
+            thir::Statement::DeclareAndAssign { name, value, .. } => {
                 self.compile_expression(value);
-                self.track_local(name);
+                self.track_local(&name);
             }
-            hir::Statement::Return { expr, .. } => {
+            thir::Statement::Return { expr, .. } => {
                 self.compile_expression(expr);
                 self.emit(Instruction::Return);
             }
-            hir::Statement::Expression { expr, .. } => {
+            thir::Statement::Expression { expr, .. } => {
                 self.compile_expression(expr);
             }
-            hir::Statement::SemicolonExpression { expr, .. } => {
+            thir::Statement::SemicolonExpression { expr, .. } => {
                 self.compile_expression(expr);
                 // This could be a function call or any other random expression
                 // like:
@@ -438,7 +520,7 @@ impl<'g> HirCompiler<'g> {
                 // binding) then implicitly drop the value.
                 self.emit(Instruction::Pop(1));
             }
-            hir::Statement::ForLoop {
+            thir::Statement::ForLoop {
                 identifier,
                 iterator,
                 block,
@@ -529,7 +611,7 @@ impl<'g> HirCompiler<'g> {
 
                 self.exit_scope(false);
             }
-            hir::Statement::While {
+            thir::Statement::While {
                 condition, block, ..
             } => {
                 self.compile_while_loop(
@@ -538,7 +620,7 @@ impl<'g> HirCompiler<'g> {
                     |_| {},
                 );
             }
-            hir::Statement::Break(_) => {
+            thir::Statement::Break(_) => {
                 let cur_loop = self.assert_loop("break");
 
                 // since we are exiting the loop context, make sure we drop everything before
@@ -554,7 +636,7 @@ impl<'g> HirCompiler<'g> {
                 // will end up with a conditional jump and a regular jump together.
                 self.emit(Instruction::Jump(0));
             }
-            hir::Statement::Continue(_) => {
+            thir::Statement::Continue(_) => {
                 let cur_loop = self.assert_loop("continue");
 
                 let pop_until = cur_loop.scope_depth;
@@ -571,8 +653,7 @@ impl<'g> HirCompiler<'g> {
                 // unreachable.
                 self.emit(Instruction::Jump(0));
             }
-
-            hir::Statement::CForLoop {
+            thir::Statement::CForLoop {
                 condition,
                 after,
                 block,
@@ -604,6 +685,10 @@ impl<'g> HirCompiler<'g> {
                     }
                 }
             },
+            thir::Statement::Assert { condition, .. } => {
+                self.compile_expression(condition);
+                self.emit(Instruction::Assert);
+            }
         }
     }
 
@@ -678,18 +763,50 @@ impl<'g> HirCompiler<'g> {
     }
 
     /// Generate bytecode for an expression.
-    fn compile_expression(&mut self, expr: &hir::Expression) {
+    fn compile_expression(&mut self, expr: &thir::Expr<(Span, Option<Type>)>) {
         // TODO: The implementation of line number is extremely slow. It always
         // reads the entire source string to find the line number.
         self.current_source_line = expr.span().line_number();
 
         match expr {
-            hir::Expression::BoolValue(val, _) => {
-                let index = self.add_constant(Value::Bool(*val));
-                self.emit(Instruction::LoadConst(index));
+            thir::Expr::Value(value) => match value {
+                BamlValueWithMeta::Null(_) => {
+                    let index = self.add_constant(Value::Null);
+                    self.emit(Instruction::LoadConst(index));
+                }
+
+                BamlValueWithMeta::Bool(v, _) => {
+                    let index = self.add_constant(Value::Bool(*v));
+                    self.emit(Instruction::LoadConst(index));
+                }
+
+                BamlValueWithMeta::Int(v, _) => {
+                    let index = self.add_constant(Value::Int(*v));
+                    self.emit(Instruction::LoadConst(index));
+                }
+
+                BamlValueWithMeta::Float(v, _) => {
+                    let index = self.add_constant(Value::Float(*v));
+                    self.emit(Instruction::LoadConst(index));
+                }
+
+                BamlValueWithMeta::String(v, _) => {
+                    // Allocate the string in the objects pool
+                    let object_index = self.objects.insert(Object::String(v.clone()));
+
+                    // Add a constant that points to the string object
+                    let const_index = self.add_constant(Value::Object(object_index));
+                    self.emit(Instruction::LoadConst(const_index));
+                }
+
+                _ => panic!("unsupported atom: {:#?}", value),
+            },
+
+            thir::Expr::Block(block, _) => {
+                self.compile_block(block);
             }
 
-            hir::Expression::ArrayAccess { base, index, .. } => {
+            thir::Expr::ArrayAccess { base, index, .. } => {
                 // Compile the base expression (the array)
                 self.compile_expression(base);
 
@@ -702,33 +819,11 @@ impl<'g> HirCompiler<'g> {
                 self.emit(Instruction::LoadArrayElement);
             }
 
-            hir::Expression::FieldAccess { .. } => {
+            thir::Expr::FieldAccess { .. } => {
                 unimplemented!("field access compilation")
             }
 
-            hir::Expression::NumericValue(num, _) => {
-                let value = num
-                    .parse::<i64>()
-                    .map(Value::Int)
-                    .or_else(|_| num.parse::<f64>().map(Value::Float))
-                    .unwrap_or_else(|_| panic!("failed to parse number: {num}"));
-
-                let index = self.add_constant(value);
-                self.emit(Instruction::LoadConst(index));
-            }
-
-            hir::Expression::StringValue(string, _)
-            | hir::Expression::RawStringValue(string, _) => {
-                // Allocate the string in the objects pool
-                self.objects.push(Object::String(string.clone()));
-                let object_index = self.objects.len() - 1;
-
-                // Add a constant that points to the string object
-                let const_index = self.add_constant(Value::Object(object_index));
-                self.emit(Instruction::LoadConst(const_index));
-            }
-
-            hir::Expression::Identifier(name, _) => {
+            thir::Expr::Var(name, _) => {
                 if let Some(&index) = self.locals.get(name) {
                     self.emit(Instruction::LoadVar(index));
                 } else {
@@ -736,25 +831,21 @@ impl<'g> HirCompiler<'g> {
                 }
             }
 
-            hir::Expression::Array(elements, _) => {
+            thir::Expr::List(elements, _) => {
                 for element in elements {
                     self.compile_expression(element);
                 }
                 self.emit(Instruction::AllocArray(elements.len()));
             }
 
-            hir::Expression::Map(_pairs, _) => {
+            thir::Expr::Map(_pairs, _) => {
                 // Maps are not yet implemented in bytecode
                 todo!("map compilation")
             }
 
-            hir::Expression::JinjaExpressionValue(_, _) => {
-                todo!("jinja expression compilation")
-            }
-
-            hir::Expression::Call { function, args, .. } => {
-                let name = match function.as_ref() {
-                    hir::Expression::Identifier(name, _) => name,
+            thir::Expr::Call { func, args, .. } => {
+                let name = match func.as_ref() {
+                    thir::Expr::Var(name, _) => name,
                     _ => panic!("expressions that evaluate to functions are not supported yet"),
                 };
 
@@ -779,14 +870,18 @@ impl<'g> HirCompiler<'g> {
                 }
             }
 
-            hir::Expression::MethodCall {
+            thir::Expr::MethodCall {
                 receiver,
                 method,
                 args,
                 ..
             } => {
+                let thir::Expr::Var(method, _) = method.as_ref() else {
+                    panic!("method calls must be on variables");
+                };
+
                 // Push the function onto the stack
-                let Some(&index) = self.globals.get(method) else {
+                let Some(&index) = self.globals.get(method.as_str()) else {
                     panic!("undefined method: {method}");
                 };
 
@@ -802,63 +897,65 @@ impl<'g> HirCompiler<'g> {
                 self.emit(Instruction::Call(1 + args.len()));
             }
 
-            hir::Expression::ClassConstructor(constructor, _) => {
-                let Some(&class_index) = self.globals.get(&constructor.class_name) else {
-                    panic!("undefined class: {}", constructor.class_name);
+            thir::Expr::ClassConstructor {
+                name: class_name,
+                fields,
+                spread,
+                meta,
+            } => {
+                let Some(&class_index) = self.globals.get(class_name) else {
+                    panic!("undefined class: {}", class_name);
                 };
 
-                // Allocate instance
-                self.emit(Instruction::AllocInstance(class_index));
+                // Emit allocation with bogus index. It will be patched later.
+                let allocation_loc = self.emit(Instruction::AllocInstance(ObjectIndex::from_raw(
+                    usize::MAX,
+                )));
+                self.class_alloc_patch_list.push(AllocInstancePatch {
+                    location: allocation_loc,
+                    global: class_index,
+                });
 
                 let mut defined_named_fields = std::collections::HashSet::new();
 
                 // Process fields in order
-                for field in &constructor.fields {
-                    match field {
-                        hir::ClassConstructorField::Named { name, value } => {
-                            self.compile_expression(value);
+                for (field_name, value) in fields {
+                    self.compile_expression(value);
 
-                            let Some(classes) = self.classes.get(&constructor.class_name) else {
-                                panic!("undefined class: {}", constructor.class_name);
-                            };
+                    let Some(classes) = self.classes.get(class_name) else {
+                        panic!("undefined class: {}", class_name);
+                    };
 
-                            let Some(&field_index) = classes.get(name) else {
-                                panic!("undefined field: {}.{}", constructor.class_name, name);
-                            };
+                    let Some(&field_index) = classes.get(field_name) else {
+                        panic!("undefined field: {}.{}", class_name, field_name);
+                    };
 
+                    self.emit(Instruction::StoreField(field_index));
+                    defined_named_fields.insert(field_name.as_str());
+                }
+
+                if let Some(spread) = spread {
+                    self.compile_expression(spread);
+
+                    // Pseudo local, user didn't declare it.
+                    let spread_local = self.locals.len() + 2;
+                    self.emit(Instruction::LoadVar(spread_local - 1));
+
+                    let Some(classes) = self.classes.get(class_name) else {
+                        panic!("undefined class: {}", class_name);
+                    };
+
+                    for (field_name, &field_index) in classes {
+                        if !defined_named_fields.contains(field_name.as_str()) {
+                            self.emit(Instruction::LoadVar(spread_local));
+                            self.emit(Instruction::LoadField(field_index));
                             self.emit(Instruction::StoreField(field_index));
-                            defined_named_fields.insert(name.as_str());
-                        }
-                        hir::ClassConstructorField::Spread { value } => {
-                            // TODO: @antonio: Variable tracking here is wrong.
-                            self.compile_expression(value);
-
-                            // Pseudo local, user didn't declare it.
-                            let spread_local = self.locals.len() + 2;
-                            self.emit(Instruction::LoadVar(spread_local - 1));
-
-                            let Some(classes) = self.classes.get(&constructor.class_name) else {
-                                panic!("undefined class: {}", constructor.class_name);
-                            };
-
-                            for (field_name, &field_index) in classes {
-                                if !defined_named_fields.contains(field_name.as_str()) {
-                                    self.emit(Instruction::LoadVar(spread_local));
-                                    self.emit(Instruction::LoadField(field_index));
-                                    self.emit(Instruction::StoreField(field_index));
-                                }
-                            }
                         }
                     }
                 }
             }
 
-            hir::Expression::If {
-                condition,
-                if_branch,
-                else_branch,
-                ..
-            } => {
+            thir::Expr::If(condition, if_branch, else_branch, _) => {
                 // First, compile the condition. This will leave the end result
                 // of the condition on top of the stack.
                 self.compile_expression(condition);
@@ -903,11 +1000,7 @@ impl<'g> HirCompiler<'g> {
                 self.patch_jump(skip_else);
             }
 
-            hir::Expression::ExpressionBlock(block, _) => {
-                self.compile_block(block);
-            }
-
-            hir::Expression::BinaryOperation {
+            thir::Expr::BinaryOperation {
                 left,
                 operator,
                 right,
@@ -973,7 +1066,7 @@ impl<'g> HirCompiler<'g> {
                 }
             }
 
-            hir::Expression::UnaryOperation { operator, expr, .. } => {
+            thir::Expr::UnaryOperation { operator, expr, .. } => {
                 self.compile_expression(expr);
 
                 self.emit(match operator {
@@ -982,8 +1075,12 @@ impl<'g> HirCompiler<'g> {
                 });
             }
 
-            hir::Expression::Paren(expr, _) => {
+            thir::Expr::Paren(expr, _) => {
                 self.compile_expression(expr);
+            }
+
+            thir::Expr::Function(_, _, _) | thir::Expr::Builtin(_, _) => {
+                todo!("unsupported expression: {:#?}", expr)
             }
         }
     }
@@ -1099,7 +1196,13 @@ impl<'g> HirCompiler<'g> {
     }
 
     /// Drops the current block scope we're in.
-    fn exit_scope(&mut self, scope_has_ending_expr: bool) {
+    fn exit_scope(&mut self, scope_has_trailing_expr: bool) {
+        // Emitting an instruction requires an existing scope, so if we need to
+        // emit a return we will do so before popping the current scope.
+        if self.scopes.len() == 1 {
+            self.emit(Instruction::Return);
+        }
+
         let scope = self
             .scopes
             .pop()
@@ -1107,16 +1210,19 @@ impl<'g> HirCompiler<'g> {
 
         self.locals_in_scope[scope.id] = self.locals.clone();
 
-        // Depth 0 is function body block. That one ends with return.
+        // Depth 0 is function body block. That one ends with return. Depth >= 1
+        // are nested blocks, those need to pop all their scoped locals and
+        // possibly push a value on top of the stack.
         if scope.depth >= 1 && !scope.locals.is_empty() {
             // Keep value on top of stack if block has a return expression.
             // Otherwise just pop locals.
-            if scope_has_ending_expr {
+            if scope_has_trailing_expr {
                 self.emit(Instruction::PopReplace(scope.locals.len()));
             } else {
                 self.emit(Instruction::Pop(scope.locals.len()));
             }
 
+            // Drop locals in this scope.
             for local in scope.locals {
                 self.locals.remove(&local);
             }
@@ -1153,79 +1259,10 @@ impl<'g> HirCompiler<'g> {
     }
 }
 
-impl hir::Expression {
-    /// Returns true if the block ends with an expression that has a final value.
-    ///
-    /// For example, it would return true for this block:
-    ///
-    /// ```ignore
-    /// let a = {
-    ///     let b = 1;
-    ///     if b == 1 {
-    ///         1
-    ///     } else {
-    ///         2
-    ///     }
-    /// };
-    /// ```
-    ///
-    /// But false for this one:
-    ///
-    /// ```ignore
-    /// let mut a = 0;
-    /// if a == 0 {
-    ///     a = 1;
-    /// } else {
-    ///     a = 2;
-    /// }
-    /// ```
-    ///
-    /// TODO: This seems completely unecessary, the typechecker will already
-    /// check at some point that return values match the expected type. After
-    /// that we should alreay have enough information to decide whether a block
-    /// returns or not.
-    fn produces_final_value(&self) -> bool {
-        match self {
-            // First call will happen on a block. Recurse on the final expression.
-            hir::Expression::ExpressionBlock(block, _) => match block.statements.last() {
-                Some(hir::Statement::Expression { expr, .. }) => expr.produces_final_value(),
-
-                // Does not produce a value.
-                _ => false,
-            },
-
-            // If statements as last expression need to check if they return
-            // any value. We won't recurse into the else branch because both
-            // need to match, if one of them returns a value the other one must
-            // return the same type. This is typechecker bug if it's wrong, so
-            // I won't bother here.
-            hir::Expression::If { if_branch, .. } => if_branch.produces_final_value(),
-
-            // This is an expression that produces a value, so true. We're
-            // forcing non-exhaustive match here because other types of
-            // expressions that we add in the future might need to be considered.
-            hir::Expression::Array(_, _)
-            | hir::Expression::Map(_, _)
-            | hir::Expression::JinjaExpressionValue(_, _)
-            | hir::Expression::ArrayAccess { .. }
-            | hir::Expression::FieldAccess { .. }
-            | hir::Expression::MethodCall { .. }
-            | hir::Expression::BoolValue(_, _)
-            | hir::Expression::NumericValue(_, _)
-            | hir::Expression::Identifier(_, _)
-            | hir::Expression::StringValue(_, _)
-            | hir::Expression::RawStringValue(_, _)
-            | hir::Expression::Call { .. }
-            | hir::Expression::ClassConstructor(_, _)
-            | hir::Expression::BinaryOperation { .. }
-            | hir::Expression::UnaryOperation { .. }
-            | hir::Expression::Paren(_, _) => true,
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
+    use baml_vm::EvalStack;
+
     use super::*;
     use crate::test::ast;
 
@@ -1261,7 +1298,13 @@ mod tests {
 
             eprintln!(
                 "---- fn {function_name}() ----\n{}",
-                baml_vm::debug::display_bytecode(function, &[], &objects, &globals, true)
+                baml_vm::debug::display_bytecode(
+                    function,
+                    &EvalStack::default(),
+                    &objects,
+                    &globals,
+                    true
+                )
             );
 
             assert_eq!(
@@ -1290,7 +1333,7 @@ mod tests {
                 (
                     "main",
                     vec![
-                        Instruction::LoadGlobal(0),
+                        Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
                         Instruction::Call(0),
                         Instruction::Return,
                     ],
@@ -1317,7 +1360,7 @@ mod tests {
                 (
                     "main",
                     vec![
-                        Instruction::LoadGlobal(0),
+                        Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
                         Instruction::Call(0),
                         Instruction::LoadVar(1),
                         Instruction::Return,
@@ -1481,7 +1524,7 @@ mod tests {
                     Instruction::Pop(1),
                     Instruction::LoadConst(1),
                     Instruction::LoadConst(2),
-                    Instruction::LoadGlobal(0),
+                    Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
                     Instruction::LoadVar(3),
                     Instruction::Call(1),
                     Instruction::Pop(1),
@@ -1490,7 +1533,7 @@ mod tests {
                     Instruction::Pop(1),
                     Instruction::LoadConst(3),
                     Instruction::LoadConst(4),
-                    Instruction::LoadGlobal(0),
+                    Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
                     Instruction::LoadVar(4),
                     Instruction::Call(1),
                     Instruction::Pop(1),
@@ -1710,7 +1753,7 @@ mod tests {
             expected: vec![(
                 "main",
                 vec![
-                    Instruction::AllocInstance(2),
+                    Instruction::AllocInstance(ObjectIndex::from_raw(2)),
                     Instruction::LoadConst(0),
                     Instruction::StoreField(0),
                     Instruction::LoadConst(1),
@@ -1723,7 +1766,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "HIR doesn't support spread operators yet"]
+    // #[ignore = "HIR doesn't support spread operators yet"]
     fn class_constructor_with_spread_operator() -> anyhow::Result<()> {
         assert_compiles(Program {
             source: r#"
@@ -1745,12 +1788,12 @@ mod tests {
             expected: vec![(
                 "main",
                 vec![
-                    Instruction::AllocInstance(2),
+                    Instruction::AllocInstance(ObjectIndex::from_raw(3)),
                     Instruction::LoadConst(0),
                     Instruction::StoreField(0),
                     Instruction::LoadConst(1),
                     Instruction::StoreField(1),
-                    Instruction::LoadGlobal(0),
+                    Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
                     Instruction::Call(0),
                     Instruction::LoadVar(1),
                     Instruction::LoadVar(2),
@@ -1848,7 +1891,7 @@ mod tests {
         } = compile(&ast)?;
 
         let main = objects[resolved_function_names["main"].0].as_function()?;
-        baml_vm::debug::disassemble(main, &[], &objects, &globals);
+        baml_vm::debug::disassemble(main, &EvalStack::default(), &objects, &globals);
 
         let expected_locals_in_scope = [
             vec!["<fn main>", "x", "a", "h"],
@@ -1930,7 +1973,7 @@ mod tests {
                     Instruction::LoadConst(0),
                     Instruction::JumpIfFalse(4),
                     Instruction::Pop(1),
-                    Instruction::LoadGlobal(0),
+                    Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
                     Instruction::Call(0),
                     Instruction::Return,
                 ],
@@ -1957,7 +2000,7 @@ mod tests {
                     Instruction::JumpIfFalse(2),
                     Instruction::Jump(4),
                     Instruction::Pop(1),
-                    Instruction::LoadGlobal(0),
+                    Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
                     Instruction::Call(0),
                     Instruction::Return,
                 ],
@@ -2388,7 +2431,7 @@ mod tests {
                     Instruction::LoadConst(1),
                     Instruction::LoadConst(2),
                     Instruction::AllocArray(3),
-                    Instruction::LoadGlobal(2),
+                    Instruction::LoadGlobal(GlobalIndex::from_raw(2)),
                     Instruction::LoadVar(1),
                     // call with one argument (self)
                     Instruction::Call(1),
@@ -2417,7 +2460,7 @@ mod tests {
                 vec![
                     Instruction::LoadConst(0),
                     Instruction::LoadVar(1),
-                    Instruction::LoadGlobal(2),
+                    Instruction::LoadGlobal(GlobalIndex::from_raw(2)),
                     Instruction::LoadVar(3),
                     Instruction::Call(1),
                     Instruction::LoadConst(0),
@@ -2470,7 +2513,7 @@ mod tests {
                 vec![
                     Instruction::LoadConst(0),
                     Instruction::LoadVar(1),
-                    Instruction::LoadGlobal(2),
+                    Instruction::LoadGlobal(GlobalIndex::from_raw(2)),
                     Instruction::LoadVar(3),
                     Instruction::Call(1),
                     Instruction::LoadConst(0),
@@ -2532,7 +2575,7 @@ mod tests {
                 vec![
                     Instruction::LoadConst(0),
                     Instruction::LoadVar(1),
-                    Instruction::LoadGlobal(2),
+                    Instruction::LoadGlobal(GlobalIndex::from_raw(2)),
                     Instruction::LoadVar(3),
                     Instruction::Call(1),
                     Instruction::LoadConst(0),
@@ -2594,7 +2637,7 @@ mod tests {
                 vec![
                     Instruction::LoadConst(0),
                     Instruction::LoadVar(1),
-                    Instruction::LoadGlobal(2),
+                    Instruction::LoadGlobal(GlobalIndex::from_raw(2)),
                     Instruction::LoadVar(4),
                     Instruction::Call(1),
                     Instruction::LoadConst(0),
@@ -2611,7 +2654,7 @@ mod tests {
                     Instruction::BinOp(BinOp::Add),
                     Instruction::StoreVar(6),
                     Instruction::LoadVar(2),
-                    Instruction::LoadGlobal(2),
+                    Instruction::LoadGlobal(GlobalIndex::from_raw(2)),
                     Instruction::LoadVar(8),
                     Instruction::Call(1),
                     Instruction::LoadConst(0),
@@ -2642,6 +2685,168 @@ mod tests {
                     Instruction::Pop(1),
                     Instruction::Pop(3),
                     Instruction::LoadVar(3),
+                    Instruction::Return,
+                ],
+            )],
+        })
+    }
+
+    mod return_stmt {
+        use super::*;
+
+        #[test]
+        fn early_return() -> anyhow::Result<()> {
+            assert_compiles(Program {
+                source: "
+                fn EarlyReturn(x: int) -> int {
+                  if x == 42 { return 1; }
+
+                  x + 5
+                }
+            ",
+                expected: vec![(
+                    "EarlyReturn",
+                    vec![
+                        Instruction::LoadVar(1),   // x
+                        Instruction::LoadConst(0), // 42
+                        Instruction::CmpOp(CmpOp::Eq),
+                        Instruction::JumpIfFalse(5), // to 8
+                        Instruction::Pop(1),
+                        Instruction::LoadConst(1), // 1
+                        Instruction::Return,
+                        Instruction::Jump(2), // to 9
+                        Instruction::Pop(1),
+                        Instruction::LoadVar(1),   // x
+                        Instruction::LoadConst(2), // 5
+                        Instruction::BinOp(BinOp::Add),
+                        Instruction::Return,
+                    ],
+                )],
+            })
+        }
+
+        #[test]
+        fn with_stack() -> anyhow::Result<()> {
+            assert_compiles(Program {
+                source: "
+                fn WithStack(x: int) -> int {
+                  let a = 1;
+
+                  // NOTE: currently there's no empty returns.
+
+                  if a == 0 { return 0; }
+
+                  {
+                     let b = 1;
+                     if a != b {
+                        return 0;
+                     }
+                  }
+
+                  {
+                     let c = 2;
+                     let b = 3;
+                     while b != c {
+                        if true {
+                           return 0;
+                        }
+                     }
+                  }
+
+                   7
+                }
+            ",
+                expected: vec![(
+                    "WithStack",
+                    vec![
+                        Instruction::LoadConst(0), // 1
+                        Instruction::LoadVar(2),   // a
+                        Instruction::LoadConst(1), // 0
+                        Instruction::CmpOp(CmpOp::Eq),
+                        Instruction::JumpIfFalse(5), // to 9
+                        Instruction::Pop(1),
+                        Instruction::LoadConst(2), // 0
+                        Instruction::Return,
+                        Instruction::Jump(2), // to 10
+                        Instruction::Pop(1),
+                        Instruction::LoadConst(3), // 1
+                        Instruction::LoadVar(2),   // a
+                        Instruction::LoadVar(3),   // b
+                        Instruction::CmpOp(CmpOp::NotEq),
+                        Instruction::JumpIfFalse(5), // to 19
+                        Instruction::Pop(1),
+                        Instruction::LoadConst(4), // 0
+                        Instruction::Return,
+                        Instruction::Jump(2), // to 20
+                        Instruction::Pop(1),
+                        Instruction::Pop(1),
+                        Instruction::LoadConst(5), // 2
+                        Instruction::LoadConst(6), // 3
+                        Instruction::LoadVar(4),   // b
+                        Instruction::LoadVar(3),   // c
+                        Instruction::CmpOp(CmpOp::NotEq),
+                        Instruction::JumpIfFalse(10), // to 36
+                        Instruction::Pop(1),
+                        Instruction::LoadConst(7),   // true
+                        Instruction::JumpIfFalse(5), // to 34
+                        Instruction::Pop(1),
+                        Instruction::LoadConst(8), // 0
+                        Instruction::Return,
+                        Instruction::Jump(2), // to 35
+                        Instruction::Pop(1),
+                        Instruction::Jump(-12), // to 23
+                        Instruction::Pop(1),
+                        Instruction::Pop(2),
+                        Instruction::LoadConst(9), // 7
+                        Instruction::Return,
+                    ],
+                )],
+            })
+        }
+    }
+
+    #[test]
+    fn assert_statement_ok() -> anyhow::Result<()> {
+        assert_compiles(Program {
+            source: "
+                fn assertOk() -> int {
+                    assert 2 + 2 == 4;
+                    3
+                }
+            ",
+            expected: vec![(
+                "assertOk",
+                vec![
+                    Instruction::LoadConst(0), // 2
+                    Instruction::LoadConst(1), // 2
+                    Instruction::BinOp(BinOp::Add),
+                    Instruction::LoadConst(2), // 4
+                    Instruction::CmpOp(CmpOp::Eq),
+                    Instruction::Assert,
+                    Instruction::LoadConst(3), // 3
+                    Instruction::Return,
+                ],
+            )],
+        })
+    }
+
+    #[test]
+    fn assert_statement_not_ok() -> anyhow::Result<()> {
+        assert_compiles(Program {
+            source: "
+                fn assertNotOk() -> int {
+                    assert 3 == 1;
+                    2
+                }
+            ",
+            expected: vec![(
+                "assertNotOk",
+                vec![
+                    Instruction::LoadConst(0), // 3
+                    Instruction::LoadConst(1), // 1
+                    Instruction::CmpOp(CmpOp::Eq),
+                    Instruction::Assert,
+                    Instruction::LoadConst(2), // 2
                     Instruction::Return,
                 ],
             )],

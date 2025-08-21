@@ -4455,6 +4455,116 @@ func (u RecursiveAliasDependency) BamlEncodeName() *cffi.CFFITypeName {
 	}
 }
 
+type RenderEnumInput struct {
+	TestKey           string `json:"testKey"`
+	DynamicProperties map[string]any
+}
+
+func (c *RenderEnumInput) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
+	typeName := holder.Name
+	if typeName.Namespace != cffi.CFFITypeNamespace_TYPES {
+		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_TYPES, got %s", string(typeName.Namespace.String())))
+	}
+	if typeName.Name != "RenderEnumInput" {
+		panic(fmt.Sprintf("expected RenderEnumInput, got %s", typeName.Name))
+	}
+
+	c.DynamicProperties = make(map[string]any)
+
+	for _, field := range holder.Fields {
+		key := field.Key
+		valueHolder := field.Value
+		switch key {
+
+		case "testKey":
+			c.TestKey = baml.Decode(valueHolder).Interface().(string)
+
+		default:
+
+			c.DynamicProperties[key] = baml.Decode(valueHolder)
+
+		}
+	}
+
+}
+
+func (c RenderEnumInput) Encode() (*cffi.CFFIValueHolder, error) {
+	fields := map[string]any{}
+
+	fields["testKey"] = c.TestKey
+
+	return baml.EncodeClass(c.BamlEncodeName, fields, &c.DynamicProperties)
+}
+
+func (c RenderEnumInput) BamlTypeName() string {
+	return "RenderEnumInput"
+}
+
+func (u RenderEnumInput) BamlEncodeName() *cffi.CFFITypeName {
+	return &cffi.CFFITypeName{
+		Namespace: cffi.CFFITypeNamespace_TYPES,
+		Name:      "RenderEnumInput",
+	}
+}
+
+type RenderTestClass struct {
+	Name              string           `json:"name"`
+	Status            RenderStatusEnum `json:"status"`
+	DynamicProperties map[string]any
+}
+
+func (c *RenderTestClass) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
+	typeName := holder.Name
+	if typeName.Namespace != cffi.CFFITypeNamespace_TYPES {
+		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_TYPES, got %s", string(typeName.Namespace.String())))
+	}
+	if typeName.Name != "RenderTestClass" {
+		panic(fmt.Sprintf("expected RenderTestClass, got %s", typeName.Name))
+	}
+
+	c.DynamicProperties = make(map[string]any)
+
+	for _, field := range holder.Fields {
+		key := field.Key
+		valueHolder := field.Value
+		switch key {
+
+		case "name":
+			c.Name = baml.Decode(valueHolder).Interface().(string)
+
+		case "status":
+			c.Status = baml.Decode(valueHolder).Interface().(RenderStatusEnum)
+
+		default:
+
+			c.DynamicProperties[key] = baml.Decode(valueHolder)
+
+		}
+	}
+
+}
+
+func (c RenderTestClass) Encode() (*cffi.CFFIValueHolder, error) {
+	fields := map[string]any{}
+
+	fields["name"] = c.Name
+
+	fields["status"] = c.Status
+
+	return baml.EncodeClass(c.BamlEncodeName, fields, &c.DynamicProperties)
+}
+
+func (c RenderTestClass) BamlTypeName() string {
+	return "RenderTestClass"
+}
+
+func (u RenderTestClass) BamlEncodeName() *cffi.CFFITypeName {
+	return &cffi.CFFITypeName{
+		Namespace: cffi.CFFITypeNamespace_TYPES,
+		Name:      "RenderTestClass",
+	}
+}
+
 type Resume struct {
 	Name       string      `json:"name"`
 	Email      string      `json:"email"`

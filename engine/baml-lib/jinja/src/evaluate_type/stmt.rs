@@ -89,7 +89,12 @@ fn track_walk(node: &ast::Stmt<'_>, state: &mut PredefinedTypes) {
             state.end_scope();
         }
         ast::Stmt::IfCond(stmt) => {
-            let _expr_type = evaluate_type(&stmt.expr, state);
+            match evaluate_type(&stmt.expr, state) {
+                Ok(_expr_type) => {}
+                Err(e) => {
+                    state.errors_mut().extend(e);
+                }
+            }
 
             let true_bindings = predicate_implications(&stmt.expr, state, true);
             let false_bindings = predicate_implications(&stmt.expr, state, false);
@@ -263,6 +268,8 @@ pub fn truthy(ty: &Type) -> Option<Type> {
             }
         },
         Type::ClassRef(_) => None,
+        Type::EnumTypeRef(_) => None,
+        Type::EnumValueRef(_) => None,
         Type::FunctionRef(_) => None,
         Type::Alias { resolved, .. } => truthy(resolved),
         Type::RecursiveTypeAlias(_) => None,

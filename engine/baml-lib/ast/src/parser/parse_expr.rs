@@ -61,69 +61,34 @@ pub fn parse_top_level_assignment(
     assert_correct_parser!(token, Rule::top_level_assignment);
     let mut tokens = token.into_inner();
 
+    let only_let_stmt = |name, span, diagnostics: &mut Diagnostics| {
+        diagnostics.push_error(DatamodelError::new_validation_error(
+            &format!("{name} are not allowed at top level, only let statements are allowed"),
+            span,
+        ));
+
+        None
+    };
+
     match parse_statement(tokens.next()?, diagnostics)? {
         Stmt::Let(stmt) => Some(TopLevelAssignment { stmt }),
-        Stmt::Assign(stmt) => {
-            // NOTE: (Jesus) top-level is generally regarded as order-independent,
-            // and assignments need an order of execution.
-
-            diagnostics.push_error(DatamodelError::new_static(
-                "assignments are not allowed at top level, only let statements are allowed",
-                stmt.span.clone(),
-            ));
-
-            None
+        Stmt::Assign(stmt) => only_let_stmt("assignments", stmt.span, diagnostics),
+        Stmt::AssignOp(stmt) => only_let_stmt("assignments", stmt.span, diagnostics),
+        Stmt::ForLoop(ForLoopStmt { span, .. }) | Stmt::CForLoop(CForLoopStmt { span, .. }) => {
+            only_let_stmt("for loops", span, diagnostics)
         }
-        Stmt::AssignOp(stmt) => {
-            diagnostics.push_error(DatamodelError::new_static(
-                "assign operations are not allowed at top level, only let statements are allowed",
-                stmt.span.clone(),
-            ));
-
-            None
+        Stmt::Expression(expr) => only_let_stmt("expressions", expr.span().clone(), diagnostics),
+        Stmt::Semicolon(expr) => {
+            only_let_stmt("semicolon expressions", expr.span().clone(), diagnostics)
         }
-
-        s @ (Stmt::ForLoop(_) | Stmt::CForLoop(_)) => {
-            diagnostics.push_error(DatamodelError::new_static(
-                "for loops are not allowed at top level, only let statements are allowed",
-                s.span().clone(),
-            ));
-
-            None
+        Stmt::WhileLoop(stmt) => only_let_stmt("while loops", stmt.span, diagnostics),
+        Stmt::Break(span) => only_let_stmt("break statements", span, diagnostics),
+        Stmt::Continue(span) => only_let_stmt("continue statements", span, diagnostics),
+        Stmt::Return(ReturnStmt { span, .. }) => {
+            only_let_stmt("return statements", span, diagnostics)
         }
-
-        Stmt::Expression(expr) => {
-            diagnostics.push_error(DatamodelError::new_static(
-                "expressions are not allowed at top level, only let statements are allowed",
-                expr.span().clone(),
-            ));
-
-            None
-        }
-
-        Stmt::WhileLoop(stmt) => {
-            diagnostics.push_error(DatamodelError::new_static(
-                "while loops are not allowed at top level, only let statements are allowed",
-                stmt.span.clone(),
-            ));
-
-            None
-        }
-        Stmt::Break(span) => {
-            diagnostics.push_error(DatamodelError::new_static(
-                "break statements are not allowed at top level, only let statements are allowed",
-                span.clone(),
-            ));
-
-            None
-        }
-        Stmt::Continue(span) => {
-            diagnostics.push_error(DatamodelError::new_static(
-                "continue statements are not allowed at top level, only let statements are allowed",
-                span.clone(),
-            ));
-
-            None
+        Stmt::Assert(AssertStmt { span, .. }) => {
+            only_let_stmt("assert statements", span, diagnostics)
         }
     }
 }
@@ -238,14 +203,19 @@ pub fn parse_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
     let span = diagnostics.span(token.as_span());
     let mut tokens = token.into_inner();
 
-    let stmt_token = tokens.next()?;
-    let stmt = parse_statement_inner_rule(stmt_token, span.clone(), diagnostics);
+    let mut stmt = parse_statement_inner_rule(tokens.next()?, span.clone(), diagnostics);
 
-    let maybe_semicolon = tokens.next();
-    match maybe_semicolon {
-        Some(p) if p.as_str() == ";" => {}
+    match tokens.next() {
+        Some(maybe_semicolon) if maybe_semicolon.as_str() == ";" => {
+            if let Some(Stmt::Expression(expr)) = stmt {
+                stmt = Some(Stmt::Semicolon(expr));
+            }
+        }
         _ => {
-            if matches!(stmt, Some(Stmt::Let(_))) {
+            if matches!(
+                stmt,
+                Some(Stmt::Let(_) | Stmt::Assign(_) | Stmt::AssignOp(_))
+            ) {
                 diagnostics.push_error(DatamodelError::new_static(
                     "Statement must end with a semicolon.",
                     span,
@@ -263,6 +233,19 @@ fn parse_statement_inner_rule(
     diagnostics: &mut Diagnostics,
 ) -> Option<Stmt> {
     match stmt_token.as_rule() {
+        Rule::assert_stmt => {
+            let assert_value = stmt_token.into_inner().next()?;
+            let value = parse_expression(assert_value, diagnostics)?;
+
+            Some(Stmt::Assert(AssertStmt { value, span }))
+        }
+
+        Rule::return_stmt => {
+            let return_value = stmt_token.into_inner().next()?;
+            let value = parse_expression(return_value, diagnostics)?;
+
+            Some(Stmt::Return(ReturnStmt { value, span }))
+        }
         Rule::assign_stmt => {
             let mut assignment_tokens = stmt_token.into_inner();
 
@@ -430,23 +413,61 @@ pub fn parse_expr_block(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Optio
         }
     }
 
-    let mut return_expr = expr.map(Box::new);
+    // Recursively decide if the trailing expression should be a statement or
+    // really is a trailing expression that produces a value.
+    let is_return_value = expr.as_ref().is_some_and(|expr| match expr {
+        // Base case. Expression that produce some kind of value.
+        Expression::BoolValue(..)
+        | Expression::StringValue(..)
+        | Expression::RawStringValue(..)
+        | Expression::NumericValue(..)
+        | Expression::JinjaExpressionValue(..)
+        | Expression::Identifier(..)
+        | Expression::App(..)
+        | Expression::MethodCall { .. }
+        | Expression::ArrayAccess(..)
+        | Expression::FieldAccess(..)
+        | Expression::Array(..)
+        | Expression::Map(..)
+        | Expression::ClassConstructor(..)
+        | Expression::BinaryOperation { .. }
+        | Expression::UnaryOperation { .. }
+        | Expression::Paren(..) => true,
 
-    // Special case for returning if expressions.
-    // TODO: Likely there's no need to separate statements and final expression
-    // since a statement can now be an expression. We just need to allow any
-    // random expression as a statement as mentioned in the grammar file.
-    if return_expr.is_none() && matches!(stmts.last(), Some(Stmt::Expression(Expression::If(..)))) {
-        let Some(Stmt::Expression(e)) = stmts.pop() else {
-            unreachable!();
-        };
+        // If the trailing expression happens to be a block, check if the
+        // block itself has a trailing expression that produces a value.
+        Expression::ExprBlock(block, _) => block.expr.is_some(),
 
-        return_expr = Some(Box::new(e));
-    }
+        // If trailing expression is an if statement, check if the statment
+        // itself has a trailing expression.
+        Expression::If(_, if_branch, else_branch, _) => match if_branch.as_ref() {
+            Expression::ExprBlock(block, _) => block.expr.is_some(),
+            _ => match else_branch.as_ref().map(Box::as_ref) {
+                Some(Expression::ExprBlock(block, _)) => block.expr.is_some(),
+                // This should not happen since branches are always blocks.
+                _ => true,
+            },
+        },
+
+        // TODO: Is this possible?
+        Expression::Lambda(..) => todo!("exprs that evaluate to lambda"),
+    });
+
+    // If the block actually returns a value, keep it as trailing expression.
+    // Otherwise, promote the expression to a statement.
+    let trailing_expr = if is_return_value {
+        expr.map(Box::new)
+    } else {
+        if let Some(expr) = expr {
+            stmts.push(Stmt::Expression(expr));
+        }
+
+        None
+    };
 
     Some(ExpressionBlock {
         stmts,
-        expr: return_expr,
+        expr: trailing_expr,
     })
 }
 

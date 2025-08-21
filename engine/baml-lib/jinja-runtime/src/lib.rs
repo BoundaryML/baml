@@ -3,6 +3,10 @@ use colored::*;
 mod chat_message_part;
 
 mod output_format;
+#[cfg(test)]
+mod test_enum_comparison;
+#[cfg(test)]
+mod test_enum_template;
 use indexmap::IndexMap;
 use internal_baml_core::ir::{jinja_helpers::get_env, repr::IntermediateRepr};
 pub use output_format::types;
@@ -16,7 +20,12 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 pub use crate::chat_message_part::ChatMessagePart;
-use crate::{baml_value_to_jinja_value::IntoMiniJinjaValue, output_format::OutputFormat};
+use crate::{
+    baml_value_to_jinja_value::{
+        IntoMiniJinjaValue, MinijinjaBamlEnumType, MinijinjaBamlEnumValue,
+    },
+    output_format::OutputFormat,
+};
 
 #[allow(non_camel_case_types)]
 #[derive(Clone, Debug, Serialize)]
@@ -51,15 +60,28 @@ pub struct TemplateStringMacro {
 const MAGIC_CHAT_ROLE_DELIMITER: &str = "BAML_CHAT_ROLE_MAGIC_STRING_DELIMITER";
 const MAGIC_MEDIA_DELIMITER: &str = "BAML_MEDIA_MAGIC_STRING_DELIMITER";
 
-fn render_minijinja(
-    template: &str,
-    args: &minijinja::Value,
-    mut ctx: RenderContext,
-    template_string_macros: &[TemplateStringMacro],
+struct MinijinjaRenderParams<'a> {
+    template: &'a str,
+    args: &'a minijinja::Value,
+    ctx: RenderContext,
+    template_string_macros: &'a [TemplateStringMacro],
     default_role: String,
     allowed_roles: Vec<String>,
     remap_role: HashMap<String, String>,
-) -> Result<RenderedPrompt, minijinja::Error> {
+    enum_values_by_name: IndexMap<String, Vec<MinijinjaBamlEnumValue>>,
+}
+
+fn render_minijinja(params: MinijinjaRenderParams) -> Result<RenderedPrompt, minijinja::Error> {
+    let MinijinjaRenderParams {
+        template,
+        args,
+        ctx,
+        template_string_macros,
+        default_role,
+        allowed_roles,
+        remap_role,
+        enum_values_by_name,
+    } = params;
     let mut env = get_env();
 
     // dedent
@@ -102,7 +124,7 @@ fn render_minijinja(
 
     env.add_template("prompt", &template)?;
     let client = ctx.client.clone();
-    let tags = std::mem::take(&mut ctx.tags);
+    let tags = ctx.tags.clone();
     let formatter = OutputFormat::new(ctx);
     env.add_global(
         "ctx",
@@ -112,6 +134,18 @@ fn render_minijinja(
             output_format => minijinja::value::Value::from_object(formatter),
         },
     );
+    for (enum_name, enum_values) in enum_values_by_name {
+        env.add_global(
+            enum_name.clone(),
+            minijinja::value::Value::from_object(MinijinjaBamlEnumType {
+                enum_name,
+                enum_values: enum_values
+                    .into_iter()
+                    .map(|v| (v.value.clone(), v))
+                    .collect(),
+            }),
+        );
+    }
 
     let role_fn = minijinja::Value::from_function(
         |role: Option<String>, kwargs: Kwargs| -> Result<String, minijinja::Error> {
@@ -430,15 +464,32 @@ pub fn render_prompt(
     let default_role = ctx.client.default_role.clone();
     let allowed_roles = ctx.client.allowed_roles.clone();
     let remap_role = ctx.client.remap_role.clone();
-    let rendered = render_minijinja(
+    let enum_values_by_name = ir
+        .walk_enums()
+        .map(|e| {
+            let enum_name = e.name().to_string();
+            let enum_values = e
+                .walk_values()
+                .map(|v| MinijinjaBamlEnumValue {
+                    value: v.name().to_string(),
+                    alias: v.alias(&eval_ctx).unwrap_or(None),
+                    enum_name: enum_name.clone(),
+                })
+                .collect::<Vec<_>>();
+            (enum_name, enum_values)
+        })
+        .collect::<IndexMap<_, _>>();
+
+    let rendered = render_minijinja(MinijinjaRenderParams {
         template,
-        &minijinja_args,
+        args: &minijinja_args,
         ctx,
         template_string_macros,
         default_role,
         allowed_roles,
         remap_role,
-    );
+        enum_values_by_name,
+    });
 
     match rendered {
         Ok(r) => Ok(r),
@@ -2022,49 +2073,100 @@ mod render_tests {
 
     // See the note in baml_value_to_jinja_value.rs for Enum for why we don't support aliases.
     // tl;dr we don't havea  way to override the equality operator for enum comparisons to NOT use the alias.
-    // #[test]
-    // fn test_render_prompt_with_enum() -> anyhow::Result<()> {
-    //     setup_logging();
+    #[test]
+    fn test_render_prompt_with_enum() -> anyhow::Result<()> {
+        setup_logging();
 
-    //     let args = BamlValue::Map(BamlMap::from([(
-    //         "enum_arg".to_string(),
-    //         BamlValue::Enum("MyEnum".to_string(), "VALUE_B".to_string()),
-    //     )]));
+        let args = BamlValue::Map(BamlMap::from([(
+            "enum_arg".to_string(),
+            BamlValue::Enum("MyEnum".to_string(), "VALUE_B".to_string()),
+        )]));
 
-    //     let ir = make_test_ir(
-    //         r#"
-    //         enum MyEnum {
-    //             VALUE_A
-    //             VALUE_B @alias("ALIAS_B")
-    //             VALUE_C
-    //         }
-    //         "#,
-    //     )?;
+        let ir = make_test_ir(
+            r#"
+            enum MyEnum {
+                VALUE_A @alias("alpha")
+                VALUE_B @alias("ALIAS_B")
+                VALUE_C
+            }
+            "#,
+        )?;
 
-    //     let rendered = render_prompt(
-    //         "Enum value: {{ enum_arg }}",
-    //         &args,
-    //         RenderContext {
-    //             client: RenderContext_Client {
-    //                 name: "gpt4".to_string(),
-    //                 provider: "openai".to_string(),
-    //                 default_role: "system".to_string(),
-    //             },
-    //             output_format: OutputFormatContent::new_string(),
-    //             tags: HashMap::new(),
-    //         },
-    //         &vec![],
-    //         &ir,
-    //         &HashMap::new(),
-    //     )?;
+        let rendered = render_prompt(
+            r#"
+Enum value: {{ enum_arg }}
 
-    //     assert_eq!(
-    //         rendered,
-    //         RenderedPrompt::Completion("Enum value: ALIAS_B".to_string())
-    //     );
+handwritten enum values:
+  - first: {{ MyEnum.VALUE_A }}
+  - second: {{ MyEnum.VALUE_B }}
+  - third: {{ MyEnum.VALUE_C }}
 
-    //     Ok(())
-    // }
+{% if enum_arg == MyEnum.VALUE_B %}
+Enum value is equal to MyEnum.VALUE_B, as expected
+{% else %}
+Enum value should equal MyEnum.VALUE_B, but it does not
+{% endif %}
+
+{% if enum_arg != MyEnum.VALUE_A %}
+Enum value is not equal to MyEnum.VALUE_A, as expected
+{% else %}
+Enum value should not equal MyEnum.VALUE_A, but it does
+{% endif %}
+
+{% if enum_arg == "VALUE_B" %}
+Enum value is equal to the "VALUE_B" string, as expected
+{% else %}
+Enum value should equal the "VALUE_B" string, but it does not
+{% endif %}
+
+{% if enum_arg != "ALIAS_B" %}
+Enum value is not equal to the "ALIAS_B" string, as expected
+{% else %}
+Enum value should not equal the "ALIAS_B" string, but it does
+{% endif %}
+"#,
+            &args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                    default_role: "system".to_string(),
+                    allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
+                    options: IndexMap::new(),
+                },
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::new(),
+            },
+            &[],
+            &ir,
+            &HashMap::new(),
+        )?;
+
+        assert_eq!(
+            rendered,
+            RenderedPrompt::Completion(
+                r#"Enum value: ALIAS_B
+
+handwritten enum values:
+  - first: alpha
+  - second: ALIAS_B
+  - third: VALUE_C
+
+Enum value is equal to MyEnum.VALUE_B, as expected
+
+Enum value is not equal to MyEnum.VALUE_A, as expected
+
+Enum value is equal to the "VALUE_B" string, as expected
+
+Enum value is not equal to the "ALIAS_B" string, as expected
+"#
+                .to_string()
+            )
+        );
+
+        Ok(())
+    }
 
     #[test]
     fn test_render_prompt_with_enum_no_alias() -> anyhow::Result<()> {
@@ -2161,17 +2263,17 @@ mod render_tests {
 
     #[test]
     fn render_with_truthy_test() {
-        let result = render_minijinja(
-            r#"
+        let result = render_minijinja(MinijinjaRenderParams {
+            template: r#"
             {% if inp %}
             {{ inp.name }}
             {% endif %}
             "#,
-            &minijinja::Value::from_serialize(HashMap::from([(
+            args: &minijinja::Value::from_serialize(HashMap::from([(
                 "inp",
                 HashMap::from([("name", "Greg")]),
             )])),
-            RenderContext {
+            ctx: RenderContext {
                 client: RenderContext_Client {
                     name: "gpt4".to_string(),
                     provider: "openai".to_string(),
@@ -2183,11 +2285,12 @@ mod render_tests {
                 output_format: OutputFormatContent::new_string(),
                 tags: HashMap::from([("ROLE".to_string(), BamlValue::String("system".into()))]),
             },
-            &[],
-            "user".to_string(),
-            vec!["user".to_string(), "system".to_string()],
-            HashMap::new(),
-        )
+            template_string_macros: &[],
+            default_role: "user".to_string(),
+            allowed_roles: vec!["user".to_string(), "system".to_string()],
+            remap_role: HashMap::new(),
+            enum_values_by_name: IndexMap::new(),
+        })
         .expect("Rendering should succeed");
         match result {
             RenderedPrompt::Completion(msg) => assert_eq!(msg, "Greg\n"),
@@ -2248,17 +2351,17 @@ mod render_tests {
 
     #[test]
     fn render_with_ne_none() {
-        let result = render_minijinja(
-            r#"
+        let result = render_minijinja(MinijinjaRenderParams {
+            template: r#"
             {% if inp != None %}
             {{ inp.name }}
             {% endif %}
             "#,
-            &minijinja::Value::from_serialize(HashMap::from([(
+            args: &minijinja::Value::from_serialize(HashMap::from([(
                 "inp",
                 HashMap::from([("name", "Greg")]),
             )])),
-            RenderContext {
+            ctx: RenderContext {
                 client: RenderContext_Client {
                     name: "gpt4".to_string(),
                     provider: "openai".to_string(),
@@ -2270,11 +2373,12 @@ mod render_tests {
                 output_format: OutputFormatContent::new_string(),
                 tags: HashMap::from([("ROLE".to_string(), BamlValue::String("system".into()))]),
             },
-            &[],
-            "user".to_string(),
-            vec!["user".to_string(), "system".to_string()],
-            HashMap::new(),
-        )
+            template_string_macros: &[],
+            default_role: "user".to_string(),
+            allowed_roles: vec!["user".to_string(), "system".to_string()],
+            remap_role: HashMap::new(),
+            enum_values_by_name: IndexMap::new(),
+        })
         .expect("Rendering should succeed");
         match result {
             RenderedPrompt::Completion(msg) => assert_eq!(msg, "Greg\n"),
@@ -2284,14 +2388,14 @@ mod render_tests {
 
     #[test]
     fn render_none_as_null() {
-        let result = render_minijinja(
-            r#"
+        let result = render_minijinja(MinijinjaRenderParams {
+            template: r#"
             {% if inp is none %}
             {{ inp }}
             {% endif %}
             "#,
-            &minijinja::Value::from_serialize(HashMap::from([("inp", ())])),
-            RenderContext {
+            args: &minijinja::Value::from_serialize(HashMap::from([("inp", ())])),
+            ctx: RenderContext {
                 client: RenderContext_Client {
                     name: "gpt4".to_string(),
                     provider: "openai".to_string(),
@@ -2303,11 +2407,12 @@ mod render_tests {
                 output_format: OutputFormatContent::new_string(),
                 tags: HashMap::from([("ROLE".to_string(), BamlValue::String("system".into()))]),
             },
-            &[],
-            "user".to_string(),
-            vec!["user".to_string(), "system".to_string()],
-            HashMap::new(),
-        )
+            template_string_macros: &[],
+            default_role: "user".to_string(),
+            allowed_roles: vec!["user".to_string(), "system".to_string()],
+            remap_role: HashMap::new(),
+            enum_values_by_name: IndexMap::new(),
+        })
         .expect("Rendering should succeed");
         match result {
             RenderedPrompt::Completion(msg) => assert_eq!(msg, "null\n"),

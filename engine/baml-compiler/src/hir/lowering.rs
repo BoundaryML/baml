@@ -3,7 +3,7 @@
 //! This files contains the convertions between Baml AST nodes to HIR nodes.
 
 use baml_types::{type_meta::base::StreamingBehavior, Constraint, ConstraintLevel, TypeValue};
-use internal_baml_ast::ast::{self, App, Attribute, WithName, WithSpan};
+use internal_baml_ast::ast::{self, App, AssertStmt, Attribute, ReturnStmt, WithName, WithSpan};
 use internal_baml_diagnostics::Span;
 
 use crate::hir::{
@@ -131,9 +131,9 @@ impl TypeM<TypeMeta> {
         match type_ {
             ast::FieldType::Symbol(_, name, _) => {
                 if name.name().starts_with("Enum") {
-                    TypeM::EnumName(name.name().to_string(), meta)
+                    TypeM::Enum(name.name().to_string(), meta)
                 } else {
-                    TypeM::ClassName(name.name().to_string(), meta)
+                    TypeM::Class(name.name().to_string(), meta)
                 }
             }
             ast::FieldType::Primitive(_, prim, _, _) => match prim {
@@ -172,10 +172,10 @@ impl TypeM<TypeMeta> {
             TypeM::Null(meta) => meta,
             TypeM::Array(_, meta) => meta,
             TypeM::Map(_, _, meta) => meta,
-            TypeM::ClassName(_, meta) => meta,
-            TypeM::EnumName(_, meta) => meta,
+            TypeM::Class(_, meta) => meta,
+            TypeM::Enum(_, meta) => meta,
             TypeM::Union(_, meta) => meta,
-            TypeM::Arrow(_, meta) => meta,
+            TypeM::Function(_, meta) => meta,
         }
     }
 
@@ -197,10 +197,10 @@ impl TypeM<TypeMeta> {
             TypeM::Bool(_) => false,
             TypeM::Array(_, _) => false,
             TypeM::Map(_, _, _) => false,
-            TypeM::ClassName(_, _) => false,
-            TypeM::EnumName(_, _) => false,
+            TypeM::Class(_, _) => false,
+            TypeM::Enum(_, _) => false,
             TypeM::Null(_) => false,
-            TypeM::Arrow(_, _) => true,
+            TypeM::Function(_, _) => true,
         }
     }
 }
@@ -267,65 +267,35 @@ impl ExprFunction {
             name: function.name.to_string(),
             parameters: lower_fn_args(&function.args),
             return_type: TypeM::from_ast_optional(function.return_type.as_ref()),
-            body: Block::from_function_body(&function.body),
+            body: Block::from_expr_block(&function.body),
             span: function.span.clone(),
         }
     }
 }
 
 impl Block {
-    /// Lower an expression block into HIR for function bodies (ends with Statement::Return).
-    pub fn from_function_body(block: &ast::ExpressionBlock) -> Self {
-        Self::from_ast_with_context(block, true)
-    }
-
-    /// Lower an expression block into HIR for expression blocks (ends with Statement::Expression).
-    pub fn from_expression_block(block: &ast::ExpressionBlock) -> Self {
-        Self::from_ast_with_context(block, false)
-    }
-
-    /// Lower an expression block into HIR with specified context.
-    /// If is_function_body is true, the final expression becomes Statement::Return.
-    /// If is_function_body is false, the final expression becomes Statement::Expression.
-    fn from_ast_with_context(block: &ast::ExpressionBlock, is_function_body: bool) -> Self {
-        let mut statements = vec![];
-
-        // Process statements, checking for if expressions in let bindings
-        for stmt in &block.stmts {
-            let hir_stmt = lower_stmt(stmt);
-            statements.push(hir_stmt);
+    /// Lower an expression block into HIR for expression blocks.
+    pub fn from_expr_block(block: &ast::ExpressionBlock) -> Self {
+        Block {
+            statements: block.stmts.iter().map(lower_stmt).collect(),
+            trailing_expr: block
+                .expr
+                .as_deref()
+                .map(Expression::from_ast)
+                .map(Box::new),
         }
-
-        if let Some(block_final_expr) = block.expr.as_ref() {
-            let final_expr = Expression::from_ast(block_final_expr);
-
-            // Then add the final statement
-            statements.push(if is_function_body {
-                Statement::Return {
-                    expr: final_expr,
-                    span: block_final_expr.span().clone(),
-                }
-            } else {
-                Statement::Expression {
-                    expr: final_expr,
-                    span: block_final_expr.span().clone(),
-                }
-            });
-        }
-
-        Block { statements }
     }
 }
 
 fn lower_stmt(stmt: &ast::Stmt) -> Statement {
-    let hir_stmt = match stmt {
+    match stmt {
         ast::Stmt::CForLoop(stmt) => {
             // we'll add  a block if we an init statement, otherwise we'll just
             // use the current context to push the while statement.
 
             let condition = stmt.condition.as_ref().map(Expression::from_ast);
             let init = stmt.init_stmt.as_ref().map(|b| lower_stmt(b));
-            let block = Block::from_expression_block(&stmt.body);
+            let block = Block::from_expr_block(&stmt.body);
             let after = stmt
                 .after_stmt
                 .as_ref()
@@ -349,9 +319,10 @@ fn lower_stmt(stmt: &ast::Stmt) -> Statement {
                 Some(init) => {
                     // use a block
                     Statement::Expression {
-                        expr: Expression::ExpressionBlock(
+                        expr: Expression::Block(
                             Block {
                                 statements: vec![init, inner_loop],
+                                trailing_expr: None,
                             },
                             stmt.span.clone(),
                         ),
@@ -362,7 +333,6 @@ fn lower_stmt(stmt: &ast::Stmt) -> Statement {
                 None => inner_loop,
             }
         }
-
         ast::Stmt::Break(span) => Statement::Break(span.clone()),
         ast::Stmt::Continue(span) => Statement::Continue(span.clone()),
         ast::Stmt::WhileLoop(ast::WhileStmt {
@@ -374,7 +344,7 @@ fn lower_stmt(stmt: &ast::Stmt) -> Statement {
 
             let condition = Expression::from_ast(condition);
 
-            let body = Block::from_expression_block(body);
+            let body = Block::from_expr_block(body);
 
             Statement::While {
                 condition,
@@ -444,34 +414,27 @@ fn lower_stmt(stmt: &ast::Stmt) -> Statement {
             Statement::ForLoop {
                 identifier: identifier.name().to_string(),
                 iterator: Box::new(lifted_iterator),
-                block: Block::from_expression_block(body),
+                block: Block::from_expr_block(body),
                 span: span.clone(),
             }
         }
-        ast::Stmt::Expression(expr) => {
-            let hir_expr = Expression::from_ast(expr);
-
-            // Expressions that contain blocks themselves will deal with
-            // return expressions recursively. But expressions that have
-            // no blocks (like function calls or 2 + 2) must drop the
-            // returned value, so we insert semicolon expressions.
-            if matches!(
-                expr,
-                ast::Expression::If(..) | ast::Expression::ExprBlock(..)
-            ) {
-                Statement::Expression {
-                    expr: hir_expr,
-                    span: expr.span().clone(),
-                }
-            } else {
-                Statement::SemicolonExpression {
-                    expr: hir_expr,
-                    span: expr.span().clone(),
-                }
-            }
-        }
-    };
-    hir_stmt
+        ast::Stmt::Expression(expr) => Statement::Expression {
+            expr: Expression::from_ast(expr),
+            span: expr.span().clone(),
+        },
+        ast::Stmt::Semicolon(expr) => Statement::Semicolon {
+            expr: Expression::from_ast(expr),
+            span: expr.span().clone(),
+        },
+        ast::Stmt::Return(ReturnStmt { value, span }) => Statement::Return {
+            expr: Expression::from_ast(value),
+            span: span.clone(),
+        },
+        ast::Stmt::Assert(AssertStmt { value, span }) => Statement::Assert {
+            condition: Expression::from_ast(value),
+            span: span.clone(),
+        },
+    }
 }
 
 impl Expression {
@@ -566,7 +529,7 @@ impl Expression {
                 // Expression blocks are lowered to HIR preserving their structure
                 // This maintains proper scoping - variables defined inside the block
                 // are only visible within that block
-                Expression::ExpressionBlock(Block::from_expression_block(block), span.clone())
+                Expression::Block(Block::from_expr_block(block), span.clone())
             }
             ast::Expression::Lambda(_, _, _) => {
                 todo!("lambdas are not yet implemented")
