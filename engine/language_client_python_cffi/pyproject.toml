@@ -26,6 +26,7 @@ classifiers = [
 ]
 dependencies = [
     "pygments>=2.19.2",
+    "protobuf>=4.21.0",
 ]
 
 [project.optional-dependencies]
