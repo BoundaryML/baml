@@ -25,13 +25,13 @@ function StoreFnCallInLocalVar(n: int) -> int {
 }
 
 function BoolToIntWithIfElse(b: bool) -> int {
-    if b { 1 } else { 0 }
+    if (b) { 1 } else { 0 }
 }
 
 function ReturnElseIfExpr(a: bool, b: bool) -> int {
-    if a {
+    if (a) {
         1
-    } else if b {
+    } else if (b) {
         2
     } else {
         3
@@ -39,9 +39,9 @@ function ReturnElseIfExpr(a: bool, b: bool) -> int {
 }
 
 function AssignElseIfExpr(a: bool, b: bool) -> int {
-    let result = if a {
+    let result = if (a) {
         1
-    } else if b {
+    } else if (b) {
         2
     } else {
         3
@@ -53,10 +53,10 @@ function AssignElseIfExpr(a: bool, b: bool) -> int {
 function NormalElseIfStmt(a: bool, b: bool) -> int {
     let v = 0;
 
-    if a {
+    if (a) {
         let one = 1;
         StoreFnCallInLocalVar(one);
-    } else if b {
+    } else if (b) {
         let two = 2;
         StoreFnCallInLocalVar(two);
     } else {
@@ -71,11 +71,11 @@ function IterativeFibonacci(n: int) -> int {
     let mut a = 0;
     let mut b = 1;
 
-    if n == 0 {
+    if (n == 0) {
         b
     } else {
         let mut i = 1;
-        while i <= n {
+        while (i <= n) {
             let c = a + b;
             a = b;
             b = c;
@@ -91,7 +91,7 @@ function LengthOfArray(arr: int[]) -> int {
 
 function SumArray(arr: int[]) -> int {
     let mut sum = 0;
-    for a in arr {
+    for (a in arr) {
         sum += a;
     }
     sum
@@ -129,5 +129,5 @@ function StoreLlmCallInLocalVar(n: int) -> int {
 }
 
 function BoolToIntWithIfElseCallingLlm(b: bool) -> int {
-    if b { LlmReturnNumber(1) } else { LlmReturnNumber(0) }
+    if (b) { LlmReturnNumber(1) } else { LlmReturnNumber(0) }
 }

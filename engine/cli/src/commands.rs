@@ -7,6 +7,14 @@ use clap::{Parser, Subcommand};
 #[command(styles = clap_cargo::style::CLAP_STYLING)]
 #[command(propagate_version = true)]
 pub(crate) struct RuntimeCli {
+    /// Enable specific features (can be specified multiple times)
+    ///
+    /// Available features:
+    ///   beta - Enable beta features and suppress experimental warnings
+    ///   display_all_warnings - Show all warnings in CLI output
+    #[arg(long = "features", value_name = "FEATURE", global = true)]
+    pub features: Vec<String>,
+
     /// Specifies a subcommand to run.
     #[command(subcommand)]
     pub(crate) command: Commands,
@@ -56,6 +64,30 @@ pub(crate) enum Commands {
 
 impl RuntimeCli {
     pub fn run(&mut self, defaults: RuntimeCliDefaults) -> Result<crate::ExitCode> {
+        use internal_baml_core::feature_flags::FeatureFlags;
+
+        // Parse feature flags once at the root level
+        let feature_flags = match FeatureFlags::from_vec(self.features.clone()) {
+            Ok(flags) => flags,
+            Err(errors) => {
+                for error in errors {
+                    eprintln!("Error: {}", error);
+                }
+                eprintln!("\nAvailable feature flags:");
+                eprintln!("  beta - Enable beta features and suppress experimental warnings");
+                eprintln!("  display_all_warnings - Display all warnings in CLI output");
+                return Ok(crate::ExitCode::Other);
+            }
+        };
+
+        // Log enabled features
+        if feature_flags.is_beta_enabled() {
+            baml_log::info!("Beta features enabled - experimental warnings will be suppressed");
+        }
+        if feature_flags.should_display_warnings() {
+            baml_log::info!("Warning display enabled - all warnings will be shown");
+        }
+
         // NB: we spawn a runtime here but block_on inside the match arms
         // because 'baml-cli dev' and 'baml-cli serve' cannot block_on
         let t = tokio::runtime::Runtime::new()?;
@@ -64,7 +96,7 @@ impl RuntimeCli {
         match &mut self.command {
             Commands::Generate(args) => {
                 args.from = BamlRuntime::parse_baml_src_path(&args.from)?;
-                match args.run(defaults) {
+                match args.run(defaults, feature_flags.clone()) {
                     Ok(()) => Ok(crate::ExitCode::Success),
                     Err(e) => {
                         eprintln!("Error: {e}");
@@ -81,7 +113,7 @@ impl RuntimeCli {
             },
             Commands::Serve(args) => {
                 args.from = BamlRuntime::parse_baml_src_path(&args.from)?;
-                match args.run() {
+                match args.run(feature_flags.clone()) {
                     Ok(()) => Ok(crate::ExitCode::Success),
                     Err(e) => {
                         eprintln!("Error: {e}");
@@ -91,7 +123,7 @@ impl RuntimeCli {
             }
             Commands::Dev(args) => {
                 args.from = BamlRuntime::parse_baml_src_path(&args.from)?;
-                match args.run(defaults) {
+                match args.run(defaults, feature_flags.clone()) {
                     Ok(()) => Ok(crate::ExitCode::Success),
                     Err(e) => {
                         eprintln!("Error: {e}");
@@ -115,7 +147,7 @@ impl RuntimeCli {
             },
             Commands::Deploy(args) => {
                 args.from = BamlRuntime::parse_baml_src_path(&args.from)?;
-                match t.block_on(async { args.run_async().await }) {
+                match t.block_on(async { args.run_async(feature_flags.clone()).await }) {
                     Ok(()) => Ok(crate::ExitCode::Success),
                     Err(e) => {
                         eprintln!("Error: {e}");
@@ -133,7 +165,7 @@ impl RuntimeCli {
                 }
             }
             Commands::Test(args) => {
-                let res = t.block_on(async { args.run().await })?;
+                let res = t.block_on(async { args.run(feature_flags.clone()).await })?;
                 match res {
                     baml_runtime::cli::testing::TestRunResult::Success => {
                         Ok(crate::ExitCode::Success)
@@ -154,7 +186,10 @@ impl RuntimeCli {
             }
             Commands::DumpHIR(args) => {
                 args.from = BamlRuntime::parse_baml_src_path(&args.from)?;
-                match args.run(baml_runtime::cli::dump_intermediate::DumpType::HIR) {
+                match args.run(
+                    baml_runtime::cli::dump_intermediate::DumpType::HIR,
+                    feature_flags.clone(),
+                ) {
                     Ok(()) => Ok(crate::ExitCode::Success),
                     Err(e) => {
                         eprintln!("Error: {e}");
@@ -164,7 +199,10 @@ impl RuntimeCli {
             }
             Commands::DumpBytecode(args) => {
                 args.from = BamlRuntime::parse_baml_src_path(&args.from)?;
-                match args.run(baml_runtime::cli::dump_intermediate::DumpType::Bytecode) {
+                match args.run(
+                    baml_runtime::cli::dump_intermediate::DumpType::Bytecode,
+                    feature_flags.clone(),
+                ) {
                     Ok(()) => Ok(crate::ExitCode::Success),
                     Err(e) => {
                         eprintln!("Error: {e}");

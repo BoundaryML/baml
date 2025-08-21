@@ -1,4 +1,4 @@
-let x = if true {
+let x = if (true) {
     1
 } else {
     2
@@ -8,7 +8,7 @@ let x = if true {
 //   -->  expr/if.baml:1
 //    | 
 //    | 
-//  1 | let x = if true {
+//  1 | let x = if (true) {
 //  2 |     1
 //  3 | } else {
 //  4 |     2

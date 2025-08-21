@@ -385,6 +385,7 @@ impl RuntimeConstructor for InternalBamlRuntime {
     fn from_file_content<T: AsRef<str>>(
         root_path: &str,
         files: &HashMap<T, T>,
+        feature_flags: internal_baml_core::feature_flags::FeatureFlags,
     ) -> Result<InternalBamlRuntime> {
         let contents = files
             .iter()
@@ -396,7 +397,7 @@ impl RuntimeConstructor for InternalBamlRuntime {
             })
             .collect::<Result<Vec<_>>>()?;
         let directory = PathBuf::from(root_path);
-        let mut schema = validate(&directory, contents.clone());
+        let mut schema = validate(&directory, contents.clone(), feature_flags);
         schema.diagnostics.to_result()?;
 
         let ir = IntermediateRepr::from_parser_database(&schema.db, schema.configuration)?;
@@ -414,7 +415,14 @@ impl RuntimeConstructor for InternalBamlRuntime {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    fn from_directory(dir: &std::path::Path) -> Result<InternalBamlRuntime> {
-        InternalBamlRuntime::from_files(dir, crate::baml_src_files(&dir.to_path_buf())?)
+    fn from_directory(
+        dir: &std::path::Path,
+        feature_flags: internal_baml_core::feature_flags::FeatureFlags,
+    ) -> Result<InternalBamlRuntime> {
+        InternalBamlRuntime::from_files(
+            dir,
+            crate::baml_src_files(&dir.to_path_buf())?,
+            feature_flags,
+        )
     }
 }

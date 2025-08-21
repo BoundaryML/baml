@@ -76,7 +76,7 @@ impl TryFrom<LlmRuntime> for BamlAsyncVmRuntime {
 
 impl BamlAsyncVmRuntime {
     pub fn internal(&self) -> &Arc<InternalBamlRuntime> {
-        self.llm_runtime.internal()
+        &self.llm_runtime.inner
     }
 
     pub fn disassemble(&self, function_name: &str) {
@@ -106,7 +106,11 @@ impl BamlAsyncVmRuntime {
         path: &std::path::Path,
         env_vars: HashMap<T, T>,
     ) -> anyhow::Result<Self> {
-        Self::try_from(LlmRuntime::from_directory(path, env_vars)?)
+        Self::try_from(LlmRuntime::from_directory(
+            path,
+            env_vars,
+            internal_baml_core::FeatureFlags::new(),
+        )?)
     }
 
     pub fn from_file_content<T: AsRef<str> + std::fmt::Debug, U: AsRef<str>>(
@@ -114,7 +118,12 @@ impl BamlAsyncVmRuntime {
         files: &HashMap<T, T>,
         env_vars: HashMap<U, U>,
     ) -> anyhow::Result<Self> {
-        Self::try_from(LlmRuntime::from_file_content(root_path, files, env_vars)?)
+        Self::try_from(LlmRuntime::from_file_content(
+            root_path,
+            files,
+            env_vars,
+            internal_baml_core::FeatureFlags::new(),
+        )?)
     }
 
     pub fn create_ctx_manager(
@@ -163,7 +172,7 @@ impl BamlAsyncVmRuntime {
 
         let expr_fn = self
             .llm_runtime
-            .internal()
+            .inner
             .ir()
             .expr_fns
             .iter()
@@ -256,7 +265,7 @@ impl BamlAsyncVmRuntime {
 
                     let llm_fn = self
                         .llm_runtime
-                        .internal()
+                        .inner
                         .ir()
                         .find_function(&pending_future.llm_function)
                         .unwrap_or_else(|_| {
