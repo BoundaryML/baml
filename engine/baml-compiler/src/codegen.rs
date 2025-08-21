@@ -26,6 +26,12 @@ pub fn compile(ast: &ParserDatabase) -> anyhow::Result<BamlVmProgram> {
 
     let hir = hir::Hir::from_ast(&ast.ast);
 
+    // TODO: THIR is built twice, once for validations, once for compilation.
+    // Fix this.
+    let thir = thir::typecheck::typecheck(&hir, &mut Diagnostics::new("dummy".into()));
+
+    // eprintln!("\nTHIR:\n{:#?}", thir);
+
     // eprintln!("\nHIR:\n{:#?}", hir);
 
     // TODO: THIR is built twice, once for validations, once for compilation.
