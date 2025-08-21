@@ -93,8 +93,10 @@ pub enum Stmt {
     ForLoop(ForLoopStmt),
     CForLoop(CForLoopStmt),
     WhileLoop(WhileStmt),
-    /// Expression with trailing semicolon.
+    /// Expression without a trailing semicolon.
     Expression(Expression),
+    /// Expression with a trailing semicolon.
+    Semicolon(Expression),
     Assign(AssignStmt),
     AssignOp(AssignOpStmt),
     Break(Span),
@@ -147,6 +149,7 @@ impl fmt::Display for Stmt {
                 write!(f, ") {}", stmt.body)
             }
             Stmt::Expression(expr) => write!(f, "{expr}"),
+            Stmt::Semicolon(expr) => write!(f, "{expr};"),
             Stmt::Assign(stmt) => write!(f, "{} = {}", stmt.identifier, stmt.expr),
             Stmt::AssignOp(stmt) => {
                 write!(f, "{} {} {}", stmt.identifier, stmt.assign_op, stmt.expr)
@@ -185,6 +188,9 @@ impl Stmt {
                 stmt1.body.assert_eq_up_to_span(&stmt2.body);
             }
             (Stmt::Expression(expr1), Stmt::Expression(expr2)) => {
+                expr1.assert_eq_up_to_span(expr2);
+            }
+            (Stmt::Semicolon(expr1), Stmt::Semicolon(expr2)) => {
                 expr1.assert_eq_up_to_span(expr2);
             }
 
@@ -242,6 +248,7 @@ impl Stmt {
                 Stmt::Let(_)
                 | Stmt::ForLoop(_)
                 | Stmt::Expression(_)
+                | Stmt::Semicolon(_)
                 | Stmt::Assign(_)
                 | Stmt::AssignOp(_)
                 | Stmt::CForLoop(_)
@@ -265,6 +272,7 @@ impl Stmt {
             | Stmt::AssignOp(AssignOpStmt { identifier, .. }) => identifier,
 
             Stmt::Expression(_) => panic!("expressions don't have identifiers"),
+            Stmt::Semicolon(_) => panic!("semicolon expressions don't have identifiers"),
             Stmt::WhileLoop(_) => panic!("while loops don't have identifiers"),
             Stmt::Break(_) => panic!("break statements don't have identifiers"),
             Stmt::Continue(_) => panic!("continue statements don't have identifiers"),
@@ -288,6 +296,7 @@ impl Stmt {
             | Stmt::Assert(AssertStmt { span, .. }) => span,
 
             Stmt::Expression(expr) => expr.span(),
+            Stmt::Semicolon(expr) => expr.span(),
         }
     }
 

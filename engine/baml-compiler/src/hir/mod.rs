@@ -312,7 +312,11 @@ pub struct Parameter {
 
 #[derive(Clone, Debug)]
 pub struct Block {
+    /// List of statements.
     pub statements: Vec<Statement>,
+
+    /// Final expression in the block without semicolon (used as return).
+    pub trailing_expr: Option<Box<Expression>>,
 }
 
 /// A single unit of execution within a block.
@@ -359,7 +363,7 @@ pub enum Statement {
         expr: Expression,
         span: Span,
     },
-    SemicolonExpression {
+    Semicolon {
         expr: Expression,
         span: Span,
     },
@@ -456,7 +460,7 @@ pub enum Expression {
     // MethodCall(Box<Expression>, String, Vec<Expression>), // TODO.
     ClassConstructor(ClassConstructor, Span),
     /// Expression block - has its own scope with statements and evaluates to a value
-    ExpressionBlock(Block, Span),
+    Block(Block, Span),
     BinaryOperation {
         left: Box<Expression>,
         operator: BinaryOperator,
@@ -545,7 +549,7 @@ impl Expression {
             Expression::JinjaExpressionValue(_, span) => span.clone(),
             Expression::Call { span, .. } => span.clone(),
             Expression::ClassConstructor(_, span) => span.clone(),
-            Expression::ExpressionBlock(_, span) => span.clone(),
+            Expression::Block(_, span) => span.clone(),
             Expression::BinaryOperation { span, .. } => span.clone(),
             Expression::UnaryOperation { span, .. } => span.clone(),
             Expression::Paren(_, span) => span.clone(),

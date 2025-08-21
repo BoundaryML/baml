@@ -102,8 +102,12 @@ pub enum Expr<T> {
 #[derive(Clone, Debug)]
 pub struct Block<T> {
     pub env: BamlMap<Variable, Expr<T>>,
+    /// List of statements.
     pub statements: Vec<Statement<T>>,
-    pub return_value: Expr<T>,
+    /// Final expression in the block without semicolon (used as return).
+    pub trailing_expr: Option<Expr<T>>,
+    /// Type of the block.
+    pub ty: Option<Type>,
     pub span: Span,
 }
 
@@ -120,7 +124,12 @@ impl<T> Block<T> {
     where
         T: Clone,
     {
-        let mut vars = self.return_value.variables();
+        let mut vars = self
+            .trailing_expr
+            .as_ref()
+            .map(|expr| expr.variables())
+            .unwrap_or_default();
+
         for stmt in self.statements.iter() {
             vars.extend(stmt.variables());
         }

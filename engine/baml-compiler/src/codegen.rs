@@ -23,15 +23,16 @@ use crate::{
 pub fn compile(ast: &ParserDatabase) -> anyhow::Result<BamlVmProgram> {
     // Stage 1: AST -> HIR
     // eprintln!("AST:\n{:#?}", ast.ast);
+
     let hir = hir::Hir::from_ast(&ast.ast);
+
+    // eprintln!("\nHIR:\n{:#?}", hir);
 
     // TODO: THIR is built twice, once for validations, once for compilation.
     // Fix this.
     let thir = thir::typecheck::typecheck(&hir, &mut Diagnostics::new("dummy".into()));
 
     // eprintln!("\nTHIR:\n{:#?}", thir);
-
-    // eprintln!("\nHIR:\n{:#?}", hir);
 
     // Stage 2: HIR -> Bytecode
     compile_thir_to_bytecode(&thir)
@@ -428,12 +429,16 @@ impl<'g> HirCompiler<'g> {
             self.compile_statement(statement);
         }
 
-        let scope_has_ending_expr = block.statements.last().is_some_and(|stmt| match stmt {
-            thir::Statement::Expression { expr, .. } => expr.produces_final_value(),
-            _ => false,
-        });
+        let scope_has_trailing_expr = match &block.trailing_expr {
+            None => false,
 
-        self.exit_scope(scope_has_ending_expr);
+            Some(trailing_expr) => {
+                self.compile_expression(trailing_expr);
+                true
+            }
+        };
+
+        self.exit_scope(scope_has_trailing_expr);
     }
 
     /// Used to compile nested blocks within functions.
@@ -1178,7 +1183,13 @@ impl<'g> HirCompiler<'g> {
     }
 
     /// Drops the current block scope we're in.
-    fn exit_scope(&mut self, scope_has_ending_expr: bool) {
+    fn exit_scope(&mut self, scope_has_trailing_expr: bool) {
+        // Emitting an instruction requires an existing scope, so if we need to
+        // emit a return we will do so before popping the current scope.
+        if self.scopes.len() == 1 {
+            self.emit(Instruction::Return);
+        }
+
         let scope = self
             .scopes
             .pop()
@@ -1186,16 +1197,19 @@ impl<'g> HirCompiler<'g> {
 
         self.locals_in_scope[scope.id] = self.locals.clone();
 
-        // Depth 0 is function body block. That one ends with return.
+        // Depth 0 is function body block. That one ends with return. Depth >= 1
+        // are nested blocks, those need to pop all their scoped locals and
+        // possibly push a value on top of the stack.
         if scope.depth >= 1 && !scope.locals.is_empty() {
             // Keep value on top of stack if block has a return expression.
             // Otherwise just pop locals.
-            if scope_has_ending_expr {
+            if scope_has_trailing_expr {
                 self.emit(Instruction::PopReplace(scope.locals.len()));
             } else {
                 self.emit(Instruction::Pop(scope.locals.len()));
             }
 
+            // Drop locals in this scope.
             for local in scope.locals {
                 self.locals.remove(&local);
             }
@@ -1229,76 +1243,6 @@ impl<'g> HirCompiler<'g> {
         }
 
         loop_info.break_patch_list
-    }
-}
-
-impl thir::Expr<(Span, Option<Type>)> {
-    /// Returns true if the block ends with an expression that has a final value.
-    ///
-    /// For example, it would return true for this block:
-    ///
-    /// ```ignore
-    /// let a = {
-    ///     let b = 1;
-    ///     if b == 1 {
-    ///         1
-    ///     } else {
-    ///         2
-    ///     }
-    /// };
-    /// ```
-    ///
-    /// But false for this one:
-    ///
-    /// ```ignore
-    /// let mut a = 0;
-    /// if a == 0 {
-    ///     a = 1;
-    /// } else {
-    ///     a = 2;
-    /// }
-    /// ```
-    ///
-    /// TODO: This seems completely unecessary, the typechecker will already
-    /// check at some point that return values match the expected type. After
-    /// that we should alreay have enough information to decide whether a block
-    /// returns or not.
-    fn produces_final_value(&self) -> bool {
-        match self {
-            // First call will happen on a block. Recurse on the final expression.
-            thir::Expr::Block(block, _) => match block.statements.last() {
-                Some(thir::Statement::Expression { expr, .. }) => expr.produces_final_value(),
-
-                // Does not produce a value.
-                _ => false,
-            },
-
-            // If statements as last expression need to check if they return
-            // any value. We won't recurse into the else branch because both
-            // need to match, if one of them returns a value the other one must
-            // return the same type. This is typechecker bug if it's wrong, so
-            // I won't bother here.
-            thir::Expr::If(_, if_branch, ..) => if_branch.produces_final_value(),
-
-            // This is an expression that produces a value, so true. We're
-            // forcing non-exhaustive match here because other types of
-            // expressions that we add in the future might need to be considered.
-            thir::Expr::List(_, _)
-            | thir::Expr::Map(_, _)
-            | thir::Expr::ArrayAccess { .. }
-            | thir::Expr::FieldAccess { .. }
-            | thir::Expr::MethodCall { .. }
-            | thir::Expr::Value(_)
-            | thir::Expr::Call { .. }
-            | thir::Expr::ClassConstructor { .. }
-            | thir::Expr::BinaryOperation { .. }
-            | thir::Expr::UnaryOperation { .. }
-            | thir::Expr::Var(_, _)
-            | thir::Expr::Builtin(_, _)
-            | thir::Expr::Paren(_, _) => true,
-
-            thir::Expr::Function(_, _, _) => todo!("function calls"),
-        }
     }
 }
 

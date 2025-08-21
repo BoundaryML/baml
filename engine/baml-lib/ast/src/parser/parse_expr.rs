@@ -78,6 +78,9 @@ pub fn parse_top_level_assignment(
             only_let_stmt("for loops", span, diagnostics)
         }
         Stmt::Expression(expr) => only_let_stmt("expressions", expr.span().clone(), diagnostics),
+        Stmt::Semicolon(expr) => {
+            only_let_stmt("semicolon expressions", expr.span().clone(), diagnostics)
+        }
         Stmt::WhileLoop(stmt) => only_let_stmt("while loops", stmt.span, diagnostics),
         Stmt::Break(span) => only_let_stmt("break statements", span, diagnostics),
         Stmt::Continue(span) => only_let_stmt("continue statements", span, diagnostics),
@@ -200,14 +203,19 @@ pub fn parse_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
     let span = diagnostics.span(token.as_span());
     let mut tokens = token.into_inner();
 
-    let stmt_token = tokens.next()?;
-    let stmt = parse_statement_inner_rule(stmt_token, span.clone(), diagnostics);
+    let mut stmt = parse_statement_inner_rule(tokens.next()?, span.clone(), diagnostics);
 
-    let maybe_semicolon = tokens.next();
-    match maybe_semicolon {
-        Some(p) if p.as_str() == ";" => {}
+    match tokens.next() {
+        Some(maybe_semicolon) if maybe_semicolon.as_str() == ";" => {
+            if let Some(Stmt::Expression(expr)) = stmt {
+                stmt = Some(Stmt::Semicolon(expr));
+            }
+        }
         _ => {
-            if matches!(stmt, Some(Stmt::Let(_))) {
+            if matches!(
+                stmt,
+                Some(Stmt::Let(_) | Stmt::Assign(_) | Stmt::AssignOp(_))
+            ) {
                 diagnostics.push_error(DatamodelError::new_static(
                     "Statement must end with a semicolon.",
                     span,
@@ -406,23 +414,61 @@ pub fn parse_expr_block(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Optio
         }
     }
 
-    let mut return_expr = expr.map(Box::new);
+    // Recursively decide if the trailing expression should be a statement or
+    // really is a trailing expression that produces a value.
+    let is_return_value = expr.as_ref().is_some_and(|expr| match expr {
+        // Base case. Expression that produce some kind of value.
+        Expression::BoolValue(..)
+        | Expression::StringValue(..)
+        | Expression::RawStringValue(..)
+        | Expression::NumericValue(..)
+        | Expression::JinjaExpressionValue(..)
+        | Expression::Identifier(..)
+        | Expression::App(..)
+        | Expression::MethodCall { .. }
+        | Expression::ArrayAccess(..)
+        | Expression::FieldAccess(..)
+        | Expression::Array(..)
+        | Expression::Map(..)
+        | Expression::ClassConstructor(..)
+        | Expression::BinaryOperation { .. }
+        | Expression::UnaryOperation { .. }
+        | Expression::Paren(..) => true,
 
-    // Special case for returning if expressions.
-    // TODO: Likely there's no need to separate statements and final expression
-    // since a statement can now be an expression. We just need to allow any
-    // random expression as a statement as mentioned in the grammar file.
-    if return_expr.is_none() && matches!(stmts.last(), Some(Stmt::Expression(Expression::If(..)))) {
-        let Some(Stmt::Expression(e)) = stmts.pop() else {
-            unreachable!();
-        };
+        // If the trailing expression happens to be a block, check if the
+        // block itself has a trailing expression that produces a value.
+        Expression::ExprBlock(block, _) => block.expr.is_some(),
 
-        return_expr = Some(Box::new(e));
-    }
+        // If trailing expression is an if statement, check if the statment
+        // itself has a trailing expression.
+        Expression::If(_, if_branch, else_branch, _) => match if_branch.as_ref() {
+            Expression::ExprBlock(block, _) => block.expr.is_some(),
+            _ => match else_branch.as_ref().map(Box::as_ref) {
+                Some(Expression::ExprBlock(block, _)) => block.expr.is_some(),
+                // This should not happen since branches are always blocks.
+                _ => true,
+            },
+        },
+
+        // TODO: Is this possible?
+        Expression::Lambda(..) => todo!("exprs that evaluate to lambda"),
+    });
+
+    // If the block actually returns a value, keep it as trailing expression.
+    // Otherwise, promote the expression to a statement.
+    let trailing_expr = if is_return_value {
+        expr.map(Box::new)
+    } else {
+        if let Some(expr) = expr {
+            stmts.push(Stmt::Expression(expr));
+        }
+
+        None
+    };
 
     Some(ExpressionBlock {
         stmts,
-        expr: return_expr,
+        expr: trailing_expr,
     })
 }
 

@@ -157,7 +157,7 @@ impl Statement {
                 .append(condition.to_doc())
                 .append(RcDoc::text(";")),
             Statement::Expression { expr, .. } => expr.to_doc(),
-            Statement::SemicolonExpression { expr, .. } => expr.to_doc(),
+            Statement::Semicolon { expr, .. } => expr.to_doc(),
             Statement::While {
                 condition, block, ..
             } => RcDoc::text("while")
@@ -448,7 +448,7 @@ impl Expression {
                         .append(RcDoc::space())
                 })
                 .append(RcDoc::text("}")),
-            Expression::ExpressionBlock(block, _) => RcDoc::text("{")
+            Expression::Block(block, _) => RcDoc::text("{")
                 .append(RcDoc::hardline())
                 .append(block.to_doc().nest(2))
                 .append(RcDoc::hardline())

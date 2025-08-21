@@ -242,76 +242,52 @@ fn typecheck_block(
     let mut statements = vec![];
     let env = BamlMap::new();
 
-    // Process statements
+    let mut block_type: Option<TypeM<TypeMeta>> = None;
+
+    // Process statements. Return type errors are checked here.
     for stmt in &block.statements {
         if let Some(typed_stmt) = typecheck_statement(stmt, context, diagnostics) {
+            if let thir::Statement::Return { expr, .. } = &typed_stmt {
+                block_type = expr.meta().1.clone();
+            }
+
             // Context is already updated in typecheck_statement, no need to update again
             statements.push(typed_stmt);
         }
     }
 
-    // Get the return value from the last statement
-    // Note: context has been updated with all let bindings from statements above
-    let (return_value, last_is_return) = if let Some(last_stmt) = block.statements.last() {
-        match last_stmt {
-            hir::Statement::Expression { expr, .. } => {
-                // For expression statements that are the last statement, we already processed them above
-                // so we need to avoid calling typecheck_expression again to prevent duplicate errors.
-                // Instead, find the corresponding typed statement and extract its return value.
-                if let Some(thir::Statement::Expression {
-                    expr: typed_expr, ..
-                }) = statements.last()
-                {
-                    (typed_expr.clone(), true)
-                } else {
-                    // Fallback if we can't find the typed statement
-                    (typecheck_expression(expr, context, diagnostics), true)
-                }
-            }
-            hir::Statement::Return { expr, .. } => {
-                // For return statements that are the last statement, we already processed them above
-                // so we need to avoid calling typecheck_expression again to prevent duplicate errors.
-                if let Some(thir::Statement::Return {
-                    expr: typed_expr, ..
-                }) = statements.last()
-                {
-                    (typed_expr.clone(), true)
-                } else {
-                    // Fallback if we can't find the typed statement
-                    (typecheck_expression(expr, context, diagnostics), true)
-                }
-            }
-            _ => {
-                // No explicit return, default to null
-                (
-                    thir::Expr::Value(BamlValueWithMeta::Null((
-                        internal_baml_diagnostics::Span::fake(),
-                        None,
-                    ))),
-                    false,
-                )
-            }
-        }
-    } else {
-        // Empty block, default to null
-        (
-            thir::Expr::Value(BamlValueWithMeta::Null((
-                internal_baml_diagnostics::Span::fake(),
-                None,
-            ))),
-            false,
-        )
-    };
-
-    // // Remove the last statement if it was converted to return value
-    // if last_is_return && !statements.is_empty() {
-    //     statements.pop();
+    // TODO: Typechecking here is broken. A nested block can have return types
+    // which are completely unrelated to the trailing expression type. Example:
+    //
+    // ```baml
+    // fn foo(b: bool) -> string {
+    //     let a = {
+    //         if (b) {
+    //             return "hello";   // Returns string from function
+    //         }
+    //         1                     // Returns int from block
+    //     };
+    //
+    //     return a;                 // Type error
     // }
+    // ```
+    //
+    // Function type checking needs to keep track of all the returns to match
+    // their types. That includes nested returns. Blocks only have one actual
+    // type, that is, the type of the trailing expression.
+    let trailing_expr = block.trailing_expr.as_ref().map(|expr| {
+        let typed_expr = typecheck_expression(expr, context, diagnostics);
+
+        block_type = typed_expr.meta().1.clone();
+
+        typed_expr
+    });
 
     thir::Block {
         env,
         statements,
-        return_value,
+        trailing_expr,
+        ty: block_type,
         span: internal_baml_diagnostics::Span::fake(),
     }
 }
@@ -361,7 +337,7 @@ fn typecheck_statement(
                 span: span.clone(),
             })
         }
-        hir::Statement::SemicolonExpression { expr, span } => {
+        hir::Statement::Semicolon { expr, span } => {
             let typed_expr = typecheck_expression(expr, context, diagnostics);
             Some(thir::Statement::SemicolonExpression {
                 expr: typed_expr,
@@ -1214,9 +1190,9 @@ fn typecheck_expression(
                 meta: (span.clone(), field_type),
             }
         }
-        hir::Expression::ExpressionBlock(block, span) => {
+        hir::Expression::Block(block, span) => {
             let typed_block = typecheck_block(block, &mut context.clone(), diagnostics);
-            let block_type = typed_block.return_value.meta().1.clone();
+            let block_type = typed_block.ty.clone();
             thir::Expr::Block(Box::new(typed_block), (span.clone(), block_type))
         }
         hir::Expression::JinjaExpressionValue(_, span) => {
@@ -1455,8 +1431,8 @@ mod tests {
             .expect("Should have test_array function");
 
         // Check array access type
-        match &test_fn.body.return_value {
-            thir::Expr::ArrayAccess { meta, .. } => {
+        match &test_fn.body.trailing_expr {
+            Some(thir::Expr::ArrayAccess { meta, .. }) => {
                 meta.1
                     .as_ref()
                     .expect("Array access should have inferred type")
