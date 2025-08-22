@@ -862,7 +862,7 @@ dependencies = [
  "chrono",
  "clap",
  "clap-cargo",
- "colored 2.2.0",
+ "colored",
  "console 0.15.11",
  "console_log",
  "ctrlc",
@@ -909,7 +909,7 @@ dependencies = [
  "similar",
  "static_assertions",
  "stream-cancel",
- "strsim 0.11.1",
+ "strsim",
  "strum",
  "strum_macros",
  "test-log",
@@ -968,14 +968,14 @@ version = "0.205.0"
 dependencies = [
  "baml-compiler",
  "baml-vm",
- "base64 0.13.1",
+ "base64 0.22.1",
  "dissimilar",
  "either",
  "env_logger",
  "expect-test",
  "indoc",
  "internal-baml-core",
- "itertools 0.13.0",
+ "itertools 0.14.0",
  "pretty_assertions",
  "strip-ansi-escapes",
 ]
@@ -986,11 +986,12 @@ version = "0.205.0"
 dependencies = [
  "anyhow",
  "chrono",
- "colored 2.2.0",
+ "colored",
  "lazy_static",
  "log",
  "serde",
  "serde_json",
+ "serial_test",
  "thiserror 2.0.12",
 ]
 
@@ -1040,6 +1041,7 @@ dependencies = [
  "futures",
  "indexmap 2.10.0",
  "internal-baml-codegen",
+ "internal-baml-core",
  "jsonish",
  "libc",
  "log",
@@ -1090,7 +1092,7 @@ dependencies = [
  "serde_with",
  "sha2",
  "static_assertions",
- "strsim 0.11.1",
+ "strsim",
  "strum",
  "strum_macros",
  "time",
@@ -1132,7 +1134,7 @@ dependencies = [
  "cfg-if",
  "chrono",
  "clap",
- "colored 2.2.0",
+ "colored",
  "console_error_panic_hook",
  "console_log",
  "cowstr",
@@ -1202,7 +1204,7 @@ dependencies = [
  "shell-escape",
  "static_assertions",
  "stream-cancel",
- "strsim 0.11.1",
+ "strsim",
  "strum",
  "strum_macros",
  "tempfile",
@@ -1314,6 +1316,7 @@ dependencies = [
  "futures",
  "indexmap 2.10.0",
  "internal-baml-codegen",
+ "internal-baml-core",
  "log",
  "napi",
  "napi-build",
@@ -1331,7 +1334,7 @@ dependencies = [
  "anyhow",
  "baml-compiler",
  "baml-types",
- "colored 2.2.0",
+ "colored",
  "criterion",
  "internal-baml-core",
  "internal-baml-diagnostics",
@@ -1354,6 +1357,7 @@ dependencies = [
  "env_logger",
  "indexmap 2.10.0",
  "internal-baml-codegen",
+ "internal-baml-core",
  "libc",
  "once_cell",
  "prost",
@@ -1374,12 +1378,6 @@ dependencies = [
  "quote",
  "syn 2.0.104",
 ]
-
-[[package]]
-name = "base64"
-version = "0.13.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e1b586273c5702936fe7b7d6896644d8be71e6314cfe09d3167c95f712589e8"
 
 [[package]]
 name = "base64"
@@ -1519,7 +1517,7 @@ dependencies = [
  "serde",
  "serde_json",
  "static_assertions",
- "strsim 0.11.1",
+ "strsim",
  "strum",
  "strum_macros",
  "uuid",
@@ -1736,7 +1734,7 @@ dependencies = [
  "anstream",
  "anstyle",
  "clap_lex",
- "strsim 0.11.1",
+ "strsim",
 ]
 
 [[package]]
@@ -1799,15 +1797,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "117725a109d387c937a1533ce01b450cbde6b88abceea8473c4d7a85853cda3c"
 dependencies = [
  "lazy_static",
- "windows-sys 0.59.0",
-]
-
-[[package]]
-name = "colored"
-version = "3.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fde0e0ec90c9dfb3b4b1a0891a7dcd0e2bffde2f7efed5fe7c9bb00e5bfb915e"
-dependencies = [
  "windows-sys 0.59.0",
 ]
 
@@ -2143,7 +2132,7 @@ dependencies = [
  "ident_case",
  "proc-macro2",
  "quote",
- "strsim 0.11.1",
+ "strsim",
  "syn 2.0.104",
 ]
 
@@ -3663,16 +3652,16 @@ dependencies = [
  "baml-types",
  "base64 0.22.1",
  "cfg-if",
- "colored 2.2.0",
+ "colored",
  "either",
  "env_logger",
  "filetime",
  "generators-lib",
  "indexmap 2.10.0",
  "internal-baml-core",
- "itertools 0.13.0",
+ "itertools 0.14.0",
  "log",
- "pathdiff 0.1.0",
+ "pathdiff 0.2.3",
  "regex",
  "semver",
  "serde",
@@ -3691,7 +3680,7 @@ dependencies = [
  "baml-derive",
  "baml-rpc",
  "baml-types",
- "base64 0.13.1",
+ "base64 0.22.1",
  "bstd",
  "chrono",
  "derive_builder",
@@ -3707,7 +3696,7 @@ dependencies = [
  "internal-baml-parser-database",
  "internal-baml-prompt-parser",
  "internal-llm-client",
- "itertools 0.13.0",
+ "itertools 0.14.0",
  "log",
  "minijinja",
  "once_cell",
@@ -3717,7 +3706,7 @@ dependencies = [
  "serde",
  "serde_json",
  "shellwords",
- "strsim 0.10.0",
+ "strsim",
  "strum",
  "textwrap",
  "whoami",
@@ -3728,12 +3717,12 @@ name = "internal-baml-diagnostics"
 version = "0.205.0"
 dependencies = [
  "anyhow",
- "colored 2.2.0",
+ "colored",
  "indoc",
  "log",
  "pest",
  "serde",
- "strsim 0.10.0",
+ "strsim",
 ]
 
 [[package]]
@@ -3743,7 +3732,7 @@ dependencies = [
  "anyhow",
  "askama",
  "baml-types",
- "colored 2.2.0",
+ "colored",
  "env_logger",
  "indexmap 2.10.0",
  "internal-baml-core",
@@ -3753,7 +3742,7 @@ dependencies = [
  "minijinja",
  "serde",
  "serde_json",
- "strsim 0.11.1",
+ "strsim",
  "strum",
 ]
 
@@ -3764,7 +3753,7 @@ dependencies = [
  "anyhow",
  "askama",
  "baml-types",
- "colored 2.2.0",
+ "colored",
  "env_logger",
  "indexmap 2.10.0",
  "log",
@@ -3772,7 +3761,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
- "strsim 0.11.1",
+ "strsim",
  "strum",
 ]
 
@@ -3783,7 +3772,7 @@ dependencies = [
  "anyhow",
  "baml-derive",
  "baml-types",
- "colored 2.2.0",
+ "colored",
  "either",
  "enumflags2",
  "indexmap 2.10.0",
@@ -3792,7 +3781,7 @@ dependencies = [
  "internal-baml-jinja-types",
  "internal-baml-prompt-parser",
  "internal-llm-client",
- "itertools 0.13.0",
+ "itertools 0.14.0",
  "log",
  "ouroboros",
  "regex",
@@ -4016,7 +4005,7 @@ dependencies = [
  "assert-json-diff",
  "baml-types",
  "bstd",
- "colored 2.2.0",
+ "colored",
  "cowstr",
  "criterion",
  "either",
@@ -4031,7 +4020,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
- "strsim 0.10.0",
+ "strsim",
  "test-log",
  "thiserror 2.0.12",
  "unicode-normalization",
@@ -4107,7 +4096,7 @@ dependencies = [
  "baml-types",
  "base64 0.21.7",
  "bytes",
- "colored 3.0.0",
+ "colored",
  "crossbeam",
  "crossbeam-channel",
  "dirs 5.0.1",
@@ -4371,8 +4360,7 @@ dependencies = [
 [[package]]
 name = "minijinja"
 version = "2.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e60ac08614cc09062820e51d5d94c2fce16b94ea4e5003bb81b99a95f84e876"
+source = "git+https://github.com/boundaryml/minijinja.git?branch=main#ee25c021c8bb78d7ca11fa99972918eea4585330"
 dependencies = [
  "aho-corasick",
  "indexmap 2.10.0",
@@ -5891,6 +5879,7 @@ dependencies = [
  "env_logger",
  "futures",
  "indexmap 2.10.0",
+ "internal-baml-core",
  "jsonish",
  "log",
  "magnus",
@@ -6661,12 +6650,6 @@ checksum = "2a8f8038e7e7969abb3f1b7c2a811225e9296da208539e0f79c5251d6cac0025"
 dependencies = [
  "vte",
 ]
-
-[[package]]
-name = "strsim"
-version = "0.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "73473c0e59e6d5812c5dfe2a064a6444949f089e20eec9a2e5506596494e4623"
 
 [[package]]
 name = "strsim"

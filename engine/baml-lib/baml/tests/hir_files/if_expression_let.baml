@@ -3,7 +3,7 @@ function simpleIf() -> string {
     x
 }
 
-// error: error: Error validating: This line is not a valid field or attribute definition. A valid property may look like: 'myProperty "some value"' for example, with no colons.
+// error: Error validating: This line is not a valid field or attribute definition. A valid property may look like: 'myProperty "some value"' for example, with no colons.
 //   -->  test.baml:2
 //    | 
 //  1 | function simpleIf() -> string {
@@ -38,4 +38,3 @@ function simpleIf() -> string {
 //    | 
 //  1 | function simpleIf() -> string {
 //    | 
-//

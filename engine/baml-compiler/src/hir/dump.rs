@@ -3,9 +3,9 @@
 use pretty::RcDoc;
 
 use crate::hir::{
-    Arrow, AssignOp, BinaryOperator, Block, Class, ClassConstructorField, Enum, EnumVariant,
-    ExprFunction, Expression, Field, Hir, LlmFunction, Parameter, Statement, TypeArg, TypeM,
-    TypeMeta, UnaryOperator,
+    AssignOp, BinaryOperator, Block, Class, ClassConstructorField, Enum, EnumVariant, ExprFunction,
+    Expression, Field, Function, Hir, LlmFunction, Parameter, Statement, TypeArg, TypeM, TypeMeta,
+    UnaryOperator,
 };
 
 impl Hir {
@@ -62,8 +62,8 @@ impl TypeM<TypeMeta> {
                 .append(RcDoc::text(", "))
                 .append(value.to_doc())
                 .append(RcDoc::text(">")),
-            TypeM::ClassName(name, _) => RcDoc::text(name.clone()),
-            TypeM::EnumName(name, _) => RcDoc::text(name.clone()),
+            TypeM::Class(name, _) => RcDoc::text(name.clone()),
+            TypeM::Enum(name, _) => RcDoc::text(name.clone()),
             TypeM::Union(types, _) => {
                 let mut docs = Vec::new();
                 for type_ in types {
@@ -74,13 +74,19 @@ impl TypeM<TypeMeta> {
                     .append(RcDoc::text(")"))
             }
             TypeM::Null(_) => RcDoc::text("null"),
-            TypeM::Arrow(Arrow { inputs, output }, _) => RcDoc::text("(")
+            TypeM::Function(
+                Function {
+                    params: inputs,
+                    return_type,
+                },
+                _,
+            ) => RcDoc::text("(")
                 .append(RcDoc::intersperse(
                     inputs.iter().map(|i| i.to_doc()),
                     RcDoc::text(", "),
                 ))
                 .append(RcDoc::text(") -> "))
-                .append(output.to_doc()),
+                .append(return_type.to_doc()),
         };
 
         let mut doc = base;
@@ -146,6 +152,10 @@ impl Statement {
                 .append(RcDoc::space())
                 .append(expr.to_doc())
                 .append(RcDoc::text(";")),
+            Statement::Assert { condition, .. } => RcDoc::text("assert")
+                .append(RcDoc::space())
+                .append(condition.to_doc())
+                .append(RcDoc::text(";")),
             Statement::Expression { expr, .. } => expr.to_doc(),
             Statement::SemicolonExpression { expr, .. } => expr.to_doc(),
             Statement::While {
@@ -179,6 +189,40 @@ impl Statement {
                 .append(RcDoc::text("}")),
             Statement::Break(_) => RcDoc::text("break").append(RcDoc::text(";")),
             Statement::Continue(_) => RcDoc::text("continue").append(RcDoc::text(";")),
+            Statement::CForLoop {
+                condition,
+                after,
+                block,
+            } => {
+                let condition = condition.as_ref().map(Expression::to_doc);
+                let after = after.as_ref().map(|b| b.to_doc());
+                let block = block.to_doc();
+
+                // for with no init statement.
+                let mut cur = RcDoc::text("for")
+                    .append(RcDoc::space())
+                    .append(RcDoc::text("("))
+                    .append(RcDoc::text(";"));
+
+                cur = match condition {
+                    Some(cond) => cur.append(cond),
+                    None => cur,
+                };
+
+                cur = cur.append(RcDoc::text(";"));
+
+                cur = match after {
+                    Some(after) => cur.append(after),
+                    None => cur,
+                };
+
+                cur = cur.append(RcDoc::text(")")).append(RcDoc::space());
+
+                cur.append(RcDoc::text("{"))
+                    .append(RcDoc::space())
+                    .append(block)
+                    .append(RcDoc::text("}"))
+            }
         }
     }
 }
@@ -344,7 +388,7 @@ impl Expression {
                 condition,
                 if_branch,
                 else_branch,
-                span,
+                ..
             } => {
                 let mut doc = RcDoc::text("if")
                     .append(RcDoc::space())

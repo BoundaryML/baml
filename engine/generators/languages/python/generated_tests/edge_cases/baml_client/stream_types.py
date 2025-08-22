@@ -99,7 +99,7 @@ class MixedEdgeCases(BaseModel):
     singleChar: typing.Optional[str] = None
     veryLongArray: typing.List[str]
     deeplyNestedMap: typing.Dict[str, typing.Dict[str, typing.Dict[str, str]]]
-    mixedTypeArray: typing.List[typing.Union[str, int, bool]]
+    mixedTypeArray: typing.List[typing.Optional[typing.Union[str, int, bool]]]
     optionalEverything: typing.Optional["OptionalEverything"] = None
 
 class NestedNullable(BaseModel):

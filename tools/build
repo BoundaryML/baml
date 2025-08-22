@@ -164,7 +164,8 @@ case "$_path" in
   /engine | /engine/* )
     command=""
     if [ "$_test_mode" -eq 1 ]; then
-      command="cargo test ${command}"
+      # command="cargo test ${command}"
+      command="cd ${_repo_root}/engine/baml-lib/baml && UPDATE_EXPECT=1 cargo nextest run enum_comparison_edge_cases enum_string_comparison"
     else
       command="cargo build ${command}"
     fi
@@ -209,7 +210,7 @@ case "$_path" in
       # command="${command} && BAML_LOG=debug,baml_runtime=trace infisical run --env=test -- uv run pytest -s tests/test_functions.py::test_streaming"
       # command="${command} && BAML_LOG=debug,baml_runtime=trace  uv run pytest -s tests/test_functions.py::test_should_work_with_vertex_claude"
       # command="${command} && BAML_LOG=info infisical run --env=test -- uv run pytest"
-      command="${command} && BAML_LOG=info  uv run pytest -s"
+      command="${command} && BAML_LOG=info  uv run pytest -s tests/test_dynamic_enum_request.py"
     fi
     if [ "$_watch_mode" -eq 1 ]; then
       npx nodemon \
@@ -234,7 +235,7 @@ case "$_path" in
     if [ "$_test_mode" -eq 1 ]; then
       #command="${command} && pnpm integ-tests"
       # command="${command} && BAML_LOG=${BAML_LOG}  infisical run -- pnpm test tests/integ-tests.test.ts"
-      command="${command} && BAML_LOG=${BAML_LOG} pnpm test tests/providers/aws.test.ts"
+      command="${command} && BAML_LOG=${BAML_LOG} pnpm test tests/dynamic-enum-request.test.ts"
     fi
     if [ "$_watch_mode" -eq 1 ]; then
       npx nodemon \

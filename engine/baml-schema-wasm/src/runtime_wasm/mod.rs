@@ -19,7 +19,7 @@ use baml_types::{BamlMediaType, BamlValue, GeneratorOutputType, ResponseCheck, T
 use futures::{channel::mpsc, StreamExt};
 use indexmap::IndexMap;
 use internal_baml_codegen::version_check::{check_version, GeneratorType, VersionCheckMode};
-use internal_baml_core::ir::repr::Walker;
+use internal_baml_core::{feature_flags::FeatureFlags, ir::repr::Walker};
 use internal_llm_client::AllowedRoleMetadata;
 use itertools::join;
 use js_sys::{Promise, Uint8Array};
@@ -241,7 +241,9 @@ impl WasmProject {
                 ))
             })?;
 
-        BamlRuntime::from_file_content(&self.root_dir_name, &hm, env_vars)
+        let feature_flags = FeatureFlags::new(); // TODO: get these from the js env.
+
+        BamlRuntime::from_file_content(&self.root_dir_name, &hm, env_vars, feature_flags)
             .map(|r| WasmRuntime { runtime: r })
             .map_err(|e| match e.downcast::<DiagnosticsError>() {
                 Ok(e) => {
@@ -1560,7 +1562,11 @@ impl WasmRuntime {
 
     #[wasm_bindgen]
     pub async fn run_tests(
-        &mut self,
+        // NOTE: This needs to be `&self` so that the runtime can be read
+        // by the UI, e.g to re-enumerate functions. In case you *really* need `&mut` access,
+        // consider `RwLock`, ideally only for the data you're going to be mutating and not the
+        // entire runtime.
+        &self,
         function_test_pairs: js_sys::Array,
         on_partial_response: js_sys::Function,
         get_baml_src_cb: js_sys::Function,

@@ -108,4 +108,62 @@ async function main() {
 
 main();
 ```
+
+```go Go
+package main
+
+import (
+    "bufio"
+    "context"
+    "fmt"
+    "os"
+    "strings"
+    
+    b "example.com/myproject/baml_client"
+    "example.com/myproject/baml_client/types"
+)
+
+func main() {
+    ctx := context.Background()
+    var messages []types.MyUserMessage
+    
+    scanner := bufio.NewScanner(os.Stdin)
+    
+    for {
+        fmt.Print("Enter your message (or 'quit' to exit): ")
+        if !scanner.Scan() {
+            break
+        }
+        
+        content := scanner.Text()
+        if strings.ToLower(content) == "quit" {
+            break
+        }
+        
+        // Add user message to history
+        messages = append(messages, types.MyUserMessage{
+            // Go generates constructor functions for literal unions like "user" | "assistant"
+            // The naming pattern is Union{Number}K{variant1}OrK{variant2}__NewK{variant}()
+            Role:    types.Union2KuserOrKassistant__NewKuser(),
+            Content: content,
+        })
+        
+        // Get AI response
+        agentResponse, err := b.ChatWithLLM(ctx, messages)
+        if err != nil {
+            fmt.Printf("Error: %v\n", err)
+            continue
+        }
+        
+        fmt.Printf("AI: %s\n\n", agentResponse)
+        
+        // Add agent's response to chat history
+        messages = append(messages, types.MyUserMessage{
+            // Constructor for "assistant" variant of the "user" | "assistant" union
+            Role:    types.Union2KuserOrKassistant__NewKassistant(),
+            Content: agentResponse,
+        })
+    }
+}
+```
 </CodeGroup>

@@ -2,13 +2,16 @@
 //!
 //! This files contains the convertions between Baml AST nodes to HIR nodes.
 
-use baml_types::{type_meta::base::StreamingBehavior, Constraint, ConstraintLevel, TypeValue};
-use internal_baml_ast::ast::{self, App, Attribute, WithName, WithSpan};
+use baml_types::{
+    ir_type::UnionTypeGeneric, type_meta::base::StreamingBehavior, Constraint, ConstraintLevel,
+    TypeIR, TypeValue,
+};
+use internal_baml_ast::ast::{self, App, AssertStmt, Attribute, ReturnStmt, WithName, WithSpan};
 use internal_baml_diagnostics::Span;
 
 use crate::hir::{
     self, Block, Class, ClassConstructor, ClassConstructorField, Enum, EnumVariant, ExprFunction,
-    Expression, Field, Hir, LlmFunction, Parameter, Statement, TypeArg, TypeM, TypeMeta,
+    Expression, Field, Hir, LlmFunction, Parameter, Statement, TypeArg,
 };
 
 impl Hir {
@@ -50,24 +53,23 @@ impl Hir {
     }
 }
 
-impl TypeM<TypeMeta> {
-    pub fn from_ast_optional(r#type: Option<&ast::FieldType>) -> Self {
-        match r#type {
-            Some(r#type) => Self::from_ast(r#type),
-            None => Self::Null(TypeMeta {
-                span: Span::fake(),
-                constraints: Vec::new(),
-                streaming_behavior: StreamingBehavior::default(),
-            }),
-        }
+pub fn type_ir_from_ast_optional(r#type: Option<&ast::FieldType>) -> TypeIR {
+    match r#type {
+        Some(r#type) => Self::from_ast(r#type),
+        None => Self::Null(TypeMeta {
+            span: Span::fake(),
+            constraints: Vec::new(),
+            streaming_behavior: StreamingBehavior::default(),
+        }),
     }
+}
 
-    pub fn from_ast(type_: &ast::FieldType) -> Self {
-        let mut constraints = Vec::new();
-        let mut streaming_behavior = StreamingBehavior::default();
+pub fn type_ir_from_ast(type_: &ast::FieldType) -> TypeIR {
+    let mut constraints = Vec::new();
+    let mut streaming_behavior = StreamingBehavior::default();
 
-        // Convert attributes to constraints and streaming behavior
-        type_.attributes().iter().for_each(|attr: &Attribute| {
+    // Convert attributes to constraints and streaming behavior
+    type_.attributes().iter().for_each(|attr: &Attribute| {
         match attr.name.name() {
             // Handle constraint attributes
             "assert" | "check" => {
@@ -122,86 +124,71 @@ impl TypeM<TypeMeta> {
         }
     });
 
-        let meta = TypeMeta {
-            span: type_.span().clone(),
-            constraints,
-            streaming_behavior,
-        };
+    let meta = TypeMeta {
+        span: type_.span().clone(),
+        constraints,
+        streaming_behavior,
+    };
 
-        match type_ {
-            ast::FieldType::Symbol(_, name, _) => {
-                if name.name().starts_with("Enum") {
-                    TypeM::EnumName(name.name().to_string(), meta)
-                } else {
-                    TypeM::ClassName(name.name().to_string(), meta)
-                }
+    match type_ {
+        ast::FieldType::Symbol(_, name, _) => {
+            if name.name().starts_with("Enum") {
+                TypeM::Enum(name.name().to_string(), meta)
+            } else {
+                TypeM::Class(name.name().to_string(), meta)
             }
-            ast::FieldType::Primitive(_, prim, _, _) => match prim {
-                TypeValue::Int => TypeM::Int(meta),
-                TypeValue::String => TypeM::String(meta),
-                TypeValue::Bool => TypeM::Bool(meta),
-                TypeValue::Float => TypeM::String(meta), // TODO: Add Float type to TypeM
-                TypeValue::Null => TypeM::String(meta),  // TODO: Add Null type to TypeM
-                TypeValue::Media(_) => TypeM::String(meta), // TODO: Add Media type to TypeM
-            },
-            ast::FieldType::List(_, inner, dims, _, _) => {
-                // Respect multi-dimensional arrays (e.g., int[][] has dims=2)
-                let mut lowered_inner = Self::from_ast(inner);
-                for _ in 0..*dims {
-                    lowered_inner = TypeM::Array(Box::new(lowered_inner), meta.clone());
-                }
-                lowered_inner
-            }
-            ast::FieldType::Map(_, box_pair, _, _) => TypeM::Map(
-                Box::new(Self::from_ast(&box_pair.0)),
-                Box::new(Self::from_ast(&box_pair.1)),
-                meta,
-            ),
-            ast::FieldType::Union(_, types, _, _) => {
-                TypeM::Union(types.iter().map(Self::from_ast).collect(), meta)
-            }
-            _ => TypeM::String(meta), // Default case for other variants
         }
-    }
-    pub fn get_meta(&self) -> &TypeMeta {
-        match self {
-            TypeM::Int(meta) => meta,
-            TypeM::String(meta) => meta,
-            TypeM::Float(meta) => meta,
-            TypeM::Bool(meta) => meta,
-            TypeM::Null(meta) => meta,
-            TypeM::Array(_, meta) => meta,
-            TypeM::Map(_, _, meta) => meta,
-            TypeM::ClassName(_, meta) => meta,
-            TypeM::EnumName(_, meta) => meta,
-            TypeM::Union(_, meta) => meta,
-            TypeM::Arrow(_, meta) => meta,
+        ast::FieldType::Primitive(_, prim, _, _) => match prim {
+            TypeValue::Int => TypeM::Int(meta),
+            TypeValue::String => TypeM::String(meta),
+            TypeValue::Bool => TypeM::Bool(meta),
+            TypeValue::Float => TypeM::String(meta), // TODO: Add Float type to TypeM
+            TypeValue::Null => TypeM::String(meta),  // TODO: Add Null type to TypeM
+            TypeValue::Media(_) => TypeM::String(meta), // TODO: Add Media type to TypeM
+        },
+        ast::FieldType::List(_, inner, dims, _, _) => {
+            // Respect multi-dimensional arrays (e.g., int[][] has dims=2)
+            let mut lowered_inner = Self::from_ast(inner);
+            for _ in 0..*dims {
+                lowered_inner = TypeM::Array(Box::new(lowered_inner), meta.clone());
+            }
+            lowered_inner
         }
+        ast::FieldType::Map(_, box_pair, _, _) => TypeM::Map(
+            Box::new(type_ir_from_ast(&box_pair.0)),
+            Box::new(type_ir_from_ast(&box_pair.1)),
+            meta,
+        ),
+        ast::FieldType::Union(_, types, _, _) => TypeIR::Union(
+            UnionTypeGeneric::new_unsafe(types.iter().map(|ast| type_ir_from_ast(ast)).collect()),
+            meta,
+        ),
+        _ => TypeIR::Primitive(TypeValue::String, meta), // Default case for other variants
     }
+}
 
-    /// Is the type complex enough that it should be parenthesized if it's not
-    /// top-level?
-    pub fn complex(&self) -> bool {
-        let meta = self.get_meta();
-        if meta.streaming_behavior != StreamingBehavior::default() {
-            return true;
-        }
-        if !meta.constraints.is_empty() {
-            return true;
-        }
-        match self {
-            TypeM::Union(_, _) => true,
-            TypeM::Int(_) => false,
-            TypeM::Float(_) => false,
-            TypeM::String(_) => false,
-            TypeM::Bool(_) => false,
-            TypeM::Array(_, _) => false,
-            TypeM::Map(_, _, _) => false,
-            TypeM::ClassName(_, _) => false,
-            TypeM::EnumName(_, _) => false,
-            TypeM::Null(_) => false,
-            TypeM::Arrow(_, _) => true,
-        }
+/// Is the type complex enough that it should be parenthesized if it's not
+/// top-level?
+pub fn complex(type_: &TypeIR) -> bool {
+    let meta = type_.meta();
+    if meta.streaming_behavior != StreamingBehavior::default() {
+        return true;
+    }
+    if !meta.constraints.is_empty() {
+        return true;
+    }
+    match type_ {
+        TypeIR::Union(_, _) => true,
+        TypeIR::Int(_) => false,
+        TypeIR::Float(_) => false,
+        TypeIR::String(_) => false,
+        TypeIR::Bool(_) => false,
+        TypeIR::Array(_, _) => false,
+        TypeIR::Map(_, _, _) => false,
+        TypeIR::Class(_, _) => false,
+        TypeIR::Enum(_, _) => false,
+        TypeIR::Null(_) => false,
+        TypeIR::Function(_, _) => true,
     }
 }
 
@@ -292,140 +279,22 @@ impl Block {
 
         // Process statements, checking for if expressions in let bindings
         for stmt in &block.stmts {
-            match stmt {
-                ast::Stmt::Break(span) => statements.push(Statement::Break(span.clone())),
-                ast::Stmt::Continue(span) => statements.push(Statement::Continue(span.clone())),
-                ast::Stmt::WhileLoop(ast::WhileStmt {
-                    condition,
-                    body,
-                    span,
-                }) => {
-                    // lowering to HIR is trivial, since HIR maps 1:1 with this.
-
-                    let hir_condition = Expression::from_ast(condition);
-
-                    let hir_body = Block::from_expression_block(body);
-
-                    statements.push(Statement::While {
-                        condition: Box::new(hir_condition),
-                        block: hir_body,
-                        span: span.clone(),
-                    })
-                }
-                ast::Stmt::Assign(ast::AssignStmt {
-                    identifier,
-                    expr,
-                    span,
-                }) => {
-                    statements.push(Statement::Assign {
-                        name: identifier.to_string(),
-                        value: Expression::from_ast(expr),
-                        span: span.clone(),
-                    });
-                }
-                ast::Stmt::AssignOp(ast::AssignOpStmt {
-                    identifier,
-                    assign_op,
-                    expr,
-                    span,
-                }) => {
-                    statements.push(Statement::AssignOp {
-                        name: identifier.to_string(),
-                        assign_op: match assign_op {
-                            ast::AssignOp::AddAssign => hir::AssignOp::AddAssign,
-                            ast::AssignOp::SubAssign => hir::AssignOp::SubAssign,
-                            ast::AssignOp::MulAssign => hir::AssignOp::MulAssign,
-                            ast::AssignOp::DivAssign => hir::AssignOp::DivAssign,
-                            ast::AssignOp::ModAssign => hir::AssignOp::ModAssign,
-                            ast::AssignOp::BitXorAssign => hir::AssignOp::BitXorAssign,
-                            ast::AssignOp::BitAndAssign => hir::AssignOp::BitAndAssign,
-                            ast::AssignOp::BitOrAssign => hir::AssignOp::BitOrAssign,
-                            ast::AssignOp::ShlAssign => hir::AssignOp::ShlAssign,
-                            ast::AssignOp::ShrAssign => hir::AssignOp::ShrAssign,
-                        },
-                        value: Expression::from_ast(expr),
-                        span: span.clone(),
-                    });
-                }
-                ast::Stmt::Let(ast::LetStmt {
-                    identifier,
-                    is_mutable,
-                    expr,
-                    span,
-                }) => {
-                    let lifted_expr = Expression::from_ast(expr);
-
-                    let stmt = if *is_mutable {
-                        Statement::DeclareAndAssign {
-                            name: identifier.to_string(),
-                            value: lifted_expr,
-                            span: span.clone(),
-                        }
-                    } else {
-                        Statement::Let {
-                            name: identifier.to_string(),
-                            value: lifted_expr,
-                            span: span.clone(),
-                        }
-                    };
-
-                    // Then add the actual let statement
-                    statements.push(stmt);
-                }
-                ast::Stmt::ForLoop(ast::ForLoopStmt {
-                    identifier,
-                    iterator,
-                    body,
-                    span,
-                }) => {
-                    // Lower for loop to HIR
-                    let lifted_iterator = Expression::from_ast(iterator);
-
-                    // Add the for loop statement
-                    statements.push(Statement::ForLoop {
-                        identifier: identifier.name().to_string(),
-                        iterator: Box::new(lifted_iterator),
-                        block: Block::from_expression_block(body),
-                        span: span.clone(),
-                    });
-                }
-                ast::Stmt::Expression(expr) => {
-                    let hir_expr = Expression::from_ast(expr);
-
-                    // Expressions that contain blocks themselves will deal with
-                    // return expressions recursively. But expressions that have
-                    // no blocks (like function calls or 2 + 2) must drop the
-                    // returned value, so we insert semicolon expressions.
-                    if matches!(
-                        expr,
-                        ast::Expression::If(..) | ast::Expression::ExprBlock(..)
-                    ) {
-                        statements.push(Statement::Expression {
-                            expr: hir_expr,
-                            span: expr.span().clone(),
-                        });
-                    } else {
-                        statements.push(Statement::SemicolonExpression {
-                            expr: hir_expr,
-                            span: expr.span().clone(),
-                        });
-                    }
-                }
-            }
+            let hir_stmt = lower_stmt(stmt);
+            statements.push(hir_stmt);
         }
 
         if let Some(block_final_expr) = block.expr.as_ref() {
-            let lifted_expr = Expression::from_ast(block_final_expr);
+            let final_expr = Expression::from_ast(block_final_expr);
 
             // Then add the final statement
             statements.push(if is_function_body {
                 Statement::Return {
-                    expr: lifted_expr,
+                    expr: final_expr,
                     span: block_final_expr.span().clone(),
                 }
             } else {
                 Statement::Expression {
-                    expr: lifted_expr,
+                    expr: final_expr,
                     span: block_final_expr.span().clone(),
                 }
             });
@@ -433,6 +302,174 @@ impl Block {
 
         Block { statements }
     }
+}
+
+fn lower_stmt(stmt: &ast::Stmt) -> Statement {
+    let hir_stmt = match stmt {
+        ast::Stmt::CForLoop(stmt) => {
+            // we'll add  a block if we an init statement, otherwise we'll just
+            // use the current context to push the while statement.
+
+            let condition = stmt.condition.as_ref().map(Expression::from_ast);
+            let init = stmt.init_stmt.as_ref().map(|b| lower_stmt(b));
+            let block = Block::from_expression_block(&stmt.body);
+            let after = stmt
+                .after_stmt
+                .as_ref()
+                .map(|b| lower_stmt(b))
+                .map(Box::new);
+
+            let inner_loop = match (condition, after) {
+                (Some(condition), None) => Statement::While {
+                    condition,
+                    block,
+                    span: stmt.span.clone(),
+                },
+                (condition, after) => Statement::CForLoop {
+                    condition,
+                    after,
+                    block,
+                },
+            };
+
+            match init {
+                Some(init) => {
+                    // use a block
+                    Statement::Expression {
+                        expr: Expression::ExpressionBlock(
+                            Block {
+                                statements: vec![init, inner_loop],
+                            },
+                            stmt.span.clone(),
+                        ),
+                        span: stmt.span.clone(),
+                    }
+                }
+                // just inner loop
+                None => inner_loop,
+            }
+        }
+        ast::Stmt::Break(span) => Statement::Break(span.clone()),
+        ast::Stmt::Continue(span) => Statement::Continue(span.clone()),
+        ast::Stmt::WhileLoop(ast::WhileStmt {
+            condition,
+            body,
+            span,
+        }) => {
+            // lowering to HIR is trivial, since HIR maps 1:1 with this.
+
+            let condition = Expression::from_ast(condition);
+
+            let body = Block::from_expression_block(body);
+
+            Statement::While {
+                condition,
+                block: body,
+                span: span.clone(),
+            }
+        }
+        ast::Stmt::Assign(ast::AssignStmt {
+            identifier,
+            expr,
+            span,
+        }) => Statement::Assign {
+            name: identifier.to_string(),
+            value: Expression::from_ast(expr),
+            span: span.clone(),
+        },
+        ast::Stmt::AssignOp(ast::AssignOpStmt {
+            identifier,
+            assign_op,
+            expr,
+            span,
+        }) => Statement::AssignOp {
+            name: identifier.to_string(),
+            assign_op: match assign_op {
+                ast::AssignOp::AddAssign => hir::AssignOp::AddAssign,
+                ast::AssignOp::SubAssign => hir::AssignOp::SubAssign,
+                ast::AssignOp::MulAssign => hir::AssignOp::MulAssign,
+                ast::AssignOp::DivAssign => hir::AssignOp::DivAssign,
+                ast::AssignOp::ModAssign => hir::AssignOp::ModAssign,
+                ast::AssignOp::BitXorAssign => hir::AssignOp::BitXorAssign,
+                ast::AssignOp::BitAndAssign => hir::AssignOp::BitAndAssign,
+                ast::AssignOp::BitOrAssign => hir::AssignOp::BitOrAssign,
+                ast::AssignOp::ShlAssign => hir::AssignOp::ShlAssign,
+                ast::AssignOp::ShrAssign => hir::AssignOp::ShrAssign,
+            },
+            value: Expression::from_ast(expr),
+            span: span.clone(),
+        },
+        ast::Stmt::Let(ast::LetStmt {
+            identifier,
+            is_mutable,
+            expr,
+            span,
+        }) => {
+            let lifted_expr = Expression::from_ast(expr);
+
+            if *is_mutable {
+                Statement::DeclareAndAssign {
+                    name: identifier.to_string(),
+                    value: lifted_expr,
+                    span: span.clone(),
+                }
+            } else {
+                Statement::Let {
+                    name: identifier.to_string(),
+                    value: lifted_expr,
+                    span: span.clone(),
+                }
+            }
+        }
+        ast::Stmt::ForLoop(ast::ForLoopStmt {
+            identifier,
+            iterator,
+            body,
+            span,
+        }) => {
+            // Lower for loop to HIR
+            let lifted_iterator = Expression::from_ast(iterator);
+
+            // Add the for loop statement
+            Statement::ForLoop {
+                identifier: identifier.name().to_string(),
+                iterator: Box::new(lifted_iterator),
+                block: Block::from_expression_block(body),
+                span: span.clone(),
+            }
+        }
+        ast::Stmt::Expression(expr) => {
+            let hir_expr = Expression::from_ast(expr);
+
+            // Expressions that contain blocks themselves will deal with
+            // return expressions recursively. But expressions that have
+            // no blocks (like function calls or 2 + 2) must drop the
+            // returned value, so we insert semicolon expressions.
+            if matches!(
+                expr,
+                ast::Expression::If(..) | ast::Expression::ExprBlock(..)
+            ) {
+                Statement::Expression {
+                    expr: hir_expr,
+                    span: expr.span().clone(),
+                }
+            } else {
+                Statement::SemicolonExpression {
+                    expr: hir_expr,
+                    span: expr.span().clone(),
+                }
+            }
+        }
+        ast::Stmt::Return(ReturnStmt { value, span }) => Statement::Return {
+            expr: Expression::from_ast(value),
+            span: span.clone(),
+        },
+        ast::Stmt::Assert(AssertStmt { value, span }) => Statement::Assert {
+            condition: Expression::from_ast(value),
+            span: span.clone(),
+        },
+    };
+    hir_stmt
 }
 
 impl Expression {
@@ -527,12 +564,9 @@ impl Expression {
                 // Expression blocks are lowered to HIR preserving their structure
                 // This maintains proper scoping - variables defined inside the block
                 // are only visible within that block
-                Expression::ExpressionBlock(
-                    Box::new(Block::from_expression_block(block)),
-                    span.clone(),
-                )
+                Expression::ExpressionBlock(Block::from_expression_block(block), span.clone())
             }
-            ast::Expression::Lambda(_args, _body, span) => {
+            ast::Expression::Lambda(_, _, _) => {
                 todo!("lambdas are not yet implemented")
             }
             ast::Expression::ClassConstructor(cc, span) => {

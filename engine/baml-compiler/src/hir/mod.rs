@@ -31,376 +31,17 @@ pub struct Hir {
     pub global_assignments: baml_types::BamlMap<String, Expression>,
 }
 
-pub type Type = TypeM<TypeMeta>;
-
-#[derive(Clone, Debug)]
-pub enum TypeM<M> {
-    Int(M),
-    String(M),
-    Float(M),
-    Bool(M),
-    Null(M),
-    Array(Box<TypeM<M>>, M),
-    Map(Box<TypeM<M>>, Box<TypeM<M>>, M),
-    ClassName(String, M),
-    EnumName(String, M),
-    Union(Vec<TypeM<M>>, M),
-    Arrow(Arrow<M>, M),
-}
-
-pub fn to_ir_type(type_: &Type) -> TypeIR {
-    use baml_types::ir_type::type_meta;
-    use baml_types::ir_type::{StreamingMode, TypeGeneric, TypeValue};
-
-    let get_meta = |type_meta: &TypeMeta| type_meta::IR {
-        constraints: type_meta.constraints.clone(),
-        streaming_behavior: type_meta.streaming_behavior.clone(),
-    };
-
-    match type_ {
-        TypeM::Int(type_meta) => TypeGeneric::Primitive(TypeValue::Int, get_meta(type_meta)),
-        TypeM::String(type_meta) => TypeGeneric::Primitive(TypeValue::String, get_meta(type_meta)),
-        TypeM::Float(type_meta) => TypeGeneric::Primitive(TypeValue::Float, get_meta(type_meta)),
-        TypeM::Bool(type_meta) => TypeGeneric::Primitive(TypeValue::Bool, get_meta(type_meta)),
-        TypeM::Null(type_meta) => TypeGeneric::Primitive(TypeValue::Null, get_meta(type_meta)),
-        TypeM::Array(inner_type, type_meta) => {
-            TypeGeneric::List(Box::new(to_ir_type(inner_type)), get_meta(type_meta))
-        }
-        TypeM::Map(key_type, value_type, type_meta) => TypeGeneric::Map(
-            Box::new(to_ir_type(key_type)),
-            Box::new(to_ir_type(value_type)),
-            get_meta(type_meta),
-        ),
-        TypeM::ClassName(name, type_meta) => TypeGeneric::Class {
-            name: name.clone(),
-            mode: StreamingMode::NonStreaming, // Default to non-streaming
-            dynamic: false,                    // Default to static
-            meta: get_meta(type_meta),
-        },
-        TypeM::EnumName(name, type_meta) => TypeGeneric::Enum {
-            name: name.clone(),
-            dynamic: false, // Default to static
-            meta: get_meta(type_meta),
-        },
-        TypeM::Union(types, type_meta) => {
-            // Convert all union types
-            let ir_types: Vec<TypeIR> = types.iter().map(to_ir_type).collect();
-
-            // Use the public union_with_meta function to create the union
-            TypeGeneric::union_with_meta(ir_types, get_meta(type_meta))
-        }
-        TypeM::Arrow(arrow, type_meta) => {
-            // Convert arrow type (function type)
-            let param_types: Vec<TypeIR> = arrow.inputs.iter().map(to_ir_type).collect();
-            let return_type = to_ir_type(&arrow.output);
-
-            let arrow_ir = baml_types::ir_type::ArrowGeneric {
-                param_types,
-                return_type,
-            };
-
-            TypeGeneric::Arrow(Box::new(arrow_ir), get_meta(type_meta))
-        }
-    }
-}
-
-pub fn from_ir_type(ir_type: &TypeIR) -> Type {
-    use baml_types::ir_type::{LiteralValue, TypeGeneric, TypeValue};
-
-    let make_meta = |ir_meta: &baml_types::ir_type::type_meta::IR| TypeMeta {
-        span: Span::fake(),
-        constraints: ir_meta.constraints.clone(),
-        streaming_behavior: ir_meta.streaming_behavior.clone(),
-    };
-
-    match ir_type {
-        TypeGeneric::Primitive(TypeValue::Int, ir_meta) => TypeM::Int(make_meta(ir_meta)),
-        TypeGeneric::Primitive(TypeValue::String, ir_meta) => TypeM::String(make_meta(ir_meta)),
-        TypeGeneric::Primitive(TypeValue::Float, ir_meta) => TypeM::Float(make_meta(ir_meta)),
-        TypeGeneric::Primitive(TypeValue::Bool, ir_meta) => TypeM::Bool(make_meta(ir_meta)),
-        TypeGeneric::Primitive(TypeValue::Null, ir_meta) => TypeM::Null(make_meta(ir_meta)),
-        TypeGeneric::Primitive(TypeValue::Media(_), ir_meta) => {
-            // Media types are not directly supported in TypeM, so we fall back to a string representation
-            // This is a lossy conversion - media types in IR become strings in HIR
-            TypeM::String(make_meta(ir_meta))
-        }
-        TypeGeneric::List(inner_ir, ir_meta) => {
-            TypeM::Array(Box::new(from_ir_type(inner_ir)), make_meta(ir_meta))
-        }
-        TypeGeneric::Map(key_ir, value_ir, ir_meta) => TypeM::Map(
-            Box::new(from_ir_type(key_ir)),
-            Box::new(from_ir_type(value_ir)),
-            make_meta(ir_meta),
-        ),
-        TypeGeneric::Class { name, meta, .. } => {
-            // Note: We lose streaming mode and dynamic flag information in the conversion
-            TypeM::ClassName(name.clone(), make_meta(meta))
-        }
-        TypeGeneric::Enum { name, meta, .. } => {
-            // Note: We lose dynamic flag information in the conversion
-            TypeM::EnumName(name.clone(), make_meta(meta))
-        }
-        TypeGeneric::Union(_union_type, ir_meta) => {
-            // Convert union types by using the flattened representation
-            let flattened_types = ir_type.flatten();
-            let converted_types: Vec<Type> = flattened_types.iter().map(from_ir_type).collect();
-            TypeM::Union(converted_types, make_meta(ir_meta))
-        }
-        TypeGeneric::Arrow(arrow_ir, ir_meta) => {
-            let inputs: Vec<Type> = arrow_ir.param_types.iter().map(from_ir_type).collect();
-            let output = Box::new(from_ir_type(&arrow_ir.return_type));
-            let arrow = Arrow { inputs, output };
-            TypeM::Arrow(arrow, make_meta(ir_meta))
-        }
-        TypeGeneric::Literal(literal_value, ir_meta) => {
-            // Literal types are not directly supported in TypeM, so we convert them to their base type
-            // This is a lossy conversion - literal values become their base primitive types
-            match literal_value {
-                LiteralValue::String(_) => TypeM::String(make_meta(ir_meta)),
-                LiteralValue::Int(_) => TypeM::Int(make_meta(ir_meta)),
-                LiteralValue::Bool(_) => TypeM::Bool(make_meta(ir_meta)),
-            }
-        }
-        TypeGeneric::Tuple(tuple_types, ir_meta) => {
-            // Tuples are not directly supported in TypeM, so we convert them to arrays
-            // This is a lossy conversion - tuples become arrays of union types
-            if tuple_types.is_empty() {
-                // Empty tuple becomes array of null
-                TypeM::Array(
-                    Box::new(TypeM::Null(make_meta(ir_meta))),
-                    make_meta(ir_meta),
-                )
-            } else if tuple_types.len() == 1 {
-                // Single-element tuple becomes array of that type
-                TypeM::Array(Box::new(from_ir_type(&tuple_types[0])), make_meta(ir_meta))
-            } else {
-                // Multi-element tuple becomes array of union type
-                let converted_types: Vec<Type> = tuple_types.iter().map(from_ir_type).collect();
-                let union_type = TypeM::Union(converted_types, TypeMeta::default());
-                TypeM::Array(Box::new(union_type), make_meta(ir_meta))
-            }
-        }
-        TypeGeneric::RecursiveTypeAlias { name, meta, .. } => {
-            // Recursive type aliases are not directly supported in TypeM, so we treat them as class names
-            // This is a lossy conversion - recursive type aliases become class references
-            TypeM::ClassName(name.clone(), make_meta(meta))
-        }
-    }
-}
-
-impl<T: Default> TypeM<T> {
-    pub fn int() -> Self {
-        Self::Int(T::default())
-    }
-}
-
-impl<T> TypeM<T> {
-    pub fn name_for_user(&self) -> &'static str {
-        match self {
-            TypeM::Int(_) => "int",
-            TypeM::String(_) => "string",
-            TypeM::Float(_) => "float",
-            TypeM::Bool(_) => "bool",
-            TypeM::Null(_) => "null type",
-            TypeM::Array(type_m, _) => "array",
-            TypeM::Map(type_m, type_m1, _) => "map",
-            TypeM::ClassName(_, _) => "class",
-            TypeM::EnumName(_, _) => "enum",
-            TypeM::Union(type_ms, _) => "union",
-            TypeM::Arrow(arrow, _) => "function",
-        }
-    }
-}
-
-impl Type {
-    /// Returns true if two types are exactly equal except for their spans.
-    pub fn eq_up_to_span(&self, other: &Type) -> bool {
-        match (self, other) {
-            (TypeM::Int(a), TypeM::Int(b)) => a.eq_up_to_span(b),
-            (TypeM::Float(a), TypeM::Float(b)) => a.eq_up_to_span(b),
-            (TypeM::String(a), TypeM::String(b)) => a.eq_up_to_span(b),
-            (TypeM::Bool(a), TypeM::Bool(b)) => a.eq_up_to_span(b),
-            (TypeM::Null(a), TypeM::Null(b)) => a.eq_up_to_span(b),
-
-            (TypeM::Array(a, a_meta), TypeM::Array(b, b_meta)) => {
-                a.eq_up_to_span(b) && a_meta.eq_up_to_span(b_meta)
-            }
-
-            (TypeM::Map(a_key, a_val, a_meta), TypeM::Map(b_key, b_val, b_meta)) => {
-                a_key.eq_up_to_span(b_key)
-                    && a_val.eq_up_to_span(b_val)
-                    && a_meta.eq_up_to_span(b_meta)
-            }
-
-            (TypeM::ClassName(a, a_meta), TypeM::ClassName(b, b_meta)) => {
-                a == b && a_meta.eq_up_to_span(b_meta)
-            }
-
-            (TypeM::EnumName(a, a_meta), TypeM::EnumName(b, b_meta)) => {
-                a == b && a_meta.eq_up_to_span(b_meta)
-            }
-
-            (TypeM::Union(a_members, a_meta), TypeM::Union(b_members, b_meta)) => {
-                a_members.len() == b_members.len()
-                    && a_members
-                        .iter()
-                        .zip(b_members.iter())
-                        .all(|(a, b)| a.eq_up_to_span(b))
-                    && a_meta.eq_up_to_span(b_meta)
-            }
-
-            (TypeM::Arrow(a_fn, a_meta), TypeM::Arrow(b_fn, b_meta)) => {
-                a_fn.inputs.len() == b_fn.inputs.len()
-                    && a_fn
-                        .inputs
-                        .iter()
-                        .zip(b_fn.inputs.iter())
-                        .all(|(a, b)| a.eq_up_to_span(b))
-                    && a_fn.output.eq_up_to_span(&b_fn.output)
-                    && a_meta.eq_up_to_span(b_meta)
-            }
-
-            _ => false,
-        }
-    }
-
-    #[track_caller]
-    pub fn can_be_assigned(&self, other: &Type) -> bool {
-        // TODO: add diagnostics
-        match (self, other) {
-            (TypeM::Null(_), TypeM::Null(_))
-            | (TypeM::Bool(_), TypeM::Bool(_))
-            | (TypeM::Float(_), TypeM::Float(_))
-            | (TypeM::String(_), TypeM::String(_))
-            | (TypeM::Int(_), TypeM::Int(_)) => true,
-
-            (TypeM::Array(a, _), TypeM::Array(b, _)) => a.can_be_assigned(b),
-
-            (TypeM::Map(key_a, val_a, _), TypeM::Map(key_b, val_b, _)) => {
-                key_a.can_be_assigned(key_b) && val_a.can_be_assigned(val_b)
-            }
-
-            (TypeM::EnumName(a, _), TypeM::EnumName(b, _))
-            | (TypeM::ClassName(a, _), TypeM::ClassName(b, _)) => a == b,
-
-            (TypeM::Union(a, _), TypeM::Union(b, _)) => {
-                // there can't be any type in b that is not assignable to a.
-                b.iter()
-                    .all(|b_ty| a.iter().any(|a_ty| a_ty.can_be_assigned(b_ty)))
-            }
-            (TypeM::Union(inner, _), non_union) => {
-                inner.iter().any(|i| i.can_be_assigned(non_union))
-            }
-
-            // for functions we only want the same inputs & same outputs, otherwise an
-            // auto-cast mechanism would need to be in place.
-            (a @ TypeM::Arrow(_, _), b @ TypeM::Arrow(_, _)) => a.eq_up_to_span(b),
-
-            (_, _) => false,
-        }
-    }
-    #[track_caller]
-    pub fn assert_eq_up_to_span(&self, other: &Type) {
-        match (self, other) {
-            (TypeM::Int(a), TypeM::Int(b)) => assert!(a.eq_up_to_span(b)),
-            (TypeM::Int(_), _) => panic!("Int type mismatch"),
-            (TypeM::Float(a), TypeM::Float(b)) => assert!(a.eq_up_to_span(b)),
-            (TypeM::Float(_), _) => panic!("Float type mismatch"),
-            (TypeM::String(a), TypeM::String(b)) => assert!(a.eq_up_to_span(b)),
-            (TypeM::String(_), _) => panic!("String type mismatch"),
-            (TypeM::Bool(a), TypeM::Bool(b)) => assert!(a.eq_up_to_span(b)),
-            (TypeM::Bool(_), _) => panic!("Bool type mismatch"),
-            (TypeM::Null(a), TypeM::Null(b)) => assert!(a.eq_up_to_span(b)),
-            (TypeM::Null(_), _) => panic!("Null type mismatch"),
-            (TypeM::Array(a, a_meta), TypeM::Array(b, b_meta)) => {
-                a.assert_eq_up_to_span(b);
-                assert!(a_meta.eq_up_to_span(b_meta));
-            }
-            (TypeM::Array(_, _), _) => panic!("Array type mismatch"),
-            (TypeM::Map(a, b, a_meta), TypeM::Map(c, d, b_meta)) => {
-                a.assert_eq_up_to_span(c);
-                b.assert_eq_up_to_span(d);
-                assert!(a_meta.eq_up_to_span(b_meta));
-            }
-            (TypeM::Map(_, _, _), _) => panic!("Map type mismatch"),
-            (TypeM::ClassName(a, a_meta), TypeM::ClassName(b, b_meta)) => {
-                assert!(a == b);
-                assert!(a_meta.eq_up_to_span(b_meta));
-            }
-            (TypeM::ClassName(_, _), _) => panic!("Class name type mismatch"),
-            (TypeM::EnumName(a, a_meta), TypeM::EnumName(b, b_meta)) => {
-                assert!(a == b);
-                assert!(a_meta.eq_up_to_span(b_meta));
-            }
-            (TypeM::EnumName(_, _), _) => panic!("Enum name type mismatch"),
-            (TypeM::Union(a, a_meta), TypeM::Union(b, b_meta)) => {
-                assert!(a.len() == b.len());
-                a.iter()
-                    .zip(b.iter())
-                    .for_each(|(a, b)| a.assert_eq_up_to_span(b));
-                assert!(a_meta.eq_up_to_span(b_meta));
-            }
-            (TypeM::Union(_, _), _) => panic!("Union type mismatch"),
-            (TypeM::Arrow(a, a_meta), TypeM::Arrow(b, b_meta)) => {
-                assert!(a.inputs.len() == b.inputs.len());
-                a.inputs
-                    .iter()
-                    .zip(b.inputs.iter())
-                    .for_each(|(a, b)| a.assert_eq_up_to_span(b));
-                a.output.assert_eq_up_to_span(&b.output);
-                assert!(a_meta.eq_up_to_span(b_meta));
-            }
-            (TypeM::Arrow(_, _), _) => panic!("Arrow type mismatch"),
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct Arrow<M> {
-    pub inputs: Vec<TypeM<M>>,
-    pub output: Box<TypeM<M>>,
-}
-
-#[derive(Clone, Debug)]
-pub struct TypeMeta {
-    pub span: Span,
-    pub constraints: Vec<Constraint>,
-    pub streaming_behavior: StreamingBehavior,
-}
-
-impl TypeMeta {
-    #[track_caller]
-    pub fn eq_up_to_span(&self, other: &TypeMeta) -> bool {
-        self.constraints == other.constraints && self.streaming_behavior == other.streaming_behavior
-    }
-
-    #[track_caller]
-    pub fn diagnose_eq_up_to_span(&self, other: &TypeMeta) -> anyhow::Result<()> {
-        if self.constraints != other.constraints {
-            return Err(anyhow::anyhow!("constraints do not match"));
-        }
-        if self.streaming_behavior != other.streaming_behavior {
-            return Err(anyhow::anyhow!("streaming behaviors do not match"));
-        }
-        Ok(())
-    }
-}
-
-impl Default for TypeMeta {
-    fn default() -> Self {
-        Self {
-            span: Span::fake(),
-            constraints: vec![],
-            streaming_behavior: StreamingBehavior::default(),
-        }
-    }
+// TODO: Unused?
+pub struct Function {
+    pub params: Vec<TypeIR>,
+    pub return_type: Box<TypeIR>,
 }
 
 #[derive(Clone, Debug)]
 pub struct ExprFunction {
     pub name: String,
     pub parameters: Vec<Parameter>,
-    pub return_type: TypeM<TypeMeta>,
+    pub return_type: TypeIR,
     pub body: Block,
     pub span: Span,
 }
@@ -409,7 +50,7 @@ pub struct ExprFunction {
 pub struct LlmFunction {
     pub name: String,
     pub parameters: Vec<Parameter>,
-    pub return_type: TypeM<TypeMeta>,
+    pub return_type: TypeIR,
     pub client: String,
     pub prompt: String,
     pub span: Span,
@@ -425,7 +66,7 @@ pub struct Class {
 #[derive(Clone, Debug)]
 pub struct Field {
     pub name: String,
-    pub r#type: TypeM<TypeMeta>,
+    pub r#type: TypeIR,
     pub span: Span,
 }
 
@@ -446,7 +87,7 @@ pub struct EnumVariant {
 pub struct Parameter {
     pub name: String,
     pub is_mutable: bool,
-    pub r#type: TypeM<TypeMeta>,
+    pub r#type: TypeIR,
     pub span: Span,
 }
 
@@ -504,7 +145,7 @@ pub enum Statement {
         span: Span,
     },
     While {
-        condition: Box<Expression>,
+        condition: Expression,
         block: Block,
         span: Span,
     },
@@ -514,8 +155,19 @@ pub enum Statement {
         block: Block,
         span: Span,
     },
+    /// C-like for-loop that can't be directly mapped to `while` because it has either no condition or has after statement
+    CForLoop {
+        condition: Option<Expression>,
+        after: Option<Box<Statement>>,
+        block: Block,
+    },
     Break(Span),
     Continue(Span),
+
+    Assert {
+        condition: Expression,
+        span: Span,
+    },
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -585,7 +237,7 @@ pub enum Expression {
     // MethodCall(Box<Expression>, String, Vec<Expression>), // TODO.
     ClassConstructor(ClassConstructor, Span),
     /// Expression block - has its own scope with statements and evaluates to a value
-    ExpressionBlock(Box<Block>, Span),
+    ExpressionBlock(Block, Span),
     BinaryOperation {
         left: Box<Expression>,
         operator: BinaryOperator,
@@ -652,7 +304,7 @@ pub enum UnaryOperator {
 /// std.fetch_value<T>(...) == TypeArg::TypeName("T")
 #[derive(Clone, Debug)]
 pub enum TypeArg {
-    Type(TypeM<TypeMeta>),
+    Type(TypeIR),
     TypeName(String),
 }
 

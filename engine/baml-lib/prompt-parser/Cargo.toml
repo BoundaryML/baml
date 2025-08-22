@@ -15,11 +15,11 @@ unused_variables = "deny"
 [dependencies]
 internal-baml-ast = { path = "../ast" }
 internal-baml-diagnostics = { path = "../diagnostics" }
-log = "0.4.20"
+log.workspace = true
 
-pest = "2.1.3"
-pest_derive = "2.1.0"
-textwrap = "0.16.0"
+pest.workspace = true
+pest_derive.workspace = true
+textwrap.workspace = true
 
 
 [features]

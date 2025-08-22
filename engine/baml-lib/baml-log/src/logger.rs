@@ -173,8 +173,8 @@ pub trait ConfigValue: Sized {
 
     /// Get value from environment or return default
     fn from_env() -> Self {
-        env::var(Self::env_name())
-            .ok()
+        let env_value = env::var(Self::env_name()).ok();
+        env_value
             .and_then(|v| Self::parse_value(&v))
             .unwrap_or_else(|| Self::default_value())
     }
@@ -192,14 +192,14 @@ pub trait ConfigValue: Sized {
 }
 
 /// Specific config value implementations
-pub struct LogLevelConfig(Option<String>);
+pub struct LogLevelConfig(Option<Level>);
 impl ConfigValue for LogLevelConfig {
     fn env_name() -> &'static str {
         "BAML_LOG"
     }
 
     fn parse_value(value: &str) -> Option<Self> {
-        Some(LogLevelConfig(Some(value.to_string())))
+        Some(LogLevelConfig(Some(value.parse().ok()?)))
     }
 
     fn default_value() -> Self {
@@ -211,8 +211,11 @@ impl From<LogLevelConfig> for Level {
     fn from(config: LogLevelConfig) -> Self {
         config
             .0
-            .or_else(|| env::var(LogLevelConfig::env_name()).ok())
-            .and_then(|v| v.parse().ok())
+            .or_else(|| {
+                env::var(LogLevelConfig::env_name())
+                    .ok()
+                    .and_then(|v| v.parse().ok())
+            })
             .unwrap_or(defaults::LOG_LEVEL)
     }
 }
@@ -323,7 +326,7 @@ impl From<MaxMessageLengthConfig> for MaxMessageLength {
 }
 
 /// Configuration for the logger
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 struct LogConfig {
     /// Current log level
     level: Level,
@@ -838,17 +841,10 @@ pub fn log_event_internal<T: Loggable>(
 }
 
 #[cfg(test)]
+#[serial_test::serial]
 mod tests {
-    use std::sync::Mutex;
-
-    use lazy_static::lazy_static;
 
     use super::*;
-
-    // Global mutex for tests that modify CONFIG
-    lazy_static! {
-        static ref TEST_MUTEX: Mutex<()> = Mutex::new(());
-    }
 
     // Helper to temporarily set environment variables for testing
     struct EnvGuard {
@@ -1036,8 +1032,6 @@ mod tests {
     // Tests for set_from_env - Testing potential bug
     #[test]
     fn test_set_from_env_updates_config() {
-        let _guard = TEST_MUTEX.lock().unwrap();
-
         // Save current state and ensure clean state
         let _ = init();
 
@@ -1063,8 +1057,6 @@ mod tests {
 
     #[test]
     fn test_set_from_env_partial_update() {
-        let _guard = TEST_MUTEX.lock().unwrap();
-
         let _ = init();
 
         // Set known initial state
@@ -1087,8 +1079,6 @@ mod tests {
 
     #[test]
     fn test_set_from_env_invalid_values() {
-        let _guard = TEST_MUTEX.lock().unwrap();
-
         let _ = init();
 
         // Test with invalid values
@@ -1108,8 +1098,6 @@ mod tests {
 
     #[test]
     fn test_set_from_env_empty_map() {
-        let _guard = TEST_MUTEX.lock().unwrap();
-
         let _ = init();
 
         let original_level = get_log_level();
@@ -1124,8 +1112,6 @@ mod tests {
     // Tests for configuration update functions
     #[test]
     fn test_set_log_level() {
-        let _guard = TEST_MUTEX.lock().unwrap();
-
         let _ = init();
 
         // Test setting to Debug
@@ -1143,8 +1129,6 @@ mod tests {
 
     #[test]
     fn test_set_json_mode() {
-        let _guard = TEST_MUTEX.lock().unwrap();
-
         let _ = init();
 
         assert!(set_json_mode(true).is_ok());
@@ -1156,8 +1140,6 @@ mod tests {
 
     #[test]
     fn test_set_color_mode() {
-        let _guard = TEST_MUTEX.lock().unwrap();
-
         let _ = init();
 
         assert!(set_color_mode(ColorMode::Always).is_ok());
@@ -1169,8 +1151,6 @@ mod tests {
 
     #[test]
     fn test_set_max_message_length() {
-        let _guard = TEST_MUTEX.lock().unwrap();
-
         let _ = init();
 
         assert!(set_max_message_length(1000).is_ok());
@@ -1185,8 +1165,6 @@ mod tests {
 
     #[test]
     fn test_set_running_in_lsp() {
-        let _guard = TEST_MUTEX.lock().unwrap();
-
         let _ = init();
 
         assert!(set_running_in_lsp(true).is_ok());
@@ -1197,8 +1175,6 @@ mod tests {
 
     #[test]
     fn test_reload_from_env() {
-        let _guard = TEST_MUTEX.lock().unwrap();
-
         let _ = init();
         let mut env_guard = EnvGuard::new();
 
@@ -1218,8 +1194,6 @@ mod tests {
     #[test]
     fn test_concurrent_config_access() {
         use std::thread;
-
-        let _guard = TEST_MUTEX.lock().unwrap();
 
         let _ = init();
 
@@ -1335,14 +1309,17 @@ mod tests {
         }
 
         // Assert the values
-        assert_eq!(config.level, Level::Debug);
-        assert!(config.use_json);
-        assert_eq!(config.color_mode, ColorMode::Always);
         assert_eq!(
-            config.max_message_length,
-            MaxMessageLength::Limited { max_length: 500 }
+            config,
+            LogConfig {
+                level: Level::Debug,
+                use_json: true,
+                color_mode: ColorMode::Always,
+                max_message_length: MaxMessageLength::Limited { max_length: 500 },
+                initialized: false,
+                running_in_lsp: false,
+            }
         );
-        assert!(!config.initialized);
     }
 
     #[test]

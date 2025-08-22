@@ -33,6 +33,7 @@ pub fn load_test_ir(file_content: &str) -> IntermediateRepr {
             PathBuf::from("./baml_src/example.baml"),
             file_content.to_string(),
         ))],
+        internal_baml_core::FeatureFlags::new(),
     );
     match schema.diagnostics.to_result() {
         Ok(_) => {}

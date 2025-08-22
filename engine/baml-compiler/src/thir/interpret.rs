@@ -317,7 +317,7 @@ where
                 let v = evaluate_block(block, scopes, thir, run_llm_function).await?;
                 EvalValue::Value(v)
             }
-            Expr::FreeVar(name, meta) => {
+            Expr::Var(name, meta) => {
                 // First check if it's an LLM function
                 if let Some(_llm_func) = thir.llm_functions.iter().find(|f| &f.name == name) {
                     // Return a special marker for LLM functions that can be called

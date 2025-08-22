@@ -36,7 +36,10 @@ pub use identifier::{Identifier, RefIdentifier};
 pub use indentation_type::IndentationType;
 pub use internal_baml_diagnostics::Span;
 pub use newline_type::NewlineType;
-pub use stmt::{AssignOp, AssignOpStmt, AssignStmt, ForLoopStmt, LetStmt, Stmt, WhileStmt};
+pub use stmt::{
+    AssertStmt, AssignOp, AssignOpStmt, AssignStmt, CForLoopStmt, ForLoopStmt, LetStmt, ReturnStmt,
+    Stmt, WhileStmt,
+};
 pub use template_string::TemplateString;
 pub use top::Top;
 pub use traits::{WithAttributes, WithDocumentation, WithIdentifier, WithName, WithSpan};

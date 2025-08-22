@@ -1,6 +1,8 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, mem::MaybeUninit};
 
-use internal_baml_ast::ast::{ClassConstructorField, Expression, Stmt, WithName, WithSpan};
+use internal_baml_ast::ast::{
+    AssertStmt, ClassConstructorField, Expression, LetStmt, ReturnStmt, Stmt, WithName, WithSpan,
+};
 use internal_baml_diagnostics::{DatamodelError, DatamodelWarning};
 use itertools::Itertools;
 
@@ -49,10 +51,13 @@ pub(super) fn validate_expr_fns(ctx: &mut Context<'_>) {
     });
 
     for expr_fn in ctx.db.walk_expr_fns() {
-        ctx.push_warning(DatamodelWarning::new(
-            "Workflow functions are experimental, and will break in the future.".to_string(),
-            expr_fn.name_span().clone(),
-        ));
+        // Only show experimental warning if beta features are NOT enabled
+        if !ctx.feature_flags().is_beta_enabled() {
+            ctx.push_warning(DatamodelWarning::new(
+                "Workflow functions are experimental, and will break in the future.".to_string(),
+                expr_fn.name_span().clone(),
+            ));
+        }
         if taken_names.contains(expr_fn.name()) {
             ctx.push_error(DatamodelError::new_validation_error(
                 "Expr function name must be unique",
@@ -89,10 +94,13 @@ pub(super) fn validate_expr_fns(ctx: &mut Context<'_>) {
     }
 
     for toplevel_assignment in ctx.db.walk_toplevel_assignments() {
-        ctx.push_warning(DatamodelWarning::new(
-            "Variable assignment is experimental, and will break in the future.".to_string(),
-            toplevel_assignment.expr().span().clone(),
-        ));
+        // Only show experimental warning if beta features are NOT enabled
+        if !ctx.feature_flags().is_beta_enabled() {
+            ctx.push_warning(DatamodelWarning::new(
+                "Variable assignment is experimental, and will break in the future.".to_string(),
+                toplevel_assignment.expr().span().clone(),
+            ));
+        }
 
         // Create a scope for toplevel assignments that includes all taken names
         let scope = taken_names.clone();
@@ -105,7 +113,7 @@ fn validate_stmt(ctx: &mut Context<'_>, stmt: &Stmt, scope: &HashSet<String>) {
         Stmt::WhileLoop(stmt) => {
             validate_expression(ctx, &stmt.condition, scope);
 
-            validate_expr_block(ctx, scope.clone(), &stmt.body);
+            validate_expr_block(ctx, &stmt.body, scope.clone());
         }
         Stmt::Assign(stmt) => {
             // re: validation is handled by HIR-based typechecking.
@@ -127,20 +135,50 @@ fn validate_stmt(ctx: &mut Context<'_>, stmt: &Stmt, scope: &HashSet<String>) {
             loop_scope.insert(stmt.identifier.name().to_string());
 
             let body = &stmt.body;
-            validate_expr_block(ctx, loop_scope, body);
+            validate_expr_block(ctx, body, loop_scope);
         }
         Stmt::Expression(expr) => {
             validate_expression(ctx, expr, scope);
         }
-        // these don't have any inner expressions or blocks
         Stmt::Break(_) | Stmt::Continue(_) => {}
+        Stmt::CForLoop(stmt) => {
+            // we have to clone the scope anyway for the inner expression block.
+            let mut loop_scope = scope.clone();
+
+            if let Some(init) = &stmt.init_stmt {
+                validate_stmt(ctx, init, scope);
+
+                let init: &Stmt = init;
+
+                if let Stmt::Let(LetStmt { identifier, .. }) = init {
+                    loop_scope.insert(identifier.to_string());
+                }
+            }
+
+            // validate the condition & after statement in the loop header's scope:
+            // bindings declared inside the loop header are available, things from inside the loop
+            // body aren't.
+
+            if let Some(condition) = &stmt.condition {
+                validate_expression(ctx, condition, &loop_scope);
+            }
+
+            if let Some(after) = &stmt.after_stmt {
+                validate_stmt(ctx, after, &loop_scope);
+            }
+
+            validate_expr_block(ctx, &stmt.body, loop_scope);
+        }
+        Stmt::Return(ReturnStmt { value, .. }) | Stmt::Assert(AssertStmt { value, .. }) => {
+            validate_expression(ctx, value, scope);
+        }
     }
 }
 
 fn validate_expr_block(
     ctx: &mut Context<'_>,
-    mut scope_for_block: HashSet<String>,
     body: &internal_baml_ast::ast::ExpressionBlock,
+    mut scope_for_block: HashSet<String>,
 ) {
     for stmt in &body.stmts {
         validate_stmt(ctx, stmt, &scope_for_block);
@@ -240,7 +278,7 @@ fn validate_expression(ctx: &mut Context<'_>, expr: &Expression, scope: &HashSet
             }
         }
         Expression::ExprBlock(block, _span) => {
-            validate_expr_block(ctx, scope.clone(), block);
+            validate_expr_block(ctx, block, scope.clone());
         }
         Expression::If(cond, then, else_, _span) => {
             validate_expression(ctx, cond, scope);
