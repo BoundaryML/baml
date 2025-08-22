@@ -3,7 +3,6 @@
 //! This file contains the definitions for all HIR items.
 
 use baml_types::ir_type::TypeIR;
-use baml_types::{type_meta::base::StreamingBehavior, Constraint};
 use internal_baml_diagnostics::Span;
 
 pub mod dump;

@@ -43,7 +43,7 @@ function GetTodoMissingTypeArg() -> Todo {
 // 20 |     query_params: {},
 // 21 |   })
 //    | 
-// error: Expected a class value, but received string value `std::fetch_value<Todo>(std::Request { base_url: "https://dummyjson.com/todos/1", headers: {}, query_params: {} })`.
+// error: Expected a Todo value, but received string value `std::fetch_value<Todo>(std::Request { base_url: "https://dummyjson.com/todos/1", headers: {}, query_params: {} })`.
 //   -->  expr/builtin.baml:9
 //    | 
 //  8 | function GetTodo() -> Todo {
@@ -59,7 +59,7 @@ function GetTodoMissingTypeArg() -> Todo {
 // 16 | function GetTodoMissingTypeArg() -> Todo {
 // 17 |   std::fetch_value(std::Request {
 //    | 
-// error: Expected a class value, but received string value `std::fetch_value(std::Request { base_url: "https://dummyjson.com/todos/1", headers: {}, query_params: {} })`.
+// error: Expected a Todo value, but received string value `std::fetch_value(std::Request { base_url: "https://dummyjson.com/todos/1", headers: {}, query_params: {} })`.
 //   -->  expr/builtin.baml:17
 //    | 
 // 16 | function GetTodoMissingTypeArg() -> Todo {

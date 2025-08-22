@@ -2,7 +2,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use baml_types::BamlValueWithMeta;
+use baml_types::{ir_type::TypeIR, BamlValueWithMeta};
 use baml_vm::{
     BamlVmProgram, BinOp, Bytecode, Class, CmpOp, Function, FunctionKind, GlobalIndex, GlobalPool,
     Instruction, Object, ObjectIndex, ObjectPool, UnaryOp, Value,
@@ -14,7 +14,6 @@ use crate::{
     hir::{self},
     thir,
 };
-use baml_types::ir_type::TypeIR;
 
 /// Compile a Baml AST into bytecode.
 ///
@@ -884,7 +883,7 @@ impl<'g> HirCompiler<'g> {
                 name: class_name,
                 fields,
                 spread,
-                meta,
+                meta: _,
             } => {
                 let Some(&class_index) = self.globals.get(class_name) else {
                     panic!("undefined class: {}", class_name);

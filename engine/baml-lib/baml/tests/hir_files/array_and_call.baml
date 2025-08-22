@@ -13,7 +13,7 @@ function ArrayAccess() -> int {
     arr[1]
 }
 
-// error: Expected a array value, but received array value `[arr, result]`.
+// error: Expected a int[] value, but received int[][] value `[arr, result]`.
 //   -->  test.baml:8
 //    | 
 //  7 |     let result = Helper(42);

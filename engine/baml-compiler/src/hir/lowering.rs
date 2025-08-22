@@ -3,12 +3,10 @@
 //! This files contains the convertions between Baml AST nodes to HIR nodes.
 
 use baml_types::{
-    ir_type::UnionTypeGeneric,
     type_meta::{self, base::StreamingBehavior},
     Constraint, ConstraintLevel, TypeIR, TypeValue,
 };
 use internal_baml_ast::ast::{self, App, AssertStmt, Attribute, ReturnStmt, WithName, WithSpan};
-use internal_baml_diagnostics::Span;
 
 use crate::hir::{
     self, Block, Class, ClassConstructor, ClassConstructorField, Enum, EnumVariant, ExprFunction,
@@ -143,7 +141,7 @@ pub fn type_ir_from_ast(type_: &ast::FieldType) -> TypeIR {
                 }
             }
         }
-        ast::FieldType::Primitive(_, prim, _, _) => TypeIR::Primitive(prim.clone(), meta),
+        ast::FieldType::Primitive(_, prim, _, _) => TypeIR::Primitive(*prim, meta),
         ast::FieldType::List(_, inner, dims, _, _) => {
             // Respect multi-dimensional arrays (e.g., int[][] has dims=2)
             let mut lowered_inner = type_ir_from_ast(inner);
@@ -158,7 +156,7 @@ pub fn type_ir_from_ast(type_: &ast::FieldType) -> TypeIR {
             meta,
         ),
         ast::FieldType::Union(_, types, _, _) => {
-            let union_types: Vec<TypeIR> = types.iter().map(|ast| type_ir_from_ast(ast)).collect();
+            let union_types: Vec<TypeIR> = types.iter().map(type_ir_from_ast).collect();
             // For now, create a simple union by taking the first type if only one
             if union_types.len() == 1 {
                 union_types.into_iter().next().unwrap()

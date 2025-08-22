@@ -1,13 +1,9 @@
-use crate::thir::THir;
-
-use std::cell::RefCell;
-use std::sync::Arc;
-
-use crate::thir::{Block, Expr, ExprMetadata, Statement};
+use std::{cell::RefCell, future::Future, sync::Arc};
 
 use anyhow::{anyhow, bail, Context, Result};
 use baml_types::{BamlMap, BamlValue, BamlValueWithMeta};
-use std::future::Future;
+
+use crate::thir::{Block, Expr, ExprMetadata, Statement, THir};
 
 /// A scope is a map of variable names to their values.
 ///
@@ -525,7 +521,7 @@ where
     }
 }
 
-fn declare(scopes: &mut Vec<Scope>, name: &str, value: BamlValueWithMeta<ExprMetadata>) {
+fn declare(scopes: &mut [Scope], name: &str, value: BamlValueWithMeta<ExprMetadata>) {
     if let Some(scope) = scopes.last_mut() {
         scope
             .variables
@@ -533,11 +529,7 @@ fn declare(scopes: &mut Vec<Scope>, name: &str, value: BamlValueWithMeta<ExprMet
     }
 }
 
-fn assign(
-    scopes: &mut Vec<Scope>,
-    name: &str,
-    value: BamlValueWithMeta<ExprMetadata>,
-) -> Result<()> {
+fn assign(scopes: &mut [Scope], name: &str, value: BamlValueWithMeta<ExprMetadata>) -> Result<()> {
     for s in scopes.iter_mut().rev() {
         if let Some(cell) = s.variables.get_mut(name) {
             *cell.borrow_mut() = value;
@@ -721,7 +713,7 @@ where
                 scopes.push(Scope {
                     variables: fresh
                         .into_iter()
-                        .zip(arg_vals.into_iter())
+                        .zip(arg_vals)
                         .map(|(k, v)| (k, RefCell::new(v)))
                         .collect(),
                 });
@@ -862,10 +854,10 @@ where
                 EvalValue::Value(result)
             }
             Expr::MethodCall {
-                receiver,
-                method,
-                args,
-                meta,
+                receiver: _,
+                method: _,
+                args: _,
+                meta: _,
             } => {
                 todo!("method calls are not supported in the interpreter")
             }
@@ -1156,10 +1148,12 @@ fn compare_values(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::thir::THir;
+    #[allow(unused_imports)]
     use baml_types::ir_type::TypeIR;
     use internal_baml_diagnostics::Span;
+
+    use super::*;
+    use crate::thir::THir;
 
     fn meta() -> ExprMetadata {
         (Span::fake(), None)
@@ -1259,8 +1253,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_llm_function_call() {
-        use crate::hir::{LlmFunction, Parameter as HirParameter};
         use baml_types::ir_type::TypeIR;
+
+        use crate::hir::{LlmFunction, Parameter as HirParameter};
 
         let thir = THir {
             expr_functions: vec![],

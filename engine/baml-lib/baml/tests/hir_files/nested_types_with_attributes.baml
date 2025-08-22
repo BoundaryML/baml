@@ -12,9 +12,9 @@ class DataModel {
 // }
 //
 // class DataModel {
-//   tags: arraystring
-//   status: (string | int) @stream.done
-//   matrix: arrayarrayint
+//   tags: array<string>
+//   status: string @stream.done
+//   matrix: array<array<int>>
 //   config: map<string, bool> @stream.needed
 // }
 //

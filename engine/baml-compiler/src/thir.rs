@@ -1,7 +1,8 @@
-use crate::hir::{AssignOp, BinaryOperator, Class, Enum, LlmFunction, UnaryOperator};
 /// Type-checked HIR.
 ///
 use baml_types::ir_type::TypeIR;
+
+use crate::hir::{AssignOp, BinaryOperator, Class, Enum, LlmFunction, UnaryOperator};
 
 pub mod interpret;
 pub mod typecheck;

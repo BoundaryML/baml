@@ -164,7 +164,7 @@ impl BamlValue {
                         .append(
                             RcDoc::intersperse(
                                 fields.iter().map(|(k, v)| {
-                                    RcDoc::text(format!("{}", k))
+                                    RcDoc::text(k.to_string())
                                         .append(RcDoc::text(":"))
                                         .append(RcDoc::space())
                                         .append(v.to_doc())
@@ -963,7 +963,7 @@ impl<T> BamlValueWithMeta<T> {
                         .append(
                             RcDoc::intersperse(
                                 fields.iter().map(|(k, v)| {
-                                    RcDoc::text(format!("{}", k))
+                                    RcDoc::text(k.to_string())
                                         .append(RcDoc::text(":"))
                                         .append(RcDoc::space())
                                         .append(v.to_doc())

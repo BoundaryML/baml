@@ -19,15 +19,13 @@
 /// in several places. Bidirectional typing is the target.
 use std::sync::Arc;
 
-use baml_types::{type_meta::base::StreamingBehavior, Arrow, BamlMap, BamlValueWithMeta};
+use baml_types::{ir_type::TypeIR, BamlMap, BamlValueWithMeta};
 use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Diagnostics, Span};
 
-use crate::hir::dump::TypeDocumentRender;
 use crate::{
-    hir::{self, Hir},
+    hir::{self, dump::TypeDocumentRender, Hir},
     thir::{self as thir, ExprMetadata, THir},
 };
-use baml_types::{ir_type::TypeIR, type_meta};
 
 pub fn typecheck(hir: &Hir, diagnostics: &mut Diagnostics) -> THir<ExprMetadata> {
     let (thir, _) = typecheck_returning_context(hir, diagnostics);
@@ -468,7 +466,7 @@ fn typecheck_block(
 
     // Get the return value from the last statement
     // Note: context has been updated with all let bindings from statements above
-    let (return_value, last_is_return) = if let Some(last_stmt) = block.statements.last() {
+    let (return_value, _last_is_return) = if let Some(last_stmt) = block.statements.last() {
         match last_stmt {
             hir::Statement::Expression { expr, .. } => {
                 // For expression statements that are the last statement, we already processed them above
@@ -996,7 +994,7 @@ pub fn typecheck_expression(
 
             // Infer array type from items
             let inner_type = typed_items.first().and_then(|item| item.meta().1.clone());
-            let array_type = inner_type.map(|t| TypeIR::list(t));
+            let array_type = inner_type.map(TypeIR::list);
 
             thir::Expr::List(typed_items, (span.clone(), array_type))
         }

@@ -5,20 +5,6 @@ use std::{
 };
 
 use anyhow::{anyhow, Context, Result};
-use baml_types::{
-    expr::ExprMetadata, ir_type::TypeGeneric, BamlValue, BamlValueWithMeta, Completion, TypeIR,
-};
-use clap::Args;
-use indexmap::IndexMap;
-use internal_baml_core::ast::Span;
-use jsonish::{ResponseBamlValue, ResponseValueMeta};
-use reedline::{
-    default_emacs_keybindings, ColumnarMenu, DefaultCompleter, DefaultPrompt, Emacs,
-    FileBackedHistory, KeyCode, KeyModifiers, MenuBuilder, Reedline, ReedlineEvent, ReedlineMenu,
-    Signal,
-};
-
-use crate::BamlRuntime;
 use baml_compiler::{
     hir::{self, Hir},
     thir::{
@@ -26,11 +12,26 @@ use baml_compiler::{
         typecheck::{typecheck_expression, typecheck_returning_context, VarInfo},
     },
 };
-use internal_baml_ast::ast::WithName;
-use internal_baml_ast::{parse, parse_standalone_expression};
-use internal_baml_core::ast as baml_ast;
-use internal_baml_core::internal_baml_diagnostics::{Diagnostics, SourceFile};
+use baml_types::{
+    expr::ExprMetadata, ir_type::TypeGeneric, BamlValue, BamlValueWithMeta, Completion, TypeIR,
+};
+use clap::Args;
+use indexmap::IndexMap;
+use internal_baml_ast::{ast::WithName, parse, parse_standalone_expression};
+use internal_baml_core::{
+    ast as baml_ast,
+    ast::Span,
+    internal_baml_diagnostics::{Diagnostics, SourceFile},
+};
+use jsonish::{ResponseBamlValue, ResponseValueMeta};
 use pretty::RcDoc;
+use reedline::{
+    default_emacs_keybindings, ColumnarMenu, DefaultCompleter, DefaultPrompt, Emacs,
+    FileBackedHistory, KeyCode, KeyModifiers, MenuBuilder, Reedline, ReedlineEvent, ReedlineMenu,
+    Signal,
+};
+
+use crate::BamlRuntime;
 
 #[derive(Args, Clone, Debug)]
 pub struct ReplArgs {
@@ -114,7 +115,7 @@ impl ReplState {
             for (name, expr) in &thir.global_assignments {
                 output.push_str(&format!("  {} = {}\n", name, expr.dump_str()));
             }
-            output.push_str("\n");
+            output.push('\n');
         }
 
         // Display expression functions
@@ -140,7 +141,7 @@ impl ReplState {
             for func in &thir.llm_functions {
                 output.push_str(&format!("  function {}\n", func.name));
             }
-            output.push_str("\n");
+            output.push('\n');
         }
 
         // Display classes
@@ -149,7 +150,7 @@ impl ReplState {
             for (_name, class) in &thir.classes {
                 output.push_str(&format!("  class {}\n", class.name));
             }
-            output.push_str("\n");
+            output.push('\n');
         }
 
         // Display enums
@@ -158,7 +159,7 @@ impl ReplState {
             for (_name, enum_def) in &thir.enums {
                 output.push_str(&format!("  enum {}\n", enum_def.name));
             }
-            output.push_str("\n");
+            output.push('\n');
         }
 
         // Show any type errors
@@ -167,7 +168,7 @@ impl ReplState {
             for error in diagnostics.errors() {
                 output.push_str(&format!("  {:?}\n", error));
             }
-            output.push_str("\n");
+            output.push('\n');
         }
 
         Ok(output)
@@ -201,7 +202,7 @@ impl ReplState {
             Ok(format!("✓ {} = {}", var_name, self.format_value(&value)))
         } else if let Some(value) = self.variables.get(input.trim()) {
             // Return variable value
-            Ok(format!("{}", self.format_value(value)))
+            Ok(self.format_value(value).to_string())
         } else {
             // Try to parse as a BAML expression
             let value = self.parse_and_evaluate_baml_expression(input).await?;
@@ -566,7 +567,7 @@ impl ReplArgs {
         println!("  :help (:h, :?)     - Show this help");
         println!("  :quit (:q)         - Exit");
         println!("  x = expr           - Assign expression result to variable x");
-        println!("");
+        println!();
         println!("💡 Use Tab for autocompletion of commands, variables, and functions");
         println!();
 

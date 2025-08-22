@@ -1,4 +1,4 @@
-use baml_vm::{BamlVmProgram, Frame, Value, Vm};
+use baml_vm::{BamlVmProgram, EvalStack, Frame, ObjectIndex, StackIndex, Value, Vm};
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 
 struct Program {
@@ -22,12 +22,10 @@ fn bootstrap_vm(input: Program) -> Vm {
         frames: vec![Frame {
             function: target_function_index,
             instruction_ptr: 0,
-            locals_offset: 0,
+            locals_offset: StackIndex::from_raw(0),
         }],
-        stack: std::iter::once(Value::Object(target_function_index))
-            .chain(input.args)
-            .collect(),
-        runtime_allocs_offset: objects.len(),
+        stack: EvalStack::from_vec(input.args),
+        runtime_allocs_offset: ObjectIndex::from_raw(objects.len()),
         objects,
         globals,
     }
@@ -40,7 +38,7 @@ pub fn bench_recursive_fib(c: &mut Criterion) {
                 bootstrap_vm(Program {
                     source: r#"
                         function fib(n: int) -> int {
-                            if n <= 1 {
+                            if (n <= 1) {
                                 n
                             } else {
                                 fib(n - 1) + fib(n - 2)
@@ -69,11 +67,11 @@ pub fn bench_iterative_fib(c: &mut Criterion) {
                             let mut a = 0;
                             let mut b = 1;
 
-                            if n == 0 {
+                            if (n == 0) {
                                 b
                             } else {
                                 let mut i = 1;
-                                while i <= n {
+                                while (i <= n) {
                                     let c = a + b;
                                     a = b;
                                     b = c;

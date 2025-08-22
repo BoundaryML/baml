@@ -1,7 +1,7 @@
+use baml_types::ir_type::TypeIR;
 use internal_baml_diagnostics::Span;
 
 use crate::hir::{Class, Enum, EnumVariant, Field};
-use baml_types::{ir_type::TypeIR, type_meta};
 
 pub mod functions {
     pub const FETCH_VALUE: &str = "std::fetch_value";

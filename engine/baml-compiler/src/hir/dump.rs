@@ -5,7 +5,7 @@ use pretty::RcDoc;
 
 use crate::hir::{
     AssignOp, BinaryOperator, Block, Class, ClassConstructorField, Enum, EnumVariant, ExprFunction,
-    Expression, Field, Function, Hir, LlmFunction, Parameter, Statement, TypeArg, UnaryOperator,
+    Expression, Field, Hir, LlmFunction, Parameter, Statement, TypeArg, UnaryOperator,
 };
 
 impl Hir {

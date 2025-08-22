@@ -11,6 +11,7 @@ mod internal_tests {
     };
 
     use baml_ids::FunctionCallId;
+    use internal_baml_core::FeatureFlags;
     // use baml_runtime::internal::llm_client::orchestrator::OrchestrationScope;
     use baml_runtime::InternalRuntimeInterface;
     use baml_runtime::{
@@ -88,6 +89,7 @@ mod internal_tests {
             "baml_src",
             &files,
             [("OPENAI_API_KEY", "OPENAI_API_KEY")].into(),
+            FeatureFlags::new(),
         )?;
         log::info!("Runtime:");
 
@@ -171,6 +173,7 @@ mod internal_tests {
             "baml_src",
             &files,
             [("OPENAI_API_KEY", "OPENAI_API_KEY")].into(),
+            FeatureFlags::new(),
         )?;
         log::info!("Runtime:");
 
@@ -248,6 +251,7 @@ mod internal_tests {
             "baml_src",
             &files,
             [("OPENAI_API_KEY", "OPENAI_API_KEY")].into(),
+            FeatureFlags::new(),
         )?;
         log::info!("Runtime:");
 
@@ -288,6 +292,7 @@ mod internal_tests {
                 "OPENAI_API_KEY",
             )]
             .into(),
+            FeatureFlags::new(),
         )
     }
 
