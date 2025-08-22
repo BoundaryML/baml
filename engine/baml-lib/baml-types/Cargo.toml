@@ -22,7 +22,7 @@ anyhow.workspace = true
 clap.workspace = true
 derive_builder.workspace = true
 internal-baml-diagnostics = { path = "../diagnostics" }
-itertools = "0.14.0"
+itertools.workspace = true
 log.workspace = true
 minijinja.workspace = true
 once_cell.workspace = true

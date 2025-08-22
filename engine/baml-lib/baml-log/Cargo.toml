@@ -19,13 +19,13 @@ unused_variables = "deny"
 type_complexity = "allow"
 
 [dependencies]
-serde = { version = "1.0", features = ["derive"] }
+serde.workspace = true
 serde_json.workspace = true
 anyhow.workspace = true
-thiserror = "2.0.12"
-colored = "2"
+thiserror.workspace = true
+colored.workspace = true
 lazy_static = "1.5.0"
-chrono = "0.4.40"
+chrono.workspace = true
 log.workspace = true
 
 [dev-dependencies]

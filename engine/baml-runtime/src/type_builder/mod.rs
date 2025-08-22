@@ -841,6 +841,8 @@ impl TypeBuilder {
 mod tests {
     use std::collections::HashMap;
 
+    use internal_baml_core::feature_flags::FeatureFlags;
+
     use super::*;
 
     #[test]
@@ -1191,6 +1193,7 @@ mod tests {
             "baml_src",
             &files,
             [("OPENAI_API_KEY", "OPENAI_API_KEY")].into(),
+            FeatureFlags::new(),
         )
         .unwrap();
 

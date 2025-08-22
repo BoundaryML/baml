@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use baml_runtime::BamlRuntime;
+use internal_baml_core::feature_flags::FeatureFlags;
 
 use super::*;
 use crate::panic::ffi_safe::{ffi_safe_cstring, ffi_safe_ptr};
@@ -49,8 +50,13 @@ pub extern "C" fn create_baml_runtime(
         };
 
         // Create runtime
-        let runtime = BamlRuntime::from_file_content(root_path_str, &src_files, env_vars)
-            .map_err(|e| format!("Failed to create BAML runtime: {e}"))?;
+        let runtime = BamlRuntime::from_file_content(
+            root_path_str,
+            &src_files,
+            env_vars,
+            FeatureFlags::new(),
+        )
+        .map_err(|e| format!("Failed to create BAML runtime: {e}"))?;
 
         Ok(Box::into_raw(Box::new(runtime)) as *const libc::c_void)
     })
