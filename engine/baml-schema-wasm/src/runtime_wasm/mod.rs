@@ -1575,14 +1575,9 @@ impl WasmRuntime {
         env: js_sys::Object,
         abort_signal: Option<js_sys::Object>,
     ) -> Result<WasmTestResponses, JsValue> {
-        log::info!("Running tests with abort_signal: {}", abort_signal.is_some());
-        
         // Convert abort signal to tripwire
         let (operation_id, tripwire) = match crate::abort_controller::js_abort_signal_to_tripwire(abort_signal) {
-            Ok((id, tw)) => {
-                log::info!("WASM Parallel: Set up abort handler for batch tests (op_id: {})", id);
-                (id, tw)
-            }
+            Ok((id, tw)) => (id, tw)
             Err(_e) => {
                 log::error!("WASM Parallel: Failed to setup abort handler");
                 (0, None)
@@ -1681,7 +1676,6 @@ impl WasmRuntime {
         // Clean up operation if we had an abort signal
         if operation_id > 0 {
             crate::abort_controller::cleanup_operation(operation_id);
-            log::info!("WASM Parallel: Cleaned up operation {}", operation_id);
         }
         
         Ok(WasmTestResponses { responses: results })
@@ -1918,13 +1912,9 @@ impl WasmFunction {
         env: js_sys::Object,
         abort_signal: Option<js_sys::Object>,
     ) -> Result<WasmTestResponse, JsValue> {
-        log::warn!("BAML Test: run_test_with_expr_events called for test: {}", test_name);
-        
         // Convert abort signal to tripwire
         let (operation_id, tripwire) = js_abort_signal_to_tripwire(abort_signal)
             .map_err(|e| JsValue::from(e))?;
-        
-        log::warn!("BAML Test: Abort signal converted, operation ID: {}, has_tripwire: {}", operation_id, tripwire.is_some());
         
         let rt = &rt.runtime;
         let function_name = self.name.clone();
@@ -1992,11 +1982,9 @@ impl WasmFunction {
             .await;
         
         // Clean up the operation
-        log::warn!("BAML Test: Cleaning up operation {} after test completion", operation_id);
         cleanup_operation(operation_id);
         
         let (test_response, span) = result;
-        log::warn!("BAML Test: Test completed with response: {test_response:#?}");
 
         Ok(WasmTestResponse {
             test_response,
@@ -2022,13 +2010,9 @@ impl WasmFunction {
         env: js_sys::Object,
         abort_signal: Option<js_sys::Object>,
     ) -> Result<WasmTestResponse, JsValue> {
-        log::warn!("BAML Test: run_test called for test: {}", test_name);
-        
         // Convert abort signal to tripwire
         let (operation_id, tripwire) = js_abort_signal_to_tripwire(abort_signal)
             .map_err(|e| JsValue::from(e))?;
-        
-        log::warn!("BAML Test: Abort signal converted, operation ID: {}, has_tripwire: {}", operation_id, tripwire.is_some());
         
         let rt = &rt.runtime;
         let function_name = self.name.clone();
@@ -2075,11 +2059,9 @@ impl WasmFunction {
             .await;
         
         // Clean up the operation
-        log::warn!("BAML Test: Cleaning up operation {} after test completion", operation_id);
         cleanup_operation(operation_id);
         
         let (test_response, span) = result;
-        log::warn!("BAML Test: Test completed with response: {test_response:#?}");
 
         Ok(WasmTestResponse {
             test_response,
