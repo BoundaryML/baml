@@ -361,6 +361,33 @@ fn main() -> std::io::Result<()> {
         // Allow overriding the protoc-gen-go plugin path
         if let Ok(path) = std::env::var("PROTOC_GEN_GO_PATH") {
             protoc.plugin(&path);
+        } else {
+            // Try to find protoc-gen-go using mise
+            match std::process::Command::new("mise")
+                .args(["which", "protoc-gen-go"])
+                .output()
+            {
+                Ok(output) if output.status.success() => {
+                    let path = String::from_utf8_lossy(&output.stdout);
+                    if !path.is_empty() {
+                        eprintln!("Using protoc-gen-go from mise: {}", path);
+                        protoc.plugin(path.trim());
+                    } else {
+                        eprintln!("protoc-gen-go fallback: mise which returned empty path, relying on PATH");
+                    }
+                }
+                Ok(_) => {
+                    eprintln!(
+                        "protoc-gen-go fallback: mise which protoc-gen-go failed, relying on PATH"
+                    );
+                }
+                Err(e) => {
+                    eprintln!(
+                        "protoc-gen-go fallback: mise command failed ({}), relying on PATH",
+                        e
+                    );
+                }
+            }
         }
 
         protoc
