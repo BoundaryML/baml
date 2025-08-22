@@ -12,7 +12,7 @@ import { orchIndexAtom } from './playground-panel/atoms-orch-graph';
 import type { ICodeBlock } from './types';
 import { vscode } from './vscode';
 import { apiKeysAtom } from '../../components/api-keys-dialog/atoms';
-import { effectiveFeatureFlagsAtom } from './feature-flags';
+import { standaloneFeatureFlagsAtom, isVSCodeEnvironment } from './feature-flags';
 
 const wasmAtomAsync = atom(async () => {
   const wasm = await import('@gloo-ai/baml-schema-wasm-web/baml_schema_build');
@@ -81,7 +81,10 @@ export const runtimeAtom = atom<{
     const selectedEnvVars = Object.fromEntries(
       Object.entries(apiKeys).filter(([key, value]) => value !== undefined),
     );
-    const featureFlags = get(effectiveFeatureFlagsAtom);
+    // Use VSCode settings in VSCode environment, standalone flags in standalone
+    const featureFlags = isVSCodeEnvironment()
+      ? get(vscodeSettingsAtom)?.featureFlags ?? []
+      : get(standaloneFeatureFlagsAtom);
     const rt = project.runtime(selectedEnvVars, featureFlags);
     const diags = project.diagnostics(rt);
     return { rt, diags, lastValidRt: rt };

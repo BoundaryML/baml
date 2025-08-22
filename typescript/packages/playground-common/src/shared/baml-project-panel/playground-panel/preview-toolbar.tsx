@@ -31,7 +31,7 @@ import { areTestsRunningAtom, selectedItemAtom, selectionAtom } from './atoms';
 import { FunctionTestName } from './function-test-name';
 import { isParallelTestsEnabledAtom } from './prompt-preview/test-panel/atoms';
 import { useRunBamlTests } from './prompt-preview/test-panel/test-runner';
-import { effectiveFeatureFlagsAtom, isVSCodeEnvironment } from '../feature-flags';
+import { betaFeatureEnabledAtom, isVSCodeEnvironment } from '../feature-flags';
 import { vscodeSettingsAtom } from '../atoms';
 
 export const displaySettingsAtom = atom({
@@ -88,21 +88,18 @@ export function PreviewToolbar() {
   const setBamlConfig = useSetAtom(bamlConfig);
   
   // Beta feature flag settings
-  const [effectiveFeatureFlags, setEffectiveFeatureFlags] = useAtom(effectiveFeatureFlagsAtom);
+  const [betaFeatureEnabled, setBetaFeatureEnabled] = useAtom(betaFeatureEnabledAtom);
   const vscodeSettings = useAtomValue(vscodeSettingsAtom);
   const isInVSCode = isVSCodeEnvironment();
   
-  // For VSCode, use VSCode settings directly; for standalone, use effective flags
-  const betaFeatureEnabled = isInVSCode 
+  // For VSCode, use VSCode settings directly (read-only); for standalone, use atom
+  const displayBetaEnabled = isInVSCode 
     ? (vscodeSettings?.featureFlags?.includes('beta') ?? false)
-    : effectiveFeatureFlags.includes('beta');
+    : betaFeatureEnabled;
   
   const handleBetaToggle = (enabled: boolean) => {
     // This function only runs in standalone mode (not VSCode)
-    const updatedFlags = enabled 
-      ? [...effectiveFeatureFlags.filter(flag => flag !== 'beta'), 'beta']
-      : effectiveFeatureFlags.filter(flag => flag !== 'beta');
-    setEffectiveFeatureFlags(updatedFlags);
+    setBetaFeatureEnabled(enabled);
     toast.success('Beta Features Toggled', {
       description: `Beta features ${enabled ? 'enabled' : 'disabled'}.`,
     });
@@ -253,7 +250,7 @@ export function PreviewToolbar() {
               {/* Beta Features - Only show toggle in standalone fiddle, not in VSCode */}
               {!isInVSCode ? (
                 <DropdownMenuCheckboxItem
-                  checked={betaFeatureEnabled}
+                  checked={displayBetaEnabled}
                   onCheckedChange={handleBetaToggle}
                   className="text-sm px-2 py-1.5 pl-7"
                 >
@@ -279,7 +276,7 @@ export function PreviewToolbar() {
                     <Tooltip delayDuration={300}>
                       <TooltipTrigger asChild>
                         <span>
-                          Beta Features: {betaFeatureEnabled ? 'Enabled' : 'Disabled'}
+                          Beta Features: {displayBetaEnabled ? 'Enabled' : 'Disabled'}
                         </span>
                       </TooltipTrigger>
                       <TooltipContent side="left" className="text-xs w-80">
@@ -289,7 +286,7 @@ export function PreviewToolbar() {
                         <b>To modify:</b> Open VSCode settings and search for "baml.featureFlags"
                         <br />
                         <br />
-                        Current status: {betaFeatureEnabled ? 'Beta features are enabled' : 'Beta features are disabled'}
+                        Current status: {displayBetaEnabled ? 'Beta features are enabled' : 'Beta features are disabled'}
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
