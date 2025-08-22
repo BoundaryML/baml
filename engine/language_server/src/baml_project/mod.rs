@@ -1320,21 +1320,21 @@ impl Project {
         let mut major_minor_versions = std::collections::HashMap::new();
         let mut highest_patch_by_major_minor = std::collections::HashMap::new();
 
-        let gen_version_strings = generators.iter().map(|gen| &gen.version);
+        let gen_version_strings = generators.iter().map(|gen| gen.version.as_ref());
 
         // add runtime version on top since that's what we want to compare with.
-        let gen_version_strings = [runtime_version].chain(gen_version_strings);
+        let gen_version_strings = [runtime_version].into_iter().chain(gen_version_strings);
 
         // Track major.minor versions and find highest patch for each
-        for gen in generators {
-            if let Ok(version) = semver::Version::parse(&gen.version) {
+        for version_str in gen_version_strings {
+            if let Ok(version) = semver::Version::parse(&version_str) {
                 let major_minor = format!("{}.{}", version.major, version.minor);
 
                 // Track generators with this major.minor
                 major_minor_versions
                     .entry(major_minor.clone())
                     .or_insert_with(Vec::new)
-                    .push(gen.clone());
+                    .push(version_str);
 
                 // Track highest patch version for this major.minor
                 highest_patch_by_major_minor
@@ -1346,7 +1346,7 @@ impl Project {
                     })
                     .or_insert(version.patch);
             } else {
-                tracing::warn!("Invalid semver version in generator: {}", gen.version);
+                tracing::warn!("Invalid semver version in generator: {}", version_str);
                 // Consider how to handle invalid versions - for now, we ignore them for the check
             }
         }
