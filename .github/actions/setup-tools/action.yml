@@ -13,5 +13,5 @@ runs:
     - name: Setup mise
       uses: jdx/mise-action@v2
       with:
-        install: false
+        install_args: "protoc-gen-go"
         cache: true
