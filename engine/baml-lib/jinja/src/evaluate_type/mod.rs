@@ -9,12 +9,13 @@ mod types;
 
 use std::{collections::HashSet, fmt::Debug, ops::Index};
 
+use indexmap::{IndexMap, IndexSet};
 use minijinja::machinery::{ast::Expr, Span};
 
 pub use self::{
     expr::evaluate_type,
     stmt::get_variable_types,
-    types::{JinjaContext, PredefinedTypes, Type},
+    types::{EnumDefinition, EnumValueDefinition, JinjaContext, PredefinedTypes, Type},
 };
 
 #[derive(Debug, Clone)]
@@ -140,6 +141,7 @@ impl TypeError {
     // either some ordering issue or closest match algorithm does weird stuff
     // and returns results non-deterministically. See commented test in
     // baml-lib/jinja/src/evaluate_type/test_expr.rs
+    // NB(sam): this is probably because valid_args is a HashSet, not an IndexSet
     fn new_unknown_arg(func: &str, span: Span, name: &str, valid_args: HashSet<&String>) -> Self {
         let names = valid_args.into_iter().collect::<Vec<_>>();
         let mut close_names = sort_by_match(name, &names, Some(3));
@@ -187,6 +189,149 @@ impl TypeError {
         };
 
         Self { message: format!("{message}\n\nSee: https://docs.rs/minijinja/latest/minijinja/filters/index.html#functions for the compelete list"), span }
+    }
+
+    fn new_enum_literal_suggestion(
+        expr: &Expr,
+        enum_name: &str,
+        literal_value: &str,
+        types: &types::PredefinedTypes,
+        span: Span,
+    ) -> Self {
+        let enum_def = match types.as_enum(enum_name) {
+            Some(def) => def,
+            None => return Self::new_enum_string_cmp_deprecated(expr, enum_name, span),
+        };
+
+        // 1. EXACT VALUE NAME MATCH
+        if enum_def.values.iter().any(|v| v.name == literal_value) {
+            return Self {
+                message: format!(
+                    "Use `{enum_name}.{literal_value}` instead of \"{literal_value}\" - comparing enums with strings will soon be deprecated."
+                ),
+                span,
+            };
+        }
+
+        // 2. CASE-INSENSITIVE VALUE NAME MATCH
+        if let Some(correct_case) = enum_def
+            .values
+            .iter()
+            .find(|v| v.name.to_lowercase() == literal_value.to_lowercase())
+        {
+            return Self {
+                message: format!(
+                    "Use `{}.{}` instead of \"{}\" - comparing enums with strings will soon be deprecated.",
+                    enum_name, correct_case.name, literal_value
+                ),
+                span,
+            };
+        }
+
+        // 3. EXACT ALIAS MATCH
+        if let Some(value_for_alias) = enum_def
+            .values
+            .iter()
+            .find(|v| v.alias.as_ref() == Some(&literal_value.to_string()))
+        {
+            return Self {
+                message: format!(
+                    "Did you mean `{}.{}` instead of \"{}\" (alias)? Enums are not equal to their alias values.",
+                    enum_name, value_for_alias.name, literal_value
+                ),
+                span,
+            };
+        }
+
+        // 4. CASE-INSENSITIVE ALIAS MATCH
+        if let Some(value_for_alias) = enum_def.values.iter().find(|v| {
+            v.alias.as_ref().map(|a| a.to_lowercase()) == Some(literal_value.to_lowercase())
+        }) {
+            return Self {
+                message: format!(
+                    "Did you mean `{}.{}` instead of \"{}\" (alias)? Enums are not equal to their alias values.",
+                    enum_name, value_for_alias.name, literal_value
+                ),
+                span,
+            };
+        }
+
+        // 5. FUZZY MATCH using existing sort_by_match function
+        let mut all_searchable_terms = Vec::new();
+        let mut term_to_value_name = IndexMap::new();
+        for value in &enum_def.values {
+            all_searchable_terms.push(value.name.clone());
+            term_to_value_name.insert(value.name.clone(), value.name.clone());
+
+            if let Some(alias) = &value.alias {
+                all_searchable_terms.push(alias.clone());
+                term_to_value_name.insert(alias.clone(), value.name.clone());
+            }
+        }
+
+        let close_matches = sort_by_match(literal_value, &all_searchable_terms, Some(3));
+        if !close_matches.is_empty() {
+            let unique_values: IndexSet<_> = close_matches
+                .iter()
+                .filter_map(|term| term_to_value_name.get(*term))
+                .collect();
+            let suggestions: Vec<_> = unique_values
+                .iter()
+                .map(|v| format!("{enum_name}.{v}"))
+                .collect();
+
+            return Self {
+                message: if suggestions.len() == 1 {
+                    format!(
+                        "Use `{}` instead of \"{}\" - comparing enums with strings will soon be deprecated.",
+                        suggestions[0], literal_value
+                    )
+                } else {
+                    format!(
+                        "Use one of: {} - comparing enums with strings will soon be deprecated.",
+                        suggestions.join(", ")
+                    )
+                },
+                span,
+            };
+        }
+
+        // 6. FALLBACK: Show all available values
+        Self {
+            message: format!(
+                "Use one of: {} - comparing enums with strings will soon be deprecated.",
+                enum_def
+                    .values
+                    .iter()
+                    .map(|v| format!("{}.{}", enum_name, v.name))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            span,
+        }
+    }
+
+    fn new_enum_string_cmp_deprecated(_expr: &Expr, enum_name: &str, span: Span) -> Self {
+        Self {
+            message: format!(
+                "Comparing enum {enum_name} to string variable - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339."
+            ),
+            span,
+        }
+    }
+
+    fn new_enum_value_property_error(
+        variable_name: &str,
+        enum_value: &str,
+        property: &str,
+        span: Span,
+    ) -> Self {
+        Self {
+            message: format!(
+                "enum value {enum_value} ({variable_name}) does not have a property '{property}'"
+            ),
+            span,
+        }
     }
 
     fn new_invalid_type(expr: &Expr, got: &Type, expected: &str, span: Span) -> Self {
@@ -238,6 +383,13 @@ impl TypeError {
     }
 
     fn new_class_not_defined(class: &str) -> Self {
+        Self {
+            message: format!("Class '{class}' is not defined"),
+            span: Span::default(),
+        }
+    }
+
+    fn new_enum_not_defined(class: &str) -> Self {
         Self {
             message: format!("Class '{class}' is not defined"),
             span: Span::default(),

@@ -1,7 +1,7 @@
 use std::{collections::HashSet, mem::MaybeUninit};
 
 use internal_baml_ast::ast::{
-    ClassConstructorField, Expression, LetStmt, ReturnStmt, Stmt, WithName, WithSpan,
+    AssertStmt, ClassConstructorField, Expression, LetStmt, ReturnStmt, Stmt, WithName, WithSpan,
 };
 use internal_baml_diagnostics::{DatamodelError, DatamodelWarning};
 use itertools::Itertools;
@@ -51,10 +51,13 @@ pub(super) fn validate_expr_fns(ctx: &mut Context<'_>) {
     });
 
     for expr_fn in ctx.db.walk_expr_fns() {
-        ctx.push_warning(DatamodelWarning::new(
-            "Workflow functions are experimental, and will break in the future.".to_string(),
-            expr_fn.name_span().clone(),
-        ));
+        // Only show experimental warning if beta features are NOT enabled
+        if !ctx.feature_flags().is_beta_enabled() {
+            ctx.push_warning(DatamodelWarning::new(
+                "Workflow functions are experimental, and will break in the future.".to_string(),
+                expr_fn.name_span().clone(),
+            ));
+        }
         if taken_names.contains(expr_fn.name()) {
             ctx.push_error(DatamodelError::new_validation_error(
                 "Expr function name must be unique",
@@ -91,10 +94,13 @@ pub(super) fn validate_expr_fns(ctx: &mut Context<'_>) {
     }
 
     for toplevel_assignment in ctx.db.walk_toplevel_assignments() {
-        ctx.push_warning(DatamodelWarning::new(
-            "Variable assignment is experimental, and will break in the future.".to_string(),
-            toplevel_assignment.expr().span().clone(),
-        ));
+        // Only show experimental warning if beta features are NOT enabled
+        if !ctx.feature_flags().is_beta_enabled() {
+            ctx.push_warning(DatamodelWarning::new(
+                "Variable assignment is experimental, and will break in the future.".to_string(),
+                toplevel_assignment.expr().span().clone(),
+            ));
+        }
 
         // Create a scope for toplevel assignments that includes all taken names
         let scope = taken_names.clone();
@@ -163,7 +169,7 @@ fn validate_stmt(ctx: &mut Context<'_>, stmt: &Stmt, scope: &HashSet<String>) {
 
             validate_expr_block(ctx, &stmt.body, loop_scope);
         }
-        Stmt::Return(ReturnStmt { value, .. }) => {
+        Stmt::Return(ReturnStmt { value, .. }) | Stmt::Assert(AssertStmt { value, .. }) => {
             validate_expression(ctx, value, scope);
         }
     }

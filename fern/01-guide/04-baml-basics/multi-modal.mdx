@@ -90,6 +90,53 @@ import { Image } from "@boundaryml/baml"
   
 ```
 
+```go Go
+package main
+
+import (
+    "context"
+    
+    b "example.com/myproject/baml_client"
+)
+
+func testImageInput() error {
+    ctx := context.Background()
+    
+    // From URL
+    img, err := b.NewImageFromUrl(
+        "https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png",
+        nil,
+    )
+    if err != nil {
+        return err
+    }
+    
+    result, err := b.TestImageInput(ctx, img)
+    if err != nil {
+        return err
+    }
+
+    // Base64 image
+    imageB64 := "iVBORw0K...."
+    img2, err := b.NewImageFromBase64(imageB64, stringPtr("image/png"))
+    if err != nil {
+        return err
+    }
+    
+    result2, err := b.TestImageInput(ctx, img2)
+    if err != nil {
+        return err
+    }
+    
+    return nil
+}
+
+// Helper function for string pointer
+func stringPtr(s string) *string {
+    return &s
+}
+```
+
 ```ruby Ruby (beta)
 we're working on it!
 ```
@@ -137,6 +184,48 @@ import { Audio } from "@boundaryml/baml"
   
 ```
 
+```go Go
+package main
+
+import (
+    "context"
+    
+    b "example.com/myproject/baml_client"
+)
+
+func testAudioInput() error {
+    ctx := context.Background()
+    
+    // From URL
+    aud, err := b.NewAudioFromUrl(
+        "https://actions.google.com/sounds/v1/emergency/beeper_emergency_call.ogg",
+        nil,
+    )
+    if err != nil {
+        return err
+    }
+    
+    result, err := b.TestAudioInput(ctx, aud)
+    if err != nil {
+        return err
+    }
+
+    // Base64 audio
+    audioB64 := "iVBORw0K...."
+    aud2, err := b.NewAudioFromBase64(audioB64, stringPtr("audio/ogg"))
+    if err != nil {
+        return err
+    }
+    
+    result2, err := b.TestAudioInput(ctx, aud2)
+    if err != nil {
+        return err
+    }
+    
+    return nil
+}
+```
+
 ```ruby Ruby (beta)
 we're working on it!
 ```
@@ -171,6 +260,34 @@ import { Pdf } from "@boundaryml/baml"
     Pdf.fromBase64('application/pdf', pdf_base64),
   )
   
+```
+
+```go Go
+package main
+
+import (
+    "context"
+    
+    b "example.com/myproject/baml_client"
+)
+
+func testPdfInput() error {
+    ctx := context.Background()
+    
+    // Base64 PDF data
+    pdfB64 := "JVBERi0K...."
+    pdf, err := b.NewPDFFromBase64(pdfB64, nil)
+    if err != nil {
+        return err
+    }
+    
+    result, err := b.TestPdfInput(ctx, pdf)
+    if err != nil {
+        return err
+    }
+    
+    return nil
+}
 ```
 
 ```ruby Ruby (beta)
@@ -219,6 +336,45 @@ import { Video } from "@boundaryml/baml"
     Video.fromBase64('video/mp4', video_base64),
   )
   
+```
+
+```go Go
+package main
+
+import (
+    "context"
+    
+    b "example.com/myproject/baml_client"
+)
+
+func testVideoInput() error {
+    ctx := context.Background()
+    
+    // From URL
+    vid, err := b.NewVideoFromUrl("https://example.com/sample.mp4", nil)
+    if err != nil {
+        return err
+    }
+    
+    result, err := b.TestVideoInput(ctx, vid)
+    if err != nil {
+        return err
+    }
+
+    // Base64 video
+    videoB64 := "AAAAGGZ0eXBpc29t...."
+    vid2, err := b.NewVideoFromBase64(videoB64, stringPtr("video/mp4"))
+    if err != nil {
+        return err
+    }
+    
+    result2, err := b.TestVideoInput(ctx, vid2)
+    if err != nil {
+        return err
+    }
+    
+    return nil
+}
 ```
 
 ```ruby Ruby (beta)

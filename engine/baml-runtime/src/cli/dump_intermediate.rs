@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use baml_compiler::{compile, hir::Hir};
-use baml_vm::{Object, Value};
+use baml_vm::{EvalStack, Object, Value};
 use clap::Parser;
 use internal_baml_core::{
     internal_baml_diagnostics::SourceFile, ir::repr::IntermediateRepr, validate, ValidatedSchema,
@@ -23,9 +23,13 @@ pub enum DumpType {
 }
 
 impl DumpIntermediateArgs {
-    pub fn run(&self, dump_type: DumpType) -> Result<()> {
+    pub fn run(
+        &self,
+        dump_type: DumpType,
+        feature_flags: internal_baml_core::feature_flags::FeatureFlags,
+    ) -> Result<()> {
         // Parse and validate BAML files
-        let validated_schema = self.load_and_validate_baml_files()?;
+        let validated_schema = self.load_and_validate_baml_files(feature_flags)?;
 
         match dump_type {
             DumpType::HIR => {
@@ -47,7 +51,10 @@ impl DumpIntermediateArgs {
         Ok(())
     }
 
-    fn load_and_validate_baml_files(&self) -> Result<ValidatedSchema> {
+    fn load_and_validate_baml_files(
+        &self,
+        feature_flags: internal_baml_core::feature_flags::FeatureFlags,
+    ) -> Result<ValidatedSchema> {
         // Get all BAML files from the directory
         let files = baml_src_files(&self.from)?;
 
@@ -61,7 +68,7 @@ impl DumpIntermediateArgs {
             .collect::<Result<Vec<_>>>()?;
 
         // Validate the files
-        let validated_schema = validate(&self.from, source_files);
+        let validated_schema = validate(&self.from, source_files, feature_flags.clone());
 
         // Check for validation errors
         if validated_schema.diagnostics.has_errors() {
@@ -70,6 +77,14 @@ impl DumpIntermediateArgs {
                 eprintln!("  {error:?}");
             }
             anyhow::bail!("Cannot generate HIR/bytecode due to validation errors");
+        }
+
+        // Display warnings if feature flag is set
+        if feature_flags.should_display_warnings() && validated_schema.diagnostics.has_warnings() {
+            eprintln!(
+                "{}",
+                validated_schema.diagnostics.warnings_to_pretty_string()
+            );
         }
 
         Ok(validated_schema)
@@ -109,7 +124,7 @@ impl DumpIntermediateArgs {
                 "{}",
                 baml_vm::debug::display_bytecode(
                     function,
-                    &[],
+                    &EvalStack::default(),
                     &program.objects,
                     &program.globals,
                     true

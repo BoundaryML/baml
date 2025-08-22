@@ -15,17 +15,17 @@ unused_variables = "allow"
 
 [dependencies]
 internal-baml-core = { path = "../baml-core" }
-itertools = "0.13.0"
+itertools.workspace = true
 
 
 [dev-dependencies]
-pretty_assertions = "1.4.0"
-base64 = "0.13.0"
-dissimilar = "1.0.4"
-expect-test = "1.1.0"
+pretty_assertions.workspace = true
+base64.workspace = true
+dissimilar.workspace = true
+expect-test.workspace = true
 env_logger.workspace = true
 indoc.workspace = true
-either = "1.8.1"
-strip-ansi-escapes = "0.2.0"
+either.workspace = true
+strip-ansi-escapes.workspace = true
 baml-compiler = { path = "../../baml-compiler" }
 baml-vm = { path = "../../baml-vm" }

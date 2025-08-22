@@ -27,14 +27,14 @@ pub(crate) fn parse_named_argument_list(
         if matches!(named_arg.as_rule(), Rule::SPACER_TEXT) {
             continue;
         }
-        if named_arg.as_rule() == Rule::named_argument || named_arg.as_rule() == Rule::openParan {
+        if named_arg.as_rule() == Rule::named_argument || named_arg.as_rule() == Rule::openParen {
             // TODO: THIS IS SUSPECT
             assert_correct_parser!(named_arg, named_arg.as_rule());
         }
         // TODO: THIS IS SUSPECT
         // assert_correct_parser!(named_arg, Rule::named_argument);
 
-        if named_arg.as_rule() == Rule::openParan || named_arg.as_rule() == Rule::closeParan {
+        if named_arg.as_rule() == Rule::openParen || named_arg.as_rule() == Rule::closeParen {
             continue;
         }
 

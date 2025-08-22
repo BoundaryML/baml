@@ -449,6 +449,31 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+      ).returns(T.any(BamlClient::Types::DynEnumOne, String))}
+      def ClassifyDynamicStatus(
+          *varargs,
+          input:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("ClassifyDynamicStatus may only be called with keyword arguments")
+          end
+
+          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          result = options.call_function_sync(function_name: "ClassifyDynamicStatus", args: {
+              input: input,
+          })
+
+          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          # for sorbet we need to cast to the return type since parsed is now the right value
+          # We just need to tell sorbet that the return type is the right type
+          parsed.cast_to(T.any(BamlClient::Types::DynEnumOne, String))
+      end
+      sig {params(
+          varargs: T.untyped,
+          input: String,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(BamlClient::Types::Category)}
       def ClassifyMessage(
           *varargs,
@@ -919,6 +944,31 @@ module BamlClient
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
           parsed.cast_to(BamlClient::Types::ContactInfo)
+      end
+      sig {params(
+          varargs: T.untyped,
+          input: String,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+      ).returns(T::Array[T.any(BamlClient::Types::DynEnumTwo, String)])}
+      def ExtractDynamicCategories(
+          *varargs,
+          input:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("ExtractDynamicCategories may only be called with keyword arguments")
+          end
+
+          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          result = options.call_function_sync(function_name: "ExtractDynamicCategories", args: {
+              input: input,
+          })
+
+          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          # for sorbet we need to cast to the return type since parsed is now the right value
+          # We just need to tell sorbet that the return type is the right type
+          parsed.cast_to(T::Array[T.any(BamlClient::Types::DynEnumTwo, String)])
       end
       sig {params(
           varargs: T.untyped,
@@ -2569,6 +2619,56 @@ module BamlClient
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
           parsed.cast_to(BamlClient::Types::RecursiveUnion)
+      end
+      sig {params(
+          varargs: T.untyped,
+          input: BamlClient::Types::RenderTestClass,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+      ).returns(String)}
+      def RenderDynamicClass(
+          *varargs,
+          input:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("RenderDynamicClass may only be called with keyword arguments")
+          end
+
+          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          result = options.call_function_sync(function_name: "RenderDynamicClass", args: {
+              input: input,
+          })
+
+          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          # for sorbet we need to cast to the return type since parsed is now the right value
+          # We just need to tell sorbet that the return type is the right type
+          parsed.cast_to(String)
+      end
+      sig {params(
+          varargs: T.untyped,
+          bike: T.any(BamlClient::Types::RenderTestEnum, String),other: T.any(BamlClient::Types::RenderTestEnum, String),
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+      ).returns(String)}
+      def RenderDynamicEnum(
+          *varargs,
+          bike:,other:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("RenderDynamicEnum may only be called with keyword arguments")
+          end
+
+          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          result = options.call_function_sync(function_name: "RenderDynamicEnum", args: {
+              bike: bike,other: other,
+          })
+
+          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          # for sorbet we need to cast to the return type since parsed is now the right value
+          # We just need to tell sorbet that the return type is the right type
+          parsed.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
@@ -5735,6 +5835,31 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+      ).returns(Baml::BamlStream[T.any(BamlClient::Types::DynEnumOne, String), T.any(BamlClient::Types::DynEnumOne, String)])}
+      def ClassifyDynamicStatus(
+          *varargs,
+          input:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("ClassifyDynamicStatus may only be called with keyword arguments")
+          end
+
+          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          ctx, result = options.create_sync_stream(function_name: "ClassifyDynamicStatus", args: {
+              input: input,
+          })
+
+          Baml::BamlStream[T.any(BamlClient::Types::DynEnumOne, String), T.any(BamlClient::Types::DynEnumOne, String)].new(
+              ffi_stream: result,
+              ctx_manager: ctx
+          )
+      end
+      sig {params(
+          varargs: T.untyped,
+          input: String,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[BamlClient::Types::Category, BamlClient::Types::Category])}
       def ClassifyMessage(
           *varargs,
@@ -6202,6 +6327,31 @@ module BamlClient
           })
 
           Baml::BamlStream[BamlClient::StreamTypes::ContactInfo, BamlClient::Types::ContactInfo].new(
+              ffi_stream: result,
+              ctx_manager: ctx
+          )
+      end
+      sig {params(
+          varargs: T.untyped,
+          input: String,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+      ).returns(Baml::BamlStream[T::Array[T.any(BamlClient::Types::DynEnumTwo, String)], T::Array[T.any(BamlClient::Types::DynEnumTwo, String)]])}
+      def ExtractDynamicCategories(
+          *varargs,
+          input:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("ExtractDynamicCategories may only be called with keyword arguments")
+          end
+
+          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          ctx, result = options.create_sync_stream(function_name: "ExtractDynamicCategories", args: {
+              input: input,
+          })
+
+          Baml::BamlStream[T::Array[T.any(BamlClient::Types::DynEnumTwo, String)], T::Array[T.any(BamlClient::Types::DynEnumTwo, String)]].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -7852,6 +8002,56 @@ module BamlClient
           })
 
           Baml::BamlStream[BamlClient::StreamTypes::RecursiveUnion, BamlClient::Types::RecursiveUnion].new(
+              ffi_stream: result,
+              ctx_manager: ctx
+          )
+      end
+      sig {params(
+          varargs: T.untyped,
+          input: BamlClient::Types::RenderTestClass,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+      ).returns(Baml::BamlStream[String, String])}
+      def RenderDynamicClass(
+          *varargs,
+          input:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("RenderDynamicClass may only be called with keyword arguments")
+          end
+
+          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          ctx, result = options.create_sync_stream(function_name: "RenderDynamicClass", args: {
+              input: input,
+          })
+
+          Baml::BamlStream[String, String].new(
+              ffi_stream: result,
+              ctx_manager: ctx
+          )
+      end
+      sig {params(
+          varargs: T.untyped,
+          bike: T.any(BamlClient::Types::RenderTestEnum, String),other: T.any(BamlClient::Types::RenderTestEnum, String),
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+      ).returns(Baml::BamlStream[String, String])}
+      def RenderDynamicEnum(
+          *varargs,
+          bike:,other:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("RenderDynamicEnum may only be called with keyword arguments")
+          end
+
+          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          ctx, result = options.create_sync_stream(function_name: "RenderDynamicEnum", args: {
+              bike: bike,other: other,
+          })
+
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )

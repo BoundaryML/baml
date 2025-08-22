@@ -3,7 +3,7 @@
 //! This files contains the convertions between Baml AST nodes to HIR nodes.
 
 use baml_types::{type_meta::base::StreamingBehavior, Constraint, ConstraintLevel, TypeValue};
-use internal_baml_ast::ast::{self, App, Attribute, ReturnStmt, WithName, WithSpan};
+use internal_baml_ast::ast::{self, App, AssertStmt, Attribute, ReturnStmt, WithName, WithSpan};
 use internal_baml_diagnostics::Span;
 
 use crate::hir::{
@@ -131,9 +131,9 @@ impl TypeM<TypeMeta> {
         match type_ {
             ast::FieldType::Symbol(_, name, _) => {
                 if name.name().starts_with("Enum") {
-                    TypeM::EnumName(name.name().to_string(), meta)
+                    TypeM::Enum(name.name().to_string(), meta)
                 } else {
-                    TypeM::ClassName(name.name().to_string(), meta)
+                    TypeM::Class(name.name().to_string(), meta)
                 }
             }
             ast::FieldType::Primitive(_, prim, _, _) => match prim {
@@ -172,10 +172,10 @@ impl TypeM<TypeMeta> {
             TypeM::Null(meta) => meta,
             TypeM::Array(_, meta) => meta,
             TypeM::Map(_, _, meta) => meta,
-            TypeM::ClassName(_, meta) => meta,
-            TypeM::EnumName(_, meta) => meta,
+            TypeM::Class(_, meta) => meta,
+            TypeM::Enum(_, meta) => meta,
             TypeM::Union(_, meta) => meta,
-            TypeM::Arrow(_, meta) => meta,
+            TypeM::Function(_, meta) => meta,
         }
     }
 
@@ -197,10 +197,10 @@ impl TypeM<TypeMeta> {
             TypeM::Bool(_) => false,
             TypeM::Array(_, _) => false,
             TypeM::Map(_, _, _) => false,
-            TypeM::ClassName(_, _) => false,
-            TypeM::EnumName(_, _) => false,
+            TypeM::Class(_, _) => false,
+            TypeM::Enum(_, _) => false,
             TypeM::Null(_) => false,
-            TypeM::Arrow(_, _) => true,
+            TypeM::Function(_, _) => true,
         }
     }
 }
@@ -475,6 +475,10 @@ fn lower_stmt(stmt: &ast::Stmt) -> Statement {
         }
         ast::Stmt::Return(ReturnStmt { value, span }) => Statement::Return {
             expr: Expression::from_ast(value),
+            span: span.clone(),
+        },
+        ast::Stmt::Assert(AssertStmt { value, span }) => Statement::Assert {
+            condition: Expression::from_ast(value),
             span: span.clone(),
         },
     };

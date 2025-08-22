@@ -40,6 +40,7 @@ runs:
         go-version: ${{ inputs.go-version }}
         cache: ${{ inputs.cache }}
         architecture: ${{ inputs.architecture }}
+        cache-dependency-path: "**/*.sum"
 
     - name: Set cross-compilation targets
       if: inputs.target-os != '' || inputs.target-arch != ''
@@ -54,7 +55,8 @@ runs:
 
     - name: Install protoc-gen-go
       if: inputs.install-protoc-gen-go == 'true'
-      run: go install github.com/golang/protobuf/protoc-gen-go@latest
+      # locked to match the version in mise.toml
+      run: go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.6
       shell: bash
 
     - name: Install goimports

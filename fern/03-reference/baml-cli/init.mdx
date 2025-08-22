@@ -29,6 +29,7 @@ The `--client-type` option allows you to specify the type of BAML client to gene
 
 - `python/pydantic`: For Python clients using Pydantic
 - `typescript`: For TypeScript clients
+- `go`: For native Go clients (recommended for Go projects)
 - `ruby/sorbet`: For Ruby clients using Sorbet
 - `rest/openapi`: For REST clients using OpenAPI
 
@@ -67,6 +68,11 @@ For a full list of supported OpenAPI client types, refer to the [OpenAPI Generat
 4. Initialize a BAML project for OpenAPI with a Go client:
    ```
    baml init --client-type openapi --openapi-client-type go
+   ```
+
+5. Initialize a BAML project with native Go client (recommended):
+   ```
+   baml init --client-type go
    ```
 
 ## Notes

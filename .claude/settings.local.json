@@ -1,5 +1,4 @@
 {
-  "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "permissions": {
     "allow": [
       "Bash(grep:*)",
@@ -38,11 +37,8 @@
       "Bash(cargo build:*)",
       "Bash(UPDATE_EXPECT=1 cargo test basic_class --lib)",
       "Bash(ln:*)",
-      "Bash(UPDATE_EXPECT=1 cargo test basic_class)",
-      "Bash(UPDATE_EXPECT=1 cargo test)",
-      "Bash(UPDATE_EXPECT=1 cargo test test_class)",
-      "Bash(UPDATE_EXPECT=1 cargo test simple_function enum_function)",
-      "Bash(UPDATE_EXPECT=1 cargo test literal_values if_expressions let_bindings function_calls llm_functions http_calls mixed_features mixed_complex)",
+      "Bash(UPDATE_EXPECT=1 cargo test:*)",
+      "Bash(UPDATE_EXPECT=1 cargo nextest run:*)",
       "Bash(npm run typecheck:*)",
       "Bash(npm run lint)",
       "Bash(npm run format:*)",
@@ -51,11 +47,13 @@
       "Bash(npx tsc:*)",
       "Bash(npx tsc:*)",
       "WebFetch(domain:www.npmjs.com)",
+      "Bash(./target/debug/baml-cli:*)",
       "WebFetch(domain:plugins.jetbrains.com)",
       "WebFetch(domain:github.com)",
       "Bash(./gradlew:*)",
       "Bash(java:*)"
     ],
     "deny": []
-  }
+  },
+  "$schema": "https://json.schemastore.org/claude-code-settings.json"
 }

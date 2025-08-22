@@ -25,7 +25,7 @@ pub struct AssignOpStmt {
     pub span: Span,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AssignOp {
     /// The `+=` operator (addition)
     AddAssign,
@@ -80,6 +80,12 @@ pub struct ReturnStmt {
     pub span: Span,
 }
 
+#[derive(Debug, Clone)]
+pub struct AssertStmt {
+    pub value: Expression,
+    pub span: Span,
+}
+
 // Stmt(statements) perform actions and not often return values.
 #[derive(Debug, Clone)]
 pub enum Stmt {
@@ -94,6 +100,7 @@ pub enum Stmt {
     Break(Span),
     Continue(Span),
     Return(ReturnStmt),
+    Assert(AssertStmt),
 }
 
 impl fmt::Display for AssignOp {
@@ -148,12 +155,25 @@ impl fmt::Display for Stmt {
             Stmt::Break(_) => f.write_str("break"),
             Stmt::Continue(_) => f.write_str("continue"),
             Stmt::Return(ReturnStmt { value, .. }) => write!(f, "return {value}"),
+            Stmt::Assert(AssertStmt { value, .. }) => write!(f, "assert {value}"),
         }
     }
 }
 
 impl Stmt {
     pub fn assert_eq_up_to_span(&self, other: &Stmt) {
+        fn assert_opt<T: std::fmt::Debug>(
+            a: &Option<T>,
+            b: &Option<T>,
+            assert_fn: impl FnOnce(&T, &T),
+        ) {
+            match (a.as_ref(), b.as_ref()) {
+                (Some(sa), Some(sb)) => assert_fn(sa, sb),
+                (None, None) => {}
+                _ => panic!("{a:?} does not equal {b:?} up to span"),
+            }
+        }
+
         match (self, other) {
             (Stmt::Let(stmt1), Stmt::Let(stmt2)) => {
                 stmt1.identifier.assert_eq_up_to_span(&stmt2.identifier);
@@ -172,7 +192,66 @@ impl Stmt {
                 stmt1.identifier.assert_eq_up_to_span(&stmt2.identifier);
                 stmt1.expr.assert_eq_up_to_span(&stmt2.expr);
             }
-            (_, _) => {
+
+            (Stmt::AssignOp(stmt1), Stmt::AssignOp(stmt2)) => {
+                assert_eq!(stmt1.assign_op, stmt2.assign_op);
+                stmt1.identifier.assert_eq_up_to_span(&stmt2.identifier);
+                stmt1.expr.assert_eq_up_to_span(&stmt2.expr);
+            }
+
+            (
+                Stmt::CForLoop(CForLoopStmt {
+                    init_stmt: init_stmt1,
+                    condition: condition1,
+                    after_stmt: after_stmt1,
+                    body: body1,
+                    ..
+                }),
+                Stmt::CForLoop(CForLoopStmt {
+                    init_stmt,
+                    condition,
+                    after_stmt,
+                    body,
+                    ..
+                }),
+            ) => {
+                assert_opt(init_stmt, init_stmt1, |a, b| a.assert_eq_up_to_span(b));
+                assert_opt(after_stmt, after_stmt1, |a, b| a.assert_eq_up_to_span(b));
+                assert_opt(condition, condition1, |a, b| a.assert_eq_up_to_span(b));
+
+                body.assert_eq_up_to_span(body1);
+            }
+
+            (Stmt::WhileLoop(a), Stmt::WhileLoop(b)) => {
+                a.condition.assert_eq_up_to_span(&b.condition);
+                a.body.assert_eq_up_to_span(&b.body);
+            }
+
+            (Stmt::Break(_), Stmt::Break(_)) | (Stmt::Continue(_), Stmt::Continue(_)) => {}
+
+            (
+                Stmt::Return(ReturnStmt { value: a, .. }),
+                Stmt::Return(ReturnStmt { value: b, .. }),
+            )
+            | (
+                Stmt::Assert(AssertStmt { value: a, .. }),
+                Stmt::Assert(AssertStmt { value: b, .. }),
+            ) => a.assert_eq_up_to_span(b),
+
+            (
+                Stmt::Let(_)
+                | Stmt::ForLoop(_)
+                | Stmt::Expression(_)
+                | Stmt::Assign(_)
+                | Stmt::AssignOp(_)
+                | Stmt::CForLoop(_)
+                | Stmt::WhileLoop(_)
+                | Stmt::Return(_)
+                | Stmt::Break(_)
+                | Stmt::Continue(_)
+                | Stmt::Assert(_),
+                _,
+            ) => {
                 panic!("Types do not match: {self:?} and {other:?}")
             }
         }
@@ -180,31 +259,35 @@ impl Stmt {
 
     pub fn identifier(&self) -> &Identifier {
         match self {
-            Stmt::Let(stmt) => &stmt.identifier,
-            Stmt::ForLoop(stmt) => &stmt.identifier,
+            Stmt::Let(LetStmt { identifier, .. })
+            | Stmt::ForLoop(ForLoopStmt { identifier, .. })
+            | Stmt::Assign(AssignStmt { identifier, .. })
+            | Stmt::AssignOp(AssignOpStmt { identifier, .. }) => identifier,
+
             Stmt::Expression(_) => panic!("expressions don't have identifiers"),
             Stmt::WhileLoop(_) => panic!("while loops don't have identifiers"),
             Stmt::Break(_) => panic!("break statements don't have identifiers"),
             Stmt::Continue(_) => panic!("continue statements don't have identifiers"),
             Stmt::Return(_) => panic!("return statements don't have identifiers"),
+            Stmt::Assert(_) => panic!("assert statements don't have identifiers"),
             Stmt::CForLoop(_) => panic!("c-like for loops don't have identifiers"),
-            Stmt::Assign(stmt) => &stmt.identifier,
-            Stmt::AssignOp(stmt) => &stmt.identifier,
         }
     }
 
     pub fn span(&self) -> &Span {
         match self {
-            Stmt::Let(stmt) => &stmt.span,
-            Stmt::ForLoop(stmt) => &stmt.span,
-            Stmt::CForLoop(stmt) => &stmt.span,
-            Stmt::Assign(stmt) => &stmt.span,
-            Stmt::AssignOp(stmt) => &stmt.span,
-            Stmt::WhileLoop(stmt) => &stmt.span,
-            Stmt::Return(stmt) => &stmt.span,
+            Stmt::Let(LetStmt { span, .. })
+            | Stmt::ForLoop(ForLoopStmt { span, .. })
+            | Stmt::CForLoop(CForLoopStmt { span, .. })
+            | Stmt::Assign(AssignStmt { span, .. })
+            | Stmt::AssignOp(AssignOpStmt { span, .. })
+            | Stmt::WhileLoop(WhileStmt { span, .. })
+            | Stmt::Return(ReturnStmt { span, .. })
+            | Stmt::Break(span)
+            | Stmt::Continue(span)
+            | Stmt::Assert(AssertStmt { span, .. }) => span,
 
             Stmt::Expression(expr) => expr.span(),
-            Stmt::Break(span) | Stmt::Continue(span) => span,
         }
     }
 

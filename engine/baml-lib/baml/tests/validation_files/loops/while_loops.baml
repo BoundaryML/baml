@@ -1,7 +1,7 @@
 fn GCD(mut a: int, mut b: int) -> int {
 
-	while a != b {
-	   if a > b {
+	while (a != b) {
+	   if (a > b) {
 	   	a = a - b;
 	   } else {
 	   	b = b - a;
@@ -18,11 +18,11 @@ fn Foo() -> int {
 
     let mut a = 0;
 
-    while a < 10 {
-        let b = if x {
+    while (a < 10) {
+        let b = if (x) {
             let c = 5;
             5
-         } else if y {
+         } else if (y) {
             6
          } else {
             7

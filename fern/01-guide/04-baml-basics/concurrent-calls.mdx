@@ -77,6 +77,58 @@ if (require.main === module) {
 ```
 </Tab>
 
+<Tab title="Go">
+
+You can make concurrent `b.ClassifyMessage()` calls using goroutines:
+
+```go main.go
+package main
+
+import (
+    "context"
+    "sync"
+
+    b "example.com/myproject/baml_client"
+    "example.com/myproject/baml_client/types"
+)
+
+func main() {
+    ctx := context.Background()
+    
+    var wg sync.WaitGroup
+    results := make(chan types.Category, 2)
+    
+    // Launch concurrent goroutines
+    wg.Add(2)
+    
+    go func() {
+        defer wg.Done()
+        result, err := b.ClassifyMessage(ctx, "I want to cancel my order")
+        if err == nil {
+            results <- result
+        }
+    }()
+    
+    go func() {
+        defer wg.Done()
+        result, err := b.ClassifyMessage(ctx, "I want a refund")
+        if err == nil {
+            results <- result
+        }
+    }()
+    
+    wg.Wait()
+    close(results)
+    
+    // Collect results
+    for result := range results {
+        // Handle each result
+        _ = result
+    }
+}
+```
+</Tab>
+
 <Tab title="Ruby (beta)">
 
 BAML Ruby (beta) does not currently support async/concurrent calls.

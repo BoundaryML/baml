@@ -34,7 +34,7 @@ module BamlClient
       const :checks, T::Hash[Symbol, Check]
   end
   # #########################################################################
-  # Generated enums (18)
+  # Generated enums (21)
   # #########################################################################
 
   class AliasedEnum < T::Enum
@@ -93,6 +93,13 @@ module BamlClient
   end
 
   class DynEnumOne < T::Enum
+  end
+
+  class DynEnumThree < T::Enum
+      enums do
+          TRICYCLE = new("TRICYCLE")
+          TRIANGLE = new("TRIANGLE")
+      end
   end
 
   class DynEnumTwo < T::Enum
@@ -165,6 +172,20 @@ module BamlClient
       end
   end
 
+  class RenderStatusEnum < T::Enum
+      enums do
+          ACTIVE = new("ACTIVE")
+          INACTIVE = new("INACTIVE")
+      end
+  end
+
+  class RenderTestEnum < T::Enum
+      enums do
+          BIKE = new("BIKE")
+          SCOOTER = new("SCOOTER")
+      end
+  end
+
   class Tag < T::Enum
       enums do
           Security = new("Security")
@@ -186,7 +207,7 @@ module BamlClient
   end
 
   # #########################################################################
-  # Generated classes (99)
+  # Generated classes (101)
   # #########################################################################
 
 
@@ -759,6 +780,19 @@ module BamlClient
   class RecursiveAliasDependency < T::Struct
       include Baml::Sorbet::Struct
       const :value, JsonValue
+  end
+
+
+  class RenderEnumInput < T::Struct
+      include Baml::Sorbet::Struct
+      const :testKey, String
+  end
+
+
+  class RenderTestClass < T::Struct
+      include Baml::Sorbet::Struct
+      const :name, String
+      const :status, T.any(RenderStatusEnum, String)
   end
 
 

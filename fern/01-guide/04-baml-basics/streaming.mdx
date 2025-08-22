@@ -190,6 +190,309 @@ if (require.main === module) {
 ```
 </Tab>
 
+<Tab title="Go">
+BAML will generate `b.Stream.ExtractReceiptInfo()` for you, which you can use like so:
+
+```go main.go
+package main
+
+import (
+    "context"
+    "fmt"
+    "log"
+    "sync"
+    "time"
+
+    b "example.com/myproject/baml_client"
+    "example.com/myproject/baml_client/stream_types"
+    "example.com/myproject/baml_client/types"
+)
+
+// Basic streaming with comprehensive error handling and context cancellation
+func basicStreamingExample(receipt string) {
+    // Create context with timeout to prevent hanging
+    ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+    defer cancel() // Always clean up context resources
+    
+    stream, err := b.Stream.ExtractReceiptInfo(ctx, receipt)
+    if err != nil {
+        log.Printf("Failed to create stream: %v", err)
+        return
+    }
+    
+    // Ensure stream is properly closed on exit
+    defer func() {
+        if stream != nil {
+            // Note: In practice, range automatically handles closing
+            // but explicit cleanup is shown here for demonstration
+            log.Println("Stream processing completed")
+        }
+    }()
+
+    for value := range stream {
+        // Handle context cancellation
+        select {
+        case <-ctx.Done():
+            log.Printf("Stream cancelled due to context: %v", ctx.Err())
+            return
+        default:
+        }
+        
+        // Handle streaming errors
+        if value.IsError {
+            log.Printf("Stream error: %v", value.Error)
+            return
+        }
+        
+        // Process partial results
+        if !value.IsFinal && value.Stream() != nil {
+            partial := *value.Stream()
+            fmt.Printf("Partial result: parsed %d items so far\n", len(partial.Items))
+            
+            // You could process partial results here
+            for i, item := range partial.Items {
+                if item.Name != "" { // Only show items with names parsed so far
+                    fmt.Printf("  Item %d: %s - %s\n", i+1, item.Name, item.Price)
+                }
+            }
+        }
+        
+        // Process final result
+        if value.IsFinal && value.Final() != nil {
+            final := *value.Final()
+            fmt.Printf("Final result: %d items total\n", len(final.Items))
+            fmt.Printf("Total amount: %s\n", final.Total)
+            return
+        }
+    }
+}
+
+// Stream with early termination based on conditions
+func streamWithEarlyTermination(receipt string) (*types.ReceiptInfo, error) {
+    ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+    defer cancel()
+    
+    stream, err := b.Stream.ExtractReceiptInfo(ctx, receipt)
+    if err != nil {
+        return nil, fmt.Errorf("failed to create stream: %w", err)
+    }
+
+    for value := range stream {
+        // Check for cancellation
+        select {
+        case <-ctx.Done():
+            return nil, fmt.Errorf("stream cancelled: %w", ctx.Err())
+        default:
+        }
+        
+        if value.IsError {
+            return nil, fmt.Errorf("stream error: %w", value.Error)
+        }
+        
+        // Early termination condition: stop if we have enough items
+        if !value.IsFinal && value.Stream() != nil {
+            partial := *value.Stream()
+            if len(partial.Items) >= 3 { // Stop early if we have 3+ items
+                fmt.Printf("Early termination: found %d items, stopping stream\n", len(partial.Items))
+                cancel() // Cancel context to stop stream
+                return &partial, nil
+            }
+        }
+        
+        if value.IsFinal && value.Final() != nil {
+            final := *value.Final()
+            return &final, nil
+        }
+    }
+    
+    return nil, fmt.Errorf("stream ended without final response")
+}
+
+// Concurrent streaming - process multiple receipts concurrently
+func concurrentStreamingExample(receipts []string) {
+    var wg sync.WaitGroup
+    results := make(chan *types.ReceiptInfo, len(receipts))
+    errors := make(chan error, len(receipts))
+    
+    // Create context with timeout for all goroutines
+    ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+    defer cancel()
+    
+    for i, receipt := range receipts {
+        wg.Add(1)
+        go func(index int, receiptData string) {
+            defer wg.Done()
+            
+            // Create per-goroutine context
+            goroutineCtx, goroutineCancel := context.WithTimeout(ctx, 30*time.Second)
+            defer goroutineCancel()
+            
+            stream, err := b.Stream.ExtractReceiptInfo(goroutineCtx, receiptData)
+            if err != nil {
+                errors <- fmt.Errorf("receipt %d: failed to create stream: %w", index, err)
+                return
+            }
+
+            for value := range stream {
+                select {
+                case <-goroutineCtx.Done():
+                    errors <- fmt.Errorf("receipt %d: stream cancelled: %w", index, goroutineCtx.Err())
+                    return
+                default:
+                }
+                
+                if value.IsError {
+                    errors <- fmt.Errorf("receipt %d: stream error: %w", index, value.Error)
+                    return
+                }
+                
+                if value.IsFinal && value.Final() != nil {
+                    final := *value.Final()
+                    fmt.Printf("Receipt %d: processed %d items\n", index, len(final.Items))
+                    results <- &final
+                    return
+                }
+            }
+            
+            errors <- fmt.Errorf("receipt %d: stream ended without final response", index)
+        }(i, receipt)
+    }
+    
+    // Wait for all goroutines and close channels
+    go func() {
+        wg.Wait()
+        close(results)
+        close(errors)
+    }()
+    
+    // Collect results and errors
+    var successCount int
+    var errorCount int
+    
+    for results != nil || errors != nil {
+        select {
+        case result, ok := <-results:
+            if !ok {
+                results = nil
+                continue
+            }
+            if result != nil {
+                successCount++
+                fmt.Printf("Successfully processed receipt with %d items, total: %s\n", 
+                    len(result.Items), result.Total)
+            }
+            
+        case err, ok := <-errors:
+            if !ok {
+                errors = nil
+                continue
+            }
+            if err != nil {
+                errorCount++
+                log.Printf("Error processing receipt: %v", err)
+            }
+        }
+    }
+    
+    fmt.Printf("Concurrent processing completed: %d successes, %d errors\n", 
+        successCount, errorCount)
+}
+
+// Robust streaming with retry logic
+func streamWithRetry(receipt string, maxRetries int) (*types.ReceiptInfo, error) {
+    for attempt := 1; attempt <= maxRetries; attempt++ {
+        // Create fresh context for each attempt
+        ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+        
+        stream, err := b.Stream.ExtractReceiptInfo(ctx, receipt)
+        if err != nil {
+            cancel()
+            if attempt == maxRetries {
+                return nil, fmt.Errorf("failed after %d attempts: %w", maxRetries, err)
+            }
+            log.Printf("Attempt %d failed: %v, retrying...", attempt, err)
+            time.Sleep(time.Duration(attempt) * time.Second) // Exponential backoff
+            continue
+        }
+
+        for value := range stream {
+            select {
+            case <-ctx.Done():
+                cancel()
+                if attempt == maxRetries {
+                    return nil, fmt.Errorf("stream timeout after %d attempts: %w", maxRetries, ctx.Err())
+                }
+                log.Printf("Attempt %d timed out, retrying...", attempt)
+                break
+            default:
+            }
+            
+            if value.IsError {
+                cancel()
+                if attempt == maxRetries {
+                    return nil, fmt.Errorf("stream failed after %d attempts: %w", maxRetries, value.Error)
+                }
+                log.Printf("Attempt %d failed with stream error: %v, retrying...", attempt, value.Error)
+                time.Sleep(time.Duration(attempt) * time.Second)
+                break
+            }
+            
+            if value.IsFinal && value.Final() != nil {
+                final := *value.Final()
+                cancel()
+                return &final, nil
+            }
+        }
+    }
+    
+    return nil, fmt.Errorf("all %d attempts failed", maxRetries)
+}
+
+func main() {
+    receipt := `04/14/2024 1:05 pm
+
+Ticket: 220000082489
+Register: Shop Counter
+Employee: Connor
+Customer: Sam
+Item	#	Price
+Guide leash (1 Pair) uni UNI
+1	$34.95
+The Index Town Walls
+1	$35.00
+Boot Punch
+3	$60.00
+Subtotal	$129.95
+Tax ($129.95 @ 9%)	$11.70
+Total Tax	$11.70
+Total	$141.65`
+
+    fmt.Println("=== Basic Streaming Example ===")
+    basicStreamingExample(receipt)
+
+    fmt.Println("\n=== Stream with Early Termination ===")
+    result, err := streamWithEarlyTermination(receipt)
+    if err != nil {
+        log.Printf("Early termination example failed: %v", err)
+    } else if result != nil {
+        fmt.Printf("Early termination result: %d items\n", len(result.Items))
+    }
+
+    fmt.Println("\n=== Concurrent Streaming Example ===")
+    receipts := []string{receipt, receipt, receipt} // Process same receipt 3 times concurrently
+    concurrentStreamingExample(receipts)
+
+    fmt.Println("\n=== Stream with Retry Example ===")
+    retryResult, err := streamWithRetry(receipt, 3)
+    if err != nil {
+        log.Printf("Retry example failed: %v", err)
+    } else if retryResult != nil {
+        fmt.Printf("Retry example succeeded: %d items\n", len(retryResult.Items))
+    }
+}
+```
+</Tab>
+
 <Tab title="Ruby (beta)">
 BAML will generate `Baml.Client.stream.ExtractReceiptInfo()` for you,
 which you can use like so:
