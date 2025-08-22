@@ -405,6 +405,7 @@ impl BamlRuntime {
         expr_tx: Option<mpsc::UnboundedSender<Vec<internal_baml_diagnostics::SerializedSpan>>>,
         collector: Option<Arc<Collector>>,
         env_vars: HashMap<String, String>,
+        cancel_tripwire: Option<stream_cancel::Tripwire>,
     ) -> (Result<TestResponse>, FunctionCallId)
     where
         F: Fn(FunctionResult),
@@ -516,7 +517,7 @@ impl BamlRuntime {
                 ExprEvalResult::LLMCall { name, args } => (name, args),
             };
 
-            let mut stream = self.inner.stream_function_impl(
+            let mut stream = self.inner.stream_function_impl_with_tripwire(
                 function_name,
                 &params,
                 self.tracer_wrapper.get_or_create_tracer(&env_vars),
@@ -525,6 +526,7 @@ impl BamlRuntime {
                 self.async_runtime.clone(),
                 // TODO: collectors here?
                 vec![],
+                cancel_tripwire.clone(),
             )?;
             let (response_res, call_uuid) = stream
                 .run(
@@ -617,6 +619,7 @@ impl BamlRuntime {
         on_event: Option<F>,
         collector: Option<Arc<Collector>>,
         env_vars: HashMap<String, String>,
+        cancel_tripwire: Option<stream_cancel::Tripwire>,
     ) -> (Result<TestResponse>, FunctionCallId)
     where
         F: Fn(FunctionResult),
@@ -630,6 +633,7 @@ impl BamlRuntime {
                 None,
                 collector,
                 env_vars,
+                cancel_tripwire,
             )
             .await;
         res
@@ -792,7 +796,14 @@ impl BamlRuntime {
                 Err(e) => Err(e),
             };
 
-        let span = self
+        #[cfg(target_arch = "wasm32")]
+        let _span = self
+            .tracer_wrapper
+            .get_or_create_tracer(&env_vars)
+            .finish_call(call, ctx, None)
+            .await;
+        #[cfg(not(target_arch = "wasm32"))]
+        let _span = self
             .tracer_wrapper
             .get_or_create_tracer(&env_vars)
             .finish_call(call, ctx, None);

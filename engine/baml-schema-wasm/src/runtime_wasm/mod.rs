@@ -2,6 +2,7 @@ pub mod generator;
 pub mod runtime_prompt;
 use std::{collections::HashMap, path::PathBuf, str::FromStr};
 
+use crate::abort_controller::{js_abort_signal_to_tripwire, cleanup_operation};
 use anyhow::Context;
 use baml_runtime::{
     internal::{
@@ -25,7 +26,7 @@ use itertools::join;
 use js_sys::{Promise, Uint8Array};
 use jsonish::ResponseBamlValue;
 use serde::{Deserialize, Serialize};
-use wasm_bindgen::{prelude::*, JsValue};
+use wasm_bindgen::{prelude::*, JsValue, JsError};
 use wasm_bindgen_futures::JsFuture;
 
 use self::runtime_prompt::WasmScope;
@@ -821,6 +822,9 @@ impl WithRenderError for baml_runtime::internal::llm_client::LLMResponse {
             baml_runtime::internal::llm_client::LLMResponse::InternalFailure(e) => {
                 e.to_string().into()
             }
+            baml_runtime::internal::llm_client::LLMResponse::Cancelled(msg) => {
+                format!("cancelled: {msg}").into()
+            }
         }
     }
 }
@@ -1570,6 +1574,7 @@ impl WasmRuntime {
         get_baml_src_cb: js_sys::Function,
         env: js_sys::Object,
     ) -> Result<WasmTestResponses, JsValue> {
+        log::info!("Running tests...");
         // Create a vector to store all test futures
         let mut test_futures = Vec::new();
 
@@ -1628,6 +1633,7 @@ impl WasmRuntime {
                                 Some(cb),
                                 None,
                                 env_vars.clone(),
+                                None, // No tripwire support for batch tests yet
                             )
                             .await;
 
@@ -1886,7 +1892,16 @@ impl WasmFunction {
         get_baml_src_cb: js_sys::Function,
         on_expr_event: js_sys::Function,
         env: js_sys::Object,
+        abort_signal: Option<js_sys::Object>,
     ) -> Result<WasmTestResponse, JsValue> {
+        log::warn!("BAML Test: run_test_with_expr_events called for test: {}", test_name);
+        
+        // Convert abort signal to tripwire
+        let (operation_id, tripwire) = js_abort_signal_to_tripwire(abort_signal)
+            .map_err(|e| JsValue::from(e))?;
+        
+        log::warn!("BAML Test: Abort signal converted, operation ID: {}, has_tripwire: {}", operation_id, tripwire.is_some());
+        
         let rt = &rt.runtime;
         let function_name = self.name.clone();
 
@@ -1938,8 +1953,8 @@ impl WasmFunction {
             env_vars.insert(key, value);
         }
 
-        // Pass the sender to run_test_with_expr_events
-        let (test_response, span) = rt
+        // Pass the sender to run_test_with_expr_events with tripwire support
+        let result = rt
             .run_test_with_expr_events(
                 &function_name,
                 &test_name,
@@ -1948,10 +1963,16 @@ impl WasmFunction {
                 Some(tx),
                 None,
                 env_vars.clone(),
+                tripwire,
             )
             .await;
-
-        log::info!("test_response: {test_response:#?}");
+        
+        // Clean up the operation
+        log::warn!("BAML Test: Cleaning up operation {} after test completion", operation_id);
+        cleanup_operation(operation_id);
+        
+        let (test_response, span) = result;
+        log::warn!("BAML Test: Test completed with response: {test_response:#?}");
 
         Ok(WasmTestResponse {
             test_response,
@@ -1975,7 +1996,16 @@ impl WasmFunction {
         on_partial_response: js_sys::Function,
         get_baml_src_cb: js_sys::Function,
         env: js_sys::Object,
+        abort_signal: Option<js_sys::Object>,
     ) -> Result<WasmTestResponse, JsValue> {
+        log::warn!("BAML Test: run_test called for test: {}", test_name);
+        
+        // Convert abort signal to tripwire
+        let (operation_id, tripwire) = js_abort_signal_to_tripwire(abort_signal)
+            .map_err(|e| JsValue::from(e))?;
+        
+        log::warn!("BAML Test: Abort signal converted, operation ID: {}, has_tripwire: {}", operation_id, tripwire.is_some());
+        
         let rt = &rt.runtime;
         let function_name = self.name.clone();
 
@@ -2007,8 +2037,8 @@ impl WasmFunction {
             let value = arr.get(1).as_string().unwrap_or_default();
             env_vars.insert(key, value);
         }
-        // Now pass collector_arc to your runtime's run_test
-        let (test_response, span) = rt
+        // Now pass collector_arc to your runtime's run_test with tripwire support
+        let result = rt
             .run_test(
                 &function_name,
                 &test_name,
@@ -2016,10 +2046,16 @@ impl WasmFunction {
                 Some(cb),
                 None,
                 env_vars.clone(),
+                tripwire,
             )
             .await;
-
-        log::info!("test_response: {test_response:#?}");
+        
+        // Clean up the operation
+        log::warn!("BAML Test: Cleaning up operation {} after test completion", operation_id);
+        cleanup_operation(operation_id);
+        
+        let (test_response, span) = result;
+        log::warn!("BAML Test: Test completed with response: {test_response:#?}");
 
         Ok(WasmTestResponse {
             test_response,

@@ -55,6 +55,7 @@ web-time.workspace = true
 either = "1.8.1"
 itertools = "0.13.0"
 once_cell.workspace = true
+stream-cancel = "0.8"
 [dependencies.web-sys]
 version = "0.3.69"
 features = [
@@ -65,6 +66,9 @@ features = [
   'RequestMode',
   'Response',
   'Window',
+  'AbortSignal',
+  'EventTarget',
+  'Event',
 ]
 
 [dev-dependencies]

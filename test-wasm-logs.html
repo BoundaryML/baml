@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WASM Logging Test</title>
+</head>
+<body>
+    <h1>WASM Logging Test</h1>
+    <button id="test-btn">Run Test</button>
+    <pre id="output"></pre>
+    
+    <script type="module">
+        // Import the WASM module
+        import init, * as wasm from './engine/baml-schema-wasm/web/dist/baml_schema_build.js';
+        
+        const output = document.getElementById('output');
+        
+        async function runTest() {
+            output.textContent = 'Initializing WASM...\n';
+            
+            // Initialize WASM
+            await init();
+            
+            // Enable logging
+            output.textContent += 'Enabling logs...\n';
+            wasm.enable_logs();
+            
+            output.textContent += 'WASM Version: ' + wasm.version() + '\n';
+            
+            // Create a simple runtime
+            output.textContent += 'Creating runtime...\n';
+            const runtime = wasm.WasmRuntime.new({
+                output_type: 'typescript'
+            });
+            
+            output.textContent += 'Runtime created successfully!\n';
+            
+            // Check console for logs
+            console.log('Check browser console for WASM logs');
+        }
+        
+        document.getElementById('test-btn').addEventListener('click', runTest);
+    </script>
+</body>
+</html>

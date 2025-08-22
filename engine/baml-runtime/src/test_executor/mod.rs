@@ -292,6 +292,7 @@ impl TestExecutor for BamlRuntime {
                             Some(|_| {}),
                             None,
                             env_vars,
+                            None, // No tripwire for test executor
                         )
                         .await;
                     let duration = start_instant.elapsed();

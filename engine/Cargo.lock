@@ -1259,6 +1259,7 @@ dependencies = [
  "serde",
  "serde-wasm-bindgen 0.6.5",
  "serde_json",
+ "stream-cancel",
  "time",
  "tokio",
  "url",

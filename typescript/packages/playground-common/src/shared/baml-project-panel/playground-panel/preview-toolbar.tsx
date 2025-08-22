@@ -44,7 +44,7 @@ export const displaySettingsAtom = atom({
 
 // RunButton component
 const RunButton: React.FC<{ className?: string }> = ({ className }) => {
-  const runBamlTests = useRunBamlTests();
+  const { runTests: runBamlTests } = useRunBamlTests();
   const isRunning = useAtomValue(areTestsRunningAtom);
   const selected = useAtomValue(selectedItemAtom);
 
