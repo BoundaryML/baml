@@ -64,8 +64,12 @@ impl SyncNotificationHandler for DidOpenTextDocumentHandler {
 
         if let Some(project) = session.get_or_create_project(&file_path) {
             let project = project.lock().unwrap();
-            let empty_flags = vec![];
-            let effective_flags = session.baml_settings.feature_flags.as_ref().unwrap_or(&empty_flags);
+            let default_flags = vec!["beta".to_string()];
+            let effective_flags = session
+                .baml_settings
+                .feature_flags
+                .as_ref()
+                .unwrap_or(&default_flags);
             if let Ok(version) = project.get_common_generator_version(effective_flags) {
                 notifier
                     .0

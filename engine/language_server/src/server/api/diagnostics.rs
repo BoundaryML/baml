@@ -34,9 +34,12 @@ pub fn publish_diagnostics(
     notifier: &Notifier,
     project: Arc<Mutex<Project>>,
     version: Option<i32>,
-    feature_flags: &Vec<String>,
+    feature_flags: &[String],
 ) -> Result<()> {
-    tracing::info!("publish_diagnostics called with feature_flags: {:?}", feature_flags);
+    tracing::info!(
+        "publish_diagnostics called with feature_flags: {:?}",
+        feature_flags
+    );
     let diagnostics = project_diagnostics(project.clone(), feature_flags);
     // Calculate counts *after* all diagnostics (including generator) are collected.
     let error_count = diagnostics
@@ -99,10 +102,17 @@ pub fn publish_session_lsp_diagnostics(
         .get_or_create_project(&path)
         .expect("We just ensured the session is valid.");
 
-    let empty_flags = vec![];
-    let effective_flags = session.baml_settings.feature_flags.as_ref().unwrap_or(&empty_flags);
-    tracing::info!("publish_diagnostics_for_file: session feature_flags: {:?}, effective_flags: {:?}", session.baml_settings.feature_flags, effective_flags);
-    let diagnostics = project_diagnostics(project.clone(), effective_flags);
+    let default_flags = vec!["beta".to_string()];
+    let feature_flags = session
+        .baml_settings
+        .feature_flags
+        .as_ref()
+        .unwrap_or(&default_flags);
+    tracing::info!(
+        "publish_diagnostics_for_file: session feature_flags: {:?}",
+        feature_flags
+    );
+    let diagnostics = project_diagnostics(project.clone(), feature_flags);
     for (uri, diagnostics) in diagnostics {
         notifier
             .notify::<lsp_types::notification::PublishDiagnostics>(PublishDiagnosticsParams {
@@ -118,9 +128,12 @@ pub fn publish_session_lsp_diagnostics(
 
 pub fn project_diagnostics(
     project: Arc<Mutex<Project>>,
-    feature_flags: &Vec<String>,
+    feature_flags: &[String],
 ) -> HashMap<Url, Vec<lsp_types::Diagnostic>> {
-    tracing::info!("project_diagnostics called with feature_flags: {:?}", feature_flags);
+    tracing::info!(
+        "project_diagnostics called with feature_flags: {:?}",
+        feature_flags
+    );
     let mut guard = project.lock().unwrap();
     let root_path = PathBuf::from(guard.root_path());
     let fake_env = HashMap::new();
@@ -300,9 +313,13 @@ pub fn project_diagnostics(
 pub fn file_diagnostics(
     project: Arc<Mutex<Project>>,
     file_url: &Url,
-    feature_flags: &Vec<String>,
+    feature_flags: &[String],
 ) -> Vec<lsp_types::Diagnostic> {
-    tracing::info!("file_diagnostics called for URL: {} with feature_flags: {:?}", file_url, feature_flags);
+    tracing::info!(
+        "file_diagnostics called for URL: {} with feature_flags: {:?}",
+        file_url,
+        feature_flags
+    );
     let mut guard = project.lock().unwrap();
     let root_path = PathBuf::from(guard.root_path());
     let fake_env = HashMap::new();

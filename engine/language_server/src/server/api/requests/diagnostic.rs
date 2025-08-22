@@ -74,9 +74,21 @@ impl SyncRequestHandler for DocumentDiagnosticRequestHandler {
             .get_or_create_project(&path)
             .expect("Project should exist");
 
-        let empty_flags = vec![];
-        let effective_flags = session.baml_settings.feature_flags.as_ref().unwrap_or(&empty_flags);
-        tracing::info!("diagnostic_request: session feature_flags: {:?}, effective_flags: {:?}", session.baml_settings.feature_flags, effective_flags);
+        let default_flags = vec!["beta".to_string()];
+        let effective_flags = session
+            .baml_settings
+            .feature_flags
+            .as_ref()
+            .unwrap_or(&default_flags);
+        tracing::info!(
+            "diagnostic_request: session feature_flags: {:?}, effective_flags: {:?}",
+            session
+                .baml_settings
+                .feature_flags
+                .as_ref()
+                .unwrap_or(&default_flags),
+            &effective_flags
+        );
         let diagnostics = file_diagnostics(project, &url, effective_flags);
         // diagnostics
 

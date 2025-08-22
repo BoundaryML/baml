@@ -92,7 +92,7 @@ impl BamlProject {
         }
     }
 
-    pub fn list_functions(&mut self, feature_flags: &Vec<String>) -> Vec<BamlFunction> {
+    pub fn list_functions(&mut self, feature_flags: &[String]) -> Vec<BamlFunction> {
         let runtime = self.runtime(HashMap::new(), feature_flags);
         if let Ok(runtime) = runtime {
             runtime.list_functions()
@@ -145,7 +145,7 @@ impl BamlProject {
     pub fn run_generators_native(
         &mut self,
         no_version_check: Option<bool>,
-        feature_flags: &Vec<String>,
+        feature_flags: &[String],
     ) -> Result<Vec<GenerateOutput>, anyhow::Error> {
         let env = std::env::vars().collect();
         let all_files = self
@@ -289,7 +289,10 @@ impl BamlProject {
         Ok(workspace_files)
     }
 
-    pub fn list_generators(&mut self, feature_flags: &Vec<String>) -> Result<Vec<BamlGeneratorConfig>, &str> {
+    pub fn list_generators(
+        &mut self,
+        feature_flags: &[String],
+    ) -> Result<Vec<BamlGeneratorConfig>, &str> {
         let runtime = self.runtime(HashMap::new(), feature_flags);
         if let Ok(runtime) = runtime {
             Ok(runtime.list_generators())
@@ -301,7 +304,7 @@ impl BamlProject {
     pub fn runtime(
         &mut self,
         env_vars: HashMap<String, String>,
-        feature_flags: &Vec<String>,
+        feature_flags: &[String],
     ) -> Result<BamlRuntime, Diagnostics> {
         let mut all_files_for_hash = self.files.iter().collect::<Vec<_>>();
 
@@ -325,7 +328,7 @@ impl BamlProject {
             v.hash(&mut hasher);
         }
         // Include feature flags in the cache hash
-        let mut sorted_flags = feature_flags.clone();
+        let mut sorted_flags = feature_flags.to_vec();
         sorted_flags.sort();
         for flag in &sorted_flags {
             flag.hash(&mut hasher);
@@ -354,17 +357,24 @@ impl BamlProject {
             .collect::<HashMap<_, _>>();
 
         // Convert feature flags to FeatureFlags struct
-        tracing::info!("BamlProject::runtime called with feature_flags: {:?}", feature_flags);
-        let feature_flags_struct = match internal_baml_core::FeatureFlags::from_vec(feature_flags.clone()) {
-            Ok(flags) => {
-                tracing::info!("Successfully converted feature flags to FeatureFlags struct: {:?}", flags);
-                flags
-            },
-            Err(errors) => {
-                tracing::warn!("Invalid feature flags: {:?}, using empty flags", errors);
-                internal_baml_core::FeatureFlags::new()
-            }
-        };
+        tracing::info!(
+            "BamlProject::runtime called with feature_flags: {:?}",
+            feature_flags
+        );
+        let feature_flags_struct =
+            match internal_baml_core::FeatureFlags::from_vec(feature_flags.to_vec()) {
+                Ok(flags) => {
+                    tracing::info!(
+                        "Successfully converted feature flags to FeatureFlags struct: {:?}",
+                        flags
+                    );
+                    flags
+                }
+                Err(errors) => {
+                    tracing::warn!("Invalid feature flags: {:?}, using empty flags", errors);
+                    internal_baml_core::FeatureFlags::new()
+                }
+            };
 
         let result = BamlRuntime::from_file_content(
             &self.root_dir_name.to_string_lossy(),
@@ -384,7 +394,6 @@ impl BamlProject {
 
         result
     }
-
 
     pub fn files(&self) -> Vec<String> {
         let mut all_files = self.files.clone();
@@ -966,7 +975,7 @@ impl Project {
     }
 
     /// Iterates over all generators and prints error messages if version mismatches are found.
-    pub fn check_version_on_save(&self, feature_flags: &Vec<String>) -> Option<String> {
+    pub fn check_version_on_save(&self, feature_flags: &[String]) -> Option<String> {
         let mut first_error_message = None;
         if let Ok(generators) = self.list_generators(&vec![]) {
             for gen in generators.iter() {
@@ -982,7 +991,7 @@ impl Project {
     }
 
     /// Returns true if any generator produces TypeScript output.
-    pub fn is_typescript_generator_present(&self, feature_flags: &Vec<String>) -> bool {
+    pub fn is_typescript_generator_present(&self, feature_flags: &[String]) -> bool {
         if let Ok(generators) = self.list_generators(&vec![]) {
             generators
                 .iter()
@@ -999,7 +1008,7 @@ impl Project {
     pub fn update_runtime(
         &mut self,
         runtime_notifier: Option<Notifier>,
-        feature_flags: &Vec<String>,
+        feature_flags: &[String],
     ) -> anyhow::Result<()> {
         let start_time = Instant::now();
         let fake_env_vars: HashMap<String, String> = HashMap::new();
@@ -1123,7 +1132,7 @@ impl Project {
         doc: &TextDocumentItem,
         position: &Position,
         notifier: Notifier,
-        feature_flags: &Vec<String>,
+        feature_flags: &[String],
     ) -> anyhow::Result<Option<Hover>> {
         // Force runtime update before handling hover
         self.update_runtime(Some(notifier), feature_flags)
@@ -1193,7 +1202,10 @@ impl Project {
     }
 
     /// Returns a list of generator configurations.
-    pub fn list_generators(&self, feature_flags: &Vec<String>) -> Result<Vec<BamlGeneratorConfig>, &str> {
+    pub fn list_generators(
+        &self,
+        feature_flags: &[String],
+    ) -> Result<Vec<BamlGeneratorConfig>, &str> {
         if let Some(ref runtime) = self.current_runtime {
             Ok(runtime.list_generators())
         } else {
@@ -1244,8 +1256,12 @@ impl Project {
     /// Runs generators without debouncing.
     /// (This async method simulates generator file generation and then calls one of the provided callbacks.)
     // #[cfg(feature = "async")]
-    pub fn run_generators_without_debounce<F, E>(&mut self, feature_flags: &Vec<String>, on_success: F, on_error: E)
-    where
+    pub fn run_generators_without_debounce<F, E>(
+        &mut self,
+        feature_flags: &[String],
+        on_success: F,
+        on_error: E,
+    ) where
         F: Fn(String) + Send,
         E: Fn(String) + Send,
     {
@@ -1289,7 +1305,7 @@ impl Project {
     /// Checks if all generators use the same major.minor version.
     /// Returns Ok(()) if they do (or if there are no generators),
     /// otherwise returns an Err with a descriptive message.
-    pub fn get_common_generator_version(&self, feature_flags: &Vec<String>) -> Result<String, String> {
+    pub fn get_common_generator_version(&self, feature_flags: &[String]) -> Result<String, String> {
         let runtime_version = env!("CARGO_PKG_VERSION");
 
         let generators = match self.list_generators(feature_flags) {

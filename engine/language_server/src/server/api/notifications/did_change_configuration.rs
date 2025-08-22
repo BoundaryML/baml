@@ -15,15 +15,27 @@ pub(crate) struct DidChangeConfiguration;
 fn republish_all_diagnostics(notifier: &Notifier, session: &mut Session) {
     let projects = session.baml_src_projects.clone();
     let projects_guard = projects.lock().unwrap();
-    
-    let empty_flags = vec![];
-    let effective_flags = session.baml_settings.feature_flags.as_ref().unwrap_or(&empty_flags);
-    tracing::info!("Republishing diagnostics for {} projects with feature_flags: {:?}", projects_guard.len(), effective_flags);
-    
+
+    let default_flags = vec!["beta".to_string()];
+    let effective_flags = session
+        .baml_settings
+        .feature_flags
+        .as_ref()
+        .unwrap_or(&default_flags);
+    tracing::info!(
+        "Republishing diagnostics for {} projects with feature_flags: {:?}",
+        projects_guard.len(),
+        &effective_flags
+    );
+
     for (root_path, project) in projects_guard.iter() {
         tracing::info!("Republishing diagnostics for project at: {:?}", root_path);
         if let Err(e) = publish_diagnostics(notifier, project.clone(), None, effective_flags) {
-            tracing::error!("Failed to republish diagnostics for project {:?}: {}", root_path, e);
+            tracing::error!(
+                "Failed to republish diagnostics for project {:?}: {}",
+                root_path,
+                e
+            );
         }
     }
 }
@@ -44,13 +56,16 @@ impl super::SyncNotificationHandler for DidChangeConfiguration {
         // Extract the BAML configuration from the params
         if let Some(settings) = params.settings.as_object() {
             if let Some(baml_settings) = settings.get("baml") {
-                tracing::info!("BAML settings received in did_change_configuration: {:?}", baml_settings);
-                
+                tracing::info!(
+                    "BAML settings received in did_change_configuration: {:?}",
+                    baml_settings
+                );
+
                 // Extract and log feature flags specifically
                 if let Some(feature_flags) = baml_settings.get("featureFlags") {
                     tracing::info!("Feature flags in configuration change: {:?}", feature_flags);
                 }
-                
+
                 // Send the BAML settings as a notification
                 notifier
                     .0
@@ -63,10 +78,12 @@ impl super::SyncNotificationHandler for DidChangeConfiguration {
                     .internal_error()?;
                 tracing::info!("Sent baml_settings_updated notification");
                 let feature_flags_changed = _session.update_baml_settings(baml_settings.clone());
-                
+
                 // Republish diagnostics if feature flags changed
                 if feature_flags_changed {
-                    tracing::info!("Feature flags changed, republishing diagnostics for all projects");
+                    tracing::info!(
+                        "Feature flags changed, republishing diagnostics for all projects"
+                    );
                     republish_all_diagnostics(&notifier, _session);
                 }
             }
@@ -93,7 +110,7 @@ impl super::SyncNotificationHandler for DidChangeConfiguration {
                                 tracing::info!("Feature flags in workspace configuration: {:?}", feature_flags);
                             }
                             let feature_flags_changed = session.update_baml_settings(first_response.clone());
-                            
+
                             // Republish diagnostics if feature flags changed
                             if feature_flags_changed {
                                 tracing::info!("Feature flags changed from workspace config, republishing diagnostics for all projects");

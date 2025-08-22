@@ -7,7 +7,7 @@ use serde::Deserialize;
 /// Maps a workspace URI to its associated client settings. Used during server initialization.
 pub(crate) type WorkspaceSettingsMap = FxHashMap<Url, ClientSettings>;
 
-#[derive(Debug, Deserialize, Default, Clone)]
+#[derive(Debug, Deserialize, Clone)]
 #[cfg_attr(test, derive(PartialEq, Eq))]
 #[serde(rename_all = "camelCase")]
 pub struct BamlSettings {
@@ -16,12 +16,28 @@ pub struct BamlSettings {
     #[serde(default = "default_enable_playground")]
     pub enable_playground: bool,
     pub playground_port: Option<u16>,
-    #[serde(default)]
+    #[serde(default = "default_feature_flags")]
     pub(crate) feature_flags: Option<Vec<String>>,
+}
+
+impl Default for BamlSettings {
+    fn default() -> Self {
+        BamlSettings {
+            cli_path: None,
+            generate_code_on_save: None,
+            enable_playground: false,
+            playground_port: None,
+            feature_flags: Some(vec!["beta".to_string()]),
+        }
+    }
 }
 
 fn default_enable_playground() -> bool {
     true
+}
+
+fn default_feature_flags() -> Option<Vec<String>> {
+    Some(vec!["beta".to_string()])
 }
 
 /// This is a direct representation of the settings schema sent by the client.
@@ -33,7 +49,7 @@ pub struct ClientSettings {
     // These will not be in the resolved settings.
     #[serde(flatten)]
     pub(crate) tracing: TracingSettings,
-    
+
     // BAML settings that can be provided during initialization
     #[serde(flatten)]
     pub(crate) baml: Option<BamlSettings>,
@@ -99,7 +115,10 @@ impl AllSettings {
                 show_err_msg!("Baml received invalid client settings - falling back to default client settings.");
             })
             .unwrap_or_default();
-        tracing::info!("--- AllSettings::from_value deserialized to: {:?}", init_options);
+        tracing::info!(
+            "--- AllSettings::from_value deserialized to: {:?}",
+            init_options
+        );
         Self::from_init_options(init_options)
     }
 
@@ -109,14 +128,18 @@ impl AllSettings {
             InitializationOptions::GlobalOnly { settings } => {
                 tracing::info!("--- Using GlobalOnly settings: {:?}", settings);
                 (settings, None)
-            },
+            }
             InitializationOptions::HasWorkspaces {
                 global_settings,
                 workspace_settings,
             } => {
-                tracing::info!("--- Using HasWorkspaces - global: {:?}, workspace: {:?}", global_settings, workspace_settings);
+                tracing::info!(
+                    "--- Using HasWorkspaces - global: {:?}, workspace: {:?}",
+                    global_settings,
+                    workspace_settings
+                );
                 (global_settings, Some(workspace_settings))
-            },
+            }
         };
 
         tracing::info!("--- workspace_settings: {:?}", workspace_settings);

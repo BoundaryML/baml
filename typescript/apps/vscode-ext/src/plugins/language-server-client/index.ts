@@ -629,7 +629,7 @@ const activateClient = (
         workspace.onDidChangeConfiguration((event) => {
           if (event.affectsConfiguration('baml')) {
             const config = workspace.getConfiguration('baml');
-            const featureFlags = config.get('featureFlags', []);
+            const featureFlags = config.get('featureFlags', ['beta']);
             
             const bamlSettings = {
               featureFlags: featureFlags,
@@ -652,7 +652,7 @@ const activateClient = (
       setTimeout(() => {
         const config = workspace.getConfiguration('baml');
         const initialBamlSettings = {
-          featureFlags: config.get('featureFlags', []),
+          featureFlags: config.get('featureFlags', ['beta']),
           enablePlaygroundProxy: config.get('enablePlaygroundProxy', true),
           generateCodeOnSave: config.get('generateCodeOnSave', 'always'),
           restartTSServerOnSave: config.get('restartTSServerOnSave', false),

@@ -100,9 +100,9 @@ impl Server {
             .clone()
             .initialization_options
             .unwrap_or_else(|| serde_json::Value::Object(serde_json::Map::default()));
-        
+
         tracing::info!("--- Received initialization options: {:?}", init_options);
-        
+
         let AllSettings {
             global_settings,
             mut workspace_settings,

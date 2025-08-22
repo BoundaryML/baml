@@ -29,7 +29,7 @@ use crate::{PositionEncoding, TextDocument};
 
 mod capabilities;
 pub mod index;
-mod settings;
+pub mod settings;
 
 use tokio::sync::{broadcast, RwLock};
 
@@ -138,7 +138,10 @@ impl Session {
                 client_capabilities,
             )),
             baml_settings: {
-                tracing::info!("--- Session::new global_settings.baml: {:?}", global_settings.baml);
+                tracing::info!(
+                    "--- Session::new global_settings.baml: {:?}",
+                    global_settings.baml
+                );
                 let baml_settings = global_settings.baml.clone().unwrap_or_default();
                 tracing::info!("--- Session::new final baml_settings: {:?}", baml_settings);
                 baml_settings
@@ -157,18 +160,22 @@ impl Session {
         match serde_json::from_value::<BamlSettings>(settings) {
             Ok(parsed_settings) => {
                 tracing::info!("Successfully parsed BAML settings: {:?}", parsed_settings);
-                tracing::info!("Previous feature_flags: {:?}", self.baml_settings.feature_flags);
-                
+                tracing::info!(
+                    "Previous feature_flags: {:?}",
+                    self.baml_settings.feature_flags
+                );
+
                 // Check if feature flags actually changed
-                let feature_flags_changed = self.baml_settings.feature_flags != parsed_settings.feature_flags;
-                
+                let feature_flags_changed =
+                    self.baml_settings.feature_flags != parsed_settings.feature_flags;
+
                 self.baml_settings = parsed_settings;
                 tracing::info!("New feature_flags: {:?}", self.baml_settings.feature_flags);
-                
+
                 if feature_flags_changed {
                     tracing::info!("Feature flags changed, diagnostics should be republished");
                 }
-                
+
                 feature_flags_changed
             }
             Err(err) => {
@@ -277,17 +284,20 @@ impl Session {
                     .baml_project
                     .load_files()
                     .map_err(|e| anyhow::anyhow!("Failed to load project files: {}", e))?;
-                project
-                    .lock()
-                    .unwrap()
-                    .update_runtime(
+                {
+                    let default_flags = vec!["beta".to_string()];
+                    project.lock().unwrap().update_runtime(
                         notifier.clone(),
-                        self.baml_settings.feature_flags.as_ref().unwrap_or(&Vec::new()),
+                        self.baml_settings
+                            .feature_flags
+                            .as_ref()
+                            .unwrap_or(&default_flags),
                     )
-                    .map_err(|e| {
-                        tracing::error!("Failed to update runtime after reloading files: {e}");
-                        anyhow::anyhow!("Failed to update runtime after reloading files: {e}")
-                    })?;
+                }
+                .map_err(|e| {
+                    tracing::error!("Failed to update runtime after reloading files: {e}");
+                    anyhow::anyhow!("Failed to update runtime after reloading files: {e}")
+                })?;
                 Ok(files_map)
             })
             .collect::<anyhow::Result<Vec<_>>>()?;
@@ -436,14 +446,17 @@ impl Session {
                         .insert(doc_key.clone(), text_document);
                     let _elapsed = start_time.elapsed();
 
-                    project
-                        .lock()
-                        .unwrap()
-                        .update_runtime(
+                    {
+                        let default_flags = vec!["beta".to_string()];
+                        project.lock().unwrap().update_runtime(
                             notifier.clone(),
-                            self.baml_settings.feature_flags.as_ref().unwrap_or(&Vec::new()),
+                            self.baml_settings
+                                .feature_flags
+                                .as_ref()
+                                .unwrap_or(&default_flags),
                         )
-                        .map_err(|e| anyhow::anyhow!("Could not update runtime: {e}"))?;
+                    }
+                    .map_err(|e| anyhow::anyhow!("Could not update runtime: {e}"))?;
                     let _elapsed = start_time.elapsed();
                 }
                 Ok::<(), anyhow::Error>(())
