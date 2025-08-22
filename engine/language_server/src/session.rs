@@ -147,13 +147,28 @@ impl Session {
         })
     }
 
-    pub fn update_baml_settings(&mut self, settings: Value) {
-        match serde_json::from_value(settings) {
+    pub fn update_baml_settings(&mut self, settings: Value) -> bool {
+        tracing::info!("update_baml_settings called with: {:?}", settings);
+        match serde_json::from_value::<BamlSettings>(settings) {
             Ok(parsed_settings) => {
+                tracing::info!("Successfully parsed BAML settings: {:?}", parsed_settings);
+                tracing::info!("Previous feature_flags: {:?}", self.baml_settings.feature_flags);
+                
+                // Check if feature flags actually changed
+                let feature_flags_changed = self.baml_settings.feature_flags != parsed_settings.feature_flags;
+                
                 self.baml_settings = parsed_settings;
+                tracing::info!("New feature_flags: {:?}", self.baml_settings.feature_flags);
+                
+                if feature_flags_changed {
+                    tracing::info!("Feature flags changed, diagnostics should be republished");
+                }
+                
+                feature_flags_changed
             }
             Err(err) => {
                 tracing::error!("Failed to parse BAML settings: {}", err);
+                false
             }
         }
     }
@@ -260,9 +275,9 @@ impl Session {
                 project
                     .lock()
                     .unwrap()
-                    .update_runtime_with_feature_flags(
+                    .update_runtime(
                         notifier.clone(),
-                        self.baml_settings.feature_flags.as_ref(),
+                        self.baml_settings.feature_flags.as_ref().unwrap_or(&Vec::new()),
                     )
                     .map_err(|e| {
                         tracing::error!("Failed to update runtime after reloading files: {e}");
@@ -419,9 +434,9 @@ impl Session {
                     project
                         .lock()
                         .unwrap()
-                        .update_runtime_with_feature_flags(
+                        .update_runtime(
                             notifier.clone(),
-                            self.baml_settings.feature_flags.as_ref(),
+                            self.baml_settings.feature_flags.as_ref().unwrap_or(&Vec::new()),
                         )
                         .map_err(|e| anyhow::anyhow!("Could not update runtime: {e}"))?;
                     let _elapsed = start_time.elapsed();
