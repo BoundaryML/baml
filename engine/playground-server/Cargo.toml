@@ -1,0 +1,34 @@
+[package]
+edition = "2021"
+name = "playground-server"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+license-file.workspace = true
+
+[lints.rust]
+dead_code = "allow"
+elided_named_lifetimes = "deny"
+unused_imports = "allow"
+unused_variables = "allow"
+
+[dependencies]
+anyhow.workspace = true
+axum = { version = "0.8.4", features = ["ws"] }
+base64 = "0.21"
+bytes.workspace = true
+dirs = "5.0"
+flate2 = "1.0"
+futures.workspace = true
+mime_guess = "2.0.4"
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2 = "0.10"
+tar = "0.4"
+tokio = { version = "1", features = ["full"] }
+tokio-stream = "0.1.17"
+tower.workspace = true
+tower-http = { version = "0.6.6", features = ["fs", "cors"] }
+tracing.workspace = true
+webbrowser = "0.8"

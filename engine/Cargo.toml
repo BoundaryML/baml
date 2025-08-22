@@ -24,7 +24,7 @@ members = [
   "sandbox",
   "llm-response-parser",
   "boundary-udf",
-  "tokio-console-demo",
+  "playground-server",
   "repro",
 ]
 default-members = [
@@ -92,6 +92,7 @@ indoc = "2.0.5"
 internal-baml-codegen = { path = "language_client_codegen" }
 internal-baml-core = { path = "baml-lib/baml-core" }
 internal-baml-jinja = { path = "baml-lib/jinja-runtime" }
+playground-server = { path = "playground-server" }
 internal-llm-client = { path = "baml-lib/llm-client" }
 itertools = "0.14.0"
 jsonish = { path = "baml-lib/jsonish" }

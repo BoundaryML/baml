@@ -8,10 +8,9 @@ pub use session::{ClientSettings, DocumentQuery, DocumentSnapshot, Session};
 use tokio::sync::broadcast;
 
 use crate::{
-    playground2::server::LangServerToWasmMessage,
     server::{Server, ServerArgs},
-    session::PreSendToWasmMessage,
 };
+use playground_server::{LangServerToWasmMessage, PreSendToWasmMessage};
 
 #[macro_use]
 mod message;
@@ -44,11 +43,15 @@ pub fn run_server() -> anyhow::Result<()> {
     let (broadcast_tx, broadcast_rx) = broadcast::channel(1000);
     let (playground_tx, playground_rx) = broadcast::channel(1000);
 
-    let port_picks = tokio_runtime.block_on(playground2::port_picker::pick())?;
+    let port_config = playground2::PortConfiguration {
+        base_port: 3700,
+        max_attempts: 100,
+    };
+    let port_picks = tokio_runtime.block_on(playground2::port_picker_pick(port_config))?;
 
     tokio_runtime.spawn(futures::future::join(
         playground2::Playground2Server {
-            app_state: playground2::server::AppState {
+            app_state: playground_server::AppState {
                 broadcast_rx,
                 playground_tx: playground_tx.clone(),
                 playground_port: port_picks.playground_port,

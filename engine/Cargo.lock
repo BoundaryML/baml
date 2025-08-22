@@ -4251,6 +4251,7 @@ dependencies = [
  "parking_lot",
  "path-absolutize",
  "pathdiff 0.2.3",
+ "playground-server",
  "regex",
  "reqwest",
  "rustc-hash 2.1.1",
@@ -5182,6 +5183,31 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7edddbd0b52d732b21ad9a5fab5c704c14cd949e5e9a1ec5929a24fded1b904c"
 
 [[package]]
+name = "playground-server"
+version = "0.205.0"
+dependencies = [
+ "anyhow",
+ "axum 0.8.4",
+ "base64 0.21.7",
+ "bytes",
+ "dirs 5.0.1",
+ "flate2",
+ "futures",
+ "mime_guess",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tar",
+ "tokio",
+ "tokio-stream",
+ "tower 0.5.2",
+ "tower-http 0.6.6",
+ "tracing",
+ "webbrowser",
+]
+
+[[package]]
 name = "plotters"
 version = "0.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5976,6 +6002,7 @@ dependencies = [
  "parking_lot",
  "path-absolutize",
  "pathdiff 0.2.3",
+ "playground-server",
  "regex",
  "reqwest",
  "rustc-hash 2.1.1",
@@ -7241,19 +7268,6 @@ dependencies = [
  "tokio-macros",
  "tracing",
  "windows-sys 0.52.0",
-]
-
-[[package]]
-name = "tokio-console-demo"
-version = "0.1.0"
-dependencies = [
- "axum 0.7.9",
- "console-subscriber",
- "serde",
- "tokio",
- "tower 0.5.2",
- "tower-http 0.6.6",
- "tracing",
 ]
 
 [[package]]

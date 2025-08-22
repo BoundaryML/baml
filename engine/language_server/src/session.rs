@@ -38,12 +38,8 @@ use tokio::sync::{broadcast, RwLock};
 // #[cfg(feature = "playground-server")]
 // use crate::playground::PlaygroundState;
 
-#[derive(Debug, Clone)]
-/// for lang-server internal comms, before sending out to the playground
-pub enum PreSendToWasmMessage {
-    Initialized,
-    FrontendMessage(FrontendMessage),
-}
+// Use the shared PreSendToWasmMessage from playground-server
+pub use playground_server::PreSendToWasmMessage;
 
 /// The global state for the LSP
 #[derive(Debug)]

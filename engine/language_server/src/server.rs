@@ -30,10 +30,11 @@ use self::{
 use crate::{
     baml_project::file_utils::{find_baml_src, find_top_level_parent},
     playground::FrontendMessage,
-    playground2::{self, server::LangServerToWasmMessage},
-    session::{AllSettings, ClientSettings, PreSendToWasmMessage, Session},
+    playground2::{self},
+    session::{AllSettings, ClientSettings, Session},
     PositionEncoding,
 };
+use playground_server::{LangServerToWasmMessage, PreSendToWasmMessage};
 
 pub mod api;
 pub mod client;
@@ -55,7 +56,7 @@ pub type Result<T> = std::result::Result<T, api::Error>;
 
 pub(crate) struct ServerArgs {
     pub tokio_handle: tokio::runtime::Handle,
-    pub broadcast_tx: broadcast::Sender<LangServerToWasmMessage>,
+    pub broadcast_tx: broadcast::Sender<LangServerToWasmMessage<lsp_server::Message>>,
     pub playground_rx: broadcast::Receiver<PreSendToWasmMessage>,
     pub playground_tx: broadcast::Sender<PreSendToWasmMessage>,
     pub playground_port: u16,
@@ -360,7 +361,7 @@ impl Server {
         _client_capabilities: &ClientCapabilities,
         mut session: Session,
         worker_threads: NonZeroUsize,
-        broadcast_tx: broadcast::Sender<LangServerToWasmMessage>,
+        broadcast_tx: broadcast::Sender<LangServerToWasmMessage<lsp_server::Message>>,
     ) -> anyhow::Result<()> {
         // Ensure we have a notifier for reload operations
         let client = client::Client::new(connection.make_sender());

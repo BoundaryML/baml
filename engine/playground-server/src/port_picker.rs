@@ -7,10 +7,13 @@ pub struct PortPicks {
     pub proxy_listener: TcpListener,
 }
 
-pub async fn pick() -> anyhow::Result<PortPicks> {
-    const MAX_PORT_ATTEMPTS: u16 = 100;
+pub struct PortConfiguration {
+    pub base_port: u16,
+    pub max_attempts: u16,
+}
 
-    for playground_port in 3700..3700 + MAX_PORT_ATTEMPTS {
+pub async fn pick_ports(config: PortConfiguration) -> anyhow::Result<PortPicks> {
+    for playground_port in config.base_port..config.base_port + config.max_attempts {
         let proxy_port = playground_port + 1;
 
         if let (Ok(playground_listener), Ok(proxy_listener)) = (
@@ -28,6 +31,6 @@ pub async fn pick() -> anyhow::Result<PortPicks> {
 
     Err(anyhow::anyhow!(
         "Failed to find an available port after {} attempts",
-        MAX_PORT_ATTEMPTS
+        config.max_attempts
     ))
 }
