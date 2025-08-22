@@ -64,7 +64,7 @@ impl SyncRequestHandler for Rename {
             let new_symbol = params.new_name;
 
             // If the symbol is a class, find all occurrences and replace them.
-            let runtime = guard.baml_project.runtime(HashMap::new());
+            let runtime = guard.baml_project.runtime(HashMap::new(), session.baml_settings.feature_flags.as_ref().unwrap_or(&Vec::new()));
             let rt = runtime
                 .as_ref()
                 .map_err(|_| anyhow::anyhow!("Failed to get runtime"))

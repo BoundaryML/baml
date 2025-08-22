@@ -28,7 +28,6 @@ import { unsavedChangesAtom } from '../_atoms/atoms';
 import { currentEditorFilesAtom } from '../_atoms/atoms';
 import { EmbedDialog } from './EmbedDialog';
 import { GithubStars } from './GithubStars';
-import { SettingsDropdown } from './SettingsDropdown';
 
 const ShareButton = ({
   project,
@@ -241,9 +240,6 @@ export const TopNavbar = ({
               />
             </div>
           </Link>
-        </div>
-        <div className="flex h-full">
-          <SettingsDropdown />
         </div>
         <div className="flex h-full">
           <GithubStars />

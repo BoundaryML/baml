@@ -51,9 +51,9 @@ impl SyncRequestHandler for GotoDefinition {
         project
             .lock()
             .unwrap()
-            .update_runtime_with_feature_flags(
+            .update_runtime(
                 Some(notifier),
-                session.baml_settings.feature_flags.as_ref(),
+                session.baml_settings.feature_flags.as_ref().unwrap_or(&Vec::new()),
             )
             .internal_error()?;
 

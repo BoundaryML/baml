@@ -49,7 +49,9 @@
       "WebFetch(domain:www.npmjs.com)",
       "Bash(./target/debug/baml-cli:*)",
       "Bash(hack/spec_metadata.sh:*)",
-      "Bash(sed:*)"
+      "Bash(sed:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ],
     "deny": []
   },

@@ -45,7 +45,7 @@ impl SyncRequestHandler for CodeLens {
             .get_or_create_project(&path)
             .expect("Ensured that a project db exists");
         let fake_env = HashMap::new();
-        let baml_diagnostics = match project.lock().unwrap().baml_project.runtime(fake_env) {
+        let baml_diagnostics = match project.lock().unwrap().baml_project.runtime(fake_env, session.baml_settings.feature_flags.as_ref().unwrap_or(&Vec::new())) {
             Ok(runtime) => runtime.internal().diagnostics().clone(),
             Err(err) => err,
         };

@@ -32,6 +32,7 @@ import { FunctionTestName } from './function-test-name';
 import { isParallelTestsEnabledAtom } from './prompt-preview/test-panel/atoms';
 import { useRunBamlTests } from './prompt-preview/test-panel/test-runner';
 import { effectiveFeatureFlagsAtom, isVSCodeEnvironment } from '../feature-flags';
+import { vscodeSettingsAtom } from '../atoms';
 
 export const displaySettingsAtom = atom({
   showTokens: false,
@@ -88,20 +89,23 @@ export function PreviewToolbar() {
   
   // Beta feature flag settings
   const [effectiveFeatureFlags, setEffectiveFeatureFlags] = useAtom(effectiveFeatureFlagsAtom);
-  const betaFeatureEnabled = effectiveFeatureFlags.includes('beta');
+  const vscodeSettings = useAtomValue(vscodeSettingsAtom);
   const isInVSCode = isVSCodeEnvironment();
   
+  // For VSCode, use VSCode settings directly; for standalone, use effective flags
+  const betaFeatureEnabled = isInVSCode 
+    ? (vscodeSettings?.featureFlags?.includes('beta') ?? false)
+    : effectiveFeatureFlags.includes('beta');
+  
   const handleBetaToggle = (enabled: boolean) => {
+    // This function only runs in standalone mode (not VSCode)
     const updatedFlags = enabled 
       ? [...effectiveFeatureFlags.filter(flag => flag !== 'beta'), 'beta']
       : effectiveFeatureFlags.filter(flag => flag !== 'beta');
     setEffectiveFeatureFlags(updatedFlags);
-    
-    if (isInVSCode) {
-      toast.success('Beta Features Toggled', {
-        description: `Beta features ${enabled ? 'enabled' : 'disabled'} temporarily. To persist this change, update your VSCode settings.`,
-      });
-    }
+    toast.success('Beta Features Toggled', {
+      description: `Beta features ${enabled ? 'enabled' : 'disabled'}.`,
+    });
   };
 
   // Hide text when sidebar is open or on smaller screens
@@ -245,35 +249,52 @@ export function PreviewToolbar() {
               <DropdownMenuLabel className="text-xs px-2 py-1.5">
                 Experimental Features
               </DropdownMenuLabel>
-              <DropdownMenuCheckboxItem
-                checked={betaFeatureEnabled}
-                onCheckedChange={handleBetaToggle}
-                className="text-sm px-2 py-1.5 pl-7"
-              >
-                <TooltipProvider>
-                  <Tooltip delayDuration={300}>
-                    <TooltipTrigger asChild>
-                      <span>Beta Features</span>
-                    </TooltipTrigger>
-                    <TooltipContent side="left" className="text-xs w-80">
-                      Enable experimental BAML features and suppress experimental warnings.
-                      <br />
-                      <br />
-                      {isInVSCode ? (
-                        <>
-                          <b>VSCode:</b> Changes here are temporary overrides. 
-                          To persist, update your VSCode extension settings.
-                        </>
-                      ) : (
-                        <>
-                          <b>Standalone:</b> This setting is saved locally 
-                          and persists across sessions.
-                        </>
-                      )}
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </DropdownMenuCheckboxItem>
+              
+              {/* Beta Features - Only show toggle in standalone fiddle, not in VSCode */}
+              {!isInVSCode ? (
+                <DropdownMenuCheckboxItem
+                  checked={betaFeatureEnabled}
+                  onCheckedChange={handleBetaToggle}
+                  className="text-sm px-2 py-1.5 pl-7"
+                >
+                  <TooltipProvider>
+                    <Tooltip delayDuration={300}>
+                      <TooltipTrigger asChild>
+                        <span>Beta Features</span>
+                      </TooltipTrigger>
+                      <TooltipContent side="left" className="text-xs w-80">
+                        Enable experimental BAML features and suppress experimental warnings.
+                        <br />
+                        <br />
+                        <b>Standalone:</b> This setting is saved locally 
+                        and persists across sessions.
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </DropdownMenuCheckboxItem>
+              ) : (
+                /* VSCode - Show read-only status instead of toggle */
+                <div className="text-sm px-2 py-1.5 pl-7 text-muted-foreground">
+                  <TooltipProvider>
+                    <Tooltip delayDuration={300}>
+                      <TooltipTrigger asChild>
+                        <span>
+                          Beta Features: {betaFeatureEnabled ? 'Enabled' : 'Disabled'}
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent side="left" className="text-xs w-80">
+                        Beta features are controlled by VSCode settings.
+                        <br />
+                        <br />
+                        <b>To modify:</b> Open VSCode settings and search for "baml.featureFlags"
+                        <br />
+                        <br />
+                        Current status: {betaFeatureEnabled ? 'Beta features are enabled' : 'Beta features are disabled'}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
 

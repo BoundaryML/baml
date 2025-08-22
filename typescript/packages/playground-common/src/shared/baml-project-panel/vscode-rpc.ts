@@ -81,6 +81,11 @@ export interface SetProxySettingsRequest {
   proxyEnabled: boolean;
 }
 
+export interface SetFeatureFlagsRequest {
+  vscodeCommand: 'SET_FEATURE_FLAGS';
+  featureFlags: string[];
+}
+
 export interface GetBamlSrcRequest {
   vscodeCommand: 'GET_BAML_SRC';
   path: string;
@@ -176,6 +181,7 @@ type ApiPairs = [
   // Echo is included here as an example of what a request/response pair looks like
   [EchoRequest, EchoResponse],
   [SetProxySettingsRequest, void],
+  [SetFeatureFlagsRequest, void],
   [GetBamlSrcRequest, GetBamlSrcResponse],
   [GetWebviewUriRequest, GetWebviewUriResponse],
   [GetVSCodeSettingsRequest, GetVSCodeSettingsResponse],

@@ -93,7 +93,7 @@ impl BamlProject {
     }
 
     pub fn list_functions(&mut self) -> Vec<BamlFunction> {
-        let runtime = self.runtime(HashMap::new());
+        let runtime = self.runtime(HashMap::new(), &vec![]);
         if let Ok(runtime) = runtime {
             runtime.list_functions()
         } else {
@@ -157,7 +157,7 @@ impl BamlProject {
             .collect();
         let start_time = Instant::now();
 
-        let runtime = self.runtime(env);
+        let runtime = self.runtime(env, &vec![]);
         if let Err(e) = runtime {
             if e.has_errors() {
                 tracing::error!("Failed to run codegen: {:?}", e);
@@ -289,7 +289,7 @@ impl BamlProject {
     }
 
     pub fn list_generators(&mut self) -> Result<Vec<BamlGeneratorConfig>, &str> {
-        let runtime = self.runtime(HashMap::new());
+        let runtime = self.runtime(HashMap::new(), &vec![]);
         if let Ok(runtime) = runtime {
             Ok(runtime.list_generators())
         } else {
@@ -300,74 +300,7 @@ impl BamlProject {
     pub fn runtime(
         &mut self,
         env_vars: HashMap<String, String>,
-    ) -> Result<BamlRuntime, Diagnostics> {
-        let mut all_files_for_hash = self.files.iter().collect::<Vec<_>>();
-
-        log::debug!(
-            "Baml Project saved files: {:#?}, Unsaved files: {:#?}",
-            all_files_for_hash.len(),
-            self.unsaved_files.len()
-        );
-        all_files_for_hash.extend(self.unsaved_files.iter());
-        all_files_for_hash.sort_by_key(|(k, _)| k.path());
-
-        let mut hasher = DefaultHasher::new();
-        for (key, doc) in &all_files_for_hash {
-            key.path().hash(&mut hasher);
-            doc.contents.hash(&mut hasher);
-        }
-        let mut sorted_env_vars = env_vars.iter().collect::<Vec<_>>();
-        sorted_env_vars.sort_by_key(|(k, _)| *k);
-        for (k, v) in &sorted_env_vars {
-            k.hash(&mut hasher);
-            v.hash(&mut hasher);
-        }
-        let current_hash = hasher.finish();
-
-        if let Some((cached_hash, cached_result)) = &self.cached_runtime {
-            if *cached_hash == current_hash {
-                tracing::debug!("Runtime cache hit ({})", current_hash);
-                return cached_result.clone();
-            }
-            tracing::debug!(
-                "Runtime cache miss (hash mismatch: {} != {})",
-                *cached_hash,
-                current_hash
-            );
-        } else {
-            tracing::debug!("Runtime cache miss (no cache entry)");
-        }
-
-        let files_for_runtime = self
-            .files
-            .iter()
-            .chain(self.unsaved_files.iter())
-            .map(|(k, v)| (k.unchecked_to_string(), v.contents.clone()))
-            .collect::<HashMap<_, _>>();
-
-        let result = BamlRuntime::from_file_content(
-            &self.root_dir_name.to_string_lossy(),
-            &files_for_runtime,
-            env_vars,
-            internal_baml_core::FeatureFlags::new(),
-        )
-        .map_err(|e| match e.downcast::<DiagnosticsError>() {
-            Ok(e) => e,
-            Err(e) => {
-                log::debug!("Error: {e:#?}");
-                Diagnostics::new(self.root_dir_name.clone())
-            }
-        });
-
-        self.cached_runtime = Some((current_hash, result.clone()));
-
-        result
-    }
-
-    pub fn runtime_with_feature_flags(
-        &mut self,
-        env_vars: HashMap<String, String>,
-        feature_flags: Option<&Vec<String>>,
+        feature_flags: &Vec<String>,
     ) -> Result<BamlRuntime, Diagnostics> {
         let mut all_files_for_hash = self.files.iter().collect::<Vec<_>>();
 
@@ -391,12 +324,10 @@ impl BamlProject {
             v.hash(&mut hasher);
         }
         // Include feature flags in the cache hash
-        if let Some(flags) = feature_flags {
-            let mut sorted_flags = flags.clone();
-            sorted_flags.sort();
-            for flag in &sorted_flags {
-                flag.hash(&mut hasher);
-            }
+        let mut sorted_flags = feature_flags.clone();
+        sorted_flags.sort();
+        for flag in &sorted_flags {
+            flag.hash(&mut hasher);
         }
         let current_hash = hasher.finish();
 
@@ -422,16 +353,16 @@ impl BamlProject {
             .collect::<HashMap<_, _>>();
 
         // Convert feature flags to FeatureFlags struct
-        let feature_flags_struct = if let Some(flags) = feature_flags {
-            match internal_baml_core::FeatureFlags::from_vec(flags.clone()) {
-                Ok(flags) => flags,
-                Err(errors) => {
-                    tracing::warn!("Invalid feature flags: {:?}", errors);
-                    internal_baml_core::FeatureFlags::new()
-                }
+        tracing::info!("BamlProject::runtime called with feature_flags: {:?}", feature_flags);
+        let feature_flags_struct = match internal_baml_core::FeatureFlags::from_vec(feature_flags.clone()) {
+            Ok(flags) => {
+                tracing::info!("Successfully converted feature flags to FeatureFlags struct: {:?}", flags);
+                flags
+            },
+            Err(errors) => {
+                tracing::warn!("Invalid feature flags: {:?}, using empty flags", errors);
+                internal_baml_core::FeatureFlags::new()
             }
-        } else {
-            internal_baml_core::FeatureFlags::new()
         };
 
         let result = BamlRuntime::from_file_content(
@@ -452,6 +383,7 @@ impl BamlProject {
 
         result
     }
+
 
     pub fn files(&self) -> Vec<String> {
         let mut all_files = self.files.clone();
@@ -1063,14 +995,10 @@ impl Project {
     /// Reads all files from the WASM project, builds a map from file URIs to file content,
     /// invokes diagnostics, and calls the success callback.
     /// TODO: Consider pushing diagnostics here.
-    pub fn update_runtime(&mut self, runtime_notifier: Option<Notifier>) -> anyhow::Result<()> {
-        self.update_runtime_with_feature_flags(runtime_notifier, None)
-    }
-
-    pub fn update_runtime_with_feature_flags(
+    pub fn update_runtime(
         &mut self,
         runtime_notifier: Option<Notifier>,
-        feature_flags: Option<&Vec<String>>,
+        feature_flags: &Vec<String>,
     ) -> anyhow::Result<()> {
         let start_time = Instant::now();
         let fake_env_vars: HashMap<String, String> = HashMap::new();
@@ -1098,7 +1026,7 @@ impl Project {
                 )))?;
         }
 
-        let runtime = self.baml_project.runtime_with_feature_flags(fake_env_vars, feature_flags);
+        let runtime = self.baml_project.runtime(fake_env_vars, feature_flags);
         self.current_runtime = runtime.clone().ok();
         if runtime.is_ok() {
             self.last_successful_runtime = runtime.ok();
@@ -1194,19 +1122,10 @@ impl Project {
         doc: &TextDocumentItem,
         position: &Position,
         notifier: Notifier,
-    ) -> anyhow::Result<Option<Hover>> {
-        self.handle_hover_request_with_feature_flags(doc, position, notifier, None)
-    }
-
-    pub fn handle_hover_request_with_feature_flags(
-        &mut self,
-        doc: &TextDocumentItem,
-        position: &Position,
-        notifier: Notifier,
-        feature_flags: Option<&Vec<String>>,
+        feature_flags: &Vec<String>,
     ) -> anyhow::Result<Option<Hover>> {
         // Force runtime update before handling hover
-        self.update_runtime_with_feature_flags(Some(notifier), feature_flags)
+        self.update_runtime(Some(notifier), feature_flags)
             .map_err(|e| anyhow::anyhow!("Failed to update runtime: {e}"))?;
 
         let word = get_word_at_position(&doc.text, position);

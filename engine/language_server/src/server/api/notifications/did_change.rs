@@ -96,7 +96,10 @@ impl SyncNotificationHandler for DidChangeTextDocumentHandler {
 
         tracing::info!("publishing diagnostics");
 
-        publish_diagnostics(&notifier, project, Some(params.text_document.version), session.baml_settings.feature_flags.as_ref())?;
+        let empty_flags = vec![];
+        let effective_flags = session.baml_settings.feature_flags.as_ref().unwrap_or(&empty_flags);
+        tracing::info!("did_change: session feature_flags: {:?}, effective_flags: {:?}", session.baml_settings.feature_flags, effective_flags);
+        publish_diagnostics(&notifier, project, Some(params.text_document.version), effective_flags)?;
 
         let elapsed = start_time_total.elapsed();
         tracing::info!("didchange total took {:?}ms", elapsed.as_millis());
