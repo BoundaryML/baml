@@ -92,8 +92,8 @@ impl BamlProject {
         }
     }
 
-    pub fn list_functions(&mut self) -> Vec<BamlFunction> {
-        let runtime = self.runtime(HashMap::new(), &vec![]);
+    pub fn list_functions(&mut self, feature_flags: &Vec<String>) -> Vec<BamlFunction> {
+        let runtime = self.runtime(HashMap::new(), feature_flags);
         if let Ok(runtime) = runtime {
             runtime.list_functions()
         } else {
@@ -145,6 +145,7 @@ impl BamlProject {
     pub fn run_generators_native(
         &mut self,
         no_version_check: Option<bool>,
+        feature_flags: &Vec<String>,
     ) -> Result<Vec<GenerateOutput>, anyhow::Error> {
         let env = std::env::vars().collect();
         let all_files = self
@@ -157,7 +158,7 @@ impl BamlProject {
             .collect();
         let start_time = Instant::now();
 
-        let runtime = self.runtime(env, &vec![]);
+        let runtime = self.runtime(env, feature_flags);
         if let Err(e) = runtime {
             if e.has_errors() {
                 tracing::error!("Failed to run codegen: {:?}", e);
@@ -288,8 +289,8 @@ impl BamlProject {
         Ok(workspace_files)
     }
 
-    pub fn list_generators(&mut self) -> Result<Vec<BamlGeneratorConfig>, &str> {
-        let runtime = self.runtime(HashMap::new(), &vec![]);
+    pub fn list_generators(&mut self, feature_flags: &Vec<String>) -> Result<Vec<BamlGeneratorConfig>, &str> {
+        let runtime = self.runtime(HashMap::new(), feature_flags);
         if let Ok(runtime) = runtime {
             Ok(runtime.list_generators())
         } else {
@@ -965,9 +966,9 @@ impl Project {
     }
 
     /// Iterates over all generators and prints error messages if version mismatches are found.
-    pub fn check_version_on_save(&self) -> Option<String> {
+    pub fn check_version_on_save(&self, feature_flags: &Vec<String>) -> Option<String> {
         let mut first_error_message = None;
-        if let Ok(generators) = self.list_generators() {
+        if let Ok(generators) = self.list_generators(&vec![]) {
             for gen in generators.iter() {
                 if let Some(message) = self.check_version(gen, false) {
                     if first_error_message.is_none() {
@@ -981,8 +982,8 @@ impl Project {
     }
 
     /// Returns true if any generator produces TypeScript output.
-    pub fn is_typescript_generator_present(&self) -> bool {
-        if let Ok(generators) = self.list_generators() {
+    pub fn is_typescript_generator_present(&self, feature_flags: &Vec<String>) -> bool {
+        if let Ok(generators) = self.list_generators(&vec![]) {
             generators
                 .iter()
                 .any(|g| g.output_type.to_lowercase() == "typescript")
@@ -1192,7 +1193,7 @@ impl Project {
     }
 
     /// Returns a list of generator configurations.
-    pub fn list_generators(&self) -> Result<Vec<BamlGeneratorConfig>, &str> {
+    pub fn list_generators(&self, feature_flags: &Vec<String>) -> Result<Vec<BamlGeneratorConfig>, &str> {
         if let Some(ref runtime) = self.current_runtime {
             Ok(runtime.list_generators())
         } else {
@@ -1243,13 +1244,13 @@ impl Project {
     /// Runs generators without debouncing.
     /// (This async method simulates generator file generation and then calls one of the provided callbacks.)
     // #[cfg(feature = "async")]
-    pub fn run_generators_without_debounce<F, E>(&mut self, on_success: F, on_error: E)
+    pub fn run_generators_without_debounce<F, E>(&mut self, feature_flags: &Vec<String>, on_success: F, on_error: E)
     where
         F: Fn(String) + Send,
         E: Fn(String) + Send,
     {
         let start = Instant::now();
-        match self.baml_project.run_generators_native(None) {
+        match self.baml_project.run_generators_native(None, feature_flags) {
             Ok(generators) => {
                 let mut generated_file_count = 0;
                 for gen in generators {
@@ -1288,10 +1289,10 @@ impl Project {
     /// Checks if all generators use the same major.minor version.
     /// Returns Ok(()) if they do (or if there are no generators),
     /// otherwise returns an Err with a descriptive message.
-    pub fn get_common_generator_version(&self) -> Result<String, String> {
+    pub fn get_common_generator_version(&self, feature_flags: &Vec<String>) -> Result<String, String> {
         let runtime_version = env!("CARGO_PKG_VERSION");
 
-        let generators = match self.list_generators() {
+        let generators = match self.list_generators(feature_flags) {
             Ok(gens) => gens,
             Err(_) => return Ok(runtime_version.to_string()), // Return cargo pkg version if error listing generators
         };

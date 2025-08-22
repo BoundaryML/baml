@@ -137,7 +137,12 @@ impl Session {
             resolved_client_capabilities: Arc::new(ResolvedClientCapabilities::new(
                 client_capabilities,
             )),
-            baml_settings: BamlSettings::default(),
+            baml_settings: {
+                tracing::info!("--- Session::new global_settings.baml: {:?}", global_settings.baml);
+                let baml_settings = global_settings.baml.clone().unwrap_or_default();
+                tracing::info!("--- Session::new final baml_settings: {:?}", baml_settings);
+                baml_settings
+            },
             #[cfg(feature = "playground-server")]
             playground_port: None,
             #[cfg(feature = "playground-server")]
@@ -486,6 +491,10 @@ impl DocumentSnapshot {
     pub(crate) fn project(&self) -> Option<Arc<Mutex<Project>>> {
         let file_path = self.document_ref.file_url().to_file_path().ok()?;
         self.session.get_or_create_project(&file_path)
+    }
+
+    pub(crate) fn session_baml_settings(&self) -> &BamlSettings {
+        &self.session.baml_settings
     }
 }
 

@@ -208,7 +208,7 @@ pub fn project_diagnostics(
     }
 
     // Add generator version diagnostics
-    if let Ok(generators) = guard.baml_project.list_generators() {
+    if let Ok(generators) = guard.baml_project.list_generators(feature_flags) {
         for gen in generators.into_iter() {
             if let Some(message) = guard.baml_project.check_version(&gen, false) {
                 if let Some(range) = span_to_range(
@@ -252,9 +252,9 @@ pub fn project_diagnostics(
     }
 
     // Check for generator version mismatch as well.
-    if let Err(message) = guard.get_common_generator_version() {
+    if let Err(message) = guard.get_common_generator_version(feature_flags) {
         // Add the diagnostic to all generators
-        if let Ok(generators) = guard.list_generators() {
+        if let Ok(generators) = guard.list_generators(feature_flags) {
             // Need to list generators again to get their spans
             for gen in &generators {
                 if let Some(range) = span_to_range(

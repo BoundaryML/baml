@@ -81,9 +81,24 @@ export const runtimeAtom = atom<{
     const selectedEnvVars = Object.fromEntries(
       Object.entries(apiKeys).filter(([key, value]) => value !== undefined),
     );
-    // Use VSCode settings if available (indicating VSCode environment), otherwise use standalone flags
-    const vscodeSettings = get(vscodeSettingsAtom);
-    const featureFlags = vscodeSettings?.featureFlags ?? get(standaloneFeatureFlagsAtom);
+    // Determine environment and get appropriate feature flags
+    const isInVSCode = isVSCodeEnvironment();
+    let featureFlags: string[];
+    
+    if (isInVSCode) {
+      // In VSCode: try vscodeSettingsAtom, then bamlConfig fallback
+      const vscodeSettings = get(vscodeSettingsAtom);
+      if (vscodeSettings?.featureFlags) {
+        featureFlags = vscodeSettings.featureFlags;
+      } else {
+        // VSCode settings not loaded yet, use bamlConfig as immediate fallback
+        const config = get(bamlConfig);
+        featureFlags = config.config?.featureFlags ?? [];
+      }
+    } else {
+      // Standalone: use standalone flags
+      featureFlags = get(standaloneFeatureFlagsAtom);
+    }
     const rt = project.runtime(selectedEnvVars, featureFlags);
     const diags = project.diagnostics(rt);
     return { rt, diags, lastValidRt: rt };

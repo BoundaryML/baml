@@ -51,7 +51,8 @@
       "Bash(hack/spec_metadata.sh:*)",
       "Bash(sed:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(cat:*)"
     ],
     "deny": []
   },

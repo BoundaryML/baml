@@ -81,13 +81,15 @@ pub(super) fn request<'a>(req: lsp_server::Request) -> Task<'a> {
                 let result: anyhow::Result<(serde_json::Value,)> = {
                     let mut all_functions = Vec::new();
                     let projects = session.baml_src_projects.lock().unwrap();
+                    let empty_flags = vec![];
+                    let effective_flags = session.baml_settings.feature_flags.as_ref().unwrap_or(&empty_flags);
 
                     for (_, project) in projects.iter() {
                         let functions = project
                             .lock()
                             .unwrap()
                             .baml_project
-                            .list_functions()
+                            .list_functions(effective_flags)
                             .iter()
                             .map(|f| BamlFunctionResult {
                                 name: f.name.clone(),

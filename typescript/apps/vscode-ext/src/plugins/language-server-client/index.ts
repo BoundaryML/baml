@@ -189,6 +189,9 @@ const debugOptions = {
 };
 
 const getClientOptions = (): LanguageClientOptions => {
+  // Get current BAML settings for initialization
+  const currentBamlSettings = workspace.getConfiguration('baml');
+  
   return {
     documentSelector: [
       { scheme: 'file', language: 'baml' },
@@ -199,7 +202,9 @@ const getClientOptions = (): LanguageClientOptions => {
     synchronize: {
       fileEvents: workspace.createFileSystemWatcher('**/baml_src/**/*.baml'),
     },
-    // Remove initializationOptions since BAML settings are sent via configuration updates
+    initializationOptions: {
+      baml: currentBamlSettings
+    },
   };
 };
 
