@@ -123,7 +123,7 @@ impl BamlValue {
                                 items.iter().map(|item| item.to_doc()),
                                 RcDoc::text(",").append(RcDoc::line()),
                             )
-                            .nest(2)
+                            .nest(2),
                         )
                         .append(RcDoc::softline())
                         .append(RcDoc::text("]"))
@@ -145,7 +145,7 @@ impl BamlValue {
                                 }),
                                 RcDoc::text(",").append(RcDoc::line()),
                             )
-                            .nest(2)
+                            .nest(2),
                         )
                         .append(RcDoc::softline())
                         .append(RcDoc::text("}"))
@@ -171,7 +171,7 @@ impl BamlValue {
                                 }),
                                 RcDoc::text(",").append(RcDoc::line()),
                             )
-                            .nest(2)
+                            .nest(2),
                         )
                         .append(RcDoc::softline())
                         .append(RcDoc::text("}"))
@@ -922,7 +922,7 @@ impl<T> BamlValueWithMeta<T> {
                                 items.iter().map(|item| item.to_doc()),
                                 RcDoc::text(",").append(RcDoc::line()),
                             )
-                            .nest(2)
+                            .nest(2),
                         )
                         .append(RcDoc::softline())
                         .append(RcDoc::text("]"))
@@ -944,7 +944,7 @@ impl<T> BamlValueWithMeta<T> {
                                 }),
                                 RcDoc::text(",").append(RcDoc::line()),
                             )
-                            .nest(2)
+                            .nest(2),
                         )
                         .append(RcDoc::softline())
                         .append(RcDoc::text("}"))
@@ -970,7 +970,7 @@ impl<T> BamlValueWithMeta<T> {
                                 }),
                                 RcDoc::text(",").append(RcDoc::line()),
                             )
-                            .nest(2)
+                            .nest(2),
                         )
                         .append(RcDoc::softline())
                         .append(RcDoc::text("}"))
@@ -1460,7 +1460,9 @@ fn add_checks<'a, S: SerializeMap>(
 
 fn format_media(media: &BamlMedia) -> RcDoc<'static, ()> {
     match &media.content {
-        crate::BamlMediaContent::Url(url) => RcDoc::text(format!("<media url {}: {}>", media.media_type, url.url)),
+        crate::BamlMediaContent::Url(url) => {
+            RcDoc::text(format!("<media url {}: {}>", media.media_type, url.url))
+        }
         crate::BamlMediaContent::Base64(base64) => {
             let preview = if base64.base64.len() > 50 {
                 format!("{}...", &base64.base64[..50])
@@ -1469,12 +1471,18 @@ fn format_media(media: &BamlMedia) -> RcDoc<'static, ()> {
             };
             RcDoc::text(format!("<media base64 {}: {}>", media.media_type, preview))
         }
-        crate::BamlMediaContent::File(file) => {
-            match file.path() {
-                Ok(path) => RcDoc::text(format!("<media file {}: {}>", media.media_type, path.display())),
-                Err(_) => RcDoc::text(format!("<media file {}: {}>", media.media_type, file.relpath.display())),
-            }
-        }
+        crate::BamlMediaContent::File(file) => match file.path() {
+            Ok(path) => RcDoc::text(format!(
+                "<media file {}: {}>",
+                media.media_type,
+                path.display()
+            )),
+            Err(_) => RcDoc::text(format!(
+                "<media file {}: {}>",
+                media.media_type,
+                file.relpath.display()
+            )),
+        },
     }
 }
 

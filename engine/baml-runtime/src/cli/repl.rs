@@ -20,17 +20,17 @@ use reedline::{
 
 use crate::BamlRuntime;
 use baml_compiler::{
-    hir::{self, from_ir_type, to_ir_type, Hir, Type, TypeM, TypeMeta},
+    hir::{self, Hir},
     thir::{
         interpret::interpret_thir,
         typecheck::{typecheck_expression, typecheck_returning_context, VarInfo},
     },
 };
-use pretty::RcDoc;
 use internal_baml_ast::ast::WithName;
 use internal_baml_ast::{parse, parse_standalone_expression};
 use internal_baml_core::ast as baml_ast;
 use internal_baml_core::internal_baml_diagnostics::{Diagnostics, SourceFile};
+use pretty::RcDoc;
 
 #[derive(Args, Clone, Debug)]
 pub struct ReplArgs {
@@ -58,9 +58,10 @@ impl ReplState {
     }
 
     fn load_baml_sources(&mut self, path: PathBuf) -> Result<()> {
-        let runtime = BamlRuntime::from_directory(&path, self.env_vars.clone()).context(
-            format!("Failed to load BAML sources from {}", path.display()),
-        )?;
+        let runtime =
+            BamlRuntime::from_directory(&path, self.env_vars.clone(), Default::default()).context(
+                format!("Failed to load BAML sources from {}", path.display()),
+            )?;
         self.runtime = Some(runtime);
         println!("✓ Loaded BAML sources from {}", path.display());
         Ok(())
@@ -240,20 +241,11 @@ impl ReplState {
 
         // let variables: IndexMap<String, BamlValueWithMeta<TypeGeneric<TypeIR>>> = self
 
-        let variables: IndexMap<String, BamlValueWithMeta<(Span, Option<TypeM<TypeMeta>>)>> = self
+        let variables: IndexMap<String, BamlValueWithMeta<ExprMetadata>> = self
             .variables
             .iter()
-            .map(|(k, v)| {
-                (
-                    k.clone(),
-                    v.clone()
-                        .map_meta_owned(|(s, m)| (s, m.map(|t| from_ir_type(&t)))),
-                )
-            })
+            .map(|(k, v)| (k.clone(), v.clone()))
             .collect();
-
-        let foo: IndexMap<String, BamlValueWithMeta<(Span, Option<TypeM<TypeMeta>>)>> =
-            IndexMap::new();
 
         let fn_params = self.function_parameters()?.clone();
         let runtime_clone = self.runtime.clone();
@@ -309,7 +301,7 @@ impl ReplState {
         )
         .await?;
 
-        Ok(eval_result.map_meta(|(span, ty)| (span.clone(), ty.clone().map(|t| to_ir_type(&t)))))
+        Ok(eval_result)
     }
 
     fn infer_expression_type(&self, input: &str) -> Result<String> {
@@ -337,8 +329,8 @@ impl ReplState {
                 type_context.vars.insert(
                     k.clone(),
                     VarInfo {
-                        ty: from_ir_type(&ty),
-                        if_mutable: None,
+                        ty: ty.clone(),
+                        mut_var_info: None,
                     },
                 );
             }
@@ -430,34 +422,63 @@ impl ReplState {
         candidates
     }
 
-    fn format_type(&self, ty: &Type) -> String {
+    fn format_type(&self, ty: &TypeIR) -> String {
         match ty {
-            hir::TypeM::Int(_) => "int".to_string(),
-            hir::TypeM::String(_) => "string".to_string(),
-            hir::TypeM::Float(_) => "float".to_string(),
-            hir::TypeM::Bool(_) => "bool".to_string(),
-            hir::TypeM::Null(_) => "null".to_string(),
-            hir::TypeM::Array(inner, _) => format!("{}[]", self.format_type(inner)),
-            hir::TypeM::Map(key, value, _) => {
+            TypeIR::Primitive(type_val, _) => match type_val {
+                baml_types::ir_type::TypeValue::String => "string".to_string(),
+                baml_types::ir_type::TypeValue::Int => "int".to_string(),
+                baml_types::ir_type::TypeValue::Float => "float".to_string(),
+                baml_types::ir_type::TypeValue::Bool => "bool".to_string(),
+                baml_types::ir_type::TypeValue::Null => "null".to_string(),
+                baml_types::ir_type::TypeValue::Media(media_type) => {
+                    format!("media({:?})", media_type)
+                }
+            },
+            TypeIR::Enum { name, .. } => name.clone(),
+            TypeIR::Class { name, .. } => name.clone(),
+            TypeIR::List(inner, _) => format!("{}[]", self.format_type(inner)),
+            TypeIR::Map(key, value, _) => {
                 format!(
                     "map<{}, {}>",
                     self.format_type(key),
                     self.format_type(value)
                 )
             }
-            hir::TypeM::ClassName(name, _) => name.clone(),
-            hir::TypeM::EnumName(name, _) => name.clone(),
-            hir::TypeM::Union(types, _) => {
-                let type_names: Vec<String> = types.iter().map(|t| self.format_type(t)).collect();
-                format!("({})", type_names.join(" | "))
+            TypeIR::Union(union_type, _) => {
+                use baml_types::ir_type::UnionTypeViewGeneric;
+                match union_type.view() {
+                    UnionTypeViewGeneric::Null => "null".to_string(),
+                    UnionTypeViewGeneric::Optional(inner) => {
+                        format!("{}?", self.format_type(inner))
+                    }
+                    UnionTypeViewGeneric::OneOf(types) => {
+                        let type_names: Vec<String> =
+                            types.iter().map(|t| self.format_type(t)).collect();
+                        format!("({})", type_names.join(" | "))
+                    }
+                    UnionTypeViewGeneric::OneOfOptional(types) => {
+                        let type_names: Vec<String> =
+                            types.iter().map(|t| self.format_type(t)).collect();
+                        format!("({})?", type_names.join(" | "))
+                    }
+                }
             }
-            hir::TypeM::Arrow(arrow, _) => {
-                let input_types: Vec<String> =
-                    arrow.inputs.iter().map(|t| self.format_type(t)).collect();
+            TypeIR::RecursiveTypeAlias { name, .. } => name.clone(),
+            TypeIR::Literal(literal, _) => format!("literal({:?})", literal),
+            TypeIR::Tuple(types, _) => {
+                let type_names: Vec<String> = types.iter().map(|t| self.format_type(t)).collect();
+                format!("({})", type_names.join(", "))
+            }
+            TypeIR::Arrow(arrow, _) => {
+                let input_types: Vec<String> = arrow
+                    .param_types
+                    .iter()
+                    .map(|t| self.format_type(t))
+                    .collect();
                 format!(
                     "({}) -> {}",
                     input_types.join(", "),
-                    self.format_type(&arrow.output)
+                    self.format_type(&arrow.return_type)
                 )
             }
         }

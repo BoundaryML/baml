@@ -6,3 +6,7 @@ ExtractResume("Vaibhav Gupta. BoundaryML (2023-present")
 :q
 ExtractResume2("Vaibhav Gupta. BoundaryML (2023-present")
 :q
+1
+:q
+1 + 2
+:q

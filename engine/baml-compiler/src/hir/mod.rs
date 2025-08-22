@@ -6,8 +6,8 @@ use baml_types::ir_type::TypeIR;
 use baml_types::{type_meta::base::StreamingBehavior, Constraint};
 use internal_baml_diagnostics::Span;
 
-mod dump;
-mod lowering;
+pub mod dump;
+pub mod lowering;
 
 /// High-level intermediate representation.
 ///

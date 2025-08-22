@@ -11,9 +11,10 @@ use internal_baml_diagnostics::{Diagnostics, Span};
 use internal_baml_parser_database::ParserDatabase;
 
 use crate::{
-    hir::{self, Type},
+    hir::{self},
     thir,
 };
+use baml_types::ir_type::TypeIR;
 
 /// Compile a Baml AST into bytecode.
 ///
@@ -41,7 +42,7 @@ pub fn compile(ast: &ParserDatabase) -> anyhow::Result<BamlVmProgram> {
 ///
 /// This function takes an HIR Program and generates the bytecode for the VM.
 fn compile_thir_to_bytecode(
-    thir: &thir::THir<(Span, Option<Type>)>,
+    thir: &thir::THir<(Span, Option<TypeIR>)>,
 ) -> anyhow::Result<BamlVmProgram> {
     let mut resolved_globals = HashMap::new();
     let mut resolved_classes = HashMap::new();
@@ -228,7 +229,7 @@ impl ForLoopVarCounters {
 
 /// Compile an HIR function to bytecode.
 fn compile_thir_function(
-    func: &thir::ExprFunction<(Span, Option<Type>)>,
+    func: &thir::ExprFunction<(Span, Option<TypeIR>)>,
     globals: &HashMap<String, GlobalIndex>,
     classes: &HashMap<String, HashMap<String, usize>>,
     llm_functions: &HashSet<String>,
@@ -379,7 +380,7 @@ impl<'g> HirCompiler<'g> {
     /// Here we compile a source function into a [`Function`] VM struct.
     fn compile_function(
         &mut self,
-        func: &thir::ExprFunction<(Span, Option<Type>)>,
+        func: &thir::ExprFunction<(Span, Option<TypeIR>)>,
     ) -> anyhow::Result<Function> {
         // Compile statements in the function body.
         self.compile_block_with_parameters(&func.body, &func.parameters);
@@ -415,7 +416,7 @@ impl<'g> HirCompiler<'g> {
     /// Functions have parameters so we need to track those as well.
     fn compile_block_with_parameters(
         &mut self,
-        block: &thir::Block<(Span, Option<Type>)>,
+        block: &thir::Block<(Span, Option<TypeIR>)>,
         parameters: &[thir::Parameter],
     ) {
         self.enter_scope();
@@ -437,12 +438,12 @@ impl<'g> HirCompiler<'g> {
     }
 
     /// Used to compile nested blocks within functions.
-    fn compile_block(&mut self, block: &thir::Block<(Span, Option<Type>)>) {
+    fn compile_block(&mut self, block: &thir::Block<(Span, Option<TypeIR>)>) {
         self.compile_block_with_parameters(block, &[]);
     }
 
     /// A statement is anything that does not produce a value by itself.
-    fn compile_statement(&mut self, statement: &thir::Statement<(Span, Option<Type>)>) {
+    fn compile_statement(&mut self, statement: &thir::Statement<(Span, Option<TypeIR>)>) {
         match statement {
             thir::Statement::Let { name, value, .. } => {
                 self.compile_expression(value);
@@ -745,7 +746,7 @@ impl<'g> HirCompiler<'g> {
     }
 
     /// Generate bytecode for an expression.
-    fn compile_expression(&mut self, expr: &thir::Expr<(Span, Option<Type>)>) {
+    fn compile_expression(&mut self, expr: &thir::Expr<(Span, Option<TypeIR>)>) {
         // TODO: The implementation of line number is extremely slow. It always
         // reads the entire source string to find the line number.
         self.current_source_line = expr.span().line_number();
@@ -1232,7 +1233,7 @@ impl<'g> HirCompiler<'g> {
     }
 }
 
-impl thir::Expr<(Span, Option<Type>)> {
+impl thir::Expr<(Span, Option<TypeIR>)> {
     /// Returns true if the block ends with an expression that has a final value.
     ///
     /// For example, it would return true for this block:
