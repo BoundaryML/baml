@@ -55,7 +55,7 @@ class CustomTaskResult {
 function CustomTask(input: string) -> BookOrder | FlightConfirmation | GroceryReceipt {
   client "openai/gpt-4o-mini"
   prompt #"
-    Given the output string, extract either an order for a book, a flight confirmation, or a grocery receipt.
+    Given the input string, extract either an order for a book, a flight confirmation, or a grocery receipt.
 
     {{ ctx.output_format }}
 
