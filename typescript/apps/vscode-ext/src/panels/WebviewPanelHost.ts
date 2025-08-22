@@ -370,7 +370,7 @@ export class WebviewPanelHost {
         <div id="root">
           <div class="baml-loading-container">
             <div class="baml-loading-box">
-              <div class="baml-spinner"></div/
+              <div class="baml-spinner"></div>
               <div class="baml-loading-title">Loading BAML Playground...</div>
               <div class="baml-loading-desc">Please wait while the playground loads.</div>
             </div>
