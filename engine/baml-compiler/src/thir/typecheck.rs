@@ -87,6 +87,8 @@ pub fn typecheck(hir: &Hir, diagnostics: &mut Diagnostics) -> THir<ExprMetadata>
         typing_context.symbols.insert(func.name.clone(), func_type);
     }
 
+    // TODO: Handle these uniformly
+
     // Add builtin functions to typing context
     // std::fetch_value<T>(std::Request) -> T
     // This is a generic function that takes a Request and returns any type T
@@ -96,6 +98,17 @@ pub fn typecheck(hir: &Hir, diagnostics: &mut Diagnostics) -> THir<ExprMetadata>
     typing_context.symbols.insert(
         crate::builtin::functions::FETCH_VALUE.to_string(),
         fetch_value_type,
+    );
+    // Len.
+    typing_context.symbols.insert(
+        "std.Array.len".to_string(),
+        TypeM::Function(
+            crate::hir::Function {
+                params: vec![], // TODO: It's technically generic like the one above. IDK why it works.
+                return_type: Box::new(Type::Int(hir::TypeMeta::default())),
+            },
+            TypeMeta::default(),
+        ),
     );
 
     // Add global assignments to typing context
