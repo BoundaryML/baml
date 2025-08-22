@@ -317,7 +317,10 @@ expr_block = { BLOCK_OPEN ~ NEWLINE? ~ (stmt | comment_block | empty_lines)* ~ e
 // Statement.
 stmt = {
     (
-        (
+        for_loop
+        | while_loop
+        | if_expression
+        | (
             (
                 BREAK_KEYWORD
                 | CONTINUE_KEYWORD
@@ -330,9 +333,6 @@ stmt = {
             )
             ~ SEMICOLON
         )
-        | for_loop
-        | if_expression
-        | while_loop
         | expr_block
     )
     ~ trailing_comment?

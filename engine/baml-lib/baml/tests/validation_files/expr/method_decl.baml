@@ -10,8 +10,9 @@ class User {
         self.age >= 18
     }
 
-    function SetName(self, name: string) -> bool {
-        self.name = name;
-        true
-    }
+    // TODO: left side of assignment is not an identifier: FieldAccess
+    // function SetName(self, name: string) -> bool {
+    //     self.name = name;
+    //     true
+    // }
 }

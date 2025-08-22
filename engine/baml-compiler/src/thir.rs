@@ -126,7 +126,12 @@ impl<T> Block<T> {
         T: Clone + std::fmt::Debug,
     {
         let statements = join(self.statements.iter().map(|stmt| stmt.dump_str()), "\n");
-        format!("{{ {statements} }}")
+
+        if let Some(expr) = &self.trailing_expr {
+            format!("{{ {statements} {} }}", expr.dump_str())
+        } else {
+            format!("{{ {statements} }}")
+        }
     }
 
     pub fn variables(&self) -> HashSet<Name>

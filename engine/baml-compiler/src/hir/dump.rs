@@ -270,7 +270,8 @@ impl LlmFunction {
 
 impl ExprFunction {
     pub fn to_doc(&self) -> RcDoc<'static, ()> {
-        let body_doc = if self.body.statements.is_empty() {
+        // TODO: Why nesting doesn't work if calling self.body.to_doc().nest(2)?
+        let mut body_doc = if self.body.statements.is_empty() {
             RcDoc::nil()
         } else {
             // The key is to apply nest() to the entire content that includes line breaks
@@ -286,6 +287,15 @@ impl ExprFunction {
                 .append(RcDoc::hardline())
                 .nest(2)
         };
+
+        if let Some(expr) = &self.body.trailing_expr {
+            body_doc = body_doc.append(
+                RcDoc::hardline()
+                    .append(expr.to_doc().append(RcDoc::hardline()))
+                    .nest(2),
+            );
+        }
+
         RcDoc::text("function")
             .append(RcDoc::space())
             .append(RcDoc::text(self.name.clone()))
@@ -310,7 +320,7 @@ impl ExprFunction {
 
 impl Block {
     pub fn to_doc(&self) -> RcDoc<'static, ()> {
-        if self.statements.is_empty() {
+        let doc = if self.statements.is_empty() {
             RcDoc::nil()
         } else {
             RcDoc::intersperse(
@@ -320,6 +330,12 @@ impl Block {
                     .collect::<Vec<_>>(),
                 RcDoc::hardline(),
             )
+        };
+
+        if let Some(expr) = &self.trailing_expr {
+            doc.append(RcDoc::hardline()).append(expr.to_doc())
+        } else {
+            doc
         }
     }
 }

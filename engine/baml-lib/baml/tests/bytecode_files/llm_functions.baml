@@ -36,4 +36,4 @@ function AnalyzeSentiment(text: string) -> Sentiment {
 // Function: AnalyzeSentiment
 //
 // Class: std::Request with 3 fields
-// Function: len
+// Function: std.Array.len

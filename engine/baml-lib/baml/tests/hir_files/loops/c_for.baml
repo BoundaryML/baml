@@ -52,7 +52,8 @@ fn Nothing() -> int {
 //   var i = 1;
 //     for (;i <= 10;i += 1;) { s += i;}
 //   }
-//   return s;
+//
+//   s
 // }
 //
 // function NoCondition() {
@@ -61,7 +62,8 @@ fn Nothing() -> int {
 //   var i = 0;
 //     for (;;s += i;) { }
 //   }
-//   return s;
+//
+//   s
 // }
 //
 // function NoAfter() {
@@ -72,7 +74,8 @@ fn Nothing() -> int {
 //     
 //     }
 //   }
-//   return s;
+//
+//   s
 // }
 //
 // function OnlyCond() {
@@ -80,13 +83,15 @@ fn Nothing() -> int {
 //   while false {
 //   
 //   }
-//   return s;
+//
+//   s
 // }
 //
 // function Nothing() {
 //   var s = 0;
 //   for (;;) { }
-//   return s;
+//
+//   s
 // }
 //
 // class std::Request {
