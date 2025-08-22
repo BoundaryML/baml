@@ -390,7 +390,6 @@ const useParallelRunTests = (maxBatchSize = 5) => {
             set(areTestsRunningAtom, true)
 
             // Call `run_tests` on the runtime
-            // TODO: The run_tests method doesn't support abort signal yet
             const results = await rt.run_tests(
               testCases,
               (partial: WasmFunctionResponse) => {
@@ -402,7 +401,7 @@ const useParallelRunTests = (maxBatchSize = 5) => {
               },
               findMediaFile,
               apiKeys,
-              // controller.signal, // TODO: Add when run_tests supports abort signal
+              controller.signal, // Now supported!
             )
 
             const endTime = performance.now()

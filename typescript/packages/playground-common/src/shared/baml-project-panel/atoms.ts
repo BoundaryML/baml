@@ -16,7 +16,6 @@ import { apiKeysAtom } from '../../components/api-keys-dialog/atoms';
 const wasmAtomAsync = atom(async () => {
   const wasm = await import('@gloo-ai/baml-schema-wasm-web/baml_schema_build');
   // Enable WASM logging for debugging
-  wasm.enable_logs();
   wasm.init_js_callback_bridge(vscode.loadAwsCreds, vscode.loadGcpCreds);
   return wasm;
 });

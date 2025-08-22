@@ -1573,8 +1573,22 @@ impl WasmRuntime {
         on_partial_response: js_sys::Function,
         get_baml_src_cb: js_sys::Function,
         env: js_sys::Object,
+        abort_signal: Option<js_sys::Object>,
     ) -> Result<WasmTestResponses, JsValue> {
-        log::info!("Running tests...");
+        log::info!("Running tests with abort_signal: {}", abort_signal.is_some());
+        
+        // Convert abort signal to tripwire
+        let (operation_id, tripwire) = match crate::abort_controller::js_abort_signal_to_tripwire(abort_signal) {
+            Ok((id, tw)) => {
+                log::info!("WASM Parallel: Set up abort handler for batch tests (op_id: {})", id);
+                (id, tw)
+            }
+            Err(_e) => {
+                log::error!("WASM Parallel: Failed to setup abort handler");
+                (0, None)
+            }
+        };
+        
         // Create a vector to store all test futures
         let mut test_futures = Vec::new();
 
@@ -1623,6 +1637,9 @@ impl WasmRuntime {
                         env_vars.insert(key, value);
                     }
 
+                    // Clone tripwire for this test
+                    let test_tripwire = tripwire.clone();
+                    
                     // Create a future for this test
                     let future = async move {
                         let (test_response, span) = rt
@@ -1633,7 +1650,7 @@ impl WasmRuntime {
                                 Some(cb),
                                 None,
                                 env_vars.clone(),
-                                None, // No tripwire support for batch tests yet
+                                test_tripwire, // Pass tripwire to each test
                             )
                             .await;
 
@@ -1660,6 +1677,13 @@ impl WasmRuntime {
 
         // Run all tests in parallel
         let results = futures::future::join_all(test_futures).await;
+        
+        // Clean up operation if we had an abort signal
+        if operation_id > 0 {
+            crate::abort_controller::cleanup_operation(operation_id);
+            log::info!("WASM Parallel: Cleaned up operation {}", operation_id);
+        }
+        
         Ok(WasmTestResponses { responses: results })
     }
 }
