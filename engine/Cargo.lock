@@ -942,7 +942,7 @@ dependencies = [
  "chrono",
  "clap",
  "clap-cargo",
- "colored",
+ "colored 2.2.0",
  "console",
  "console_log",
  "ctrlc",
@@ -1076,7 +1076,7 @@ version = "0.205.0"
 dependencies = [
  "anyhow",
  "chrono",
- "colored",
+ "colored 2.2.0",
  "lazy_static",
  "log",
  "serde",
@@ -1224,7 +1224,7 @@ dependencies = [
  "cfg-if",
  "chrono",
  "clap",
- "colored",
+ "colored 2.2.0",
  "console_error_panic_hook",
  "console_log",
  "cowstr",
@@ -1419,7 +1419,7 @@ dependencies = [
  "anyhow",
  "baml-compiler",
  "baml-types",
- "colored",
+ "colored 2.2.0",
  "criterion",
  "internal-baml-core",
  "internal-baml-diagnostics",
@@ -1879,6 +1879,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "117725a109d387c937a1533ce01b450cbde6b88abceea8473c4d7a85853cda3c"
 dependencies = [
  "lazy_static",
+ "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "colored"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fde0e0ec90c9dfb3b4b1a0891a7dcd0e2bffde2f7efed5fe7c9bb00e5bfb915e"
+dependencies = [
  "windows-sys 0.59.0",
 ]
 
@@ -2402,7 +2411,7 @@ dependencies = [
  "filetime",
  "indexmap 2.9.0",
  "internal-baml-core",
- "pathdiff 0.1.0",
+ "pathdiff 0.2.3",
  "serde_json",
  "sugar_path",
  "walkdir",
@@ -3780,7 +3789,7 @@ dependencies = [
  "baml-types",
  "base64 0.22.1",
  "cfg-if",
- "colored",
+ "colored 2.2.0",
  "either",
  "env_logger",
  "filetime",
@@ -3845,7 +3854,7 @@ name = "internal-baml-diagnostics"
 version = "0.205.0"
 dependencies = [
  "anyhow",
- "colored",
+ "colored 2.2.0",
  "indoc",
  "log",
  "pest",
@@ -3860,7 +3869,7 @@ dependencies = [
  "anyhow",
  "askama",
  "baml-types",
- "colored",
+ "colored 2.2.0",
  "env_logger",
  "indexmap 2.9.0",
  "internal-baml-core",
@@ -3881,7 +3890,7 @@ dependencies = [
  "anyhow",
  "askama",
  "baml-types",
- "colored",
+ "colored 2.2.0",
  "env_logger",
  "indexmap 2.9.0",
  "log",
@@ -3900,7 +3909,7 @@ dependencies = [
  "anyhow",
  "baml-derive",
  "baml-types",
- "colored",
+ "colored 2.2.0",
  "either",
  "enumflags2",
  "indexmap 2.9.0",
@@ -4122,7 +4131,7 @@ dependencies = [
  "assert-json-diff",
  "baml-types",
  "bstd",
- "colored",
+ "colored 2.2.0",
  "cowstr",
  "criterion",
  "either",
@@ -4214,7 +4223,8 @@ dependencies = [
  "baml-types",
  "base64 0.21.7",
  "bytes",
- "colored",
+ "colored 2.2.0",
+ "console-subscriber",
  "crossbeam",
  "crossbeam-channel",
  "dirs 5.0.1",
@@ -6112,7 +6122,7 @@ dependencies = [
  "base64 0.22.1",
  "env_logger",
  "futures",
- "indexmap 2.10.0",
+ "indexmap 2.9.0",
  "internal-baml-core",
  "jsonish",
  "log",

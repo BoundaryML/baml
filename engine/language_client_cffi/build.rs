@@ -342,55 +342,79 @@ fn main() -> std::io::Result<()> {
     );
     prost_build::compile_protos(&["types/cffi.proto"], &["types/"])?;
 
-    // {
-    //     let lang = "go";
-    //     let lang_dir = format!("../language_client_{lang}/pkg");
-    //     // let args: flatc_rust::Args<'_> = flatc_rust::Args {
-    //     //     lang,
-    //     //     inputs: &[Path::new("types/cffi.fbs")],
-    //     //     out_dir: Path::new(&lang_dir),
-    //     //     ..Default::default()
-    //     // };
+    {
+        let lang = "go";
+        let lang_dir = format!("../language_client_{lang}/pkg");
+        // let args: flatc_rust::Args<'_> = flatc_rust::Args {
+        //     lang,
+        //     inputs: &[Path::new("types/cffi.fbs")],
+        //     out_dir: Path::new(&lang_dir),
+        //     ..Default::default()
+        // };
 
-    //     let mut protoc = protoc_lang_out::ProtocLangOut::new();
-    //     protoc
-    //         .lang(lang)
-    //         .input("types/cffi.proto")
-    //         .out_dir(lang_dir);
+        let mut protoc = protoc_lang_out::ProtocLangOut::new();
+        protoc
+            .lang(lang)
+            .input("types/cffi.proto")
+            .out_dir(lang_dir);
 
-    //     // Allow overriding the protoc-gen-go plugin path
-    //     if let Ok(path) = std::env::var("PROTOC_GEN_GO_PATH") {
-    //         protoc.plugin(&path);
-    //     }
+        // Allow overriding the protoc-gen-go plugin path
+        if let Ok(path) = std::env::var("PROTOC_GEN_GO_PATH") {
+            protoc.plugin(&path);
+        } else {
+            // Try to find protoc-gen-go using mise
+            match std::process::Command::new("mise")
+                .args(["which", "protoc-gen-go"])
+                .output()
+            {
+                Ok(output) if output.status.success() => {
+                    let path = String::from_utf8_lossy(&output.stdout);
+                    let path = path.trim();
+                    eprintln!("Using protoc-gen-go from mise: {:?}", path);
+                    protoc.plugin(path);
+                }
+                Ok(_) => {
+                    eprintln!(
+                        "protoc-gen-go fallback: mise which protoc-gen-go failed, relying on PATH"
+                    );
+                }
+                Err(e) => {
+                    eprintln!(
+                        "protoc-gen-go fallback: mise command failed ({}), relying on PATH",
+                        e
+                    );
+                }
+            }
+        }
 
-    //     protoc
-    //         .run()
-    //         .unwrap_or_else(|_| panic!("Failed to generate {lang} bindings"));
-    // }
+        protoc
+            .run()
+            .unwrap_or_else(|_| panic!("Failed to generate {lang} bindings"));
+    }
 
     // Use cbindgen to generate the C header for your Rust library.
     let crate_dir = std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set");
 
-    // {
-    //     // Generate header to pkg/cffi directory for better vendoring support
-    //     let out_path =
-    //         Path::new(&crate_dir).join("../language_client_go/pkg/cffi/baml_cffi_generated.h");
-    //     let outpath_content =
-    //         std::fs::read_to_string(&out_path).unwrap_or_else(|_| String::from(""));
-    //     let res = cbindgen::Builder::new()
-    //         .with_config(cbindgen::Config::from_file("cbindgen.toml").unwrap())
-    //         .with_crate(".")
-    //         .generate()
-    //         .expect("Failed to generate C header")
-    //         .write_to_file(out_path.clone());
-    //     if std::env::var("CI").is_ok() && res {
-    //         let new_content = std::fs::read_to_string(&out_path).unwrap();
-    //         println!("New header content: \n==============\n{new_content}");
-    //         println!("\n\n");
-    //         println!("Old header content: \n==============\n{outpath_content}");
-    //         panic!("cbindgen generated a diff");
-    //     }
-    // }
+    {
+        // Generate header to pkg/cffi directory for better vendoring support
+        let out_path =
+            Path::new(&crate_dir).join("../language_client_go/pkg/cffi/baml_cffi_generated.h");
+        let outpath_content =
+            std::fs::read_to_string(&out_path).unwrap_or_else(|_| String::from(""));
+        let res = cbindgen::Builder::new()
+            .with_config(cbindgen::Config::from_file("cbindgen.toml").unwrap())
+            .with_crate(".")
+            .generate()
+            .expect("Failed to generate C header")
+            .write_to_file(out_path.clone());
+        if std::env::var("CI").is_ok() && res {
+            let new_content = std::fs::read_to_string(&out_path).unwrap();
+            println!("New header content: \n==============\n{new_content}");
+            println!("\n\n");
+            println!("Old header content: \n==============\n{outpath_content}");
+            panic!("cbindgen generated a diff");
+        }
+    }
 
     Ok(())
 }
