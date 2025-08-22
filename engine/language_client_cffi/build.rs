@@ -369,12 +369,9 @@ fn main() -> std::io::Result<()> {
             {
                 Ok(output) if output.status.success() => {
                     let path = String::from_utf8_lossy(&output.stdout);
-                    if !path.is_empty() {
-                        eprintln!("Using protoc-gen-go from mise: {}", path);
-                        protoc.plugin(path.trim());
-                    } else {
-                        eprintln!("protoc-gen-go fallback: mise which returned empty path, relying on PATH");
-                    }
+                    let path = path.trim();
+                    eprintln!("Using protoc-gen-go from mise: {:?}", path);
+                    protoc.plugin(path);
                 }
                 Ok(_) => {
                     eprintln!(

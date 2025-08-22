@@ -17,10 +17,7 @@ node = "lts"     # For pnpm
 # Go tools
 # locked to match the version in .github/actions/setup-go/action.yml
 "protoc-gen-go" = "v1.34.1"
-"go:golang.org/x/tools/cmd/goimports" = "latest"
-"go:github.com/chrishrb/go-grip" = "latest"
-
-
+"go:golang.org/x/tools/cmd/goimports" = "0.36.0"
 
 # Python tools
 "pipx:uv" = "latest"
