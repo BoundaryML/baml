@@ -1320,8 +1320,13 @@ impl Project {
         let mut major_minor_versions = std::collections::HashMap::new();
         let mut highest_patch_by_major_minor = std::collections::HashMap::new();
 
+        let gen_version_strings = generators.iter().map(|gen| &gen.version);
+
+        // add runtime version on top since that's what we want to compare with.
+        let gen_version_strings = [runtime_version].chain(gen_version_strings);
+
         // Track major.minor versions and find highest patch for each
-        for gen in &generators {
+        for gen in generators {
             if let Ok(version) = semver::Version::parse(&gen.version) {
                 let major_minor = format!("{}.{}", version.major, version.minor);
 
