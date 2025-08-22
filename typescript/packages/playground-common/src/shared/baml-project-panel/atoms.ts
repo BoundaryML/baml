@@ -81,10 +81,9 @@ export const runtimeAtom = atom<{
     const selectedEnvVars = Object.fromEntries(
       Object.entries(apiKeys).filter(([key, value]) => value !== undefined),
     );
-    // Use VSCode settings in VSCode environment, standalone flags in standalone
-    const featureFlags = isVSCodeEnvironment()
-      ? get(vscodeSettingsAtom)?.featureFlags ?? []
-      : get(standaloneFeatureFlagsAtom);
+    // Use VSCode settings if available (indicating VSCode environment), otherwise use standalone flags
+    const vscodeSettings = get(vscodeSettingsAtom);
+    const featureFlags = vscodeSettings?.featureFlags ?? get(standaloneFeatureFlagsAtom);
     const rt = project.runtime(selectedEnvVars, featureFlags);
     const diags = project.diagnostics(rt);
     return { rt, diags, lastValidRt: rt };
