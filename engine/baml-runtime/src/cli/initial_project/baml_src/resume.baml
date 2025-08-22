@@ -5,26 +5,14 @@ class Resume {
   experience string[]
   skills string[]
 }
-// Create a function to extract the resume from a string.
-function ZippityDoo(resume: string) -> Resume {
-  // Specify a client as provider/model-name
-  // you can use custom LLM params with a custom client name from clients.baml like "client CustomHaiku"
-  client "openai/gpt-4o" // Set OPENAI_API_KEY to use this client.
-  prompt #"
-    Extract lorem ipsum this content:
-    {{ resume }}
-
-    {{ ctx.output_format }}
-  "#
-}
 
 // Create a function to extract the resume from a string.
 function ExtractResume(resume: string) -> Resume {
   // Specify a client as provider/model-name
   // you can use custom LLM params with a custom client name from clients.baml like "client CustomHaiku"
-  client CustomGPT4oMini // Set OPENAI_API_KEY to use this client.
+  client "openai/gpt-4o" // Set OPENAI_API_KEY to use this client.
   prompt #"
-    Extract rerererere this content:
+    Extract from this content:
     {{ resume }}
 
     {{ ctx.output_format }}
@@ -35,7 +23,7 @@ function ExtractResume(resume: string) -> Resume {
 
 // Test the function with a sample resume. Open the VSCode playground to run this.
 test vaibhav_resume {
-  functions [ExtractResume, ZippityDoo]
+  functions [ExtractResume]
   args {
     resume #"
       Vaibhav Gupta
