@@ -26,12 +26,6 @@ pub fn compile(ast: &ParserDatabase) -> anyhow::Result<BamlVmProgram> {
 
     let hir = hir::Hir::from_ast(&ast.ast);
 
-    // TODO: THIR is built twice, once for validations, once for compilation.
-    // Fix this.
-    let thir = thir::typecheck::typecheck(&hir, &mut Diagnostics::new("dummy".into()));
-
-    // eprintln!("\nTHIR:\n{:#?}", thir);
-
     // eprintln!("\nHIR:\n{:#?}", hir);
 
     // TODO: THIR is built twice, once for validations, once for compilation.
@@ -86,17 +80,17 @@ fn compile_thir_to_bytecode(
         resolved_classes.insert(class.name.clone(), class_fields);
     }
 
-    let native_fns = baml_vm::native::functions();
-
-    for name in native_fns.keys() {
-        resolved_globals.insert(name.clone(), GlobalIndex::from_raw(resolved_globals.len()));
-    }
-
     for class in thir.classes.values() {
         for method in &class.methods {
             let func_name = format!("{}.{}", class.name, method.name);
             resolved_globals.insert(func_name, GlobalIndex::from_raw(resolved_globals.len()));
         }
+    }
+
+    let native_fns = baml_vm::native::functions();
+
+    for name in native_fns.keys() {
+        resolved_globals.insert(name.clone(), GlobalIndex::from_raw(resolved_globals.len()));
     }
 
     let mut objects = ObjectPool::from_vec(Vec::with_capacity(resolved_globals.len()));
@@ -869,10 +863,14 @@ impl<'g> HirCompiler<'g> {
                         panic!("undefined field: {class_name}.{field}");
                     };
 
+                    self.compile_expression(base);
                     self.emit(Instruction::LoadField(field_index));
                 }
 
-                other => panic!("field access must be on classes, got: {other:#?}"),
+                other => panic!(
+                    "field access must be on classes, but expr `{}` got: {other:?}",
+                    base.dump_str()
+                ),
             },
 
             thir::Expr::Var(name, _) => {

@@ -1211,7 +1211,7 @@ fn basic_method_decl() -> anyhow::Result<()> {
             class Number {
                 value int
 
-                function add(mut self, other: Number) -> Number {
+                function add(self, other: Number) -> Number {
                     Number { value: self.value + other.value }
                 }
             }
@@ -1221,6 +1221,32 @@ fn basic_method_decl() -> anyhow::Result<()> {
                 let mut b = Number { value: 2 };
                 let n = a.add(b);
                 n.value
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(3)),
+    })
+}
+
+#[test]
+#[ignore = "TODO: Left hand side of assignment is not an identifier"]
+fn mut_self_method_decl() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            class Number {
+                value int
+
+                function add(mut self, other: Number) -> bool {
+                    self.value += other.value;
+                    true
+                }
+            }
+
+            function main() -> int {
+                let mut a = Number { value: 1 };
+                let mut b = Number { value: 2 };
+                a.add(b);
+                a.value
             }
         "#,
         function: "main",

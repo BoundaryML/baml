@@ -50,26 +50,41 @@ pub fn typecheck(hir: &Hir, diagnostics: &mut Diagnostics) -> THir<ExprMetadata>
 
     // Add expr functions to typing context
     for func in &hir.expr_functions {
-        let arrow_type = Type::Function(
+        let func_type = Type::Function(
             hir::Function {
                 params: func.parameters.iter().map(|p| p.r#type.clone()).collect(),
                 return_type: Box::new(func.return_type.clone()),
             },
             hir::TypeMeta::default(),
         );
-        typing_context.symbols.insert(func.name.clone(), arrow_type);
+        typing_context.symbols.insert(func.name.clone(), func_type);
+    }
+
+    for class in &hir.classes {
+        for method in &class.methods {
+            let func_type = Type::Function(
+                hir::Function {
+                    params: method.parameters.iter().map(|p| p.r#type.clone()).collect(),
+                    return_type: Box::new(method.return_type.clone()),
+                },
+                hir::TypeMeta::default(),
+            );
+            typing_context
+                .symbols
+                .insert(format!("{}.{}", class.name, method.name), func_type);
+        }
     }
 
     // Add LLM functions to typing context
     for func in &hir.llm_functions {
-        let arrow_type = Type::Function(
+        let func_type = Type::Function(
             hir::Function {
                 params: func.parameters.iter().map(|p| p.r#type.clone()).collect(),
                 return_type: Box::new(func.return_type.clone()),
             },
             hir::TypeMeta::default(),
         );
-        typing_context.symbols.insert(func.name.clone(), arrow_type);
+        typing_context.symbols.insert(func.name.clone(), func_type);
     }
 
     // Add builtin functions to typing context
@@ -913,8 +928,8 @@ fn typecheck_expression(
             }
 
             let (param_types, return_type, is_known_function) = match &func_type {
-                Some(hir::TypeM::Function(arrow, _)) => {
-                    (arrow.params.clone(), Some(*arrow.return_type.clone()), true)
+                Some(hir::TypeM::Function(f, _)) => {
+                    (f.params.clone(), Some(*f.return_type.clone()), true)
                 }
                 _ => {
                     diagnostics.push_error(DatamodelError::new_validation_error(
@@ -1000,15 +1015,135 @@ fn typecheck_expression(
             args,
             span,
         } => {
-            // TODO: Typecheck method call.
-            thir::Expr::MethodCall {
-                receiver: Arc::new(typecheck_expression(receiver, context, diagnostics)),
-                method: Arc::new(thir::Expr::Var(method.clone(), (span.clone(), None))),
-                args: args
-                    .iter()
+            let typed_receiver = typecheck_expression(receiver, context, diagnostics);
+
+            // TODO: Flatten this nested logic.
+            let full_name = match &typed_receiver.meta().1 {
+                Some(hir::Type::Class(class_name, _)) => match context.classes.get(class_name) {
+                    Some(class_def) => match class_def.methods.iter().find(|m| &m.name == method) {
+                        Some(method_def) => Some(format!("{class_name}.{method}")),
+                        None => {
+                            diagnostics.push_error(DatamodelError::new_validation_error(
+                                &format!("Class `{class_name}` has no method `{method}`"),
+                                span.clone(),
+                            ));
+                            None
+                        }
+                    },
+                    None => {
+                        diagnostics.push_error(DatamodelError::new_validation_error(
+                            &format!("Expression resolves to unknown class `{class_name}`"),
+                            receiver.span(),
+                        ));
+                        None
+                    }
+                },
+                // TODO: Handle this uniformly with the other cases.
+                Some(hir::Type::Array(_, _)) => match method.as_str() {
+                    "len" => Some("std.Array.len".to_string()),
+                    _ => {
+                        diagnostics.push_error(DatamodelError::new_validation_error(
+                            &format!("Method `{method}` is not available on class `std.Array`"),
+                            span.clone(),
+                        ));
+                        None
+                    }
+                },
+
+                _ => None,
+            };
+
+            // Return untyped expr if not known.
+            let Some(full_name) = full_name else {
+                return thir::Expr::MethodCall {
+                    receiver: Arc::new(typed_receiver),
+                    method: Arc::new(thir::Expr::Var(method.clone(), (span.clone(), None))),
+                    args: args
+                        .iter()
+                        .map(|arg| typecheck_expression(arg, context, diagnostics))
+                        .collect(),
+                    meta: (span.clone(), None),
+                };
+            };
+
+            let func_type = context.get_type(&full_name).cloned();
+
+            let (param_types, return_type, is_known_function) = match &func_type {
+                Some(hir::TypeM::Function(f, _)) => {
+                    (f.params.clone(), Some(*f.return_type.clone()), true)
+                }
+                _ => {
+                    diagnostics.push_error(DatamodelError::new_validation_error(
+                        &format!("Unknown function {full_name}"),
+                        span.clone(),
+                    ));
+                    (vec![], None, false)
+                }
+            };
+
+            let typed_args: Vec<_> = if is_known_function {
+                // Only validate arguments for known functions
+                args.iter()
+                    .zip(
+                        param_types
+                            .iter()
+                            .chain(std::iter::repeat(&hir::TypeM::Null(
+                                hir::TypeMeta::default(),
+                            ))),
+                    )
+                    .map(|(arg, expected_type)| {
+                        let typed_arg = typecheck_expression(arg, context, diagnostics);
+
+                        // Check if argument type matches expected type
+                        if let Some(arg_type) = typed_arg.meta().1.as_ref() {
+                            if !types_compatible(arg_type, expected_type) {
+                                diagnostics.push_error(DatamodelError::new_validation_error(
+                                    &format!(
+                                        "Type mismatch in argument, expected: {}, got: {}",
+                                        expected_type.name_for_user(),
+                                        typed_arg
+                                            .meta()
+                                            .1
+                                            .as_ref()
+                                            .map(|t| t.name_for_user())
+                                            .unwrap_or("unknown")
+                                    ),
+                                    arg.span(),
+                                ));
+                            }
+                        }
+
+                        typed_arg
+                    })
+                    .collect()
+            } else {
+                // For unknown functions, just typecheck arguments without validation
+                args.iter()
                     .map(|arg| typecheck_expression(arg, context, diagnostics))
-                    .collect(),
-                meta: (span.clone(), None),
+                    .collect()
+            };
+
+            // Check argument count only for known functions
+            if is_known_function && args.len() != param_types.len() {
+                diagnostics.push_error(DatamodelError::new_validation_error(
+                    &format!(
+                        "Function {} expects {} arguments, got {}",
+                        full_name,
+                        param_types.len(),
+                        args.len()
+                    ),
+                    span.clone(),
+                ));
+            }
+
+            thir::Expr::MethodCall {
+                receiver: Arc::new(typed_receiver),
+                method: Arc::new(thir::Expr::Var(
+                    method.clone(),
+                    (span.clone(), func_type.clone()),
+                )),
+                args: typed_args,
+                meta: (span.clone(), return_type),
             }
         }
         hir::Expression::ClassConstructor(constructor, span) => {

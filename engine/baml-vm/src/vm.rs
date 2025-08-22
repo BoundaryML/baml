@@ -1202,6 +1202,8 @@ impl Vm {
                         .into());
                     };
 
+                    eprintln!("CALLEE: {callee:?}");
+
                     // Compiler should have already checked this so we could
                     // skip it but it's an easy and fast check.
                     if arg_count != callee.arity {
