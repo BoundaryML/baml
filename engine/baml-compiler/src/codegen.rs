@@ -575,8 +575,8 @@ impl<'g> HirCompiler<'g> {
 
                 let len_method = *self
                     .globals
-                    .get("len")
-                    .expect("native len() for array length is not in globals?");
+                    .get("std.Array.len")
+                    .expect("native std.Array.len() for array length is not in globals?");
 
                 // {
 
@@ -933,19 +933,14 @@ impl<'g> HirCompiler<'g> {
                 };
 
                 let func_name = match receiver.meta().1.as_ref() {
-                    Some(hir::Type::Class(class_name, _)) => {
-                        let Some(class_index) = self.globals.get(class_name) else {
-                            panic!("undefined class: {class_name}");
-                        };
+                    Some(hir::Type::Class(class_name, _)) => format!("{class_name}.{method}"),
 
-                        format!("{class_name}.{method}")
-                    }
+                    Some(hir::Type::Array(_, _)) => format!("std.Array.{method}"),
 
                     other => panic!("method calls must be on classes, got: {other:#?}"),
                 };
 
                 // Push the function onto the stack
-                eprintln!("globals: {:?}", self.globals);
                 let Some(&index) = self.globals.get(&func_name) else {
                     panic!("undefined method: {func_name}");
                 };

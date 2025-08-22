@@ -12,12 +12,7 @@ use crate::{
 impl Vm {
     /// Array length.
     pub fn len(&mut self, args: &[Value]) -> Result<Value, VmError> {
-        if args.len() != 1 {
-            return Err(VmError::from(InternalError::InvalidArgumentCount {
-                expected: 1,
-                got: args.len(),
-            }));
-        }
+        // Arity is already checked by the VM.
 
         let expected = ObjectType::Array;
         let ob_index = self.objects.as_object(&args[0], expected)?;
@@ -38,7 +33,7 @@ pub type NativeFunction = fn(&mut Vm, &[Value]) -> Result<Value, VmError>;
 
 pub fn functions() -> HashMap<String, (NativeFunction, usize)> {
     let native_fn: NativeFunction = Vm::len;
-    let fns = [("len", (native_fn, 1))];
+    let fns = [("std.Array.len", (native_fn, 1))];
 
     HashMap::from_iter(fns.into_iter().map(|(name, func)| (name.to_string(), func)))
 }
