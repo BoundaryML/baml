@@ -11,13 +11,13 @@ mod internal_tests {
     };
 
     use baml_ids::FunctionCallId;
-    use internal_baml_core::FeatureFlags;
     // use baml_runtime::internal::llm_client::orchestrator::OrchestrationScope;
     use baml_runtime::InternalRuntimeInterface;
     use baml_runtime::{
         internal::llm_client::LLMResponse, BamlRuntime, DiagnosticsError, IRHelper, RenderedPrompt,
     };
     use baml_types::BamlValue;
+    use internal_baml_core::FeatureFlags;
     use wasm_bindgen_test::*;
 
     #[tokio::test]

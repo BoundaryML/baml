@@ -24,7 +24,11 @@ fn bootstrap_vm(input: Program) -> Vm {
             instruction_ptr: 0,
             locals_offset: StackIndex::from_raw(0),
         }],
-        stack: EvalStack::from_vec(input.args),
+        stack: EvalStack::from_vec(
+            std::iter::once(Value::Object(target_function_index))
+                .chain(input.args)
+                .collect(),
+        ),
         runtime_allocs_offset: ObjectIndex::from_raw(objects.len()),
         objects,
         globals,

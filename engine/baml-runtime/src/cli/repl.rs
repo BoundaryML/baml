@@ -361,7 +361,7 @@ impl ReplState {
 
         // Extract the inferred type
         if let Some(inferred_type) = input_expr_thir.meta().1.as_ref() {
-            Ok(self.format_type(inferred_type))
+            Ok(ReplState::format_type(inferred_type))
         } else {
             Ok("unknown".to_string())
         }
@@ -423,7 +423,7 @@ impl ReplState {
         candidates
     }
 
-    fn format_type(&self, ty: &TypeIR) -> String {
+    fn format_type(ty: &TypeIR) -> String {
         match ty {
             TypeIR::Primitive(type_val, _) => match type_val {
                 baml_types::ir_type::TypeValue::String => "string".to_string(),
@@ -437,12 +437,12 @@ impl ReplState {
             },
             TypeIR::Enum { name, .. } => name.clone(),
             TypeIR::Class { name, .. } => name.clone(),
-            TypeIR::List(inner, _) => format!("{}[]", self.format_type(inner)),
+            TypeIR::List(inner, _) => format!("{}[]", ReplState::format_type(inner)),
             TypeIR::Map(key, value, _) => {
                 format!(
                     "map<{}, {}>",
-                    self.format_type(key),
-                    self.format_type(value)
+                    ReplState::format_type(key),
+                    ReplState::format_type(value)
                 )
             }
             TypeIR::Union(union_type, _) => {
@@ -450,16 +450,16 @@ impl ReplState {
                 match union_type.view() {
                     UnionTypeViewGeneric::Null => "null".to_string(),
                     UnionTypeViewGeneric::Optional(inner) => {
-                        format!("{}?", self.format_type(inner))
+                        format!("{}?", ReplState::format_type(inner))
                     }
                     UnionTypeViewGeneric::OneOf(types) => {
                         let type_names: Vec<String> =
-                            types.iter().map(|t| self.format_type(t)).collect();
+                            types.iter().map(|t| ReplState::format_type(t)).collect();
                         format!("({})", type_names.join(" | "))
                     }
                     UnionTypeViewGeneric::OneOfOptional(types) => {
                         let type_names: Vec<String> =
-                            types.iter().map(|t| self.format_type(t)).collect();
+                            types.iter().map(|t| ReplState::format_type(t)).collect();
                         format!("({})?", type_names.join(" | "))
                     }
                 }
@@ -467,19 +467,19 @@ impl ReplState {
             TypeIR::RecursiveTypeAlias { name, .. } => name.clone(),
             TypeIR::Literal(literal, _) => format!("literal({:?})", literal),
             TypeIR::Tuple(types, _) => {
-                let type_names: Vec<String> = types.iter().map(|t| self.format_type(t)).collect();
+                let type_names: Vec<String> = types.iter().map(ReplState::format_type).collect();
                 format!("({})", type_names.join(", "))
             }
             TypeIR::Arrow(arrow, _) => {
                 let input_types: Vec<String> = arrow
                     .param_types
                     .iter()
-                    .map(|t| self.format_type(t))
+                    .map(ReplState::format_type)
                     .collect();
                 format!(
                     "({}) -> {}",
                     input_types.join(", "),
-                    self.format_type(&arrow.return_type)
+                    ReplState::format_type(&arrow.return_type)
                 )
             }
         }

@@ -127,4 +127,4 @@ fn WhileWithScopes() -> int {
 //      33   RETURN              
 //
 // Class: std::Request with 3 fields
-// Function: len
+// Function: std.Array.len

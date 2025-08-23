@@ -6,7 +6,8 @@ function nestedOps() -> int {
 
 // function nestedOps() {
 //   let x = 1 + (2 + (3 + 4));
-//   return x;
+//
+//   x
 // }
 //
 // class std::Request {

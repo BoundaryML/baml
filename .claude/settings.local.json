@@ -47,7 +47,8 @@
       "Bash(npx tsc:*)",
       "Bash(npx tsc:*)",
       "WebFetch(domain:www.npmjs.com)",
-      "Bash(./target/debug/baml-cli:*)"
+      "Bash(./target/debug/baml-cli:*)",
+      "Bash(rustc:*)"
     ],
     "deny": []
   },

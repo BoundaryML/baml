@@ -14,7 +14,8 @@ function TestClass() -> int {
 
 // function TestClass() {
 //   let example = Example { a: 1, b: "hello" };
-//   return example.a;
+//
+//   example.a
 // }
 //
 // class std::Request {
