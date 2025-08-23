@@ -24,6 +24,14 @@ def set_log_max_chunk_length(length: int) -> None:
     """Set the maximum log chunk length for the BAML Python client."""
     ...
 
+class AbortController:
+    """Controller for cancelling BAML operations."""
+
+    def __init__(self) -> None: ...
+    def abort(self) -> None: ...
+    @property
+    def aborted(self) -> bool: ...
+
 class FunctionResult:
     """The result of a BAML function call.
 

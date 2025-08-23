@@ -390,64 +390,6 @@ print(collector.id(stream.id).usage)
 </Tab>
 </Tabs>
 
-### Abort Controllers
-
-Configure a default abort controller for all operations through the client, which can be used to cancel operations in progress.
-
-<Tabs>
-<Tab title="TypeScript" language="typescript">
-```typescript
-import { b } from "baml_client"
-
-// Create a global abort controller
-const globalController = new AbortController()
-
-// Create client with default abort controller
-const myB = b.withOptions({ 
-    abortController: globalController 
-})
-
-// All operations will use the global controller
-const promise1 = myB.ExtractResume("...")
-const promise2 = myB.ExtractInvoice("...")
-
-// Cancel all operations at once
-globalController.abort()
-
-// Override with a specific controller for one call
-const specificController = new AbortController()
-const result = await myB.ExtractResume("...", {
-    abortController: specificController
-})
-```
-</Tab>
-
-<Tab title="Python" language="python">
-```python
-from baml_client import b
-from baml_py import AbortController
-
-# Create a global abort controller
-global_controller = AbortController()
-
-# Create client with default abort controller
-my_b = b.with_options(abort_controller=global_controller)
-
-# All operations will use the global controller
-task1 = my_b.ExtractResume("...")
-task2 = my_b.ExtractInvoice("...")
-
-# Cancel all operations at once
-global_controller.abort()
-
-# Override with a specific controller for one call
-specific_controller = AbortController()
-result = await my_b.ExtractResume("...", 
-    baml_options={"abort_controller": specific_controller})
-```
-</Tab>
-</Tabs>
-
 ## API Reference
 
 ### with_options Parameters
@@ -462,8 +404,6 @@ These can always be overridden on a per-call basis with the `baml_options` param
 | `client_registry` | `ClientRegistry` | Registry for managing LLM clients and their configurations |
 | `type_builder` | [`TypeBuilder`](/ref/baml_client/type-builder) | Custom type builder for function inputs and outputs |
 | `env` | `Dict/Object` | Environment variables to set for the client |
-| `abortController` | [`AbortController`](/03-reference/baml_client/abort-controller) | (TypeScript) Controller to cancel operations |
-| `abort_controller` | [`AbortController`](/03-reference/baml_client/abort-controller) | (Python) Controller to cancel operations |
 
 ### Configured Client Properties
 
