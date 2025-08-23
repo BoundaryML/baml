@@ -1,22 +1,57 @@
-use serde_json::json;
+use playground_server::{
+    pick_ports, PortConfiguration, GitHubReleaseAssetManager, PlaygroundServer, AppState, 
+    LangServerToWasmMessage, FrontendMessage, PreSendToWasmMessage,
+};
+use std::collections::HashMap;
 use tokio::io::AsyncBufReadExt;
+use tracing_subscriber::EnvFilter;
+use serde_json::json;
 
-use crate::definitions::{FrontendMessage, PreSendToWasmMessage};
+// Type alias for barebones specific message type  
+pub type BarebonesMessage = LangServerToWasmMessage<lsp_server::Message>;
 
-pub mod definitions;
-pub mod server;
+#[derive(Debug)]
+pub struct Playground2Server {
+    pub app_state: AppState<BarebonesMessage>,
+}
+
+impl Playground2Server {
+    pub async fn run(self, listener: tokio::net::TcpListener) -> Result<(), Box<dyn std::error::Error + Send>> {
+        let asset_manager = GitHubReleaseAssetManager {
+            github_repo: "BoundaryML/baml",
+            version_env_var: "CARGO_PKG_VERSION",
+        };
+        
+        let server = PlaygroundServer {
+            app_state: self.app_state,
+            asset_manager,
+        };
+        
+        server.run(listener).await
+    }
+}
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    tracing_subscriber::fmt()
+        .with_env_filter(EnvFilter::from("playground_barebones=debug,info"))
+        .init();
+
+    run_server().await?;
+    Ok(())
+}
 
 pub async fn run_server() -> anyhow::Result<()> {
-
     let (playground_tx, mut playground_rx) = tokio::sync::broadcast::channel(1000);
     let (broadcast_tx, broadcast_rx) = tokio::sync::broadcast::channel(1000);
 
-    let port_picks = playground_server::pick_ports(playground_server::PortConfiguration {
+    let port_picks = pick_ports(PortConfiguration {
         base_port: 3900,
         max_attempts: 100,
     }).await?;
-    let server = server::Playground2Server {
-        app_state: playground_server::AppState {
+    
+    let server = Playground2Server {
+        app_state: AppState {
             broadcast_rx,
             playground_tx,
             playground_port: port_picks.playground_port,
@@ -24,7 +59,7 @@ pub async fn run_server() -> anyhow::Result<()> {
         },
     };
 
-    let playground_task = tokio::spawn( server.run(port_picks.playground_listener));
+    let playground_task = tokio::spawn(server.run(port_picks.playground_listener));
 
     tracing::info!(
         "Playground started on: http://localhost:{}",
@@ -43,15 +78,15 @@ pub async fn run_server() -> anyhow::Result<()> {
                 match msg {
                     PreSendToWasmMessage::Initialized => {
                         tracing::info!("Playground initialized");
-                        let _  = broadcast_tx.send(playground_server::LangServerToWasmMessage::PlaygroundMessage(
-                            playground_server::FrontendMessage::add_project {
+                        let _  = broadcast_tx.send(LangServerToWasmMessage::PlaygroundMessage(
+                            FrontendMessage::add_project {
                                 root_path: "/Users/sam/baml4/engine/baml-runtime/src/cli/initial_project/baml_src".to_string(),
-                                files: std::collections::HashMap::new(),
+                                files: HashMap::new(),
                             }
                         ));
                         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-                        let playground_message = playground_server::LangServerToWasmMessage::PlaygroundMessage(
-                            playground_server::FrontendMessage::run_test {
+                        let playground_message = LangServerToWasmMessage::PlaygroundMessage(
+                            FrontendMessage::run_test {
                                 function_name: "ExtractResume".to_string(),
                                 test_name: "vaibhav_resume".to_string(),
                             }
@@ -72,16 +107,15 @@ pub async fn run_server() -> anyhow::Result<()> {
     // Start a loop to watch stdin and echo it back
     tokio::spawn(async move {
         let stdin = tokio::io::stdin();
-        
         let mut lines = tokio::io::BufReader::new(stdin).lines();
         
         loop {
             println!("Press enter to send test message");
-            let Ok(Some(line)) = lines.next_line().await else {
+            let Ok(Some(_line)) = lines.next_line().await else {
                 break;
             };
-            let playground_message = playground_server::LangServerToWasmMessage::PlaygroundMessage(
-                playground_server::FrontendMessage::run_test {
+            let playground_message = LangServerToWasmMessage::PlaygroundMessage(
+                FrontendMessage::run_test {
                     function_name: "ExtractResume".to_string(),
                     test_name: "vaibhav_resume".to_string(),
                 }
