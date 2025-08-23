@@ -11,7 +11,7 @@ members = [
   "baml-vm",
   "bstd",
   "cli",
-  "hot-reload",
+  "tools",
   "language_client_codegen",
   "language_client_python",
   "language_client_ruby/ext/ruby_ffi",

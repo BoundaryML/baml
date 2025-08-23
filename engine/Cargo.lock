@@ -1029,17 +1029,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "baml-hot-reload"
-version = "0.205.0"
-dependencies = [
- "anyhow",
- "notify-debouncer-full",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "baml-ids"
 version = "0.0.1"
 dependencies = [
@@ -7397,6 +7386,17 @@ dependencies = [
  "tower-layer",
  "tower-service",
  "tracing",
+]
+
+[[package]]
+name = "tools"
+version = "0.205.0"
+dependencies = [
+ "anyhow",
+ "notify-debouncer-full",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

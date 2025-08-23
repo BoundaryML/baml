@@ -1,11 +1,11 @@
 [package]
-name = "baml-hot-reload"
+name = "tools"
 version.workspace = true
 edition = "2021"
 
 [[bin]]
-name = "baml-hot-reload"
-path = "src/main.rs"
+name = "language-server-hot-reload"
+path = "src/bin/language-server-hot-reload.rs"
 
 [dependencies]
 notify-debouncer-full = "0.3"

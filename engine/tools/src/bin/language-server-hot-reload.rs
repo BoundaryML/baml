@@ -232,7 +232,7 @@ impl HotReloader {
 async fn main() -> Result<()> {
     let subscriber = FmtSubscriber::builder()
         .with_env_filter(
-            EnvFilter::from_default_env().add_directive("baml_hot_reload=info".parse()?),
+            EnvFilter::from_default_env().add_directive("language_server_hot_reload=info".parse()?),
         )
         .finish();
 
