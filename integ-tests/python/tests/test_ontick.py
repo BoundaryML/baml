@@ -3,7 +3,6 @@ import json
 from typing import List, Tuple, Optional
 from baml_py import baml_py
 from ..baml_client import b  # async client
-from ..baml_client.sync_client import b as sync_b  # sync client
 from ..baml_client.tracing import flush
 
 
