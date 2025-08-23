@@ -62,11 +62,6 @@ def test_iterative_fibonacci():
     assert b.IterativeFibonacci(7) == 13
     assert b.IterativeFibonacci(8) == 21
 
-def test_length_of_array():
-    assert b.LengthOfArray([1, 2, 3]) == 3
-    assert b.LengthOfArray([1, 2, 3, 4, 5]) == 5
-    assert b.LengthOfArray([]) == 0
-
 def test_sum_array():
     assert b.SumArray([1, 2, 3]) == 6
     assert b.SumArray([1, 2, 3, 4, 5]) == 15

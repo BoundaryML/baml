@@ -284,7 +284,7 @@ impl BamlRuntime {
             .map_err(BamlError::from_anyhow)
     }
 
-    #[pyo3(signature = (function_name, args, on_event, ctx, tb, cb, collectors, env_vars))]
+    #[pyo3(signature = (function_name, args, on_event, ctx, tb, cb, collectors, env_vars, on_tick=None))]
     fn stream_function(
         &self,
         py: Python<'_>,
@@ -296,6 +296,7 @@ impl BamlRuntime {
         cb: Option<&ClientRegistry>,
         collectors: &Bound<'_, PyList>,
         env_vars: HashMap<String, String>,
+        on_tick: Option<PyObject>,
     ) -> PyResult<FunctionResultStream> {
         let Some(args) = parse_py_type(args.into_bound(py).into_py_any(py)?, false)? else {
             return Err(BamlInvalidArgumentError::new_err(
@@ -334,10 +335,11 @@ impl BamlRuntime {
             tb.map(|tb| tb.inner.clone()),
             cb.map(|cb| cb.inner.clone()),
             env_vars,
+            on_tick,
         ))
     }
 
-    #[pyo3(signature = (function_name, args, on_event, ctx, tb, cb, collectors, env_vars))]
+    #[pyo3(signature = (function_name, args, on_event, ctx, tb, cb, collectors, env_vars, on_tick=None))]
     fn stream_function_sync(
         &self,
         py: Python<'_>,
@@ -349,6 +351,7 @@ impl BamlRuntime {
         cb: Option<&ClientRegistry>,
         collectors: &Bound<'_, PyList>,
         env_vars: HashMap<String, String>,
+        on_tick: Option<PyObject>,
     ) -> PyResult<SyncFunctionResultStream> {
         let Some(args) = parse_py_type(args.into_bound(py).into_py_any(py)?, false)? else {
             return Err(BamlInvalidArgumentError::new_err(
@@ -387,6 +390,7 @@ impl BamlRuntime {
             tb.map(|tb| tb.inner.clone()),
             cb.map(|cb| cb.inner.clone()),
             env_vars,
+            on_tick,
         ))
     }
 

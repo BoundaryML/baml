@@ -64,7 +64,13 @@ impl SyncNotificationHandler for DidOpenTextDocumentHandler {
 
         if let Some(project) = session.get_or_create_project(&file_path) {
             let project = project.lock().unwrap();
-            if let Ok(version) = project.get_common_generator_version() {
+            let default_flags = vec!["beta".to_string()];
+            let effective_flags = session
+                .baml_settings
+                .feature_flags
+                .as_ref()
+                .unwrap_or(&default_flags);
+            if let Ok(version) = project.get_common_generator_version(effective_flags) {
                 notifier
                     .0
                     .send(lsp_server::Message::Notification(

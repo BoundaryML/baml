@@ -34,8 +34,13 @@ pub fn publish_diagnostics(
     notifier: &Notifier,
     project: Arc<Mutex<Project>>,
     version: Option<i32>,
+    feature_flags: &[String],
 ) -> Result<()> {
-    let diagnostics = project_diagnostics(project.clone());
+    tracing::info!(
+        "publish_diagnostics called with feature_flags: {:?}",
+        feature_flags
+    );
+    let diagnostics = project_diagnostics(project.clone(), feature_flags);
     // Calculate counts *after* all diagnostics (including generator) are collected.
     let error_count = diagnostics
         .iter()
@@ -97,7 +102,17 @@ pub fn publish_session_lsp_diagnostics(
         .get_or_create_project(&path)
         .expect("We just ensured the session is valid.");
 
-    let diagnostics = project_diagnostics(project.clone());
+    let default_flags = vec!["beta".to_string()];
+    let feature_flags = session
+        .baml_settings
+        .feature_flags
+        .as_ref()
+        .unwrap_or(&default_flags);
+    tracing::info!(
+        "publish_diagnostics_for_file: session feature_flags: {:?}",
+        feature_flags
+    );
+    let diagnostics = project_diagnostics(project.clone(), feature_flags);
     for (uri, diagnostics) in diagnostics {
         notifier
             .notify::<lsp_types::notification::PublishDiagnostics>(PublishDiagnosticsParams {
@@ -113,11 +128,16 @@ pub fn publish_session_lsp_diagnostics(
 
 pub fn project_diagnostics(
     project: Arc<Mutex<Project>>,
+    feature_flags: &[String],
 ) -> HashMap<Url, Vec<lsp_types::Diagnostic>> {
+    tracing::info!(
+        "project_diagnostics called with feature_flags: {:?}",
+        feature_flags
+    );
     let mut guard = project.lock().unwrap();
     let root_path = PathBuf::from(guard.root_path());
     let fake_env = HashMap::new();
-    let baml_diagnostics = match guard.baml_project.runtime(fake_env) {
+    let baml_diagnostics = match guard.baml_project.runtime(fake_env, feature_flags) {
         Ok(runtime) => {
             runtime.internal().diagnostics().clone()
             // Diagnostics::new(PathBuf::from("/fake1"))
@@ -201,7 +221,7 @@ pub fn project_diagnostics(
     }
 
     // Add generator version diagnostics
-    if let Ok(generators) = guard.baml_project.list_generators() {
+    if let Ok(generators) = guard.baml_project.list_generators(feature_flags) {
         for gen in generators.into_iter() {
             if let Some(message) = guard.baml_project.check_version(&gen, false) {
                 if let Some(range) = span_to_range(
@@ -245,9 +265,9 @@ pub fn project_diagnostics(
     }
 
     // Check for generator version mismatch as well.
-    if let Err(message) = guard.get_common_generator_version() {
+    if let Err(message) = guard.get_common_generator_version(feature_flags) {
         // Add the diagnostic to all generators
-        if let Ok(generators) = guard.list_generators() {
+        if let Ok(generators) = guard.list_generators(feature_flags) {
             // Need to list generators again to get their spans
             for gen in &generators {
                 if let Some(range) = span_to_range(
@@ -293,11 +313,17 @@ pub fn project_diagnostics(
 pub fn file_diagnostics(
     project: Arc<Mutex<Project>>,
     file_url: &Url,
+    feature_flags: &[String],
 ) -> Vec<lsp_types::Diagnostic> {
+    tracing::info!(
+        "file_diagnostics called for URL: {} with feature_flags: {:?}",
+        file_url,
+        feature_flags
+    );
     let mut guard = project.lock().unwrap();
     let root_path = PathBuf::from(guard.root_path());
     let fake_env = HashMap::new();
-    let baml_diagnostics = match guard.baml_project.runtime(fake_env) {
+    let baml_diagnostics = match guard.baml_project.runtime(fake_env, feature_flags) {
         Ok(runtime) => runtime.internal().diagnostics().clone(),
         Err(err) => err,
     };

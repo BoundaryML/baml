@@ -2,6 +2,8 @@ from __future__ import annotations
 from typing_extensions import Literal
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
+TickReason = Literal["Unknown"]
+
 def get_version() -> str:
     """Get the version of the BAML Python client."""
     ...
@@ -172,6 +174,7 @@ class BamlRuntime:
         cr: Optional[ClientRegistry],
         collectors: List[Collector],
         env_vars: Dict[str, str],
+        on_tick: Optional[Callable[[], None]],
     ) -> FunctionResultStream: ...
     def stream_function_sync(
         self,
@@ -183,6 +186,7 @@ class BamlRuntime:
         cr: Optional[ClientRegistry],
         collectors: List[Collector],
         env_vars: Dict[str, str],
+        on_tick: Optional[Callable[[], None]],
     ) -> SyncFunctionResultStream: ...
     def create_context_manager(self) -> RuntimeContextManager: ...
     def flush(self) -> None: ...

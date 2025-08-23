@@ -230,7 +230,11 @@ impl WasmProject {
     }
 
     #[wasm_bindgen]
-    pub fn runtime(&self, env_vars: JsValue) -> Result<WasmRuntime, JsValue> {
+    pub fn runtime(
+        &self,
+        env_vars: JsValue,
+        feature_flags: JsValue,
+    ) -> Result<WasmRuntime, JsValue> {
         let mut hm = self.files.iter().collect::<HashMap<_, _>>();
         hm.extend(self.unsaved_files.iter());
 
@@ -241,7 +245,16 @@ impl WasmProject {
                 ))
             })?;
 
-        let feature_flags = FeatureFlags::new(); // TODO: get these from the js env.
+        let feature_flags = if feature_flags.is_undefined() || feature_flags.is_null() {
+            FeatureFlags::new()
+        } else {
+            let flags: Vec<String> =
+                serde_wasm_bindgen::from_value(feature_flags).map_err(|e| {
+                    JsValue::from_str(&format!("Expected feature_flags to be Array<string>. {e}"))
+                })?;
+            FeatureFlags::from_vec(flags)
+                .map_err(|e| JsValue::from_str(&format!("Invalid feature flags: {:?}", e)))?
+        };
 
         BamlRuntime::from_file_content(&self.root_dir_name, &hm, env_vars, feature_flags)
             .map(|r| WasmRuntime { runtime: r })
@@ -270,7 +283,8 @@ impl WasmProject {
         let no_version_check = no_version_check.unwrap_or(false);
 
         let js_value = serde_wasm_bindgen::to_value(&fake_map).unwrap();
-        let runtime = self.runtime(js_value);
+        let empty_flags = JsValue::undefined();
+        let runtime = self.runtime(js_value, empty_flags);
         log::info!("Files are: {:#?}", self.files);
         let res = match runtime {
             Ok(runtime) => runtime.run_generators(&self.files, no_version_check),

@@ -41,6 +41,7 @@ class BamlAsyncClient:
         client_registry: typing.Optional[baml_py.baml_py.ClientRegistry] = None,
         collector: typing.Optional[typing.Union[baml_py.baml_py.Collector, typing.List[baml_py.baml_py.Collector]]] = None,
         env: typing.Optional[typing.Dict[str, typing.Optional[str]]] = None,
+        on_tick: typing.Optional[typing.Callable[[str, baml_py.baml_py.FunctionLog], None]] = None,
     ) -> "BamlAsyncClient":
         options: BamlCallOptions = {}
         if tb is not None:
@@ -51,6 +52,8 @@ class BamlAsyncClient:
             options["collector"] = collector
         if env is not None:
             options["env"] = env
+        if on_tick is not None:
+            options["on_tick"] = on_tick
         return BamlAsyncClient(self.__options.merge_options(options))
 
     @property
@@ -76,17 +79,33 @@ class BamlAsyncClient:
     async def TestMediaArrayInputs(self, imageArray: typing.List[baml_py.Image],textInput: str,
         baml_options: BamlCallOptions = {},
     ) -> types.MediaArrayAnalysisResult:
-        result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestMediaArrayInputs", args={
-            "imageArray": imageArray,"textInput": textInput,
-        })
-        return typing.cast(types.MediaArrayAnalysisResult, result.cast_to(types, types, stream_types, False, __runtime__))
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            stream = self.stream.TestMediaArrayInputs(imageArray=imageArray,textInput=textInput,
+                baml_options=baml_options)
+            return await stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestMediaArrayInputs", args={
+                "imageArray": imageArray,"textInput": textInput,
+            })
+            return typing.cast(types.MediaArrayAnalysisResult, result.cast_to(types, types, stream_types, False, __runtime__))
     async def TestMediaInput(self, media: typing.Union[baml_py.Image, baml_py.Audio, baml_py.Pdf, baml_py.Video],textInput: str,
         baml_options: BamlCallOptions = {},
     ) -> types.MediaAnalysisResult:
-        result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestMediaInput", args={
-            "media": media,"textInput": textInput,
-        })
-        return typing.cast(types.MediaAnalysisResult, result.cast_to(types, types, stream_types, False, __runtime__))
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            stream = self.stream.TestMediaInput(media=media,textInput=textInput,
+                baml_options=baml_options)
+            return await stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestMediaInput", args={
+                "media": media,"textInput": textInput,
+            })
+            return typing.cast(types.MediaAnalysisResult, result.cast_to(types, types, stream_types, False, __runtime__))
     
 
 

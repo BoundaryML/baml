@@ -145,6 +145,7 @@ export const CodeMirrorViewer = ({
   const ref = useRef<ReactCodeMirrorRef>({});
   const store = useStore();
   const flashRanges = useAtomValue(flashRangesAtom);
+  const diagnostics = useAtomValue(CodeMirrorDiagnosticsAtom);
 
   useEffect(() => {
     console.log('flashRanges updated: ', flashRanges);
@@ -198,7 +199,7 @@ export const CodeMirrorViewer = ({
       // );
     }
     return [];
-  }, [store, lang]);
+  }, [store, lang, CodeMirrorDiagnosticsAtom]);
 
   const compartment = useMemo(() => new Compartment(), []);
 
@@ -388,7 +389,7 @@ export const CodeMirrorViewer = ({
         effects: compartment.reconfigure([makeLinter()]),
       });
     }
-  }, [fileContent.code, lang, makeLinter, compartment]);
+  }, [fileContent.code, lang, makeLinter, compartment, diagnostics]);
 
   const handleReset = () => {
     // setActualFileContent(file_content);

@@ -6,7 +6,7 @@ title: with_options
 Added in 0.79.0
 </Info>
 
-The `with_options` function creates a new client with default configuration options for logging, client registry, and type builders. These options are automatically applied to all function calls made through this client, but can be overridden on a per-call basis when needed.
+The `with_options` function creates a new client with default configuration options for logging, client registry, type builders, and onTick callbacks. These options are automatically applied to all function calls made through this client, but can be overridden on a per-call basis when needed.
 
 ## Quick Start
 
@@ -59,7 +59,7 @@ const result2 = await myB.ExtractResume("...", { collector: otherCollector })
 
 <Tab title="Go" language="go">
 <Note>
-Go doesn't have a `with_options` method like Python/TypeScript. Instead, use individual option functions like `WithCollector`, `WithClientRegistry`, and `WithEnv` directly in function calls.
+Go doesn't have a `with_options` method like Python/TypeScript. Instead, use individual option functions like `WithCollector`, `WithClientRegistry`, `WithEnv`, and `WithOnTick` directly in function calls.
 </Note>
 
 ```go
