@@ -52,28 +52,17 @@ pub(crate) fn init_logging(_log_level: LogLevel, log_file: Option<&std::path::Pa
         Some(file) => BoxMakeWriter::new(Arc::new(file)),
         None => BoxMakeWriter::new(std::io::stderr),
     };
-    let (console_layer, console_server) = console_subscriber::ConsoleLayer::builder()
-        // set how long the console will retain data from completed tasks
-        .retention(Duration::from_secs(60))
-        // set the address the server is bound to
-        // .server_addr(([127, 0, 0, 1], 5555))
-        // ... other configurations ...
-        .enable_grpc_web(true)
-        .server_addr((Ipv4Addr::UNSPECIFIED, 6669))
-        .build();
-    let subscriber = tracing_subscriber::Registry::default()
-        .with(console_layer)
-        .with(
-            tracing_subscriber::fmt::layer()
-                .with_timer(Uptime::default())
-                .with_thread_names(true)
-                .with_ansi(false) // Enable ANSI colors
-                .with_writer(logger)
-                .with_span_events(FmtSpan::ENTER)
-                .with_filter(LogLevelFilter {
-                    filter: LogLevel::Trace,
-                }),
-        );
+    let subscriber = tracing_subscriber::Registry::default().with(
+        tracing_subscriber::fmt::layer()
+            .with_timer(Uptime::default())
+            .with_thread_names(true)
+            .with_ansi(false) // Enable ANSI colors
+            .with_writer(logger)
+            .with_span_events(FmtSpan::ENTER)
+            .with_filter(LogLevelFilter {
+                filter: LogLevel::Trace,
+            }),
+    );
 
     tracing::subscriber::set_global_default(subscriber)
         .expect("should be able to set global default subscriber");
