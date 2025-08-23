@@ -1,0 +1,679 @@
+---
+title: "Abort Controllers"
+description: "Cancel in-flight LLM operations to save time and resources"
+---
+
+## Overview
+
+Abort controllers allow you to cancel ongoing LLM operations, which is essential for:
+- User-initiated cancellations (e.g., "Stop generating" buttons)
+- Implementing timeouts for long-running operations
+- Cleaning up resources when components unmount
+- Managing multiple parallel requests
+
+## Quick Start
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { b } from '@/baml_client'
+
+    // TypeScript uses the standard Web API AbortController
+    // No additional imports needed - it's built into the runtime
+    const controller = new AbortController()
+
+    // Start an operation
+    const promise = b.ExtractResume(text, {
+      abortController: controller
+    })
+
+    // Cancel after 5 seconds
+    setTimeout(() => controller.abort(), 5000)
+
+    try {
+      const result = await promise
+    } catch (error) {
+      if (error.name === 'BamlAbortError') {
+        console.log('Operation was cancelled')
+      }
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Python">
+    ```python
+    from baml_client import b
+    # Python doesn't have a native abort controller construct,
+    # so BAML provides a custom implementation
+    from baml_py import AbortController
+    import asyncio
+
+    controller = AbortController()
+
+    async def run_with_timeout():
+        # Cancel after 5 seconds
+        asyncio.create_task(cancel_after(controller, 5))
+        
+        try:
+            result = await b.ExtractResume(
+                text,
+                baml_options={"abort_controller": controller}
+            )
+        except BamlAbortError:
+            print("Operation was cancelled")
+
+    async def cancel_after(controller, seconds):
+        await asyncio.sleep(seconds)
+        controller.abort()
+    ```
+  </Tab>
+  
+  <Tab title="Go">
+    ```go
+    import (
+        "context"
+        "time"
+    )
+
+    // Go uses the standard context.Context for cancellation
+    // This is the idiomatic Go way to handle cancellation and timeouts
+    // Create context with 5 second timeout
+    ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+    defer cancel()
+
+    result, err := b.ExtractResume(ctx, text)
+    if err != nil {
+        if errors.Is(err, context.DeadlineExceeded) {
+            fmt.Println("Operation timed out")
+        } else if errors.Is(err, context.Canceled) {
+            fmt.Println("Operation was cancelled")
+        }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Common Use Cases
+
+### User-Initiated Cancellation
+
+Build responsive backend services that allow users to cancel long-running operations:
+
+<Tabs>
+  <Tab title="TypeScript (Express)">
+    ```typescript
+    import express from 'express'
+    import { b } from '@/baml_client'
+    
+    const app = express()
+    const activeControllers = new Map<string, AbortController>()
+    
+    app.post('/extract/:requestId', async (req, res) => {
+      const { requestId } = req.params
+      const { text } = req.body
+      
+      const controller = new AbortController()
+      activeControllers.set(requestId, controller)
+      
+      try {
+        const result = await b.ExtractResume(text, {
+          abortController: controller
+        })
+        res.json({ result })
+      } catch (error) {
+        if (error.name === 'BamlAbortError') {
+          res.json({ status: 'cancelled' })
+        } else {
+          res.status(500).json({ error: error.message })
+        }
+      } finally {
+        activeControllers.delete(requestId)
+      }
+    })
+    
+    app.post('/cancel/:requestId', (req, res) => {
+      const { requestId } = req.params
+      const controller = activeControllers.get(requestId)
+      
+      if (controller) {
+        controller.abort()
+        res.json({ status: 'cancellation requested' })
+      } else {
+        res.status(404).json({ status: 'request not found' })
+      }
+    })
+    ```
+  </Tab>
+  
+  <Tab title="Python (FastAPI)">
+    ```python
+    from fastapi import FastAPI, BackgroundTasks
+    from baml_py import AbortController
+    import asyncio
+
+    app = FastAPI()
+    active_controllers = {}
+
+    @app.post("/extract/{request_id}")
+    async def extract_resume(request_id: str, text: str):
+        controller = AbortController()
+        active_controllers[request_id] = controller
+        
+        try:
+            result = await b.ExtractResume(
+                text,
+                baml_options={"abort_controller": controller}
+            )
+            return {"result": result}
+        except BamlAbortError:
+            return {"status": "cancelled"}
+        finally:
+            active_controllers.pop(request_id, None)
+
+    @app.post("/cancel/{request_id}")
+    async def cancel_extraction(request_id: str):
+        if controller := active_controllers.get(request_id):
+            controller.abort()
+            return {"status": "cancellation requested"}
+        return {"status": "request not found"}
+    ```
+  </Tab>
+</Tabs>
+
+### Implementing Timeouts
+
+Automatically cancel operations that take too long:
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    async function extractWithTimeout(text: string, timeoutMs: number = 30000) {
+      const controller = new AbortController()
+      
+      // Set up automatic timeout
+      const timeoutId = setTimeout(() => {
+        controller.abort()
+      }, timeoutMs)
+
+      try {
+        const result = await b.ExtractResume(text, {
+          abortController: controller
+        })
+        clearTimeout(timeoutId)
+        return result
+      } catch (error) {
+        clearTimeout(timeoutId)
+        if (error.name === 'BamlAbortError') {
+          throw new Error(`Operation timed out after ${timeoutMs}ms`)
+        }
+        throw error
+      }
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Python">
+    ```python
+    import asyncio
+    from baml_py import AbortController
+
+    async def extract_with_timeout(text: str, timeout_seconds: float = 30):
+        controller = AbortController()
+        
+        async def timeout_task():
+            await asyncio.sleep(timeout_seconds)
+            controller.abort()
+        
+        # Start timeout
+        timeout = asyncio.create_task(timeout_task())
+        
+        try:
+            result = await b.ExtractResume(
+                text,
+                baml_options={"abort_controller": controller}
+            )
+            timeout.cancel()
+            return result
+        except BamlAbortError:
+            raise TimeoutError(f"Operation timed out after {timeout_seconds}s")
+        except Exception:
+            timeout.cancel()
+            raise
+    ```
+  </Tab>
+  
+  <Tab title="Go">
+    ```go
+    func extractWithTimeout(text string, timeout time.Duration) (Result, error) {
+        ctx, cancel := context.WithTimeout(context.Background(), timeout)
+        defer cancel()
+        
+        result, err := b.ExtractResume(ctx, text)
+        if err != nil {
+            if errors.Is(err, context.DeadlineExceeded) {
+                return nil, fmt.Errorf("operation timed out after %v", timeout)
+            }
+            return nil, err
+        }
+        
+        return result, nil
+    }
+    ```
+  </Tab>
+</Tabs>
+
+
+### Fastest Request Wins
+
+Race multiple LLM providers and cancel slower ones when the fastest completes:
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { ClientRegistry } from '@boundaryml/baml'
+    
+    async function fastestProviderWins(text: string) {
+      const controllers = [
+        new AbortController(),
+        new AbortController(),
+        new AbortController()
+      ]
+
+      // Create separate client registries for each provider
+      const openaiRegistry = new ClientRegistry()
+      openaiRegistry.addLlmClient('OpenAI', 'openai', {
+        model: 'gpt-4o-mini',
+        api_key: process.env.OPENAI_API_KEY
+      })
+      openaiRegistry.setPrimary('OpenAI')
+
+      const anthropicRegistry = new ClientRegistry()
+      anthropicRegistry.addLlmClient('Anthropic', 'anthropic', {
+        model: 'claude-3-haiku-20240307',
+        api_key: process.env.ANTHROPIC_API_KEY
+      })
+      anthropicRegistry.setPrimary('Anthropic')
+
+      const geminiRegistry = new ClientRegistry()
+      geminiRegistry.addLlmClient('Gemini', 'vertex-ai', {
+        model: 'gemini-1.5-flash',
+        location: 'us-central1',
+        credentials: process.env.GOOGLE_APPLICATION_CREDENTIALS
+      })
+      geminiRegistry.setPrimary('Gemini')
+
+      const promises = [
+        b.ExtractResume(text, {
+          clientRegistry: openaiRegistry,
+          abortController: controllers[0]
+        }),
+        b.ExtractResume(text, {
+          clientRegistry: anthropicRegistry,
+          abortController: controllers[1]
+        }),
+        b.ExtractResume(text, {
+          clientRegistry: geminiRegistry,
+          abortController: controllers[2]
+        })
+      ]
+
+      try {
+        // Wait for first to complete
+        const result = await Promise.race(promises)
+        
+        // Cancel the others
+        controllers.forEach(c => c.abort())
+        
+        return result
+      } catch (error) {
+        // All failed - cancel any still running
+        controllers.forEach(c => c.abort())
+        throw error
+      }
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Python">
+    ```python
+    import asyncio
+    import os
+    from baml_py import AbortController, ClientRegistry
+
+    async def fastest_provider_wins(text: str):
+        controllers = [
+            AbortController(),
+            AbortController(),
+            AbortController()
+        ]
+        
+        # Create separate client registries for each provider
+        openai_registry = ClientRegistry()
+        openai_registry.add_llm_client('OpenAI', 'openai', {
+            'model': 'gpt-4o-mini',
+            'api_key': os.environ.get('OPENAI_API_KEY')
+        })
+        openai_registry.set_primary('OpenAI')
+        
+        anthropic_registry = ClientRegistry()
+        anthropic_registry.add_llm_client('Anthropic', 'anthropic', {
+            'model': 'claude-3-haiku-20240307',
+            'api_key': os.environ.get('ANTHROPIC_API_KEY')
+        })
+        anthropic_registry.set_primary('Anthropic')
+        
+        gemini_registry = ClientRegistry()
+        gemini_registry.add_llm_client('Gemini', 'vertex-ai', {
+            'model': 'gemini-1.5-flash',
+            'location': 'us-central1',
+            'credentials': os.environ.get('GOOGLE_APPLICATION_CREDENTIALS_CONTENT')
+        })
+        gemini_registry.set_primary('Gemini')
+        
+        tasks = [
+            b.ExtractResume(text, baml_options={
+                'client_registry': openai_registry,
+                'abort_controller': controllers[0]
+            }),
+            b.ExtractResume(text, baml_options={
+                'client_registry': anthropic_registry,
+                'abort_controller': controllers[1]
+            }),
+            b.ExtractResume(text, baml_options={
+                'client_registry': gemini_registry,
+                'abort_controller': controllers[2]
+            })
+        ]
+        
+        # Create tasks
+        tasks = [asyncio.create_task(t) for t in tasks]
+        
+        try:
+            # Wait for first to complete
+            done, pending = await asyncio.wait(
+                tasks,
+                return_when=asyncio.FIRST_COMPLETED
+            )
+            
+            # Cancel the others
+            for controller in controllers:
+                controller.abort()
+            
+            # Get result from completed task
+            result = done.pop().result()
+            return result
+            
+        except Exception as e:
+            # Cancel all on error
+            for controller in controllers:
+                controller.abort()
+            raise
+    ```
+  </Tab>
+</Tabs>
+
+## Streaming with Abort Controllers
+
+Abort controllers work seamlessly with streaming responses:
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    const controller = new AbortController()
+
+    const stream = b.stream.GenerateStory(prompt, {
+      abortController: controller
+    })
+
+    let wordCount = 0
+    for await (const chunk of stream) {
+      wordCount += chunk.split(' ').length
+      
+      // Stop if we've generated enough
+      if (wordCount > 1000) {
+        controller.abort()
+        break
+      }
+      
+      // Process chunk
+      console.log(chunk)
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Python">
+    ```python
+    controller = AbortController()
+    
+    stream = b.stream.GenerateStory(
+        prompt,
+        baml_options={"abort_controller": controller}
+    )
+    
+    word_count = 0
+    async for chunk in stream:
+        word_count += len(chunk.split())
+        
+        # Stop if we've generated enough
+        if word_count > 1000:
+            controller.abort()
+            break
+        
+        # Process chunk
+        print(chunk)
+    ```
+  </Tab>
+  
+  <Tab title="Go">
+    ```go
+    ctx, cancel := context.WithCancel(context.Background())
+    defer cancel()
+    
+    stream := b.StreamGenerateStory(ctx, prompt)
+    
+    wordCount := 0
+    for chunk := range stream {
+        wordCount += len(strings.Fields(chunk))
+        
+        // Stop if we've generated enough
+        if wordCount > 1000 {
+            cancel()
+            break
+        }
+        
+        // Process chunk
+        fmt.Println(chunk)
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Error Handling
+
+Properly handle abort errors to distinguish cancellations from other failures:
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { BamlAbortError } from '@/baml_client'
+
+    try {
+      const result = await b.ExtractResume(text, {
+        abortController: controller
+      })
+      return { success: true, data: result }
+    } catch (error) {
+      if (error instanceof BamlAbortError) {
+        // User cancelled - this is expected
+        return { success: false, cancelled: true }
+      }
+      
+      if (error.name === 'BamlValidationError') {
+        // Schema validation failed
+        return { success: false, validationError: error.message }
+      }
+      
+      // Unexpected error
+      console.error('Extraction failed:', error)
+      throw error
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Python">
+    ```python
+    from baml_py import BamlAbortError, BamlValidationError
+
+    try:
+        result = await b.ExtractResume(
+            text,
+            baml_options={"abort_controller": controller}
+        )
+        return {"success": True, "data": result}
+        
+    except BamlAbortError:
+        # User cancelled - this is expected
+        return {"success": False, "cancelled": True}
+        
+    except BamlValidationError as e:
+        # Schema validation failed
+        return {"success": False, "validation_error": str(e)}
+        
+    except Exception as e:
+        # Unexpected error
+        logger.error(f"Extraction failed: {e}")
+        raise
+    ```
+  </Tab>
+  
+  <Tab title="Go">
+    ```go
+    result, err := b.ExtractResume(ctx, text)
+    if err != nil {
+        if errors.Is(err, context.Canceled) {
+            // User cancelled - this is expected
+            return Result{Success: false, Cancelled: true}, nil
+        }
+        
+        if errors.Is(err, context.DeadlineExceeded) {
+            // Timeout occurred
+            return Result{Success: false, TimedOut: true}, nil
+        }
+        
+        // Other error
+        return Result{}, fmt.Errorf("extraction failed: %w", err)
+    }
+    
+    return Result{Success: true, Data: result}, nil
+    ```
+  </Tab>
+</Tabs>
+
+## Best Practices
+
+### Always Clean Up Controllers
+
+Ensure abort controllers are properly cleaned up to avoid memory leaks:
+
+```typescript
+// Good: Controller is cleaned up
+const controller = new AbortController()
+try {
+  await b.ExtractResume(text, { abortController: controller })
+} finally {
+  // Clean up references
+  controller.abort() // Ensure it's aborted
+}
+
+// Bad: Controller may leak
+const controller = new AbortController()
+await b.ExtractResume(text, { abortController: controller })
+// No cleanup!
+```
+
+### Use Timeouts in Production
+
+Always set reasonable timeouts for production systems:
+
+```typescript
+// Good: Has timeout protection
+async function productionExtract(text: string) {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 30000) // 30s timeout
+  
+  try {
+    return await b.ExtractResume(text, { abortController: controller })
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+// Bad: Could hang indefinitely
+async function riskyExtract(text: string) {
+  return await b.ExtractResume(text) // No timeout!
+}
+```
+
+### Handle Errors Gracefully
+
+Always distinguish between cancellations and real errors:
+
+```typescript
+// Good: Different handling for different error types
+catch (error) {
+  if (error.name === 'BamlAbortError') {
+    // Expected cancellation
+    showMessage('Operation cancelled')
+  } else {
+    // Unexpected error
+    showError('Something went wrong')
+    reportToErrorTracking(error)
+  }
+}
+
+// Bad: All errors treated the same
+catch (error) {
+  showError('Operation failed') // User doesn't know if cancelled or failed
+}
+```
+
+### Consider Retry Logic
+
+For timeout scenarios, consider implementing retry logic:
+
+```typescript
+async function extractWithRetry(
+  text: string,
+  maxAttempts: number = 3,
+  timeoutMs: number = 30000
+) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), timeoutMs)
+    
+    try {
+      const result = await b.ExtractResume(text, {
+        abortController: controller
+      })
+      clearTimeout(timeout)
+      return result
+    } catch (error) {
+      clearTimeout(timeout)
+      
+      if (error.name === 'BamlAbortError' && attempt < maxAttempts) {
+        console.log(`Attempt ${attempt} timed out, retrying...`)
+        continue
+      }
+      
+      throw error
+    }
+  }
+}
+```
+
+## Related Topics
+
+- [Error Handling](/01-guide/04-baml-basics/error-handling) - Learn about all error types
+- [Streaming](/01-guide/04-baml-basics/streaming) - Stream responses with cancellation support
+- [Concurrent Calls](/01-guide/04-baml-basics/concurrent-calls) - Cancel multiple operations at once
+- [API Reference](/03-reference/baml_client/abort-controller) - Detailed API documentation

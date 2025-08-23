@@ -137,3 +137,293 @@ Please [contact us](/contact) if this is something you need.
 
 </Tab>
 </Tabs>
+
+## Cancelling Parallel Operations
+
+When running multiple operations in parallel, you can use abort controllers to cancel them all at once or individually.
+
+### Cancel All Operations
+
+Use a single abort controller to cancel all parallel operations:
+
+<Tabs>
+<Tab title="TypeScript">
+```typescript
+import { b } from './baml_client'
+
+const controller = new AbortController()
+
+// Start multiple operations with the same controller
+const promises = [
+  b.ClassifyMessage('I want to cancel my order', { abortController: controller }),
+  b.ClassifyMessage('I want a refund', { abortController: controller }),
+  b.ClassifyMessage('Is my package shipped?', { abortController: controller })
+]
+
+// Cancel all operations after 2 seconds
+setTimeout(() => {
+  controller.abort()
+  console.log('All operations cancelled')
+}, 2000)
+
+try {
+  const results = await Promise.all(promises)
+  console.log('All completed:', results)
+} catch (error) {
+  if (error.name === 'BamlAbortError') {
+    console.log('Operations were cancelled')
+  }
+}
+```
+</Tab>
+
+<Tab title="Python">
+```python
+import asyncio
+from baml_client.async_client import b
+from baml_py import AbortController, BamlAbortError
+
+async def main():
+    controller = AbortController()
+    
+    # Start multiple operations with the same controller
+    tasks = [
+        b.ClassifyMessage(
+            'I want to cancel my order',
+            baml_options={"abort_controller": controller}
+        ),
+        b.ClassifyMessage(
+            'I want a refund',
+            baml_options={"abort_controller": controller}
+        ),
+        b.ClassifyMessage(
+            'Is my package shipped?',
+            baml_options={"abort_controller": controller}
+        )
+    ]
+    
+    # Cancel all operations after 2 seconds
+    async def cancel_after_timeout():
+        await asyncio.sleep(2)
+        controller.abort()
+        print('All operations cancelled')
+    
+    asyncio.create_task(cancel_after_timeout())
+    
+    try:
+        results = await asyncio.gather(*tasks)
+        print('All completed:', results)
+    except BamlAbortError:
+        print('Operations were cancelled')
+```
+</Tab>
+
+<Tab title="Go">
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "sync"
+    "time"
+    
+    b "example.com/myproject/baml_client"
+)
+
+func main() {
+    // Create a cancellable context
+    ctx, cancel := context.WithCancel(context.Background())
+    
+    // Cancel all operations after 2 seconds
+    go func() {
+        time.Sleep(2 * time.Second)
+        cancel()
+        fmt.Println("All operations cancelled")
+    }()
+    
+    var wg sync.WaitGroup
+    messages := []string{
+        "I want to cancel my order",
+        "I want a refund",
+        "Is my package shipped?",
+    }
+    
+    for _, msg := range messages {
+        wg.Add(1)
+        go func(message string) {
+            defer wg.Done()
+            result, err := b.ClassifyMessage(ctx, message)
+            if err != nil {
+                if err == context.Canceled {
+                    fmt.Printf("Cancelled: %s\n", message)
+                }
+                return
+            }
+            fmt.Printf("Completed: %s -> %v\n", message, result)
+        }(msg)
+    }
+    
+    wg.Wait()
+}
+```
+</Tab>
+</Tabs>
+
+### Cancel Individual Operations
+
+Use separate controllers to cancel operations independently:
+
+<Tabs>
+<Tab title="TypeScript">
+```typescript
+const controllers = [
+  new AbortController(),
+  new AbortController(),
+  new AbortController()
+]
+
+const promises = [
+  b.ClassifyMessage('I want to cancel my order', { abortController: controllers[0] }),
+  b.ClassifyMessage('I want a refund', { abortController: controllers[1] }),
+  b.ClassifyMessage('Is my package shipped?', { abortController: controllers[2] })
+]
+
+// Cancel only the second operation
+controllers[1].abort()
+
+const results = await Promise.allSettled(promises)
+results.forEach((result, index) => {
+  if (result.status === 'fulfilled') {
+    console.log(`Operation ${index} completed:`, result.value)
+  } else {
+    console.log(`Operation ${index} failed:`, result.reason.message)
+  }
+})
+```
+</Tab>
+
+<Tab title="Python">
+```python
+controllers = [
+    AbortController(),
+    AbortController(),
+    AbortController()
+]
+
+tasks = [
+    b.ClassifyMessage(
+        'I want to cancel my order',
+        baml_options={"abort_controller": controllers[0]}
+    ),
+    b.ClassifyMessage(
+        'I want a refund',
+        baml_options={"abort_controller": controllers[1]}
+    ),
+    b.ClassifyMessage(
+        'Is my package shipped?',
+        baml_options={"abort_controller": controllers[2]}
+    )
+]
+
+# Cancel only the second operation
+controllers[1].abort()
+
+# Use gather with return_exceptions to handle partial failures
+results = await asyncio.gather(*tasks, return_exceptions=True)
+for index, result in enumerate(results):
+    if isinstance(result, Exception):
+        print(f"Operation {index} failed: {result}")
+    else:
+        print(f"Operation {index} completed: {result}")
+```
+</Tab>
+</Tabs>
+
+### Race Multiple Providers
+
+Cancel slower providers once the fastest one completes:
+
+<Tabs>
+<Tab title="TypeScript">
+```typescript
+async function raceProviders(message: string) {
+  const controllers = [
+    new AbortController(),
+    new AbortController(),
+    new AbortController()
+  ]
+
+  const promises = [
+    b.withOptions({ client: 'openai' })
+      .ClassifyMessage(message, { abortController: controllers[0] }),
+    b.withOptions({ client: 'anthropic' })
+      .ClassifyMessage(message, { abortController: controllers[1] }),
+    b.withOptions({ client: 'gemini' })
+      .ClassifyMessage(message, { abortController: controllers[2] })
+  ]
+
+  try {
+    // Wait for the first to complete
+    const result = await Promise.race(promises)
+    
+    // Cancel the others
+    controllers.forEach(c => c.abort())
+    
+    return result
+  } catch (error) {
+    // All failed - cancel any still running
+    controllers.forEach(c => c.abort())
+    throw error
+  }
+}
+```
+</Tab>
+
+<Tab title="Python">
+```python
+async def race_providers(message: str):
+    controllers = [
+        AbortController(),
+        AbortController(),
+        AbortController()
+    ]
+    
+    tasks = [
+        asyncio.create_task(
+            b.with_options(client='openai')
+              .ClassifyMessage(message, baml_options={"abort_controller": controllers[0]})
+        ),
+        asyncio.create_task(
+            b.with_options(client='anthropic')
+              .ClassifyMessage(message, baml_options={"abort_controller": controllers[1]})
+        ),
+        asyncio.create_task(
+            b.with_options(client='gemini')
+              .ClassifyMessage(message, baml_options={"abort_controller": controllers[2]})
+        )
+    ]
+    
+    # Wait for first to complete
+    done, pending = await asyncio.wait(
+        tasks,
+        return_when=asyncio.FIRST_COMPLETED
+    )
+    
+    # Cancel the others
+    for controller in controllers:
+        controller.abort()
+    
+    # Get result from completed task
+    result = done.pop().result()
+    
+    # Cancel pending tasks
+    for task in pending:
+        task.cancel()
+    
+    return result
+```
+</Tab>
+</Tabs>
+
+For more abort controller patterns, see the [Abort Controllers guide](/01-guide/04-baml-basics/abort-controllers).

@@ -383,6 +383,9 @@ navigation:
           - page: Concurrent Calls
             icon: fa-regular fa-clock-rotate-left
             path: 01-guide/04-baml-basics/concurrent-calls.mdx
+          - page: Abort Controllers
+            icon: fa-regular fa-stop-circle
+            path: 01-guide/04-baml-basics/abort-controllers.mdx
 
       - section: BAML Advanced
         contents:
@@ -666,6 +669,9 @@ navigation:
         contents:
           - page: with_options(..)
             path: 03-reference/baml_client/with_options.mdx
+          - page: AbortController
+            slug: abort-controller
+            path: 03-reference/baml_client/abort-controller.mdx
           - page: Collector
             path: 03-reference/baml_client/collector.mdx
             slug: collector
@@ -702,6 +708,8 @@ navigation:
                 path: 03-reference/baml_client/errors/baml-validation-error.mdx
               - page: BamlClientFinishReasonError
                 path: 03-reference/baml_client/errors/baml-client-finish-reason-error.mdx
+              - page: BamlAbortError
+                path: 03-reference/baml_client/errors/baml-abort-error.mdx
           - section: React/Next.js
             contents:
               - page: use{FunctionName} Hook
@@ -1151,3 +1159,11 @@ redirects:
     destination: "/ref/llm-client-providers/unify"
   - source: "/ref/llm-client-providers/openai-generic-vllm"
     destination: "/ref/llm-client-providers/vllm"
+  - source: "/cancel"
+    destination: "/guide/baml-basics/abort-controllers"
+  - source: "/timeout"
+    destination: "/guide/baml-basics/abort-controllers"
+  - source: "/cancellation"
+    destination: "/guide/baml-basics/abort-controllers"
+  - source: "/abort"
+    destination: "/guide/baml-basics/abort-controllers"
