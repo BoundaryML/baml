@@ -343,10 +343,11 @@ fn class_constructor_with_spread_operator() -> anyhow::Result<()> {
                     x int
                     y int
                     z int
+                    w int
                 }
 
                 fn default_point() -> Point {
-                    Point { x: 0, y: 0, z: 0 }
+                    Point { x: 0, y: 0, z: 0, w: 0 }
                 }
 
                 fn main() -> Point {
@@ -367,12 +368,38 @@ fn class_constructor_with_spread_operator() -> anyhow::Result<()> {
 
             assert_eq!(
                 instance.fields,
-                &[Value::Int(1), Value::Int(2), Value::Int(0)]
+                &[Value::Int(1), Value::Int(2), Value::Int(0), Value::Int(0)],
             );
 
             Ok(())
         },
     )
+}
+
+#[test]
+fn class_constructor_with_spread_operator_does_not_break_locals() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: "
+                class Point {
+                    x int
+                    y int
+                    z int
+                    w int
+                }
+
+                fn default_point() -> Point {
+                    Point { x: 0, y: 0, z: 0, w: 0 }
+                }
+
+                fn main() -> int {
+                    let p = Point { x: 1, y: 2, ..default_point() };
+                    let x = 0;
+                    x
+                }
+            ",
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(0)),
+    })
 }
 
 #[test]
@@ -886,6 +913,22 @@ fn builtin_method_call() -> anyhow::Result<()> {
 }
 
 #[test]
+fn bind_method_call() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            fn main() -> int {
+                let arr = [1, 2, 3];
+                let v = arr.len();
+
+                v
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(3)),
+    })
+}
+
+#[test]
 fn while_loop() -> anyhow::Result<()> {
     // NOTE: there's no way to make a safeguard since there's no "return", and we shouldn't rely on
     // "break" to keep the test as isolated as possible.
@@ -1161,6 +1204,56 @@ fn for_loop_nested() -> anyhow::Result<()> {
     })
 }
 
+#[test]
+fn basic_method_decl() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            class Number {
+                value int
+
+                function add(self, other: Number) -> Number {
+                    Number { value: self.value + other.value }
+                }
+            }
+
+            function main() -> int {
+                let mut a = Number { value: 1 };
+                let mut b = Number { value: 2 };
+                let n = a.add(b);
+                n.value
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(3)),
+    })
+}
+
+#[test]
+#[ignore = "TODO: Left hand side of assignment is not an identifier"]
+fn mut_self_method_decl() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            class Number {
+                value int
+
+                function add(mut self, other: Number) -> bool {
+                    self.value += other.value;
+                    true
+                }
+            }
+
+            function main() -> int {
+                let mut a = Number { value: 1 };
+                let mut b = Number { value: 2 };
+                a.add(b);
+                a.value
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(3)),
+    })
+}
+
 #[cfg(test)]
 mod c_for_loops {
 
@@ -1260,7 +1353,7 @@ mod return_stmt {
             source: r#"
                 fn EarlyReturn(x: int) -> int {
                    if (x == 42) { return 1; }
-                   
+
                    x + 5
                 }
 
@@ -1281,14 +1374,14 @@ mod return_stmt {
                    let a = 1;
 
                    if (a == 0) { return 0; }
-                   
+
                    {
                       let b = 1;
                       if (a != b) {
                          return 0;
                       }
                    }
-                   
+
                    {
                       let c = 2;
                       let b = 3;

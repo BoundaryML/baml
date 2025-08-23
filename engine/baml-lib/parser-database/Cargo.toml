@@ -22,18 +22,18 @@ internal-baml-diagnostics = { path = "../diagnostics" }
 internal-baml-prompt-parser = { path = "../prompt-parser" }
 internal-llm-client = { path = "../llm-client" }
 
-either = "1.6.1"
-enumflags2 = "0.7"
-indexmap = "2.1.0"
+either.workspace = true
+enumflags2.workspace = true
+indexmap.workspace = true
 rustc-hash = "1.1.0"
-colored = "2.0.0"
-log = "0.4.20"
-textwrap = "0.16.0"
+colored.workspace = true
+log.workspace = true
+textwrap.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-regex = "1.10.2"
+regex.workspace = true
 anyhow.workspace = true
-itertools = "0.13.0"
+itertools.workspace = true
 ouroboros = "*"
 
 [features]

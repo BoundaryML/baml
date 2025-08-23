@@ -761,27 +761,27 @@ impl Vm {
             frame.instruction_ptr += 1;
 
             // Runtime debugging information.
-            #[cfg(debug_assertions)]
-            {
-                let stack = self
-                    .stack
-                    .iter()
-                    .map(|v| crate::debug::display_value(v, &self.objects))
-                    .collect::<Vec<_>>()
-                    .join(", ");
+            // #[cfg(debug_assertions)]
+            // {
+            //     let stack = self
+            //         .stack
+            //         .iter()
+            //         .map(|v| crate::debug::display_value(v, &self.objects))
+            //         .collect::<Vec<_>>()
+            //         .join(", ");
 
-                eprintln!("[{stack}]");
+            //     eprintln!("[{stack}]");
 
-                let (instruction, metadata) = crate::debug::display_instruction(
-                    instruction_ptr,
-                    function,
-                    &self.stack,
-                    &self.objects,
-                    &self.globals,
-                );
+            //     let (instruction, metadata) = crate::debug::display_instruction(
+            //         instruction_ptr,
+            //         function,
+            //         &self.stack,
+            //         &self.objects,
+            //         &self.globals,
+            //     );
 
-                eprintln!("{instruction} {metadata}");
-            }
+            //     eprintln!("{instruction} {metadata}");
+            // }
 
             match function.bytecode.instructions[instruction_ptr as usize] {
                 Instruction::LoadConst(index) => {
@@ -833,8 +833,6 @@ impl Vm {
                     self.stack.push(instance.fields[index]);
                 }
                 Instruction::StoreField(index) => {
-                    let value_stack_index = self.stack.ensure_stack_top()?;
-
                     let reference = self.objects.as_object(
                         &self.stack[self.stack.ensure_slot_from_top(1)?],
                         ObjectType::Instance,
@@ -848,11 +846,11 @@ impl Vm {
                         .into());
                     };
 
-                    // Set the value.
-                    instance.fields[index] = self.stack[value_stack_index];
+                    // Consume and set the value.
+                    instance.fields[index] = self.stack.ensure_pop()?;
 
-                    // Consume the value.
-                    self.stack.pop();
+                    // Consume the intance.
+                    self.stack.ensure_pop()?;
 
                     // TODO: Borrow checker stuff.
                     function = self.objects[frame.function].as_function()?;

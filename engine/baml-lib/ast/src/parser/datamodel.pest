@@ -11,7 +11,7 @@ type_expression_block = { identifier ~ identifier ~ named_argument_list? ~ BLOCK
 dynamic_type_expression_block = { identifier ~ type_expression_block }
 
 type_expression_contents = {
-    (type_expression | block_attribute | comment_block | empty_lines | BLOCK_LEVEL_CATCH_ALL)*
+    (expr_fn | type_expression | block_attribute | comment_block | empty_lines | BLOCK_LEVEL_CATCH_ALL)*
 }
 type_expression          = {
     identifier ~ field_type_chain? ~ (NEWLINE? ~ (field_attribute | trailing_comment))* ~ NEWLINE?
@@ -261,19 +261,22 @@ COMMA = { "," }
 // Operators
 // #################################################
 
+// NOTE: ~ !"=" is needed to allow assignments like `a += 1`
+// If not used, PEST assumes this is an addition and right hand side is "= 1".
+
 // Arithmetic
-ADD = { "+" }
-SUB = { "-" }
-MUL = { "*" }
-DIV = { "/" }
-MOD = { "%" }
+ADD = { "+" ~ !"=" }
+SUB = { "-" ~ !"=" }
+MUL = { "*" ~ !"=" }
+DIV = { "/" ~ !"=" }
+MOD = { "%" ~ !"=" }
 
 // Bitwise
-BIT_AND = { "&" }
-BIT_OR = { "|" }
-BIT_XOR = { "^" }
-BIT_SHL = { "<<" }
-BIT_SHR = { ">>" }
+BIT_AND = { "&" ~ !"=" }
+BIT_OR = { "|" ~ !"=" }
+BIT_XOR = { "^" ~ !"=" }
+BIT_SHL = { "<<" ~ !"=" }
+BIT_SHR = { ">>" ~ !"=" }
 
 // Comparison
 EQ = { "==" }
@@ -312,27 +315,46 @@ expr_fn = { ("function" | "fn") ~ identifier ~ named_argument_list ~ ARROW? ~ fi
 expr_block = { BLOCK_OPEN ~ NEWLINE? ~ (stmt | comment_block | empty_lines)* ~ expression? ~ NEWLINE? ~ BLOCK_CLOSE }
 
 // Statement.
-// TODO: Most language allow any arbitrary expression as a statement. For example,
-// you should be able to do this:
-//
-// let x = 1;
-// 2 + 2;  // Random expression as a statement.
-//
-// For now we only allow function calls, most other expressions don't make sense
-// at least at first glance, but imagine something like
-//
-// call_func(1) + call_func(2);
-//
-// With operator overloading (implicit function call) + side effects.
-//
-// Just allow any expr and fix the parser.
-stmt = { (((let_expr | assign_op_stmt | assign_stmt | fn_app | generic_fn_app | BREAK_KEYWORD | CONTINUE_KEYWORD | return_stmt | assert_stmt) ~ SEMICOLON) | for_loop | if_expression | while_loop | expr_block) ~ trailing_comment? ~ NEWLINE? }
+stmt = {
+    (
+        for_loop
+        | while_loop
+        | if_expression
+        | (
+            (
+                BREAK_KEYWORD
+                | CONTINUE_KEYWORD
+                | let_expr
+                | return_stmt
+                | assert_stmt
+                | assign_op_stmt
+                | assign_stmt
+                | expression
+            )
+            ~ SEMICOLON
+        )
+        | expr_block
+    )
+    ~ trailing_comment?
+    ~ NEWLINE?
+}
 
 // Let-binding statement.
 let_expr = { "let" ~ MUT_KEYWORD? ~ identifier ~ "=" ~ expression }
 
-assign_stmt = { identifier ~ "=" ~ expression }
-assign_op_stmt = { identifier ~ assign_op ~ expression }
+// NOTE: Needs to supports things like `object.getter().field[x + y] = value`,
+// so can't be just `identifier ~ "=" ~ expression`.
+//
+// Though having expression as LHS is also tricky since we need to make sure
+// that `a += 1` is not treaded as `a` + `= 1` (addition, infix operator).
+// This is solved by forcing infix operators like `+` to not be followed by `=`.
+//
+// Another solution if this fails at some point is having an assignable_expression
+// rule with no infix operators:
+//
+// assignable_expression = { prefix_operator* ~ primary_expression ~ postfix_operator* }
+assign_stmt = { expression ~ "=" ~ expression }
+assign_op_stmt = { expression ~ assign_op ~ expression }
 
 assign_op = _{ BIT_SHL_ASSIGN | BIT_SHR_ASSIGN | ADD_ASSIGN | SUB_ASSIGN | MUL_ASSIGN | DIV_ASSIGN | MOD_ASSIGN | BIT_AND_ASSIGN | BIT_OR_ASSIGN | BIT_XOR_ASSIGN }
 
@@ -381,8 +403,8 @@ c_for_init_stmt = { let_expr | assign_op_stmt | assign_stmt | fn_app | generic_f
 c_for_after_stmt = {  block_aware_assign_op_stmt | block_aware_assign_stmt | fn_app | generic_fn_app }
 
 // statements with a block-aware tail expression. Read `block_aware_tail_expression` for more info.
-block_aware_assign_op_stmt = { identifier ~ assign_op ~ block_aware_tail_expression }
-block_aware_assign_stmt = { identifier ~ "=" ~ block_aware_tail_expression }
+block_aware_assign_op_stmt = { expression ~ assign_op ~ block_aware_tail_expression }
+block_aware_assign_stmt = { expression ~ "=" ~ block_aware_tail_expression }
 
 return_stmt = { "return" ~ expression? }
 

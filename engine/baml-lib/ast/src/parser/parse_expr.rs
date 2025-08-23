@@ -78,6 +78,9 @@ pub fn parse_top_level_assignment(
             only_let_stmt("for loops", span, diagnostics)
         }
         Stmt::Expression(expr) => only_let_stmt("expressions", expr.span().clone(), diagnostics),
+        Stmt::Semicolon(expr) => {
+            only_let_stmt("semicolon expressions", expr.span().clone(), diagnostics)
+        }
         Stmt::WhileLoop(stmt) => only_let_stmt("while loops", stmt.span, diagnostics),
         Stmt::Break(span) => only_let_stmt("break statements", span, diagnostics),
         Stmt::Continue(span) => only_let_stmt("continue statements", span, diagnostics),
@@ -170,24 +173,20 @@ fn parse_c_for_loop(
             Rule::block_aware_assign_stmt => {
                 let mut tokens = rule.into_inner();
 
-                let identifier = parse_identifier(tokens.next()?, diagnostics);
+                let left = parse_expression(tokens.next()?, diagnostics)?;
 
                 let expr = parse_block_aware_tail_expression(tokens.next()?, diagnostics)?;
 
-                Some(Stmt::Assign(AssignStmt {
-                    identifier,
-                    expr,
-                    span,
-                }))
+                Some(Stmt::Assign(AssignStmt { left, expr, span }))
             }
             Rule::block_aware_assign_op_stmt => {
                 let mut tokens = rule.into_inner();
 
-                let ident = tokens.next()?;
+                let left = tokens.next()?;
                 let op = tokens.next()?;
                 let expr = parse_block_aware_tail_expression(tokens.next()?, diagnostics);
 
-                finish_assign_op_stmt(span, diagnostics, ident, op, expr).map(Stmt::AssignOp)
+                finish_assign_op_stmt(span, diagnostics, left, op, expr).map(Stmt::AssignOp)
             }
             _ => parse_statement_inner_rule(rule, span, diagnostics),
         }
@@ -325,14 +324,19 @@ pub fn parse_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
     let span = diagnostics.span(token.as_span());
     let mut tokens = token.into_inner();
 
-    let stmt_token = tokens.next()?;
-    let stmt = parse_statement_inner_rule(stmt_token, span.clone(), diagnostics);
+    let mut stmt = parse_statement_inner_rule(tokens.next()?, span.clone(), diagnostics);
 
-    let maybe_semicolon = tokens.next();
-    match maybe_semicolon {
-        Some(p) if p.as_str() == ";" => {}
+    match tokens.next() {
+        Some(maybe_semicolon) if maybe_semicolon.as_str() == ";" => {
+            if let Some(Stmt::Expression(expr)) = stmt {
+                stmt = Some(Stmt::Semicolon(expr));
+            }
+        }
         _ => {
-            if matches!(stmt, Some(Stmt::Let(_))) {
+            if matches!(
+                stmt,
+                Some(Stmt::Let(_) | Stmt::Assign(_) | Stmt::AssignOp(_))
+            ) {
                 diagnostics.push_error(DatamodelError::new_static(
                     "Statement must end with a semicolon.",
                     span,
@@ -366,14 +370,14 @@ fn parse_statement_inner_rule(
         Rule::assign_stmt => {
             let mut assignment_tokens = stmt_token.into_inner();
 
-            let identifier = parse_identifier(assignment_tokens.next()?, diagnostics);
+            let lhs = parse_expression(assignment_tokens.next()?, diagnostics)?;
 
             let rhs = assignment_tokens.next()?;
             let rhs_span = diagnostics.span(rhs.as_span());
             let maybe_body = parse_assignment_expr(diagnostics, rhs, rhs_span);
             maybe_body.map(|body| {
                 Stmt::Assign(AssignStmt {
-                    identifier,
+                    left: lhs,
                     expr: body,
                     span,
                 })
@@ -382,15 +386,14 @@ fn parse_statement_inner_rule(
         Rule::assign_op_stmt => {
             let mut assignment_tokens = stmt_token.into_inner();
 
-            let ident_rule = assignment_tokens.next()?;
+            let lhs = assignment_tokens.next()?;
             let op_token = assignment_tokens.next()?;
             let rhs = assignment_tokens.next()?;
 
             let rhs_span = diagnostics.span(rhs.as_span());
             let maybe_body = parse_assignment_expr(diagnostics, rhs, rhs_span);
 
-            finish_assign_op_stmt(span, diagnostics, ident_rule, op_token, maybe_body)
-                .map(Stmt::AssignOp)
+            finish_assign_op_stmt(span, diagnostics, lhs, op_token, maybe_body).map(Stmt::AssignOp)
         }
         Rule::let_expr => {
             let mut let_binding_tokens = stmt_token.into_inner();
@@ -421,8 +424,7 @@ fn parse_statement_inner_rule(
         Rule::while_loop => parse_while_loop(stmt_token, diagnostics),
         Rule::for_loop => parse_for_loop(stmt_token, diagnostics),
         Rule::if_expression => parse_if_expression(stmt_token, diagnostics).map(Stmt::Expression),
-        Rule::fn_app => parse_fn_app(stmt_token, diagnostics).map(Stmt::Expression),
-        Rule::generic_fn_app => parse_generic_fn_app(stmt_token, diagnostics).map(Stmt::Expression),
+        Rule::expression => parse_expression(stmt_token, diagnostics).map(Stmt::Expression),
         Rule::expr_block => parse_expr_block(stmt_token, diagnostics)
             .map(|expr_block| Stmt::Expression(Expression::ExprBlock(expr_block, span.clone()))),
         _ => {
@@ -437,11 +439,11 @@ fn parse_statement_inner_rule(
 fn finish_assign_op_stmt(
     span: Span,
     diagnostics: &mut Diagnostics,
-    ident_rule: Pair<'_>,
+    lhs_rule: Pair<'_>,
     op_token: Pair<'_>,
     maybe_body: Option<Expression>,
 ) -> Option<AssignOpStmt> {
-    let identifier = parse_identifier(ident_rule, diagnostics);
+    let left = parse_expression(lhs_rule, diagnostics)?;
 
     let assign_op = match op_token.as_rule() {
         Rule::ADD_ASSIGN => AssignOp::AddAssign,
@@ -458,7 +460,7 @@ fn finish_assign_op_stmt(
     };
 
     maybe_body.map(|body| AssignOpStmt {
-        identifier,
+        left,
         assign_op,
         expr: body,
         span,
@@ -542,23 +544,61 @@ pub fn parse_expr_block(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Optio
         }
     }
 
-    let mut return_expr = expr.map(Box::new);
+    // Recursively decide if the trailing expression should be a statement or
+    // really is a trailing expression that produces a value.
+    let is_return_value = expr.as_ref().is_some_and(|expr| match expr {
+        // Base case. Expression that produce some kind of value.
+        Expression::BoolValue(..)
+        | Expression::StringValue(..)
+        | Expression::RawStringValue(..)
+        | Expression::NumericValue(..)
+        | Expression::JinjaExpressionValue(..)
+        | Expression::Identifier(..)
+        | Expression::App(..)
+        | Expression::MethodCall { .. }
+        | Expression::ArrayAccess(..)
+        | Expression::FieldAccess(..)
+        | Expression::Array(..)
+        | Expression::Map(..)
+        | Expression::ClassConstructor(..)
+        | Expression::BinaryOperation { .. }
+        | Expression::UnaryOperation { .. }
+        | Expression::Paren(..) => true,
 
-    // Special case for returning if expressions.
-    // TODO: Likely there's no need to separate statements and final expression
-    // since a statement can now be an expression. We just need to allow any
-    // random expression as a statement as mentioned in the grammar file.
-    if return_expr.is_none() && matches!(stmts.last(), Some(Stmt::Expression(Expression::If(..)))) {
-        let Some(Stmt::Expression(e)) = stmts.pop() else {
-            unreachable!();
-        };
+        // If the trailing expression happens to be a block, check if the
+        // block itself has a trailing expression that produces a value.
+        Expression::ExprBlock(block, _) => block.expr.is_some(),
 
-        return_expr = Some(Box::new(e));
-    }
+        // If trailing expression is an if statement, check if the statment
+        // itself has a trailing expression.
+        Expression::If(_, if_branch, else_branch, _) => match if_branch.as_ref() {
+            Expression::ExprBlock(block, _) => block.expr.is_some(),
+            _ => match else_branch.as_ref().map(Box::as_ref) {
+                Some(Expression::ExprBlock(block, _)) => block.expr.is_some(),
+                // This should not happen since branches are always blocks.
+                _ => true,
+            },
+        },
+
+        // TODO: Is this possible?
+        Expression::Lambda(..) => todo!("exprs that evaluate to lambda"),
+    });
+
+    // If the block actually returns a value, keep it as trailing expression.
+    // Otherwise, promote the expression to a statement.
+    let trailing_expr = if is_return_value {
+        expr.map(Box::new)
+    } else {
+        if let Some(expr) = expr {
+            stmts.push(Stmt::Expression(expr));
+        }
+
+        None
+    };
 
     Some(ExpressionBlock {
         stmts,
-        expr: return_expr,
+        expr: trailing_expr,
     })
 }
 

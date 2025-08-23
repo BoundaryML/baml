@@ -47,7 +47,7 @@ serde-wasm-bindgen = "0.6.5"
 time.workspace = true
 tokio = { workspace = true, features = ["sync"] }
 url.workspace = true
-uuid = { version = "1.8", features = ["v4", "js"] }
+uuid = { workspace = true, features = ["v4", "js"] }
 wasm-bindgen = "=0.2.92"
 wasm-bindgen-futures = "0.4.42"
 wasm-logger = { version = "0.2.0" }

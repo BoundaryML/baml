@@ -4,9 +4,10 @@ version = "0.205.0"
 description = "BAML python bindings (pyproject.toml)"
 readme = "README.md"
 authors = [{ "name" = "Boundary", "email" = "contact@boundaryml.com" }]
-
-[project.license]
-file = "LICENSE"
+# This is what controls the Python license file, see
+# https://github.com/PyO3/maturin/issues/2718 and
+# https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license
+license = "Apache-2.0"
 
 [build-system]
 requires = ["maturin>=1.0,<2.0"]

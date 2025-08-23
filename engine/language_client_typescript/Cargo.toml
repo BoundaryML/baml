@@ -29,6 +29,7 @@ dashmap.workspace = true
 env_logger.workspace = true
 futures.workspace = true
 indexmap.workspace = true
+internal-baml-core.workspace = true
 internal-baml-codegen.workspace = true
 log.workspace = true
 once_cell.workspace = true

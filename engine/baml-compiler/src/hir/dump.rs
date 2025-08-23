@@ -123,18 +123,20 @@ impl Statement {
                 .append(RcDoc::space())
                 .append(RcDoc::text(name.clone()))
                 .append(RcDoc::text(";")),
-            Statement::Assign { name, value, .. } => RcDoc::text(name.clone())
+            Statement::Assign { left, value, .. } => left
+                .to_doc()
                 .append(RcDoc::space())
                 .append(RcDoc::text("="))
                 .append(RcDoc::space())
                 .append(value.to_doc())
                 .append(RcDoc::text(";")),
             Statement::AssignOp {
-                name,
+                left,
                 value,
                 assign_op,
                 ..
-            } => RcDoc::text(name.clone())
+            } => left
+                .to_doc()
                 .append(RcDoc::space())
                 .append(assign_op.to_doc())
                 .append(RcDoc::space())
@@ -157,7 +159,7 @@ impl Statement {
                 .append(condition.to_doc())
                 .append(RcDoc::text(";")),
             Statement::Expression { expr, .. } => expr.to_doc(),
-            Statement::SemicolonExpression { expr, .. } => expr.to_doc(),
+            Statement::Semicolon { expr, .. } => expr.to_doc(),
             Statement::While {
                 condition, block, ..
             } => RcDoc::text("while")
@@ -268,7 +270,8 @@ impl LlmFunction {
 
 impl ExprFunction {
     pub fn to_doc(&self) -> RcDoc<'static, ()> {
-        let body_doc = if self.body.statements.is_empty() {
+        // TODO: Why nesting doesn't work if calling self.body.to_doc().nest(2)?
+        let mut body_doc = if self.body.statements.is_empty() {
             RcDoc::nil()
         } else {
             // The key is to apply nest() to the entire content that includes line breaks
@@ -284,6 +287,15 @@ impl ExprFunction {
                 .append(RcDoc::hardline())
                 .nest(2)
         };
+
+        if let Some(expr) = &self.body.trailing_expr {
+            body_doc = body_doc.append(
+                RcDoc::hardline()
+                    .append(expr.to_doc().append(RcDoc::hardline()))
+                    .nest(2),
+            );
+        }
+
         RcDoc::text("function")
             .append(RcDoc::space())
             .append(RcDoc::text(self.name.clone()))
@@ -308,7 +320,7 @@ impl ExprFunction {
 
 impl Block {
     pub fn to_doc(&self) -> RcDoc<'static, ()> {
-        if self.statements.is_empty() {
+        let doc = if self.statements.is_empty() {
             RcDoc::nil()
         } else {
             RcDoc::intersperse(
@@ -318,6 +330,12 @@ impl Block {
                     .collect::<Vec<_>>(),
                 RcDoc::hardline(),
             )
+        };
+
+        if let Some(expr) = &self.trailing_expr {
+            doc.append(RcDoc::hardline()).append(expr.to_doc())
+        } else {
+            doc
         }
     }
 }
@@ -448,7 +466,7 @@ impl Expression {
                         .append(RcDoc::space())
                 })
                 .append(RcDoc::text("}")),
-            Expression::ExpressionBlock(block, _) => RcDoc::text("{")
+            Expression::Block(block, _) => RcDoc::text("{")
                 .append(RcDoc::hardline())
                 .append(block.to_doc().nest(2))
                 .append(RcDoc::hardline())

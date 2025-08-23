@@ -9,7 +9,7 @@ path = "src/upload-traces-main.rs"
 
 [dependencies]
 anyhow.workspace = true
-axum = "0.7"
+axum.workspace = true
 baml-types.workspace = true
 env_logger.workspace = true
 log.workspace = true
