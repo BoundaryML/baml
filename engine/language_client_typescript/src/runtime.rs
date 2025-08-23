@@ -255,7 +255,13 @@ impl BamlRuntime {
             None => None,
         };
 
-        Ok(FunctionResultStream::new(stream, cb, on_tick, tb, client_registry))
+        Ok(FunctionResultStream::new(
+            stream,
+            cb,
+            on_tick,
+            tb,
+            client_registry,
+        ))
     }
 
     #[napi]
@@ -313,7 +319,13 @@ impl BamlRuntime {
             None => None,
         };
 
-        Ok(FunctionResultStream::new(stream, cb, on_tick, tb, client_registry))
+        Ok(FunctionResultStream::new(
+            stream,
+            cb,
+            on_tick,
+            tb,
+            client_registry,
+        ))
     }
 
     #[napi(ts_return_type = "Promise<HTTPRequest>")]
