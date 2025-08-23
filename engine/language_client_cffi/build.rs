@@ -379,9 +379,7 @@ fn main() -> std::io::Result<()> {
                     );
                 }
                 Err(e) => {
-                    eprintln!(
-                        "protoc-gen-go fallback: mise command failed ({e}), relying on PATH"
-                    );
+                    eprintln!("protoc-gen-go fallback: mise command failed ({e}), relying on PATH");
                 }
             }
         }
