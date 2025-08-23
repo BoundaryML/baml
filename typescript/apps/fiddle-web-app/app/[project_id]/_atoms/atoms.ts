@@ -1,4 +1,4 @@
-import { filesAtom, effectiveFeatureFlagsAtom, betaFeatureEnabledAtom } from '@baml/playground-common';
+import { filesAtom, betaFeatureEnabledAtom } from '@baml/playground-common';
 import type { EditorFile } from '../../../app/actions';
 
 // import { ParserDBFunctionTestModel } from "@/lib/exampleProjects"
@@ -81,6 +81,3 @@ export const productTourTestDoneAtom = atomWithStorage<boolean>(
   'test_tour_v1',
   false,
 );
-
-// Feature flags are now handled by @baml/playground-common
-// Use effectiveFeatureFlagsAtom and betaFeatureEnabledAtom from the import above

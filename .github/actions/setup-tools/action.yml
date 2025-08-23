@@ -11,7 +11,7 @@ runs:
   using: "composite"
   steps:
     - name: Setup mise
-      if: inputs.install-mise == 'true'
       uses: jdx/mise-action@v2
       with:
-        cache: false
+        install_args: "protoc-gen-go"
+        cache: true

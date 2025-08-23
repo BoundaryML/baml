@@ -40,7 +40,8 @@ fn ContinueNested() -> int {
 //     should_continue = false;
 //     } 
 //   }
-//   return result;
+//
+//   result
 // }
 //
 // function ContinueNested() {

@@ -19,7 +19,8 @@ fn GCD(mut a: int, mut b: int) -> int {
 //     b = b - a;
 //     } 
 //   }
-//   return a;
+//
+//   a
 // }
 //
 // class std::Request {

@@ -88,7 +88,7 @@ fn get_bytecode_output(content: &str) -> Result<String, String> {
                     baml_vm::Object::Function(func) => {
                         output.push_str(&format!("Function: {}\n", func.name));
                         output.push_str(&baml_vm::debug::display_bytecode(
-                            &func,
+                            func,
                             &baml_vm::EvalStack::default(),
                             &objects,
                             &globals,

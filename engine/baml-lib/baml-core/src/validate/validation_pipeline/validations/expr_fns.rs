@@ -140,6 +140,9 @@ fn validate_stmt(ctx: &mut Context<'_>, stmt: &Stmt, scope: &HashSet<String>) {
         Stmt::Expression(expr) => {
             validate_expression(ctx, expr, scope);
         }
+        Stmt::Semicolon(expr) => {
+            validate_expression(ctx, expr, scope);
+        }
         Stmt::Break(_) | Stmt::Continue(_) => {}
         Stmt::CForLoop(stmt) => {
             // we have to clone the scope anyway for the inner expression block.

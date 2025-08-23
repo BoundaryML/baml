@@ -977,7 +977,7 @@ impl Project {
     /// Iterates over all generators and prints error messages if version mismatches are found.
     pub fn check_version_on_save(&self, feature_flags: &[String]) -> Option<String> {
         let mut first_error_message = None;
-        if let Ok(generators) = self.list_generators(&vec![]) {
+        if let Ok(generators) = self.list_generators(&[]) {
             for gen in generators.iter() {
                 if let Some(message) = self.check_version(gen, false) {
                     if first_error_message.is_none() {
@@ -992,7 +992,7 @@ impl Project {
 
     /// Returns true if any generator produces TypeScript output.
     pub fn is_typescript_generator_present(&self, feature_flags: &[String]) -> bool {
-        if let Ok(generators) = self.list_generators(&vec![]) {
+        if let Ok(generators) = self.list_generators(&[]) {
             generators
                 .iter()
                 .any(|g| g.output_type.to_lowercase() == "typescript")

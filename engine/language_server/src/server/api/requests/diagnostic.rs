@@ -108,7 +108,7 @@ fn diagnostics_report(
     project: Arc<Mutex<Project>>,
     url: &Url,
 ) -> Result<DocumentDiagnosticReportResult> {
-    let diagnostics = file_diagnostics(project, url, &vec![]);
+    let diagnostics = file_diagnostics(project, url, &[]);
     Ok(DocumentDiagnosticReportResult::Report(
         DocumentDiagnosticReport::Full(RelatedFullDocumentDiagnosticReport {
             related_documents: None,

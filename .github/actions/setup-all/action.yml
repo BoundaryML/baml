@@ -77,10 +77,6 @@ inputs:
     description: 'Go version to install'
     required: false
     default: '1.24'
-  go-install-protoc-gen-go:
-    description: 'Install protoc-gen-go'
-    required: false
-    default: 'true'
   go-install-goimports:
     description: 'Install goimports'
     required: false
