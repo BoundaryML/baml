@@ -1,4 +1,4 @@
-use axum::{response::Html, routing::get, Router};
+use axum::{routing::get, Router};
 use flate2::read::GzDecoder;
 use sha2::{Digest, Sha256};
 use std::io::Cursor;
@@ -83,10 +83,6 @@ where
             .await
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)
     }
-}
-
-async fn handler() -> Html<&'static str> {
-    Html("<h1>Playground Server</h1><p>Axum HTTP server is running!</p>")
 }
 
 async fn health_check() -> &'static str {

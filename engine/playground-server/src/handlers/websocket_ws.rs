@@ -1,11 +1,8 @@
-use std::sync::Arc;
-
 use axum::{
     extract::{ws::Message, State, WebSocketUpgrade},
     response::IntoResponse,
 };
 use futures::{SinkExt, StreamExt};
-use tokio::sync::RwLock;
 
 use crate::server::AppState;
 

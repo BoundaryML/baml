@@ -1,16 +1,10 @@
-use std::sync::Arc;
-
 use axum::{
     extract::{ws::Message, State, WebSocketUpgrade},
     response::IntoResponse,
 };
 use futures::{SinkExt, StreamExt};
-use tokio::sync::RwLock;
 
-use base64::{engine::general_purpose, Engine as _};
-use mime_guess::from_path;
 use serde_json::Value;
-use webbrowser;
 
 use crate::{definitions::PreSendToWasmMessage, server::AppState};
 
@@ -35,7 +29,7 @@ where
             if let Ok(json) = serde_json::from_str::<Value>(msg) {
                 let rpc_id = json["rpcId"].clone();
                 let rpc_method = json["rpcMethod"].as_str().unwrap_or("");
-                let data = &json["data"];
+                let _data = &json["data"];
                 tracing::info!("Handling RPC request: {:?}", rpc_method);
                 match rpc_method {
                     "INITIALIZED" => {
