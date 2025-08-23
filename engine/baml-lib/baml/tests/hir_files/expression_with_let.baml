@@ -5,7 +5,8 @@ fn AddOne(x: int) -> int {
 
 // function AddOne(x) {
 //   let y = x;
-//   return y;
+//
+//   y
 // }
 //
 // class std::Request {

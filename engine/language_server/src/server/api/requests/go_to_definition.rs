@@ -48,11 +48,18 @@ impl SyncRequestHandler for GotoDefinition {
         let project = session
             .get_or_create_project(&path)
             .expect("Ensured that a project db exists");
-        project
-            .lock()
-            .unwrap()
-            .update_runtime(Some(notifier))
-            .internal_error()?;
+        {
+            let default_flags = vec!["beta".to_string()];
+            project.lock().unwrap().update_runtime(
+                Some(notifier),
+                session
+                    .baml_settings
+                    .feature_flags
+                    .as_ref()
+                    .unwrap_or(&default_flags),
+            )
+        }
+        .internal_error()?;
 
         let document_key = DocumentKey::from_url(
             &project.lock().unwrap().baml_project.root_dir_name,

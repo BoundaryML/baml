@@ -23,15 +23,16 @@ use crate::{
 pub fn compile(ast: &ParserDatabase) -> anyhow::Result<BamlVmProgram> {
     // Stage 1: AST -> HIR
     // eprintln!("AST:\n{:#?}", ast.ast);
+
     let hir = hir::Hir::from_ast(&ast.ast);
+
+    // eprintln!("\nHIR:\n{:#?}", hir);
 
     // TODO: THIR is built twice, once for validations, once for compilation.
     // Fix this.
     let thir = thir::typecheck::typecheck(&hir, &mut Diagnostics::new("dummy".into()));
 
     // eprintln!("\nTHIR:\n{:#?}", thir);
-
-    // eprintln!("\nHIR:\n{:#?}", hir);
 
     // Stage 2: HIR -> Bytecode
     compile_thir_to_bytecode(&thir)
@@ -77,6 +78,13 @@ fn compile_thir_to_bytecode(
         }
 
         resolved_classes.insert(class.name.clone(), class_fields);
+    }
+
+    for class in thir.classes.values() {
+        for method in &class.methods {
+            let func_name = format!("{}.{}", class.name, method.name);
+            resolved_globals.insert(func_name, GlobalIndex::from_raw(resolved_globals.len()));
+        }
     }
 
     let native_fns = baml_vm::native::functions();
@@ -134,6 +142,29 @@ fn compile_thir_to_bytecode(
 
         let object_index = objects.insert(Object::Class(bytecode_class));
         globals.push(Value::Object(object_index));
+    }
+
+    for class in thir.classes.values() {
+        for method in &class.methods {
+            let mut class_alloc_patch_list = Vec::new();
+
+            let mut bytecode_function = compile_thir_function(
+                method,
+                &resolved_globals,
+                &resolved_classes,
+                &llm_functions,
+                &mut loop_var_counter,
+                &mut objects,
+                &mut class_alloc_patch_list,
+            )?;
+
+            bytecode_function.name = format!("{}.{}", class.name, method.name);
+
+            // Add the function to the globals and objects pools.
+            let object_index = objects.insert(Object::Function(bytecode_function));
+            fn_class_patch_lists.push((object_index, class_alloc_patch_list));
+            globals.push(Value::Object(object_index));
+        }
     }
 
     // resolve classes into their instance creation insns now that we've got their locations.
@@ -428,12 +459,16 @@ impl<'g> HirCompiler<'g> {
             self.compile_statement(statement);
         }
 
-        let scope_has_ending_expr = block.statements.last().is_some_and(|stmt| match stmt {
-            thir::Statement::Expression { expr, .. } => expr.produces_final_value(),
-            _ => false,
-        });
+        let scope_has_trailing_expr = match &block.trailing_expr {
+            None => false,
 
-        self.exit_scope(scope_has_ending_expr);
+            Some(trailing_expr) => {
+                self.compile_expression(trailing_expr);
+                true
+            }
+        };
+
+        self.exit_scope(scope_has_trailing_expr);
     }
 
     /// Used to compile nested blocks within functions.
@@ -451,16 +486,29 @@ impl<'g> HirCompiler<'g> {
             thir::Statement::Declare { name, .. } => {
                 self.declare_mut(name);
             }
-            thir::Statement::Assign { name, value, .. } => {
+            thir::Statement::Assign { left, value, .. } => {
                 self.compile_expression(value);
+
+                // TODO: Hanlde field & array accessors.
+                let name = match &left {
+                    thir::Expr::Var(name, _) => name,
+                    _ => panic!("left side of assignment is not an identifier: {left:?}"),
+                };
+
                 self.emit(Instruction::StoreVar(self.locals[name]));
             }
             thir::Statement::AssignOp {
-                name,
+                left,
                 value,
                 assign_op,
                 ..
             } => {
+                // TODO: Handle field & array accessors.
+                let name = match &left {
+                    thir::Expr::Var(name, _) => name,
+                    _ => panic!("left side of assignment is not an identifier: {left:?}"),
+                };
+
                 self.emit(Instruction::LoadVar(self.locals[name]));
                 self.compile_expression(value);
 
@@ -521,8 +569,8 @@ impl<'g> HirCompiler<'g> {
 
                 let len_method = *self
                     .globals
-                    .get("len")
-                    .expect("native len() for array length is not in globals?");
+                    .get("std.Array.len")
+                    .expect("native std.Array.len() for array length is not in globals?");
 
                 // {
 
@@ -781,7 +829,7 @@ impl<'g> HirCompiler<'g> {
                     self.emit(Instruction::LoadConst(const_index));
                 }
 
-                _ => panic!("unsupported atom: {:#?}", value),
+                _ => panic!("unsupported atom: {value:#?}"),
             },
 
             thir::Expr::Block(block, _) => {
@@ -801,9 +849,29 @@ impl<'g> HirCompiler<'g> {
                 self.emit(Instruction::LoadArrayElement);
             }
 
-            thir::Expr::FieldAccess { .. } => {
-                unimplemented!("field access compilation")
-            }
+            thir::Expr::FieldAccess { base, field, .. } => match base.meta().1.as_ref() {
+                Some(hir::Type::Class(class_name, _)) => {
+                    let Some(class_index) = self.globals.get(class_name) else {
+                        panic!("undefined class: {class_name}");
+                    };
+
+                    let Some(resolved_fields) = self.classes.get(class_name) else {
+                        panic!("undefined class: {class_name}");
+                    };
+
+                    let Some(&field_index) = resolved_fields.get(field) else {
+                        panic!("undefined field: {class_name}.{field}");
+                    };
+
+                    self.compile_expression(base);
+                    self.emit(Instruction::LoadField(field_index));
+                }
+
+                other => panic!(
+                    "field access must be on classes, but expr `{}` got: {other:?}",
+                    base.dump_str()
+                ),
+            },
 
             thir::Expr::Var(name, _) => {
                 if let Some(&index) = self.locals.get(name) {
@@ -859,12 +927,20 @@ impl<'g> HirCompiler<'g> {
                 ..
             } => {
                 let thir::Expr::Var(method, _) = method.as_ref() else {
-                    panic!("method calls must be on variables");
+                    panic!("method calls must be identifiers");
+                };
+
+                let func_name = match receiver.meta().1.as_ref() {
+                    Some(hir::Type::Class(class_name, _)) => format!("{class_name}.{method}"),
+
+                    Some(hir::Type::Array(_, _)) => format!("std.Array.{method}"),
+
+                    other => panic!("method calls must be on classes, got: {other:#?}"),
                 };
 
                 // Push the function onto the stack
-                let Some(&index) = self.globals.get(method.as_str()) else {
-                    panic!("undefined method: {method}");
+                let Some(&index) = self.globals.get(&func_name) else {
+                    panic!("undefined method: {func_name}");
                 };
 
                 self.emit(Instruction::LoadGlobal(index));
@@ -886,7 +962,7 @@ impl<'g> HirCompiler<'g> {
                 meta,
             } => {
                 let Some(&class_index) = self.globals.get(class_name) else {
-                    panic!("undefined class: {}", class_name);
+                    panic!("undefined class: {class_name}");
                 };
 
                 // Emit allocation with bogus index. It will be patched later.
@@ -898,41 +974,80 @@ impl<'g> HirCompiler<'g> {
                     global: class_index,
                 });
 
+                let instance_local_index = self.locals.len() + 1;
+
                 let mut defined_named_fields = std::collections::HashSet::new();
 
                 // Process fields in order
                 for (field_name, value) in fields {
+                    let Some(resolved_fields) = self.classes.get(class_name) else {
+                        panic!("undefined class: {class_name}");
+                    };
+
+                    let Some(&field_index) = resolved_fields.get(field_name) else {
+                        panic!("undefined field: {class_name}.{field_name}");
+                    };
+
+                    self.emit(Instruction::LoadVar(instance_local_index));
                     self.compile_expression(value);
-
-                    let Some(classes) = self.classes.get(class_name) else {
-                        panic!("undefined class: {}", class_name);
-                    };
-
-                    let Some(&field_index) = classes.get(field_name) else {
-                        panic!("undefined field: {}.{}", class_name, field_name);
-                    };
-
                     self.emit(Instruction::StoreField(field_index));
+
                     defined_named_fields.insert(field_name.as_str());
                 }
 
                 if let Some(spread) = spread {
-                    self.compile_expression(spread);
-
-                    // Pseudo local, user didn't declare it.
-                    let spread_local = self.locals.len() + 2;
-                    self.emit(Instruction::LoadVar(spread_local - 1));
-
-                    let Some(classes) = self.classes.get(class_name) else {
-                        panic!("undefined class: {}", class_name);
+                    let Some(resolved_fields) = self.classes.get(class_name) else {
+                        panic!("undefined class: {class_name}");
                     };
 
-                    for (field_name, &field_index) in classes {
+                    self.compile_expression(spread);
+
+                    // Pseudo local, user didn't declare it. + 2 because stack is:
+                    //
+                    // [a, b, c, allocated_instance, spread_local]
+                    //  ^  ^  ^         ^                    ^
+                    //  |  |  |         |                    |
+                    //  |  |  |         |                    +-- spread (+2)
+                    //  |  |  |         |
+                    //  +--+--+         +-- Not yet tracked (+1)
+                    //     |
+                    //     |
+                    //     +-- These are tracked locals.
+                    let spread_local_index = instance_local_index + 1;
+
+                    let mut pop_spread_local = false;
+
+                    // Not sorted cause of hashmap, tried using sorted map and
+                    // it didn't work either, figure out what's going on.
+                    let mut sorted_fields = resolved_fields
+                        .iter()
+                        .map(|(name, index)| (name, *index))
+                        .collect::<Vec<_>>();
+                    sorted_fields.sort_by_key(|(_, index)| *index);
+
+                    for (field_name, field_index) in sorted_fields {
                         if !defined_named_fields.contains(field_name.as_str()) {
-                            self.emit(Instruction::LoadVar(spread_local));
+                            // Now load allocated instance again:
+                            // [a, b, c, allocated_instance, spread_local, allocated_instance]
+                            self.emit(Instruction::LoadVar(instance_local_index));
+
+                            // Load spread again:
+                            // [a, b, c, allocated_instance, spread_local, allocated_instance, spread_local]
+                            self.emit(Instruction::LoadVar(spread_local_index));
+                            // Load field:
+                            // [a, b, c, allocated_instance, spread_local, allocated_instance, field_value]
                             self.emit(Instruction::LoadField(field_index));
+                            // Store field:
+                            // [a, b, c, allocated_instance, spread_local]
                             self.emit(Instruction::StoreField(field_index));
+
+                            pop_spread_local = true;
                         }
+                    }
+
+                    // Get rid of spread local, won't be used anymore.
+                    if pop_spread_local {
+                        self.emit(Instruction::Pop(1));
                     }
                 }
             }
@@ -1178,7 +1293,13 @@ impl<'g> HirCompiler<'g> {
     }
 
     /// Drops the current block scope we're in.
-    fn exit_scope(&mut self, scope_has_ending_expr: bool) {
+    fn exit_scope(&mut self, scope_has_trailing_expr: bool) {
+        // Emitting an instruction requires an existing scope, so if we need to
+        // emit a return we will do so before popping the current scope.
+        if self.scopes.len() == 1 {
+            self.emit(Instruction::Return);
+        }
+
         let scope = self
             .scopes
             .pop()
@@ -1186,16 +1307,19 @@ impl<'g> HirCompiler<'g> {
 
         self.locals_in_scope[scope.id] = self.locals.clone();
 
-        // Depth 0 is function body block. That one ends with return.
+        // Depth 0 is function body block. That one ends with return. Depth >= 1
+        // are nested blocks, those need to pop all their scoped locals and
+        // possibly push a value on top of the stack.
         if scope.depth >= 1 && !scope.locals.is_empty() {
             // Keep value on top of stack if block has a return expression.
             // Otherwise just pop locals.
-            if scope_has_ending_expr {
+            if scope_has_trailing_expr {
                 self.emit(Instruction::PopReplace(scope.locals.len()));
             } else {
                 self.emit(Instruction::Pop(scope.locals.len()));
             }
 
+            // Drop locals in this scope.
             for local in scope.locals {
                 self.locals.remove(&local);
             }
@@ -1229,76 +1353,6 @@ impl<'g> HirCompiler<'g> {
         }
 
         loop_info.break_patch_list
-    }
-}
-
-impl thir::Expr<(Span, Option<Type>)> {
-    /// Returns true if the block ends with an expression that has a final value.
-    ///
-    /// For example, it would return true for this block:
-    ///
-    /// ```ignore
-    /// let a = {
-    ///     let b = 1;
-    ///     if b == 1 {
-    ///         1
-    ///     } else {
-    ///         2
-    ///     }
-    /// };
-    /// ```
-    ///
-    /// But false for this one:
-    ///
-    /// ```ignore
-    /// let mut a = 0;
-    /// if a == 0 {
-    ///     a = 1;
-    /// } else {
-    ///     a = 2;
-    /// }
-    /// ```
-    ///
-    /// TODO: This seems completely unecessary, the typechecker will already
-    /// check at some point that return values match the expected type. After
-    /// that we should alreay have enough information to decide whether a block
-    /// returns or not.
-    fn produces_final_value(&self) -> bool {
-        match self {
-            // First call will happen on a block. Recurse on the final expression.
-            thir::Expr::Block(block, _) => match block.statements.last() {
-                Some(thir::Statement::Expression { expr, .. }) => expr.produces_final_value(),
-
-                // Does not produce a value.
-                _ => false,
-            },
-
-            // If statements as last expression need to check if they return
-            // any value. We won't recurse into the else branch because both
-            // need to match, if one of them returns a value the other one must
-            // return the same type. This is typechecker bug if it's wrong, so
-            // I won't bother here.
-            thir::Expr::If(_, if_branch, ..) => if_branch.produces_final_value(),
-
-            // This is an expression that produces a value, so true. We're
-            // forcing non-exhaustive match here because other types of
-            // expressions that we add in the future might need to be considered.
-            thir::Expr::List(_, _)
-            | thir::Expr::Map(_, _)
-            | thir::Expr::ArrayAccess { .. }
-            | thir::Expr::FieldAccess { .. }
-            | thir::Expr::MethodCall { .. }
-            | thir::Expr::Value(_)
-            | thir::Expr::Call { .. }
-            | thir::Expr::ClassConstructor { .. }
-            | thir::Expr::BinaryOperation { .. }
-            | thir::Expr::UnaryOperation { .. }
-            | thir::Expr::Var(_, _)
-            | thir::Expr::Builtin(_, _)
-            | thir::Expr::Paren(_, _) => true,
-
-            thir::Expr::Function(_, _, _) => todo!("function calls"),
-        }
     }
 }
 
@@ -1797,8 +1851,10 @@ mod tests {
                 "main",
                 vec![
                     Instruction::AllocInstance(ObjectIndex::from_raw(2)),
+                    Instruction::LoadVar(1),
                     Instruction::LoadConst(0),
                     Instruction::StoreField(0),
+                    Instruction::LoadVar(1),
                     Instruction::LoadConst(1),
                     Instruction::StoreField(1),
                     Instruction::LoadVar(1),
@@ -1809,7 +1865,6 @@ mod tests {
     }
 
     #[test]
-    // #[ignore = "HIR doesn't support spread operators yet"]
     fn class_constructor_with_spread_operator() -> anyhow::Result<()> {
         assert_compiles(Program {
             source: r#"
@@ -1817,10 +1872,11 @@ mod tests {
                     x int
                     y int
                     z int
+                    w int
                 }
 
                 fn default_point() -> Point {
-                    Point { x: 0, y: 0, z: 0 }
+                    Point { x: 0, y: 0, z: 0, w: 0 }
                 }
 
                 fn main() -> Point {
@@ -1832,8 +1888,10 @@ mod tests {
                 "main",
                 vec![
                     Instruction::AllocInstance(ObjectIndex::from_raw(3)),
+                    Instruction::LoadVar(1),
                     Instruction::LoadConst(0),
                     Instruction::StoreField(0),
+                    Instruction::LoadVar(1),
                     Instruction::LoadConst(1),
                     Instruction::StoreField(1),
                     Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
@@ -1843,6 +1901,61 @@ mod tests {
                     Instruction::LoadField(2),
                     Instruction::StoreField(2),
                     Instruction::LoadVar(1),
+                    Instruction::LoadVar(2),
+                    Instruction::LoadField(3),
+                    Instruction::StoreField(3),
+                    Instruction::Pop(1),
+                    Instruction::LoadVar(1),
+                    Instruction::Return,
+                ],
+            )],
+        })
+    }
+
+    #[test]
+    fn class_constructor_with_spread_operator_does_not_break_locals() -> anyhow::Result<()> {
+        assert_compiles(Program {
+            source: r#"
+                class Point {
+                    x int
+                    y int
+                    z int
+                    w int
+                }
+
+                fn default_point() -> Point {
+                    Point { x: 0, y: 0, z: 0, w: 0 }
+                }
+
+                fn main() -> int {
+                    let p = Point { x: 1, y: 2, ..default_point() };
+                    let x = 0;
+                    x
+                }
+            "#,
+            expected: vec![(
+                "main",
+                vec![
+                    Instruction::AllocInstance(ObjectIndex::from_raw(3)),
+                    Instruction::LoadVar(1),
+                    Instruction::LoadConst(0),
+                    Instruction::StoreField(0),
+                    Instruction::LoadVar(1),
+                    Instruction::LoadConst(1),
+                    Instruction::StoreField(1),
+                    Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
+                    Instruction::Call(0),
+                    Instruction::LoadVar(1),
+                    Instruction::LoadVar(2),
+                    Instruction::LoadField(2),
+                    Instruction::StoreField(2),
+                    Instruction::LoadVar(1),
+                    Instruction::LoadVar(2),
+                    Instruction::LoadField(3),
+                    Instruction::StoreField(3),
+                    Instruction::Pop(1),
+                    Instruction::LoadConst(2),
+                    Instruction::LoadVar(2),
                     Instruction::Return,
                 ],
             )],
@@ -2743,7 +2856,7 @@ mod tests {
                 source: "
                 fn EarlyReturn(x: int) -> int {
                   if (x == 42) { return 1; }
-                  
+
                   x + 5
                 }
             ",
@@ -2778,7 +2891,7 @@ mod tests {
                   // NOTE: currently there's no empty returns.
 
                   if (a == 0) { return 0; }
-                  
+
                   {
                      let b = 1;
                      if (a != b) {

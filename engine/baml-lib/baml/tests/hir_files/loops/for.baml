@@ -13,7 +13,8 @@ fn Sum(xs: int[]) -> int {
 //   for x in xs {
 //   result += x;
 //   }
-//   return result;
+//
+//   result
 // }
 //
 // class std::Request {

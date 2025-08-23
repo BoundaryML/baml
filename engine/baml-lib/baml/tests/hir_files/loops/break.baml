@@ -37,7 +37,8 @@ fn Nested() -> int {
 //     result = result * limit;
 //     limit = limit - 1;
 //   }
-//   return result;
+//
+//   result
 // }
 //
 // function Nested() {
@@ -50,7 +51,8 @@ fn Nested() -> int {
 //     a = a + 1;
 //     break;
 //   }
-//   return a;
+//
+//   a
 // }
 //
 // class std::Request {

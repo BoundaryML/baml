@@ -35,7 +35,8 @@ fn WithStack(x: int) -> int {
 //   if x == 42 {
 //   return 1;
 //   } 
-//   return x + 5;
+//
+//   x + 5
 // }
 //
 // function WithStack(x) {
@@ -58,7 +59,8 @@ fn WithStack(x: int) -> int {
 //       } 
 //     }
 //   }
-//   return 7;
+//
+//   7
 // }
 //
 // class std::Request {

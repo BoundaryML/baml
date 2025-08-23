@@ -50,27 +50,44 @@ pub fn typecheck(hir: &Hir, diagnostics: &mut Diagnostics) -> THir<ExprMetadata>
 
     // Add expr functions to typing context
     for func in &hir.expr_functions {
-        let arrow_type = Type::Function(
+        let func_type = Type::Function(
             hir::Function {
                 params: func.parameters.iter().map(|p| p.r#type.clone()).collect(),
                 return_type: Box::new(func.return_type.clone()),
             },
             hir::TypeMeta::default(),
         );
-        typing_context.symbols.insert(func.name.clone(), arrow_type);
+        typing_context.symbols.insert(func.name.clone(), func_type);
+    }
+
+    for class in &hir.classes {
+        for method in &class.methods {
+            let func_type = Type::Function(
+                hir::Function {
+                    params: method.parameters.iter().map(|p| p.r#type.clone()).collect(),
+                    return_type: Box::new(method.return_type.clone()),
+                },
+                hir::TypeMeta::default(),
+            );
+            typing_context
+                .symbols
+                .insert(format!("{}.{}", class.name, method.name), func_type);
+        }
     }
 
     // Add LLM functions to typing context
     for func in &hir.llm_functions {
-        let arrow_type = Type::Function(
+        let func_type = Type::Function(
             hir::Function {
                 params: func.parameters.iter().map(|p| p.r#type.clone()).collect(),
                 return_type: Box::new(func.return_type.clone()),
             },
             hir::TypeMeta::default(),
         );
-        typing_context.symbols.insert(func.name.clone(), arrow_type);
+        typing_context.symbols.insert(func.name.clone(), func_type);
     }
+
+    // TODO: Handle these uniformly
 
     // Add builtin functions to typing context
     // std::fetch_value<T>(std::Request) -> T
@@ -81,6 +98,17 @@ pub fn typecheck(hir: &Hir, diagnostics: &mut Diagnostics) -> THir<ExprMetadata>
     typing_context.symbols.insert(
         crate::builtin::functions::FETCH_VALUE.to_string(),
         fetch_value_type,
+    );
+    // Len.
+    typing_context.symbols.insert(
+        "std.Array.len".to_string(),
+        TypeM::Function(
+            crate::hir::Function {
+                params: vec![], // TODO: It's technically generic like the one above. IDK why it works.
+                return_type: Box::new(Type::Int(hir::TypeMeta::default())),
+            },
+            TypeMeta::default(),
+        ),
     );
 
     // Add global assignments to typing context
@@ -140,9 +168,61 @@ pub fn typecheck(hir: &Hir, diagnostics: &mut Diagnostics) -> THir<ExprMetadata>
         });
     }
 
+    let mut thir_classes = BamlMap::new();
+
+    for (name, class) in &classes {
+        let mut methods = vec![];
+        for method in &class.methods {
+            let mut func_context = typing_context.clone();
+
+            // Add parameters to context
+            for param in &method.parameters {
+                func_context.vars.insert(
+                    param.name.clone(),
+                    VarInfo {
+                        ty: param.r#type.clone(),
+                        mut_var_info: param.is_mutable.then(|| MutableVarInfo {
+                            ty_infer_span: Some(param.span.clone()),
+                        }),
+                    },
+                );
+            }
+
+            func_context.function_return_type = Some(&method.return_type);
+
+            // Convert HIR block to THIR block with type inference
+            let typed_body = typecheck_block(&method.body, &mut func_context, diagnostics);
+
+            methods.push(thir::ExprFunction {
+                name: method.name.clone(),
+                parameters: method
+                    .parameters
+                    .iter()
+                    .map(|p| thir::Parameter {
+                        name: p.name.clone(),
+                        r#type: p.r#type.clone(),
+                        span: p.span.clone(),
+                    })
+                    .collect(),
+                return_type: method.return_type.clone(),
+                body: typed_body,
+                span: method.span.clone(),
+            });
+        }
+        thir_classes.insert(
+            name.clone(),
+            thir::Class {
+                name: name.clone(),
+                fields: class.fields.clone(),
+                methods,
+                span: class.span.clone(),
+            },
+        );
+    }
+
     THir {
         llm_functions,
-        classes,
+        classes: thir_classes,
         enums,
         expr_functions,
         global_assignments: BamlMap::new(),
@@ -242,76 +322,52 @@ fn typecheck_block(
     let mut statements = vec![];
     let env = BamlMap::new();
 
-    // Process statements
+    let mut block_type: Option<TypeM<TypeMeta>> = None;
+
+    // Process statements. Return type errors are checked here.
     for stmt in &block.statements {
         if let Some(typed_stmt) = typecheck_statement(stmt, context, diagnostics) {
+            if let thir::Statement::Return { expr, .. } = &typed_stmt {
+                block_type = expr.meta().1.clone();
+            }
+
             // Context is already updated in typecheck_statement, no need to update again
             statements.push(typed_stmt);
         }
     }
 
-    // Get the return value from the last statement
-    // Note: context has been updated with all let bindings from statements above
-    let (return_value, last_is_return) = if let Some(last_stmt) = block.statements.last() {
-        match last_stmt {
-            hir::Statement::Expression { expr, .. } => {
-                // For expression statements that are the last statement, we already processed them above
-                // so we need to avoid calling typecheck_expression again to prevent duplicate errors.
-                // Instead, find the corresponding typed statement and extract its return value.
-                if let Some(thir::Statement::Expression {
-                    expr: typed_expr, ..
-                }) = statements.last()
-                {
-                    (typed_expr.clone(), true)
-                } else {
-                    // Fallback if we can't find the typed statement
-                    (typecheck_expression(expr, context, diagnostics), true)
-                }
-            }
-            hir::Statement::Return { expr, .. } => {
-                // For return statements that are the last statement, we already processed them above
-                // so we need to avoid calling typecheck_expression again to prevent duplicate errors.
-                if let Some(thir::Statement::Return {
-                    expr: typed_expr, ..
-                }) = statements.last()
-                {
-                    (typed_expr.clone(), true)
-                } else {
-                    // Fallback if we can't find the typed statement
-                    (typecheck_expression(expr, context, diagnostics), true)
-                }
-            }
-            _ => {
-                // No explicit return, default to null
-                (
-                    thir::Expr::Value(BamlValueWithMeta::Null((
-                        internal_baml_diagnostics::Span::fake(),
-                        None,
-                    ))),
-                    false,
-                )
-            }
-        }
-    } else {
-        // Empty block, default to null
-        (
-            thir::Expr::Value(BamlValueWithMeta::Null((
-                internal_baml_diagnostics::Span::fake(),
-                None,
-            ))),
-            false,
-        )
-    };
-
-    // // Remove the last statement if it was converted to return value
-    // if last_is_return && !statements.is_empty() {
-    //     statements.pop();
+    // TODO: Typechecking here is broken. A nested block can have return types
+    // which are completely unrelated to the trailing expression type. Example:
+    //
+    // ```baml
+    // fn foo(b: bool) -> string {
+    //     let a = {
+    //         if (b) {
+    //             return "hello";   // Returns string from function
+    //         }
+    //         1                     // Returns int from block
+    //     };
+    //
+    //     return a;                 // Type error
     // }
+    // ```
+    //
+    // Function type checking needs to keep track of all the returns to match
+    // their types. That includes nested returns. Blocks only have one actual
+    // type, that is, the type of the trailing expression.
+    let trailing_expr = block.trailing_expr.as_ref().map(|expr| {
+        let typed_expr = typecheck_expression(expr, context, diagnostics);
+
+        block_type = typed_expr.meta().1.clone();
+
+        typed_expr
+    });
 
     thir::Block {
         env,
         statements,
-        return_value,
+        trailing_expr,
+        ty: block_type,
         span: internal_baml_diagnostics::Span::fake(),
     }
 }
@@ -361,7 +417,7 @@ fn typecheck_statement(
                 span: span.clone(),
             })
         }
-        hir::Statement::SemicolonExpression { expr, span } => {
+        hir::Statement::Semicolon { expr, span } => {
             let typed_expr = typecheck_expression(expr, context, diagnostics);
             Some(thir::Statement::SemicolonExpression {
                 expr: typed_expr,
@@ -418,9 +474,16 @@ fn typecheck_statement(
             })
         }
         hir::Statement::Assign {
-            name, value, span, ..
+            left, value, span, ..
         } => {
             let typed_value = typecheck_expression(value, context, diagnostics);
+            let typed_left = typecheck_expression(left, context, diagnostics);
+
+            // TODO: Handle field & array accessors.
+            let name = match &left {
+                hir::Expression::Identifier(name, _) => name,
+                _ => panic!("left side of assignment is not an identifier: {left:?}"),
+            };
 
             // validate/update type.
             match context.vars.get_mut(name) {
@@ -466,18 +529,25 @@ fn typecheck_statement(
             }
 
             Some(thir::Statement::Assign {
-                name: name.clone(),
+                left: typed_left,
                 value: typed_value,
             })
         }
         hir::Statement::AssignOp {
-            name,
+            left,
             value,
             span,
             assign_op,
             ..
         } => {
+            let typed_left = typecheck_expression(left, context, diagnostics);
             let typed_value = typecheck_expression(value, context, diagnostics);
+
+            // TODO: Handle field & array accessors.
+            let name = match &left {
+                hir::Expression::Identifier(name, _) => name,
+                _ => panic!("left side of assignment is not an identifier: {left:?}"),
+            };
 
             // TODO: Extract in funciton, repeated above.
             // validate/update type.
@@ -524,7 +594,7 @@ fn typecheck_statement(
             }
 
             Some(thir::Statement::AssignOp {
-                name: name.clone(),
+                left: typed_left,
                 value: typed_value,
                 assign_op: *assign_op,
                 span: span.clone(),
@@ -871,8 +941,8 @@ fn typecheck_expression(
             }
 
             let (param_types, return_type, is_known_function) = match &func_type {
-                Some(hir::TypeM::Function(arrow, _)) => {
-                    (arrow.params.clone(), Some(*arrow.return_type.clone()), true)
+                Some(hir::TypeM::Function(f, _)) => {
+                    (f.params.clone(), Some(*f.return_type.clone()), true)
                 }
                 _ => {
                     diagnostics.push_error(DatamodelError::new_validation_error(
@@ -958,15 +1028,135 @@ fn typecheck_expression(
             args,
             span,
         } => {
-            // TODO: Typecheck method call.
-            thir::Expr::MethodCall {
-                receiver: Arc::new(typecheck_expression(receiver, context, diagnostics)),
-                method: Arc::new(thir::Expr::Var(method.clone(), (span.clone(), None))),
-                args: args
-                    .iter()
+            let typed_receiver = typecheck_expression(receiver, context, diagnostics);
+
+            // TODO: Flatten this nested logic.
+            let full_name = match &typed_receiver.meta().1 {
+                Some(hir::Type::Class(class_name, _)) => match context.classes.get(class_name) {
+                    Some(class_def) => match class_def.methods.iter().find(|m| &m.name == method) {
+                        Some(method_def) => Some(format!("{class_name}.{method}")),
+                        None => {
+                            diagnostics.push_error(DatamodelError::new_validation_error(
+                                &format!("Class `{class_name}` has no method `{method}`"),
+                                span.clone(),
+                            ));
+                            None
+                        }
+                    },
+                    None => {
+                        diagnostics.push_error(DatamodelError::new_validation_error(
+                            &format!("Expression resolves to unknown class `{class_name}`"),
+                            receiver.span(),
+                        ));
+                        None
+                    }
+                },
+                // TODO: Handle this uniformly with the other cases.
+                Some(hir::Type::Array(_, _)) => match method.as_str() {
+                    "len" => Some("std.Array.len".to_string()),
+                    _ => {
+                        diagnostics.push_error(DatamodelError::new_validation_error(
+                            &format!("Method `{method}` is not available on class `std.Array`"),
+                            span.clone(),
+                        ));
+                        None
+                    }
+                },
+
+                _ => None,
+            };
+
+            // Return untyped expr if not known.
+            let Some(full_name) = full_name else {
+                return thir::Expr::MethodCall {
+                    receiver: Arc::new(typed_receiver),
+                    method: Arc::new(thir::Expr::Var(method.clone(), (span.clone(), None))),
+                    args: args
+                        .iter()
+                        .map(|arg| typecheck_expression(arg, context, diagnostics))
+                        .collect(),
+                    meta: (span.clone(), None),
+                };
+            };
+
+            let func_type = context.get_type(&full_name).cloned();
+
+            let (param_types, return_type, is_known_function) = match &func_type {
+                Some(hir::TypeM::Function(f, _)) => {
+                    (f.params.clone(), Some(*f.return_type.clone()), true)
+                }
+                _ => {
+                    diagnostics.push_error(DatamodelError::new_validation_error(
+                        &format!("Unknown function {full_name}"),
+                        span.clone(),
+                    ));
+                    (vec![], None, false)
+                }
+            };
+
+            let typed_args: Vec<_> = if is_known_function {
+                // Only validate arguments for known functions
+                args.iter()
+                    .zip(
+                        param_types
+                            .iter()
+                            .chain(std::iter::repeat(&hir::TypeM::Null(
+                                hir::TypeMeta::default(),
+                            ))),
+                    )
+                    .map(|(arg, expected_type)| {
+                        let typed_arg = typecheck_expression(arg, context, diagnostics);
+
+                        // Check if argument type matches expected type
+                        if let Some(arg_type) = typed_arg.meta().1.as_ref() {
+                            if !types_compatible(arg_type, expected_type) {
+                                diagnostics.push_error(DatamodelError::new_validation_error(
+                                    &format!(
+                                        "Type mismatch in argument, expected: {}, got: {}",
+                                        expected_type.name_for_user(),
+                                        typed_arg
+                                            .meta()
+                                            .1
+                                            .as_ref()
+                                            .map(|t| t.name_for_user())
+                                            .unwrap_or("unknown")
+                                    ),
+                                    arg.span(),
+                                ));
+                            }
+                        }
+
+                        typed_arg
+                    })
+                    .collect()
+            } else {
+                // For unknown functions, just typecheck arguments without validation
+                args.iter()
                     .map(|arg| typecheck_expression(arg, context, diagnostics))
-                    .collect(),
-                meta: (span.clone(), None),
+                    .collect()
+            };
+
+            // Check argument count only for known functions
+            if is_known_function && args.len() != param_types.len() {
+                diagnostics.push_error(DatamodelError::new_validation_error(
+                    &format!(
+                        "Function {} expects {} arguments, got {}",
+                        full_name,
+                        param_types.len(),
+                        args.len()
+                    ),
+                    span.clone(),
+                ));
+            }
+
+            thir::Expr::MethodCall {
+                receiver: Arc::new(typed_receiver),
+                method: Arc::new(thir::Expr::Var(
+                    method.clone(),
+                    (span.clone(), func_type.clone()),
+                )),
+                args: typed_args,
+                meta: (span.clone(), return_type),
             }
         }
         hir::Expression::ClassConstructor(constructor, span) => {
@@ -1214,9 +1404,9 @@ fn typecheck_expression(
                 meta: (span.clone(), field_type),
             }
         }
-        hir::Expression::ExpressionBlock(block, span) => {
+        hir::Expression::Block(block, span) => {
             let typed_block = typecheck_block(block, &mut context.clone(), diagnostics);
-            let block_type = typed_block.return_value.meta().1.clone();
+            let block_type = typed_block.ty.clone();
             thir::Expr::Block(Box::new(typed_block), (span.clone(), block_type))
         }
         hir::Expression::JinjaExpressionValue(_, span) => {
@@ -1455,8 +1645,8 @@ mod tests {
             .expect("Should have test_array function");
 
         // Check array access type
-        match &test_fn.body.return_value {
-            thir::Expr::ArrayAccess { meta, .. } => {
+        match &test_fn.body.trailing_expr {
+            Some(thir::Expr::ArrayAccess { meta, .. }) => {
                 meta.1
                     .as_ref()
                     .expect("Array access should have inferred type")

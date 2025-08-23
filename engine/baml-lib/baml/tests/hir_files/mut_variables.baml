@@ -15,12 +15,14 @@ fn MutableInArg(mut x: int) -> int {
 // function DeclareMutableInFunction(x) {
 //   var y = 3;
 //   y = 5;
-//   return y;
+//
+//   y
 // }
 //
 // function MutableInArg(x) {
 //   x = 3;
-//   return x;
+//
+//   x
 // }
 //
 // class std::Request {

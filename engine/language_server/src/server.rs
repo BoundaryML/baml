@@ -96,15 +96,17 @@ impl Server {
         let client_capabilities = init_params.capabilities.clone();
         let position_encoding = Self::find_best_position_encoding(&client_capabilities);
 
+        let init_options = init_params
+            .clone()
+            .initialization_options
+            .unwrap_or_else(|| serde_json::Value::Object(serde_json::Map::default()));
+
+        tracing::info!("--- Received initialization options: {:?}", init_options);
+
         let AllSettings {
             global_settings,
             mut workspace_settings,
-        } = AllSettings::from_value(
-            init_params
-                .clone()
-                .initialization_options
-                .unwrap_or_else(|| serde_json::Value::Object(serde_json::Map::default())),
-        );
+        } = AllSettings::from_value(init_options);
 
         crate::logging::init_logging(
             global_settings.tracing.log_level.unwrap_or_default(),

@@ -48,7 +48,16 @@ impl super::SyncNotificationHandler for DidSaveTextDocument {
             .get_or_create_project(&path)
             .expect("Ensured that a project db exists");
 
-        let version = project.lock().unwrap().get_common_generator_version();
+        let default_flags = vec!["beta".to_string()];
+        let effective_flags = session
+            .baml_settings
+            .feature_flags
+            .as_ref()
+            .unwrap_or(&default_flags);
+        let version = project
+            .lock()
+            .unwrap()
+            .get_common_generator_version(effective_flags);
         if let Ok(version) = version {
             let _ = notifier.0.send(lsp_server::Message::Notification(
                 lsp_server::Notification::new(
@@ -66,7 +75,14 @@ impl super::SyncNotificationHandler for DidSaveTextDocument {
             ));
         }
 
+        let default_flags2 = vec!["beta".to_string()];
+        let effective_flags = session
+            .baml_settings
+            .feature_flags
+            .as_ref()
+            .unwrap_or(&default_flags2);
         project.lock().unwrap().run_generators_without_debounce(
+            effective_flags,
             |message| {
                 tracing::info!("About to notify client that generator has run.");
                 notifier.notify_baml_info(&message).unwrap_or(())
@@ -105,7 +121,14 @@ impl super::BackgroundDocumentNotificationHandler for DidSaveTextDocument {
         // Note: In the background version, we need to get the project from the snapshot
         // instead of modifying the session directly
         if let Some(project) = snapshot.project() {
+            let default_flags = vec!["beta".to_string()];
+            let effective_flags = snapshot
+                .session_baml_settings()
+                .feature_flags
+                .as_ref()
+                .unwrap_or(&default_flags);
             project.lock().unwrap().run_generators_without_debounce(
+                effective_flags,
                 |message| {
                     tracing::info!("About to notify client that generator has run.");
                     notifier.notify_baml_info(&message).unwrap_or(())
