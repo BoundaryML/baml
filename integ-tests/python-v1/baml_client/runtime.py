@@ -28,6 +28,7 @@ class BamlCallOptions(typing.TypedDict, total=False):
         typing.Union[baml_py.baml_py.Collector, typing.List[baml_py.baml_py.Collector]]
     ]
     abort_controller: typing_extensions.NotRequired[baml_py.baml_py.AbortController]
+    on_tick: typing_extensions.NotRequired[typing.Callable[[str, baml_py.baml_py.FunctionLog], None]]
 
 
 class _ResolvedBamlOptions:
@@ -36,6 +37,7 @@ class _ResolvedBamlOptions:
     collectors: typing.List[baml_py.baml_py.Collector]
     env_vars: typing.Dict[str, str]
     abort_controller: typing.Optional[baml_py.baml_py.AbortController]
+    on_tick: typing.Optional[typing.Callable[[], None]]
 
     def __init__(
         self,
@@ -44,13 +46,14 @@ class _ResolvedBamlOptions:
         collectors: typing.List[baml_py.baml_py.Collector],
         env_vars: typing.Dict[str, str],
         abort_controller: typing.Optional[baml_py.baml_py.AbortController],
+        on_tick: typing.Optional[typing.Callable[[], None]],
     ):
         self.tb = tb
         self.client_registry = client_registry
         self.collectors = collectors
         self.env_vars = env_vars
         self.abort_controller = abort_controller
-
+        self.on_tick = on_tick
 
 
 
@@ -89,12 +92,24 @@ class DoNotUseDirectlyCallManager:
         
         abort_controller = self.__baml_options.get("abort_controller")
 
+        on_tick = self.__baml_options.get("on_tick")
+        if on_tick is not None:
+            collector = baml_py.baml_py.Collector("on-tick-collector")
+            collectors_as_list.append(collector)
+            def on_tick_wrapper():
+                log = collector.last
+                if log is not None:
+                    on_tick("Unknown", log)
+        else:
+            on_tick_wrapper = None
+
         return _ResolvedBamlOptions(
             baml_tb,
             client_registry,
             collectors_as_list,
             env_vars,
             abort_controller,
+            on_tick_wrapper,
         )
 
     def merge_options(self, options: BamlCallOptions) -> "DoNotUseDirectlyCallManager":
@@ -177,6 +192,8 @@ class DoNotUseDirectlyCallManager:
             resolved_options.collectors,
             # env_vars
             resolved_options.env_vars,
+            # on_tick
+            resolved_options.on_tick,
         )
         return ctx, result
 
@@ -187,6 +204,8 @@ class DoNotUseDirectlyCallManager:
         args: typing.Dict[str, typing.Any],
     ) -> typing.Tuple[baml_py.baml_py.RuntimeContextManager, baml_py.baml_py.SyncFunctionResultStream]:
         resolved_options = self.__resolve()
+        if resolved_options.on_tick is not None:
+            raise ValueError("on_tick is not supported for sync streams. Please use async streams instead.")
         ctx = __ctx__manager__.get()
         result = __runtime__.stream_function_sync(
             function_name,
@@ -204,6 +223,9 @@ class DoNotUseDirectlyCallManager:
             resolved_options.collectors,
             # env_vars
             resolved_options.env_vars,
+            # on_tick
+            # always None! sync streams don't support on_tick
+            None,
         )
         return ctx, result
 

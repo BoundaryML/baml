@@ -17,6 +17,7 @@ crate::lang_wrapper!(
     no_from,
     thread_safe,
     callback: Option<napi::Ref<()>>,
+    on_tick: Option<napi::Ref<()>>,
     tb: Option<baml_runtime::type_builder::TypeBuilder>,
     cb: Option<baml_runtime::client_registry::ClientRegistry>,
     env_vars: HashMap<String, String>
@@ -26,12 +27,14 @@ impl FunctionResultStream {
     pub(crate) fn new(
         inner: baml_runtime::FunctionResultStream,
         event: Option<napi::Ref<()>>,
+        on_tick: Option<napi::Ref<()>>,
         tb: Option<baml_runtime::type_builder::TypeBuilder>,
         cb: Option<baml_runtime::client_registry::ClientRegistry>,
     ) -> Self {
         Self {
             inner: std::sync::Arc::new(tokio::sync::Mutex::new(inner)),
             callback: event,
+            on_tick,
             tb,
             cb,
             env_vars: HashMap::new(),
@@ -87,6 +90,27 @@ impl FunctionResultStream {
             None => None,
         };
 
+        let on_tick_callback = match &self.on_tick {
+            Some(tick_cb) => {
+                let tick_cb = env.get_reference_value::<JsFunction>(tick_cb)?;
+                let tsfn = env.create_threadsafe_function(
+                    &tick_cb,
+                    0,
+                    |_ctx: ThreadSafeCallContext<()>| -> napi::Result<Vec<JsUndefined>> {
+                        Ok(vec![])
+                    },
+                )?;
+
+                Some(move || {
+                    let res = tsfn.call(Ok(()), ThreadsafeFunctionCallMode::Blocking);
+                    if res != napi::Status::Ok {
+                        log::error!("Error calling on_tick callback: {res:?}");
+                    }
+                })
+            }
+            None => None,
+        };
+
         let ctx_mng = rctx.inner.clone();
         let tb = self.tb.clone();
         let cb = self.cb.clone();
@@ -98,7 +122,7 @@ impl FunctionResultStream {
                 .lock()
                 .await
                 .run(
-                    None::<fn()>,
+                    on_tick_callback,
                     on_event,
                     &ctx_mng,
                     tb.as_ref(),
@@ -117,6 +141,9 @@ impl ObjectFinalize for FunctionResultStream {
     fn finalize(mut self, env: Env) -> napi::Result<()> {
         if let Some(mut cb) = self.callback.take() {
             cb.unref(env)?;
+        }
+        if let Some(mut tick_cb) = self.on_tick.take() {
+            tick_cb.unref(env)?;
         }
         Ok(())
     }

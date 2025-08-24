@@ -14,7 +14,8 @@ crate::lang_wrapper!(
     on_event: Option<PyObject>,
     tb: Option<baml_runtime::type_builder::TypeBuilder>,
     cb: Option<baml_runtime::client_registry::ClientRegistry>,
-    env_vars: HashMap<String, String>
+    env_vars: HashMap<String, String>,
+    on_tick: Option<PyObject>
 );
 
 crate::lang_wrapper!(
@@ -23,7 +24,8 @@ crate::lang_wrapper!(
     on_event: Option<PyObject>,
     tb: Option<baml_runtime::type_builder::TypeBuilder>,
     cb: Option<baml_runtime::client_registry::ClientRegistry>,
-    env_vars: HashMap<String, String>
+    env_vars: HashMap<String, String>,
+    on_tick: Option<PyObject>
 );
 
 impl FunctionResultStream {
@@ -33,6 +35,7 @@ impl FunctionResultStream {
         tb: Option<baml_runtime::type_builder::TypeBuilder>,
         cb: Option<baml_runtime::client_registry::ClientRegistry>,
         env_vars: HashMap<String, String>,
+        on_tick: Option<PyObject>,
     ) -> Self {
         Self {
             inner: std::sync::Arc::new(tokio::sync::Mutex::new(inner)),
@@ -40,6 +43,7 @@ impl FunctionResultStream {
             tb,
             cb,
             env_vars,
+            on_tick,
         }
     }
 }
@@ -51,6 +55,7 @@ impl SyncFunctionResultStream {
         tb: Option<baml_runtime::type_builder::TypeBuilder>,
         cb: Option<baml_runtime::client_registry::ClientRegistry>,
         env_vars: HashMap<String, String>,
+        on_tick: Option<PyObject>,
     ) -> Self {
         Self {
             inner: std::sync::Arc::new(std::sync::Mutex::new(inner)),
@@ -58,6 +63,7 @@ impl SyncFunctionResultStream {
             tb,
             cb,
             env_vars,
+            on_tick,
         }
     }
 }
@@ -77,7 +83,6 @@ impl FunctionResultStream {
         on_event_cb: PyObject,
     ) -> PyRefMut<'p, Self> {
         slf.on_event = Some(on_event_cb.clone_ref(py));
-
         slf
     }
 
@@ -95,6 +100,18 @@ impl FunctionResultStream {
             }
         });
 
+        let on_tick_callback = self.on_tick.as_ref().map(|tick_cb| {
+            let tick_cb = tick_cb.clone_ref(py);
+            move || {
+                Python::with_gil(|py| {
+                    let res = tick_cb.call0(py);
+                    if let Err(e) = res {
+                        e.display(py);
+                    }
+                });
+            }
+        });
+
         let ctx_mng = ctx.inner.clone();
         let tb = self.tb.clone();
         let cb = self.cb.clone();
@@ -104,7 +121,7 @@ impl FunctionResultStream {
             let mut locked = inner.lock().await;
             let (res, _) = locked
                 .run(
-                    None::<fn()>,
+                    on_tick_callback,
                     on_event,
                     &ctx_mng,
                     tb.as_ref(),
@@ -152,6 +169,17 @@ impl SyncFunctionResultStream {
             }
         });
 
+        let on_tick_callback = self.on_tick.as_ref().map(|tick_cb| {
+            let tick_cb = Python::with_gil(|py| tick_cb.clone_ref(py));
+            move || {
+                Python::with_gil(|py| {
+                    // For now, we pass "Unknown" as the reason
+                    // In a full implementation, we'd get the last event from the collector
+                    tick_cb.call1(py, ("Unknown", py.None())).ok();
+                });
+            }
+        });
+
         let ctx_mng = ctx.inner.clone();
         let tb = self.tb.clone();
         let cb = self.cb.clone();
@@ -159,7 +187,7 @@ impl SyncFunctionResultStream {
         let ctx_mng = ctx_mng;
         let mut locked = inner.lock().unwrap();
         let (res, _) = locked.run_sync(
-            None::<fn()>,
+            on_tick_callback,
             on_event,
             &ctx_mng,
             tb.as_ref(),

@@ -239,6 +239,7 @@ impl BamlRuntime {
         collectors: Vec<&Collector>,
         env_vars: HashMap<String, String>,
         signal: Option<JsObject>, // NEW: AbortSignal parameter
+        #[napi(ts_arg_type = "(() => void) | undefined")] on_tick: Option<JsFunction>,
     ) -> napi::Result<FunctionResultStream> {
         let args: BamlValue = parse_ts_types::js_object_to_baml_value(env, args)?;
         if !args.is_map() {
@@ -274,7 +275,18 @@ impl BamlRuntime {
             None => None,
         };
 
-        Ok(FunctionResultStream::new(stream, cb, tb, client_registry))
+        let on_tick = match on_tick {
+            Some(tick_cb) => Some(env.create_reference(tick_cb)?),
+            None => None,
+        };
+
+        Ok(FunctionResultStream::new(
+            stream,
+            cb,
+            on_tick,
+            tb,
+            client_registry,
+        ))
     }
 
     #[napi]
@@ -292,6 +304,7 @@ impl BamlRuntime {
         collectors: Vec<&Collector>,
         env_vars: HashMap<String, String>,
         signal: Option<JsObject>, // NEW: AbortSignal parameter
+        #[napi(ts_arg_type = "(() => void) | undefined")] on_tick: Option<JsFunction>,
     ) -> napi::Result<FunctionResultStream> {
         let args: BamlValue = parse_ts_types::js_object_to_baml_value(env, args)?;
         if !args.is_map() {
@@ -327,7 +340,18 @@ impl BamlRuntime {
             None => None,
         };
 
-        Ok(FunctionResultStream::new(stream, cb, tb, client_registry))
+        let on_tick = match on_tick {
+            Some(tick_cb) => Some(env.create_reference(tick_cb)?),
+            None => None,
+        };
+
+        Ok(FunctionResultStream::new(
+            stream,
+            cb,
+            on_tick,
+            tb,
+            client_registry,
+        ))
     }
 
     #[napi(ts_return_type = "Promise<HTTPRequest>")]

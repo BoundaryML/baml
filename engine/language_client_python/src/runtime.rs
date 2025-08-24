@@ -120,8 +120,13 @@ impl BamlRuntime {
         env_vars: std::collections::HashMap<String, String>,
         files: std::collections::HashMap<String, String>,
     ) -> PyResult<Self> {
-        let core = CoreBamlRuntime::from_file_content(&root_path, &files, env_vars.clone())
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("{e}")))?;
+        let core = CoreBamlRuntime::from_file_content(
+            &root_path,
+            &files,
+            env_vars.clone(),
+            internal_baml_core::feature_flags::FeatureFlags::default(),
+        )
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("{e}")))?;
         Ok(BamlRuntime {
             inner: std::sync::Arc::new(core),
             root_path,
@@ -132,9 +137,13 @@ impl BamlRuntime {
 
     #[staticmethod]
     fn from_directory(directory: PathBuf, env_vars: HashMap<String, String>) -> PyResult<Self> {
-        Ok(CoreBamlRuntime::from_directory(&directory, env_vars)
-            .map_err(BamlError::from_anyhow)?
-            .into())
+        Ok(CoreBamlRuntime::from_directory(
+            &directory,
+            env_vars,
+            internal_baml_core::feature_flags::FeatureFlags::default(),
+        )
+        .map_err(BamlError::from_anyhow)?
+        .into())
     }
 
     #[staticmethod]
@@ -143,11 +152,14 @@ impl BamlRuntime {
         files: HashMap<String, String>,
         env_vars: HashMap<String, String>,
     ) -> PyResult<Self> {
-        Ok(
-            CoreBamlRuntime::from_file_content(&root_path, &files, env_vars)
-                .map_err(BamlError::from_anyhow)?
-                .into(),
+        Ok(CoreBamlRuntime::from_file_content(
+            &root_path,
+            &files,
+            env_vars,
+            internal_baml_core::feature_flags::FeatureFlags::default(),
         )
+        .map_err(BamlError::from_anyhow)?
+        .into())
     }
 
     #[pyo3()]
@@ -157,9 +169,14 @@ impl BamlRuntime {
         files: HashMap<String, String>,
         env_vars: HashMap<String, String>,
     ) -> PyResult<()> {
-        self.inner = CoreBamlRuntime::from_file_content(&root_path, &files, env_vars)
-            .map_err(BamlError::from_anyhow)?
-            .into();
+        self.inner = CoreBamlRuntime::from_file_content(
+            &root_path,
+            &files,
+            env_vars,
+            internal_baml_core::feature_flags::FeatureFlags::default(),
+        )
+        .map_err(BamlError::from_anyhow)?
+        .into();
         Ok(())
     }
 
@@ -294,7 +311,7 @@ impl BamlRuntime {
             .map_err(BamlError::from_anyhow)
     }
 
-    #[pyo3(signature = (function_name, args, on_event, ctx, tb, cb, collectors, env_vars))]
+    #[pyo3(signature = (function_name, args, on_event, ctx, tb, cb, collectors, env_vars, on_tick=None))]
     fn stream_function(
         &self,
         py: Python<'_>,
@@ -306,6 +323,7 @@ impl BamlRuntime {
         cb: Option<&ClientRegistry>,
         collectors: &Bound<'_, PyList>,
         env_vars: HashMap<String, String>,
+        on_tick: Option<PyObject>,
     ) -> PyResult<FunctionResultStream> {
         let Some(args) = parse_py_type(args.into_bound(py).into_py_any(py)?, false)? else {
             return Err(BamlInvalidArgumentError::new_err(
@@ -344,10 +362,11 @@ impl BamlRuntime {
             tb.map(|tb| tb.inner.clone()),
             cb.map(|cb| cb.inner.clone()),
             env_vars,
+            on_tick,
         ))
     }
 
-    #[pyo3(signature = (function_name, args, on_event, ctx, tb, cb, collectors, env_vars))]
+    #[pyo3(signature = (function_name, args, on_event, ctx, tb, cb, collectors, env_vars, on_tick=None))]
     fn stream_function_sync(
         &self,
         py: Python<'_>,
@@ -359,6 +378,7 @@ impl BamlRuntime {
         cb: Option<&ClientRegistry>,
         collectors: &Bound<'_, PyList>,
         env_vars: HashMap<String, String>,
+        on_tick: Option<PyObject>,
     ) -> PyResult<SyncFunctionResultStream> {
         let Some(args) = parse_py_type(args.into_bound(py).into_py_any(py)?, false)? else {
             return Err(BamlInvalidArgumentError::new_err(
@@ -397,6 +417,7 @@ impl BamlRuntime {
             tb.map(|tb| tb.inner.clone()),
             cb.map(|cb| cb.inner.clone()),
             env_vars,
+            on_tick,
         ))
     }
 

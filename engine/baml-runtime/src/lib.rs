@@ -401,7 +401,7 @@ impl BamlRuntime {
             .get_test_params(function_name, test_name, ctx, strict)
     }
 
-    pub async fn run_test_with_expr_events<F>(
+    pub async fn run_test_with_expr_events<F, G>(
         &self,
         function_name: &str,
         test_name: &str,
@@ -411,9 +411,11 @@ impl BamlRuntime {
         collector: Option<Arc<Collector>>,
         env_vars: HashMap<String, String>,
         cancel_tripwire: Option<stream_cancel::Tripwire>,
+        on_tick: Option<G>,
     ) -> (Result<TestResponse>, FunctionCallId)
     where
         F: Fn(FunctionResult),
+        G: Fn(),
     {
         baml_log::set_from_env(&env_vars).unwrap();
 
@@ -616,7 +618,7 @@ impl BamlRuntime {
         (response, call_id)
     }
 
-    pub async fn run_test<F>(
+    pub async fn run_test<F, G>(
         &self,
         function_name: &str,
         test_name: &str,
@@ -625,12 +627,14 @@ impl BamlRuntime {
         collector: Option<Arc<Collector>>,
         env_vars: HashMap<String, String>,
         cancel_tripwire: Option<stream_cancel::Tripwire>,
+        on_tick: Option<G>,
     ) -> (Result<TestResponse>, FunctionCallId)
     where
         F: Fn(FunctionResult),
+        G: Fn(),
     {
         let res = self
-            .run_test_with_expr_events::<F>(
+            .run_test_with_expr_events::<F, G>(
                 function_name,
                 test_name,
                 ctx,
@@ -639,6 +643,7 @@ impl BamlRuntime {
                 collector,
                 env_vars,
                 cancel_tripwire,
+                on_tick,
             )
             .await;
         res

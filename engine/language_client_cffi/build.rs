@@ -370,7 +370,7 @@ fn main() -> std::io::Result<()> {
                 Ok(output) if output.status.success() => {
                     let path = String::from_utf8_lossy(&output.stdout);
                     let path = path.trim();
-                    eprintln!("Using protoc-gen-go from mise: {:?}", path);
+                    eprintln!("Using protoc-gen-go from mise: {path:?}");
                     protoc.plugin(path);
                 }
                 Ok(_) => {
@@ -379,10 +379,7 @@ fn main() -> std::io::Result<()> {
                     );
                 }
                 Err(e) => {
-                    eprintln!(
-                        "protoc-gen-go fallback: mise command failed ({}), relying on PATH",
-                        e
-                    );
+                    eprintln!("protoc-gen-go fallback: mise command failed ({e}), relying on PATH");
                 }
             }
         }

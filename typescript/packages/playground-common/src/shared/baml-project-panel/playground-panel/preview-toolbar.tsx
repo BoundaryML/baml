@@ -31,10 +31,8 @@ import { areTestsRunningAtom, selectedItemAtom, selectionAtom } from './atoms';
 import { FunctionTestName } from './function-test-name';
 import { isParallelTestsEnabledAtom } from './prompt-preview/test-panel/atoms';
 import { useRunBamlTests } from './prompt-preview/test-panel/test-runner';
-
-// Check if we're in a VSCode environment
-const isVSCodeEnvironment =
-  typeof window !== 'undefined' && !('vscode' in window);
+import { betaFeatureEnabledAtom, isVSCodeEnvironment } from '../feature-flags';
+import { vscodeSettingsAtom } from '../atoms';
 
 export const displaySettingsAtom = atom({
   showTokens: false,
@@ -88,6 +86,24 @@ export function PreviewToolbar() {
   );
   const proxySettings = useAtomValue(proxyUrlAtom);
   const setBamlConfig = useSetAtom(bamlConfig);
+  
+  // Beta feature flag settings
+  const [betaFeatureEnabled, setBetaFeatureEnabled] = useAtom(betaFeatureEnabledAtom);
+  const vscodeSettings = useAtomValue(vscodeSettingsAtom);
+  const isInVSCode = isVSCodeEnvironment();
+  
+  // For VSCode, use VSCode settings directly (read-only); for standalone, use atom
+  const displayBetaEnabled = isInVSCode 
+    ? (vscodeSettings?.featureFlags?.includes('beta') ?? false)
+    : betaFeatureEnabled;
+  
+  const handleBetaToggle = (enabled: boolean) => {
+    // This function only runs in standalone mode (not VSCode)
+    setBetaFeatureEnabled(enabled);
+    toast.success('Beta Features Toggled', {
+      description: `Beta features ${enabled ? 'enabled' : 'disabled'}.`,
+    });
+  };
 
   // Hide text when sidebar is open or on smaller screens
   const getButtonTextClass = () => {
@@ -226,6 +242,56 @@ export function PreviewToolbar() {
                   </Tooltip>
                 </TooltipProvider>
               </DropdownMenuCheckboxItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel className="text-xs px-2 py-1.5">
+                Experimental Features
+              </DropdownMenuLabel>
+              
+              {/* Beta Features - Only show toggle in standalone fiddle, not in VSCode */}
+              {!isInVSCode ? (
+                <DropdownMenuCheckboxItem
+                  checked={displayBetaEnabled}
+                  onCheckedChange={handleBetaToggle}
+                  className="text-sm px-2 py-1.5 pl-7"
+                >
+                  <TooltipProvider>
+                    <Tooltip delayDuration={300}>
+                      <TooltipTrigger asChild>
+                        <span>Beta Features</span>
+                      </TooltipTrigger>
+                      <TooltipContent side="left" className="text-xs w-80">
+                        Enable experimental BAML features and suppress experimental warnings.
+                        <br />
+                        <br />
+                        <b>Standalone:</b> This setting is saved locally 
+                        and persists across sessions.
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </DropdownMenuCheckboxItem>
+              ) : (
+                /* VSCode - Show read-only status instead of toggle */
+                <div className="text-sm px-2 py-1.5 pl-7 text-muted-foreground">
+                  <TooltipProvider>
+                    <Tooltip delayDuration={300}>
+                      <TooltipTrigger asChild>
+                        <span>
+                          Beta Features: {displayBetaEnabled ? 'Enabled' : 'Disabled'}
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent side="left" className="text-xs w-80">
+                        Beta features are controlled by VSCode settings.
+                        <br />
+                        <br />
+                        <b>To modify:</b> Open VSCode settings and search for "baml.featureFlags"
+                        <br />
+                        <br />
+                        Current status: {displayBetaEnabled ? 'Beta features are enabled' : 'Beta features are disabled'}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
 
