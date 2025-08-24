@@ -152,9 +152,7 @@ impl BamlValue {
                 }
             }
             BamlValue::Media(media) => format_media(media),
-            BamlValue::Enum(enum_name, variant) => {
-                RcDoc::text(format!("{enum_name}::{variant}"))
-            }
+            BamlValue::Enum(enum_name, variant) => RcDoc::text(format!("{enum_name}::{variant}")),
             BamlValue::Class(class_name, fields) => {
                 if fields.is_empty() {
                     RcDoc::text(format!("{class_name} {{}}"))

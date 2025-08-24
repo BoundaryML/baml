@@ -21,8 +21,8 @@ type PickleReduceResult = PyResult<(
 // Switch between runtimes here by importing the one you want to use.
 
 pub use baml_runtime::BamlRuntime as CoreBamlRuntime;
-// pub use baml_runtime::async_vm_runtime::BamlAsyncVmRuntime as CoreBamlRuntime;
 
+// pub use baml_runtime::async_vm_runtime::BamlAsyncVmRuntime as CoreBamlRuntime;
 use crate::{
     errors::{BamlError, BamlInvalidArgumentError},
     parse_py_type::parse_py_type,

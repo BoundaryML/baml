@@ -1,8 +1,7 @@
-use std::cell::RefCell;
-use std::collections::HashMap;
+use std::{cell::RefCell, collections::HashMap};
+
 use stream_cancel::{Trigger, Tripwire};
-use wasm_bindgen::closure::Closure;
-use wasm_bindgen::prelude::*;
+use wasm_bindgen::{closure::Closure, prelude::*};
 use web_sys::AbortSignal;
 
 thread_local! {

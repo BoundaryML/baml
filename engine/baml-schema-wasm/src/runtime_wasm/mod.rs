@@ -2,7 +2,6 @@ pub mod generator;
 pub mod runtime_prompt;
 use std::{collections::HashMap, path::PathBuf, str::FromStr};
 
-use crate::abort_controller::{cleanup_operation, js_abort_signal_to_tripwire};
 use anyhow::Context;
 use baml_runtime::{
     internal::{
@@ -30,7 +29,10 @@ use wasm_bindgen::{prelude::*, JsError, JsValue};
 use wasm_bindgen_futures::JsFuture;
 
 use self::runtime_prompt::WasmScope;
-use crate::runtime_wasm::runtime_prompt::WasmPrompt;
+use crate::{
+    abort_controller::{cleanup_operation, js_abort_signal_to_tripwire},
+    runtime_wasm::runtime_prompt::WasmPrompt,
+};
 
 type JsResult<T> = core::result::Result<T, JsError>;
 

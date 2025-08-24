@@ -1,7 +1,8 @@
+use std::sync::Arc;
+
 use dashmap::DashMap;
 use napi::{Env, JsFunction, JsObject, JsUnknown};
 use once_cell::sync::Lazy;
-use std::sync::Arc;
 use stream_cancel::{Trigger, Tripwire};
 
 // Track active operations with their cancellation triggers
