@@ -83,16 +83,21 @@ impl Pdf {
             inner: BamlMedia::url(BamlMediaType::Pdf, url, Some("application/pdf".to_string())),
         }
     }
-    pub fn from_base64(media_type: String, base64: String) -> Self {
+
+    pub fn from_base64(base64: String) -> Self {
         Self {
-            inner: BamlMedia::base64(BamlMediaType::Pdf, base64, Some(media_type)),
+            inner: BamlMedia::base64(
+                BamlMediaType::Pdf,
+                base64,
+                Some("application/pdf".to_string()),
+            ),
         }
     }
 
     pub fn define_in_ruby(module: &RModule) -> Result<()> {
         let cls = module.define_class("Pdf", class::object())?;
         cls.define_singleton_method("from_url", function!(Pdf::from_url, 1))?;
-        cls.define_singleton_method("from_base64", function!(Pdf::from_base64, 2))?;
+        cls.define_singleton_method("from_base64", function!(Pdf::from_base64, 1))?;
 
         Ok(())
     }

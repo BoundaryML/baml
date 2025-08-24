@@ -23,12 +23,12 @@ impl BamlPdfPy {
     }
 
     #[staticmethod]
-    fn from_base64(media_type: String, base64: String) -> Self {
+    fn from_base64(base64: String) -> Self {
         BamlPdfPy {
             inner: baml_types::BamlMedia::base64(
                 baml_types::BamlMediaType::Pdf,
                 base64,
-                Some(media_type),
+                Some("application/pdf".to_string()),
             ),
         }
     }
