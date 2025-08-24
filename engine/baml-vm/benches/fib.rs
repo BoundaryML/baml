@@ -42,7 +42,7 @@ pub fn bench_recursive_fib(c: &mut Criterion) {
                 bootstrap_vm(Program {
                     source: r#"
                         function fib(n: int) -> int {
-                            if n <= 1 {
+                            if (n <= 1) {
                                 n
                             } else {
                                 fib(n - 1) + fib(n - 2)
@@ -71,11 +71,11 @@ pub fn bench_iterative_fib(c: &mut Criterion) {
                             let mut a = 0;
                             let mut b = 1;
 
-                            if n == 0 {
+                            if (n == 0) {
                                 b
                             } else {
                                 let mut i = 1;
-                                while i <= n {
+                                while (i <= n) {
                                     let c = a + b;
                                     a = b;
                                     b = c;

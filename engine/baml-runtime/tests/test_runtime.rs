@@ -17,6 +17,7 @@ mod internal_tests {
         internal::llm_client::LLMResponse, BamlRuntime, DiagnosticsError, IRHelper, RenderedPrompt,
     };
     use baml_types::BamlValue;
+    use internal_baml_core::FeatureFlags;
     use wasm_bindgen_test::*;
 
     #[tokio::test]
@@ -88,7 +89,7 @@ mod internal_tests {
             "baml_src",
             &files,
             [("OPENAI_API_KEY", "OPENAI_API_KEY")].into(),
-            internal_baml_core::feature_flags::FeatureFlags::default(),
+            FeatureFlags::new(),
         )?;
         log::info!("Runtime:");
 
@@ -173,7 +174,7 @@ mod internal_tests {
             "baml_src",
             &files,
             [("OPENAI_API_KEY", "OPENAI_API_KEY")].into(),
-            internal_baml_core::feature_flags::FeatureFlags::default(),
+            FeatureFlags::new(),
         )?;
         log::info!("Runtime:");
 
@@ -251,7 +252,7 @@ mod internal_tests {
             "baml_src",
             &files,
             [("OPENAI_API_KEY", "OPENAI_API_KEY")].into(),
-            internal_baml_core::feature_flags::FeatureFlags::default(),
+            FeatureFlags::new(),
         )?;
         log::info!("Runtime:");
 
@@ -292,7 +293,7 @@ mod internal_tests {
                 "OPENAI_API_KEY",
             )]
             .into(),
-            internal_baml_core::feature_flags::FeatureFlags::default(),
+            FeatureFlags::new(),
         )
     }
 

@@ -2,7 +2,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use baml_types::BamlValueWithMeta;
+use baml_types::{ir_type::TypeIR, BamlValueWithMeta};
 use baml_vm::{
     BamlVmProgram, BinOp, Bytecode, Class, CmpOp, Function, FunctionKind, GlobalIndex, GlobalPool,
     Instruction, Object, ObjectIndex, ObjectPool, UnaryOp, Value,
@@ -11,7 +11,7 @@ use internal_baml_diagnostics::{Diagnostics, Span};
 use internal_baml_parser_database::ParserDatabase;
 
 use crate::{
-    hir::{self, Type},
+    hir::{self},
     thir,
 };
 
@@ -42,7 +42,7 @@ pub fn compile(ast: &ParserDatabase) -> anyhow::Result<BamlVmProgram> {
 ///
 /// This function takes an HIR Program and generates the bytecode for the VM.
 fn compile_thir_to_bytecode(
-    thir: &thir::THir<(Span, Option<Type>)>,
+    thir: &thir::THir<(Span, Option<TypeIR>)>,
 ) -> anyhow::Result<BamlVmProgram> {
     let mut resolved_globals = HashMap::new();
     let mut resolved_classes = HashMap::new();
@@ -259,7 +259,7 @@ impl ForLoopVarCounters {
 
 /// Compile an HIR function to bytecode.
 fn compile_thir_function(
-    func: &thir::ExprFunction<(Span, Option<Type>)>,
+    func: &thir::ExprFunction<(Span, Option<TypeIR>)>,
     globals: &HashMap<String, GlobalIndex>,
     classes: &HashMap<String, HashMap<String, usize>>,
     llm_functions: &HashSet<String>,
@@ -410,7 +410,7 @@ impl<'g> HirCompiler<'g> {
     /// Here we compile a source function into a [`Function`] VM struct.
     fn compile_function(
         &mut self,
-        func: &thir::ExprFunction<(Span, Option<Type>)>,
+        func: &thir::ExprFunction<(Span, Option<TypeIR>)>,
     ) -> anyhow::Result<Function> {
         // Compile statements in the function body.
         self.compile_block_with_parameters(&func.body, &func.parameters);
@@ -446,7 +446,7 @@ impl<'g> HirCompiler<'g> {
     /// Functions have parameters so we need to track those as well.
     fn compile_block_with_parameters(
         &mut self,
-        block: &thir::Block<(Span, Option<Type>)>,
+        block: &thir::Block<(Span, Option<TypeIR>)>,
         parameters: &[thir::Parameter],
     ) {
         self.enter_scope();
@@ -472,12 +472,12 @@ impl<'g> HirCompiler<'g> {
     }
 
     /// Used to compile nested blocks within functions.
-    fn compile_block(&mut self, block: &thir::Block<(Span, Option<Type>)>) {
+    fn compile_block(&mut self, block: &thir::Block<(Span, Option<TypeIR>)>) {
         self.compile_block_with_parameters(block, &[]);
     }
 
     /// A statement is anything that does not produce a value by itself.
-    fn compile_statement(&mut self, statement: &thir::Statement<(Span, Option<Type>)>) {
+    fn compile_statement(&mut self, statement: &thir::Statement<(Span, Option<TypeIR>)>) {
         match statement {
             thir::Statement::Let { name, value, .. } => {
                 self.compile_expression(value);
@@ -793,7 +793,7 @@ impl<'g> HirCompiler<'g> {
     }
 
     /// Generate bytecode for an expression.
-    fn compile_expression(&mut self, expr: &thir::Expr<(Span, Option<Type>)>) {
+    fn compile_expression(&mut self, expr: &thir::Expr<(Span, Option<TypeIR>)>) {
         // TODO: The implementation of line number is extremely slow. It always
         // reads the entire source string to find the line number.
         self.current_source_line = expr.span().line_number();
@@ -850,7 +850,9 @@ impl<'g> HirCompiler<'g> {
             }
 
             thir::Expr::FieldAccess { base, field, .. } => match base.meta().1.as_ref() {
-                Some(hir::Type::Class(class_name, _)) => {
+                Some(TypeIR::Class {
+                    name: class_name, ..
+                }) => {
                     let Some(class_index) = self.globals.get(class_name) else {
                         panic!("undefined class: {class_name}");
                     };
@@ -931,9 +933,11 @@ impl<'g> HirCompiler<'g> {
                 };
 
                 let func_name = match receiver.meta().1.as_ref() {
-                    Some(hir::Type::Class(class_name, _)) => format!("{class_name}.{method}"),
+                    Some(TypeIR::Class {
+                        name: class_name, ..
+                    }) => format!("{class_name}.{method}"),
 
-                    Some(hir::Type::Array(_, _)) => format!("std.Array.{method}"),
+                    Some(TypeIR::List(_, _)) => format!("std.Array.{method}"),
 
                     other => panic!("method calls must be on classes, got: {other:#?}"),
                 };
@@ -959,7 +963,7 @@ impl<'g> HirCompiler<'g> {
                 name: class_name,
                 fields,
                 spread,
-                meta,
+                meta: _,
             } => {
                 let Some(&class_index) = self.globals.get(class_name) else {
                     panic!("undefined class: {class_name}");
@@ -1353,6 +1357,76 @@ impl<'g> HirCompiler<'g> {
         }
 
         loop_info.break_patch_list
+    }
+}
+
+impl thir::Expr<(Span, Option<TypeIR>)> {
+    /// Returns true if the block ends with an expression that has a final value.
+    ///
+    /// For example, it would return true for this block:
+    ///
+    /// ```ignore
+    /// let a = {
+    ///     let b = 1;
+    ///     if b == 1 {
+    ///         1
+    ///     } else {
+    ///         2
+    ///     }
+    /// };
+    /// ```
+    ///
+    /// But false for this one:
+    ///
+    /// ```ignore
+    /// let mut a = 0;
+    /// if a == 0 {
+    ///     a = 1;
+    /// } else {
+    ///     a = 2;
+    /// }
+    /// ```
+    ///
+    /// TODO: This seems completely unecessary, the typechecker will already
+    /// check at some point that return values match the expected type. After
+    /// that we should alreay have enough information to decide whether a block
+    /// returns or not.
+    fn produces_final_value(&self) -> bool {
+        match self {
+            // First call will happen on a block. Recurse on the final expression.
+            thir::Expr::Block(block, _) => match block.statements.last() {
+                Some(thir::Statement::Expression { expr, .. }) => expr.produces_final_value(),
+
+                // Does not produce a value.
+                _ => false,
+            },
+
+            // If statements as last expression need to check if they return
+            // any value. We won't recurse into the else branch because both
+            // need to match, if one of them returns a value the other one must
+            // return the same type. This is typechecker bug if it's wrong, so
+            // I won't bother here.
+            thir::Expr::If(_, if_branch, ..) => if_branch.produces_final_value(),
+
+            // This is an expression that produces a value, so true. We're
+            // forcing non-exhaustive match here because other types of
+            // expressions that we add in the future might need to be considered.
+            thir::Expr::List(_, _)
+            | thir::Expr::Map(_, _)
+            | thir::Expr::ArrayAccess { .. }
+            | thir::Expr::FieldAccess { .. }
+            | thir::Expr::MethodCall { .. }
+            | thir::Expr::Value(_)
+            | thir::Expr::Call { .. }
+            | thir::Expr::ClassConstructor { .. }
+            | thir::Expr::BinaryOperation { .. }
+            | thir::Expr::UnaryOperation { .. }
+            | thir::Expr::Var(_, _)
+            | thir::Expr::Builtin(_, _)
+            | thir::Expr::Paren(_, _) => true,
+
+            thir::Expr::Function(_, _, _) => todo!("function calls"),
+        }
     }
 }
 

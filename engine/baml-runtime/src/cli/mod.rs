@@ -4,6 +4,7 @@ pub mod dump_intermediate;
 pub mod generate;
 pub mod init;
 pub mod init_ui;
+pub mod repl;
 pub mod serve;
 pub mod testing;
 

@@ -30,6 +30,8 @@ arc_with_non_send_sync = "allow"
 anyhow.workspace = true
 baml-compiler = { path = "../baml-compiler" }
 baml-ids.workspace = true
+internal-baml-ast = { path = "../baml-lib/ast" }
+internal-baml-diagnostics = { path = "../baml-lib/diagnostics" }
 baml-log.workspace = true
 baml-types.workspace = true
 baml-rpc.workspace = true
@@ -64,6 +66,7 @@ internal-baml-jinja.workspace = true
 log.workspace = true
 minijinja.workspace = true
 pin-project-lite.workspace = true
+pretty.workspace = true
 regex.workspace = true
 reqwest-eventsource = "0.6.0"
 scopeguard.workspace = true
@@ -196,6 +199,7 @@ indicatif = "0.17"
 junit-report = "0.8.3"
 ratatui = "0.29"
 crossterm = "0.28"
+reedline = "0.37"
 
 
 [features]

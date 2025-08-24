@@ -2,11 +2,11 @@
 //!
 //! This file contains the definitions for all HIR items.
 
-use baml_types::{type_meta::base::StreamingBehavior, Constraint};
+use baml_types::ir_type::TypeIR;
 use internal_baml_diagnostics::Span;
 
-mod dump;
-mod lowering;
+pub mod dump;
+pub mod lowering;
 
 /// High-level intermediate representation.
 ///
@@ -30,237 +30,29 @@ pub struct Hir {
     pub global_assignments: baml_types::BamlMap<String, Expression>,
 }
 
-pub type Type = TypeM<TypeMeta>;
-
-#[derive(Clone, Debug)]
-pub enum TypeM<M> {
-    Int(M),
-    String(M),
-    Float(M),
-    Bool(M),
-    Null(M),
-    Array(Box<TypeM<M>>, M),
-    Map(Box<TypeM<M>>, Box<TypeM<M>>, M),
-    Class(String, M),
-    Enum(String, M),
-    Union(Vec<TypeM<M>>, M),
-    Function(Function<M>, M),
-}
-
-impl<T: Default> TypeM<T> {
-    pub fn int() -> Self {
-        Self::Int(T::default())
-    }
-}
-
-impl<T> TypeM<T> {
-    pub fn name_for_user(&self) -> &'static str {
-        match self {
-            TypeM::Int(_) => "int",
-            TypeM::String(_) => "string",
-            TypeM::Float(_) => "float",
-            TypeM::Bool(_) => "bool",
-            TypeM::Null(_) => "null type",
-            TypeM::Array(_, _) => "array",
-            TypeM::Map(_, _, _) => "map",
-            TypeM::Class(_, _) => "class",
-            TypeM::Enum(_, _) => "enum",
-            TypeM::Union(_, _) => "union",
-            TypeM::Function(_, _) => "function",
+impl Hir {
+    pub fn empty() -> Self {
+        Hir {
+            expr_functions: vec![],
+            llm_functions: vec![],
+            classes: vec![],
+            enums: vec![],
+            global_assignments: baml_types::BamlMap::new(),
         }
     }
 }
 
-impl Type {
-    /// Returns true if two types are exactly equal except for their spans.
-    pub fn eq_up_to_span(&self, other: &Type) -> bool {
-        match (self, other) {
-            (TypeM::Int(a), TypeM::Int(b)) => a.eq_up_to_span(b),
-            (TypeM::Float(a), TypeM::Float(b)) => a.eq_up_to_span(b),
-            (TypeM::String(a), TypeM::String(b)) => a.eq_up_to_span(b),
-            (TypeM::Bool(a), TypeM::Bool(b)) => a.eq_up_to_span(b),
-            (TypeM::Null(a), TypeM::Null(b)) => a.eq_up_to_span(b),
-
-            (TypeM::Array(a, a_meta), TypeM::Array(b, b_meta)) => {
-                a.eq_up_to_span(b) && a_meta.eq_up_to_span(b_meta)
-            }
-
-            (TypeM::Map(a_key, a_val, a_meta), TypeM::Map(b_key, b_val, b_meta)) => {
-                a_key.eq_up_to_span(b_key)
-                    && a_val.eq_up_to_span(b_val)
-                    && a_meta.eq_up_to_span(b_meta)
-            }
-
-            (TypeM::Class(a, a_meta), TypeM::Class(b, b_meta)) => {
-                a == b && a_meta.eq_up_to_span(b_meta)
-            }
-
-            (TypeM::Enum(a, a_meta), TypeM::Enum(b, b_meta)) => {
-                a == b && a_meta.eq_up_to_span(b_meta)
-            }
-
-            (TypeM::Union(a_members, a_meta), TypeM::Union(b_members, b_meta)) => {
-                a_members.len() == b_members.len()
-                    && a_members
-                        .iter()
-                        .zip(b_members.iter())
-                        .all(|(a, b)| a.eq_up_to_span(b))
-                    && a_meta.eq_up_to_span(b_meta)
-            }
-
-            (TypeM::Function(a_fn, a_meta), TypeM::Function(b_fn, b_meta)) => {
-                a_fn.params.len() == b_fn.params.len()
-                    && a_fn
-                        .params
-                        .iter()
-                        .zip(b_fn.params.iter())
-                        .all(|(a, b)| a.eq_up_to_span(b))
-                    && a_fn.return_type.eq_up_to_span(&b_fn.return_type)
-                    && a_meta.eq_up_to_span(b_meta)
-            }
-
-            _ => false,
-        }
-    }
-
-    #[track_caller]
-    pub fn can_be_assigned(&self, other: &Type) -> bool {
-        // TODO: add diagnostics
-        match (self, other) {
-            (TypeM::Null(_), TypeM::Null(_))
-            | (TypeM::Bool(_), TypeM::Bool(_))
-            | (TypeM::Float(_), TypeM::Float(_))
-            | (TypeM::String(_), TypeM::String(_))
-            | (TypeM::Int(_), TypeM::Int(_)) => true,
-
-            (TypeM::Array(a, _), TypeM::Array(b, _)) => a.can_be_assigned(b),
-
-            (TypeM::Map(key_a, val_a, _), TypeM::Map(key_b, val_b, _)) => {
-                key_a.can_be_assigned(key_b) && val_a.can_be_assigned(val_b)
-            }
-
-            (TypeM::Enum(a, _), TypeM::Enum(b, _)) | (TypeM::Class(a, _), TypeM::Class(b, _)) => {
-                a == b
-            }
-
-            (TypeM::Union(a, _), TypeM::Union(b, _)) => {
-                // there can't be any type in b that is not assignable to a.
-                b.iter()
-                    .all(|b_ty| a.iter().any(|a_ty| a_ty.can_be_assigned(b_ty)))
-            }
-            (TypeM::Union(inner, _), non_union) => {
-                inner.iter().any(|i| i.can_be_assigned(non_union))
-            }
-
-            // for functions we only want the same inputs & same outputs, otherwise an
-            // auto-cast mechanism would need to be in place.
-            (a @ TypeM::Function(_, _), b @ TypeM::Function(_, _)) => a.eq_up_to_span(b),
-
-            (_, _) => false,
-        }
-    }
-    #[track_caller]
-    pub fn assert_eq_up_to_span(&self, other: &Type) {
-        match (self, other) {
-            (TypeM::Int(a), TypeM::Int(b)) => assert!(a.eq_up_to_span(b)),
-            (TypeM::Int(_), _) => panic!("Int type mismatch"),
-            (TypeM::Float(a), TypeM::Float(b)) => assert!(a.eq_up_to_span(b)),
-            (TypeM::Float(_), _) => panic!("Float type mismatch"),
-            (TypeM::String(a), TypeM::String(b)) => assert!(a.eq_up_to_span(b)),
-            (TypeM::String(_), _) => panic!("String type mismatch"),
-            (TypeM::Bool(a), TypeM::Bool(b)) => assert!(a.eq_up_to_span(b)),
-            (TypeM::Bool(_), _) => panic!("Bool type mismatch"),
-            (TypeM::Null(a), TypeM::Null(b)) => assert!(a.eq_up_to_span(b)),
-            (TypeM::Null(_), _) => panic!("Null type mismatch"),
-            (TypeM::Array(a, a_meta), TypeM::Array(b, b_meta)) => {
-                a.assert_eq_up_to_span(b);
-                assert!(a_meta.eq_up_to_span(b_meta));
-            }
-            (TypeM::Array(_, _), _) => panic!("Array type mismatch"),
-            (TypeM::Map(a, b, a_meta), TypeM::Map(c, d, b_meta)) => {
-                a.assert_eq_up_to_span(c);
-                b.assert_eq_up_to_span(d);
-                assert!(a_meta.eq_up_to_span(b_meta));
-            }
-            (TypeM::Map(_, _, _), _) => panic!("Map type mismatch"),
-            (TypeM::Class(a, a_meta), TypeM::Class(b, b_meta)) => {
-                assert!(a == b);
-                assert!(a_meta.eq_up_to_span(b_meta));
-            }
-            (TypeM::Class(_, _), _) => panic!("Class name type mismatch"),
-            (TypeM::Enum(a, a_meta), TypeM::Enum(b, b_meta)) => {
-                assert!(a == b);
-                assert!(a_meta.eq_up_to_span(b_meta));
-            }
-            (TypeM::Enum(_, _), _) => panic!("Enum name type mismatch"),
-            (TypeM::Union(a, a_meta), TypeM::Union(b, b_meta)) => {
-                assert!(a.len() == b.len());
-                a.iter()
-                    .zip(b.iter())
-                    .for_each(|(a, b)| a.assert_eq_up_to_span(b));
-                assert!(a_meta.eq_up_to_span(b_meta));
-            }
-            (TypeM::Union(_, _), _) => panic!("Union type mismatch"),
-            (TypeM::Function(a, a_meta), TypeM::Function(b, b_meta)) => {
-                assert!(a.params.len() == b.params.len());
-                a.params
-                    .iter()
-                    .zip(b.params.iter())
-                    .for_each(|(a, b)| a.assert_eq_up_to_span(b));
-                a.return_type.assert_eq_up_to_span(&b.return_type);
-                assert!(a_meta.eq_up_to_span(b_meta));
-            }
-            (TypeM::Function(_, _), _) => panic!("Arrow type mismatch"),
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct Function<M> {
-    pub params: Vec<TypeM<M>>,
-    pub return_type: Box<TypeM<M>>,
-}
-
-#[derive(Clone, Debug)]
-pub struct TypeMeta {
-    pub span: Span,
-    pub constraints: Vec<Constraint>,
-    pub streaming_behavior: StreamingBehavior,
-}
-
-impl TypeMeta {
-    #[track_caller]
-    pub fn eq_up_to_span(&self, other: &TypeMeta) -> bool {
-        self.constraints == other.constraints && self.streaming_behavior == other.streaming_behavior
-    }
-
-    #[track_caller]
-    pub fn diagnose_eq_up_to_span(&self, other: &TypeMeta) -> anyhow::Result<()> {
-        if self.constraints != other.constraints {
-            return Err(anyhow::anyhow!("constraints do not match"));
-        }
-        if self.streaming_behavior != other.streaming_behavior {
-            return Err(anyhow::anyhow!("streaming behaviors do not match"));
-        }
-        Ok(())
-    }
-}
-
-impl Default for TypeMeta {
-    fn default() -> Self {
-        Self {
-            span: Span::fake(),
-            constraints: vec![],
-            streaming_behavior: StreamingBehavior::default(),
-        }
-    }
+// TODO: Unused?
+pub struct Function {
+    pub params: Vec<TypeIR>,
+    pub return_type: Box<TypeIR>,
 }
 
 #[derive(Clone, Debug)]
 pub struct ExprFunction {
     pub name: String,
     pub parameters: Vec<Parameter>,
-    pub return_type: TypeM<TypeMeta>,
+    pub return_type: TypeIR,
     pub body: Block,
     pub span: Span,
 }
@@ -269,7 +61,7 @@ pub struct ExprFunction {
 pub struct LlmFunction {
     pub name: String,
     pub parameters: Vec<Parameter>,
-    pub return_type: TypeM<TypeMeta>,
+    pub return_type: TypeIR,
     pub client: String,
     pub prompt: String,
     pub span: Span,
@@ -287,7 +79,7 @@ pub struct Class {
 #[derive(Clone, Debug)]
 pub struct Field {
     pub name: String,
-    pub r#type: TypeM<TypeMeta>,
+    pub r#type: TypeIR,
     pub span: Span,
 }
 
@@ -308,7 +100,7 @@ pub struct EnumVariant {
 pub struct Parameter {
     pub name: String,
     pub is_mutable: bool,
-    pub r#type: TypeM<TypeMeta>,
+    pub r#type: TypeIR,
     pub span: Span,
 }
 
@@ -529,7 +321,7 @@ pub enum UnaryOperator {
 /// std.fetch_value<T>(...) == TypeArg::TypeName("T")
 #[derive(Clone, Debug)]
 pub enum TypeArg {
-    Type(TypeM<TypeMeta>),
+    Type(TypeIR),
     TypeName(String),
 }
 
