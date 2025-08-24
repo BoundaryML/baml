@@ -700,7 +700,8 @@ where
                     )
                 }
                 // Check if it's an expression function
-                else if let Some(expr_func) = thir.expr_functions.iter().find(|f| &f.name == name) {
+                else if let Some(expr_func) = thir.expr_functions.iter().find(|f| &f.name == name)
+                {
                     EvalValue::Function(
                         expr_func.parameters.len(),
                         Arc::new(expr_func.body.clone()),
@@ -765,36 +766,41 @@ where
                     )?);
                 }
 
-                // Create fresh names and open body under them
-                let body_expr =
-                    Expr::Block(Box::new(Arc::unwrap_or_clone(body.clone())), meta.clone());
-                let fresh = body_expr.fresh_names(arity);
-                // let mut opened = body_expr;
-                // for (i, name) in fresh.iter().enumerate() {
-                //     opened = opened.open(
-                //         &VarIndex {
-                //             de_bruijn: 0,
-                //             tuple: i as u32,
-                //         },
-                //         name,
-                //     );
-                // }
+                // Check if this is an expression function call to get parameter names
+                let param_names = if let Expr::Var(func_name, _) = func.as_ref() {
+                    if let Some(expr_func) =
+                        thir.expr_functions.iter().find(|f| &f.name == func_name)
+                    {
+                        // Use actual parameter names from expression function
+                        expr_func
+                            .parameters
+                            .iter()
+                            .map(|p| p.name.clone())
+                            .collect::<Vec<_>>()
+                    } else {
+                        // Use fresh names for anonymous functions
+                        let body_expr =
+                            Expr::Block(Box::new(Arc::unwrap_or_clone(body.clone())), meta.clone());
+                        body_expr.fresh_names(arity)
+                    }
+                } else {
+                    // Use fresh names for complex function expressions
+                    let body_expr =
+                        Expr::Block(Box::new(Arc::unwrap_or_clone(body.clone())), meta.clone());
+                    body_expr.fresh_names(arity)
+                };
 
                 // Create a scope binding parameters to their argument values
                 scopes.push(Scope {
-                    variables: fresh
+                    variables: param_names
                         .into_iter()
                         .zip(arg_vals)
                         .map(|(k, v)| (k, RefCell::new(v)))
                         .collect(),
                 });
-                // TODO: Check this.
-                let result = match &body_expr {
-                    Expr::Block(b, _) => evaluate_block(b, scopes, thir, run_llm_function).await?,
-                    other => {
-                        expect_value(evaluate_expr(other, scopes, thir, run_llm_function).await?)?
-                    }
-                };
+
+                // Execute the function body
+                let result = evaluate_block(&body, scopes, thir, run_llm_function).await?;
                 scopes.pop();
                 EvalValue::Value(result)
             }
@@ -1472,5 +1478,150 @@ mod tests {
             super::interpret_thir(thir, method_call, mock_llm_function, BamlMap::new()).await;
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("unknown method"));
+    }
+
+    #[tokio::test]
+    async fn test_fibonacci_function() {
+        use baml_types::ir_type::TypeIR;
+
+        use crate::thir::{Block, ExprFunction, Parameter, Statement};
+
+        // Create the Fibonacci function:
+        // fn Fib(mut n: int) -> int {
+        //     let mut a = 0;
+        //     let mut b = 1;
+        //     while (n > 0) {
+        //         n -= 1;
+        //         let t = a + b;
+        //         b = a;
+        //         a = t;
+        //     }
+        //     a
+        // }
+
+        let fib_body = Block {
+            env: BamlMap::new(),
+            statements: vec![
+                // let mut a = 0;
+                Statement::Let {
+                    name: "a".to_string(),
+                    value: Expr::Value(BamlValueWithMeta::Int(0, meta())),
+                    span: Span::fake(),
+                },
+                // let mut b = 1;
+                Statement::Let {
+                    name: "b".to_string(),
+                    value: Expr::Value(BamlValueWithMeta::Int(1, meta())),
+                    span: Span::fake(),
+                },
+                // while (n > 0) {
+                //     n -= 1;
+                //     let t = a + b;
+                //     b = a;
+                //     a = t;
+                // }
+                Statement::While {
+                    condition: Box::new(Expr::BinaryOperation {
+                        left: Arc::new(Expr::Var("n".to_string(), meta())),
+                        operator: crate::hir::BinaryOperator::Gt,
+                        right: Arc::new(Expr::Value(BamlValueWithMeta::Int(0, meta()))),
+                        meta: meta(),
+                    }),
+                    block: Block {
+                        env: BamlMap::new(),
+                        statements: vec![
+                            // n -= 1;
+                            Statement::AssignOp {
+                                left: Expr::Var("n".to_string(), meta()),
+                                assign_op: crate::hir::AssignOp::SubAssign,
+                                value: Expr::Value(BamlValueWithMeta::Int(1, meta())),
+                                span: Span::fake(),
+                            },
+                            // let t = a + b;
+                            Statement::Let {
+                                name: "t".to_string(),
+                                value: Expr::BinaryOperation {
+                                    left: Arc::new(Expr::Var("a".to_string(), meta())),
+                                    operator: crate::hir::BinaryOperator::Add,
+                                    right: Arc::new(Expr::Var("b".to_string(), meta())),
+                                    meta: meta(),
+                                },
+                                span: Span::fake(),
+                            },
+                            // b = a;
+                            Statement::Assign {
+                                left: Expr::Var("b".to_string(), meta()),
+                                value: Expr::Var("a".to_string(), meta()),
+                            },
+                            // a = t;
+                            Statement::Assign {
+                                left: Expr::Var("a".to_string(), meta()),
+                                value: Expr::Var("t".to_string(), meta()),
+                            },
+                        ],
+                        trailing_expr: None,
+                        ty: Some(TypeIR::null()),
+                        span: Span::fake(),
+                    },
+                    span: Span::fake(),
+                },
+            ],
+            trailing_expr: Some(Expr::Var("a".to_string(), meta())), // return a
+            ty: Some(TypeIR::int()),
+            span: Span::fake(),
+        };
+
+        let fib_function = ExprFunction {
+            name: "Fib".to_string(),
+            parameters: vec![Parameter {
+                name: "n".to_string(),
+                r#type: TypeIR::int(),
+                span: Span::fake(),
+            }],
+            return_type: TypeIR::int(),
+            body: fib_body,
+            span: Span::fake(),
+        };
+
+        let mut thir = empty_thir();
+        thir.expr_functions.push(fib_function);
+
+        // Test cases: Fib(0) = 0, Fib(1) = 1, Fib(2) = 1, Fib(5) = 5
+        let test_cases = vec![
+            (0, 0), // Fib(0) = 0
+            (1, 1), // Fib(1) = 1
+            (2, 1), // Fib(2) = 1
+            (5, 5), // Fib(5) = 5
+        ];
+
+        for (input, expected) in test_cases {
+            println!("Testing Fib({}) = {}", input, expected);
+
+            // Create function call: Fib(input)
+            let fib_call = Expr::Call {
+                func: Arc::new(Expr::Var("Fib".to_string(), meta())),
+                type_args: vec![],
+                args: vec![Expr::Value(BamlValueWithMeta::Int(input, meta()))],
+                meta: meta(),
+            };
+
+            let result =
+                super::interpret_thir(thir.clone(), fib_call, mock_llm_function, BamlMap::new())
+                    .await
+                    .unwrap();
+
+            match result {
+                BamlValueWithMeta::Int(actual, _) => {
+                    assert_eq!(
+                        actual, expected,
+                        "Fib({}) should be {}, got {}",
+                        input, expected, actual
+                    );
+                }
+                v => panic!("Expected int result for Fib({}), got {:?}", input, v),
+            }
+        }
+
+        println!("✅ All Fibonacci tests passed!");
     }
 }

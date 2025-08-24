@@ -41,6 +41,13 @@ pub struct ReplArgs {
         default_value = "./baml_src"
     )]
     pub from: PathBuf,
+
+    #[arg(
+        short = 'e',
+        long = "eval",
+        help = "Evaluate a single expression and exit"
+    )]
+    pub expression: Option<String>,
 }
 
 struct ReplState {
@@ -517,6 +524,20 @@ impl ReplArgs {
                 "No BAML sources found at {}. Use :load <path> to load sources.",
                 self.from.display()
             );
+        }
+
+        // If -e argument is provided, evaluate the expression and exit
+        if let Some(expression) = &self.expression {
+            match state.evaluate_expression(expression).await {
+                Ok(result) => {
+                    println!("{}", result);
+                    return Ok(());
+                }
+                Err(e) => {
+                    eprintln!("Error: {}", e);
+                    std::process::exit(1);
+                }
+            }
         }
 
         // Set up readline with history and completion
