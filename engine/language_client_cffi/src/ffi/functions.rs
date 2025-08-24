@@ -17,8 +17,7 @@ static RUNTIME: Lazy<Arc<tokio::runtime::Runtime>> =
     Lazy::new(|| Arc::new(tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime")));
 
 /// Track active operations with their cancellation triggers
-static OPERATION_TRIGGERS: Lazy<DashMap<u32, stream_cancel::Trigger>> =
-    Lazy::new(DashMap::new);
+static OPERATION_TRIGGERS: Lazy<DashMap<u32, stream_cancel::Trigger>> = Lazy::new(DashMap::new);
 
 /// Extern "C" function that returns immediately, scheduling the async call.
 /// Once the asynchronous function completes, the provided callback is invoked.

@@ -2,7 +2,7 @@ pub mod generator;
 pub mod runtime_prompt;
 use std::{collections::HashMap, path::PathBuf, str::FromStr};
 
-use crate::abort_controller::{js_abort_signal_to_tripwire, cleanup_operation};
+use crate::abort_controller::{cleanup_operation, js_abort_signal_to_tripwire};
 use anyhow::Context;
 use baml_runtime::{
     internal::{
@@ -26,7 +26,7 @@ use itertools::join;
 use js_sys::{Promise, Uint8Array};
 use jsonish::ResponseBamlValue;
 use serde::{Deserialize, Serialize};
-use wasm_bindgen::{prelude::*, JsValue, JsError};
+use wasm_bindgen::{prelude::*, JsError, JsValue};
 use wasm_bindgen_futures::JsFuture;
 
 use self::runtime_prompt::WasmScope;
@@ -1592,14 +1592,15 @@ impl WasmRuntime {
         abort_signal: Option<js_sys::Object>,
     ) -> Result<WasmTestResponses, JsValue> {
         // Convert abort signal to tripwire
-        let (operation_id, tripwire) = match crate::abort_controller::js_abort_signal_to_tripwire(abort_signal) {
-            Ok((id, tw)) => (id, tw)
-            Err(_e) => {
-                log::error!("WASM Parallel: Failed to setup abort handler");
-                (0, None)
-            }
-        };
-        
+        let (operation_id, tripwire) =
+            match crate::abort_controller::js_abort_signal_to_tripwire(abort_signal) {
+                Ok((id, tw)) => (id, tw),
+                Err(_e) => {
+                    log::error!("WASM Parallel: Failed to setup abort handler");
+                    (0, None)
+                }
+            };
+
         // Create a vector to store all test futures
         let mut test_futures = Vec::new();
 
@@ -1650,7 +1651,8 @@ impl WasmRuntime {
 
                     // Clone tripwire for this test
                     let test_tripwire = tripwire.clone();
-                    
+                    let on_tick = if false { Some(|| {}) } else { None };
+
                     // Create a future for this test
                     let future = async move {
                         let (test_response, span) = rt
@@ -1662,6 +1664,7 @@ impl WasmRuntime {
                                 None,
                                 env_vars.clone(),
                                 test_tripwire, // Pass tripwire to each test
+                                on_tick,
                             )
                             .await;
 
@@ -1688,12 +1691,12 @@ impl WasmRuntime {
 
         // Run all tests in parallel
         let results = futures::future::join_all(test_futures).await;
-        
+
         // Clean up operation if we had an abort signal
         if operation_id > 0 {
             crate::abort_controller::cleanup_operation(operation_id);
         }
-        
+
         Ok(WasmTestResponses { responses: results })
     }
 }
@@ -1929,9 +1932,9 @@ impl WasmFunction {
         abort_signal: Option<js_sys::Object>,
     ) -> Result<WasmTestResponse, JsValue> {
         // Convert abort signal to tripwire
-        let (operation_id, tripwire) = js_abort_signal_to_tripwire(abort_signal)
-            .map_err(|e| JsValue::from(e))?;
-        
+        let (operation_id, tripwire) =
+            js_abort_signal_to_tripwire(abort_signal).map_err(|e| JsValue::from(e))?;
+
         let rt = &rt.runtime;
         let function_name = self.name.clone();
 
@@ -1984,6 +1987,7 @@ impl WasmFunction {
         }
 
         // Pass the sender to run_test_with_expr_events with tripwire support
+        let on_tick = if false { Some(|| {}) } else { None };
         let result = rt
             .run_test_with_expr_events(
                 &function_name,
@@ -1994,12 +1998,13 @@ impl WasmFunction {
                 None,
                 env_vars.clone(),
                 tripwire,
+                on_tick,
             )
             .await;
-        
+
         // Clean up the operation
         cleanup_operation(operation_id);
-        
+
         let (test_response, span) = result;
 
         Ok(WasmTestResponse {
@@ -2027,9 +2032,9 @@ impl WasmFunction {
         abort_signal: Option<js_sys::Object>,
     ) -> Result<WasmTestResponse, JsValue> {
         // Convert abort signal to tripwire
-        let (operation_id, tripwire) = js_abort_signal_to_tripwire(abort_signal)
-            .map_err(|e| JsValue::from(e))?;
-        
+        let (operation_id, tripwire) =
+            js_abort_signal_to_tripwire(abort_signal).map_err(|e| JsValue::from(e))?;
+
         let rt = &rt.runtime;
         let function_name = self.name.clone();
 
@@ -2062,6 +2067,7 @@ impl WasmFunction {
             env_vars.insert(key, value);
         }
         // Now pass collector_arc to your runtime's run_test with tripwire support
+        let on_tick = if false { Some(|| {}) } else { None };
         let result = rt
             .run_test(
                 &function_name,
@@ -2071,12 +2077,13 @@ impl WasmFunction {
                 None,
                 env_vars.clone(),
                 tripwire,
+                on_tick,
             )
             .await;
-        
+
         // Clean up the operation
         cleanup_operation(operation_id);
-        
+
         let (test_response, span) = result;
 
         Ok(WasmTestResponse {

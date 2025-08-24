@@ -1,8 +1,8 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use stream_cancel::{Trigger, Tripwire};
-use wasm_bindgen::prelude::*;
 use wasm_bindgen::closure::Closure;
+use wasm_bindgen::prelude::*;
 use web_sys::AbortSignal;
 
 thread_local! {
@@ -17,31 +17,31 @@ pub fn js_abort_signal_to_tripwire(
     let Some(signal) = signal else {
         return Ok((0, None));
     };
-    
-    let abort_signal: AbortSignal = signal.dyn_into()
+
+    let abort_signal: AbortSignal = signal
+        .dyn_into()
         .map_err(|_| JsError::new("Expected AbortSignal"))?;
-    
+
     let operation_id = OPERATION_ID_COUNTER.with(|counter| {
         let mut c = counter.borrow_mut();
         let id = *c;
         *c += 1;
         id
     });
-    
-    
+
     let (trigger, tripwire) = Tripwire::new();
-    
+
     // Early abort check
     if abort_signal.aborted() {
         trigger.cancel();
         return Ok((operation_id, Some(tripwire)));
     }
-    
+
     // Store the trigger for later cancellation
     OPERATION_TRIGGERS.with(|triggers| {
         triggers.borrow_mut().insert(operation_id, trigger);
     });
-    
+
     // Create closure for abort event
     let op_id = operation_id;
     let closure = Closure::wrap(Box::new(move || {
@@ -56,15 +56,15 @@ pub fn js_abort_signal_to_tripwire(
             closures.borrow_mut().remove(&op_id);
         });
     }) as Box<dyn Fn()>);
-    
+
     // Set up event listener
     abort_signal.set_onabort(Some(closure.as_ref().unchecked_ref()));
-    
+
     // Store closure to prevent deallocation
     ABORT_CLOSURES.with(|closures| {
         closures.borrow_mut().insert(operation_id, closure);
     });
-    
+
     Ok((operation_id, Some(tripwire)))
 }
 

@@ -768,7 +768,7 @@ impl BamlRuntime {
                         // Call (CANNOT RETURN HERE until trace event is finished)
                         let result = self
                             .inner
-                            .call_function_impl_with_tripwire(prepared_func, rctx, cancel_tripwire)
+                            .call_function_impl(prepared_func, rctx, cancel_tripwire)
                             .await;
                         // eprintln!("result: {:?}", result);
                         // Trace event
@@ -891,7 +891,10 @@ impl BamlRuntime {
                             };
 
                         // Call (CANNOT RETURN HERE until trace event is finished)
-                        let result = self.inner.call_function_impl(prepared_func, rctx).await;
+                        let result = self
+                            .inner
+                            .call_function_impl(prepared_func, rctx, None)
+                            .await;
                         // eprintln!("result: {:?}", result);
                         // Trace event
                         let trace_event = TraceEvent::new_function_end(

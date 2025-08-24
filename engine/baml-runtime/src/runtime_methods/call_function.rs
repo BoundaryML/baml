@@ -48,15 +48,6 @@ impl InternalBamlRuntime {
         &'ir self,
         prepared_func_call: PreparedFunction<'ir>,
         ctx: RuntimeContext,
-    ) -> Result<crate::FunctionResult> {
-        self.call_function_impl_with_tripwire(prepared_func_call, ctx, None)
-            .await
-    }
-
-    pub(crate) async fn call_function_impl_with_tripwire<'ir>(
-        &'ir self,
-        prepared_func_call: PreparedFunction<'ir>,
-        ctx: RuntimeContext,
         cancel_tripwire: Option<Tripwire>,
     ) -> Result<crate::FunctionResult> {
         let future = async {
