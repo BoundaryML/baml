@@ -69,12 +69,13 @@ impl ReplState {
     }
 
     fn function_parameters(&self) -> Result<HashMap<String, Vec<String>>> {
-        let runtime = self
-            .runtime
-            .as_ref()
-            .ok_or_else(|| anyhow!("No BAML sources loaded. Use :load <path> to load sources."))?;
-        let internal = &runtime.inner;
-        let hir = Hir::from_ast(&internal.db.ast);
+        let hir = match self.runtime.as_ref() {
+            Some(runtime) => {
+                let internal = &runtime.inner;
+                Hir::from_ast(&internal.db.ast)
+            }
+            None => Hir::empty(),
+        };
         let mut diagnostics = Diagnostics::default();
         diagnostics.set_source(&(PathBuf::from("repl"), "function_parameters").into());
         let (thir, _) = typecheck_returning_context(&hir, &mut diagnostics);
@@ -180,10 +181,10 @@ impl ReplState {
     }
 
     async fn evaluate_expression(&mut self, input: &str) -> Result<String> {
-        let runtime = self
-            .runtime
-            .as_ref()
-            .ok_or_else(|| anyhow!("No BAML sources loaded. Use :load <path> to load sources."))?;
+        // let runtime = self
+        //     .runtime
+        //     .as_ref()
+        //     .ok_or_else(|| anyhow!("No BAML sources loaded. Use :load <path> to load sources."))?;
 
         // For now, we'll implement a simple expression evaluator
         // This is a placeholder - we'd need to integrate with the BAML parser properly
@@ -214,16 +215,16 @@ impl ReplState {
         &self,
         input: &str,
     ) -> Result<BamlValueWithMeta<ExprMetadata>> {
-        let runtime = self
-            .runtime
-            .as_ref()
-            .ok_or_else(|| anyhow!("No BAML sources loaded. Use :load <path> to load sources."))?;
+        let hir = match self.runtime.as_ref() {
+            Some(runtime) => {
+                // Get the internal runtime to access the existing context
+                let internal = &runtime.inner;
 
-        // Get the internal runtime to access the existing context
-        let internal = &runtime.inner;
-
-        // Convert AST to HIR from existing loaded sources
-        let hir = Hir::from_ast(&internal.db.ast);
+                // Convert AST to HIR from existing loaded sources
+                Hir::from_ast(&internal.db.ast)
+            }
+            None => Hir::empty(),
+        };
 
         // Typecheck to get THIR
         let mut type_diagnostics = Diagnostics::default();
@@ -249,10 +250,13 @@ impl ReplState {
             .collect();
 
         let fn_params = self.function_parameters()?.clone();
+
         let runtime_clone = self.runtime.clone();
-        let handle_llm_function = |function_name: String, args: Vec<BamlValue>| {
+        let env_vars = self.env_vars.clone();
+        let handle_llm_function = move |function_name: String, args: Vec<BamlValue>| {
             let fn_params = fn_params.clone();
             let runtime_clone = runtime_clone.clone();
+            let env_vars = env_vars.clone();
             async move {
                 match runtime_clone.as_ref() {
                     Some(runtime) => {
@@ -268,15 +272,7 @@ impl ReplState {
                         let cxt =
                             runtime.create_ctx_manager(BamlValue::String("none".to_string()), None);
                         let res = runtime
-                            .call_function(
-                                function_name,
-                                &args,
-                                &cxt,
-                                None,
-                                None,
-                                None,
-                                self.env_vars.clone(),
-                            )
+                            .call_function(function_name, &args, &cxt, None, None, None, env_vars)
                             .await;
                         let function_result = res.0?;
                         match function_result.parsed() {
@@ -289,7 +285,7 @@ impl ReplState {
                         }
                     }
                     None => Err(anyhow!(
-                        "No BAML sources loaded. Use :load <path> to load sources."
+                        "No runtime loaded, it should be impossible to call an LLM function"
                     )),
                 }
             }
@@ -308,17 +304,16 @@ impl ReplState {
     fn infer_expression_type(&self, input: &str) -> Result<String> {
         let input = input.trim();
 
-        // If not a stored variable, proceed with parsing and type checking
-        let runtime = self
-            .runtime
-            .as_ref()
-            .ok_or_else(|| anyhow!("No BAML sources loaded. Use :load <path> to load sources."))?;
+        let hir = match self.runtime.as_ref() {
+            Some(runtime) => {
+                // Get the internal runtime to access the existing context
+                let internal = &runtime.inner;
 
-        // Get the internal runtime to access the existing context
-        let internal = &runtime.inner;
-
-        // Convert AST to HIR from existing loaded sources
-        let hir = Hir::from_ast(&internal.db.ast);
+                // Convert AST to HIR from existing loaded sources
+                Hir::from_ast(&internal.db.ast)
+            }
+            None => Hir::empty(),
+        };
 
         // Typecheck to get THIR and type context
         let mut type_diagnostics = Diagnostics::default();

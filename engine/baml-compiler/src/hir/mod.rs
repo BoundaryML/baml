@@ -30,6 +30,18 @@ pub struct Hir {
     pub global_assignments: baml_types::BamlMap<String, Expression>,
 }
 
+impl Hir {
+    pub fn empty() -> Self {
+        Hir {
+            expr_functions: vec![],
+            llm_functions: vec![],
+            classes: vec![],
+            enums: vec![],
+            global_assignments: baml_types::BamlMap::new(),
+        }
+    }
+}
+
 // TODO: Unused?
 pub struct Function {
     pub params: Vec<TypeIR>,
