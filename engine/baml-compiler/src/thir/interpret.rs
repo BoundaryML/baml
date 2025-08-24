@@ -917,12 +917,31 @@ where
                 EvalValue::Value(result)
             }
             Expr::MethodCall {
-                receiver: _,
-                method: _,
-                args: _,
-                meta: _,
+                receiver,
+                method,
+                args,
+                meta,
             } => {
-                todo!("method calls are not supported in the interpreter")
+                let receiver_val =
+                    expect_value(evaluate_expr(receiver, scopes, thir, run_llm_function).await?)?;
+
+                // Extract method name
+                let method_name = match method.as_ref() {
+                    Expr::Var(name, _) => name.clone(),
+                    _ => bail!("method name must be an identifier at {:?}", meta.0),
+                };
+
+                // Evaluate arguments
+                let mut arg_vals: Vec<BamlValueWithMeta<ExprMetadata>> =
+                    Vec::with_capacity(args.len());
+                for arg in args.iter() {
+                    arg_vals.push(expect_value(
+                        evaluate_expr(arg, scopes, thir, run_llm_function).await?,
+                    )?);
+                }
+
+                let result = evaluate_method_call(&receiver_val, &method_name, &arg_vals, meta)?;
+                EvalValue::Value(result)
             }
             Expr::Paren(inner, _) => evaluate_expr(inner, scopes, thir, run_llm_function).await?,
         })
@@ -1178,36 +1197,48 @@ fn compare_values(
     })
 }
 
-// /// Convert a BamlValue to BamlValueWithMeta by adding the given metadata
-// fn baml_value_to_with_meta(value: &BamlValue, meta: ExprMetadata) -> BamlValueWithMeta<ExprMetadata> {
-//     match value {
-//         BamlValue::String(s) => BamlValueWithMeta::String(s.clone(), meta),
-//         BamlValue::Int(i) => BamlValueWithMeta::Int(*i, meta),
-//         BamlValue::Float(f) => BamlValueWithMeta::Float(*f, meta),
-//         BamlValue::Bool(b) => BamlValueWithMeta::Bool(*b, meta),
-//         BamlValue::Map(m) => {
-//             let with_meta_map = m.iter()
-//                 .map(|(k, v)| (k.clone(), baml_value_to_with_meta(v, meta.clone())))
-//                 .collect();
-//             BamlValueWithMeta::Map(with_meta_map, meta)
-//         },
-//         BamlValue::List(l) => {
-//             let with_meta_list = l.iter()
-//                 .map(|v| baml_value_to_with_meta(v, meta.clone()))
-//                 .collect();
-//             BamlValueWithMeta::List(with_meta_list, meta)
-//         },
-//         BamlValue::Media(m) => BamlValueWithMeta::Media(m.clone(), meta),
-//         BamlValue::Enum(name, val) => BamlValueWithMeta::Enum(name.clone(), val.clone(), meta),
-//         BamlValue::Class(name, fields) => {
-//             let with_meta_fields = fields.iter()
-//                 .map(|(k, v)| (k.clone(), baml_value_to_with_meta(v, meta.clone())))
-//                 .collect();
-//             BamlValueWithMeta::Class(name.clone(), with_meta_fields, meta)
-//         },
-//         BamlValue::Null => BamlValueWithMeta::Null(meta),
-//     }
-// }
+fn evaluate_method_call(
+    receiver: &BamlValueWithMeta<ExprMetadata>,
+    method_name: &str,
+    args: &[BamlValueWithMeta<ExprMetadata>],
+    meta: &ExprMetadata,
+) -> Result<BamlValueWithMeta<ExprMetadata>> {
+    match method_name {
+        "len" => {
+            // Array/List length method
+            match receiver {
+                BamlValueWithMeta::List(items, _) => {
+                    if !args.is_empty() {
+                        bail!("len() method takes no arguments at {:?}", meta.0);
+                    }
+                    Ok(BamlValueWithMeta::Int(items.len() as i64, meta.clone()))
+                }
+                BamlValueWithMeta::String(s, _) => {
+                    if !args.is_empty() {
+                        bail!("len() method takes no arguments at {:?}", meta.0);
+                    }
+                    Ok(BamlValueWithMeta::Int(s.len() as i64, meta.clone()))
+                }
+                BamlValueWithMeta::Map(map, _) => {
+                    if !args.is_empty() {
+                        bail!("len() method takes no arguments at {:?}", meta.0);
+                    }
+                    Ok(BamlValueWithMeta::Int(map.len() as i64, meta.clone()))
+                }
+                _ => bail!(
+                    "len() method not available on type {:?} at {:?}",
+                    receiver,
+                    meta.0
+                ),
+            }
+        }
+        _ => bail!(
+            "unknown method '{}' at {:?}, should have been caught during typechecking",
+            method_name,
+            meta.0
+        ),
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -1361,5 +1392,77 @@ mod tests {
             BamlValueWithMeta::Int(i, _) => assert_eq!(i, 10),
             v => panic!("expected int, got {:?}", v),
         }
+    }
+
+    #[tokio::test]
+    async fn test_method_call_array_len() {
+        let thir = empty_thir();
+
+        // Test [1, 2, 3].len()
+        let array = Expr::List(
+            vec![
+                Expr::Value(BamlValueWithMeta::Int(1, meta())),
+                Expr::Value(BamlValueWithMeta::Int(2, meta())),
+                Expr::Value(BamlValueWithMeta::Int(3, meta())),
+            ],
+            meta(),
+        );
+        let method_call = Expr::MethodCall {
+            receiver: Arc::new(array),
+            method: Arc::new(Expr::Var("len".to_string(), meta())),
+            args: vec![],
+            meta: meta(),
+        };
+
+        let result = super::interpret_thir(thir, method_call, mock_llm_function, BamlMap::new())
+            .await
+            .unwrap();
+
+        match result {
+            BamlValueWithMeta::Int(len, _) => assert_eq!(len, 3),
+            v => panic!("expected int, got {:?}", v),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_method_call_string_len() {
+        let thir = empty_thir();
+
+        // Test "hello".len()
+        let string_expr = Expr::Value(BamlValueWithMeta::String("hello".to_string(), meta()));
+        let method_call = Expr::MethodCall {
+            receiver: Arc::new(string_expr),
+            method: Arc::new(Expr::Var("len".to_string(), meta())),
+            args: vec![],
+            meta: meta(),
+        };
+
+        let result = super::interpret_thir(thir, method_call, mock_llm_function, BamlMap::new())
+            .await
+            .unwrap();
+
+        match result {
+            BamlValueWithMeta::Int(len, _) => assert_eq!(len, 5),
+            v => panic!("expected int, got {:?}", v),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_method_call_unknown_method() {
+        let thir = empty_thir();
+
+        // Test "hello".unknown_method()
+        let string_expr = Expr::Value(BamlValueWithMeta::String("hello".to_string(), meta()));
+        let method_call = Expr::MethodCall {
+            receiver: Arc::new(string_expr),
+            method: Arc::new(Expr::Var("unknown_method".to_string(), meta())),
+            args: vec![],
+            meta: meta(),
+        };
+
+        let result =
+            super::interpret_thir(thir, method_call, mock_llm_function, BamlMap::new()).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("unknown method"));
     }
 }
