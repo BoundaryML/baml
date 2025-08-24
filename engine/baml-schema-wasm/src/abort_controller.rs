@@ -8,7 +8,7 @@ use web_sys::AbortSignal;
 thread_local! {
     static ABORT_CLOSURES: RefCell<HashMap<u32, Closure<dyn Fn()>>> = RefCell::new(HashMap::new());
     static OPERATION_TRIGGERS: RefCell<HashMap<u32, Trigger>> = RefCell::new(HashMap::new());
-    static OPERATION_ID_COUNTER: RefCell<u32> = RefCell::new(0);
+    static OPERATION_ID_COUNTER: RefCell<u32> = const { RefCell::new(0) };
 }
 
 pub fn js_abort_signal_to_tripwire(

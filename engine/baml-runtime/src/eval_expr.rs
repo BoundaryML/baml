@@ -327,6 +327,7 @@ async fn beta_reduce<'a>(
                             None,
                             None,
                             env.env_vars.clone(),
+                            None,
                         )
                         .await
                         .0;

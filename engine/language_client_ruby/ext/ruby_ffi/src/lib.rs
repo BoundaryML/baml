@@ -141,6 +141,7 @@ impl BamlRuntimeFfi {
             client_registry.map(|c| c.inner.borrow_mut()).as_deref(),
             Some(collectors),
             env_vars,
+            None,
         )) {
             (Ok(res), _) => Ok(FunctionResult::new(res)),
             (Err(e), _) => Err(Error::new(

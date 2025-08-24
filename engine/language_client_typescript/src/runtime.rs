@@ -142,32 +142,18 @@ impl BamlRuntime {
             .collect::<Vec<_>>();
 
         let fut = async move {
-            let result = if let Some(tripwire) = tripwire {
-                baml_runtime
-                    .call_function_with_tripwire(
-                        function_name,
-                        &args_map,
-                        &ctx_mng,
-                        tb.as_ref(),
-                        cb.as_ref(),
-                        Some(collector_list),
-                        env_vars,
-                        Some(tripwire),
-                    )
-                    .await
-            } else {
-                baml_runtime
-                    .call_function(
-                        function_name,
-                        &args_map,
-                        &ctx_mng,
-                        tb.as_ref(),
-                        cb.as_ref(),
-                        Some(collector_list),
-                        env_vars,
-                    )
-                    .await
-            };
+            let result = baml_runtime
+                .call_function(
+                    function_name,
+                    &args_map,
+                    &ctx_mng,
+                    tb.as_ref(),
+                    cb.as_ref(),
+                    Some(collector_list),
+                    env_vars,
+                    tripwire,
+                )
+                .await;
 
             // Clean up the operation trigger
             cleanup_operation(operation_id);
@@ -195,6 +181,7 @@ impl BamlRuntime {
         signal: Option<JsObject>, // NEW: AbortSignal parameter (sync doesn't actually use it)
     ) -> napi::Result<FunctionResult> {
         let args = parse_ts_types::js_object_to_baml_value(env, args)?;
+        let (operation_id, tripwire) = js_abort_signal_to_rust_tripwire(env, signal)?;
 
         if !args.is_map() {
             return Err(invalid_argument_error(&format!(
@@ -219,7 +206,9 @@ impl BamlRuntime {
             cb.as_ref(),
             Some(collector_list),
             env_vars,
+            tripwire,
         );
+        cleanup_operation(operation_id);
 
         result.map(FunctionResult::from).map_err(from_anyhow_error)
     }

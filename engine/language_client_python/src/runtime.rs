@@ -229,7 +229,7 @@ impl BamlRuntime {
 
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let (result, _) = baml_runtime
-                .call_function_with_tripwire(
+                .call_function(
                     function_name,
                     &args_map,
                     &ctx_mng,
@@ -302,6 +302,7 @@ impl BamlRuntime {
                     cb.as_ref(),
                     Some(collector_list),
                     env_vars,
+                    None,
                 )
             })
         });

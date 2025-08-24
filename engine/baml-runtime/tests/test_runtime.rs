@@ -88,6 +88,7 @@ mod internal_tests {
             "baml_src",
             &files,
             [("OPENAI_API_KEY", "OPENAI_API_KEY")].into(),
+            internal_baml_core::feature_flags::FeatureFlags::default(),
         )?;
         log::info!("Runtime:");
 
@@ -108,6 +109,7 @@ mod internal_tests {
                 None,
                 None,
                 HashMap::new(),
+                None,
             )
             .await;
 
@@ -171,6 +173,7 @@ mod internal_tests {
             "baml_src",
             &files,
             [("OPENAI_API_KEY", "OPENAI_API_KEY")].into(),
+            internal_baml_core::feature_flags::FeatureFlags::default(),
         )?;
         log::info!("Runtime:");
 
@@ -248,6 +251,7 @@ mod internal_tests {
             "baml_src",
             &files,
             [("OPENAI_API_KEY", "OPENAI_API_KEY")].into(),
+            internal_baml_core::feature_flags::FeatureFlags::default(),
         )?;
         log::info!("Runtime:");
 
@@ -288,6 +292,7 @@ mod internal_tests {
                 "OPENAI_API_KEY",
             )]
             .into(),
+            internal_baml_core::feature_flags::FeatureFlags::default(),
         )
     }
 
@@ -623,13 +628,17 @@ test RecursiveAliasCycle {
 
         let ctx = runtime.create_ctx_manager(BamlValue::String("test".to_string()), None);
 
+        let on_event = if false { Some(|_| {}) } else { None };
+        let on_tick = if false { Some(|| {}) } else { None };
         let run_test_future = runtime.run_test(
             function_name,
             test_name,
             &ctx,
-            Some(|r| {}),
+            on_event,
             None,
             HashMap::new(),
+            None,
+            on_tick,
         );
         let (res, call) = runtime.async_runtime.block_on(run_test_future);
 
@@ -1065,13 +1074,17 @@ test RecursiveAliasCycle {
         let ctx = runtime.create_ctx_manager(BamlValue::String("test".to_string()), None);
 
         // First call with initial env var
+        let on_event = if false { Some(|_| {}) } else { None };
+        let on_tick = if false { Some(|| {}) } else { None };
         let run_test_future = runtime.run_test(
             "Test",
             "TestEnvVars",
             &ctx,
-            Some(|r| {}),
+            on_event,
             None,
             HashMap::new(),
+            None,
+            on_tick,
         );
         let (res1, _) = runtime.async_runtime.block_on(run_test_future);
         // Get the first client instance
@@ -1084,9 +1097,11 @@ test RecursiveAliasCycle {
             "Test",
             "TestEnvVars",
             &ctx,
-            Some(|r| {}),
+            on_event,
             None,
             env_vars2.clone(),
+            None,
+            on_tick,
         );
         let (res2, _) = runtime.async_runtime.block_on(run_test_future);
         let client2 = runtime.llm_provider_from_function(

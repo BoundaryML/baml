@@ -254,7 +254,7 @@ impl WasmProject {
                     JsValue::from_str(&format!("Expected feature_flags to be Array<string>. {e}"))
                 })?;
             FeatureFlags::from_vec(flags)
-                .map_err(|e| JsValue::from_str(&format!("Invalid feature flags: {:?}", e)))?
+                .map_err(|e| JsValue::from_str(&format!("Invalid feature flags: {e:?}")))?
         };
 
         BamlRuntime::from_file_content(&self.root_dir_name, &hm, env_vars, feature_flags)
@@ -1933,7 +1933,7 @@ impl WasmFunction {
     ) -> Result<WasmTestResponse, JsValue> {
         // Convert abort signal to tripwire
         let (operation_id, tripwire) =
-            js_abort_signal_to_tripwire(abort_signal).map_err(|e| JsValue::from(e))?;
+            js_abort_signal_to_tripwire(abort_signal).map_err(JsValue::from)?;
 
         let rt = &rt.runtime;
         let function_name = self.name.clone();
@@ -2033,7 +2033,7 @@ impl WasmFunction {
     ) -> Result<WasmTestResponse, JsValue> {
         // Convert abort signal to tripwire
         let (operation_id, tripwire) =
-            js_abort_signal_to_tripwire(abort_signal).map_err(|e| JsValue::from(e))?;
+            js_abort_signal_to_tripwire(abort_signal).map_err(JsValue::from)?;
 
         let rt = &rt.runtime;
         let function_name = self.name.clone();

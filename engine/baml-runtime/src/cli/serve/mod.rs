@@ -355,6 +355,7 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
                 client_registry.as_ref(),
                 None,
                 env_vars,
+                None,
             )
             .await;
 

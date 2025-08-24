@@ -104,8 +104,9 @@ mod tests {
             .cloned()
             .collect::<HashMap<_, _>>();
         let env_vars_js = to_value(&env_vars).unwrap();
+        let undefined_js = JsValue::UNDEFINED;
 
-        let mut current_runtime = project.runtime(env_vars_js.clone()).unwrap();
+        let mut current_runtime = project.runtime(env_vars_js.clone(), undefined_js).unwrap();
 
         let diagnostics = project.diagnostics(&current_runtime);
         assert!(diagnostics.errors().is_empty());
@@ -119,6 +120,7 @@ mod tests {
                 js_sys::Function::new_no_args(""),
                 js_sys::Function::new_no_args(""),
                 env_vars_js.clone().into(),
+                None,
             )
             .await;
         }

@@ -87,32 +87,20 @@ fn call_function_from_c_inner(
     let rt = RUNTIME.clone();
     rt.spawn(async move {
         // Create a future for the call_function
-        let call_future = async {
-            // TODO: There's a race condition bug here. Technically we should COPY the type builder, not just clone it.
-            let type_builder = type_builder.map(|t| t.type_builder.as_ref().clone());
-            runtime
-                .call_function(
-                    func_name,
-                    &kwargs,
-                    &ctx,
-                    type_builder.as_ref(),
-                    client_registry.as_ref(),
-                    collectors.map(|c| c.iter().map(|c| c.deref().clone()).collect()),
-                    env_vars,
-                )
-                .await
-        };
-
-        // Use tokio::select to handle cancellation
-        let result = tokio::select! {
-            _ = tripwire => {
-                // Operation was cancelled
-                (Err(anyhow::anyhow!("Operation cancelled")), Default::default())
-            }
-            result = call_future => {
-                result
-            }
-        };
+        // TODO: There's a race condition bug here. Technically we should COPY the type builder, not just clone it.
+        let type_builder = type_builder.map(|t| t.type_builder.as_ref().clone());
+        let result = runtime
+            .call_function(
+                func_name,
+                &kwargs,
+                &ctx,
+                type_builder.as_ref(),
+                client_registry.as_ref(),
+                collectors.map(|c| c.iter().map(|c| c.deref().clone()).collect()),
+                env_vars,
+                Some(tripwire),
+            )
+            .await;
 
         // Clean up the trigger
         OPERATION_TRIGGERS.remove(&id);
