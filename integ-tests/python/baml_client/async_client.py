@@ -3466,21 +3466,6 @@ class BamlAsyncClient:
                 "n": n,
             })
             return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
-    async def LengthOfArray(self, arr: typing.List[int],
-        baml_options: BamlCallOptions = {},
-    ) -> int:
-        # Check if on_tick is provided
-        if 'on_tick' in baml_options:
-            # Use streaming internally when on_tick is provided
-            stream = self.stream.LengthOfArray(arr=arr,
-                baml_options=baml_options)
-            return await stream.get_final_response()
-        else:
-            # Original non-streaming code
-            result = await self.__options.merge_options(baml_options).call_function_async(function_name="LengthOfArray", args={
-                "arr": arr,
-            })
-            return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
     async def NormalElseIfStmt(self, a: bool,b: bool,
         baml_options: BamlCallOptions = {},
     ) -> int:
@@ -6337,18 +6322,6 @@ class BamlStreamClient:
           lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
-    def LengthOfArray(self, arr: typing.List[int],
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlStream[typing.Optional[int], int]:
-        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="LengthOfArray", args={
-            "arr": arr,
-        })
-        return baml_py.BamlStream[typing.Optional[int], int](
-          result,
-          lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
-          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
-          ctx,
-        )
     def NormalElseIfStmt(self, a: bool,b: bool,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[typing.Optional[int], int]:
@@ -8047,13 +8020,6 @@ class BamlHttpRequestClient:
             "n": n,
         }, mode="request")
         return result
-    async def LengthOfArray(self, arr: typing.List[int],
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.baml_py.HTTPRequest:
-        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="LengthOfArray", args={
-            "arr": arr,
-        }, mode="request")
-        return result
     async def NormalElseIfStmt(self, a: bool,b: bool,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -9705,13 +9671,6 @@ class BamlHttpStreamRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="IterativeFibonacci", args={
             "n": n,
-        }, mode="stream")
-        return result
-    async def LengthOfArray(self, arr: typing.List[int],
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.baml_py.HTTPRequest:
-        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="LengthOfArray", args={
-            "arr": arr,
         }, mode="stream")
         return result
     async def NormalElseIfStmt(self, a: bool,b: bool,
