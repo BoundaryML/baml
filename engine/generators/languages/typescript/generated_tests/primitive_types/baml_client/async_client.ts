@@ -112,7 +112,6 @@ export class BamlAsyncClient {
         
         return await stream.getFinalResponse();
       }
-      }
       
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -157,7 +156,6 @@ export class BamlAsyncClient {
         );
         
         return await stream.getFinalResponse();
-      }
       }
       
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -204,7 +202,6 @@ export class BamlAsyncClient {
         
         return await stream.getFinalResponse();
       }
-      }
       
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -249,7 +246,6 @@ export class BamlAsyncClient {
         );
         
         return await stream.getFinalResponse();
-      }
       }
       
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -296,7 +292,6 @@ export class BamlAsyncClient {
         
         return await stream.getFinalResponse();
       }
-      }
       
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -341,7 +336,6 @@ export class BamlAsyncClient {
         );
         
         return await stream.getFinalResponse();
-      }
       }
       
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -388,7 +382,6 @@ export class BamlAsyncClient {
         
         return await stream.getFinalResponse();
       }
-      }
       
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -433,7 +426,6 @@ export class BamlAsyncClient {
         );
         
         return await stream.getFinalResponse();
-      }
       }
       
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -480,7 +472,6 @@ export class BamlAsyncClient {
         
         return await stream.getFinalResponse();
       }
-      }
       
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -525,7 +516,6 @@ export class BamlAsyncClient {
         );
         
         return await stream.getFinalResponse();
-      }
       }
       
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -597,6 +587,7 @@ class BamlStreamClient {
           }
         };
       }
+
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
         Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
@@ -659,6 +650,7 @@ class BamlStreamClient {
           }
         };
       }
+
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
         Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
@@ -721,6 +713,7 @@ class BamlStreamClient {
           }
         };
       }
+
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
         Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
@@ -783,6 +776,7 @@ class BamlStreamClient {
           }
         };
       }
+
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
         Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
@@ -845,6 +839,7 @@ class BamlStreamClient {
           }
         };
       }
+
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
         Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
@@ -907,6 +902,7 @@ class BamlStreamClient {
           }
         };
       }
+
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
         Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
@@ -969,6 +965,7 @@ class BamlStreamClient {
           }
         };
       }
+
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
         Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
@@ -1031,6 +1028,7 @@ class BamlStreamClient {
           }
         };
       }
+
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
         Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
@@ -1093,6 +1091,7 @@ class BamlStreamClient {
           }
         };
       }
+
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
         Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
@@ -1155,6 +1154,7 @@ class BamlStreamClient {
           }
         };
       }
+
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
         Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
