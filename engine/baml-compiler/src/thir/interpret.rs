@@ -698,6 +698,14 @@ where
                         }),
                         meta.clone(),
                     )
+                }
+                // Check if it's an expression function
+                else if let Some(expr_func) = thir.expr_functions.iter().find(|f| &f.name == name) {
+                    EvalValue::Function(
+                        expr_func.parameters.len(),
+                        Arc::new(expr_func.body.clone()),
+                        meta.clone(),
+                    )
                 } else {
                     let v = lookup(scopes, name)
                         .with_context(|| format!("unbound variable `{}` at {:?}", name, meta.0))?;
