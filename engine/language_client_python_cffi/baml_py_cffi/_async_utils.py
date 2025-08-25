@@ -68,3 +68,38 @@ async def make_async_call(call_fn, *args) -> Any:
         with _callback_lock:
             _active_callbacks.pop(call_id, None)
         raise
+
+async def make_async_call_with_type_map(call_fn, *args) -> Any:
+    """Make an async CFFI call with a type map for encoding/decoding"""
+    # Extract type_map from the last argument
+    *call_args, type_map = args
+    
+    # Generate unique ID
+    call_id = random.randint(1, 1000000)
+    
+    # Create queue and register callback state with type map
+    loop = asyncio.get_event_loop()
+    queue = asyncio.Queue()
+    
+    with _callback_lock:
+        _active_callbacks[call_id] = CallbackState(
+            queue=queue,
+            loop=loop,
+            type_map=type_map  # Store the type map for callback processing
+        )
+    
+    try:
+        # Make the C call with our ID
+        error = call_fn(*call_args, call_id)
+        if error:
+            # Synchronous error
+            error_msg = error.decode('utf-8')
+            raise RuntimeError(f"Call failed: {error_msg}")
+        
+        # Use wrapper to get single result from queue
+        return await queue_to_single_result(queue)
+    except Exception:
+        # Cleanup on error
+        with _callback_lock:
+            _active_callbacks.pop(call_id, None)
+        raise

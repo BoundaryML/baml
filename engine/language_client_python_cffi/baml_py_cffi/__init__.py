@@ -4,9 +4,10 @@ from typing import Dict
 from ._ffi import version
 from ._lib import set_shared_library_path
 from .runtime import BamlRuntime
+from .client import ScopedClient
 
 __version__ = "0.205.0"
-__all__ = ["BamlRuntime", "version", "create_runtime", "set_shared_library_path"]
+__all__ = ["BamlRuntime", "version", "create_runtime", "set_shared_library_path", "ScopedClient"]
 
 
 # Simple creation function matching Go API
