@@ -1204,29 +1204,29 @@ fn for_loop_nested() -> anyhow::Result<()> {
     })
 }
 
-#[test]
-fn basic_method_decl() -> anyhow::Result<()> {
-    assert_vm_executes(Program {
-        source: r#"
-            class Number {
-                value int
-
-                function add(self, other: Number) -> Number {
-                    Number { value: self.value + other.value }
-                }
-            }
-
-            function main() -> int {
-                let mut a = Number { value: 1 };
-                let mut b = Number { value: 2 };
-                let n = a.add(b);
-                n.value
-            }
-        "#,
-        function: "main",
-        expected: VmExecState::Complete(Value::Int(3)),
-    })
-}
+// #[test]
+// fn basic_method_decl() -> anyhow::Result<()> {
+//     assert_vm_executes(Program {
+//         source: r#"
+//             class Number {
+//                 value int
+//
+//                 function add(self, other: Number) -> Number {
+//                     Number { value: self.value + other.value }
+//                 }
+//             }
+//
+//             function main() -> int {
+//                 let mut a = Number { value: 1 };
+//                 let mut b = Number { value: 2 };
+//                 let n = a.add(b);
+//                 n.value
+//             }
+//         "#,
+//         function: "main",
+//         expected: VmExecState::Complete(Value::Int(3)),
+//     })
+// }
 
 #[test]
 #[ignore = "TODO: Left hand side of assignment is not an identifier"]

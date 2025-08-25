@@ -1,7 +1,10 @@
 /// Type-checked HIR.
 ///
-use crate::hir::{self, AssignOp, BinaryOperator, Enum, LlmFunction, Type, UnaryOperator};
+use baml_types::ir_type::TypeIR;
 
+use crate::hir::{self, AssignOp, BinaryOperator, Enum, LlmFunction, UnaryOperator};
+
+pub mod interpret;
 pub mod typecheck;
 
 use std::{
@@ -30,7 +33,7 @@ pub struct THir<T> {
 pub struct ExprFunction<T> {
     pub name: String,
     pub parameters: Vec<Parameter>,
-    pub return_type: Type,
+    pub return_type: TypeIR,
     pub body: Block<T>,
     pub span: Span,
 }
@@ -38,7 +41,7 @@ pub struct ExprFunction<T> {
 #[derive(Clone, Debug)]
 pub struct Parameter {
     pub name: String,
-    pub r#type: Type,
+    pub r#type: TypeIR,
     pub span: Span,
 }
 
@@ -69,7 +72,7 @@ pub enum Expr<T> {
     Function(usize, Arc<Block<T>>, T), // number of parameters, body, metadata
     Call {
         func: Arc<Expr<T>>,
-        type_args: Vec<Type>,
+        type_args: Vec<TypeIR>,
         args: Vec<Expr<T>>,
         meta: T,
     },
@@ -116,7 +119,7 @@ pub struct Block<T> {
     /// Final expression in the block without semicolon (used as return).
     pub trailing_expr: Option<Expr<T>>,
     /// Type of the block.
-    pub ty: Option<Type>,
+    pub ty: Option<TypeIR>,
     pub span: Span,
 }
 
@@ -185,7 +188,7 @@ impl VarIndex {
 }
 
 /// The metadata used during parsing, typechecking and evaluation of BAML expressions.
-pub type ExprMetadata = (Span, Option<Type>);
+pub type ExprMetadata = (Span, Option<TypeIR>);
 
 impl<T: Clone + std::fmt::Debug> Expr<T> {
     pub fn meta(&self) -> &T {

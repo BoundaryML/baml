@@ -28,6 +28,7 @@ package baml_client
 
 import (
 	"classes/baml_client/type_builder"
+	"fmt"
 	"os"
 	"strings"
 
@@ -109,7 +110,7 @@ func (o *onTickCallbackData) OnTick() baml.TickCallback {
 	return o.onTick
 }
 
-func WithExperimentalOnTick(onTick baml.TickCallback) CallOptionFunc {
+func WithOnTick(onTick baml.TickCallback) CallOptionFunc {
 	return func(o *callOption) {
 		collector, err := bamlRuntime.NewCollector("on-tick-collector")
 		if err != nil {
@@ -124,6 +125,12 @@ func WithExperimentalOnTick(onTick baml.TickCallback) CallOptionFunc {
 			onTick:    onTick,
 		}
 	}
+}
+
+// Deprecated: Use WithOnTick instead.
+func WithExperimentalOnTick(onTick baml.TickCallback) CallOptionFunc {
+	fmt.Println("Warning: WithExperimentalOnTick is deprecated. Use WithOnTick instead.")
+	return WithOnTick(onTick)
 }
 
 // Add multiple collectors to the specific function call.

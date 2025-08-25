@@ -1,11 +1,11 @@
 //! Pretty printing for HIR.
 
+use baml_types::ir_type::TypeIR;
 use pretty::RcDoc;
 
 use crate::hir::{
     AssignOp, BinaryOperator, Block, Class, ClassConstructorField, Enum, EnumVariant, ExprFunction,
-    Expression, Field, Function, Hir, LlmFunction, Parameter, Statement, TypeArg, TypeM, TypeMeta,
-    UnaryOperator,
+    Expression, Field, Hir, LlmFunction, Parameter, Statement, TypeArg, UnaryOperator,
 };
 
 impl Hir {
@@ -48,23 +48,34 @@ impl Hir {
     }
 }
 
-impl TypeM<TypeMeta> {
-    pub fn to_doc(&self) -> RcDoc<'static, ()> {
-        let meta = self.get_meta();
+pub trait TypeDocumentRender {
+    fn to_doc(&self) -> RcDoc<'static, ()>;
+}
+
+impl TypeDocumentRender for TypeIR {
+    fn to_doc(&self) -> RcDoc<'static, ()> {
+        let meta = self.meta();
         let base = match self {
-            TypeM::Int(_) => RcDoc::text("int"),
-            TypeM::Float(_) => RcDoc::text("float"),
-            TypeM::String(_) => RcDoc::text("string"),
-            TypeM::Bool(_) => RcDoc::text("bool"),
-            TypeM::Array(inner, _) => RcDoc::text("array").append(inner.to_doc()),
-            TypeM::Map(key, value, _) => RcDoc::text("map<")
+            TypeIR::Primitive(baml_types::TypeValue::Int, _) => RcDoc::text("int"),
+            TypeIR::Primitive(baml_types::TypeValue::Float, _) => RcDoc::text("float"),
+            TypeIR::Primitive(baml_types::TypeValue::String, _) => RcDoc::text("string"),
+            TypeIR::Primitive(baml_types::TypeValue::Bool, _) => RcDoc::text("bool"),
+            TypeIR::Primitive(baml_types::TypeValue::Null, _) => RcDoc::text("null"),
+            TypeIR::Primitive(baml_types::TypeValue::Media(media_type), _) => {
+                RcDoc::text(format!("{}", media_type))
+            }
+            TypeIR::List(inner, _) => RcDoc::text("array<")
+                .append(inner.to_doc())
+                .append(RcDoc::text(">")),
+            TypeIR::Map(key, value, _) => RcDoc::text("map<")
                 .append(key.to_doc())
                 .append(RcDoc::text(", "))
                 .append(value.to_doc())
                 .append(RcDoc::text(">")),
-            TypeM::Class(name, _) => RcDoc::text(name.clone()),
-            TypeM::Enum(name, _) => RcDoc::text(name.clone()),
-            TypeM::Union(types, _) => {
+            TypeIR::Class { name, .. } => RcDoc::text(name.clone()),
+            TypeIR::Enum { name, .. } => RcDoc::text(name.clone()),
+            TypeIR::Union(union_type, _) => {
+                let types = union_type.iter_include_null();
                 let mut docs = Vec::new();
                 for type_ in types {
                     docs.push(type_.to_doc());
@@ -73,20 +84,21 @@ impl TypeM<TypeMeta> {
                     .append(RcDoc::intersperse(docs, RcDoc::text(" | ")))
                     .append(RcDoc::text(")"))
             }
-            TypeM::Null(_) => RcDoc::text("null"),
-            TypeM::Function(
-                Function {
-                    params: inputs,
-                    return_type,
-                },
-                _,
-            ) => RcDoc::text("(")
+            TypeIR::Arrow(arrow, _) => RcDoc::text("(")
                 .append(RcDoc::intersperse(
-                    inputs.iter().map(|i| i.to_doc()),
+                    arrow.param_types.iter().map(|i| i.to_doc()),
                     RcDoc::text(", "),
                 ))
                 .append(RcDoc::text(") -> "))
-                .append(return_type.to_doc()),
+                .append(arrow.return_type.to_doc()),
+            TypeIR::Literal(literal, _) => RcDoc::text(format!("{}", literal)),
+            TypeIR::RecursiveTypeAlias { name, .. } => RcDoc::text(name.clone()),
+            TypeIR::Tuple(types, _) => RcDoc::text("(")
+                .append(RcDoc::intersperse(
+                    types.iter().map(|t| t.to_doc()),
+                    RcDoc::text(", "),
+                ))
+                .append(RcDoc::text(")")),
         };
 
         let mut doc = base;

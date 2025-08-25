@@ -12,6 +12,7 @@ import { orchIndexAtom } from './playground-panel/atoms-orch-graph';
 import type { ICodeBlock } from './types';
 import { vscode } from './vscode';
 import { apiKeysAtom } from '../../components/api-keys-dialog/atoms';
+import { standaloneFeatureFlagsAtom, isVSCodeEnvironment } from './feature-flags';
 
 const wasmAtomAsync = atom(async () => {
   const wasm = await import('@gloo-ai/baml-schema-wasm-web/baml_schema_build');
@@ -80,7 +81,25 @@ export const runtimeAtom = atom<{
     const selectedEnvVars = Object.fromEntries(
       Object.entries(apiKeys).filter(([key, value]) => value !== undefined),
     );
-    const rt = project.runtime(selectedEnvVars);
+    // Determine environment and get appropriate feature flags
+    const isInVSCode = isVSCodeEnvironment();
+    let featureFlags: string[];
+    
+    if (isInVSCode) {
+      // In VSCode: try vscodeSettingsAtom, then bamlConfig fallback
+      const vscodeSettings = get(vscodeSettingsAtom);
+      if (vscodeSettings?.featureFlags) {
+        featureFlags = vscodeSettings.featureFlags;
+      } else {
+        // VSCode settings not loaded yet, use bamlConfig as immediate fallback
+        const config = get(bamlConfig);
+        featureFlags = config.config?.featureFlags ?? [];
+      }
+    } else {
+      // Standalone: use standalone flags
+      featureFlags = get(standaloneFeatureFlagsAtom);
+    }
+    const rt = project.runtime(selectedEnvVars, featureFlags);
     const diags = project.diagnostics(rt);
     return { rt, diags, lastValidRt: rt };
   } catch (e) {
@@ -162,12 +181,27 @@ export const generatedFilesByLangAtom = atomFamily(
 
 export const isPanelVisibleAtom = atom(false);
 
-const vscodeSettingsAtom = atom<{ enablePlaygroundProxy: boolean }>((get) => {
-  const config = get(bamlConfig);
-  return {
-    enablePlaygroundProxy: config.config?.enablePlaygroundProxy ?? true,
-  };
-});
+export const vscodeSettingsAtom = unwrap(
+  atom(async (get) => {
+    try {
+      const settings = await vscode.getVSCodeSettings();
+      return {
+        enablePlaygroundProxy: settings.enablePlaygroundProxy,
+        featureFlags: settings.featureFlags,
+      };
+    } catch (e) {
+      console.error(
+        `Error occurred while getting VSCode settings:\n${JSON.stringify(e)}`,
+      );
+      // Fallback to config if RPC fails
+      const config = get(bamlConfig);
+      return {
+        enablePlaygroundProxy: config.config?.enablePlaygroundProxy ?? true,
+        featureFlags: config.config?.featureFlags ?? [],
+      };
+    }
+  }),
+);
 
 const playgroundPortAtom = unwrap(
   atom(async () => {

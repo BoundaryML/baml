@@ -15,3 +15,6 @@ internal-baml-parser-database = { path = "../baml-lib/parser-database" }
 anyhow = { workspace = true }
 itertools = { workspace = true }
 pretty = { workspace = true }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt"] }

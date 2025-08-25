@@ -85,10 +85,6 @@ function IterativeFibonacci(n: int) -> int {
     }
 }
 
-function LengthOfArray(arr: int[]) -> int {
-    arr.len()
-}
-
 function SumArray(arr: int[]) -> int {
     let mut sum = 0;
     for (a in arr) {

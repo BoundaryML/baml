@@ -47,7 +47,21 @@
       "Bash(npx tsc:*)",
       "Bash(npx tsc:*)",
       "WebFetch(domain:www.npmjs.com)",
-      "Bash(./target/debug/baml-cli:*)"
+      "Bash(./target/debug/baml-cli:*)",
+      "Bash(hack/spec_metadata.sh:*)",
+      "Bash(sed:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(cat:*)",
+      "Bash(for file in /Users/greghale/code/baml/engine/language_server/src/server/api/notifications/*.rs /Users/greghale/code/baml/engine/language_server/src/server/api/requests/*.rs)",
+      "Bash(do)",
+      "Bash(if grep -q \"DEFAULT_BETA_FLAGS\" \"$file\")",
+      "Bash(! grep -q \"session::settings::DEFAULT_BETA_FLAGS\" \"$file\")",
+      "Bash(then)",
+      "Bash(if grep -q \"use crate::\" \"$file\")",
+      "Bash(else)",
+      "Bash(fi)",
+      "Bash(done)"
     ],
     "deny": []
   },
