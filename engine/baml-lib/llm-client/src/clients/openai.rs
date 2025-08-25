@@ -7,9 +7,10 @@ use indexmap::IndexMap;
 
 use super::helpers::{Error, PropertyHandler, UnresolvedUrl};
 use crate::{
-    AllowedRoleMetadata, FinishReasonFilter, ResponseType, RolesSelection, SupportedRequestModes,
-    UnresolvedAllowedRoleMetadata, UnresolvedFinishReasonFilter, UnresolvedResponseType,
-    UnresolvedRolesSelection,
+    AllowedRoleMetadata, BamlMode, FinishReasonFilter, ResponseType, RolesSelection, 
+    SupportedRequestModes, ToolChoice, UnresolvedAllowedRoleMetadata, UnresolvedBamlMode,
+    UnresolvedFinishReasonFilter, UnresolvedResponseType, UnresolvedRolesSelection,
+    UnresolvedToolChoice,
 };
 
 #[derive(Debug, Clone, BamlHash)]
@@ -27,6 +28,8 @@ pub struct UnresolvedOpenAI<Meta> {
     query_params: IndexMap<String, StringOr>,
     finish_reason_filter: UnresolvedFinishReasonFilter,
     client_response_type: Option<UnresolvedResponseType>,
+    pub baml_mode: Option<UnresolvedBamlMode>,
+    pub tool_choice: Option<UnresolvedToolChoice>,
 }
 
 impl<Meta> UnresolvedOpenAI<Meta> {
@@ -54,6 +57,8 @@ impl<Meta> UnresolvedOpenAI<Meta> {
                 .collect(),
             finish_reason_filter: self.finish_reason_filter.clone(),
             client_response_type: self.client_response_type.clone(),
+            baml_mode: self.baml_mode.clone(),
+            tool_choice: self.tool_choice.clone(),
         }
     }
 }
@@ -70,6 +75,8 @@ pub struct ResolvedOpenAI {
     pub proxy_url: Option<String>,
     pub finish_reason_filter: FinishReasonFilter,
     pub client_response_type: ResponseType,
+    pub baml_mode: BamlMode,
+    pub tool_choice: Option<ToolChoice>,
 }
 
 impl ResolvedOpenAI {
@@ -146,6 +153,12 @@ impl<Meta: Clone> UnresolvedOpenAI<Meta> {
         self.query_params
             .iter()
             .for_each(|(_, v)| env_vars.extend(v.required_env_vars()));
+        if let Some(ref baml_mode) = self.baml_mode {
+            env_vars.extend(baml_mode.required_env_vars());
+        }
+        if let Some(ref tool_choice) = self.tool_choice {
+            env_vars.extend(tool_choice.required_env_vars());
+        }
 
         env_vars
     }
@@ -236,6 +249,17 @@ impl<Meta: Clone> UnresolvedOpenAI<Meta> {
                 .client_response_type
                 .as_ref()
                 .map_or(Ok(ResponseType::OpenAI), |v| v.resolve(ctx))?,
+            baml_mode: self
+                .baml_mode
+                .as_ref()
+                .map(|m| m.resolve(ctx))
+                .transpose()?
+                .unwrap_or_default(),
+            tool_choice: self
+                .tool_choice
+                .as_ref()
+                .map(|t| t.resolve(ctx))
+                .transpose()?,
         })
     }
 
@@ -383,6 +407,23 @@ impl<Meta: Clone> UnresolvedOpenAI<Meta> {
         let finish_reason_filter = properties.ensure_finish_reason_filter();
         let query_params = properties.ensure_query_params().unwrap_or_default();
         let client_response_type = properties.ensure_client_response_type();
+        
+        let baml_mode = properties.ensure_baml_mode();
+        let tool_choice = properties.ensure_tool_choice();
+        
+        // Check if tools are manually specified in properties
+        let has_manual_tools = properties.properties().contains_key("tools");
+        
+        // Validate tool_choice requires either baml_mode:tool_calling OR manual tools
+        if tool_choice.is_some() 
+            && baml_mode != Some(UnresolvedBamlMode::ToolCalling) 
+            && !has_manual_tools {
+            properties.push_error(
+                "tool_choice requires either baml_mode to be 'tool_calling' or manual 'tools' to be specified", 
+                properties.span()
+            );
+        }
+        
         let (properties, errors) = properties.finalize();
 
         if !errors.is_empty() {
@@ -400,6 +441,8 @@ impl<Meta: Clone> UnresolvedOpenAI<Meta> {
             query_params,
             finish_reason_filter,
             client_response_type,
+            baml_mode,
+            tool_choice,
         })
     }
 }

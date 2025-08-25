@@ -4,8 +4,9 @@ use baml_types::{GetEnvVar, StringOr, UnresolvedValue};
 use indexmap::IndexMap;
 
 use crate::{
-    SupportedRequestModes, UnresolvedAllowedRoleMetadata, UnresolvedFinishReasonFilter,
-    UnresolvedResponseType, UnresolvedRolesSelection,
+    SupportedRequestModes, UnresolvedAllowedRoleMetadata, UnresolvedBamlMode,
+    UnresolvedFinishReasonFilter, UnresolvedResponseType, UnresolvedRolesSelection,
+    UnresolvedToolChoice,
 };
 
 #[derive(Debug, Clone, Hash)]
@@ -57,6 +58,14 @@ impl<Meta: Clone> PropertyHandler<Meta> {
             span,
             errors: Vec::new(),
         }
+    }
+
+    pub fn span(&self) -> Meta {
+        self.span.clone()
+    }
+
+    pub fn properties(&self) -> &IndexMap<String, (Meta, UnresolvedValue<Meta>)> {
+        &self.options
     }
 
     pub fn push_option_error(&mut self, message: impl Into<Cow<'static, str>>) {
@@ -395,6 +404,46 @@ impl<Meta: Clone> PropertyHandler<Meta> {
                         key_span,
                     );
                     None
+                }
+            })
+    }
+
+    pub fn ensure_baml_mode(&mut self) -> Option<UnresolvedBamlMode> {
+        self.ensure_string("baml_mode", false)
+            .and_then(|(key_span, value, _)| {
+                if let StringOr::Value(value) = value {
+                    Some(match value.as_str() {
+                        "text_schema" => UnresolvedBamlMode::TextSchema,
+                        "tool_calling" => UnresolvedBamlMode::ToolCalling,
+                        other => {
+                            self.push_error(
+                                format!("Invalid baml_mode: {other}. Must be 'text_schema' or 'tool_calling'"),
+                                key_span,
+                            );
+                            return None;
+                        }
+                    })
+                } else {
+                    self.push_error("baml_mode must not be an environment variable", key_span);
+                    None
+                }
+            })
+    }
+
+    pub fn ensure_tool_choice(&mut self) -> Option<UnresolvedToolChoice> {
+        self.ensure_string("tool_choice", false)
+            .and_then(|(_key_span, value, _)| {
+                match value {
+                    StringOr::Value(s) => {
+                        Some(match s.as_str() {
+                            "auto" => UnresolvedToolChoice::Auto,
+                            "none" => UnresolvedToolChoice::None,
+                            "required" => UnresolvedToolChoice::Required,
+                            tool_name => UnresolvedToolChoice::Specific(StringOr::Value(tool_name.to_string())),
+                        })
+                    }
+                    StringOr::EnvVar(env) => Some(UnresolvedToolChoice::Specific(StringOr::EnvVar(env))),
+                    _ => None,  // Handle JinjaExpression variant if needed
                 }
             })
     }
