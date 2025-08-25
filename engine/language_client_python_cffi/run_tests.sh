@@ -2,15 +2,15 @@
 # Script to run tests with uv
 
 # Set the library path to the built BAML library
-export BAML_LIBRARY_PATH="/Users/sam/baml5/engine/target/debug/libbaml_cffi.dylib"
+export BAML_LIBRARY_PATH="/workspaces/baml-2/engine/target/debug/libbaml_cffi.so"
 
 # Sync dependencies (creates venv automatically if needed)
 echo "Syncing dependencies..."
 uv sync --all-extras
 
-# Run tests with dev extras
+# Run tests with dev extras, passing any additional arguments
 echo "Running tests..."
-uv run --extra dev pytest tests/ -v
+infisical run --env=test -- uv run --extra dev pytest tests/ -v "$@"
 
 # Run manual test as well
 # echo -e "\nRunning manual test..."
