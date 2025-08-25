@@ -107,19 +107,19 @@ class TestPrimitiveSerde:
     def test_unsupported_type_raises(self):
         """Test that truly unsupported types raise ValueError."""
         # Custom objects not supported
-        with pytest.raises(ValueError, match="Unsupported type"):
+        with pytest.raises(ValueError, match="Cannot encode type"):
             encode_value(object())
             
         # Sets not supported
-        with pytest.raises(ValueError, match="Unsupported type"):
+        with pytest.raises(ValueError, match="Cannot encode type"):
             encode_value({1, 2, 3})
             
         # Tuples not supported (yet)
-        with pytest.raises(ValueError, match="Unsupported type"):
+        with pytest.raises(ValueError, match="Cannot encode type"):
             encode_value((1, 2, 3))
             
         # Custom classes not supported (without type map)
         class CustomClass:
             pass
-        with pytest.raises(ValueError, match="Unsupported type"):
+        with pytest.raises(ValueError, match="Cannot encode type"):
             encode_value(CustomClass())

@@ -1,35 +1,43 @@
 import os
 from typing import Any, List, Dict, Optional
 from . import cffi_pb2
+from .type_map import TypeMap
 
 
-def encode_list(values: List[Any]) -> cffi_pb2.CFFIValueList:
+def encode_list(values: List[Any], type_map: Optional[TypeMap] = None) -> cffi_pb2.CFFIValueList:
     """Encode a list of values."""
     list_value = cffi_pb2.CFFIValueList()
 
     for item in values:
-        list_value.values.append(encode_value(item))
+        list_value.values.append(encode_value(item, type_map=type_map))
 
     return list_value
 
 
-def encode_map(values: Dict[str, Any]) -> cffi_pb2.CFFIValueMap:
+def encode_map(values: Dict[str, Any], type_map: Optional[TypeMap] = None) -> cffi_pb2.CFFIValueMap:
     """Encode a map with string keys and any values."""
     map_value = cffi_pb2.CFFIValueMap()
 
     for key, val in values.items():
         entry = cffi_pb2.CFFIMapEntry()
         entry.key = str(key)  # Ensure key is string
-        entry.value.CopyFrom(encode_value(val))
+        entry.value.CopyFrom(encode_value(val, type_map=type_map))
         map_value.entries.append(entry)
 
     return map_value
 
 
-def encode_value(value: Any) -> cffi_pb2.CFFIValueHolder:
-    """Encode a value to CFFI format - primitives, lists, and maps."""
+def encode_value(value: Any, type_name: Optional[str] = None, 
+                type_map: Optional[TypeMap] = None) -> cffi_pb2.CFFIValueHolder:
+    """Encode with optional type map for user-defined types."""
     holder = cffi_pb2.CFFIValueHolder()
-
+    
+    # Check type map first if provided
+    if type_name and type_map and type_name in type_map:
+        _, encoder, _ = type_map[type_name]
+        return encoder(value)
+    
+    # Fall back to primitive/collection handling
     if value is None:
         holder.null_value.CopyFrom(cffi_pb2.CFFIValueNull())
     elif isinstance(value, bool):
@@ -42,11 +50,17 @@ def encode_value(value: Any) -> cffi_pb2.CFFIValueHolder:
     elif isinstance(value, str):
         holder.string_value = value
     elif isinstance(value, list):
-        holder.list_value.CopyFrom(encode_list(value))
+        holder.list_value.CopyFrom(encode_list(value, type_map))
     elif isinstance(value, dict):
-        holder.map_value.CopyFrom(encode_map(value))
+        holder.map_value.CopyFrom(encode_map(value, type_map))
     else:
-        raise ValueError(f"Unsupported type: {type(value)}")
+        # Try to find type in map by class name
+        if type_map:
+            class_name = type(value).__name__
+            if class_name in type_map:
+                _, encoder, _ = type_map[class_name]
+                return encoder(value)
+        raise ValueError(f"Cannot encode type: {type(value)}")
 
     return holder
 
