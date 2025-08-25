@@ -20,9 +20,6 @@ type PickleReduceResult = PyResult<(
 
 // Switch between runtimes here by importing the one you want to use.
 
-pub use baml_runtime::BamlRuntime as CoreBamlRuntime;
-
-// pub use baml_runtime::async_vm_runtime::BamlAsyncVmRuntime as CoreBamlRuntime;
 use crate::{
     errors::{BamlError, BamlInvalidArgumentError},
     parse_py_type::parse_py_type,
@@ -35,6 +32,7 @@ use crate::{
         ClientRegistry, Collector, HTTPRequest,
     },
 };
+pub use baml_runtime::async_vm_runtime::BamlAsyncVmRuntime as CoreBamlRuntime;
 
 crate::lang_wrapper!(
     BamlRuntime,
@@ -113,6 +111,10 @@ impl BamlRuntime {
         Ok((cls.getattr("_create_from_state")?.into(), args))
     }
 
+    fn disassemble(&self, function_name: String) {
+        self.inner.disassemble(&function_name);
+    }
+
     /// Static method to recreate BamlRuntime from pickle state
     #[staticmethod]
     fn _create_from_state(
@@ -120,13 +122,8 @@ impl BamlRuntime {
         env_vars: std::collections::HashMap<String, String>,
         files: std::collections::HashMap<String, String>,
     ) -> PyResult<Self> {
-        let core = CoreBamlRuntime::from_file_content(
-            &root_path,
-            &files,
-            env_vars.clone(),
-            internal_baml_core::feature_flags::FeatureFlags::default(),
-        )
-        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("{e}")))?;
+        let core = CoreBamlRuntime::from_file_content(&root_path, &files, env_vars.clone())
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("{e}")))?;
         Ok(BamlRuntime {
             inner: std::sync::Arc::new(core),
             root_path,
@@ -137,13 +134,9 @@ impl BamlRuntime {
 
     #[staticmethod]
     fn from_directory(directory: PathBuf, env_vars: HashMap<String, String>) -> PyResult<Self> {
-        Ok(CoreBamlRuntime::from_directory(
-            &directory,
-            env_vars,
-            internal_baml_core::feature_flags::FeatureFlags::default(),
-        )
-        .map_err(BamlError::from_anyhow)?
-        .into())
+        Ok(CoreBamlRuntime::from_directory(&directory, env_vars)
+            .map_err(BamlError::from_anyhow)?
+            .into())
     }
 
     #[staticmethod]
@@ -152,14 +145,11 @@ impl BamlRuntime {
         files: HashMap<String, String>,
         env_vars: HashMap<String, String>,
     ) -> PyResult<Self> {
-        Ok(CoreBamlRuntime::from_file_content(
-            &root_path,
-            &files,
-            env_vars,
-            internal_baml_core::feature_flags::FeatureFlags::default(),
+        Ok(
+            CoreBamlRuntime::from_file_content(&root_path, &files, env_vars)
+                .map_err(BamlError::from_anyhow)?
+                .into(),
         )
-        .map_err(BamlError::from_anyhow)?
-        .into())
     }
 
     #[pyo3()]
@@ -169,14 +159,9 @@ impl BamlRuntime {
         files: HashMap<String, String>,
         env_vars: HashMap<String, String>,
     ) -> PyResult<()> {
-        self.inner = CoreBamlRuntime::from_file_content(
-            &root_path,
-            &files,
-            env_vars,
-            internal_baml_core::feature_flags::FeatureFlags::default(),
-        )
-        .map_err(BamlError::from_anyhow)?
-        .into();
+        self.inner = CoreBamlRuntime::from_file_content(&root_path, &files, env_vars)
+            .map_err(BamlError::from_anyhow)?
+            .into();
         Ok(())
     }
 
