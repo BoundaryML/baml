@@ -696,6 +696,15 @@ where
                         }),
                         meta.clone(),
                     )
+                }
+                // Check if it's an expression function
+                else if let Some(expr_func) = thir.expr_functions.iter().find(|f| &f.name == name)
+                {
+                    EvalValue::Function(
+                        expr_func.parameters.len(),
+                        Arc::new(expr_func.body.clone()),
+                        meta.clone(),
+                    )
                 } else {
                     let v = lookup(scopes, name)
                         .with_context(|| format!("unbound variable `{}` at {:?}", name, meta.0))?;
@@ -755,36 +764,41 @@ where
                     )?);
                 }
 
-                // Create fresh names and open body under them
-                let body_expr =
-                    Expr::Block(Box::new(Arc::unwrap_or_clone(body.clone())), meta.clone());
-                let fresh = body_expr.fresh_names(arity);
-                // let mut opened = body_expr;
-                // for (i, name) in fresh.iter().enumerate() {
-                //     opened = opened.open(
-                //         &VarIndex {
-                //             de_bruijn: 0,
-                //             tuple: i as u32,
-                //         },
-                //         name,
-                //     );
-                // }
+                // Check if this is an expression function call to get parameter names
+                let param_names = if let Expr::Var(func_name, _) = func.as_ref() {
+                    if let Some(expr_func) =
+                        thir.expr_functions.iter().find(|f| &f.name == func_name)
+                    {
+                        // Use actual parameter names from expression function
+                        expr_func
+                            .parameters
+                            .iter()
+                            .map(|p| p.name.clone())
+                            .collect::<Vec<_>>()
+                    } else {
+                        // Use fresh names for anonymous functions
+                        let body_expr =
+                            Expr::Block(Box::new(Arc::unwrap_or_clone(body.clone())), meta.clone());
+                        body_expr.fresh_names(arity)
+                    }
+                } else {
+                    // Use fresh names for complex function expressions
+                    let body_expr =
+                        Expr::Block(Box::new(Arc::unwrap_or_clone(body.clone())), meta.clone());
+                    body_expr.fresh_names(arity)
+                };
 
                 // Create a scope binding parameters to their argument values
                 scopes.push(Scope {
-                    variables: fresh
+                    variables: param_names
                         .into_iter()
                         .zip(arg_vals)
                         .map(|(k, v)| (k, RefCell::new(v)))
                         .collect(),
                 });
-                // TODO: Check this.
-                let result = match &body_expr {
-                    Expr::Block(b, _) => evaluate_block(b, scopes, thir, run_llm_function).await?,
-                    other => {
-                        expect_value(evaluate_expr(other, scopes, thir, run_llm_function).await?)?
-                    }
-                };
+
+                // Execute the function body
+                let result = evaluate_block(&body, scopes, thir, run_llm_function).await?;
                 scopes.pop();
                 EvalValue::Value(result)
             }
@@ -915,12 +929,31 @@ where
                 EvalValue::Value(result)
             }
             Expr::MethodCall {
-                receiver: _,
-                method: _,
-                args: _,
-                meta: _,
+                receiver,
+                method,
+                args,
+                meta,
             } => {
-                todo!("method calls are not supported in the interpreter")
+                let receiver_val =
+                    expect_value(evaluate_expr(receiver, scopes, thir, run_llm_function).await?)?;
+
+                // Extract method name
+                let method_name = match method.as_ref() {
+                    Expr::Var(name, _) => name.clone(),
+                    _ => bail!("method name must be an identifier at {:?}", meta.0),
+                };
+
+                // Evaluate arguments
+                let mut arg_vals: Vec<BamlValueWithMeta<ExprMetadata>> =
+                    Vec::with_capacity(args.len());
+                for arg in args.iter() {
+                    arg_vals.push(expect_value(
+                        evaluate_expr(arg, scopes, thir, run_llm_function).await?,
+                    )?);
+                }
+
+                let result = evaluate_method_call(&receiver_val, &method_name, &arg_vals, meta)?;
+                EvalValue::Value(result)
             }
             Expr::Paren(inner, _) => evaluate_expr(inner, scopes, thir, run_llm_function).await?,
         })
@@ -1176,36 +1209,48 @@ fn compare_values(
     })
 }
 
-// /// Convert a BamlValue to BamlValueWithMeta by adding the given metadata
-// fn baml_value_to_with_meta(value: &BamlValue, meta: ExprMetadata) -> BamlValueWithMeta<ExprMetadata> {
-//     match value {
-//         BamlValue::String(s) => BamlValueWithMeta::String(s.clone(), meta),
-//         BamlValue::Int(i) => BamlValueWithMeta::Int(*i, meta),
-//         BamlValue::Float(f) => BamlValueWithMeta::Float(*f, meta),
-//         BamlValue::Bool(b) => BamlValueWithMeta::Bool(*b, meta),
-//         BamlValue::Map(m) => {
-//             let with_meta_map = m.iter()
-//                 .map(|(k, v)| (k.clone(), baml_value_to_with_meta(v, meta.clone())))
-//                 .collect();
-//             BamlValueWithMeta::Map(with_meta_map, meta)
-//         },
-//         BamlValue::List(l) => {
-//             let with_meta_list = l.iter()
-//                 .map(|v| baml_value_to_with_meta(v, meta.clone()))
-//                 .collect();
-//             BamlValueWithMeta::List(with_meta_list, meta)
-//         },
-//         BamlValue::Media(m) => BamlValueWithMeta::Media(m.clone(), meta),
-//         BamlValue::Enum(name, val) => BamlValueWithMeta::Enum(name.clone(), val.clone(), meta),
-//         BamlValue::Class(name, fields) => {
-//             let with_meta_fields = fields.iter()
-//                 .map(|(k, v)| (k.clone(), baml_value_to_with_meta(v, meta.clone())))
-//                 .collect();
-//             BamlValueWithMeta::Class(name.clone(), with_meta_fields, meta)
-//         },
-//         BamlValue::Null => BamlValueWithMeta::Null(meta),
-//     }
-// }
+fn evaluate_method_call(
+    receiver: &BamlValueWithMeta<ExprMetadata>,
+    method_name: &str,
+    args: &[BamlValueWithMeta<ExprMetadata>],
+    meta: &ExprMetadata,
+) -> Result<BamlValueWithMeta<ExprMetadata>> {
+    match method_name {
+        "len" => {
+            // Array/List length method
+            match receiver {
+                BamlValueWithMeta::List(items, _) => {
+                    if !args.is_empty() {
+                        bail!("len() method takes no arguments at {:?}", meta.0);
+                    }
+                    Ok(BamlValueWithMeta::Int(items.len() as i64, meta.clone()))
+                }
+                BamlValueWithMeta::String(s, _) => {
+                    if !args.is_empty() {
+                        bail!("len() method takes no arguments at {:?}", meta.0);
+                    }
+                    Ok(BamlValueWithMeta::Int(s.len() as i64, meta.clone()))
+                }
+                BamlValueWithMeta::Map(map, _) => {
+                    if !args.is_empty() {
+                        bail!("len() method takes no arguments at {:?}", meta.0);
+                    }
+                    Ok(BamlValueWithMeta::Int(map.len() as i64, meta.clone()))
+                }
+                _ => bail!(
+                    "len() method not available on type {:?} at {:?}",
+                    receiver,
+                    meta.0
+                ),
+            }
+        }
+        _ => bail!(
+            "unknown method '{}' at {:?}, should have been caught during typechecking",
+            method_name,
+            meta.0
+        ),
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -1359,5 +1404,222 @@ mod tests {
             BamlValueWithMeta::Int(i, _) => assert_eq!(i, 10),
             v => panic!("expected int, got {v:?}"),
         }
+    }
+
+    #[tokio::test]
+    async fn test_method_call_array_len() {
+        let thir = empty_thir();
+
+        // Test [1, 2, 3].len()
+        let array = Expr::List(
+            vec![
+                Expr::Value(BamlValueWithMeta::Int(1, meta())),
+                Expr::Value(BamlValueWithMeta::Int(2, meta())),
+                Expr::Value(BamlValueWithMeta::Int(3, meta())),
+            ],
+            meta(),
+        );
+        let method_call = Expr::MethodCall {
+            receiver: Arc::new(array),
+            method: Arc::new(Expr::Var("len".to_string(), meta())),
+            args: vec![],
+            meta: meta(),
+        };
+
+        let result = super::interpret_thir(thir, method_call, mock_llm_function, BamlMap::new())
+            .await
+            .unwrap();
+
+        match result {
+            BamlValueWithMeta::Int(len, _) => assert_eq!(len, 3),
+            v => panic!("expected int, got {:?}", v),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_method_call_string_len() {
+        let thir = empty_thir();
+
+        // Test "hello".len()
+        let string_expr = Expr::Value(BamlValueWithMeta::String("hello".to_string(), meta()));
+        let method_call = Expr::MethodCall {
+            receiver: Arc::new(string_expr),
+            method: Arc::new(Expr::Var("len".to_string(), meta())),
+            args: vec![],
+            meta: meta(),
+        };
+
+        let result = super::interpret_thir(thir, method_call, mock_llm_function, BamlMap::new())
+            .await
+            .unwrap();
+
+        match result {
+            BamlValueWithMeta::Int(len, _) => assert_eq!(len, 5),
+            v => panic!("expected int, got {:?}", v),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_method_call_unknown_method() {
+        let thir = empty_thir();
+
+        // Test "hello".unknown_method()
+        let string_expr = Expr::Value(BamlValueWithMeta::String("hello".to_string(), meta()));
+        let method_call = Expr::MethodCall {
+            receiver: Arc::new(string_expr),
+            method: Arc::new(Expr::Var("unknown_method".to_string(), meta())),
+            args: vec![],
+            meta: meta(),
+        };
+
+        let result =
+            super::interpret_thir(thir, method_call, mock_llm_function, BamlMap::new()).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("unknown method"));
+    }
+
+    #[tokio::test]
+    async fn test_fibonacci_function() {
+        use baml_types::ir_type::TypeIR;
+
+        use crate::thir::{Block, ExprFunction, Parameter, Statement};
+
+        // Create the Fibonacci function:
+        // fn Fib(mut n: int) -> int {
+        //     let mut a = 0;
+        //     let mut b = 1;
+        //     while (n > 0) {
+        //         n -= 1;
+        //         let t = a + b;
+        //         b = a;
+        //         a = t;
+        //     }
+        //     a
+        // }
+
+        let fib_body = Block {
+            env: BamlMap::new(),
+            statements: vec![
+                // let mut a = 0;
+                Statement::Let {
+                    name: "a".to_string(),
+                    value: Expr::Value(BamlValueWithMeta::Int(0, meta())),
+                    span: Span::fake(),
+                },
+                // let mut b = 1;
+                Statement::Let {
+                    name: "b".to_string(),
+                    value: Expr::Value(BamlValueWithMeta::Int(1, meta())),
+                    span: Span::fake(),
+                },
+                // while (n > 0) {
+                //     n -= 1;
+                //     let t = a + b;
+                //     b = a;
+                //     a = t;
+                // }
+                Statement::While {
+                    condition: Box::new(Expr::BinaryOperation {
+                        left: Arc::new(Expr::Var("n".to_string(), meta())),
+                        operator: crate::hir::BinaryOperator::Gt,
+                        right: Arc::new(Expr::Value(BamlValueWithMeta::Int(0, meta()))),
+                        meta: meta(),
+                    }),
+                    block: Block {
+                        env: BamlMap::new(),
+                        statements: vec![
+                            // n -= 1;
+                            Statement::AssignOp {
+                                left: Expr::Var("n".to_string(), meta()),
+                                assign_op: crate::hir::AssignOp::SubAssign,
+                                value: Expr::Value(BamlValueWithMeta::Int(1, meta())),
+                                span: Span::fake(),
+                            },
+                            // let t = a + b;
+                            Statement::Let {
+                                name: "t".to_string(),
+                                value: Expr::BinaryOperation {
+                                    left: Arc::new(Expr::Var("a".to_string(), meta())),
+                                    operator: crate::hir::BinaryOperator::Add,
+                                    right: Arc::new(Expr::Var("b".to_string(), meta())),
+                                    meta: meta(),
+                                },
+                                span: Span::fake(),
+                            },
+                            // b = a;
+                            Statement::Assign {
+                                left: Expr::Var("b".to_string(), meta()),
+                                value: Expr::Var("a".to_string(), meta()),
+                            },
+                            // a = t;
+                            Statement::Assign {
+                                left: Expr::Var("a".to_string(), meta()),
+                                value: Expr::Var("t".to_string(), meta()),
+                            },
+                        ],
+                        trailing_expr: None,
+                        ty: Some(TypeIR::null()),
+                        span: Span::fake(),
+                    },
+                    span: Span::fake(),
+                },
+            ],
+            trailing_expr: Some(Expr::Var("a".to_string(), meta())), // return a
+            ty: Some(TypeIR::int()),
+            span: Span::fake(),
+        };
+
+        let fib_function = ExprFunction {
+            name: "Fib".to_string(),
+            parameters: vec![Parameter {
+                name: "n".to_string(),
+                r#type: TypeIR::int(),
+                span: Span::fake(),
+            }],
+            return_type: TypeIR::int(),
+            body: fib_body,
+            span: Span::fake(),
+        };
+
+        let mut thir = empty_thir();
+        thir.expr_functions.push(fib_function);
+
+        // Test cases: Fib(0) = 0, Fib(1) = 1, Fib(2) = 1, Fib(5) = 5
+        let test_cases = vec![
+            (0, 0), // Fib(0) = 0
+            (1, 1), // Fib(1) = 1
+            (2, 1), // Fib(2) = 1
+            (5, 5), // Fib(5) = 5
+        ];
+
+        for (input, expected) in test_cases {
+            println!("Testing Fib({}) = {}", input, expected);
+
+            // Create function call: Fib(input)
+            let fib_call = Expr::Call {
+                func: Arc::new(Expr::Var("Fib".to_string(), meta())),
+                type_args: vec![],
+                args: vec![Expr::Value(BamlValueWithMeta::Int(input, meta()))],
+                meta: meta(),
+            };
+
+            let result =
+                super::interpret_thir(thir.clone(), fib_call, mock_llm_function, BamlMap::new())
+                    .await
+                    .unwrap();
+
+            match result {
+                BamlValueWithMeta::Int(actual, _) => {
+                    assert_eq!(
+                        actual, expected,
+                        "Fib({}) should be {}, got {}",
+                        input, expected, actual
+                    );
+                }
+                v => panic!("Expected int result for Fib({}), got {:?}", input, v),
+            }
+        }
+
+        println!("✅ All Fibonacci tests passed!");
     }
 }
