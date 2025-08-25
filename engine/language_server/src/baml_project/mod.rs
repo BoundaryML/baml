@@ -390,6 +390,8 @@ impl BamlProject {
             }
         });
 
+        // NOTE: consider using RefCell/RwLock/Mutex separately on this so we can have
+        // &self & reduce critical sections as much as possible.
         self.cached_runtime = Some((current_hash, result.clone()));
 
         result
@@ -1064,19 +1066,7 @@ impl Project {
     //     }
     //     Ok(())
     // }
-
-    /// Retrieves a reference to the current runtime or the last successful one.
-    pub fn runtime(&self) -> anyhow::Result<&BamlRuntime> {
-        if let Some(ref rt) = self.current_runtime {
-            Ok(rt)
-        } else if let Some(ref rt) = self.last_successful_runtime {
-            Ok(rt)
-        } else {
-            Err(anyhow::anyhow!(
-                "BAML Generate failed - Project has errors."
-            ))
-        }
-    }
+    //
 
     /// Returns a map of file URIs to their content.
     pub fn files(&self) -> HashMap<String, String> {
@@ -1303,27 +1293,29 @@ impl Project {
     // }
 
     /// Checks if all generators use the same major.minor version.
-    /// Returns Ok(()) if they do (or if there are no generators),
+    /// Returns Ok(()) if they do,
     /// otherwise returns an Err with a descriptive message.
-    pub fn get_common_generator_version(&self, feature_flags: &[String]) -> Result<String, String> {
+    pub fn get_common_generator_version(
+        &mut self,
+        feature_flags: &[String],
+        client_version: Option<&str>,
+    ) -> anyhow::Result<String> {
         let runtime_version = env!("CARGO_PKG_VERSION");
 
-        let generators = match self.list_generators(feature_flags) {
-            Ok(gens) => gens,
-            Err(_) => return Ok(runtime_version.to_string()), // Return cargo pkg version if error listing generators
-        };
+        // list generators. If we can't get the runtime, we'll error out.
+        let generators = self
+            .runtime()?
+            .codegen_generators()
+            .map(|gen| gen.version.as_str());
 
-        if generators.is_empty() {
-            return Ok(runtime_version.to_string());
-        }
+        // add runtime version on top since that's what we want to compare with.
+        let gen_version_strings = [runtime_version]
+            .into_iter()
+            .chain(client_version)
+            .chain(generators);
 
         let mut major_minor_versions = std::collections::HashMap::new();
         let mut highest_patch_by_major_minor = std::collections::HashMap::new();
-
-        let gen_version_strings = generators.iter().map(|gen| gen.version.as_ref());
-
-        // add runtime version on top since that's what we want to compare with.
-        let gen_version_strings = [runtime_version].into_iter().chain(gen_version_strings);
 
         // Track major.minor versions and find highest patch for each
         for version_str in gen_version_strings {
@@ -1359,7 +1351,7 @@ impl Project {
                 .collect::<Vec<_>>()
                 .join(", ");
 
-            let message = format!(
+            let message = anyhow::anyhow!(
                 "Multiple generator major.minor versions detected: {versions_str}. Major and minor versions must match across all generators."
             );
             Err(message)
@@ -1379,7 +1371,7 @@ impl Project {
             }
         // Fallback to the runtime version if no valid versions were found
         } else {
-            Err("No valid generator versions found".to_string())
+            Err(anyhow::anyhow!("No valid generator versions found"))
         }
     }
 }

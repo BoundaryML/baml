@@ -54,11 +54,12 @@ impl super::SyncNotificationHandler for DidSaveTextDocument {
             .feature_flags
             .as_ref()
             .unwrap_or(&default_flags);
+        let client_version = session.baml_settings.get_client_version();
 
         let version = project
             .lock()
             .unwrap()
-            .get_common_generator_version(effective_flags)
+            .get_common_generator_version(effective_flags, client_version)
             .map_err(|msg| api::Error {
                 error: anyhow::anyhow!(msg),
                 code: lsp_server::ErrorCode::InternalError,
