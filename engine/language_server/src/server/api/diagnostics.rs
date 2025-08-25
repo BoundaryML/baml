@@ -92,7 +92,6 @@ pub fn publish_session_lsp_diagnostics(
     notifier: &Notifier,
     session: &mut Session,
     file_url: &Url,
-    feature_flags: &[String],
 ) -> Result<()> {
     // let keys = session.index().documents.keys();
     let path = file_url.to_file_path().unwrap_or_default();
@@ -286,7 +285,7 @@ pub fn project_diagnostics(
                 ) {
                     let diagnostic = Diagnostic {
                         range,
-                        message: message.clone(),
+                        message: message.to_string(),
                         severity: Some(DiagnosticSeverity::ERROR),
                         source: Some("baml".to_string()),
                         ..Default::default()

@@ -1068,6 +1068,19 @@ impl Project {
     // }
     //
 
+    /// Retrieves a reference to the current runtime or the last successful one.
+    pub fn runtime(&self) -> anyhow::Result<&BamlRuntime> {
+        if let Some(ref rt) = self.current_runtime {
+            Ok(rt)
+        } else if let Some(ref rt) = self.last_successful_runtime {
+            Ok(rt)
+        } else {
+            Err(anyhow::anyhow!(
+                "BAML Generate failed - Project has errors."
+            ))
+        }
+    }
+
     /// Returns a map of file URIs to their content.
     pub fn files(&self) -> HashMap<String, String> {
         let files = self.baml_project.files();
@@ -1296,7 +1309,7 @@ impl Project {
     /// Returns Ok(()) if they do,
     /// otherwise returns an Err with a descriptive message.
     pub fn get_common_generator_version(
-        &mut self,
+        &self,
         feature_flags: &[String],
         client_version: Option<&str>,
     ) -> anyhow::Result<String> {
