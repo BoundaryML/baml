@@ -131,8 +131,7 @@ impl Session {
             }
         }
 
-        let mut baml_settings = BamlSettings::default();
-        baml_settings.client_version = client_version;
+        let baml_settings = BamlSettings::default().with_client_version(client_version);
 
         Ok(Self {
             position_encoding,

@@ -35,6 +35,13 @@ impl Default for BamlSettings {
 }
 
 impl BamlSettings {
+    pub(crate) fn with_client_version(self, client_version: Option<String>) -> Self {
+        Self {
+            client_version,
+            ..self
+        }
+    }
+
     pub fn get_client_version(&self) -> Option<&str> {
         self.client_version.as_ref().map(AsRef::as_ref)
     }

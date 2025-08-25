@@ -1332,7 +1332,7 @@ impl Project {
 
         // Track major.minor versions and find highest patch for each
         for version_str in gen_version_strings {
-            if let Ok(version) = semver::Version::parse(&version_str) {
+            if let Ok(version) = semver::Version::parse(version_str) {
                 let major_minor = format!("{}.{}", version.major, version.minor);
 
                 // Track generators with this major.minor
