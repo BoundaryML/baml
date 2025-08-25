@@ -56,7 +56,7 @@ class TestEndToEndRealCalls:
             """
         }
 
-        print(os.environ["OPENAI_API_KEY"])
+        # Do not log sensitive API keys
         rt = create_runtime(".", baml_src, os.environ.copy())
 
         # Test string function with real API
