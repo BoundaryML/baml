@@ -19,7 +19,6 @@ pub mod edit;
 pub mod logging;
 #[cfg(feature = "playground-server")]
 pub mod playground;
-pub mod playground2;
 pub mod cors_bypass_proxy;
 pub mod server;
 pub mod session;
@@ -44,22 +43,24 @@ pub fn run_server() -> anyhow::Result<()> {
     let (broadcast_tx, broadcast_rx) = broadcast::channel(1000);
     let (playground_tx, playground_rx) = broadcast::channel(1000);
 
-    let port_config = playground2::PortConfiguration {
+    let port_config = playground_server::PortConfiguration {
         base_port: 3700,
         max_attempts: 100,
     };
-    let port_picks = tokio_runtime.block_on(playground2::port_picker_pick(port_config))?;
+    let port_picks = tokio_runtime.block_on(playground_server::pick_ports(port_config))?;
 
     tokio_runtime.spawn(futures::future::join(
-        playground2::run_playground_server(
-            playground_server::AppState {
-                broadcast_rx,
-                playground_tx: playground_tx.clone(),
-                playground_port: port_picks.playground_port,
-                proxy_port: port_picks.proxy_port,
-            },
-            port_picks.playground_listener
-        ),
+        {
+            let server = playground_server::PlaygroundServer {
+                app_state: playground_server::AppState {
+                    broadcast_rx,
+                    playground_tx: playground_tx.clone(),
+                    playground_port: port_picks.playground_port,
+                    proxy_port: port_picks.proxy_port,
+                }
+            };
+            server.run(port_picks.playground_listener)
+        },
         cors_bypass_proxy::ProxyServer {}.run(port_picks.proxy_listener),
     ));
 

@@ -31,7 +31,6 @@ use playground_server::{FrontendMessage, LangServerToWasmMessage, PreSendToWasmM
 
 use crate::{
     baml_project::file_utils::{find_baml_src, find_top_level_parent},
-    playground2::{self},
     session::{AllSettings, ClientSettings, Session},
     PositionEncoding,
 };
