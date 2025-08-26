@@ -1229,7 +1229,6 @@ fn for_loop_nested() -> anyhow::Result<()> {
 // }
 
 #[test]
-#[ignore = "TODO: Left hand side of assignment is not an identifier"]
 fn mut_self_method_decl() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"

@@ -487,15 +487,33 @@ impl<'g> HirCompiler<'g> {
                 self.declare_mut(name);
             }
             thir::Statement::Assign { left, value, .. } => {
-                self.compile_expression(value);
-
-                // TODO: Hanlde field & array accessors.
-                let name = match &left {
-                    thir::Expr::Var(name, _) => name,
-                    _ => panic!("left side of assignment is not an identifier: {left:?}"),
-                };
-
-                self.emit(Instruction::StoreVar(self.locals[name]));
+                match left {
+                    thir::Expr::Var(name, _) => {
+                        self.compile_expression(value);
+                        self.emit(Instruction::StoreVar(self.locals[name]));
+                    }
+                    thir::Expr::FieldAccess { base, field, meta: _ } => {
+                        // Get class name from type metadata
+                        let class_name = match base.meta().1.as_ref() {
+                            Some(TypeIR::Class { name, .. }) => name,
+                            _ => panic!("Field access on non-class type"),
+                        };
+                        
+                        // Resolve field index
+                        let Some(resolved_fields) = self.classes.get(class_name) else {
+                            panic!("undefined class: {class_name}");
+                        };
+                        let Some(&field_index) = resolved_fields.get(field) else {
+                            panic!("undefined field: {class_name}.{field}");
+                        };
+                        
+                        // Generate bytecode: load base, load value, store field
+                        self.compile_expression(base);
+                        self.compile_expression(value);
+                        self.emit(Instruction::StoreField(field_index));
+                    }
+                    _ => panic!("Invalid left hand of assignment, only variables, instance fields and array elements can be assigned"),
+                }
             }
             thir::Statement::AssignOp {
                 left,
@@ -503,30 +521,58 @@ impl<'g> HirCompiler<'g> {
                 assign_op,
                 ..
             } => {
-                // TODO: Handle field & array accessors.
-                let name = match &left {
-                    thir::Expr::Var(name, _) => name,
-                    _ => panic!("left side of assignment is not an identifier: {left:?}"),
-                };
-
-                self.emit(Instruction::LoadVar(self.locals[name]));
-                self.compile_expression(value);
-
-                self.emit(match assign_op {
+                let binop = match assign_op {
                     hir::AssignOp::AddAssign => Instruction::BinOp(BinOp::Add),
                     hir::AssignOp::SubAssign => Instruction::BinOp(BinOp::Sub),
                     hir::AssignOp::MulAssign => Instruction::BinOp(BinOp::Mul),
                     hir::AssignOp::DivAssign => Instruction::BinOp(BinOp::Div),
                     hir::AssignOp::ModAssign => Instruction::BinOp(BinOp::Mod),
-
                     hir::AssignOp::BitAndAssign => Instruction::BinOp(BinOp::BitAnd),
                     hir::AssignOp::BitOrAssign => Instruction::BinOp(BinOp::BitOr),
                     hir::AssignOp::BitXorAssign => Instruction::BinOp(BinOp::BitXor),
                     hir::AssignOp::ShlAssign => Instruction::BinOp(BinOp::Shl),
                     hir::AssignOp::ShrAssign => Instruction::BinOp(BinOp::Shr),
-                });
-
-                self.emit(Instruction::StoreVar(self.locals[name]));
+                };
+                
+                match left {
+                    thir::Expr::Var(name, _) => {
+                        self.emit(Instruction::LoadVar(self.locals[name]));
+                        self.compile_expression(value);
+                        self.emit(binop);
+                        self.emit(Instruction::StoreVar(self.locals[name]));
+                    }
+                    thir::Expr::FieldAccess { base, field, meta: _ } => {
+                        // Get class name from type metadata
+                        let class_name = match base.meta().1.as_ref() {
+                            Some(TypeIR::Class { name, .. }) => name,
+                            _ => panic!("Field access on non-class type"),
+                        };
+                        
+                        // Resolve field index
+                        let Some(resolved_fields) = self.classes.get(class_name) else {
+                            panic!("undefined class: {class_name}");
+                        };
+                        let Some(&field_index) = resolved_fields.get(field) else {
+                            panic!("undefined field: {class_name}.{field}");
+                        };
+                        
+                        // For obj.field += value, generate:
+                        // 1. Load object
+                        // 2. Copy object reference (Copy 0)
+                        // 3. Load field value
+                        // 4. Load value
+                        // 5. Apply operation
+                        // 6. Store back to field (uses copied object reference)
+                        
+                        self.compile_expression(base);
+                        self.emit(Instruction::Copy(0));  // Duplicate object reference
+                        self.emit(Instruction::LoadField(field_index));
+                        self.compile_expression(value);
+                        self.emit(binop);
+                        self.emit(Instruction::StoreField(field_index));
+                    }
+                    _ => panic!("Invalid left hand of assignment, only variables, instance fields and array elements can be assigned"),
+                }
             }
             thir::Statement::DeclareAndAssign { name, value, .. } => {
                 self.compile_expression(value);
@@ -853,7 +899,7 @@ impl<'g> HirCompiler<'g> {
                 Some(TypeIR::Class {
                     name: class_name, ..
                 }) => {
-                    let Some(class_index) = self.globals.get(class_name) else {
+                    let Some(_class_index) = self.globals.get(class_name) else {
                         panic!("undefined class: {class_name}");
                     };
 

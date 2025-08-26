@@ -859,6 +859,11 @@ impl Vm {
                     let drain_range = StackIndex(self.stack.len() - n)..;
                     self.stack.drain(drain_range);
                 }
+                Instruction::Copy(offset) => {
+                    let index = self.stack.ensure_slot_from_top(offset)?;
+                    let value = self.stack[index];
+                    self.stack.push(value);
+                }
                 Instruction::PopReplace(n) => {
                     let value = self.stack.ensure_pop()?;
 

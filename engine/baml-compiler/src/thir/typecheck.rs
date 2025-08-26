@@ -174,7 +174,27 @@ pub fn typecheck_returning_context<'a>(
                         .methods
                         .into_iter()
                         .map(|method| {
-                            // For now, we'll use empty typed methods - full method typechecking would be more complex
+                            // Create a context for method typechecking
+                            let mut method_context = typing_context.clone();
+                            
+                            // Add method parameters to context
+                            for param in &method.parameters {
+                                method_context.vars.insert(
+                                    param.name.clone(),
+                                    VarInfo {
+                                        ty: param.r#type.clone(),
+                                        mut_var_info: param.is_mutable.then(|| MutableVarInfo {
+                                            ty_infer_span: Some(param.span.clone()),
+                                        }),
+                                    },
+                                );
+                            }
+                            
+                            method_context.function_return_type = Some(&method.return_type);
+                            
+                            // Typecheck the method body
+                            let typed_body = typecheck_block(&method.body, &mut method_context, diagnostics);
+                            
                             thir::ExprFunction {
                                 name: method.name,
                                 parameters: method
@@ -187,13 +207,7 @@ pub fn typecheck_returning_context<'a>(
                                     })
                                     .collect(),
                                 return_type: method.return_type,
-                                body: thir::Block {
-                                    env: BamlMap::new(),
-                                    statements: vec![],
-                                    trailing_expr: None,
-                                    ty: None,
-                                    span: method.span.clone(),
-                                },
+                                body: typed_body,
                                 span: method.span,
                             }
                         })
@@ -705,14 +719,11 @@ fn typecheck_statement(
             let typed_value = typecheck_expression(value, context, diagnostics);
             let typed_left = typecheck_expression(left, context, diagnostics);
 
-            // TODO: Handle field & array accessors.
-            let name = match &left {
-                hir::Expression::Identifier(name, _) => name,
-                _ => panic!("left side of assignment is not an identifier: {left:?}"),
-            };
-
-            // validate/update type.
-            match context.vars.get_mut(name) {
+            // Handle field access and regular identifiers
+            match &left {
+                hir::Expression::Identifier(name, _) => {
+                    // validate/update type.
+                    match context.vars.get_mut(name) {
                 Some(info) => match info.mut_var_info.as_mut() {
                     Some(mut_info) => {
                         if let Some(inferred_type) = typed_value.meta().1.as_ref() {
@@ -753,6 +764,31 @@ fn typecheck_statement(
                     ));
                 }
             }
+                }
+                hir::Expression::FieldAccess { base, field, span: _ } => {
+                    // For field access, check if self parameter is mutable
+                    if let hir::Expression::Identifier(name, _) = base.as_ref() {
+                        if name == "self" {
+                            match context.vars.get(name) {
+                                Some(info) if info.mut_var_info.is_none() => {
+                                    diagnostics.push_error(DatamodelError::new_validation_error(
+                                        &format!("Cannot assign to field of immutable self"),
+                                        span.clone(),
+                                    ));
+                                }
+                                _ => {} // Self is mutable or doesn't exist (will be caught elsewhere)
+                            }
+                        }
+                    }
+                    // Type checking for the field assignment itself happens in codegen
+                }
+                _ => {
+                    diagnostics.push_error(DatamodelError::new_validation_error(
+                        "Invalid left hand of assignment, only variables, instance fields and array elements can be assigned",
+                        span.clone(),
+                    ));
+                }
+            }
 
             Some(thir::Statement::Assign {
                 left: typed_left,
@@ -769,15 +805,12 @@ fn typecheck_statement(
             let typed_left = typecheck_expression(left, context, diagnostics);
             let typed_value = typecheck_expression(value, context, diagnostics);
 
-            // TODO: Handle field & array accessors.
-            let name = match &left {
-                hir::Expression::Identifier(name, _) => name,
-                _ => panic!("left side of assignment is not an identifier: {left:?}"),
-            };
-
-            // TODO: Extract in funciton, repeated above.
-            // validate/update type.
-            match context.vars.get_mut(name) {
+            // Handle field access and regular identifiers
+            match &left {
+                hir::Expression::Identifier(name, _) => {
+                    // TODO: Extract in funciton, repeated above.
+                    // validate/update type.
+                    match context.vars.get_mut(name) {
                 Some(info) => match info.mut_var_info.as_mut() {
                     Some(mut_info) => {
                         if let Some(inferred_type) = typed_value.meta().1.as_ref() {
@@ -814,6 +847,31 @@ fn typecheck_statement(
                 None => {
                     diagnostics.push_error(DatamodelError::new_validation_error(
                         &format!("Unknown variable {name}"),
+                        span.clone(),
+                    ));
+                }
+            }
+                }
+                hir::Expression::FieldAccess { base, field, span: _ } => {
+                    // For field access, check if self parameter is mutable
+                    if let hir::Expression::Identifier(name, _) = base.as_ref() {
+                        if name == "self" {
+                            match context.vars.get(name) {
+                                Some(info) if info.mut_var_info.is_none() => {
+                                    diagnostics.push_error(DatamodelError::new_validation_error(
+                                        &format!("Cannot assign to field of immutable self"),
+                                        span.clone(),
+                                    ));
+                                }
+                                _ => {} // Self is mutable or doesn't exist (will be caught elsewhere)
+                            }
+                        }
+                    }
+                    // Type checking for the field assignment itself happens in codegen
+                }
+                _ => {
+                    diagnostics.push_error(DatamodelError::new_validation_error(
+                        "Invalid left hand of assignment, only variables, instance fields and array elements can be assigned",
                         span.clone(),
                     ));
                 }
