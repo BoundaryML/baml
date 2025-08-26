@@ -17,6 +17,7 @@ mod internal_tests {
         BamlRuntime, DiagnosticsError, IRHelper,
     };
     use baml_types::BamlValue;
+    use internal_baml_core::FeatureFlags;
     use wasm_bindgen_test::*;
 
     #[test_log::test]
@@ -70,6 +71,7 @@ mod internal_tests {
             "baml_src",
             &files,
             [("OPENAI_API_KEY", "OPENAI_API_KEY")].into(),
+            FeatureFlags::new(),
         )?;
         log::info!("Runtime:");
 

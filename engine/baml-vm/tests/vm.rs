@@ -209,7 +209,7 @@ fn exec_if_branch() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: "
             fn run_if(b: bool) -> int {
-                if b { 1 } else { 2 }
+                if (b) { 1 } else { 2 }
             }
 
             fn main() -> int {
@@ -227,7 +227,7 @@ fn exec_else_branch() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: "
             fn run_if(b: bool) -> int {
-                if b { 1 } else { 2 }
+                if (b) { 1 } else { 2 }
             }
 
             fn main() -> int {
@@ -245,9 +245,9 @@ fn exec_else_if_branch() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: "
             fn run_if(a: bool, b: bool) -> int {
-                if a {
+                if (a) {
                     1
-                } else if b {
+                } else if (b) {
                     2
                 } else {
                     3
@@ -343,10 +343,11 @@ fn class_constructor_with_spread_operator() -> anyhow::Result<()> {
                     x int
                     y int
                     z int
+                    w int
                 }
 
                 fn default_point() -> Point {
-                    Point { x: 0, y: 0, z: 0 }
+                    Point { x: 0, y: 0, z: 0, w: 0 }
                 }
 
                 fn main() -> Point {
@@ -367,12 +368,38 @@ fn class_constructor_with_spread_operator() -> anyhow::Result<()> {
 
             assert_eq!(
                 instance.fields,
-                &[Value::Int(1), Value::Int(2), Value::Int(0)]
+                &[Value::Int(1), Value::Int(2), Value::Int(0), Value::Int(0)],
             );
 
             Ok(())
         },
     )
+}
+
+#[test]
+fn class_constructor_with_spread_operator_does_not_break_locals() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: "
+                class Point {
+                    x int
+                    y int
+                    z int
+                    w int
+                }
+
+                fn default_point() -> Point {
+                    Point { x: 0, y: 0, z: 0, w: 0 }
+                }
+
+                fn main() -> int {
+                    let p = Point { x: 1, y: 2, ..default_point() };
+                    let x = 0;
+                    x
+                }
+            ",
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(0)),
+    })
 }
 
 #[test]
@@ -886,6 +913,22 @@ fn builtin_method_call() -> anyhow::Result<()> {
 }
 
 #[test]
+fn bind_method_call() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            fn main() -> int {
+                let arr = [1, 2, 3];
+                let v = arr.len();
+
+                v
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(3)),
+    })
+}
+
+#[test]
 fn while_loop() -> anyhow::Result<()> {
     // NOTE: there's no way to make a safeguard since there's no "return", and we shouldn't rely on
     // "break" to keep the test as isolated as possible.
@@ -893,9 +936,9 @@ fn while_loop() -> anyhow::Result<()> {
     const SOURCE: &str = r#"
         fn GCD(mut a: int, mut b: int) -> int {
 
-            while a != b {
+            while (a != b) {
 
-               if a > b {
+               if (a > b) {
                    a = a - b;
                } else {
                    b = b - a;
@@ -925,8 +968,8 @@ fn break_factorial() -> anyhow::Result<()> {
             fn Factorial(mut limit: int) -> int {
                 let mut result = 1;
 
-                while true {
-                    if limit == 0 {
+                while (true) {
+                    if (limit == 0) {
                         break;
                     }
                     result = result * limit;
@@ -951,8 +994,8 @@ fn break_nested_loops() -> anyhow::Result<()> {
         source: r#"
             fn Nested() -> int {
                 let mut a = 5;
-                while true {
-                    while true {
+                while (true) {
+                    while (true) {
                         a = a + 1;
                         break;
                     }
@@ -980,11 +1023,11 @@ fn continue_factorial() -> anyhow::Result<()> {
 
                 // used to make the loop break without relying on `break` implementation.
                 let mut should_continue = true;
-                while should_continue {
+                while (should_continue) {
                     result = result * limit;
                     limit = limit - 1;
 
-                    if limit != 0 {
+                    if (limit != 0) {
                         continue;
                     } else {
                         should_continue = false;
@@ -1009,11 +1052,11 @@ fn continue_nested() -> anyhow::Result<()> {
         source: r#"
             fn ContinueNested() -> int {
                 let mut execute = true;
-                while execute {
-                    while false {
+                while (execute) {
+                    while (false) {
                         continue;
                     }
-                    if false {
+                    if (false) {
                         continue;
                     }
                     execute = false;
@@ -1038,7 +1081,7 @@ fn while_with_scope() -> anyhow::Result<()> {
             let mut a = 0;
             let mut b = 1;
 
-            while n > 0 {
+            while (n > 0) {
                 n -= 1;
                 let t = a + b;
                 b = a;
@@ -1067,7 +1110,7 @@ fn for_loop_sum() -> anyhow::Result<()> {
             fn Sum(xs: int[]) -> int {
                 let mut result = 0;
 
-                for x in xs {
+                for (x in xs) {
                     result += x;
                 }
 
@@ -1090,8 +1133,8 @@ fn for_loop_with_break() -> anyhow::Result<()> {
             fn ForWithBreak(xs: int[]) -> int {
                 let mut result = 0;
 
-                for x in xs {
-                    if x > 10 {
+                for (x in xs) {
+                    if (x > 10) {
                         break;
                     }
                     result += x;
@@ -1116,8 +1159,8 @@ fn for_loop_with_continue() -> anyhow::Result<()> {
             fn ForWithContinue(xs: int[]) -> int {
                 let mut result = 0;
 
-                for x in xs {
-                    if x > 10 {
+                for (x in xs) {
+                    if (x > 10) {
                         continue;
                     }
                     result += x;
@@ -1143,8 +1186,8 @@ fn for_loop_nested() -> anyhow::Result<()> {
 
                 let mut result =  0;
 
-                for a in arr_a {
-                    for b in arr_b {
+                for (a in arr_a) {
+                    for (b in arr_b) {
                         result += a * b;
                     }
                 }
@@ -1158,6 +1201,56 @@ fn for_loop_nested() -> anyhow::Result<()> {
         "#,
         function: "main",
         expected: VmExecState::Complete(Value::Int(21)),
+    })
+}
+
+// #[test]
+// fn basic_method_decl() -> anyhow::Result<()> {
+//     assert_vm_executes(Program {
+//         source: r#"
+//             class Number {
+//                 value int
+//
+//                 function add(self, other: Number) -> Number {
+//                     Number { value: self.value + other.value }
+//                 }
+//             }
+//
+//             function main() -> int {
+//                 let mut a = Number { value: 1 };
+//                 let mut b = Number { value: 2 };
+//                 let n = a.add(b);
+//                 n.value
+//             }
+//         "#,
+//         function: "main",
+//         expected: VmExecState::Complete(Value::Int(3)),
+//     })
+// }
+
+#[test]
+#[ignore = "TODO: Left hand side of assignment is not an identifier"]
+fn mut_self_method_decl() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            class Number {
+                value int
+
+                function add(mut self, other: Number) -> bool {
+                    self.value += other.value;
+                    true
+                }
+            }
+
+            function main() -> int {
+                let mut a = Number { value: 1 };
+                let mut b = Number { value: 2 };
+                a.add(b);
+                a.value
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(3)),
     })
 }
 
@@ -1194,11 +1287,11 @@ mod c_for_loops {
 
                     for (let mut i = 0; ; s += i) {
                         i += 1;
-                        if i > 10 {
+                        if (i > 10) {
                             let x = 0; // this tests that popping is correct.
                             break;
                         }
-                        if i == 5 {
+                        if (i == 5) {
                             // since `s += i` is in the for loop's after, this 'continue' is
                             // actually irrelevant and the function does the same as SumToTen.
                             // That's the behavior we're looking for.
@@ -1259,8 +1352,8 @@ mod return_stmt {
         assert_vm_executes(Program {
             source: r#"
                 fn EarlyReturn(x: int) -> int {
-                   if x == 42 { return 1; }
-                   
+                   if (x == 42) { return 1; }
+
                    x + 5
                 }
 
@@ -1280,20 +1373,20 @@ mod return_stmt {
                 fn WithStack() -> int {
                    let a = 1;
 
-                   if a == 0 { return 0; }
-                   
+                   if (a == 0) { return 0; }
+
                    {
                       let b = 1;
-                      if a != b {
+                      if (a != b) {
                          return 0;
                       }
                    }
-                   
+
                    {
                       let c = 2;
                       let b = 3;
-                      while b != c {
-                         if true {
+                      while (b != c) {
+                         if (true) {
                               return 0;
                          }
                       }

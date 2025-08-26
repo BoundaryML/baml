@@ -45,4 +45,4 @@ function ArrayAccessWithVariable(arr: float[], idx: int) -> float {
 //      4   RETURN               
 //
 // Class: std::Request with 3 fields
-// Function: len
+// Function: std.Array.len

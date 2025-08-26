@@ -13,10 +13,10 @@ fn AfterWithBreakContinue() -> int {
 
 	for (let mut i = 0; ; s += i) {
 		i += 1;
-		if i > 10 {
+		if (i > 10) {
 			break;
 		}
-		if i == 5 {
+		if (i == 5) {
 			continue;
 		}
 	}
@@ -130,4 +130,4 @@ fn Nothing() -> int {
 //      4   RETURN         
 //
 // Class: std::Request with 3 fields
-// Function: len
+// Function: std.Array.len

@@ -1,7 +1,10 @@
 /// Type-checked HIR.
 ///
-use crate::hir::{AssignOp, BinaryOperator, Class, Enum, LlmFunction, Type, UnaryOperator};
+use baml_types::ir_type::TypeIR;
 
+use crate::hir::{self, AssignOp, BinaryOperator, Enum, LlmFunction, UnaryOperator};
+
+pub mod interpret;
 pub mod typecheck;
 
 use std::{
@@ -22,7 +25,7 @@ pub struct THir<T> {
     pub expr_functions: Vec<ExprFunction<T>>,
     pub llm_functions: Vec<LlmFunction>,
     pub global_assignments: BamlMap<String, Expr<ExprMetadata>>,
-    pub classes: BamlMap<String, Class>,
+    pub classes: BamlMap<String, Class<T>>,
     pub enums: BamlMap<String, Enum>,
 }
 
@@ -30,7 +33,7 @@ pub struct THir<T> {
 pub struct ExprFunction<T> {
     pub name: String,
     pub parameters: Vec<Parameter>,
-    pub return_type: Type,
+    pub return_type: TypeIR,
     pub body: Block<T>,
     pub span: Span,
 }
@@ -38,7 +41,16 @@ pub struct ExprFunction<T> {
 #[derive(Clone, Debug)]
 pub struct Parameter {
     pub name: String,
-    pub r#type: Type,
+    pub r#type: TypeIR,
+    pub span: Span,
+}
+
+#[derive(Clone, Debug)]
+pub struct Class<T> {
+    pub name: String,
+    pub fields: Vec<hir::Field>,
+    // TODO: Allow LLM functions here.
+    pub methods: Vec<ExprFunction<T>>,
     pub span: Span,
 }
 
@@ -60,7 +72,7 @@ pub enum Expr<T> {
     Function(usize, Arc<Block<T>>, T), // number of parameters, body, metadata
     Call {
         func: Arc<Expr<T>>,
-        type_args: Vec<Type>,
+        type_args: Vec<TypeIR>,
         args: Vec<Expr<T>>,
         meta: T,
     },
@@ -102,8 +114,12 @@ pub enum Expr<T> {
 #[derive(Clone, Debug)]
 pub struct Block<T> {
     pub env: BamlMap<Variable, Expr<T>>,
+    /// List of statements.
     pub statements: Vec<Statement<T>>,
-    pub return_value: Expr<T>,
+    /// Final expression in the block without semicolon (used as return).
+    pub trailing_expr: Option<Expr<T>>,
+    /// Type of the block.
+    pub ty: Option<TypeIR>,
     pub span: Span,
 }
 
@@ -113,14 +129,24 @@ impl<T> Block<T> {
         T: Clone + std::fmt::Debug,
     {
         let statements = join(self.statements.iter().map(|stmt| stmt.dump_str()), "\n");
-        format!("{{ {statements} }}")
+
+        if let Some(expr) = &self.trailing_expr {
+            format!("{{ {statements} {} }}", expr.dump_str())
+        } else {
+            format!("{{ {statements} }}")
+        }
     }
 
     pub fn variables(&self) -> HashSet<Name>
     where
         T: Clone,
     {
-        let mut vars = self.return_value.variables();
+        let mut vars = self
+            .trailing_expr
+            .as_ref()
+            .map(|expr| expr.variables())
+            .unwrap_or_default();
+
         for stmt in self.statements.iter() {
             vars.extend(stmt.variables());
         }
@@ -162,7 +188,7 @@ impl VarIndex {
 }
 
 /// The metadata used during parsing, typechecking and evaluation of BAML expressions.
-pub type ExprMetadata = (Span, Option<Type>);
+pub type ExprMetadata = (Span, Option<TypeIR>);
 
 impl<T: Clone + std::fmt::Debug> Expr<T> {
     pub fn meta(&self) -> &T {
@@ -591,11 +617,11 @@ pub enum Statement<T> {
     },
     /// Assign a mutable variable.
     Assign {
-        name: String,
+        left: Expr<T>,
         value: Expr<T>,
     },
     AssignOp {
-        name: String,
+        left: Expr<T>,
         value: Expr<T>,
         assign_op: AssignOp,
         span: Span,
@@ -660,13 +686,15 @@ impl<T: Clone> Statement<T> {
                 format!("Let {} = {}", name, value.dump_str())
             }
             Statement::Declare { name, span: _ } => format!("var {name}"),
-            Statement::Assign { name, value } => format!("{} <- {}", name, value.dump_str()),
+            Statement::Assign { left, value } => {
+                format!("{} <- {}", left.dump_str(), value.dump_str())
+            }
             Statement::AssignOp {
-                name,
+                left,
                 value,
                 assign_op,
                 span: _,
-            } => format!("{} {} {}", name, assign_op, value.dump_str()),
+            } => format!("{} {} {}", left.dump_str(), assign_op, value.dump_str()),
             Statement::DeclareAndAssign {
                 name,
                 value,

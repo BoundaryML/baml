@@ -5,6 +5,7 @@ use std::{
 
 use anyhow::{Context, Result};
 use indexmap::IndexMap;
+use pretty::RcDoc;
 use serde::{de::Visitor, ser::SerializeMap, Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::{
@@ -100,6 +101,82 @@ impl BamlValue {
             BamlValue::Enum(e, _) => format!("enum {e}"),
             BamlValue::Class(c, _) => format!("class {c}"),
             BamlValue::Null => "null".into(),
+        }
+    }
+
+    /// Convert this BamlValue to a pretty printing document
+    pub fn to_doc(&self) -> RcDoc<'static, ()> {
+        match self {
+            BamlValue::Null => RcDoc::text("null"),
+            BamlValue::Bool(b) => RcDoc::text(b.to_string()),
+            BamlValue::Int(i) => RcDoc::text(i.to_string()),
+            BamlValue::Float(f) => RcDoc::text(f.to_string()),
+            BamlValue::String(s) => RcDoc::text(format!("\"{}\"", escape_string(s))),
+            BamlValue::List(items) => {
+                if items.is_empty() {
+                    RcDoc::text("[]")
+                } else {
+                    RcDoc::text("[")
+                        .append(RcDoc::softline())
+                        .append(
+                            RcDoc::intersperse(
+                                items.iter().map(|item| item.to_doc()),
+                                RcDoc::text(",").append(RcDoc::line()),
+                            )
+                            .nest(2),
+                        )
+                        .append(RcDoc::softline())
+                        .append(RcDoc::text("]"))
+                }
+            }
+            BamlValue::Map(map) => {
+                if map.is_empty() {
+                    RcDoc::text("{}")
+                } else {
+                    RcDoc::text("{")
+                        .append(RcDoc::softline())
+                        .append(
+                            RcDoc::intersperse(
+                                map.iter().map(|(k, v)| {
+                                    RcDoc::text(format!("\"{}\"", escape_string(k)))
+                                        .append(RcDoc::text(":"))
+                                        .append(RcDoc::space())
+                                        .append(v.to_doc())
+                                }),
+                                RcDoc::text(",").append(RcDoc::line()),
+                            )
+                            .nest(2),
+                        )
+                        .append(RcDoc::softline())
+                        .append(RcDoc::text("}"))
+                }
+            }
+            BamlValue::Media(media) => format_media(media),
+            BamlValue::Enum(enum_name, variant) => {
+                RcDoc::text(format!("{}::{}", enum_name, variant))
+            }
+            BamlValue::Class(class_name, fields) => {
+                if fields.is_empty() {
+                    RcDoc::text(format!("{} {{}}", class_name))
+                } else {
+                    RcDoc::text(format!("{} {{", class_name))
+                        .append(RcDoc::softline())
+                        .append(
+                            RcDoc::intersperse(
+                                fields.iter().map(|(k, v)| {
+                                    RcDoc::text(k.to_string())
+                                        .append(RcDoc::text(":"))
+                                        .append(RcDoc::space())
+                                        .append(v.to_doc())
+                                }),
+                                RcDoc::text(",").append(RcDoc::line()),
+                            )
+                            .nest(2),
+                        )
+                        .append(RcDoc::softline())
+                        .append(RcDoc::text("}"))
+                }
+            }
         }
     }
 
@@ -826,6 +903,82 @@ impl<T> BamlValueWithMeta<T> {
         plain_value.r#type()
     }
 
+    /// Convert this BamlValueWithMeta to a pretty printing document
+    pub fn to_doc(&self) -> RcDoc<'static, ()> {
+        match self {
+            BamlValueWithMeta::Null(_) => RcDoc::text("null"),
+            BamlValueWithMeta::Bool(b, _) => RcDoc::text(b.to_string()),
+            BamlValueWithMeta::Int(i, _) => RcDoc::text(i.to_string()),
+            BamlValueWithMeta::Float(f, _) => RcDoc::text(f.to_string()),
+            BamlValueWithMeta::String(s, _) => RcDoc::text(format!("\"{}\"", escape_string(s))),
+            BamlValueWithMeta::List(items, _) => {
+                if items.is_empty() {
+                    RcDoc::text("[]")
+                } else {
+                    RcDoc::text("[")
+                        .append(RcDoc::softline())
+                        .append(
+                            RcDoc::intersperse(
+                                items.iter().map(|item| item.to_doc()),
+                                RcDoc::text(",").append(RcDoc::line()),
+                            )
+                            .nest(2),
+                        )
+                        .append(RcDoc::softline())
+                        .append(RcDoc::text("]"))
+                }
+            }
+            BamlValueWithMeta::Map(map, _) => {
+                if map.is_empty() {
+                    RcDoc::text("{}")
+                } else {
+                    RcDoc::text("{")
+                        .append(RcDoc::softline())
+                        .append(
+                            RcDoc::intersperse(
+                                map.iter().map(|(k, v)| {
+                                    RcDoc::text(format!("\"{}\"", escape_string(k)))
+                                        .append(RcDoc::text(":"))
+                                        .append(RcDoc::space())
+                                        .append(v.to_doc())
+                                }),
+                                RcDoc::text(",").append(RcDoc::line()),
+                            )
+                            .nest(2),
+                        )
+                        .append(RcDoc::softline())
+                        .append(RcDoc::text("}"))
+                }
+            }
+            BamlValueWithMeta::Media(media, _) => format_media(media),
+            BamlValueWithMeta::Enum(enum_name, variant, _) => {
+                RcDoc::text(format!("{}::{}", enum_name, variant))
+            }
+            BamlValueWithMeta::Class(class_name, fields, _) => {
+                if fields.is_empty() {
+                    RcDoc::text(format!("{} {{}}", class_name))
+                } else {
+                    RcDoc::text(format!("{} {{", class_name))
+                        .append(RcDoc::softline())
+                        .append(
+                            RcDoc::intersperse(
+                                fields.iter().map(|(k, v)| {
+                                    RcDoc::text(k.to_string())
+                                        .append(RcDoc::text(":"))
+                                        .append(RcDoc::space())
+                                        .append(v.to_doc())
+                                }),
+                                RcDoc::text(",").append(RcDoc::line()),
+                            )
+                            .nest(2),
+                        )
+                        .append(RcDoc::softline())
+                        .append(RcDoc::text("}"))
+                }
+            }
+        }
+    }
+
     /// Iterating over a `BamlValueWithMeta` produces a depth-first traversal
     /// of the value and all its children.
     pub fn iter(&self) -> BamlValueWithMetaIterator<'_, T> {
@@ -1303,6 +1456,48 @@ fn add_checks<'a, S: SerializeMap>(
         map.serialize_entry("checks", &checks_map)?;
     }
     Ok(())
+}
+
+fn format_media(media: &BamlMedia) -> RcDoc<'static, ()> {
+    match &media.content {
+        crate::BamlMediaContent::Url(url) => {
+            RcDoc::text(format!("<media url {}: {}>", media.media_type, url.url))
+        }
+        crate::BamlMediaContent::Base64(base64) => {
+            let preview = if base64.base64.len() > 50 {
+                format!("{}...", &base64.base64[..50])
+            } else {
+                base64.base64.clone()
+            };
+            RcDoc::text(format!("<media base64 {}: {}>", media.media_type, preview))
+        }
+        crate::BamlMediaContent::File(file) => match file.path() {
+            Ok(path) => RcDoc::text(format!(
+                "<media file {}: {}>",
+                media.media_type,
+                path.display()
+            )),
+            Err(_) => RcDoc::text(format!(
+                "<media file {}: {}>",
+                media.media_type,
+                file.relpath.display()
+            )),
+        },
+    }
+}
+
+fn escape_string(s: &str) -> String {
+    s.chars()
+        .map(|c| match c {
+            '"' => "\\\"".to_string(),
+            '\\' => "\\\\".to_string(),
+            '\n' => "\\n".to_string(),
+            '\r' => "\\r".to_string(),
+            '\t' => "\\t".to_string(),
+            c if c.is_control() => format!("\\u{:04x}", c as u32),
+            c => c.to_string(),
+        })
+        .collect()
 }
 
 /// This type is used in `BamlResponseValue` to summarize data about the

@@ -2,6 +2,9 @@ FROM ubuntu:24.04
 
 # Install dependencies
 RUN apt update && DEBIAN_FRONTEND=noninteractive apt install -y \
+    sudo \
+    curl \
+    git \
     build-essential \
     clang \
     cmake \
@@ -10,43 +13,44 @@ RUN apt update && DEBIAN_FRONTEND=noninteractive apt install -y \
     zlib1g-dev \
     libssl-dev \
     libffi-dev \
-    libyaml-dev \
-    python3 \
-    python3-pip \
-    pipx \
-    curl \
-    sudo \
-    golang \
-    git
+    libyaml-dev
 
 # Add non-privileged user to sudoers
 ARG USER=ubuntu
 RUN adduser $USER sudo && echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
 USER $USER
 
-# Install uv
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Install Mise (Ruby, Node, PNPM)
+# Install Mise and set up Ruby dynamically linked library path.
+#
+# Rest of tools can be installed with Mise using scripts/setup-dev.sh
 RUN curl https://mise.run | sh \
-    && ~/.local/bin/mise --verbose use -g --yes ruby@3.1 node@20.14 pnpm@9.9 \
-    && echo 'export PATH="$HOME/.local/bin:$HOME/.local/share/mise/shims:$PATH"' >> ~/.bash_profile \
+    && echo 'eval "$(~/.local/bin/mise activate bash)"' >> ~/.bashrc \
     && echo 'export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/.local/share/mise/installs/ruby/3.2/lib' >> ~/.bash_profile
 
-# TODO: Since we already installed Mise, we can run the setup-dev.sh script
-# to install everything else.
+COPY mise.toml /workspaces/baml/mise.toml
 
-# Install Rust
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
-    && echo 'source "$HOME/.cargo/env"' >> ~/.bash_profile
+WORKDIR /workspaces/baml/
 
-# Install WASM tools
-RUN $HOME/.cargo/bin/cargo install wasm-bindgen-cli@0.2.92 wasm-pack
+# This is a little clunky, but the problem is that the pipx backend in Mise
+# requires pipx to be installed. Read here:
+#
+# https://mise.jdx.dev/dev-tools/backends/pipx.html
+#
+# So this command does this:
+# 1. Setup Mise project.
+# 2. Install Python.
+# 3. Install pipx with the Mise Python version.
+# 4. Install rest of tools.
+ENV PATH="/home/${USER}/.local/bin:/home/${USER}/.local/share/mise/shims:${PATH}"
+RUN mise settings add idiomatic_version_file_enable_tools "[]" \
+    && mise trust \
+    && mise install python \
+    && pip install --user pipx \
+    && mise install
 
-# Install Go tools
-RUN go install google.golang.org/protobuf/cmd/protoc-gen-go@latest \
-    && echo 'export PATH="$HOME/go/bin:$PATH"' >> ~/.bash_profile
-
-# Install Infisical
-RUN curl -1sLf 'https://dl.cloudsmith.io/public/infisical/infisical-cli/setup.deb.sh' | sudo -E bash \
-    && sudo apt update && sudo apt install -y infisical
+# Tool versions are managed with Mise in the Docker container as well because
+# it's a pain to maintain in sync both the Dockerfile and mise.toml file. If you
+# want to fully manage dependencies with Docker, here's the previous version of
+# this Dockerfile before Mise was set up (it's missing some stuff like protobuf):
+#
+# https://github.com/BoundaryML/baml/blob/e8c98595c3b9048ee40b8a99d2f735ce9610cf74/.devcontainer/Dockerfile

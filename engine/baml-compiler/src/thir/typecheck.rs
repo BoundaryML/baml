@@ -19,16 +19,24 @@
 /// in several places. Bidirectional typing is the target.
 use std::sync::Arc;
 
-use baml_types::{type_meta::base::StreamingBehavior, BamlMap, BamlValueWithMeta};
+use baml_types::{ir_type::TypeIR, BamlMap, BamlValueWithMeta};
 use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Diagnostics, Span};
 
 use crate::{
-    hir::{self, Hir, Type, TypeM, TypeMeta},
+    hir::{self, dump::TypeDocumentRender, Hir},
     thir::{self as thir, ExprMetadata, THir},
 };
 
-/// Convert HIR to THIR while collecting type errors.
 pub fn typecheck(hir: &Hir, diagnostics: &mut Diagnostics) -> THir<ExprMetadata> {
+    let (thir, _) = typecheck_returning_context(hir, diagnostics);
+    thir
+}
+
+/// Convert HIR to THIR while collecting type errors.
+pub fn typecheck_returning_context<'a>(
+    hir: &'a Hir,
+    diagnostics: &mut Diagnostics,
+) -> (THir<ExprMetadata>, TypeContext<'a>) {
     let llm_functions = hir.llm_functions.clone();
     let classes: BamlMap<String, hir::Class> = hir
         .classes
@@ -50,24 +58,18 @@ pub fn typecheck(hir: &Hir, diagnostics: &mut Diagnostics) -> THir<ExprMetadata>
 
     // Add expr functions to typing context
     for func in &hir.expr_functions {
-        let arrow_type = Type::Function(
-            hir::Function {
-                params: func.parameters.iter().map(|p| p.r#type.clone()).collect(),
-                return_type: Box::new(func.return_type.clone()),
-            },
-            hir::TypeMeta::default(),
+        let arrow_type = TypeIR::arrow(
+            func.parameters.iter().map(|p| p.r#type.clone()).collect(),
+            func.return_type.clone(),
         );
         typing_context.symbols.insert(func.name.clone(), arrow_type);
     }
 
     // Add LLM functions to typing context
     for func in &hir.llm_functions {
-        let arrow_type = Type::Function(
-            hir::Function {
-                params: func.parameters.iter().map(|p| p.r#type.clone()).collect(),
-                return_type: Box::new(func.return_type.clone()),
-            },
-            hir::TypeMeta::default(),
+        let arrow_type = TypeIR::arrow(
+            func.parameters.iter().map(|p| p.r#type.clone()).collect(),
+            func.return_type.clone(),
         );
         typing_context.symbols.insert(func.name.clone(), arrow_type);
     }
@@ -76,12 +78,31 @@ pub fn typecheck(hir: &Hir, diagnostics: &mut Diagnostics) -> THir<ExprMetadata>
     // std::fetch_value<T>(std::Request) -> T
     // This is a generic function that takes a Request and returns any type T
     // For now, we'll add a placeholder - this should be handled more generically in the future
-    let generic_return_type = Type::String(hir::TypeMeta::default()); // Placeholder for generic T
+    let generic_return_type = TypeIR::string(); // Placeholder for generic T
     let fetch_value_type = crate::builtin::std_fetch_value_signature(generic_return_type);
     typing_context.symbols.insert(
         crate::builtin::functions::FETCH_VALUE.to_string(),
         fetch_value_type,
     );
+
+    // Add native functions to typing context
+    let native_fns = baml_vm::native::functions();
+    for (name, (_, arity)) in native_fns {
+        // For now, create a simple function signature
+        // std.Array.len takes an array and returns int
+        let function_type = match name.as_str() {
+            "std.Array.len" => TypeIR::arrow(
+                vec![TypeIR::List(Box::new(TypeIR::null()), Default::default())],
+                TypeIR::int(),
+            ),
+            _ => {
+                // Generic function type for other natives
+                let param_types = vec![TypeIR::null(); arity];
+                TypeIR::arrow(param_types, TypeIR::null())
+            }
+        };
+        typing_context.symbols.insert(name, function_type);
+    }
 
     // Add global assignments to typing context
     for (name, global_expr) in &hir.global_assignments {
@@ -140,13 +161,59 @@ pub fn typecheck(hir: &Hir, diagnostics: &mut Diagnostics) -> THir<ExprMetadata>
         });
     }
 
-    THir {
-        llm_functions,
-        classes,
-        enums,
-        expr_functions,
-        global_assignments: BamlMap::new(),
-    }
+    // Convert HIR classes to THIR classes
+    let thir_classes = classes
+        .into_iter()
+        .map(|(name, class)| {
+            (
+                name.clone(),
+                thir::Class {
+                    name: class.name,
+                    fields: class.fields,
+                    methods: class
+                        .methods
+                        .into_iter()
+                        .map(|method| {
+                            // For now, we'll use empty typed methods - full method typechecking would be more complex
+                            thir::ExprFunction {
+                                name: method.name,
+                                parameters: method
+                                    .parameters
+                                    .into_iter()
+                                    .map(|p| thir::Parameter {
+                                        name: p.name,
+                                        r#type: p.r#type,
+                                        span: p.span,
+                                    })
+                                    .collect(),
+                                return_type: method.return_type,
+                                body: thir::Block {
+                                    env: BamlMap::new(),
+                                    statements: vec![],
+                                    trailing_expr: None,
+                                    ty: None,
+                                    span: method.span.clone(),
+                                },
+                                span: method.span,
+                            }
+                        })
+                        .collect(),
+                    span: class.span,
+                },
+            )
+        })
+        .collect();
+
+    (
+        THir {
+            llm_functions,
+            classes: thir_classes,
+            enums,
+            expr_functions,
+            global_assignments: BamlMap::new(),
+        },
+        typing_context,
+    )
 }
 
 #[derive(Clone, Debug)]
@@ -157,21 +224,21 @@ pub struct MutableVarInfo {
 
 #[derive(Clone, Debug)]
 pub struct VarInfo {
-    pub ty: Type,
+    pub ty: TypeIR,
     pub mut_var_info: Option<MutableVarInfo>,
 }
 
 #[derive(Clone, Debug)]
 pub struct TypeContext<'func> {
     // Function names and other non-variable symbols
-    pub symbols: BamlMap<String, Type>,
+    pub symbols: BamlMap<String, TypeIR>,
     // Variables in scope with mutability info
     pub vars: BamlMap<String, VarInfo>,
     pub classes: BamlMap<String, hir::Class>,
     // Used for knowing whether `break` and `continue` are inside a loop or not.
     pub is_inside_loop: bool,
 
-    pub function_return_type: Option<&'func TypeM<TypeMeta>>,
+    pub function_return_type: Option<&'func TypeIR>,
 }
 
 impl Default for TypeContext<'_> {
@@ -187,14 +254,14 @@ impl TypeContext<'_> {
         vars.insert(
             "true".to_string(),
             VarInfo {
-                ty: Type::Bool(hir::TypeMeta::default()),
+                ty: TypeIR::bool(),
                 mut_var_info: None,
             },
         );
         vars.insert(
             "false".to_string(),
             VarInfo {
-                ty: Type::Bool(hir::TypeMeta::default()),
+                ty: TypeIR::bool(),
                 mut_var_info: None,
             },
         );
@@ -207,15 +274,254 @@ impl TypeContext<'_> {
         }
     }
 
-    pub fn get_type(&self, name: &str) -> Option<&Type> {
+    pub fn get_type(&self, name: &str) -> Option<&TypeIR> {
         self.vars
             .get(name)
             .map(|v| &v.ty)
             .or_else(|| self.symbols.get(name))
     }
 
-    pub fn infer_type(&mut self, _expr: &hir::Expression) -> Option<Type> {
-        todo!()
+    // TODO: What's this?
+    pub fn from_thir(thir: &thir::THir<ExprMetadata>) -> Self {
+        let mut context = TypeContext::new();
+
+        // Add classes to context - convert thir::Class back to hir::Class
+        for (name, class) in &thir.classes {
+            let hir_class = hir::Class {
+                name: class.name.clone(),
+                fields: class.fields.clone(),
+                methods: class
+                    .methods
+                    .iter()
+                    .map(|method| {
+                        hir::ExprFunction {
+                            name: method.name.clone(),
+                            parameters: method
+                                .parameters
+                                .iter()
+                                .map(|p| hir::Parameter {
+                                    name: p.name.clone(),
+                                    is_mutable: false, // Default to false for simplicity
+                                    r#type: p.r#type.clone(),
+                                    span: p.span.clone(),
+                                })
+                                .collect(),
+                            return_type: method.return_type.clone(),
+                            body: hir::Block {
+                                statements: vec![], // Empty for simplicity
+                                trailing_expr: None,
+                            },
+                            span: method.span.clone(),
+                        }
+                    })
+                    .collect(),
+                span: class.span.clone(),
+            };
+            context.classes.insert(name.clone(), hir_class);
+        }
+
+        // Add expression functions to symbol table
+        for func in &thir.expr_functions {
+            let arrow_type = TypeIR::arrow(
+                func.parameters.iter().map(|p| p.r#type.clone()).collect(),
+                func.return_type.clone(),
+            );
+            context.symbols.insert(func.name.clone(), arrow_type);
+        }
+
+        // Add global assignments to variable context
+        for (name, _expr) in &thir.global_assignments {
+            // For now, we'll assume string type for global assignments
+            // TODO: Properly infer type from expression
+            context.vars.insert(
+                name.clone(),
+                VarInfo {
+                    ty: TypeIR::string(),
+                    mut_var_info: None,
+                },
+            );
+        }
+
+        context
+    }
+
+    pub fn infer_type(&self, expr: &hir::Expression) -> Option<TypeIR> {
+        match expr {
+            hir::Expression::BoolValue(_, _) => Some(TypeIR::bool()),
+            hir::Expression::NumericValue(value, _) => {
+                // Try to parse as integer first, then float
+                if value.contains('.') {
+                    Some(TypeIR::float())
+                } else {
+                    Some(TypeIR::int())
+                }
+            }
+            hir::Expression::StringValue(_, _) | hir::Expression::RawStringValue(_, _) => {
+                Some(TypeIR::string())
+            }
+            hir::Expression::Identifier(name, _) => {
+                // Look up type in context
+                self.get_type(name).cloned()
+            }
+            hir::Expression::Array(items, _) => {
+                // Infer array type from first item
+                let inner_type = items.first().and_then(|item| self.infer_type(item))?;
+                Some(TypeIR::list(inner_type))
+            }
+            hir::Expression::Map(entries, _) => {
+                // Infer map type from first value (assume string keys)
+                let value_type = entries
+                    .iter()
+                    .next()
+                    .and_then(|(_, value_expr)| self.infer_type(value_expr))?;
+                Some(TypeIR::map(TypeIR::string(), value_type))
+            }
+            hir::Expression::ClassConstructor(constructor, _) => {
+                Some(TypeIR::class(&constructor.class_name))
+            }
+            hir::Expression::Call { function, .. } => {
+                // Try to get function name and look up its type
+                match function.as_ref() {
+                    hir::Expression::Identifier(name, _) => self.symbols.get(name).cloned(),
+                    _ => None, // Complex function expressions not handled yet
+                }
+            }
+            // Lambda expressions - not currently supported in HIR
+            // hir::Expression::Lambda(params, _body, _) => { ... }
+            hir::Expression::If {
+                if_branch,
+                else_branch,
+                ..
+            } => {
+                // Infer type from then branch (else branch should match)
+                let then_type = self.infer_type(if_branch);
+                if let Some(else_expr) = else_branch {
+                    let else_type = self.infer_type(else_expr);
+                    // TODO: Proper type unification
+                    then_type.or(else_type)
+                } else {
+                    then_type
+                }
+            }
+            hir::Expression::BinaryOperation {
+                left,
+                operator,
+                right,
+                ..
+            } => {
+                match operator {
+                    hir::BinaryOperator::Add
+                    | hir::BinaryOperator::Sub
+                    | hir::BinaryOperator::Mul
+                    | hir::BinaryOperator::Div
+                    | hir::BinaryOperator::Mod => {
+                        // Arithmetic operations - try to infer numeric type
+                        let left_type = self.infer_type(left);
+                        let right_type = self.infer_type(right);
+
+                        match (left_type, right_type) {
+                            (Some(t), _) | (_, Some(t))
+                                if matches!(
+                                    t,
+                                    TypeIR::Primitive(baml_types::TypeValue::Float, _)
+                                ) =>
+                            {
+                                Some(TypeIR::float())
+                            }
+                            (Some(t1), Some(t2))
+                                if matches!(
+                                    t1,
+                                    TypeIR::Primitive(baml_types::TypeValue::Int, _)
+                                ) && matches!(
+                                    t2,
+                                    TypeIR::Primitive(baml_types::TypeValue::Int, _)
+                                ) =>
+                            {
+                                Some(TypeIR::int())
+                            }
+                            _ => Some(TypeIR::float()), // default to float
+                        }
+                    }
+                    hir::BinaryOperator::And
+                    | hir::BinaryOperator::Or
+                    | hir::BinaryOperator::Eq
+                    | hir::BinaryOperator::Neq
+                    | hir::BinaryOperator::Lt
+                    | hir::BinaryOperator::LtEq
+                    | hir::BinaryOperator::Gt
+                    | hir::BinaryOperator::GtEq => {
+                        // Comparison and logical operations return bool
+                        Some(TypeIR::bool())
+                    }
+                    hir::BinaryOperator::BitAnd
+                    | hir::BinaryOperator::BitOr
+                    | hir::BinaryOperator::BitXor
+                    | hir::BinaryOperator::Shl
+                    | hir::BinaryOperator::Shr => {
+                        // Bitwise operations on integers
+                        Some(TypeIR::int())
+                    }
+                }
+            }
+            hir::Expression::UnaryOperation {
+                operator,
+                expr: inner_expr,
+                ..
+            } => {
+                match operator {
+                    hir::UnaryOperator::Not => {
+                        // Logical not returns bool
+                        Some(TypeIR::bool())
+                    }
+                    hir::UnaryOperator::Neg => {
+                        // Numeric negation preserves type
+                        self.infer_type(inner_expr)
+                    }
+                }
+            }
+            hir::Expression::ArrayAccess { base, .. } => {
+                // Extract inner type from array
+                if let Some(base_type) = self.infer_type(base) {
+                    match base_type {
+                        TypeIR::List(inner_type, _) => Some(*inner_type),
+                        _ => None, // Not an array
+                    }
+                } else {
+                    None
+                }
+            }
+            hir::Expression::FieldAccess { base, field, .. } => {
+                // Look up field type in class definition
+                if let Some(base_type) = self.infer_type(base) {
+                    match base_type {
+                        TypeIR::Class {
+                            name: class_name, ..
+                        } => {
+                            // Look up field in class definition
+                            if let Some(class_def) = self.classes.get(&class_name) {
+                                class_def
+                                    .fields
+                                    .iter()
+                                    .find(|f| f.name == *field)
+                                    .map(|f| f.r#type.clone())
+                            } else {
+                                None
+                            }
+                        }
+                        _ => None, // Not a class
+                    }
+                } else {
+                    None
+                }
+            }
+            // Null expressions - not currently in HIR Expression enum
+            hir::Expression::Paren(inner_expr, _) => {
+                // Parentheses don't change type
+                self.infer_type(inner_expr)
+            }
+            // For expressions we can't infer or don't handle yet
+            _ => None,
+        }
     }
 
     /// Makes sure that the context passed to `inner` knows it's inside a loop,
@@ -242,76 +548,52 @@ fn typecheck_block(
     let mut statements = vec![];
     let env = BamlMap::new();
 
-    // Process statements
+    let mut block_type = None;
+
+    // Process statements. Return type errors are checked here.
     for stmt in &block.statements {
         if let Some(typed_stmt) = typecheck_statement(stmt, context, diagnostics) {
+            if let thir::Statement::Return { expr, .. } = &typed_stmt {
+                block_type = expr.meta().1.clone();
+            }
+
             // Context is already updated in typecheck_statement, no need to update again
             statements.push(typed_stmt);
         }
     }
 
-    // Get the return value from the last statement
-    // Note: context has been updated with all let bindings from statements above
-    let (return_value, last_is_return) = if let Some(last_stmt) = block.statements.last() {
-        match last_stmt {
-            hir::Statement::Expression { expr, .. } => {
-                // For expression statements that are the last statement, we already processed them above
-                // so we need to avoid calling typecheck_expression again to prevent duplicate errors.
-                // Instead, find the corresponding typed statement and extract its return value.
-                if let Some(thir::Statement::Expression {
-                    expr: typed_expr, ..
-                }) = statements.last()
-                {
-                    (typed_expr.clone(), true)
-                } else {
-                    // Fallback if we can't find the typed statement
-                    (typecheck_expression(expr, context, diagnostics), true)
-                }
-            }
-            hir::Statement::Return { expr, .. } => {
-                // For return statements that are the last statement, we already processed them above
-                // so we need to avoid calling typecheck_expression again to prevent duplicate errors.
-                if let Some(thir::Statement::Return {
-                    expr: typed_expr, ..
-                }) = statements.last()
-                {
-                    (typed_expr.clone(), true)
-                } else {
-                    // Fallback if we can't find the typed statement
-                    (typecheck_expression(expr, context, diagnostics), true)
-                }
-            }
-            _ => {
-                // No explicit return, default to null
-                (
-                    thir::Expr::Value(BamlValueWithMeta::Null((
-                        internal_baml_diagnostics::Span::fake(),
-                        None,
-                    ))),
-                    false,
-                )
-            }
-        }
-    } else {
-        // Empty block, default to null
-        (
-            thir::Expr::Value(BamlValueWithMeta::Null((
-                internal_baml_diagnostics::Span::fake(),
-                None,
-            ))),
-            false,
-        )
-    };
-
-    // // Remove the last statement if it was converted to return value
-    // if last_is_return && !statements.is_empty() {
-    //     statements.pop();
+    // TODO: Typechecking here is broken. A nested block can have return types
+    // which are completely unrelated to the trailing expression type. Example:
+    //
+    // ```baml
+    // fn foo(b: bool) -> string {
+    //     let a = {
+    //         if (b) {
+    //             return "hello";   // Returns string from function
+    //         }
+    //         1                     // Returns int from block
+    //     };
+    //
+    //     return a;                 // Type error
     // }
+    // ```
+    //
+    // Function type checking needs to keep track of all the returns to match
+    // their types. That includes nested returns. Blocks only have one actual
+    // type, that is, the type of the trailing expression.
+    let trailing_expr = block.trailing_expr.as_ref().map(|expr| {
+        let typed_expr = typecheck_expression(expr, context, diagnostics);
+
+        block_type = typed_expr.meta().1.clone();
+
+        typed_expr
+    });
 
     thir::Block {
         env,
         statements,
-        return_value,
+        trailing_expr,
+        ty: block_type,
         span: internal_baml_diagnostics::Span::fake(),
     }
 }
@@ -342,7 +624,7 @@ fn typecheck_statement(
                 context.vars.insert(
                     name.clone(),
                     VarInfo {
-                        ty: hir::TypeM::Int(hir::TypeMeta::default()),
+                        ty: TypeIR::int(),
                         mut_var_info: None,
                     },
                 );
@@ -361,7 +643,7 @@ fn typecheck_statement(
                 span: span.clone(),
             })
         }
-        hir::Statement::SemicolonExpression { expr, span } => {
+        hir::Statement::Semicolon { expr, span } => {
             let typed_expr = typecheck_expression(expr, context, diagnostics);
             Some(thir::Statement::SemicolonExpression {
                 expr: typed_expr,
@@ -383,8 +665,8 @@ fn typecheck_statement(
                         let src = render_doc_to_string(expr.to_doc());
 
                         diagnostics.push_error(DatamodelError::new_type_mismatch_error(
-                            return_type.name_for_user(),
-                            has.name_for_user(),
+                            &return_type.name_for_user(),
+                            &has.name_for_user(),
                             &src,
                             span.clone(),
                         ));
@@ -406,7 +688,7 @@ fn typecheck_statement(
             context.vars.insert(
                 name.clone(),
                 VarInfo {
-                    ty: hir::TypeM::Int(hir::TypeMeta::default()),
+                    ty: TypeIR::int(),
                     mut_var_info: Some(MutableVarInfo {
                         ty_infer_span: None,
                     }),
@@ -418,9 +700,16 @@ fn typecheck_statement(
             })
         }
         hir::Statement::Assign {
-            name, value, span, ..
+            left, value, span, ..
         } => {
             let typed_value = typecheck_expression(value, context, diagnostics);
+            let typed_left = typecheck_expression(left, context, diagnostics);
+
+            // TODO: Handle field & array accessors.
+            let name = match &left {
+                hir::Expression::Identifier(name, _) => name,
+                _ => panic!("left side of assignment is not an identifier: {left:?}"),
+            };
 
             // validate/update type.
             match context.vars.get_mut(name) {
@@ -433,8 +722,8 @@ fn typecheck_statement(
                                     diagnostics.push_error(DatamodelError::new_validation_error(
                                         &format!(
                                             "Cannot assign {} to {}",
-                                            inferred_type.name_for_user(),
-                                            info.ty.name_for_user()
+                                            &inferred_type.name_for_user(),
+                                            &info.ty.name_for_user()
                                         ),
                                         value.span(),
                                     ));
@@ -466,18 +755,25 @@ fn typecheck_statement(
             }
 
             Some(thir::Statement::Assign {
-                name: name.clone(),
+                left: typed_left,
                 value: typed_value,
             })
         }
         hir::Statement::AssignOp {
-            name,
+            left,
             value,
             span,
             assign_op,
             ..
         } => {
+            let typed_left = typecheck_expression(left, context, diagnostics);
             let typed_value = typecheck_expression(value, context, diagnostics);
+
+            // TODO: Handle field & array accessors.
+            let name = match &left {
+                hir::Expression::Identifier(name, _) => name,
+                _ => panic!("left side of assignment is not an identifier: {left:?}"),
+            };
 
             // TODO: Extract in funciton, repeated above.
             // validate/update type.
@@ -491,8 +787,8 @@ fn typecheck_statement(
                                     diagnostics.push_error(DatamodelError::new_validation_error(
                                         &format!(
                                             "Cannot assign {} to {}",
-                                            inferred_type.name_for_user(),
-                                            info.ty.name_for_user()
+                                            &inferred_type.name_for_user(),
+                                            &info.ty.name_for_user()
                                         ),
                                         value.span(),
                                     ));
@@ -524,7 +820,7 @@ fn typecheck_statement(
             }
 
             Some(thir::Statement::AssignOp {
-                name: name.clone(),
+                left: typed_left,
                 value: typed_value,
                 assign_op: *assign_op,
                 span: span.clone(),
@@ -551,7 +847,7 @@ fn typecheck_statement(
                 context.vars.insert(
                     name.clone(),
                     VarInfo {
-                        ty: hir::TypeM::Int(hir::TypeMeta::default()),
+                        ty: TypeIR::int(),
                         mut_var_info: Some(MutableVarInfo {
                             ty_infer_span: None,
                         }),
@@ -594,7 +890,7 @@ fn typecheck_statement(
 
             // Infer item type from iterator type
             let item_type = if let Some(iterator_type) = typed_iterator.meta().1.as_ref() {
-                if let hir::TypeM::Array(inner_type, _) = iterator_type {
+                if let TypeIR::List(inner_type, _) = iterator_type {
                     inner_type.as_ref().clone()
                 } else {
                     diagnostics.push_error(DatamodelError::new_validation_error(
@@ -603,11 +899,11 @@ fn typecheck_statement(
                     ));
                     // use int for default - we might want a bottom type here to avoid
                     // misleading/extraneous errors
-                    hir::TypeM::int()
+                    TypeIR::int()
                 }
             } else {
                 // could not infer type - use int for default.
-                hir::TypeM::int()
+                TypeIR::int()
             };
 
             loop_context.vars.insert(
@@ -679,18 +975,14 @@ fn typecheck_statement(
         } => {
             let mut condition = typecheck_expression(hir_cond, context, diagnostics);
 
-            let bool = TypeM::Bool(TypeMeta {
-                span: condition.span().clone(),
-                constraints: vec![],
-                streaming_behavior: StreamingBehavior::default(),
-            });
+            let bool = TypeIR::bool();
 
             match &mut condition.meta_mut().1 {
                 Some(cur_type) => {
                     if !cur_type.eq_up_to_span(&bool) {
                         diagnostics.push_error(DatamodelError::new_type_mismatch_error(
-                            bool.name_for_user(),
-                            cur_type.name_for_user(),
+                            &bool.name_for_user(),
+                            &cur_type.name_for_user(),
                             &render_doc_to_string(hir_cond.to_doc()),
                             span.clone(),
                         ));
@@ -716,7 +1008,7 @@ fn render_doc_to_string(doc: pretty::RcDoc<'static>) -> String {
 }
 
 /// Typecheck an expression and infer its type
-fn typecheck_expression(
+pub fn typecheck_expression(
     expr: &hir::Expression,
     context: &TypeContext,
     diagnostics: &mut Diagnostics,
@@ -724,10 +1016,7 @@ fn typecheck_expression(
     match expr {
         hir::Expression::BoolValue(value, span) => thir::Expr::Value(BamlValueWithMeta::Bool(
             *value,
-            (
-                span.clone(),
-                Some(hir::TypeM::Bool(hir::TypeMeta::default())),
-            ),
+            (span.clone(), Some(TypeIR::bool())),
         )),
         hir::Expression::NumericValue(value, span) => {
             // Try to parse as integer first, then float
@@ -735,10 +1024,7 @@ fn typecheck_expression(
                 match value.parse::<f64>() {
                     Ok(f) => thir::Expr::Value(BamlValueWithMeta::Float(
                         f,
-                        (
-                            span.clone(),
-                            Some(hir::TypeM::Float(hir::TypeMeta::default())),
-                        ),
+                        (span.clone(), Some(TypeIR::float())),
                     )),
                     Err(_) => {
                         diagnostics.push_error(DatamodelError::new_validation_error(
@@ -752,10 +1038,7 @@ fn typecheck_expression(
                 match value.parse::<i64>() {
                     Ok(i) => thir::Expr::Value(BamlValueWithMeta::Int(
                         i,
-                        (
-                            span.clone(),
-                            Some(hir::TypeM::Int(hir::TypeMeta::default())),
-                        ),
+                        (span.clone(), Some(TypeIR::int())),
                     )),
                     Err(_) => {
                         diagnostics.push_error(DatamodelError::new_validation_error(
@@ -769,20 +1052,11 @@ fn typecheck_expression(
         }
         hir::Expression::StringValue(value, span) => thir::Expr::Value(BamlValueWithMeta::String(
             value.clone(),
-            (
-                span.clone(),
-                Some(hir::TypeM::String(hir::TypeMeta::default())),
-            ),
+            (span.clone(), Some(TypeIR::string())),
         )),
-        hir::Expression::RawStringValue(value, span) => {
-            thir::Expr::Value(BamlValueWithMeta::String(
-                value.clone(),
-                (
-                    span.clone(),
-                    Some(hir::TypeM::String(hir::TypeMeta::default())),
-                ),
-            ))
-        }
+        hir::Expression::RawStringValue(value, span) => thir::Expr::Value(
+            BamlValueWithMeta::String(value.clone(), (span.clone(), Some(TypeIR::string()))),
+        ),
         hir::Expression::Identifier(name, span) => {
             // Look up type in context
             let var_type = context.get_type(name).cloned();
@@ -802,8 +1076,7 @@ fn typecheck_expression(
 
             // Infer array type from items
             let inner_type = typed_items.first().and_then(|item| item.meta().1.clone());
-            let array_type =
-                inner_type.map(|t| hir::TypeM::Array(Box::new(t), hir::TypeMeta::default()));
+            let array_type = inner_type.map(TypeIR::list);
 
             thir::Expr::List(typed_items, (span.clone(), array_type))
         }
@@ -833,13 +1106,8 @@ fn typecheck_expression(
                 typed_entries.insert(key, typed_value);
             }
 
-            let map_type = value_type.map(|v| {
-                hir::TypeM::Map(
-                    Box::new(hir::TypeM::String(hir::TypeMeta::default())),
-                    Box::new(v),
-                    hir::TypeMeta::default(),
-                )
-            });
+            let map_type = value_type
+                .map(|v| TypeIR::Map(Box::new(TypeIR::string()), Box::new(v), Default::default()));
 
             thir::Expr::Map(typed_entries, (span.clone(), map_type))
         }
@@ -871,9 +1139,11 @@ fn typecheck_expression(
             }
 
             let (param_types, return_type, is_known_function) = match &func_type {
-                Some(hir::TypeM::Function(arrow, _)) => {
-                    (arrow.params.clone(), Some(*arrow.return_type.clone()), true)
-                }
+                Some(TypeIR::Arrow(arrow, _)) => (
+                    arrow.param_types.clone(),
+                    Some(arrow.return_type.clone()),
+                    true,
+                ),
                 _ => {
                     diagnostics.push_error(DatamodelError::new_validation_error(
                         &format!("Unknown function {func_name}"),
@@ -887,13 +1157,7 @@ fn typecheck_expression(
             let typed_args: Vec<_> = if is_known_function {
                 // Only validate arguments for known functions
                 args.iter()
-                    .zip(
-                        param_types
-                            .iter()
-                            .chain(std::iter::repeat(&hir::TypeM::Null(
-                                hir::TypeMeta::default(),
-                            ))),
-                    )
+                    .zip(param_types.iter().chain(std::iter::repeat(&TypeIR::null())))
                     .map(|(arg, expected_type)| {
                         let typed_arg = typecheck_expression(arg, context, diagnostics);
 
@@ -944,7 +1208,12 @@ fn typecheck_expression(
                                 &format!("Generic function calls with type names are not yet supported: {name}"),
                                 span.clone(),
                             ));
-                            hir::TypeM::Class(name.clone(), hir::TypeMeta::default())
+                            TypeIR::Class {
+                                name: name.clone(),
+                                mode: baml_types::ir_type::StreamingMode::NonStreaming,
+                                dynamic: false,
+                                meta: Default::default(),
+                            }
                         }
                     })
                     .collect(),
@@ -958,15 +1227,133 @@ fn typecheck_expression(
             args,
             span,
         } => {
-            // TODO: Typecheck method call.
-            thir::Expr::MethodCall {
-                receiver: Arc::new(typecheck_expression(receiver, context, diagnostics)),
-                method: Arc::new(thir::Expr::Var(method.clone(), (span.clone(), None))),
-                args: args
-                    .iter()
+            let typed_receiver = typecheck_expression(receiver, context, diagnostics);
+
+            // TODO: Flatten this nested logic.
+            let full_name = match &typed_receiver.meta().1 {
+                Some(TypeIR::Class {
+                    name: class_name, ..
+                }) => match context.classes.get(class_name) {
+                    Some(class_def) => match class_def.methods.iter().find(|m| &m.name == method) {
+                        Some(method_def) => Some(format!("{class_name}.{method}")),
+                        None => {
+                            diagnostics.push_error(DatamodelError::new_validation_error(
+                                &format!("Class `{class_name}` has no method `{method}`"),
+                                span.clone(),
+                            ));
+                            None
+                        }
+                    },
+                    None => {
+                        diagnostics.push_error(DatamodelError::new_validation_error(
+                            &format!("Expression resolves to unknown class `{class_name}`"),
+                            receiver.span(),
+                        ));
+                        None
+                    }
+                },
+                // TODO: Handle this uniformly with the other cases.
+                Some(TypeIR::List(_, _)) => match method.as_str() {
+                    "len" => Some("std.Array.len".to_string()),
+                    _ => {
+                        diagnostics.push_error(DatamodelError::new_validation_error(
+                            &format!("Method `{method}` is not available on class `std.Array`"),
+                            span.clone(),
+                        ));
+                        None
+                    }
+                },
+
+                _ => None,
+            };
+
+            // Return untyped expr if not known.
+            let Some(full_name) = full_name else {
+                return thir::Expr::MethodCall {
+                    receiver: Arc::new(typed_receiver),
+                    method: Arc::new(thir::Expr::Var(method.clone(), (span.clone(), None))),
+                    args: args
+                        .iter()
+                        .map(|arg| typecheck_expression(arg, context, diagnostics))
+                        .collect(),
+                    meta: (span.clone(), None),
+                };
+            };
+
+            let func_type = context.get_type(&full_name).cloned();
+
+            let (param_types, return_type, is_known_function) = match &func_type {
+                Some(TypeIR::Arrow(arrow, _)) => (
+                    arrow.param_types.clone(),
+                    Some(arrow.return_type.clone()),
+                    true,
+                ),
+                _ => {
+                    diagnostics.push_error(DatamodelError::new_validation_error(
+                        &format!("Unknown function {full_name}"),
+                        span.clone(),
+                    ));
+                    (vec![], None, false)
+                }
+            };
+
+            let typed_args: Vec<_> = if is_known_function {
+                // Only validate arguments for known functions
+                args.iter()
+                    .zip(param_types.iter().chain(std::iter::repeat(&TypeIR::null())))
+                    .map(|(arg, expected_type)| {
+                        let typed_arg = typecheck_expression(arg, context, diagnostics);
+
+                        // Check if argument type matches expected type
+                        if let Some(arg_type) = typed_arg.meta().1.as_ref() {
+                            if !types_compatible(arg_type, expected_type) {
+                                diagnostics.push_error(DatamodelError::new_validation_error(
+                                    &format!(
+                                        "Type mismatch in argument, expected: {}, got: {}",
+                                        expected_type.name_for_user(),
+                                        typed_arg
+                                            .meta()
+                                            .1
+                                            .as_ref()
+                                            .map(|t| t.name_for_user())
+                                            .unwrap_or("unknown".to_string())
+                                    ),
+                                    arg.span(),
+                                ));
+                            }
+                        }
+
+                        typed_arg
+                    })
+                    .collect()
+            } else {
+                // For unknown functions, just typecheck arguments without validation
+                args.iter()
                     .map(|arg| typecheck_expression(arg, context, diagnostics))
-                    .collect(),
-                meta: (span.clone(), None),
+                    .collect()
+            };
+
+            // Check argument count only for known functions
+            if is_known_function && args.len() != param_types.len() {
+                diagnostics.push_error(DatamodelError::new_validation_error(
+                    &format!(
+                        "Function {} expects {} arguments, got {}",
+                        full_name,
+                        param_types.len(),
+                        args.len()
+                    ),
+                    span.clone(),
+                ));
+            }
+
+            thir::Expr::MethodCall {
+                receiver: Arc::new(typed_receiver),
+                method: Arc::new(thir::Expr::Var(
+                    method.clone(),
+                    (span.clone(), func_type.clone()),
+                )),
+                args: typed_args,
+                meta: (span.clone(), return_type),
             }
         }
         hir::Expression::ClassConstructor(constructor, span) => {
@@ -978,7 +1365,7 @@ fn typecheck_expression(
 
             if let Some(class_def) = class_def {
                 // Create a map of field names to types
-                let class_field_types: BamlMap<String, Type> = class_def
+                let class_field_types: BamlMap<String, TypeIR> = class_def
                     .fields
                     .iter()
                     .map(|f| (f.name.clone(), f.r#type.clone()))
@@ -1095,10 +1482,12 @@ fn typecheck_expression(
                 spread,
                 meta: (
                     span.clone(),
-                    Some(hir::TypeM::Class(
-                        constructor.class_name.clone(),
-                        hir::TypeMeta::default(),
-                    )),
+                    Some(TypeIR::Class {
+                        name: constructor.class_name.clone(),
+                        mode: baml_types::ir_type::StreamingMode::NonStreaming,
+                        dynamic: false,
+                        meta: Default::default(),
+                    }),
                 ),
             }
         }
@@ -1112,7 +1501,7 @@ fn typecheck_expression(
 
             // Check condition is boolean
             if let Some(cond_type) = typed_condition.meta().1.as_ref() {
-                if !matches!(cond_type, hir::TypeM::Bool(_)) {
+                if !matches!(cond_type, TypeIR::Primitive(baml_types::TypeValue::Bool, _)) {
                     diagnostics.push_error(DatamodelError::new_validation_error(
                         "If condition must be boolean",
                         condition.span(),
@@ -1141,10 +1530,10 @@ fn typecheck_expression(
 
             // Infer result type from base type
             let result_type = match typed_base.meta().1.as_ref() {
-                Some(hir::TypeM::Array(inner, _)) => {
+                Some(TypeIR::List(inner, _)) => {
                     // Check index is integer
                     if let Some(index_type) = typed_index.meta().1.as_ref() {
-                        if !matches!(index_type, hir::TypeM::Int(_)) {
+                        if !matches!(index_type, TypeIR::Primitive(baml_types::TypeValue::Int, _)) {
                             diagnostics.push_error(DatamodelError::new_validation_error(
                                 "Array index must be integer",
                                 index.span(),
@@ -1153,7 +1542,7 @@ fn typecheck_expression(
                     }
                     Some(*inner.clone())
                 }
-                Some(hir::TypeM::Map(_, value_type, _)) => Some(*value_type.clone()),
+                Some(TypeIR::Map(_, value_type, _)) => Some(*value_type.clone()),
                 _ => {
                     diagnostics.push_error(DatamodelError::new_validation_error(
                         "Can only index arrays and maps",
@@ -1174,7 +1563,9 @@ fn typecheck_expression(
 
             // Look up field type from class definition
             let field_type = match typed_base.meta().1.as_ref() {
-                Some(hir::TypeM::Class(class_name, _)) => {
+                Some(TypeIR::Class {
+                    name: class_name, ..
+                }) => {
                     // Look up the class definition
                     if let Some(class_def) = context.classes.get(class_name) {
                         // Find the field in the class
@@ -1214,9 +1605,9 @@ fn typecheck_expression(
                 meta: (span.clone(), field_type),
             }
         }
-        hir::Expression::ExpressionBlock(block, span) => {
+        hir::Expression::Block(block, span) => {
             let typed_block = typecheck_block(block, &mut context.clone(), diagnostics);
-            let block_type = typed_block.return_value.meta().1.clone();
+            let block_type = typed_block.ty.clone();
             thir::Expr::Block(Box::new(typed_block), (span.clone(), block_type))
         }
         hir::Expression::JinjaExpressionValue(_, span) => {
@@ -1255,35 +1646,58 @@ fn typecheck_expression(
 }
 
 /// Check if two types are compatible (for now, just equality)
-fn types_compatible(actual: &Type, expected: &Type) -> bool {
+fn types_compatible(actual: &TypeIR, expected: &TypeIR) -> bool {
     match (actual, expected) {
-        (hir::TypeM::Int(_), hir::TypeM::Int(_)) => true,
-        (hir::TypeM::String(_), hir::TypeM::String(_)) => true,
-        (hir::TypeM::Bool(_), hir::TypeM::Bool(_)) => true,
-        (hir::TypeM::Null(_), hir::TypeM::Null(_)) => true,
-        (hir::TypeM::Array(a, _), hir::TypeM::Array(b, _)) => types_compatible(a, b),
-        (hir::TypeM::Map(k1, v1, _), hir::TypeM::Map(k2, v2, _)) => {
+        (
+            TypeIR::Primitive(baml_types::TypeValue::Int, _),
+            TypeIR::Primitive(baml_types::TypeValue::Int, _),
+        ) => true,
+        (
+            TypeIR::Primitive(baml_types::TypeValue::String, _),
+            TypeIR::Primitive(baml_types::TypeValue::String, _),
+        ) => true,
+        (
+            TypeIR::Primitive(baml_types::TypeValue::Bool, _),
+            TypeIR::Primitive(baml_types::TypeValue::Bool, _),
+        ) => true,
+        (
+            TypeIR::Primitive(baml_types::TypeValue::Null, _),
+            TypeIR::Primitive(baml_types::TypeValue::Null, _),
+        ) => true,
+        (TypeIR::List(a, _), TypeIR::List(b, _)) => types_compatible(a, b),
+        (TypeIR::Map(k1, v1, _), TypeIR::Map(k2, v2, _)) => {
             types_compatible(k1, k2) && types_compatible(v1, v2)
         }
-        (hir::TypeM::Class(a, _), hir::TypeM::Class(b, _)) => a == b,
-        (hir::TypeM::Enum(a, _), hir::TypeM::Enum(b, _)) => a == b,
+        (TypeIR::Class { name: a, .. }, TypeIR::Class { name: b, .. }) => a == b,
+        (TypeIR::Enum { name: a, .. }, TypeIR::Enum { name: b, .. }) => a == b,
         // TODO: Handle union types, subtyping, etc.
         _ => false,
     }
 }
 
-impl Type {
+pub trait TypeCompatibility {
+    fn is_optional(&self) -> bool;
+    fn is_subtype(&self, expected: &TypeIR) -> bool;
+    fn name_for_user(&self) -> String;
+    fn eq_up_to_span(&self, other: &TypeIR) -> bool;
+    fn can_be_assigned(&self, other: &TypeIR) -> bool;
+}
+
+impl TypeCompatibility for TypeIR {
     /// Check if a type is optional (contains null in a union)
-    pub fn is_optional(&self) -> bool {
+    fn is_optional(&self) -> bool {
         match self {
-            Type::Null(_) => true,
-            Type::Union(types, _) => types.iter().any(|t| matches!(t, Type::Null(_))),
+            TypeIR::Primitive(baml_types::TypeValue::Null, _) => true,
+            TypeIR::Union(types, _) => types
+                .iter_include_null()
+                .iter()
+                .any(|t| matches!(t, TypeIR::Primitive(baml_types::TypeValue::Null, _))),
             _ => false,
         }
     }
 
     /// Return true if `self` is a subtype of `expected`.
-    pub fn is_subtype(&self, expected: &Type) -> bool {
+    fn is_subtype(&self, expected: &TypeIR) -> bool {
         // Semantics similar to IR's `IntermediateRepr::is_subtype`:
         // - Unions on the right: self <: (e1 | e2 | ...) if exists ei s.t. self <: ei
         // - Unions on the left: (a1 | a2 | ...) <: expected if all ai <: expected
@@ -1291,33 +1705,48 @@ impl Type {
         // - Maps have contravariant keys and covariant values
         match (self, expected) {
             // Primitives
-            (Type::Int(_), Type::Int(_)) => true,
-            (Type::String(_), Type::String(_)) => true,
-            (Type::Bool(_), Type::Bool(_)) => true,
-            (Type::Float(_), Type::Float(_)) => true,
-            (Type::Null(_), Type::Null(_)) => true,
+            (
+                TypeIR::Primitive(baml_types::TypeValue::Int, _),
+                TypeIR::Primitive(baml_types::TypeValue::Int, _),
+            ) => true,
+            (
+                TypeIR::Primitive(baml_types::TypeValue::String, _),
+                TypeIR::Primitive(baml_types::TypeValue::String, _),
+            ) => true,
+            (
+                TypeIR::Primitive(baml_types::TypeValue::Bool, _),
+                TypeIR::Primitive(baml_types::TypeValue::Bool, _),
+            ) => true,
+            (
+                TypeIR::Primitive(baml_types::TypeValue::Float, _),
+                TypeIR::Primitive(baml_types::TypeValue::Float, _),
+            ) => true,
+            (
+                TypeIR::Primitive(baml_types::TypeValue::Null, _),
+                TypeIR::Primitive(baml_types::TypeValue::Null, _),
+            ) => true,
 
             // Arrays: covariant element
-            (Type::Array(a_item, _), Type::Array(e_item, _)) => a_item.is_subtype(e_item),
+            (TypeIR::List(a_item, _), TypeIR::List(e_item, _)) => a_item.is_subtype(e_item),
 
             // Maps: contravariant key, covariant value
-            (Type::Map(a_k, a_v, _), Type::Map(e_k, e_v, _)) => {
+            (TypeIR::Map(a_k, a_v, _), TypeIR::Map(e_k, e_v, _)) => {
                 e_k.is_subtype(a_k) && a_v.is_subtype(e_v)
             }
 
             // Nominal types
-            (Type::Class(a, _), Type::Class(e, _)) => a == e,
-            (Type::Enum(a, _), Type::Enum(e, _)) => a == e,
+            (TypeIR::Class { name: a, .. }, TypeIR::Class { name: e, .. }) => a == e,
+            (TypeIR::Enum { name: a, .. }, TypeIR::Enum { name: e, .. }) => a == e,
 
             // Function types: conservative check (same arity; covariant inputs/outputs)
-            (Type::Function(a_arrow, _), Type::Function(e_arrow, _)) => {
-                if a_arrow.params.len() != e_arrow.params.len() {
+            (TypeIR::Arrow(a_arrow, _), TypeIR::Arrow(e_arrow, _)) => {
+                if a_arrow.param_types.len() != e_arrow.param_types.len() {
                     return false;
                 }
                 if !a_arrow
-                    .params
+                    .param_types
                     .iter()
-                    .zip(e_arrow.params.iter())
+                    .zip(e_arrow.param_types.iter())
                     .all(|(a_in, e_in)| a_in.is_subtype(e_in))
                 {
                     return false;
@@ -1326,13 +1755,92 @@ impl Type {
             }
 
             // If expected is a union, self must be subtype of some branch
-            (a, Type::Union(e_items, _)) => e_items.iter().any(|e| a.is_subtype(e)),
+            (a, TypeIR::Union(e_items, _)) => {
+                e_items.iter_include_null().iter().any(|e| a.is_subtype(e))
+            }
 
             // If self is a union, every branch must be a subtype of expected
-            (Type::Union(a_items, _), e) => a_items.iter().all(|a| a.is_subtype(e)),
+            (TypeIR::Union(a_items, _), e) => {
+                a_items.iter_include_null().iter().all(|a| a.is_subtype(e))
+            }
 
             _ => false,
         }
+    }
+
+    fn name_for_user(&self) -> String {
+        match self {
+            TypeIR::Primitive(baml_types::TypeValue::Int, _) => "int".to_string(),
+            TypeIR::Primitive(baml_types::TypeValue::Float, _) => "float".to_string(),
+            TypeIR::Primitive(baml_types::TypeValue::String, _) => "string".to_string(),
+            TypeIR::Primitive(baml_types::TypeValue::Bool, _) => "bool".to_string(),
+            TypeIR::Primitive(baml_types::TypeValue::Null, _) => "null".to_string(),
+            TypeIR::List(inner, _) => format!("{}[]", inner.name_for_user()),
+            TypeIR::Map(key, value, _) => {
+                format!("map<{}, {}>", key.name_for_user(), value.name_for_user())
+            }
+            TypeIR::Class { name, .. } => name.clone(),
+            TypeIR::Enum { name, .. } => name.clone(),
+            TypeIR::Union(union_type, _) => {
+                let type_names: Vec<String> = union_type
+                    .iter_include_null()
+                    .iter()
+                    .map(|t| t.name_for_user())
+                    .collect();
+                format!("({})", type_names.join(" | "))
+            }
+            TypeIR::Arrow(arrow, _) => {
+                let param_names: Vec<String> = arrow
+                    .param_types
+                    .iter()
+                    .map(|t| t.name_for_user())
+                    .collect();
+                format!(
+                    "({}) -> {}",
+                    param_names.join(", "),
+                    arrow.return_type.name_for_user()
+                )
+            }
+            _ => "unknown".to_string(),
+        }
+    }
+
+    fn eq_up_to_span(&self, other: &TypeIR) -> bool {
+        // Simple equality check ignoring spans/metadata
+        match (self, other) {
+            (TypeIR::Primitive(a, _), TypeIR::Primitive(b, _)) => a == b,
+            (TypeIR::List(a, _), TypeIR::List(b, _)) => a.eq_up_to_span(b),
+            (TypeIR::Map(ak, av, _), TypeIR::Map(bk, bv, _)) => {
+                ak.eq_up_to_span(bk) && av.eq_up_to_span(bv)
+            }
+            (TypeIR::Class { name: a, .. }, TypeIR::Class { name: b, .. }) => a == b,
+            (TypeIR::Enum { name: a, .. }, TypeIR::Enum { name: b, .. }) => a == b,
+            (TypeIR::Union(a, _), TypeIR::Union(b, _)) => {
+                let a_types = a.iter_include_null();
+                let b_types = b.iter_include_null();
+                let a_vec: Vec<_> = a_types.iter().collect();
+                let b_vec: Vec<_> = b_types.iter().collect();
+                a_vec.len() == b_vec.len()
+                    && a_vec
+                        .iter()
+                        .zip(b_vec.iter())
+                        .all(|(x, y)| x.eq_up_to_span(y))
+            }
+            (TypeIR::Arrow(a, _), TypeIR::Arrow(b, _)) => {
+                a.param_types.len() == b.param_types.len()
+                    && a.param_types
+                        .iter()
+                        .zip(b.param_types.iter())
+                        .all(|(x, y)| x.eq_up_to_span(y))
+                    && a.return_type.eq_up_to_span(&b.return_type)
+            }
+            _ => false,
+        }
+    }
+
+    fn can_be_assigned(&self, other: &TypeIR) -> bool {
+        // For simplicity, use subtype check
+        other.is_subtype(self)
     }
 }
 
@@ -1379,12 +1887,12 @@ mod tests {
 
         // Check that the let statement has the correct inferred type
         if let Some(thir::Statement::Let { value, .. }) = test_fn.body.statements.first() {
-            value
+            assert!(value
                 .meta()
                 .1
                 .as_ref()
                 .expect("a should be inferred")
-                .assert_eq_up_to_span(&Type::int());
+                .eq_up_to_span(&TypeIR::int()));
         } else {
             panic!("Expected let statement");
         }
@@ -1420,10 +1928,11 @@ mod tests {
         if let Some(thir::Statement::Let { value, .. }) = test_fn.body.statements.first() {
             match value {
                 thir::Expr::Call { meta, .. } => {
-                    meta.1
+                    assert!(meta
+                        .1
                         .as_ref()
                         .expect("Call should have inferred return type")
-                        .assert_eq_up_to_span(&Type::int());
+                        .eq_up_to_span(&TypeIR::int()));
                 }
                 _ => panic!("Expected function call"),
             }
@@ -1455,12 +1964,13 @@ mod tests {
             .expect("Should have test_array function");
 
         // Check array access type
-        match &test_fn.body.return_value {
-            thir::Expr::ArrayAccess { meta, .. } => {
-                meta.1
+        match &test_fn.body.trailing_expr {
+            Some(thir::Expr::ArrayAccess { meta, .. }) => {
+                assert!(meta
+                    .1
                     .as_ref()
                     .expect("Array access should have inferred type")
-                    .assert_eq_up_to_span(&Type::int());
+                    .eq_up_to_span(&TypeIR::int()));
             }
             _ => panic!("Expected array access"),
         }

@@ -6,10 +6,6 @@ inputs:
     description: "Go version to install"
     required: false
     default: "1.23.11"
-  install-protoc-gen-go:
-    description: "Install protoc-gen-go"
-    required: false
-    default: "true"
   cache:
     description: "Enable Go module caching"
     required: false
@@ -51,12 +47,6 @@ runs:
         if [ "${{ inputs.target-arch }}" != "" ]; then
           echo "GOARCH=${{ inputs.target-arch }}" >> $GITHUB_ENV
         fi
-      shell: bash
-
-    - name: Install protoc-gen-go
-      if: inputs.install-protoc-gen-go == 'true'
-      # locked to match the version in mise.toml
-      run: go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.6
       shell: bash
 
     - name: Install goimports

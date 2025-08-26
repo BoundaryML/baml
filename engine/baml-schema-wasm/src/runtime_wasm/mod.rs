@@ -19,7 +19,7 @@ use baml_types::{BamlMediaType, BamlValue, GeneratorOutputType, ResponseCheck, T
 use futures::{channel::mpsc, StreamExt};
 use indexmap::IndexMap;
 use internal_baml_codegen::version_check::{check_version, GeneratorType, VersionCheckMode};
-use internal_baml_core::ir::repr::Walker;
+use internal_baml_core::{feature_flags::FeatureFlags, ir::repr::Walker};
 use internal_llm_client::AllowedRoleMetadata;
 use itertools::join;
 use js_sys::{Promise, Uint8Array};
@@ -230,7 +230,11 @@ impl WasmProject {
     }
 
     #[wasm_bindgen]
-    pub fn runtime(&self, env_vars: JsValue) -> Result<WasmRuntime, JsValue> {
+    pub fn runtime(
+        &self,
+        env_vars: JsValue,
+        feature_flags: JsValue,
+    ) -> Result<WasmRuntime, JsValue> {
         let mut hm = self.files.iter().collect::<HashMap<_, _>>();
         hm.extend(self.unsaved_files.iter());
 
@@ -241,7 +245,18 @@ impl WasmProject {
                 ))
             })?;
 
-        BamlRuntime::from_file_content(&self.root_dir_name, &hm, env_vars)
+        let feature_flags = if feature_flags.is_undefined() || feature_flags.is_null() {
+            FeatureFlags::new()
+        } else {
+            let flags: Vec<String> =
+                serde_wasm_bindgen::from_value(feature_flags).map_err(|e| {
+                    JsValue::from_str(&format!("Expected feature_flags to be Array<string>. {e}"))
+                })?;
+            FeatureFlags::from_vec(flags)
+                .map_err(|e| JsValue::from_str(&format!("Invalid feature flags: {:?}", e)))?
+        };
+
+        BamlRuntime::from_file_content(&self.root_dir_name, &hm, env_vars, feature_flags)
             .map(|r| WasmRuntime { runtime: r })
             .map_err(|e| match e.downcast::<DiagnosticsError>() {
                 Ok(e) => {
@@ -268,7 +283,8 @@ impl WasmProject {
         let no_version_check = no_version_check.unwrap_or(false);
 
         let js_value = serde_wasm_bindgen::to_value(&fake_map).unwrap();
-        let runtime = self.runtime(js_value);
+        let empty_flags = JsValue::undefined();
+        let runtime = self.runtime(js_value, empty_flags);
         log::info!("Files are: {:#?}", self.files);
         let res = match runtime {
             Ok(runtime) => runtime.run_generators(&self.files, no_version_check),

@@ -32,4 +32,4 @@ fn assertNotOk() -> int {
 //      5   RETURN         
 //
 // Class: std::Request with 3 fields
-// Function: len
+// Function: std.Array.len

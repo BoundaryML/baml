@@ -20,7 +20,7 @@ unused_variables = "deny"
 
 [dependencies]
 anyhow.workspace = true
-axum = "0.7.5"
+axum.workspace = true
 axum-extra = { version = "0.9.3", features = ["erased-json", "typed-header"] }
 baml-runtime = { path = "../baml-runtime", features = ["internal"] }
 language-server = { path = "../language_server" }
@@ -32,7 +32,7 @@ bytes.workspace = true
 cfg-if.workspace = true
 clap = { workspace = true, features = ["color", "env"] }
 clap-cargo = "0.14.1"
-colored = "2.1.0"
+colored.workspace = true
 console = "0.15.0"
 dashmap.workspace = true
 derive_more.workspace = true
@@ -61,7 +61,7 @@ scopeguard.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 similar = { version = "2.6.0", features = ["inline"] }
-strsim = "0.11.1"
+strsim.workspace = true
 strum.workspace = true
 strum_macros.workspace = true
 tokio = { version = "1", default-features = false, features = [
@@ -72,7 +72,7 @@ tokio-stream = "0.1.15"
 # NOTE(sam): adding this caused a build error, I suspect because tower uses nightly features or something
 # tower = "0.5.0"
 walkdir.workspace = true
-uuid = { version = "1.8.0", features = ["v4", "serde"] }
+uuid.workspace = true
 web-time.workspace = true
 static_assertions.workspace = true
 mime_guess = "2.0.4"

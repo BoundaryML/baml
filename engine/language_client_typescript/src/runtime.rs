@@ -5,6 +5,7 @@ use baml_runtime::{
     BamlRuntime as CoreRuntime,
 };
 use baml_types::BamlValue;
+use internal_baml_core::feature_flags::FeatureFlags;
 use napi::{
     bindgen_prelude::ObjectFinalize,
     threadsafe_function::{ThreadSafeCallContext, ThreadsafeFunctionCallMode},
@@ -58,9 +59,11 @@ impl BamlRuntime {
         env_vars: HashMap<String, String>,
     ) -> napi::Result<Self> {
         let directory = PathBuf::from(directory);
-        Ok(CoreRuntime::from_directory(&directory, env_vars)
-            .map_err(from_anyhow_error)?
-            .into())
+        Ok(
+            CoreRuntime::from_directory(&directory, env_vars, FeatureFlags::new())
+                .map_err(from_anyhow_error)?
+                .into(),
+        )
     }
 
     #[napi(ts_return_type = "BamlRuntime")]
@@ -73,9 +76,11 @@ impl BamlRuntime {
             .into_iter()
             .filter_map(|(key, value)| value.map(|value| (key, value)))
             .collect();
-        Ok(CoreRuntime::from_file_content(&root_path, &files, env_vars)
-            .map_err(from_anyhow_error)?
-            .into())
+        Ok(
+            CoreRuntime::from_file_content(&root_path, &files, env_vars, FeatureFlags::new())
+                .map_err(from_anyhow_error)?
+                .into(),
+        )
     }
 
     #[napi]
@@ -85,9 +90,10 @@ impl BamlRuntime {
         files: HashMap<String, String>,
         env_vars: HashMap<String, String>,
     ) -> napi::Result<()> {
-        self.inner = CoreRuntime::from_file_content(&root_path, &files, env_vars)
-            .map_err(from_anyhow_error)?
-            .into();
+        self.inner =
+            CoreRuntime::from_file_content(&root_path, &files, env_vars, FeatureFlags::new())
+                .map_err(from_anyhow_error)?
+                .into();
         Ok(())
     }
 
@@ -208,6 +214,7 @@ impl BamlRuntime {
         client_registry: Option<&ClientRegistry>,
         collectors: Vec<&Collector>,
         env_vars: HashMap<String, String>,
+        #[napi(ts_arg_type = "(() => void) | undefined")] on_tick: Option<JsFunction>,
     ) -> napi::Result<FunctionResultStream> {
         let args: BamlValue = parse_ts_types::js_object_to_baml_value(env, args)?;
         if !args.is_map() {
@@ -243,7 +250,18 @@ impl BamlRuntime {
             None => None,
         };
 
-        Ok(FunctionResultStream::new(stream, cb, tb, client_registry))
+        let on_tick = match on_tick {
+            Some(tick_cb) => Some(env.create_reference(tick_cb)?),
+            None => None,
+        };
+
+        Ok(FunctionResultStream::new(
+            stream,
+            cb,
+            on_tick,
+            tb,
+            client_registry,
+        ))
     }
 
     #[napi]
@@ -260,6 +278,7 @@ impl BamlRuntime {
         client_registry: Option<&ClientRegistry>,
         collectors: Vec<&Collector>,
         env_vars: HashMap<String, String>,
+        #[napi(ts_arg_type = "(() => void) | undefined")] on_tick: Option<JsFunction>,
     ) -> napi::Result<FunctionResultStream> {
         let args: BamlValue = parse_ts_types::js_object_to_baml_value(env, args)?;
         if !args.is_map() {
@@ -295,7 +314,18 @@ impl BamlRuntime {
             None => None,
         };
 
-        Ok(FunctionResultStream::new(stream, cb, tb, client_registry))
+        let on_tick = match on_tick {
+            Some(tick_cb) => Some(env.create_reference(tick_cb)?),
+            None => None,
+        };
+
+        Ok(FunctionResultStream::new(
+            stream,
+            cb,
+            on_tick,
+            tb,
+            client_registry,
+        ))
     }
 
     #[napi(ts_return_type = "Promise<HTTPRequest>")]

@@ -1,7 +1,7 @@
 fn Sum(xs: int[]) -> int {
 	let mut result = 0;
 
-	for x in xs {
+	for (x in xs) {
 		result += x;
 	}
 
@@ -11,8 +11,8 @@ fn Sum(xs: int[]) -> int {
 fn ForWithBreak(xs: int[]) -> int {
 	let mut result = 0;
 
-	for x in xs {
-		if x > 10 {
+	for (x in xs) {
+		if (x > 10) {
 			break;
 		}
 		result += x;
@@ -24,8 +24,8 @@ fn ForWithBreak(xs: int[]) -> int {
 fn ForWithContinue(xs: int[]) -> int {
 	let mut result = 0;
 
-	for x in xs {
-		if x > 10 {
+	for (x in xs) {
+		if (x > 10) {
 			continue;
 		}
 		result += x;
@@ -38,8 +38,8 @@ fn NestedFor(as: int[], bs: int[]) -> int {
 
 	let mut result = 0;
 
-	for a in as {
-		for b in bs {
+	for (a in as) {
+		for (b in bs) {
 			result += a * b;
 		}
 	}
@@ -51,7 +51,7 @@ fn NestedFor(as: int[], bs: int[]) -> int {
 // 1   0    LOAD_CONST 0         (0)
 //
 // 3   1    LOAD_VAR 1           (xs)
-//     2    LOAD_GLOBAL 5        (<fn len>)
+//     2    LOAD_GLOBAL 5        (<fn std.Array.len>)
 //     3    LOAD_VAR 3           (__baml for loop iterated array 0)
 //     4    CALL 1               
 //     5    LOAD_CONST 0         (0)
@@ -84,7 +84,7 @@ fn NestedFor(as: int[], bs: int[]) -> int {
 // 11   0    LOAD_CONST 0         (0)
 //
 // 13   1    LOAD_VAR 1           (xs)
-//      2    LOAD_GLOBAL 5        (<fn len>)
+//      2    LOAD_GLOBAL 5        (<fn std.Array.len>)
 //      3    LOAD_VAR 3           (__baml for loop iterated array 1)
 //      4    CALL 1               
 //      5    LOAD_CONST 0         (0)
@@ -127,7 +127,7 @@ fn NestedFor(as: int[], bs: int[]) -> int {
 // 24   0    LOAD_CONST 0         (0)
 //
 // 26   1    LOAD_VAR 1           (xs)
-//      2    LOAD_GLOBAL 5        (<fn len>)
+//      2    LOAD_GLOBAL 5        (<fn std.Array.len>)
 //      3    LOAD_VAR 3           (__baml for loop iterated array 2)
 //      4    CALL 1               
 //      5    LOAD_CONST 0         (0)
@@ -170,7 +170,7 @@ fn NestedFor(as: int[], bs: int[]) -> int {
 // 38   0    LOAD_CONST 0         (0)
 //
 // 40   1    LOAD_VAR 1           (as)
-//      2    LOAD_GLOBAL 5        (<fn len>)
+//      2    LOAD_GLOBAL 5        (<fn std.Array.len>)
 //      3    LOAD_VAR 4           (__baml for loop iterated array 3)
 //      4    CALL 1               
 //      5    LOAD_CONST 0         (0)
@@ -188,7 +188,7 @@ fn NestedFor(as: int[], bs: int[]) -> int {
 //      17   STORE_VAR 6          (__baml for loop index 3)
 //
 // 41   18   LOAD_VAR 2           (bs)
-//      19   LOAD_GLOBAL 5        (<fn len>)
+//      19   LOAD_GLOBAL 5        (<fn std.Array.len>)
 //      20   LOAD_VAR 8           (__baml for loop iterated array 4)
 //      21   CALL 1               
 //      22   LOAD_CONST 0         (0)
@@ -224,4 +224,4 @@ fn NestedFor(as: int[], bs: int[]) -> int {
 //      50   RETURN               
 //
 // Class: std::Request with 3 fields
-// Function: len
+// Function: std.Array.len

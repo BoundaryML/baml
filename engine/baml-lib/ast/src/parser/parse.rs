@@ -8,6 +8,7 @@ use pest::Parser;
 use super::{
     parse_assignment::parse_assignment,
     parse_expr::{parse_expr_fn, parse_top_level_assignment},
+    parse_expression::parse_expression,
     parse_template_string::parse_template_string,
     parse_type_expression_block::parse_type_expression_block,
     parse_value_expression_block::parse_value_expression_block,
@@ -27,6 +28,25 @@ fn pretty_print<'a>(pair: pest::iterators::Pair<'a, Rule>, indent_level: usize) 
     // Recursively print inner pairs with increased indentation
     for inner_pair in pair.into_inner() {
         pretty_print(inner_pair, indent_level + 1);
+    }
+}
+
+/// Parse a standalone BAML expression.
+pub fn parse_standalone_expression(
+    input: &str,
+    diagnostics: &mut Diagnostics,
+) -> anyhow::Result<Expression> {
+    let datamodel_result = BAMLParser::parse(Rule::expression, input);
+    match datamodel_result {
+        Ok(mut datamodel_wrapped) => {
+            let datamodel = datamodel_wrapped.next().unwrap();
+            let expression =
+                parse_expression(datamodel, diagnostics).expect("parse_expression failed");
+            Ok(expression)
+        }
+        Err(err) => {
+            panic!("BAMLParser failed: Handle this error: {:?}", err);
+        }
     }
 }
 

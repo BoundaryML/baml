@@ -862,7 +862,7 @@ dependencies = [
  "chrono",
  "clap",
  "clap-cargo",
- "colored 2.2.0",
+ "colored",
  "console 0.15.11",
  "console_log",
  "ctrlc",
@@ -909,7 +909,7 @@ dependencies = [
  "similar",
  "static_assertions",
  "stream-cancel",
- "strsim 0.11.1",
+ "strsim",
  "strum",
  "strum_macros",
  "test-log",
@@ -937,6 +937,7 @@ dependencies = [
  "internal-baml-parser-database",
  "itertools 0.14.0",
  "pretty",
+ "tokio",
 ]
 
 [[package]]
@@ -967,14 +968,14 @@ version = "0.205.0"
 dependencies = [
  "baml-compiler",
  "baml-vm",
- "base64 0.13.1",
+ "base64 0.22.1",
  "dissimilar",
  "either",
  "env_logger",
  "expect-test",
  "indoc",
  "internal-baml-core",
- "itertools 0.13.0",
+ "itertools 0.14.0",
  "pretty_assertions",
  "strip-ansi-escapes",
 ]
@@ -985,7 +986,7 @@ version = "0.205.0"
 dependencies = [
  "anyhow",
  "chrono",
- "colored 2.2.0",
+ "colored",
  "lazy_static",
  "log",
  "serde",
@@ -1040,6 +1041,7 @@ dependencies = [
  "futures",
  "indexmap 2.10.0",
  "internal-baml-codegen",
+ "internal-baml-core",
  "jsonish",
  "libc",
  "log",
@@ -1090,7 +1092,7 @@ dependencies = [
  "serde_with",
  "sha2",
  "static_assertions",
- "strsim 0.11.1",
+ "strsim",
  "strum",
  "strum_macros",
  "time",
@@ -1132,7 +1134,7 @@ dependencies = [
  "cfg-if",
  "chrono",
  "clap",
- "colored 2.2.0",
+ "colored",
  "console_error_panic_hook",
  "console_log",
  "cowstr",
@@ -1163,8 +1165,10 @@ dependencies = [
  "indicatif 0.17.11",
  "indoc",
  "infer",
+ "internal-baml-ast",
  "internal-baml-codegen",
  "internal-baml-core",
+ "internal-baml-diagnostics",
  "internal-baml-jinja",
  "internal-llm-client",
  "js-sys",
@@ -1180,8 +1184,10 @@ dependencies = [
  "notify-debouncer-full",
  "once_cell",
  "pin-project-lite",
+ "pretty",
  "pretty_assertions",
  "ratatui",
+ "reedline",
  "regex",
  "reqwest",
  "reqwest-eventsource",
@@ -1198,7 +1204,7 @@ dependencies = [
  "shell-escape",
  "static_assertions",
  "stream-cancel",
- "strsim 0.11.1",
+ "strsim",
  "strum",
  "strum_macros",
  "tempfile",
@@ -1284,6 +1290,7 @@ dependencies = [
  "log",
  "minijinja",
  "once_cell",
+ "pretty",
  "secrecy",
  "serde",
  "serde_json",
@@ -1309,6 +1316,7 @@ dependencies = [
  "futures",
  "indexmap 2.10.0",
  "internal-baml-codegen",
+ "internal-baml-core",
  "log",
  "napi",
  "napi-build",
@@ -1326,7 +1334,7 @@ dependencies = [
  "anyhow",
  "baml-compiler",
  "baml-types",
- "colored 2.2.0",
+ "colored",
  "criterion",
  "internal-baml-core",
  "internal-baml-diagnostics",
@@ -1349,6 +1357,7 @@ dependencies = [
  "env_logger",
  "indexmap 2.10.0",
  "internal-baml-codegen",
+ "internal-baml-core",
  "libc",
  "once_cell",
  "prost",
@@ -1369,12 +1378,6 @@ dependencies = [
  "quote",
  "syn 2.0.104",
 ]
-
-[[package]]
-name = "base64"
-version = "0.13.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e1b586273c5702936fe7b7d6896644d8be71e6314cfe09d3167c95f712589e8"
 
 [[package]]
 name = "base64"
@@ -1438,6 +1441,9 @@ name = "bitflags"
 version = "2.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1b8e56985ec62d17e9c1001dc89c88ecd7dc08e47eba5ec7c29c7b5eeecde967"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "block-buffer"
@@ -1511,7 +1517,7 @@ dependencies = [
  "serde",
  "serde_json",
  "static_assertions",
- "strsim 0.11.1",
+ "strsim",
  "strum",
  "strum_macros",
  "uuid",
@@ -1728,7 +1734,7 @@ dependencies = [
  "anstream",
  "anstyle",
  "clap_lex",
- "strsim 0.11.1",
+ "strsim",
 ]
 
 [[package]]
@@ -1791,15 +1797,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "117725a109d387c937a1533ce01b450cbde6b88abceea8473c4d7a85853cda3c"
 dependencies = [
  "lazy_static",
- "windows-sys 0.59.0",
-]
-
-[[package]]
-name = "colored"
-version = "3.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fde0e0ec90c9dfb3b4b1a0891a7dcd0e2bffde2f7efed5fe7c9bb00e5bfb915e"
-dependencies = [
  "windows-sys 0.59.0",
 ]
 
@@ -2064,6 +2061,7 @@ dependencies = [
  "mio 1.0.4",
  "parking_lot",
  "rustix 0.38.44",
+ "serde",
  "signal-hook",
  "signal-hook-mio",
  "winapi",
@@ -2134,7 +2132,7 @@ dependencies = [
  "ident_case",
  "proc-macro2",
  "quote",
- "strsim 0.11.1",
+ "strsim",
  "syn 2.0.104",
 ]
 
@@ -2296,7 +2294,7 @@ dependencies = [
  "filetime",
  "indexmap 2.10.0",
  "internal-baml-core",
- "pathdiff 0.1.0",
+ "pathdiff 0.2.3",
  "serde_json",
  "sugar_path",
  "walkdir",
@@ -2565,6 +2563,17 @@ name = "fastrand"
 version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "37909eebbb50d72f9059c3b6d82c0463f2ff062c9e95845c43a6c9c0355411be"
+
+[[package]]
+name = "fd-lock"
+version = "4.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0ce92ff622d6dadf7349484f42c93271a0d49b7cc4d466a936405bacbe10aa78"
+dependencies = [
+ "cfg-if",
+ "rustix 1.0.8",
+ "windows-sys 0.59.0",
+]
 
 [[package]]
 name = "file-id"
@@ -3643,16 +3652,16 @@ dependencies = [
  "baml-types",
  "base64 0.22.1",
  "cfg-if",
- "colored 2.2.0",
+ "colored",
  "either",
  "env_logger",
  "filetime",
  "generators-lib",
  "indexmap 2.10.0",
  "internal-baml-core",
- "itertools 0.13.0",
+ "itertools 0.14.0",
  "log",
- "pathdiff 0.1.0",
+ "pathdiff 0.2.3",
  "regex",
  "semver",
  "serde",
@@ -3671,7 +3680,7 @@ dependencies = [
  "baml-derive",
  "baml-rpc",
  "baml-types",
- "base64 0.13.1",
+ "base64 0.22.1",
  "bstd",
  "chrono",
  "derive_builder",
@@ -3687,7 +3696,7 @@ dependencies = [
  "internal-baml-parser-database",
  "internal-baml-prompt-parser",
  "internal-llm-client",
- "itertools 0.13.0",
+ "itertools 0.14.0",
  "log",
  "minijinja",
  "once_cell",
@@ -3697,7 +3706,7 @@ dependencies = [
  "serde",
  "serde_json",
  "shellwords",
- "strsim 0.10.0",
+ "strsim",
  "strum",
  "textwrap",
  "whoami",
@@ -3708,12 +3717,12 @@ name = "internal-baml-diagnostics"
 version = "0.205.0"
 dependencies = [
  "anyhow",
- "colored 2.2.0",
+ "colored",
  "indoc",
  "log",
  "pest",
  "serde",
- "strsim 0.10.0",
+ "strsim",
 ]
 
 [[package]]
@@ -3723,7 +3732,7 @@ dependencies = [
  "anyhow",
  "askama",
  "baml-types",
- "colored 2.2.0",
+ "colored",
  "env_logger",
  "indexmap 2.10.0",
  "internal-baml-core",
@@ -3733,7 +3742,7 @@ dependencies = [
  "minijinja",
  "serde",
  "serde_json",
- "strsim 0.11.1",
+ "strsim",
  "strum",
 ]
 
@@ -3744,7 +3753,7 @@ dependencies = [
  "anyhow",
  "askama",
  "baml-types",
- "colored 2.2.0",
+ "colored",
  "env_logger",
  "indexmap 2.10.0",
  "log",
@@ -3752,7 +3761,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
- "strsim 0.11.1",
+ "strsim",
  "strum",
 ]
 
@@ -3763,7 +3772,7 @@ dependencies = [
  "anyhow",
  "baml-derive",
  "baml-types",
- "colored 2.2.0",
+ "colored",
  "either",
  "enumflags2",
  "indexmap 2.10.0",
@@ -3772,7 +3781,7 @@ dependencies = [
  "internal-baml-jinja-types",
  "internal-baml-prompt-parser",
  "internal-llm-client",
- "itertools 0.13.0",
+ "itertools 0.14.0",
  "log",
  "ouroboros",
  "regex",
@@ -3996,7 +4005,7 @@ dependencies = [
  "assert-json-diff",
  "baml-types",
  "bstd",
- "colored 2.2.0",
+ "colored",
  "cowstr",
  "criterion",
  "either",
@@ -4011,7 +4020,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
- "strsim 0.10.0",
+ "strsim",
  "test-log",
  "thiserror 2.0.12",
  "unicode-normalization",
@@ -4087,7 +4096,7 @@ dependencies = [
  "baml-types",
  "base64 0.21.7",
  "bytes",
- "colored 3.0.0",
+ "colored",
  "crossbeam",
  "crossbeam-channel",
  "dirs 5.0.1",
@@ -4594,6 +4603,15 @@ checksum = "77a8165726e8236064dbb45459242600304b42a5ea24ee2948e18e023bf7ba84"
 dependencies = [
  "overload",
  "winapi",
+]
+
+[[package]]
+name = "nu-ansi-term"
+version = "0.50.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d4a28e057d01f97e61255210fcff094d74ed0466038633e95017f5beb68e4399"
+dependencies = [
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -5645,6 +5663,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "reedline"
+version = "0.37.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9834765acaa2deedf29197f2da3d309801683beb20e25775bc0249f97a7b9a74"
+dependencies = [
+ "chrono",
+ "crossterm",
+ "fd-lock",
+ "itertools 0.12.1",
+ "nu-ansi-term 0.50.1",
+ "serde",
+ "strip-ansi-escapes",
+ "strum",
+ "strum_macros",
+ "thiserror 1.0.69",
+ "unicode-segmentation",
+ "unicode-width 0.1.14",
+]
+
+[[package]]
 name = "ref-cast"
 version = "1.0.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5841,6 +5879,7 @@ dependencies = [
  "env_logger",
  "futures",
  "indexmap 2.10.0",
+ "internal-baml-core",
  "jsonish",
  "log",
  "magnus",
@@ -6614,12 +6653,6 @@ dependencies = [
 
 [[package]]
 name = "strsim"
-version = "0.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "73473c0e59e6d5812c5dfe2a064a6444949f089e20eec9a2e5506596494e4623"
-
-[[package]]
-name = "strsim"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
@@ -7203,7 +7236,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e8189decb5ac0fa7bc8b96b7cb9b2701d60d48805aca84a238004d665fcc4008"
 dependencies = [
  "matchers",
- "nu-ansi-term",
+ "nu-ansi-term 0.46.0",
  "once_cell",
  "regex",
  "serde",

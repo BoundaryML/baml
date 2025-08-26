@@ -31,7 +31,7 @@ fn format_chunks(chunks: Vec<dissimilar::Chunk<'_>>) -> String {
 use std::{fs, path::Path, sync::Arc};
 
 use baml_compiler::compile;
-use baml_lib::SourceFile;
+use baml_lib::{FeatureFlags, SourceFile};
 use baml_vm::BamlVmProgram;
 use strip_ansi_escapes::strip_str;
 
@@ -58,7 +58,11 @@ fn get_bytecode_output(content: &str) -> Result<String, String> {
         "test.baml".into(),
         Arc::from(content.to_string().into_boxed_str()),
     );
-    let schema = baml_lib::validate(&std::path::PathBuf::from("./test"), vec![source_file]);
+    let schema = baml_lib::validate(
+        &std::path::PathBuf::from("./test"),
+        vec![source_file],
+        FeatureFlags::new(),
+    );
 
     // Check for validation errors first
     if !schema.diagnostics.errors().is_empty() {
@@ -84,7 +88,7 @@ fn get_bytecode_output(content: &str) -> Result<String, String> {
                     baml_vm::Object::Function(func) => {
                         output.push_str(&format!("Function: {}\n", func.name));
                         output.push_str(&baml_vm::debug::display_bytecode(
-                            &func,
+                            func,
                             &baml_vm::EvalStack::default(),
                             &objects,
                             &globals,

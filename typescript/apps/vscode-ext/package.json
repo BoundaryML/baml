@@ -77,6 +77,16 @@
           "type": "string",
           "default": "",
           "description": "Command to run to get environment variables."
+        },
+        "baml.featureFlags": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["beta", "display_all_warnings"]
+          },
+          "uniqueItems": true,
+          "default": [],
+          "markdownDescription": "Enable experimental BAML features. **Beta** enables experimental features and suppresses experimental warnings."
         }
       }
     },

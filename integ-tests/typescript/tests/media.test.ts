@@ -42,7 +42,7 @@ describe("Media Tests", () => {
   });
 
   it("should work with pdf from base 64", async () => {
-    let res = await b.PdfInput(Pdf.fromBase64("application/pdf", pdf_b64));
+    let res = await b.PdfInput(Pdf.fromBase64(pdf_b64));
     expect(res.toLowerCase()).toMatch(/(bookmarks|pdf|sample|usage)/);
   });
 

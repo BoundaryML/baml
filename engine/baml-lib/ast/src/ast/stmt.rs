@@ -12,14 +12,14 @@ pub struct LetStmt {
 
 #[derive(Debug, Clone)]
 pub struct AssignStmt {
-    pub identifier: Identifier,
+    pub left: Expression,
     pub expr: Expression,
     pub span: Span,
 }
 
 #[derive(Debug, Clone)]
 pub struct AssignOpStmt {
-    pub identifier: Identifier,
+    pub left: Expression,
     pub assign_op: AssignOp,
     pub expr: Expression,
     pub span: Span,
@@ -93,8 +93,10 @@ pub enum Stmt {
     ForLoop(ForLoopStmt),
     CForLoop(CForLoopStmt),
     WhileLoop(WhileStmt),
-    /// Expression with trailing semicolon.
+    /// Expression without a trailing semicolon.
     Expression(Expression),
+    /// Expression with a trailing semicolon.
+    Semicolon(Expression),
     Assign(AssignStmt),
     AssignOp(AssignOpStmt),
     Break(Span),
@@ -147,9 +149,10 @@ impl fmt::Display for Stmt {
                 write!(f, ") {}", stmt.body)
             }
             Stmt::Expression(expr) => write!(f, "{expr}"),
-            Stmt::Assign(stmt) => write!(f, "{} = {}", stmt.identifier, stmt.expr),
+            Stmt::Semicolon(expr) => write!(f, "{expr};"),
+            Stmt::Assign(stmt) => write!(f, "{} = {}", stmt.left, stmt.expr),
             Stmt::AssignOp(stmt) => {
-                write!(f, "{} {} {}", stmt.identifier, stmt.assign_op, stmt.expr)
+                write!(f, "{} {} {}", stmt.left, stmt.assign_op, stmt.expr)
             }
             Stmt::WhileLoop(stmt) => write!(f, "while {} {}", stmt.condition, stmt.body),
             Stmt::Break(_) => f.write_str("break"),
@@ -187,15 +190,18 @@ impl Stmt {
             (Stmt::Expression(expr1), Stmt::Expression(expr2)) => {
                 expr1.assert_eq_up_to_span(expr2);
             }
+            (Stmt::Semicolon(expr1), Stmt::Semicolon(expr2)) => {
+                expr1.assert_eq_up_to_span(expr2);
+            }
 
             (Stmt::Assign(stmt1), Stmt::Assign(stmt2)) => {
-                stmt1.identifier.assert_eq_up_to_span(&stmt2.identifier);
+                stmt1.left.assert_eq_up_to_span(&stmt2.left);
                 stmt1.expr.assert_eq_up_to_span(&stmt2.expr);
             }
 
             (Stmt::AssignOp(stmt1), Stmt::AssignOp(stmt2)) => {
                 assert_eq!(stmt1.assign_op, stmt2.assign_op);
-                stmt1.identifier.assert_eq_up_to_span(&stmt2.identifier);
+                stmt1.left.assert_eq_up_to_span(&stmt2.left);
                 stmt1.expr.assert_eq_up_to_span(&stmt2.expr);
             }
 
@@ -242,6 +248,7 @@ impl Stmt {
                 Stmt::Let(_)
                 | Stmt::ForLoop(_)
                 | Stmt::Expression(_)
+                | Stmt::Semicolon(_)
                 | Stmt::Assign(_)
                 | Stmt::AssignOp(_)
                 | Stmt::CForLoop(_)
@@ -260,17 +267,30 @@ impl Stmt {
     pub fn identifier(&self) -> &Identifier {
         match self {
             Stmt::Let(LetStmt { identifier, .. })
-            | Stmt::ForLoop(ForLoopStmt { identifier, .. })
-            | Stmt::Assign(AssignStmt { identifier, .. })
-            | Stmt::AssignOp(AssignOpStmt { identifier, .. }) => identifier,
+            | Stmt::ForLoop(ForLoopStmt { identifier, .. }) => identifier,
 
             Stmt::Expression(_) => panic!("expressions don't have identifiers"),
+            Stmt::Semicolon(_) => panic!("semicolon expressions don't have identifiers"),
             Stmt::WhileLoop(_) => panic!("while loops don't have identifiers"),
             Stmt::Break(_) => panic!("break statements don't have identifiers"),
             Stmt::Continue(_) => panic!("continue statements don't have identifiers"),
             Stmt::Return(_) => panic!("return statements don't have identifiers"),
             Stmt::Assert(_) => panic!("assert statements don't have identifiers"),
             Stmt::CForLoop(_) => panic!("c-like for loops don't have identifiers"),
+            Stmt::Assign(stmt) => match &stmt.left {
+                Expression::Identifier(id) => id,
+                _ => panic!(
+                    "left side of assignment is not an identifier: {:?}",
+                    stmt.left
+                ),
+            },
+            Stmt::AssignOp(stmt) => match &stmt.left {
+                Expression::Identifier(id) => id,
+                _ => panic!(
+                    "left side of assignment is not an identifier: {:?}",
+                    stmt.left
+                ),
+            },
         }
     }
 
@@ -288,6 +308,7 @@ impl Stmt {
             | Stmt::Assert(AssertStmt { span, .. }) => span,
 
             Stmt::Expression(expr) => expr.span(),
+            Stmt::Semicolon(expr) => expr.span(),
         }
     }
 
