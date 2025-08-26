@@ -1615,10 +1615,39 @@ fn test_array_element_method_field_assignment() -> anyhow::Result<()> {
                 containers[1].data.value += 5;
                 let result1 = containers[1].data.value; // Should be 25
                 
-                // This would fail at compile time:
-                // containers[1].get_data().value += 10;
+                // Test method call assignment:
+                containers[1].get_data().value += 10;
+                let result2 = containers[1].data.value; // Should be 35 (25 + 10)
                 
-                result1
+                result2
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(35)), // 20 + 5 + 10
+    })
+}
+
+#[test]
+fn test_method_call_then_array_access_assignment() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            class Item {
+                value int
+            }
+            class Container {
+                data Item[]
+                function get_nested(self) -> Item[] {
+                    self.data
+                }
+            }
+            function main() -> int {
+                let i1 = Item { value: 10 };
+                let i2 = Item { value: 20 };
+                let i3 = Item { value: 30 };
+                let arr = [i1, i2, i3];
+                let mut obj = Container { data: arr };
+                obj.get_nested()[1].value += 5;
+                obj.data[1].value
             }
         "#,
         function: "main",
