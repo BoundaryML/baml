@@ -1018,8 +1018,10 @@ impl<'g> HirCompiler<'g> {
                 meta: _,
             } => {
                 // TODO: Long-term solution - Refactor AllocInstance to consume fields from stack
-                // like AllocArray does. This would eliminate the need for LoadVar/StoreField
-                // and naturally handle nested construction without tracking depth.
+                // like AllocArray does. This would eliminate the need for Copy/StoreField pattern
+                // and naturally handle nested construction. The approach would compile all field
+                // values onto the stack first, then AllocInstance(class, field_count) would
+                // consume them all at once, creating a fully initialized instance.
                 // See: Stack-Based AllocInstance approach in field_access_assignments_implementation.md
                 
                 let Some(&class_index) = self.globals.get(class_name) else {
