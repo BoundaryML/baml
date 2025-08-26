@@ -79,7 +79,7 @@ impl SyncNotificationHandler for DidOpenTextDocumentHandler {
                 .unwrap_or(&default_flags);
             let client_version = session.baml_settings.get_client_version();
             if let Ok(version) =
-                project.get_common_generator_version(effective_flags, client_version)
+                locked.get_common_generator_version(effective_flags, client_version)
             {
                 notifier
                     .0

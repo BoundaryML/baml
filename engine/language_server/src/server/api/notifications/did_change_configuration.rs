@@ -14,7 +14,7 @@ pub(crate) struct DidChangeConfiguration;
 /// Republishes diagnostics for all projects when feature flags change
 fn republish_all_diagnostics(notifier: &Notifier, session: &mut Session) {
     let projects = session.baml_src_projects.clone();
-    let projects_guard = projects.lock().unwrap();
+    let projects_guard = projects.lock();
 
     let default_flags = vec!["beta".to_string()];
     let effective_flags = session

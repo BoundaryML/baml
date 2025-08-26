@@ -40,7 +40,6 @@ impl PlaygroundServer {
         let dist_dir = playground_static_assets().await?;
 
         let app = Router::new()
-            .route("/health", get(health_check))
             .route("/ping", get(crate::handlers::ping_handler))
             .route("/ws", get(crate::handlers::ws_handler))
             .route("/rpc", get(crate::handlers::ws_rpc_handler))
@@ -57,10 +56,6 @@ impl PlaygroundServer {
     }
 }
 
-async fn health_check() -> &'static str {
-    "OK"
-}
-
 async fn playground_static_assets() -> anyhow::Result<PathBuf> {
     const GITHUB_REPO: &str = "BoundaryML/baml";
 
@@ -70,7 +65,7 @@ async fn playground_static_assets() -> anyhow::Result<PathBuf> {
     {
         // Use cargo-relative path for local dist
         let local_dist = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../../typescript/apps/playground/dist");
+            .join("../../typescript/apps/playground/dist");
         tracing::info!(
             "VSCODE_DEBUG_MODE is set. Using local playground dist at {}",
             local_dist.display()

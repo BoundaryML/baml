@@ -5,9 +5,6 @@ use playground_server::{
 use std::collections::HashMap;
 use tokio::io::AsyncBufReadExt;
 use tracing_subscriber::EnvFilter;
-use serde_json::json;
-
-// Type alias removed - use LangServerToWasmMessage directly
 
 #[derive(Debug)]
 pub struct Playground2Server {

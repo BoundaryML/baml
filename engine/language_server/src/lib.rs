@@ -4,22 +4,20 @@ use std::num::NonZeroUsize;
 
 use anyhow::Context;
 pub use edit::{DocumentKey, PositionEncoding, TextDocument};
+use playground_server::{LangServerToWasmMessage, PreSendToWasmMessage};
 pub use session::{ClientSettings, DocumentQuery, DocumentSnapshot, Session};
 use tokio::sync::broadcast;
 
-use crate::{
-    server::{Server, ServerArgs},
-};
-use playground_server::{LangServerToWasmMessage, PreSendToWasmMessage};
+use crate::server::{Server, ServerArgs};
 
 #[macro_use]
 mod message;
 
+pub mod cors_bypass_proxy;
 pub mod edit;
 pub mod logging;
 #[cfg(feature = "playground-server")]
 pub mod playground;
-pub mod cors_bypass_proxy;
 pub mod server;
 pub mod session;
 #[cfg(test)]
@@ -49,20 +47,26 @@ pub fn run_server() -> anyhow::Result<()> {
     };
     let port_picks = tokio_runtime.block_on(playground_server::pick_ports(port_config))?;
 
+    {
+        let playground_tx = playground_tx.clone();
     tokio_runtime.spawn(futures::future::join(
-        {
+        async move {
+            eprintln!("Playground server started");
             let server = playground_server::PlaygroundServer {
                 app_state: playground_server::AppState {
                     broadcast_rx,
                     playground_tx: playground_tx.clone(),
                     playground_port: port_picks.playground_port,
                     proxy_port: port_picks.proxy_port,
-                }
+                },
             };
-            server.run(port_picks.playground_listener)
+            let fut = server.run(port_picks.playground_listener).await;
+            eprintln!("Playground server finished");
+            fut
         },
         cors_bypass_proxy::ProxyServer {}.run(port_picks.proxy_listener),
     ));
+}
 
     eprintln!(
         "Playground started on: http://localhost:{}",
