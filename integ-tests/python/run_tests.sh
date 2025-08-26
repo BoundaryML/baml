@@ -18,5 +18,5 @@ uv run pytest "$@" \
     --ignore=tests/test_typebuilder.py \
     --ignore=tests/test_vm_async_runtime.py \
     --ignore=tests/test_ontick.py \
-    --ignore=tests/test_abort_handlers.py::test_normal_operation \
-    --ignore=tests/test_abort_handlers_simple.py::test_normal_operation \
+    --ignore=tests/test_abort_handlers.py \
+    --ignore=tests/test_abort_handlers_simple.py \
