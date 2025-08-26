@@ -1083,7 +1083,7 @@ impl<'g> HirCompiler<'g> {
                     // We'll use Copy to access both values regardless of nesting level
                     // This is simpler than calculating pseudo-local indices
 
-                    let mut pop_spread_local = false;
+                    let mut pop_tmp_spread_value = false;
 
                     // Not sorted cause of hashmap, tried using sorted map and
                     // it didn't work either, figure out what's going on.
@@ -1113,12 +1113,12 @@ impl<'g> HirCompiler<'g> {
                             // Stack becomes: [locals..., allocated_instance, spread_value]
                             self.emit(Instruction::StoreField(field_index));
 
-                            pop_spread_local = true;
+                            pop_tmp_spread_value = true;
                         }
                     }
 
                     // Get rid of spread local, won't be used anymore.
-                    if pop_spread_local {
+                    if pop_tmp_spread_value {
                         self.emit(Instruction::Pop(1));
                     }
                 }
