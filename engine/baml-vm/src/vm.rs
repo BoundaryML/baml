@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 pub(super) mod indexable;
 
+use baml_types::BamlMap;
 use indexable::{EvalStack, GlobalPool, ObjectIndex, ObjectPool, StackIndex};
 
 use crate::{
@@ -129,6 +130,9 @@ pub enum Object {
     /// List of values.
     Array(Vec<Value>),
 
+    /// Map of values.
+    Map(BamlMap<Value, Value>),
+
     Future(Future),
 }
 
@@ -174,7 +178,8 @@ impl std::fmt::Display for Object {
             Object::Class(class) => class.fmt(f),
             Object::Instance(instance) => instance.fmt(f),
             Object::String(string) => string.fmt(f),
-            Object::Array(array) => std::fmt::Debug::fmt(array, f),
+            Object::Array(array) => write!(f, "{array:?}"),
+            Object::Map(map) => write!(f, "{map:?}"),
             Object::Future(future) => match future {
                 Future::Pending(llm_future) => write!(f, "<pending: {}>", llm_future.llm_function),
                 Future::Ready(value) => write!(f, "<ready: {value}>"),
@@ -188,17 +193,62 @@ impl std::fmt::Display for Object {
 /// This struct should not contain allocated objects and should be [`Copy`].
 /// Read the documentation of [`Vm::objects`] to understand how allocated
 /// objects work in the virtual machine.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Value {
     Null,
     Int(i64),
-    Float(f64),
+    Float(HashableFloat),
     Bool(bool),
 
     /// Index into the [`Vm::objects`] vec.
     ///
     /// Strings are also objects, don't add `Value::String`.
     Object(ObjectIndex),
+}
+
+/// Representation of floating point that implements Eq + Hash, so that values can be hashed.
+/// When hashing, it will appropiately handle NaN/+-inf.
+#[derive(Clone, Copy, PartialEq, PartialOrd)]
+#[repr(transparent)]
+pub struct HashableFloat(pub f64);
+
+impl std::fmt::Debug for HashableFloat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl std::fmt::Display for HashableFloat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl Eq for HashableFloat {}
+
+impl std::hash::Hash for HashableFloat {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        #[derive(Eq, PartialEq, Hash)]
+        enum FloatTag {
+            NaN,
+            PosInf,
+            NegInf,
+            Regular(u64),
+        }
+        let tagged = if self.0.is_nan() {
+            FloatTag::NaN
+        } else if self.0.is_infinite() {
+            if self.0.is_sign_negative() {
+                FloatTag::NegInf
+            } else {
+                FloatTag::PosInf
+            }
+        } else {
+            FloatTag::Regular(self.0.to_bits())
+        };
+
+        tagged.hash(state);
+    }
 }
 
 impl std::fmt::Display for Value {
@@ -233,6 +283,7 @@ pub enum ObjectType {
     Any,
     Instance,
     Array,
+    Map,
     Function(FunctionType),
     Class,
     String,
@@ -278,6 +329,7 @@ impl ObjectType {
             Object::Instance(_) => Self::Instance,
             Object::String(_) => Self::String,
             Object::Array(_) => Self::Array,
+            Object::Map(_) => Self::Map,
             Object::Future(fut) => Self::Future(fut.into()),
         }
     }
@@ -380,6 +432,9 @@ pub enum RuntimeError {
 
     /// VM internal error.
     InternalError(InternalError),
+
+    /// Map does not contain the requested key.
+    NoSuchKeyInMap,
 }
 
 /// Any kind of virtual machine error.
@@ -919,7 +974,7 @@ impl Vm {
                             BinOp::Shr => left >> right,
                         }),
 
-                        (Value::Float(left), Value::Float(right)) => Value::Float(match op {
+                        (Value::Float(HashableFloat(left)), Value::Float(HashableFloat(right))) => Value::Float(HashableFloat(match op {
                             BinOp::Add => left + right,
                             BinOp::Sub => left - right,
                             BinOp::Mul => left * right,
@@ -938,7 +993,7 @@ impl Vm {
                                     op,
                                 }));
                             }
-                        }),
+                        })),
 
                         _ => {
                             return Err(VmError::from(InternalError::CannotApplyBinOp {
@@ -995,7 +1050,7 @@ impl Vm {
                     let result = match (op, value) {
                         (UnaryOp::Not, Value::Bool(value)) => Value::Bool(!value),
                         (UnaryOp::Neg, Value::Int(value)) => Value::Int(-value),
-                        (UnaryOp::Neg, Value::Float(value)) => Value::Float(-value),
+                        (UnaryOp::Neg, Value::Float(HashableFloat(value))) => Value::Float(HashableFloat(-value)),
                         _ => {
                             return Err(VmError::from(InternalError::CannotApplyUnaryOp {
                                 op,

@@ -330,7 +330,7 @@ fn parse_map(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expression {
 
         entries.extend(parse_map_entry(first, diagnostics));
 
-        entries.extend(inner.filter_map( |pair| {
+        entries.extend(inner.filter_map(|pair| {
 
             if first_rule != pair.as_rule() {
                 diagnostics.push_error(DatamodelError::new_validation_error("Inconsistent use of key-value pair syntax. Consider using python-style if any of the keys is an identifier to avoid confusion", diagnostics.span(pair.as_span())));

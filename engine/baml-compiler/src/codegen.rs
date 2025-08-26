@@ -4,8 +4,7 @@ use std::collections::{HashMap, HashSet};
 
 use baml_types::{ir_type::TypeIR, BamlValueWithMeta};
 use baml_vm::{
-    BamlVmProgram, BinOp, Bytecode, Class, CmpOp, Function, FunctionKind, GlobalIndex, GlobalPool,
-    Instruction, Object, ObjectIndex, ObjectPool, UnaryOp, Value,
+    BamlVmProgram, BinOp, Bytecode, Class, CmpOp, Function, FunctionKind, GlobalIndex, GlobalPool, HashableFloat, Instruction, Object, ObjectIndex, ObjectPool, UnaryOp, Value
 };
 use internal_baml_diagnostics::{Diagnostics, Span};
 use internal_baml_parser_database::ParserDatabase;
@@ -862,7 +861,7 @@ impl<'g> HirCompiler<'g> {
                 }
 
                 BamlValueWithMeta::Float(v, _) => {
-                    let index = self.add_constant(Value::Float(*v));
+                    let index = self.add_constant(Value::Float(HashableFloat(*v)));
                     self.emit(Instruction::LoadConst(index));
                 }
 

@@ -29,7 +29,7 @@ macro_rules! impl_indexable_wrapper {
             }
         }
 
-        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
         pub struct $index_name(pub(crate) usize);
 
         impl $name {

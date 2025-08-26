@@ -102,7 +102,7 @@ arguments_list = { "(" ~ (NEWLINE?) ~ config_expression? ~ ("," ~ (NEWLINE?) ~ c
 // Expressions & Functions
 // ######################################
 
-ident_map_entry = { identifier ~ expression }
+ident_map_entry = { identifier ~ !COLON ~ expression }
 // We'll make colon optional so that parser doesn't choke on missing ":"
 // This will make `ident <missing colon> expression` pass as a string key. We'll report inconsistencies
 // like this within the parser

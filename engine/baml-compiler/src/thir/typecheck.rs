@@ -1347,7 +1347,32 @@ pub fn typecheck_expression(
                     }
                 },
 
-                _ => None,
+                Some(TypeIR::Map(_, _, _)) => match method.as_str() {
+                    "len" => Some("std.Map.len".to_string()),
+                    "contains" => Some("std.Map.contains".to_string()),
+                    _ => {
+                        diagnostics.push_error(DatamodelError::new_validation_error(
+                            &format!("Method `{method}` is not available on class `std.Map`"),
+                            span.clone(),
+                        ));
+                        None
+
+                    }
+                }
+
+                Some(ty) => {
+                    diagnostics.push_error(DatamodelError::new_validation_error(
+                        &format!(
+                            "Unknown method `{method}` for type `{ty}`",
+                            ty = ty.basename()
+                        ),
+                        typed_receiver.meta().0.clone(),
+                    ));
+                    None
+                },
+
+                // type not inferred, so we can't say anything about it.
+                None => None,
             };
 
             // Return untyped expr if not known.

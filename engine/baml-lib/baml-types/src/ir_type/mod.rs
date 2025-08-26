@@ -48,6 +48,41 @@ pub enum TypeGeneric<T> {
     Union(UnionTypeGeneric<T>, T),
 }
 
+impl TypeValue {
+    pub fn basename(&self) -> &'static str {
+        match self {
+            TypeValue::String => "string",
+            TypeValue::Int => "int",
+            TypeValue::Float => "float",
+            TypeValue::Bool => "bool",
+            TypeValue::Null => "null",
+            TypeValue::Media(_) => "media",
+        }
+    }
+}
+
+impl <T> TypeGeneric<T> {
+    pub fn basename(&self) -> &'static str {
+        match self {
+            TypeGeneric::Primitive(type_value, _) => type_value.basename(),
+            TypeGeneric::Enum {..} => "enum",
+            TypeGeneric::Literal(lit, _) => match lit {
+                LiteralValue::String(_) => "string",
+                LiteralValue::Int(_) => "int",
+                LiteralValue::Bool(_) => "bool",
+            },
+            TypeGeneric::Class {..} => "class",
+            TypeGeneric::List(_, _) => "list",
+            TypeGeneric::Map(_, _, _) => "map",
+            TypeGeneric::RecursiveTypeAlias { .. } => "type alias",
+            TypeGeneric::Tuple(_, _) => "tuple",
+            TypeGeneric::Arrow(_, _) => "function",
+            TypeGeneric::Union(_, _) => "union",
+        }
+
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize, strum::Display)]
 pub enum StreamingMode {
     NonStreaming,
