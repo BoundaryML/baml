@@ -791,7 +791,7 @@ fn typecheck_statement(
                             match context.vars.get(name) {
                                 Some(info) if info.mut_var_info.is_none() => {
                                     diagnostics.push_error(DatamodelError::new_validation_error(
-                                        &format!("Cannot assign to field of immutable self"),
+                                        "Cannot assign to field of immutable self",
                                         span.clone(),
                                     ));
                                 }
@@ -884,7 +884,7 @@ fn typecheck_statement(
                             match context.vars.get(name) {
                                 Some(info) if info.mut_var_info.is_none() => {
                                     diagnostics.push_error(DatamodelError::new_validation_error(
-                                        &format!("Cannot assign to field of immutable self"),
+                                        "Cannot assign to field of immutable self",
                                         span.clone(),
                                     ));
                                 }
