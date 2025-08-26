@@ -1,5 +1,6 @@
 package com.boundaryml.jetbrains_ext
 
+import BamlGetPortService
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
@@ -11,6 +12,7 @@ import java.awt.BorderLayout
 import java.awt.FlowLayout
 import javax.swing.JButton
 import javax.swing.JPanel
+
 
 private const val PLACEHOLDER_HTML = """
     <!DOCTYPE html>
@@ -95,10 +97,16 @@ class BamlToolWindowFactory : ToolWindowFactory {
             }
         }
 
+        val openDevToolsButton = JButton("Open DevTools").apply {
+            addActionListener {
+                browser.openDevtools()
+            }
+        }
         // Create control panel with buttons
         val controlPanel = JPanel(FlowLayout(FlowLayout.RIGHT)).apply {
             add(reloadButton)
             add(loremButton)
+            add(openDevToolsButton)
         }
 
         // Create main panel with controls and browser
