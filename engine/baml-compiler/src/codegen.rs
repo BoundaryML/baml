@@ -1039,9 +1039,18 @@ impl<'g> HirCompiler<'g> {
                     global: class_index,
                 });
 
-                // Calculate instance index accounting for nested constructor depth
-                // Each nested constructor is one position deeper on the eval stack
-                let instance_local_index = self.locals.len() + 1 + self.constructor_depth;
+                // For nested constructors, the instance is on the evaluation stack, not in locals
+                // For top-level constructors, we need to account for existing locals
+                let is_nested = self.constructor_depth > 0;
+                let instance_local_index = if is_nested {
+                    // For nested constructors, we'll use Copy instruction instead of LoadVar
+                    // The instance is at the top of the stack, so we use Copy(0)
+                    0  // This value won't actually be used for LoadVar
+                } else {
+                    // For top-level constructors, instance will be stored at locals.len() + 1
+                    // This accounts for any existing local variables (like let a = 1; let b = 2; etc.)
+                    self.locals.len() + 1
+                };
                 
                 // Track that we're now building this constructor
                 self.constructor_depth += 1;
@@ -1058,7 +1067,14 @@ impl<'g> HirCompiler<'g> {
                         panic!("undefined field: {class_name}.{field_name}");
                     };
 
-                    self.emit(Instruction::LoadVar(instance_local_index));
+                    if is_nested {
+                        // For nested constructors, the instance is on top of the evaluation stack
+                        // Copy it from position 0 (0 positions from the top)
+                        self.emit(Instruction::Copy(0));
+                    } else {
+                        // For top-level constructors, load from the calculated local variable index
+                        self.emit(Instruction::LoadVar(instance_local_index));
+                    }
                     self.compile_expression(value);
                     self.emit(Instruction::StoreField(field_index));
 
@@ -1083,7 +1099,12 @@ impl<'g> HirCompiler<'g> {
                     //     |
                     //     |
                     //     +-- These are tracked locals.
-                    let spread_local_index = instance_local_index + 1;
+                    let spread_local_index = if is_nested {
+                        // For nested constructors, spread is at position 0 on stack
+                        0
+                    } else {
+                        instance_local_index + 1
+                    };
 
                     let mut pop_spread_local = false;
 
@@ -1099,11 +1120,21 @@ impl<'g> HirCompiler<'g> {
                         if !defined_named_fields.contains(field_name.as_str()) {
                             // Now load allocated instance again:
                             // [a, b, c, allocated_instance, spread_local, allocated_instance]
-                            self.emit(Instruction::LoadVar(instance_local_index));
+                            if is_nested {
+                                // For nested constructors, copy from stack position 1 (under spread)
+                                self.emit(Instruction::Copy(1));
+                            } else {
+                                self.emit(Instruction::LoadVar(instance_local_index));
+                            }
 
                             // Load spread again:
                             // [a, b, c, allocated_instance, spread_local, allocated_instance, spread_local]
-                            self.emit(Instruction::LoadVar(spread_local_index));
+                            if is_nested {
+                                // For nested, spread is at position 1 from top (under instance copy)
+                                self.emit(Instruction::Copy(1));
+                            } else {
+                                self.emit(Instruction::LoadVar(spread_local_index));
+                            }
                             // Load field:
                             // [a, b, c, allocated_instance, spread_local, allocated_instance, field_value]
                             self.emit(Instruction::LoadField(field_index));

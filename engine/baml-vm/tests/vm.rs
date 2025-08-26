@@ -1410,7 +1410,6 @@ fn test_nested_object_construction() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "Nested field access after nested construction returns Null - separate issue"]
 fn test_nested_object_construction_with_field_access() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -1437,7 +1436,6 @@ fn test_nested_object_construction_with_field_access() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "Nested object construction has a bug with variable reuse"]
 fn test_nested_field_read_with_nested_construction() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -1476,6 +1474,53 @@ fn test_nested_field_read() -> anyhow::Result<()> {
         "#,
         function: "main",
         expected: VmExecState::Complete(Value::Int(42)),
+    })
+}
+
+#[test]
+fn test_constructor_with_preceding_variables() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            class MyClass {
+                x int
+                y int
+            }
+            function main() -> int {
+                let a = 10;
+                let b = 20;
+                let c = 30;
+                let obj = MyClass { x: 100, y: 200 };
+                obj.x + obj.y + a + b + c
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(360)), // 100 + 200 + 10 + 20 + 30
+    })
+}
+
+#[test]
+fn test_nested_constructor_with_preceding_variables() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            class Inner {
+                val int
+            }
+            class Outer {
+                inner Inner
+                x int
+            }
+            function main() -> int {
+                let a = 5;
+                let b = 10;
+                let obj = Outer { 
+                    inner: Inner { val: 100 },
+                    x: 50
+                };
+                obj.inner.val + obj.x + a + b
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(165)), // 100 + 50 + 5 + 10
     })
 }
 
