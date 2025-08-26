@@ -365,7 +365,6 @@ struct HirCompiler<'g> {
     /// `AllocInstance` instructions that have a placeholder, which must be resolved when location
     /// of the class object is resolved.
     class_alloc_patch_list: &'g mut Vec<AllocInstancePatch>,
-
 }
 
 #[derive(Debug)]
@@ -499,7 +498,7 @@ impl<'g> HirCompiler<'g> {
                             Some(TypeIR::Class { name, .. }) => name,
                             _ => panic!("Field access on non-class type"),
                         };
-                        
+
                         // Resolve field index
                         let Some(resolved_fields) = self.classes.get(class_name) else {
                             panic!("undefined class: {class_name}");
@@ -507,7 +506,7 @@ impl<'g> HirCompiler<'g> {
                         let Some(&field_index) = resolved_fields.get(field) else {
                             panic!("undefined field: {class_name}.{field}");
                         };
-                        
+
                         // Generate bytecode: load base, load value, store field
                         self.compile_expression(base);
                         self.compile_expression(value);
@@ -534,7 +533,7 @@ impl<'g> HirCompiler<'g> {
                     hir::AssignOp::ShlAssign => Instruction::BinOp(BinOp::Shl),
                     hir::AssignOp::ShrAssign => Instruction::BinOp(BinOp::Shr),
                 };
-                
+
                 match left {
                     thir::Expr::Var(name, _) => {
                         self.emit(Instruction::LoadVar(self.locals[name]));
@@ -548,7 +547,7 @@ impl<'g> HirCompiler<'g> {
                             Some(TypeIR::Class { name, .. }) => name,
                             _ => panic!("Field access on non-class type"),
                         };
-                        
+
                         // Resolve field index
                         let Some(resolved_fields) = self.classes.get(class_name) else {
                             panic!("undefined class: {class_name}");
@@ -556,7 +555,7 @@ impl<'g> HirCompiler<'g> {
                         let Some(&field_index) = resolved_fields.get(field) else {
                             panic!("undefined field: {class_name}.{field}");
                         };
-                        
+
                         // For obj.field += value, generate:
                         // 1. Load object
                         // 2. Copy object reference (Copy 0)
@@ -564,7 +563,7 @@ impl<'g> HirCompiler<'g> {
                         // 4. Load value
                         // 5. Apply operation
                         // 6. Store back to field (uses copied object reference)
-                        
+
                         self.compile_expression(base);
                         self.emit(Instruction::Copy(0));  // Duplicate object reference
                         self.emit(Instruction::LoadField(field_index));
@@ -899,7 +898,7 @@ impl<'g> HirCompiler<'g> {
             thir::Expr::FieldAccess { base, field, .. } => {
                 // First compile the base expression
                 self.compile_expression(base);
-                
+
                 // Now get the type of the base to resolve the field
                 match base.meta().1.as_ref() {
                     Some(TypeIR::Class {
@@ -1023,7 +1022,7 @@ impl<'g> HirCompiler<'g> {
                 // values onto the stack first, then AllocInstance(class, field_count) would
                 // consume them all at once, creating a fully initialized instance.
                 // See: Stack-Based AllocInstance approach in field_access_assignments_implementation.md
-                
+
                 let Some(&class_index) = self.globals.get(class_name) else {
                     panic!("undefined class: {class_name}");
                 };
@@ -1072,7 +1071,7 @@ impl<'g> HirCompiler<'g> {
                     // [locals..., allocated_instance, spread_value]
                     //                                       ^-- position 0 from top (Copy(0))
                     //                    ^-- position 1 from top (Copy(1))
-                    // 
+                    //
                     // We'll use Copy to access both values regardless of nesting level
                     // This is simpler than calculating pseudo-local indices
 
@@ -1089,19 +1088,19 @@ impl<'g> HirCompiler<'g> {
                     for (field_name, field_index) in sorted_fields {
                         if !defined_named_fields.contains(field_name.as_str()) {
                             // Current stack: [locals..., allocated_instance, spread_value]
-                            
+
                             // Copy instance from position 1 (under spread)
                             // Stack becomes: [locals..., allocated_instance, spread_value, allocated_instance]
                             self.emit(Instruction::Copy(1));
-                            
+
                             // Copy spread from position 1 (now under instance copy)
                             // Stack becomes: [locals..., allocated_instance, spread_value, allocated_instance, spread_value]
                             self.emit(Instruction::Copy(1));
-                            
+
                             // Load field from spread
                             // Stack becomes: [locals..., allocated_instance, spread_value, allocated_instance, field_value]
                             self.emit(Instruction::LoadField(field_index));
-                            
+
                             // Store field to instance
                             // Stack becomes: [locals..., allocated_instance, spread_value]
                             self.emit(Instruction::StoreField(field_index));
@@ -2032,12 +2031,12 @@ mod tests {
                     Instruction::StoreField(1),
                     Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
                     Instruction::Call(0),
-                    Instruction::Copy(1),  // Copy instance from under spread
-                    Instruction::Copy(1),  // Copy spread from under instance
+                    Instruction::Copy(1), // Copy instance from under spread
+                    Instruction::Copy(1), // Copy spread from under instance
                     Instruction::LoadField(2),
                     Instruction::StoreField(2),
-                    Instruction::Copy(1),  // Copy instance from under spread
-                    Instruction::Copy(1),  // Copy spread from under instance
+                    Instruction::Copy(1), // Copy instance from under spread
+                    Instruction::Copy(1), // Copy spread from under instance
                     Instruction::LoadField(3),
                     Instruction::StoreField(3),
                     Instruction::Pop(1),
@@ -2081,12 +2080,12 @@ mod tests {
                     Instruction::StoreField(1),
                     Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
                     Instruction::Call(0),
-                    Instruction::Copy(1),  // Copy instance from under spread
-                    Instruction::Copy(1),  // Copy spread from under instance
+                    Instruction::Copy(1), // Copy instance from under spread
+                    Instruction::Copy(1), // Copy spread from under instance
                     Instruction::LoadField(2),
                     Instruction::StoreField(2),
-                    Instruction::Copy(1),  // Copy instance from under spread
-                    Instruction::Copy(1),  // Copy spread from under instance
+                    Instruction::Copy(1), // Copy instance from under spread
+                    Instruction::Copy(1), // Copy spread from under instance
                     Instruction::LoadField(3),
                     Instruction::StoreField(3),
                     Instruction::Pop(1),
@@ -3152,7 +3151,7 @@ mod tests {
                 class Counter {
                     value int
                 }
-                
+
                 function incrementCounter(c: Counter) -> int {
                     c.value += 10;
                     c.value
@@ -3162,15 +3161,15 @@ mod tests {
                 "incrementCounter",
                 vec![
                     // c.value += 10
-                    Instruction::LoadVar(1),         // Load c
-                    Instruction::Copy(0),            // Duplicate c reference
-                    Instruction::LoadField(0),       // Load c.value
-                    Instruction::LoadConst(0),       // Load 10
-                    Instruction::BinOp(BinOp::Add),  // Add
-                    Instruction::StoreField(0),      // Store back to c.value
+                    Instruction::LoadVar(1),        // Load c
+                    Instruction::Copy(0),           // Duplicate c reference
+                    Instruction::LoadField(0),      // Load c.value
+                    Instruction::LoadConst(0),      // Load 10
+                    Instruction::BinOp(BinOp::Add), // Add
+                    Instruction::StoreField(0),     // Store back to c.value
                     // c.value
-                    Instruction::LoadVar(1),         // Load c
-                    Instruction::LoadField(0),       // Load c.value
+                    Instruction::LoadVar(1),   // Load c
+                    Instruction::LoadField(0), // Load c.value
                     Instruction::Return,
                 ],
             )],
@@ -3187,7 +3186,7 @@ mod tests {
                 class Outer {
                     inner Inner
                 }
-                
+
                 function main() -> int {
                     let o = Outer { inner: Inner { value: 42 } };
                     o.inner.value
@@ -3198,18 +3197,17 @@ mod tests {
                 vec![
                     // Create Outer { inner: Inner { value: 42 } }
                     Instruction::AllocInstance(ObjectIndex::from_raw(3)), // Outer class
-                    Instruction::Copy(0),            // Copy Outer instance
+                    Instruction::Copy(0),                                 // Copy Outer instance
                     // Create Inner inline
-                    Instruction::AllocInstance(ObjectIndex::from_raw(2)), // Inner class  
-                    Instruction::Copy(0),            // Copy Inner instance
-                    Instruction::LoadConst(0),       // 42
-                    Instruction::StoreField(0),      // Inner.value = 42
-                    Instruction::StoreField(0),      // Outer.inner = Inner instance
-                    
+                    Instruction::AllocInstance(ObjectIndex::from_raw(2)), // Inner class
+                    Instruction::Copy(0),                                 // Copy Inner instance
+                    Instruction::LoadConst(0),                            // 42
+                    Instruction::StoreField(0),                           // Inner.value = 42
+                    Instruction::StoreField(0), // Outer.inner = Inner instance
                     // o.inner.value
-                    Instruction::LoadVar(1),         // Load o
-                    Instruction::LoadField(0),       // Load o.inner (returns Inner)
-                    Instruction::LoadField(0),       // Load inner.value (returns 42)
+                    Instruction::LoadVar(1),   // Load o
+                    Instruction::LoadField(0), // Load o.inner (returns Inner)
+                    Instruction::LoadField(0), // Load inner.value (returns 42)
                     Instruction::Return,
                 ],
             )],
@@ -3228,11 +3226,11 @@ mod tests {
                     inner Inner
                     value int
                 }
-                
+
                 function main() -> int {
-                    let o = Outer { 
-                        inner: Inner { x: 10, y: 20 }, 
-                        value: 30 
+                    let o = Outer {
+                        inner: Inner { x: 10, y: 20 },
+                        value: 30
                     };
                     o.value
                 }
@@ -3242,22 +3240,22 @@ mod tests {
                 vec![
                     // Outer constructor
                     Instruction::AllocInstance(ObjectIndex::from_raw(3)), // Outer
-                    Instruction::Copy(0),            // Copy Outer instance
+                    Instruction::Copy(0),                                 // Copy Outer instance
                     // Nested Inner construction
                     Instruction::AllocInstance(ObjectIndex::from_raw(2)), // Inner
-                    Instruction::Copy(0),            // Copy Inner instance
-                    Instruction::LoadConst(0),       // 10
-                    Instruction::StoreField(0),      // x = 10
-                    Instruction::Copy(0),            // Copy Inner instance again
-                    Instruction::LoadConst(1),       // 20  
-                    Instruction::StoreField(1),      // y = 20
-                    Instruction::StoreField(0),      // Outer.inner = Inner
-                    Instruction::Copy(0),            // Copy Outer instance
-                    Instruction::LoadConst(2),       // 30
-                    Instruction::StoreField(1),      // Outer.value = 30
+                    Instruction::Copy(0),                                 // Copy Inner instance
+                    Instruction::LoadConst(0),                            // 10
+                    Instruction::StoreField(0),                           // x = 10
+                    Instruction::Copy(0),       // Copy Inner instance again
+                    Instruction::LoadConst(1),  // 20
+                    Instruction::StoreField(1), // y = 20
+                    Instruction::StoreField(0), // Outer.inner = Inner
+                    Instruction::Copy(0),       // Copy Outer instance
+                    Instruction::LoadConst(2),  // 30
+                    Instruction::StoreField(1), // Outer.value = 30
                     // o.value
-                    Instruction::LoadVar(1),         // o
-                    Instruction::LoadField(1),       // value
+                    Instruction::LoadVar(1),   // o
+                    Instruction::LoadField(1), // value
                     Instruction::Return,
                 ],
             )],
@@ -3274,7 +3272,7 @@ mod tests {
                 class Outer {
                     inner Inner
                 }
-                
+
                 function setNestedValue(i: Inner, o: Outer) -> int {
                     o.inner.value = 99;
                     o.inner.value
@@ -3284,15 +3282,14 @@ mod tests {
                 "setNestedValue",
                 vec![
                     // o.inner.value = 99
-                    Instruction::LoadVar(2),         // Load o
-                    Instruction::LoadField(0),       // Load o.inner (returns Inner object)
-                    Instruction::LoadConst(0),       // Load 99
-                    Instruction::StoreField(0),      // Store to inner.value
-                    
+                    Instruction::LoadVar(2),    // Load o
+                    Instruction::LoadField(0),  // Load o.inner (returns Inner object)
+                    Instruction::LoadConst(0),  // Load 99
+                    Instruction::StoreField(0), // Store to inner.value
                     // o.inner.value
-                    Instruction::LoadVar(2),         // Load o
-                    Instruction::LoadField(0),       // Load o.inner
-                    Instruction::LoadField(0),       // Load inner.value
+                    Instruction::LoadVar(2),   // Load o
+                    Instruction::LoadField(0), // Load o.inner
+                    Instruction::LoadField(0), // Load inner.value
                     Instruction::Return,
                 ],
             )],
@@ -3309,7 +3306,7 @@ mod tests {
                 class Outer {
                     inner Inner
                 }
-                
+
                 function incrementNestedValue(o: Outer) -> int {
                     o.inner.value += 10;
                     o.inner.value
@@ -3319,18 +3316,17 @@ mod tests {
                 "incrementNestedValue",
                 vec![
                     // o.inner.value += 10
-                    Instruction::LoadVar(1),         // Load o
-                    Instruction::LoadField(0),       // Load o.inner (returns Inner object)
-                    Instruction::Copy(0),            // Duplicate inner reference
-                    Instruction::LoadField(0),       // Load inner.value
-                    Instruction::LoadConst(0),       // Load 10
-                    Instruction::BinOp(BinOp::Add),  // Add
-                    Instruction::StoreField(0),      // Store back to inner.value
-                    
+                    Instruction::LoadVar(1),        // Load o
+                    Instruction::LoadField(0),      // Load o.inner (returns Inner object)
+                    Instruction::Copy(0),           // Duplicate inner reference
+                    Instruction::LoadField(0),      // Load inner.value
+                    Instruction::LoadConst(0),      // Load 10
+                    Instruction::BinOp(BinOp::Add), // Add
+                    Instruction::StoreField(0),     // Store back to inner.value
                     // o.inner.value
-                    Instruction::LoadVar(1),         // Load o
-                    Instruction::LoadField(0),       // Load o.inner
-                    Instruction::LoadField(0),       // Load inner.value
+                    Instruction::LoadVar(1),   // Load o
+                    Instruction::LoadField(0), // Load o.inner
+                    Instruction::LoadField(0), // Load inner.value
                     Instruction::Return,
                 ],
             )],
@@ -3344,7 +3340,7 @@ mod tests {
                 class Data {
                     value int
                 }
-                
+
                 function setDataValue(d: Data) -> int {
                     d.value = 42;
                     d.value
@@ -3354,12 +3350,12 @@ mod tests {
                 "setDataValue",
                 vec![
                     // d.value = 42
-                    Instruction::LoadVar(1),         // Load d
-                    Instruction::LoadConst(0),       // Load 42
-                    Instruction::StoreField(0),      // Store to d.value
+                    Instruction::LoadVar(1),    // Load d
+                    Instruction::LoadConst(0),  // Load 42
+                    Instruction::StoreField(0), // Store to d.value
                     // d.value
-                    Instruction::LoadVar(1),         // Load d
-                    Instruction::LoadField(0),       // Load d.value
+                    Instruction::LoadVar(1),   // Load d
+                    Instruction::LoadField(0), // Load d.value
                     Instruction::Return,
                 ],
             )],

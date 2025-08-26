@@ -1383,7 +1383,7 @@ fn field_assignment_multiple_ops() -> anyhow::Result<()> {
     })
 }
 
-#[test] 
+#[test]
 fn test_nested_object_construction() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -1672,7 +1672,7 @@ fn nested_field_assignment_simple() -> anyhow::Result<()> {
                 o.inner.value
             }
         "#,
-        function: "main", 
+        function: "main",
         expected: VmExecState::Complete(Value::Int(42)),
     })
 }

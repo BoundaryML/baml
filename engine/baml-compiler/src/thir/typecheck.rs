@@ -188,7 +188,7 @@ pub fn typecheck_returning_context<'a>(
                         .map(|method| {
                             // Create a context for method typechecking
                             let mut method_context = typing_context.clone();
-                            
+
                             // Add method parameters to context
                             for param in &method.parameters {
                                 method_context.vars.insert(
@@ -201,12 +201,13 @@ pub fn typecheck_returning_context<'a>(
                                     },
                                 );
                             }
-                            
+
                             method_context.function_return_type = Some(&method.return_type);
-                            
+
                             // Typecheck the method body
-                            let typed_body = typecheck_block(&method.body, &mut method_context, diagnostics);
-                            
+                            let typed_body =
+                                typecheck_block(&method.body, &mut method_context, diagnostics);
+
                             thir::ExprFunction {
                                 name: method.name,
                                 parameters: method
@@ -736,48 +737,54 @@ fn typecheck_statement(
                 hir::Expression::Identifier(name, _) => {
                     // validate/update type.
                     match context.vars.get_mut(name) {
-                Some(info) => match info.mut_var_info.as_mut() {
-                    Some(mut_info) => {
-                        if let Some(inferred_type) = typed_value.meta().1.as_ref() {
-                            if let Some(infer_span) = mut_info.ty_infer_span.as_ref() {
-                                // known type - typecheck against it.
-                                if !info.ty.can_be_assigned(inferred_type) {
-                                    diagnostics.push_error(DatamodelError::new_validation_error(
-                                        &format!(
-                                            "Cannot assign {} to {}",
-                                            &inferred_type.name_for_user(),
-                                            &info.ty.name_for_user()
-                                        ),
-                                        value.span(),
-                                    ));
+                        Some(info) => match info.mut_var_info.as_mut() {
+                            Some(mut_info) => {
+                                if let Some(inferred_type) = typed_value.meta().1.as_ref() {
+                                    if let Some(infer_span) = mut_info.ty_infer_span.as_ref() {
+                                        // known type - typecheck against it.
+                                        if !info.ty.can_be_assigned(inferred_type) {
+                                            diagnostics.push_error(
+                                                DatamodelError::new_validation_error(
+                                                    &format!(
+                                                        "Cannot assign {} to {}",
+                                                        &inferred_type.name_for_user(),
+                                                        &info.ty.name_for_user()
+                                                    ),
+                                                    value.span(),
+                                                ),
+                                            );
 
-                                    diagnostics.push_warning(DatamodelWarning::new(
-                                        format!("type for '{name}' was inferred here"),
-                                        infer_span.clone(),
-                                    ));
+                                            diagnostics.push_warning(DatamodelWarning::new(
+                                                format!("type for '{name}' was inferred here"),
+                                                infer_span.clone(),
+                                            ));
+                                        }
+                                    } else {
+                                        // type is not known yet - use this assignment as the type.
+                                        info.ty = inferred_type.clone();
+
+                                        mut_info.ty_infer_span = Some(value.span().clone())
+                                    }
                                 }
-                            } else {
-                                // type is not known yet - use this assignment as the type.
-                                info.ty = inferred_type.clone();
-
-                                mut_info.ty_infer_span = Some(value.span().clone())
                             }
+                            None => diagnostics.push_error(DatamodelError::new_validation_error(
+                                &format!("Cannot assign to immutable variable {name}"),
+                                value.span(),
+                            )),
+                        },
+                        None => {
+                            diagnostics.push_error(DatamodelError::new_validation_error(
+                                &format!("Unknown variable {name}"),
+                                span.clone(),
+                            ));
                         }
                     }
-                    None => diagnostics.push_error(DatamodelError::new_validation_error(
-                        &format!("Cannot assign to immutable variable {name}"),
-                        value.span(),
-                    )),
-                },
-                None => {
-                    diagnostics.push_error(DatamodelError::new_validation_error(
-                        &format!("Unknown variable {name}"),
-                        span.clone(),
-                    ));
                 }
-            }
-                }
-                hir::Expression::FieldAccess { base, field: _, span: _ } => {
+                hir::Expression::FieldAccess {
+                    base,
+                    field: _,
+                    span: _,
+                } => {
                     // For field access, check if self parameter is mutable
                     if let hir::Expression::Identifier(name, _) = base.as_ref() {
                         if name == "self" {
@@ -823,48 +830,54 @@ fn typecheck_statement(
                     // TODO: Extract in funciton, repeated above.
                     // validate/update type.
                     match context.vars.get_mut(name) {
-                Some(info) => match info.mut_var_info.as_mut() {
-                    Some(mut_info) => {
-                        if let Some(inferred_type) = typed_value.meta().1.as_ref() {
-                            if let Some(infer_span) = mut_info.ty_infer_span.as_ref() {
-                                // known type - typecheck against it.
-                                if !info.ty.can_be_assigned(inferred_type) {
-                                    diagnostics.push_error(DatamodelError::new_validation_error(
-                                        &format!(
-                                            "Cannot assign {} to {}",
-                                            &inferred_type.name_for_user(),
-                                            &info.ty.name_for_user()
-                                        ),
-                                        value.span(),
-                                    ));
+                        Some(info) => match info.mut_var_info.as_mut() {
+                            Some(mut_info) => {
+                                if let Some(inferred_type) = typed_value.meta().1.as_ref() {
+                                    if let Some(infer_span) = mut_info.ty_infer_span.as_ref() {
+                                        // known type - typecheck against it.
+                                        if !info.ty.can_be_assigned(inferred_type) {
+                                            diagnostics.push_error(
+                                                DatamodelError::new_validation_error(
+                                                    &format!(
+                                                        "Cannot assign {} to {}",
+                                                        &inferred_type.name_for_user(),
+                                                        &info.ty.name_for_user()
+                                                    ),
+                                                    value.span(),
+                                                ),
+                                            );
 
-                                    diagnostics.push_warning(DatamodelWarning::new(
-                                        format!("type for '{name}' was inferred here"),
-                                        infer_span.clone(),
-                                    ));
+                                            diagnostics.push_warning(DatamodelWarning::new(
+                                                format!("type for '{name}' was inferred here"),
+                                                infer_span.clone(),
+                                            ));
+                                        }
+                                    } else {
+                                        // type is not known yet - use this assignment as the type.
+                                        info.ty = inferred_type.clone();
+
+                                        mut_info.ty_infer_span = Some(value.span().clone())
+                                    }
                                 }
-                            } else {
-                                // type is not known yet - use this assignment as the type.
-                                info.ty = inferred_type.clone();
-
-                                mut_info.ty_infer_span = Some(value.span().clone())
                             }
+                            None => diagnostics.push_error(DatamodelError::new_validation_error(
+                                &format!("Cannot assign to immutable variable {name}"),
+                                value.span(),
+                            )),
+                        },
+                        None => {
+                            diagnostics.push_error(DatamodelError::new_validation_error(
+                                &format!("Unknown variable {name}"),
+                                span.clone(),
+                            ));
                         }
                     }
-                    None => diagnostics.push_error(DatamodelError::new_validation_error(
-                        &format!("Cannot assign to immutable variable {name}"),
-                        value.span(),
-                    )),
-                },
-                None => {
-                    diagnostics.push_error(DatamodelError::new_validation_error(
-                        &format!("Unknown variable {name}"),
-                        span.clone(),
-                    ));
                 }
-            }
-                }
-                hir::Expression::FieldAccess { base, field: _, span: _ } => {
+                hir::Expression::FieldAccess {
+                    base,
+                    field: _,
+                    span: _,
+                } => {
                     // For field access, check if self parameter is mutable
                     if let hir::Expression::Identifier(name, _) = base.as_ref() {
                         if name == "self" {

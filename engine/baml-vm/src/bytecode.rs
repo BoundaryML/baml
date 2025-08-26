@@ -87,7 +87,7 @@ pub enum Instruction {
     Pop(usize),
 
     /// Copy the i-th value from the top of the stack to the top.
-    /// 
+    ///
     /// Format: `COPY i` where `i` is the offset from the top of the stack.
     /// `COPY 0` copies the top element (duplicates it).
     /// `COPY 1` copies the second element from the top.
