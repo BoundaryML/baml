@@ -366,9 +366,6 @@ struct HirCompiler<'g> {
     /// of the class object is resolved.
     class_alloc_patch_list: &'g mut Vec<AllocInstancePatch>,
 
-    /// Tracks how many constructors are currently being built
-    /// Used to calculate correct variable indices for nested object construction
-    constructor_depth: usize,
 }
 
 #[derive(Debug)]
@@ -406,7 +403,6 @@ impl<'g> HirCompiler<'g> {
             scopes: Vec::new(),
             current_source_line: 0,
             locals_in_scope: Vec::new(),
-            constructor_depth: 0,
         }
     }
 
@@ -1039,13 +1035,8 @@ impl<'g> HirCompiler<'g> {
                     global: class_index,
                 });
 
-                // Determine if we're in a nested constructor
-                // Both nested and top-level constructors will use Copy to access the instance
+                // All constructors now use Copy to access the instance
                 // The instance is always on the stack after AllocInstance
-                let is_nested = self.constructor_depth > 0;
-                
-                // Track that we're now building this constructor
-                self.constructor_depth += 1;
 
                 let mut defined_named_fields = std::collections::HashSet::new();
 
@@ -1122,9 +1113,6 @@ impl<'g> HirCompiler<'g> {
                         self.emit(Instruction::Pop(1));
                     }
                 }
-                
-                // Done building this constructor, restore depth
-                self.constructor_depth -= 1;
             }
 
             thir::Expr::If(condition, if_branch, else_branch, _) => {
