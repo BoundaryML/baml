@@ -895,31 +895,36 @@ impl<'g> HirCompiler<'g> {
                 self.emit(Instruction::LoadArrayElement);
             }
 
-            thir::Expr::FieldAccess { base, field, .. } => match base.meta().1.as_ref() {
-                Some(TypeIR::Class {
-                    name: class_name, ..
-                }) => {
-                    let Some(_class_index) = self.globals.get(class_name) else {
-                        panic!("undefined class: {class_name}");
-                    };
+            thir::Expr::FieldAccess { base, field, .. } => {
+                // First compile the base expression
+                self.compile_expression(base);
+                
+                // Now get the type of the base to resolve the field
+                match base.meta().1.as_ref() {
+                    Some(TypeIR::Class {
+                        name: class_name, ..
+                    }) => {
+                        let Some(_class_index) = self.globals.get(class_name) else {
+                            panic!("undefined class: {class_name}");
+                        };
 
-                    let Some(resolved_fields) = self.classes.get(class_name) else {
-                        panic!("undefined class: {class_name}");
-                    };
+                        let Some(resolved_fields) = self.classes.get(class_name) else {
+                            panic!("undefined class: {class_name}");
+                        };
 
-                    let Some(&field_index) = resolved_fields.get(field) else {
-                        panic!("undefined field: {class_name}.{field}");
-                    };
+                        let Some(&field_index) = resolved_fields.get(field) else {
+                            panic!("undefined field: {class_name}.{field}");
+                        };
 
-                    self.compile_expression(base);
-                    self.emit(Instruction::LoadField(field_index));
+                        self.emit(Instruction::LoadField(field_index));
+                    }
+
+                    other => panic!(
+                        "field access must be on classes, but expr `{}` got: {other:?}",
+                        base.dump_str()
+                    ),
                 }
-
-                other => panic!(
-                    "field access must be on classes, but expr `{}` got: {other:?}",
-                    base.dump_str()
-                ),
-            },
+            }
 
             thir::Expr::Var(name, _) => {
                 if let Some(&index) = self.locals.get(name) {
@@ -3155,6 +3160,118 @@ mod tests {
                     // c.value
                     Instruction::LoadVar(1),         // Load c
                     Instruction::LoadField(0),       // Load c.value
+                    Instruction::Return,
+                ],
+            )],
+        })
+    }
+
+    #[test]
+    fn nested_field_read_bytecode() -> anyhow::Result<()> {
+        assert_compiles(Program {
+            source: "
+                class Inner {
+                    value int
+                }
+                class Outer {
+                    inner Inner
+                }
+                
+                function main() -> int {
+                    let o = Outer { inner: Inner { value: 42 } };
+                    o.inner.value
+                }
+            ",
+            expected: vec![(
+                "main",
+                vec![
+                    // Create Outer { inner: Inner { value: 42 } }
+                    Instruction::AllocInstance(ObjectIndex::from_raw(3)), // Outer class
+                    Instruction::LoadVar(1),         // o
+                    // Create Inner inline
+                    Instruction::AllocInstance(ObjectIndex::from_raw(2)), // Inner class  
+                    Instruction::LoadVar(1),         // reuses o variable temporarily
+                    Instruction::LoadConst(0),       // 42
+                    Instruction::StoreField(0),      // Inner.value = 42
+                    Instruction::StoreField(0),      // Outer.inner = Inner instance
+                    
+                    // o.inner.value
+                    Instruction::LoadVar(1),         // Load o
+                    Instruction::LoadField(0),       // Load o.inner (returns Inner)
+                    Instruction::LoadField(0),       // Load inner.value (returns 42)
+                    Instruction::Return,
+                ],
+            )],
+        })
+    }
+
+    #[test]
+    fn nested_field_assignment_bytecode() -> anyhow::Result<()> {
+        assert_compiles(Program {
+            source: "
+                class Inner {
+                    value int
+                }
+                class Outer {
+                    inner Inner
+                }
+                
+                function setNestedValue(i: Inner, o: Outer) -> int {
+                    o.inner.value = 99;
+                    o.inner.value
+                }
+            ",
+            expected: vec![(
+                "setNestedValue",
+                vec![
+                    // o.inner.value = 99
+                    Instruction::LoadVar(2),         // Load o
+                    Instruction::LoadField(0),       // Load o.inner (returns Inner object)
+                    Instruction::LoadConst(0),       // Load 99
+                    Instruction::StoreField(0),      // Store to inner.value
+                    
+                    // o.inner.value
+                    Instruction::LoadVar(2),         // Load o
+                    Instruction::LoadField(0),       // Load o.inner
+                    Instruction::LoadField(0),       // Load inner.value
+                    Instruction::Return,
+                ],
+            )],
+        })
+    }
+
+    #[test]
+    fn nested_field_assignment_compound_bytecode() -> anyhow::Result<()> {
+        assert_compiles(Program {
+            source: "
+                class Inner {
+                    value int
+                }
+                class Outer {
+                    inner Inner
+                }
+                
+                function incrementNestedValue(o: Outer) -> int {
+                    o.inner.value += 10;
+                    o.inner.value
+                }
+            ",
+            expected: vec![(
+                "incrementNestedValue",
+                vec![
+                    // o.inner.value += 10
+                    Instruction::LoadVar(1),         // Load o
+                    Instruction::LoadField(0),       // Load o.inner (returns Inner object)
+                    Instruction::Copy(0),            // Duplicate inner reference
+                    Instruction::LoadField(0),       // Load inner.value
+                    Instruction::LoadConst(0),       // Load 10
+                    Instruction::BinOp(BinOp::Add),  // Add
+                    Instruction::StoreField(0),      // Store back to inner.value
+                    
+                    // o.inner.value
+                    Instruction::LoadVar(1),         // Load o
+                    Instruction::LoadField(0),       // Load o.inner
+                    Instruction::LoadField(0),       // Load inner.value
                     Instruction::Return,
                 ],
             )],

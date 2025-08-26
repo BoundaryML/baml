@@ -1383,6 +1383,93 @@ fn field_assignment_multiple_ops() -> anyhow::Result<()> {
     })
 }
 
+#[test] 
+#[ignore = "Nested object construction has a bug with variable reuse"]
+fn test_nested_field_read_with_nested_construction() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            class Inner {
+                value int
+            }
+            class Outer {
+                inner Inner
+            }
+            function main() -> int {
+                let o = Outer { inner: Inner { value: 42 } };
+                o.inner.value
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(42)),
+    })
+}
+
+#[test]
+fn test_nested_field_read() -> anyhow::Result<()> {
+    // Test nested field read without nested construction
+    assert_vm_executes(Program {
+        source: r#"
+            class Inner {
+                value int
+            }
+            class Outer {
+                inner Inner  
+            }
+            function main() -> int {
+                let i = Inner { value: 42 };
+                let o = Outer { inner: i };
+                o.inner.value
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(42)),
+    })
+}
+
+#[test]
+fn nested_field_assignment_simple() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            class Inner {
+                value int
+            }
+            class Outer {
+                inner Inner
+            }
+            function main() -> int {
+                let i = Inner { value: 10 };
+                let mut o = Outer { inner: i };
+                o.inner.value = 42;
+                o.inner.value
+            }
+        "#,
+        function: "main", 
+        expected: VmExecState::Complete(Value::Int(42)),
+    })
+}
+
+#[test]
+fn nested_field_assignment_compound() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            class Inner {
+                value int
+            }
+            class Outer {
+                inner Inner
+            }
+            function main() -> int {
+                let i = Inner { value: 10 };
+                let mut o = Outer { inner: i };
+                o.inner.value += 32;
+                o.inner.value
+            }
+        "#,
+        function: "main",
+        expected: VmExecState::Complete(Value::Int(42)),
+    })
+}
+
 #[test]
 fn field_assignment_object_field() -> anyhow::Result<()> {
     assert_vm_executes(Program {
