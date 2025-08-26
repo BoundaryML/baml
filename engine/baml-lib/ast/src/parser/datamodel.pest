@@ -110,7 +110,7 @@ expr_map_entry = {  expression ~ COLON? ~ expression }
 
 
 splitter          = _{ ("," ~ NEWLINE?) | NEWLINE }
-map_expression    =  { "{" ~ NEWLINE* ~ ((ident_map_entry | expr_map_entry))* ~ NEWLINE* ~ "}" }
+map_expression    =  { "{" ~ NEWLINE* ~ ((ident_map_entry | expr_map_entry) ~ splitter?)* ~ NEWLINE* ~ "}" }
 array_expression  =  { "[" ~ empty_lines? ~ ((expression | ARRAY_CATCH_ALL) ~ trailing_comment? ~ (splitter ~ (comment_block | empty_lines)* ~ (expression | ARRAY_CATCH_ALL) ~ trailing_comment?)*)? ~ (comment_block | empty_lines)* ~ splitter? ~ "]" }
 jinja_block_open  = _{ "{{" }
 jinja_block_close = _{ "}}" }
@@ -232,11 +232,8 @@ doc_content      = @{ (!NEWLINE ~ ANY)* }
 // ######################################
 // Shared Building Blocks and Comments
 // ######################################
-WHITESPACE  = _{ " " | "\t" | NEWLINE }
+WHITESPACE  = _{ " " | "\t" }
 NEWLINE     =  { "\n" | "\r\n" | "\r" }
-// Like WHITESPACE, this is a special rule that PEST will use for implicit whitespace.
-// Comments are not ignored.
-COMMENT 	= _{ comment_block | trailing_comment }
 empty_lines = @{ (WHITESPACE* ~ NEWLINE)+ }
 
 // ######################################

@@ -56,6 +56,7 @@ impl TypeDocumentRender for TypeIR {
     fn to_doc(&self) -> RcDoc<'static, ()> {
         let meta = self.meta();
         let base = match self {
+            TypeIR::Top(_) => RcDoc::text("ANY"),
             TypeIR::Primitive(baml_types::TypeValue::Int, _) => RcDoc::text("int"),
             TypeIR::Primitive(baml_types::TypeValue::Float, _) => RcDoc::text("float"),
             TypeIR::Primitive(baml_types::TypeValue::String, _) => RcDoc::text("string"),

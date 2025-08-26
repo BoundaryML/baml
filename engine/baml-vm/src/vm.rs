@@ -974,26 +974,28 @@ impl Vm {
                             BinOp::Shr => left >> right,
                         }),
 
-                        (Value::Float(HashableFloat(left)), Value::Float(HashableFloat(right))) => Value::Float(HashableFloat(match op {
-                            BinOp::Add => left + right,
-                            BinOp::Sub => left - right,
-                            BinOp::Mul => left * right,
-                            BinOp::Div => left / right,
-                            BinOp::Mod => left % right,
+                        (Value::Float(HashableFloat(left)), Value::Float(HashableFloat(right))) => {
+                            Value::Float(HashableFloat(match op {
+                                BinOp::Add => left + right,
+                                BinOp::Sub => left - right,
+                                BinOp::Mul => left * right,
+                                BinOp::Div => left / right,
+                                BinOp::Mod => left % right,
 
-                            // Bitwise ops not applicable to floats.
-                            BinOp::BitAnd
-                            | BinOp::BitOr
-                            | BinOp::BitXor
-                            | BinOp::Shl
-                            | BinOp::Shr => {
-                                return Err(VmError::from(InternalError::CannotApplyBinOp {
-                                    left: Type::Float,
-                                    right: Type::Float,
-                                    op,
-                                }));
-                            }
-                        })),
+                                // Bitwise ops not applicable to floats.
+                                BinOp::BitAnd
+                                | BinOp::BitOr
+                                | BinOp::BitXor
+                                | BinOp::Shl
+                                | BinOp::Shr => {
+                                    return Err(VmError::from(InternalError::CannotApplyBinOp {
+                                        left: Type::Float,
+                                        right: Type::Float,
+                                        op,
+                                    }));
+                                }
+                            }))
+                        }
 
                         _ => {
                             return Err(VmError::from(InternalError::CannotApplyBinOp {
@@ -1050,7 +1052,9 @@ impl Vm {
                     let result = match (op, value) {
                         (UnaryOp::Not, Value::Bool(value)) => Value::Bool(!value),
                         (UnaryOp::Neg, Value::Int(value)) => Value::Int(-value),
-                        (UnaryOp::Neg, Value::Float(HashableFloat(value))) => Value::Float(HashableFloat(-value)),
+                        (UnaryOp::Neg, Value::Float(HashableFloat(value))) => {
+                            Value::Float(HashableFloat(-value))
+                        }
                         _ => {
                             return Err(VmError::from(InternalError::CannotApplyUnaryOp {
                                 op,

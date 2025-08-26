@@ -19,7 +19,7 @@
 /// in several places. Bidirectional typing is the target.
 use std::sync::Arc;
 
-use baml_types::{ir_type::TypeIR, BamlMap, BamlValueWithMeta};
+use baml_types::{ir_type::TypeIR, BamlMap, BamlValueWithMeta, TypeValue};
 use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Diagnostics, Span};
 
 use crate::{
@@ -89,8 +89,8 @@ pub fn typecheck_returning_context<'a>(
     // Add builtin functions to typing context
     // std::fetch_value<T>(std::Request) -> T
     // This is a generic function that takes a Request and returns any type T
-    // For now, we'll add a placeholder - this should be handled more generically in the future
-    let generic_return_type = TypeIR::string(); // Placeholder for generic T
+    // For now, we'll add a placeholder with a Top type.
+    let generic_return_type = TypeIR::Top(Default::default()); // Placeholder for generic T
     let fetch_value_type = crate::builtin::std_fetch_value_signature(generic_return_type);
     typing_context.symbols.insert(
         crate::builtin::functions::FETCH_VALUE.to_string(),
@@ -106,6 +106,28 @@ pub fn typecheck_returning_context<'a>(
             "std.Array.len" => TypeIR::arrow(
                 vec![TypeIR::List(Box::new(TypeIR::null()), Default::default())],
                 TypeIR::int(),
+            ),
+            "std.Map.len" => TypeIR::arrow(
+                // map<string, V> -> int
+                // NOTE: we don't have a "top" type for map/array values, so we'll use Null.
+                vec![TypeIR::Map(
+                    Box::new(TypeIR::string()),
+                    Box::new(TypeIR::null()),
+                    Default::default(),
+                )],
+                TypeIR::int(),
+            ),
+            "std.Map.contains" => TypeIR::arrow(
+                // map<string, V>, string -> bool
+                vec![
+                    TypeIR::Map(
+                        Box::new(TypeIR::string()),
+                        Box::new(TypeIR::null()),
+                        Default::default(),
+                    ),
+                    TypeIR::string(),
+                ],
+                TypeIR::bool(),
             ),
             _ => {
                 // Generic function type for other natives
@@ -155,6 +177,23 @@ pub fn typecheck_returning_context<'a>(
 
         // Convert HIR block to THIR block with type inference
         let typed_body = typecheck_block(&func.body, &mut func_context, diagnostics);
+
+        if let Some((expr, expr_return_type)) = typed_body
+            .trailing_expr
+            .as_ref()
+            .and_then(|e| Some((e, e.meta().1.as_ref()?)))
+        {
+            if !types_compatible(expr_return_type, &func.return_type) {
+                diagnostics.push_error(DatamodelError::new_validation_error(
+                    &format!(
+                        "Return type mismatch: function return type is {} but got {}",
+                        func.return_type.diagnostic_repr(),
+                        expr_return_type.diagnostic_repr(),
+                    ),
+                    expr.span().clone(),
+                ));
+            }
+        }
 
         expr_functions.push(thir::ExprFunction {
             name: func.name.clone(),
@@ -1356,9 +1395,8 @@ pub fn typecheck_expression(
                             span.clone(),
                         ));
                         None
-
                     }
-                }
+                },
 
                 Some(ty) => {
                     diagnostics.push_error(DatamodelError::new_validation_error(
@@ -1369,7 +1407,7 @@ pub fn typecheck_expression(
                         typed_receiver.meta().0.clone(),
                     ));
                     None
-                },
+                }
 
                 // type not inferred, so we can't say anything about it.
                 None => None,
@@ -1406,9 +1444,15 @@ pub fn typecheck_expression(
             };
 
             let typed_args: Vec<_> = if is_known_function {
-                // Only validate arguments for known functions
+                // Only validate arguments for known functions. Skip the first argument since that's going to be
+                // our method receiver.
                 args.iter()
-                    .zip(param_types.iter().chain(std::iter::repeat(&TypeIR::null())))
+                    .zip(
+                        param_types
+                            .iter()
+                            .skip(1)
+                            .chain(std::iter::repeat(&TypeIR::null())),
+                    )
                     .map(|(arg, expected_type)| {
                         let typed_arg = typecheck_expression(arg, context, diagnostics);
 
@@ -1442,7 +1486,7 @@ pub fn typecheck_expression(
             };
 
             // Check argument count only for known functions
-            if is_known_function && args.len() != param_types.len() {
+            if is_known_function && args.len() + 1 != param_types.len() {
                 diagnostics.push_error(DatamodelError::new_validation_error(
                     &format!(
                         "Function {} expects {} arguments, got {}",
@@ -1650,7 +1694,23 @@ pub fn typecheck_expression(
                     }
                     Some(*inner.clone())
                 }
-                Some(TypeIR::Map(_, value_type, _)) => Some(*value_type.clone()),
+
+                Some(TypeIR::Map(_, value_type, _)) => {
+                    if let Some(index_type) = typed_index.meta().1.as_ref() {
+                        if !matches!(
+                            index_type,
+                            TypeIR::Primitive(TypeValue::String, _)
+                                | TypeIR::Literal(baml_types::LiteralValue::String(_), _)
+                        ) {
+                            diagnostics.push_error(DatamodelError::new_validation_error(
+                                "Map access must be a string",
+                                index.span(),
+                            ));
+                        }
+                    }
+
+                    Some(value_type.as_ref().clone())
+                }
                 _ => {
                     diagnostics.push_error(DatamodelError::new_validation_error(
                         "Can only index arrays and maps",
@@ -1756,22 +1816,8 @@ pub fn typecheck_expression(
 /// Check if two types are compatible (for now, just equality)
 fn types_compatible(actual: &TypeIR, expected: &TypeIR) -> bool {
     match (actual, expected) {
-        (
-            TypeIR::Primitive(baml_types::TypeValue::Int, _),
-            TypeIR::Primitive(baml_types::TypeValue::Int, _),
-        ) => true,
-        (
-            TypeIR::Primitive(baml_types::TypeValue::String, _),
-            TypeIR::Primitive(baml_types::TypeValue::String, _),
-        ) => true,
-        (
-            TypeIR::Primitive(baml_types::TypeValue::Bool, _),
-            TypeIR::Primitive(baml_types::TypeValue::Bool, _),
-        ) => true,
-        (
-            TypeIR::Primitive(baml_types::TypeValue::Null, _),
-            TypeIR::Primitive(baml_types::TypeValue::Null, _),
-        ) => true,
+        (TypeIR::Top(_), _) | (_, TypeIR::Top(_)) => true,
+        (TypeIR::Primitive(a, _), TypeIR::Primitive(b, _)) => a == b,
         (TypeIR::List(a, _), TypeIR::List(b, _)) => types_compatible(a, b),
         (TypeIR::Map(k1, v1, _), TypeIR::Map(k2, v2, _)) => {
             types_compatible(k1, k2) && types_compatible(v1, v2)

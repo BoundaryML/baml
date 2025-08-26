@@ -26,6 +26,7 @@ pub fn from_type_ir(r#type: &TypeIR, lookup: &impl TypeLookups) -> TypeStreaming
         // Streaming behavior of the type, without regard to the `@stream` annotations.
         // (That annotation will be handled later in this function).
         let mut base_type_streaming = match r#type {
+            TypeIR::Top(_) => TypeStreaming::Top(meta),
             TypeIR::Primitive(type_value, _) => match type_value {
                 TypeValue::Null => TypeStreaming::Primitive(TypeValue::Null, meta),
                 TypeValue::Int => TypeStreaming::Primitive(TypeValue::Int, meta),
@@ -161,6 +162,7 @@ pub fn from_type_ir(r#type: &TypeIR, lookup: &impl TypeLookups) -> TypeStreaming
     ) -> type_meta::base::StreamingBehavior {
         type StreamingBehavior = type_meta::base::StreamingBehavior;
         match field_type {
+            TypeIR::Top(_) => Default::default(),
             TypeIR::Primitive(type_value, _) => match type_value {
                 TypeValue::Bool | TypeValue::Float | TypeValue::Int => StreamingBehavior {
                     done: true,

@@ -122,6 +122,8 @@ pub trait IRHelperExtended: IRSemanticStreamingHelper {
         }
 
         match (base, other) {
+            // top can meet any other type.
+            (TypeIR::Top(_), _) | (_, TypeIR::Top(_)) => true,
             // TODO: O(n)
             (TypeIR::RecursiveTypeAlias { name, .. }, _) => self
                 .get_all_recursive_aliases(name)
@@ -857,6 +859,7 @@ impl IRSemanticStreamingHelper for IntermediateRepr {
 /// child-having variants?).
 fn item_type(ir: &(impl IRHelperExtended + ?Sized), field_type: &TypeIR) -> Option<TypeIR> {
     let res = match field_type {
+        TypeIR::Top(_) => None,
         TypeIR::Class { .. } => None,
         TypeIR::Enum { .. } => None,
         TypeIR::List(inner, _) => Some(*inner.clone()),
@@ -907,11 +910,12 @@ where
         } => ir
             .recursive_alias_definition(alias_name)
             .and_then(|alias_definition| map_types(ir, alias_definition)),
-        TypeIR::Primitive(_, _) => None,
-        TypeIR::Enum { .. } => None,
-        TypeIR::List(_, _) => None,
-        TypeIR::Literal(_, _) => None,
-        TypeIR::Tuple(_, _) => None,
+        TypeIR::Top(_)
+        | TypeIR::Primitive(_, _)
+        | TypeIR::Enum { .. }
+        | TypeIR::List(_, _)
+        | TypeIR::Literal(_, _)
+        | TypeIR::Tuple(_, _) => None,
         TypeIR::Union(variants, _) => {
             let variant_map_types: Vec<(TypeIR, TypeIR)> = variants
                 .iter_include_null()

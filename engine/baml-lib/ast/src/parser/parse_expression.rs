@@ -320,7 +320,7 @@ fn parse_map(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expression {
     let mut entries: Vec<(Expression, Expression)> = vec![];
     let span = token.as_span();
 
-    let mut inner = token.into_inner();
+    let mut inner = token.into_inner().filter(|pair| !matches!(pair.as_rule(), Rule::NEWLINE));
 
     // Option<(rule, span of inference)>
     // We'll be reporting
