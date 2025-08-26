@@ -74,6 +74,14 @@ func CreateRuntime(
 
 func (r *BamlRuntime) CallFunction(ctx context.Context, functionName string, encoded_args []byte, onTick OnTickCallbackData) (*ResultCallback, error) {
 	callback_id, callback := create_unique_id(ctx, onTick)
+	
+	// Monitor context for early cancellation
+	go func() {
+		<-ctx.Done()
+		// Send cancellation to Rust immediately when context is done
+		baml_go.CancelFunctionCall(callback_id)
+	}()
+	
 	return_channel := make(chan ResultCallback)
 	go func() {
 		for {
@@ -114,6 +122,13 @@ func (r *BamlRuntime) CallFunction(ctx context.Context, functionName string, enc
 
 func (r *BamlRuntime) CallFunctionStream(ctx context.Context, functionName string, encoded_args []byte, onTick OnTickCallbackData) (<-chan ResultCallback, error) {
 	callback_id, callback := create_unique_id(ctx, onTick)
+	
+	// Monitor context for early cancellation
+	go func() {
+		<-ctx.Done()
+		// Send cancellation to Rust immediately when context is done
+		baml_go.CancelFunctionCall(callback_id)
+	}()
 
 	result, err := baml_go.CallFunctionStreamFromC(r.runtime, functionName, encoded_args, callback_id)
 	if err != nil {
@@ -130,6 +145,13 @@ func (r *BamlRuntime) CallFunctionStream(ctx context.Context, functionName strin
 
 func (r *BamlRuntime) CallFunctionParse(ctx context.Context, functionName string, encoded_args []byte) (any, error) {
 	callback_id, callback := create_unique_id(ctx, nil)
+	
+	// Monitor context for early cancellation
+	go func() {
+		<-ctx.Done()
+		// Send cancellation to Rust immediately when context is done
+		baml_go.CancelFunctionCall(callback_id)
+	}()
 
 	result, err := baml_go.CallFunctionParseFromC(r.runtime, functionName, encoded_args, callback_id)
 	if err != nil {

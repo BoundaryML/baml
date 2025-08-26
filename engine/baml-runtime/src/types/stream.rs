@@ -8,6 +8,7 @@ use baml_types::{
 };
 use internal_baml_core::ir::repr::IntermediateRepr;
 use serde_json::json;
+use stream_cancel::Tripwire;
 
 use crate::{
     client_registry::ClientRegistry,
@@ -36,6 +37,7 @@ pub struct FunctionResultStream {
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) tokio_runtime: Arc<tokio::runtime::Runtime>,
     pub(crate) collectors: Vec<Arc<Collector>>,
+    pub(crate) cancel_tripwire: Option<Tripwire>,
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -122,6 +124,7 @@ impl FunctionResultStream {
                         |content| self.renderer.parse(self.ir.as_ref(), &rctx, content, true),
                         |content| self.renderer.parse(self.ir.as_ref(), &rctx, content, false),
                         on_event,
+                        self.cancel_tripwire.clone(),
                     )
                     .await;
 

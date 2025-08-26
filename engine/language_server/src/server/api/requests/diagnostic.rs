@@ -73,7 +73,22 @@ impl SyncRequestHandler for DocumentDiagnosticRequestHandler {
             .get_or_create_project(&path)
             .expect("Project should exist");
 
-        let diagnostics = file_diagnostics(project, &url);
+        let default_flags = vec!["beta".to_string()];
+        let effective_flags = session
+            .baml_settings
+            .feature_flags
+            .as_ref()
+            .unwrap_or(&default_flags);
+        tracing::info!(
+            "diagnostic_request: session feature_flags: {:?}, effective_flags: {:?}",
+            session
+                .baml_settings
+                .feature_flags
+                .as_ref()
+                .unwrap_or(&default_flags),
+            &effective_flags
+        );
+        let diagnostics = file_diagnostics(project, &url, effective_flags);
         // diagnostics
 
         Ok(DocumentDiagnosticReportResult::Report(
@@ -92,7 +107,7 @@ fn diagnostics_report(
     project: Arc<Mutex<Project>>,
     url: &Url,
 ) -> Result<DocumentDiagnosticReportResult> {
-    let diagnostics = file_diagnostics(project, url);
+    let diagnostics = file_diagnostics(project, url, &[]);
     Ok(DocumentDiagnosticReportResult::Report(
         DocumentDiagnosticReport::Full(RelatedFullDocumentDiagnosticReport {
             related_documents: None,

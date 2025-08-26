@@ -188,17 +188,25 @@ const debugOptions = {
   },
 };
 
-const getClientOptions = (): LanguageClientOptions => ({
-  documentSelector: [
-    { scheme: 'file', language: 'baml' },
-    { language: 'json', pattern: '**/baml_src/**' },
-  ],
-  outputChannel: vscode.window.createOutputChannel('Baml Language Server'),
-  revealOutputChannelOn: RevealOutputChannelOn.Never,
-  synchronize: {
-    fileEvents: workspace.createFileSystemWatcher('**/baml_src/**/*.baml'),
-  },
-});
+const getClientOptions = (): LanguageClientOptions => {
+  // Get current BAML settings for initialization
+  const currentBamlSettings = workspace.getConfiguration('baml');
+  
+  return {
+    documentSelector: [
+      { scheme: 'file', language: 'baml' },
+      { language: 'json', pattern: '**/baml_src/**' },
+    ],
+    outputChannel: vscode.window.createOutputChannel('Baml Language Server'),
+    revealOutputChannelOn: RevealOutputChannelOn.Never,
+    synchronize: {
+      fileEvents: workspace.createFileSystemWatcher('**/baml_src/**/*.baml'),
+    },
+    initializationOptions: {
+      baml: currentBamlSettings
+    },
+  };
+};
 
 export const requestDiagnostics = async () => {
   const currentFile = getCurrentOpenedFile();
@@ -593,6 +601,7 @@ const activateClient = (
   refreshBamlConfigSingleton();
   console.log('Activating BAML Language Client...');
   console.log('Server Options:', JSON.stringify(serverOptions, null, 2));
+  console.log('Client Options initialization options:', JSON.stringify(clientOptions.initializationOptions, null, 2));
 
   if (client?.needsStop()) {
     console.log('Stopping existing client before activating new one...');
@@ -614,6 +623,48 @@ const activateClient = (
 
       registerClientEventHandlers(client, context);
       console.log('Client event handlers registered.');
+
+      // Set up configuration change listener to send settings to LSP
+      context.subscriptions.push(
+        workspace.onDidChangeConfiguration((event) => {
+          if (event.affectsConfiguration('baml')) {
+            const config = workspace.getConfiguration('baml');
+            const featureFlags = config.get('featureFlags', ['beta']);
+            
+            const bamlSettings = {
+              featureFlags: featureFlags,
+              enablePlaygroundProxy: config.get('enablePlaygroundProxy', true),
+              generateCodeOnSave: config.get('generateCodeOnSave', 'always'),
+              restartTSServerOnSave: config.get('restartTSServerOnSave', false),
+              fileWatcher: config.get('fileWatcher', false),
+              trace: config.get('trace', { server: 'off' }),
+            };
+            console.log('Constructed bamlSettings:', JSON.stringify(bamlSettings, null, 2));
+            console.log('Sending configuration update to LSP:', bamlSettings);
+            client.sendNotification('workspace/didChangeConfiguration', {
+              settings: { baml: bamlSettings }
+            });
+          }
+        })
+      );
+
+      // Send initial configuration after a small delay to ensure LSP is fully ready
+      setTimeout(() => {
+        const config = workspace.getConfiguration('baml');
+        const initialBamlSettings = {
+          featureFlags: config.get('featureFlags', ['beta']),
+          enablePlaygroundProxy: config.get('enablePlaygroundProxy', true),
+          generateCodeOnSave: config.get('generateCodeOnSave', 'always'),
+          restartTSServerOnSave: config.get('restartTSServerOnSave', false),
+          fileWatcher: config.get('fileWatcher', false),
+          trace: config.get('trace', { server: 'off' }),
+        };
+        
+        console.log('Sending initial configuration to LSP:', initialBamlSettings);
+        client.sendNotification('workspace/didChangeConfiguration', {
+          settings: { baml: initialBamlSettings }
+        });
+      }, 100); // 100ms delay
 
       requestDiagnostics().catch((e) =>
         console.error('Error requesting initial diagnostics:', e),
@@ -667,6 +718,7 @@ const plugin: BamlVSCodePlugin = {
     bamlOutputChannel = _outputChannel;
     context.subscriptions.push(bamlOutputChannel);
     bamlOutputChannel.appendLine('Activating BAML Language Server plugin...');
+    
 
     console.log('Activating BAML Language Server plugin...');
     bamlOutputChannel.appendLine(`Debug/Test Session: ${isDebugOrTest}`);

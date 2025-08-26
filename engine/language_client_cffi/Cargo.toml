@@ -33,6 +33,8 @@ env_logger.workspace = true
 prost = "0.14"
 baml_cffi_macros = { path = "../baml_cffi_macros" }
 indexmap.workspace = true
+dashmap = "6.1"
+stream-cancel = "0.8"
 
 [build-dependencies]
 cbindgen = "0.28.0"

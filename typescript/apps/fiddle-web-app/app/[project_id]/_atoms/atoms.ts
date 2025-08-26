@@ -1,4 +1,4 @@
-import { filesAtom } from '@baml/playground-common';
+import { filesAtom, betaFeatureEnabledAtom } from '@baml/playground-common';
 import type { EditorFile } from '../../../app/actions';
 
 // import { ParserDBFunctionTestModel } from "@/lib/exampleProjects"

@@ -946,7 +946,7 @@ dependencies = [
  "console",
  "console_log",
  "ctrlc",
- "dashmap",
+ "dashmap 5.5.3",
  "derive_more",
  "dialoguer",
  "difference",
@@ -1017,6 +1017,7 @@ dependencies = [
  "internal-baml-parser-database",
  "itertools 0.14.0",
  "pretty",
+ "tokio",
 ]
 
 [[package]]
@@ -1115,6 +1116,7 @@ dependencies = [
  "baml-runtime",
  "baml-types",
  "ctrlc",
+ "dashmap 5.5.3",
  "either",
  "env_logger",
  "futures",
@@ -1124,6 +1126,7 @@ dependencies = [
  "jsonish",
  "libc",
  "log",
+ "once_cell",
  "pyo3",
  "pyo3-async-runtimes",
  "pyo3-build-config 0.21.2",
@@ -1131,6 +1134,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
+ "stream-cancel",
  "tokio",
  "tokio-util",
  "tracing-subscriber",
@@ -1219,7 +1223,7 @@ dependencies = [
  "cowstr",
  "criterion",
  "crossterm",
- "dashmap",
+ "dashmap 5.5.3",
  "derive-new",
  "derive_more",
  "dissimilar",
@@ -1244,8 +1248,10 @@ dependencies = [
  "indicatif",
  "indoc",
  "infer",
+ "internal-baml-ast",
  "internal-baml-codegen",
  "internal-baml-core",
+ "internal-baml-diagnostics",
  "internal-baml-jinja",
  "internal-llm-client",
  "js-sys",
@@ -1261,8 +1267,10 @@ dependencies = [
  "notify-debouncer-full",
  "once_cell",
  "pin-project-lite",
+ "pretty",
  "pretty_assertions",
  "ratatui",
+ "reedline",
  "regex",
  "reqwest",
  "reqwest-eventsource",
@@ -1337,6 +1345,7 @@ dependencies = [
  "serde",
  "serde-wasm-bindgen 0.6.5",
  "serde_json",
+ "stream-cancel",
  "time",
  "tokio",
  "url",
@@ -1365,6 +1374,7 @@ dependencies = [
  "log",
  "minijinja",
  "once_cell",
+ "pretty",
  "secrecy",
  "serde",
  "serde_json",
@@ -1386,6 +1396,7 @@ dependencies = [
  "baml-log",
  "baml-runtime",
  "baml-types",
+ "dashmap 5.5.3",
  "env_logger",
  "futures",
  "indexmap 2.9.0",
@@ -1395,8 +1406,10 @@ dependencies = [
  "napi",
  "napi-build",
  "napi-derive",
+ "once_cell",
  "serde",
  "serde_json",
+ "stream-cancel",
  "tokio",
  "tracing-subscriber",
 ]
@@ -1428,6 +1441,7 @@ dependencies = [
  "baml-types",
  "baml_cffi_macros",
  "cbindgen",
+ "dashmap 6.1.0",
  "env_logger",
  "indexmap 2.9.0",
  "internal-baml-codegen",
@@ -1440,6 +1454,7 @@ dependencies = [
  "protoc-bin-vendored",
  "serde",
  "serde_json",
+ "stream-cancel",
  "tokio",
  "tokio-util",
 ]
@@ -1515,6 +1530,9 @@ name = "bitflags"
 version = "2.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1b8e56985ec62d17e9c1001dc89c88ecd7dc08e47eba5ec7c29c7b5eeecde967"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "block-buffer"
@@ -2159,6 +2177,7 @@ dependencies = [
  "mio 1.0.4",
  "parking_lot",
  "rustix 0.38.44",
+ "serde",
  "signal-hook",
  "signal-hook-mio",
  "winapi",
@@ -2251,6 +2270,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "978747c1d849a7d2ee5e8adc0159961c48fb7e5db2f06af6723b80123bb53856"
 dependencies = [
  "cfg-if",
+ "hashbrown 0.14.5",
+ "lock_api",
+ "once_cell",
+ "parking_lot_core",
+]
+
+[[package]]
+name = "dashmap"
+version = "6.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5041cc499144891f3790297212f32a74fb938e5136a14943f338ef9e0ae276cf"
+dependencies = [
+ "cfg-if",
+ "crossbeam-utils",
  "hashbrown 0.14.5",
  "lock_api",
  "once_cell",
@@ -2660,6 +2693,17 @@ name = "fastrand"
 version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "37909eebbb50d72f9059c3b6d82c0463f2ff062c9e95845c43a6c9c0355411be"
+
+[[package]]
+name = "fd-lock"
+version = "4.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0ce92ff622d6dadf7349484f42c93271a0d49b7cc4d466a936405bacbe10aa78"
+dependencies = [
+ "cfg-if",
+ "rustix 1.0.8",
+ "windows-sys 0.59.0",
+]
 
 [[package]]
 name = "file-id"
@@ -4726,6 +4770,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "nu-ansi-term"
+version = "0.50.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d4a28e057d01f97e61255210fcff094d74ed0466038633e95017f5beb68e4399"
+dependencies = [
+ "windows-sys 0.52.0",
+]
+
+[[package]]
 name = "num"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5885,6 +5938,26 @@ dependencies = [
  "getrandom 0.2.16",
  "libredox",
  "thiserror 2.0.12",
+]
+
+[[package]]
+name = "reedline"
+version = "0.37.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9834765acaa2deedf29197f2da3d309801683beb20e25775bc0249f97a7b9a74"
+dependencies = [
+ "chrono",
+ "crossterm",
+ "fd-lock",
+ "itertools 0.12.1",
+ "nu-ansi-term 0.50.1",
+ "serde",
+ "strip-ansi-escapes",
+ "strum",
+ "strum_macros",
+ "thiserror 1.0.69",
+ "unicode-segmentation",
+ "unicode-width 0.1.14",
 ]
 
 [[package]]
@@ -7562,7 +7635,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e8189decb5ac0fa7bc8b96b7cb9b2701d60d48805aca84a238004d665fcc4008"
 dependencies = [
  "matchers",
- "nu-ansi-term",
+ "nu-ansi-term 0.46.0",
  "once_cell",
  "regex",
  "serde",

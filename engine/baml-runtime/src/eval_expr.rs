@@ -327,6 +327,7 @@ async fn beta_reduce<'a>(
                             None,
                             None,
                             env.env_vars.clone(),
+                            None,
                         )
                         .await
                         .0;
@@ -1141,7 +1142,16 @@ test Poems {
         let (res, _) = rt
             // .run_test("Second", "TestSecond", &ctx, Some(on_event))
             // .run_test("Go", "Go", &ctx, Some(on_event), None)
-            .run_test("Poems", "Poems", &ctx, Some(on_event), None, HashMap::new())
+            .run_test(
+                "Poems",
+                "Poems",
+                &ctx,
+                Some(on_event),
+                None,
+                HashMap::new(),
+                None,
+                None::<Box<dyn Fn()>>,
+            )
             // .run_test("MakePerson", "TestMakePerson", &ctx, Some(on_event), None)
             // .run_test("CompareHaikus", "Test", &ctx, Some(on_event))
             // .run_test("LlmParseInt", "TestParse", &ctx, Some(on_event))
@@ -1273,6 +1283,8 @@ test TestMakePerson() {
                 Some(on_event),
                 None,
                 HashMap::new(),
+                None,
+                None::<Box<dyn Fn()>>,
             )
             // .run_test("MakePerson", "TestMakePerson", &ctx, Some(on_event), None)
             // .run_test("CompareHaikus", "Test", &ctx, Some(on_event))
@@ -1349,6 +1361,8 @@ test UseFunction() {
                     "OPENAI_API_KEY".to_string(),
                     std::env::var("OPENAI_API_KEY").expect("OPENAI_API_KEY is not set."),
                 )]),
+                None,
+                None::<Box<dyn Fn()>>,
             )
             .await;
         dbg!(res);

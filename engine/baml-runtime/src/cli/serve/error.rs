@@ -110,6 +110,9 @@ impl BamlError {
                 LLMResponse::InternalFailure(_) => Self::InternalError {
                     message: format!("Something went wrong with the LLM client: {err}"),
                 },
+                LLMResponse::Cancelled(msg) => Self::InternalError {
+                    message: format!("Operation cancelled: {msg}"),
+                },
             }
         } else {
             Self::InternalError {

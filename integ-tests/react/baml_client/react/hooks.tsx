@@ -2310,6 +2310,56 @@ export function useExtractHobby(
   }
 }
 /**
+ * A specialized hook for the ExtractName BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - text: string
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** string
+ * - **Streaming Partial:** string
+ * - **Streaming Final:** string
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useExtractName({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useExtractName({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useExtractName(props: HookInput<'ExtractName', { stream: false }>): HookOutput<'ExtractName', { stream: false }>
+export function useExtractName(props?: HookInput<'ExtractName', { stream?: true }>): HookOutput<'ExtractName', { stream: true }>
+export function useExtractName(
+  props: HookInput<'ExtractName', { stream?: boolean }> = {},
+): HookOutput<'ExtractName', { stream: true }> | HookOutput<'ExtractName', { stream: false }> {
+  let action: ServerAction = Actions.ExtractName;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.ExtractName;
+    return useBamlAction(action, props)
+  } else {
+    return useBamlAction(action, props as HookInput<'ExtractName', { stream: false }>)
+  }
+}
+/**
  * A specialized hook for the ExtractNames BAML function that supports both streaming and non‑streaming responses.
  *
  * **Input Types:**
@@ -2761,6 +2811,110 @@ export function useFnEnumOutput(
     return useBamlAction(action, props)
   } else {
     return useBamlAction(action, props as HookInput<'FnEnumOutput', { stream: false }>)
+  }
+}
+/**
+ * A specialized hook for the FnFailRetryConstantDelay BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - retries: number
+ *
+ * - delay_ms: number
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** string
+ * - **Streaming Partial:** string
+ * - **Streaming Final:** string
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useFnFailRetryConstantDelay({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useFnFailRetryConstantDelay({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useFnFailRetryConstantDelay(props: HookInput<'FnFailRetryConstantDelay', { stream: false }>): HookOutput<'FnFailRetryConstantDelay', { stream: false }>
+export function useFnFailRetryConstantDelay(props?: HookInput<'FnFailRetryConstantDelay', { stream?: true }>): HookOutput<'FnFailRetryConstantDelay', { stream: true }>
+export function useFnFailRetryConstantDelay(
+  props: HookInput<'FnFailRetryConstantDelay', { stream?: boolean }> = {},
+): HookOutput<'FnFailRetryConstantDelay', { stream: true }> | HookOutput<'FnFailRetryConstantDelay', { stream: false }> {
+  let action: ServerAction = Actions.FnFailRetryConstantDelay;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.FnFailRetryConstantDelay;
+    return useBamlAction(action, props)
+  } else {
+    return useBamlAction(action, props as HookInput<'FnFailRetryConstantDelay', { stream: false }>)
+  }
+}
+/**
+ * A specialized hook for the FnFailRetryExponentialDelay BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - retries: number
+ *
+ * - initial_delay_ms: number
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** string
+ * - **Streaming Partial:** string
+ * - **Streaming Final:** string
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useFnFailRetryExponentialDelay({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useFnFailRetryExponentialDelay({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useFnFailRetryExponentialDelay(props: HookInput<'FnFailRetryExponentialDelay', { stream: false }>): HookOutput<'FnFailRetryExponentialDelay', { stream: false }>
+export function useFnFailRetryExponentialDelay(props?: HookInput<'FnFailRetryExponentialDelay', { stream?: true }>): HookOutput<'FnFailRetryExponentialDelay', { stream: true }>
+export function useFnFailRetryExponentialDelay(
+  props: HookInput<'FnFailRetryExponentialDelay', { stream?: boolean }> = {},
+): HookOutput<'FnFailRetryExponentialDelay', { stream: true }> | HookOutput<'FnFailRetryExponentialDelay', { stream: false }> {
+  let action: ServerAction = Actions.FnFailRetryExponentialDelay;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.FnFailRetryExponentialDelay;
+    return useBamlAction(action, props)
+  } else {
+    return useBamlAction(action, props as HookInput<'FnFailRetryExponentialDelay', { stream: false }>)
   }
 }
 /**
@@ -6415,6 +6569,56 @@ export function useTellStory(
     return useBamlAction(action, props)
   } else {
     return useBamlAction(action, props as HookInput<'TellStory', { stream: false }>)
+  }
+}
+/**
+ * A specialized hook for the TestAbortFallbackChain BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - input: string
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** string
+ * - **Streaming Partial:** string
+ * - **Streaming Final:** string
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useTestAbortFallbackChain({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useTestAbortFallbackChain({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useTestAbortFallbackChain(props: HookInput<'TestAbortFallbackChain', { stream: false }>): HookOutput<'TestAbortFallbackChain', { stream: false }>
+export function useTestAbortFallbackChain(props?: HookInput<'TestAbortFallbackChain', { stream?: true }>): HookOutput<'TestAbortFallbackChain', { stream: true }>
+export function useTestAbortFallbackChain(
+  props: HookInput<'TestAbortFallbackChain', { stream?: boolean }> = {},
+): HookOutput<'TestAbortFallbackChain', { stream: true }> | HookOutput<'TestAbortFallbackChain', { stream: false }> {
+  let action: ServerAction = Actions.TestAbortFallbackChain;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.TestAbortFallbackChain;
+    return useBamlAction(action, props)
+  } else {
+    return useBamlAction(action, props as HookInput<'TestAbortFallbackChain', { stream: false }>)
   }
 }
 /**

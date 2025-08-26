@@ -32,6 +32,12 @@ class BamlClientFinishReasonError extends Error {
   prompt: string
   raw_output: string
 }
+
+class BamlAbortError extends Error {
+  type: 'BamlAbortError'
+  message: string
+  reason?: any
+}
 ```
 </CodeBlocks>
 
@@ -43,6 +49,9 @@ Thrown when BAML fails to parse or validate LLM output. Contains the original pr
 ### [BamlClientFinishReasonError](./baml-client-finish-reason-error)
 Thrown when an LLM terminates with a disallowed finish reason. Includes the original prompt and partial output received before termination.
 
+### [BamlAbortError](./baml-abort-error)
+Thrown when a BAML operation is cancelled via an abort controller. Contains an optional reason for the cancellation.
+
 ## Type Guards
 
 All BAML errors can be identified using TypeScript's `instanceof` operator:
@@ -52,7 +61,9 @@ All BAML errors can be identified using TypeScript's `instanceof` operator:
 try {
   // BAML operation
 } catch (error) {
-  if (error instanceof BamlValidationError) {
+  if (error instanceof BamlAbortError) {
+    // Handle cancellation
+  } else if (error instanceof BamlValidationError) {
     // Handle validation error
   } else if (error instanceof BamlClientFinishReasonError) {
     // Handle finish reason error

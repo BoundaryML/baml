@@ -144,7 +144,7 @@ func trigger_callback(id C.uint32_t, isDone C.int, content *C.int8_t, length C.i
 		case <-callback.ctx.Done():
 			force_close = true
 			callback.channel <- ResultCallback{Error: callback.ctx.Err()}
-			// TODO: Somehow tell rust to die
+			// Cancellation is now handled early in runtime.go
 			break
 		case callback.channel <- res:
 			break

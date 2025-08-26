@@ -401,7 +401,7 @@ impl BamlRuntime {
             .get_test_params(function_name, test_name, ctx, strict)
     }
 
-    pub async fn run_test_with_expr_events<F>(
+    pub async fn run_test_with_expr_events<F, G>(
         &self,
         function_name: &str,
         test_name: &str,
@@ -410,9 +410,12 @@ impl BamlRuntime {
         expr_tx: Option<mpsc::UnboundedSender<Vec<internal_baml_diagnostics::SerializedSpan>>>,
         collector: Option<Arc<Collector>>,
         env_vars: HashMap<String, String>,
+        cancel_tripwire: Option<stream_cancel::Tripwire>,
+        on_tick: Option<G>,
     ) -> (Result<TestResponse>, FunctionCallId)
     where
         F: Fn(FunctionResult),
+        G: Fn(),
     {
         baml_log::set_from_env(&env_vars).unwrap();
 
@@ -521,7 +524,7 @@ impl BamlRuntime {
                 ExprEvalResult::LLMCall { name, args } => (name, args),
             };
 
-            let mut stream = self.inner.stream_function_impl(
+            let mut stream = self.inner.stream_function_impl_with_tripwire(
                 function_name,
                 &params,
                 self.tracer_wrapper.get_or_create_tracer(&env_vars),
@@ -530,6 +533,7 @@ impl BamlRuntime {
                 self.async_runtime.clone(),
                 // TODO: collectors here?
                 vec![],
+                cancel_tripwire.clone(),
             )?;
             let (response_res, call_uuid) = stream
                 .run(
@@ -554,6 +558,7 @@ impl BamlRuntime {
                 LLMResponse::Success(complete_llm_response) => Ok(complete_llm_response),
                 LLMResponse::InternalFailure(e) => Err(anyhow::anyhow!("{}", e)),
                 LLMResponse::UserFailure(e) => Err(anyhow::anyhow!("{}", e)),
+                LLMResponse::Cancelled(e) => Err(anyhow::anyhow!("Cancelled: {}", e)),
                 LLMResponse::LLMFailure(e) => Err(anyhow::anyhow!(
                     "{} {}\n\nRequest options: {}",
                     e.code.to_string(),
@@ -613,7 +618,7 @@ impl BamlRuntime {
         (response, call_id)
     }
 
-    pub async fn run_test<F>(
+    pub async fn run_test<F, G>(
         &self,
         function_name: &str,
         test_name: &str,
@@ -621,12 +626,15 @@ impl BamlRuntime {
         on_event: Option<F>,
         collector: Option<Arc<Collector>>,
         env_vars: HashMap<String, String>,
+        cancel_tripwire: Option<stream_cancel::Tripwire>,
+        on_tick: Option<G>,
     ) -> (Result<TestResponse>, FunctionCallId)
     where
         F: Fn(FunctionResult),
+        G: Fn(),
     {
         let res = self
-            .run_test_with_expr_events::<F>(
+            .run_test_with_expr_events::<F, G>(
                 function_name,
                 test_name,
                 ctx,
@@ -634,6 +642,8 @@ impl BamlRuntime {
                 None,
                 collector,
                 env_vars,
+                cancel_tripwire,
+                on_tick,
             )
             .await;
         res
@@ -649,8 +659,18 @@ impl BamlRuntime {
         cb: Option<&ClientRegistry>,
         collectors: Option<Vec<Arc<Collector>>>,
         env_vars: HashMap<String, String>,
+        cancel_tripwire: Option<stream_cancel::Tripwire>,
     ) -> (Result<FunctionResult>, FunctionCallId) {
-        let fut = self.call_function(function_name, params, ctx, tb, cb, collectors, env_vars);
+        let fut = self.call_function(
+            function_name,
+            params,
+            ctx,
+            tb,
+            cb,
+            collectors,
+            env_vars,
+            cancel_tripwire,
+        );
         self.async_runtime.block_on(fut)
     }
 
@@ -663,6 +683,7 @@ impl BamlRuntime {
         cb: Option<&ClientRegistry>,
         collectors: Option<Vec<Arc<Collector>>>,
         env_vars: HashMap<String, String>,
+        cancel_tripwire: Option<stream_cancel::Tripwire>,
     ) -> (Result<FunctionResult>, FunctionCallId) {
         let res = Box::pin(self.call_function_with_expr_events(
             function_name,
@@ -673,6 +694,7 @@ impl BamlRuntime {
             collectors,
             env_vars,
             None,
+            cancel_tripwire,
         ))
         .await;
         res
@@ -708,6 +730,7 @@ impl BamlRuntime {
         collectors: Option<Vec<Arc<Collector>>>,
         env_vars: HashMap<String, String>,
         expr_tx: Option<mpsc::UnboundedSender<Vec<internal_baml_diagnostics::SerializedSpan>>>,
+        cancel_tripwire: Option<stream_cancel::Tripwire>,
     ) -> (Result<FunctionResult>, FunctionCallId) {
         // baml_log::info!("env vars: {:#?}", env_vars.clone());
         baml_log::set_from_env(&env_vars).unwrap();
@@ -749,8 +772,10 @@ impl BamlRuntime {
                             };
 
                         // Call (CANNOT RETURN HERE until trace event is finished)
-                        let result = self.inner.call_function_impl(prepared_func, rctx).await;
-                        // eprintln!("result: {:?}", result);
+                        let result = self
+                            .inner
+                            .call_function_impl(prepared_func, rctx, cancel_tripwire)
+                            .await;
                         // Trace event
                         let trace_event = TraceEvent::new_function_end(
                             call_id_stack.clone(),
@@ -759,13 +784,7 @@ impl BamlRuntime {
                                     Ok(value) => Ok(value
                                         .0
                                         .map_meta(|f| f.3.to_non_streaming_type(self.inner.ir()))),
-                                    Err(e) => Err((&e).to_baml_error()), // None => Err(baml_types::tracing::errors::BamlError::Base {
-                                                                         //     message: format!(
-                                                                         //         "No parsed result found for function: {}",
-                                                                         //         function_name
-                                                                         //     )
-                                                                         //     .into(),
-                                                                         // }),
+                                    Err(e) => Err((&e).to_baml_error()),
                                 },
                                 Err(e) => Err(e.to_baml_error()),
                             },

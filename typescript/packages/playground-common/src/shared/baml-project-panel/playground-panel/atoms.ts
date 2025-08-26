@@ -238,6 +238,9 @@ export const runningTestsAtom = atom<
   { functionName: string; testName: string; state: TestState }[]
 >([]);
 
+// AbortController for cancelling running tests
+export const currentAbortControllerAtom = atom<AbortController | null>(null);
+
 export interface FlashRange {
   filePath: string;
   startLine: number;

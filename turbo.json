@@ -13,10 +13,7 @@
     "VERCEL_ENV",
     "TARGET",
     "CMAKE_FRAMEWORK_PATH",
-    "NIX_CC",
-    "NIX_CC_WRAPPER_TARGET_HOST_aarch64_apple_darwin",
-    "NIX_BINTOOLS",
-    "NIX_BINTOOLS_WRAPPER_TARGET_HOST_aarch64_apple_darwin",
+    "NIX_*",
     "CC",
     "LD",
     "MACOSX_DEPLOYMENT_TARGET"

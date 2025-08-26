@@ -3,8 +3,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-use parking_lot::Mutex;
-
 use diagnostics::{file_diagnostics, project_diagnostics};
 use log::info;
 use lsp_server;
@@ -12,6 +10,7 @@ use lsp_types::{
     DidChangeTextDocumentParams, DocumentDiagnosticReport, DocumentDiagnosticReportResult,
     FullDocumentDiagnosticReport, RelatedFullDocumentDiagnosticReport,
 };
+use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use url::Url;
 
@@ -83,12 +82,18 @@ pub(super) fn request<'a>(req: lsp_server::Request) -> Task<'a> {
                 let result: anyhow::Result<(serde_json::Value,)> = {
                     let mut all_functions = Vec::new();
                     let projects = session.baml_src_projects.lock();
+                    let default_flags = vec!["beta".to_string()];
+                    let effective_flags = session
+                        .baml_settings
+                        .feature_flags
+                        .as_ref()
+                        .unwrap_or(&default_flags);
 
                     for (_, project) in projects.iter() {
                         let functions = project
                             .lock()
                             .baml_project
-                            .list_functions()
+                            .list_functions(effective_flags)
                             .iter()
                             .map(|f| BamlFunctionResult {
                                 name: f.name.clone(),
@@ -138,10 +143,29 @@ pub(super) fn request<'a>(req: lsp_server::Request) -> Task<'a> {
                     let project = session
                         .get_or_create_project(url.to_file_path().unwrap())
                         .expect("Already checked for project's existence");
-                    project.lock().update_runtime(Some(notifier))?;
+                    {
+                        let default_flags = vec!["beta".to_string()];
+                        project.lock().update_runtime(
+                            Some(notifier),
+                            session
+                                .baml_settings
+                                .feature_flags
+                                .as_ref()
+                                .unwrap_or(&default_flags),
+                        )?
+                    };
 
                     // TODO: I think we need to send ALL diagnostics for the project. Not sure how this report is different vs sending a signle diagnostic param message
-                    let diagnostics = file_diagnostics(project.clone(), &url);
+                    let default_flags = vec!["beta".to_string()];
+                    let diagnostics = file_diagnostics(
+                        project.clone(),
+                        &url,
+                        session
+                            .baml_settings
+                            .feature_flags
+                            .as_ref()
+                            .unwrap_or(&default_flags),
+                    );
                     // tracing::info!("---- diagnostics Returned: ");
                     let report = Ok(DocumentDiagnosticReportResult::Report(
                         DocumentDiagnosticReport::Full(RelatedFullDocumentDiagnosticReport {
