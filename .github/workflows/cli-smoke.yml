@@ -1,0 +1,163 @@
+name: CLI smoke
+
+on:
+  pull_request:
+  push:
+    branches: [ canary, main ]
+  workflow_dispatch:
+    inputs:
+      binary_url:
+        description: "URL to a standalone baml-cli binary (optional)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cli-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  matrix-flavors:
+    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.binary_url == '' }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        flavor: [python, ts, go]
+
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      BAML_LOG: off
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fail if OPENAI_API_KEY is missing
+        run: |
+          if [ -z "${OPENAI_API_KEY}" ]; then
+            echo "::error::OPENAI_API_KEY secret is not set. Add it in Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+
+      # ------- Acquire CLI per flavor -------
+      - name: Setup Python
+        if: matrix.flavor == 'python'
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.11
+
+      - name: Install baml-cli via baml-py (pip)
+        if: matrix.flavor == 'python'
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install baml-py
+          echo "BAML_BIN=baml-cli" >> $GITHUB_ENV
+
+      - name: Setup Node
+        if: matrix.flavor == 'ts'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Use npx runner
+        if: matrix.flavor == 'ts'
+        run: echo "BAML_BIN=npx -y @baml/cli" >> $GITHUB_ENV
+
+      - name: Setup Go
+        if: matrix.flavor == 'go'
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.22
+
+      - name: Install baml-cli via go install
+        if: matrix.flavor == 'go'
+        run: |
+          go install github.com/boundaryml/baml/baml-cli@latest
+          echo "BAML_BIN=$HOME/go/bin/baml-cli" >> $GITHUB_ENV
+
+      # ------- Sanity -------
+      - name: Show version
+        run: $BAML_BIN --version
+
+      # ------- Test 1: init produces files -------
+      - name: baml-cli init should create baml_src
+        run: |
+          mkdir -p /tmp/baml-init-${{ matrix.flavor }}
+          cd /tmp/baml-init-${{ matrix.flavor }}
+          $BAML_BIN init
+          test -d baml_src
+          ls -la baml_src
+
+      # ------- Test 2: minimal single-function + test -------
+      - name: Create minimal BAML project
+        run: |
+          mkdir -p /tmp/baml-test-${{ matrix.flavor }}/baml_src
+          cat > /tmp/baml-test-${{ matrix.flavor }}/baml_src/hello.baml <<BAML
+          // Minimal BAML: one function + one test
+          function Hello(name: string) -> string {
+            client "openai/gpt-4o"
+            prompt #"
+              Say hello to {{ name }} in exactly 2 words.
+            "#
+          }
+
+          test HelloWorks {
+            functions [Hello]
+            args { name "Ethan" }
+          }
+          BAML
+
+      - name: Run baml-cli test
+        working-directory: /tmp/baml-test-${{ matrix.flavor }}
+        run: $BAML_BIN test
+
+  # Optional: validate an arbitrary binary by URL (workflow_dispatch only)
+  arbitrary-binary:
+    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.binary_url != '' }}
+    runs-on: ubuntu-latest
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      BAML_LOG: off
+    steps:
+      - name: Fail if OPENAI_API_KEY is missing
+        run: |
+          if [ -z "${OPENAI_API_KEY}" ]; then
+            echo "::error::OPENAI_API_KEY secret is not set. Add it in Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+      - name: Fetch binary
+        run: |
+          curl -L "${{ github.event.inputs.binary_url }}" -o baml-cli
+          chmod +x baml-cli
+          echo "BAML_BIN=$PWD/baml-cli" >> $GITHUB_ENV
+
+      - name: Show version
+        run: $BAML_BIN --version
+
+      - name: Init smoke
+        run: |
+          mkdir -p /tmp/baml-init-custom && cd /tmp/baml-init-custom
+          $BAML_BIN init
+          test -d baml_src
+          ls -la baml_src
+
+      - name: Minimal function + test
+        run: |
+          mkdir -p /tmp/baml-test-custom/baml_src
+          cat > /tmp/baml-test-custom/baml_src/hello.baml <<BAML
+          function Hello(name: string) -> string {
+            client "openai/gpt-4o"
+            prompt #"
+              Say hello to {{ name }} in exactly 2 words.
+            "#
+          }
+          test HelloWorks {
+            functions [Hello]
+            args { name "Ethan" }
+          }
+          BAML
+          cd /tmp/baml-test-custom
+          $BAML_BIN test
