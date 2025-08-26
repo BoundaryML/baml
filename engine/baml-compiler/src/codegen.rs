@@ -2,7 +2,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use baml_types::{ir_type::TypeIR, BamlValueWithMeta};
+use baml_types::{ir_type::TypeIR, BamlMap, BamlValueWithMeta};
 use baml_vm::{
     BamlVmProgram, BinOp, Bytecode, Class, CmpOp, Function, FunctionKind, GlobalIndex, GlobalPool,
     HashableFloat, Instruction, Object, ObjectIndex, ObjectPool, UnaryOp, Value,
@@ -44,8 +44,8 @@ pub fn compile(ast: &ParserDatabase) -> anyhow::Result<BamlVmProgram> {
 fn compile_thir_to_bytecode(
     thir: &thir::THir<(Span, Option<TypeIR>)>,
 ) -> anyhow::Result<BamlVmProgram> {
-    let mut resolved_globals = HashMap::new();
-    let mut resolved_classes = HashMap::new();
+    let mut resolved_globals = BamlMap::new();
+    let mut resolved_classes = BamlMap::new();
     let mut llm_functions = HashSet::new();
 
     // Resolve global functions from HIR
@@ -260,8 +260,8 @@ impl ForLoopVarCounters {
 /// Compile an HIR function to bytecode.
 fn compile_thir_function(
     func: &thir::ExprFunction<(Span, Option<TypeIR>)>,
-    globals: &HashMap<String, GlobalIndex>,
-    classes: &HashMap<String, HashMap<String, usize>>,
+    globals: &BamlMap<String, GlobalIndex>,
+    classes: &BamlMap<String, HashMap<String, usize>>,
     llm_functions: &HashSet<String>,
     loop_var_counter: &mut ForLoopVarCounters,
     objects: &mut ObjectPool,
@@ -325,7 +325,7 @@ struct HirCompiler<'g> {
     /// Resolved global variables.
     ///
     /// Maps the name of the global variable to its index in the globals pool.
-    globals: &'g HashMap<String, GlobalIndex>,
+    globals: &'g BamlMap<String, GlobalIndex>,
 
     /// Resolved class fields.
     ///
@@ -334,7 +334,7 @@ struct HirCompiler<'g> {
     ///
     /// TODO: The `g` lifetime here doesn't need to be the same as the globals
     /// lifetime.
-    classes: &'g HashMap<String, HashMap<String, usize>>,
+    classes: &'g BamlMap<String, HashMap<String, usize>>,
 
     llm_functions: &'g HashSet<String>,
 
@@ -382,8 +382,8 @@ struct LoopInfo {
 
 impl<'g> HirCompiler<'g> {
     fn new(
-        globals: &'g HashMap<String, GlobalIndex>,
-        classes: &'g HashMap<String, HashMap<String, usize>>,
+        globals: &'g BamlMap<String, GlobalIndex>,
+        classes: &'g BamlMap<String, HashMap<String, usize>>,
         llm_functions: &'g HashSet<String>,
         var_counters: &'g mut ForLoopVarCounters,
         objects: &'g mut ObjectPool,
@@ -2105,7 +2105,15 @@ mod tests {
                     "hello"
                 }
             "#,
-            expected: vec![("main", vec![Instruction::LoadConst(0), Instruction::Return])],
+            expected: vec![(
+                "main",
+                vec![
+                    Instruction::LoadConst(0),
+                    Instruction::Return,
+                    Instruction::LoadConst(1),
+                    Instruction::Return,
+                ],
+            )],
         })
     }
 

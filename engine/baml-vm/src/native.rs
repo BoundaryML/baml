@@ -2,7 +2,7 @@
 //!
 //! We need to find a better pattern for this, but this works for now.
 
-use std::collections::HashMap;
+use baml_types::BamlMap;
 
 use crate::{
     vm::{InternalError, Object, ObjectType, Vm, VmError},
@@ -70,13 +70,15 @@ impl Vm {
 
 pub type NativeFunction = fn(&mut Vm, &[Value]) -> Result<Value, VmError>;
 
-pub fn functions() -> HashMap<String, (NativeFunction, usize)> {
+pub fn functions() -> BamlMap<String, (NativeFunction, usize)> {
     let native_fn: NativeFunction = Vm::array_len;
     let fns = [
-        ("std.Array.len", (native_fn, 1)),
-        ("std.Map.len", (Vm::map_len, 1)),
-        ("std.Map.contains", (Vm::map_contains, 2)),
+        ("std.Array.len".to_string(), (native_fn, 1)),
+        ("std.Map.len".to_string(), (Vm::map_len, 1)),
+        ("std.Map.contains".to_string(), (Vm::map_contains, 2)),
     ];
 
-    HashMap::from_iter(fns.into_iter().map(|(name, func)| (name.to_string(), func)))
+
+    BamlMap::from_iter(fns)
+
 }

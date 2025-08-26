@@ -37,7 +37,6 @@ pub fn typecheck_returning_context<'a>(
     hir: &'a Hir,
     diagnostics: &mut Diagnostics,
 ) -> (THir<ExprMetadata>, TypeContext<'a>) {
-    let llm_functions = hir.llm_functions.clone();
     let classes: BamlMap<String, hir::Class> = hir
         .classes
         .clone()
@@ -272,7 +271,7 @@ pub fn typecheck_returning_context<'a>(
 
     (
         THir {
-            llm_functions,
+            llm_functions: hir.llm_functions.clone(),
             classes: thir_classes,
             enums,
             expr_functions,
