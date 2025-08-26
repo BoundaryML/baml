@@ -1039,17 +1039,20 @@ impl<'g> HirCompiler<'g> {
                     global: class_index,
                 });
 
-                // For nested constructors, the instance is on the evaluation stack, not in locals
-                // For top-level constructors, we need to account for existing locals
+                // Determine if we're in a nested constructor
+                // Nested constructors have their instance on the evaluation stack
+                // Top-level constructors need to track the instance as a local variable
                 let is_nested = self.constructor_depth > 0;
-                let instance_local_index = if is_nested {
-                    // For nested constructors, we'll use Copy instruction instead of LoadVar
-                    // The instance is at the top of the stack, so we use Copy(0)
-                    0  // This value won't actually be used for LoadVar
-                } else {
+                
+                // Only calculate local index for top-level constructors
+                // For nested constructors, we'll use Copy instead of LoadVar
+                let instance_local_index = if !is_nested {
                     // For top-level constructors, instance will be stored at locals.len() + 1
                     // This accounts for any existing local variables (like let a = 1; let b = 2; etc.)
-                    self.locals.len() + 1
+                    Some(self.locals.len() + 1)
+                } else {
+                    // Nested constructors don't use LoadVar - they use Copy from the stack
+                    None
                 };
                 
                 // Track that we're now building this constructor
@@ -1067,13 +1070,16 @@ impl<'g> HirCompiler<'g> {
                         panic!("undefined field: {class_name}.{field_name}");
                     };
 
-                    if is_nested {
-                        // For nested constructors, the instance is on top of the evaluation stack
-                        // Copy it from position 0 (0 positions from the top)
-                        self.emit(Instruction::Copy(0));
-                    } else {
-                        // For top-level constructors, load from the calculated local variable index
-                        self.emit(Instruction::LoadVar(instance_local_index));
+                    match instance_local_index {
+                        None => {
+                            // Nested constructor: instance is on top of evaluation stack
+                            // Copy it from position 0 (0 positions from the top)
+                            self.emit(Instruction::Copy(0));
+                        }
+                        Some(index) => {
+                            // Top-level constructor: load from the calculated local variable index
+                            self.emit(Instruction::LoadVar(index));
+                        }
                     }
                     self.compile_expression(value);
                     self.emit(Instruction::StoreField(field_index));
@@ -1099,11 +1105,16 @@ impl<'g> HirCompiler<'g> {
                     //     |
                     //     |
                     //     +-- These are tracked locals.
-                    let spread_local_index = if is_nested {
-                        // For nested constructors, spread is at position 0 on stack
-                        0
-                    } else {
-                        instance_local_index + 1
+                    let spread_local_index = match instance_local_index {
+                        None => {
+                            // For nested constructors, spread is at position 0 on stack
+                            // But this is actually not used since we use Copy instruction
+                            0
+                        }
+                        Some(index) => {
+                            // For top-level constructors, spread is one position after instance
+                            index + 1
+                        }
                     };
 
                     let mut pop_spread_local = false;
@@ -1120,20 +1131,28 @@ impl<'g> HirCompiler<'g> {
                         if !defined_named_fields.contains(field_name.as_str()) {
                             // Now load allocated instance again:
                             // [a, b, c, allocated_instance, spread_local, allocated_instance]
-                            if is_nested {
-                                // For nested constructors, copy from stack position 1 (under spread)
-                                self.emit(Instruction::Copy(1));
-                            } else {
-                                self.emit(Instruction::LoadVar(instance_local_index));
+                            match instance_local_index {
+                                None => {
+                                    // Nested constructor: copy from stack position 1 (under spread)
+                                    self.emit(Instruction::Copy(1));
+                                }
+                                Some(index) => {
+                                    // Top-level constructor: load from local variable
+                                    self.emit(Instruction::LoadVar(index));
+                                }
                             }
 
                             // Load spread again:
                             // [a, b, c, allocated_instance, spread_local, allocated_instance, spread_local]
-                            if is_nested {
-                                // For nested, spread is at position 1 from top (under instance copy)
-                                self.emit(Instruction::Copy(1));
-                            } else {
-                                self.emit(Instruction::LoadVar(spread_local_index));
+                            match instance_local_index {
+                                None => {
+                                    // Nested constructor: spread is at position 1 from top (under instance copy)
+                                    self.emit(Instruction::Copy(1));
+                                }
+                                Some(_) => {
+                                    // Top-level constructor: load spread from its local variable
+                                    self.emit(Instruction::LoadVar(spread_local_index));
+                                }
                             }
                             // Load field:
                             // [a, b, c, allocated_instance, spread_local, allocated_instance, field_value]
